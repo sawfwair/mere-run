@@ -70,6 +70,7 @@ struct VisionTrack: AsyncParsableCommand {
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for vision track.")
         }
+        try RunReceipt.validate(receipt: receipt, preflight: preflight)
         if preflight {
             return
         }

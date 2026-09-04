@@ -178,6 +178,20 @@ final class RunReceiptTests: XCTestCase {
         XCTAssertThrowsError(try VisionGround.parse(["/tmp/a.png", "--query", "cat", "--json"]))
     }
 
+    func testReceiptIsRejectedTogetherWithPreflight() {
+        XCTAssertThrowsError(try ImageGenerate.parse(["--prompt", "a cat", "--preflight", "--receipt"])) { error in
+            XCTAssertTrue(String(describing: error).contains("--receipt cannot be combined with --preflight"))
+        }
+        XCTAssertThrowsError(try VideoGenerate.parse(["a cat", "--preflight", "--receipt"]))
+        XCTAssertThrowsError(try VisionGround.parse(["/tmp/a.png", "--query", "cat", "--preflight", "--receipt"]))
+        XCTAssertThrowsError(try VisionSegment.parse(["/tmp/a.png", "--preflight", "--receipt"]))
+        XCTAssertThrowsError(try VisionTrack.parse(["/tmp/a.mp4", "--preflight", "--receipt"]))
+
+        XCTAssertNoThrow(try ImageGenerate.parse(["--prompt", "a cat", "--preflight", "--json"]))
+        XCTAssertNoThrow(try VideoGenerate.parse(["a cat", "--preflight"]))
+        XCTAssertNoThrow(try VisionSegment.parse(["/tmp/a.png", "--preflight"]))
+    }
+
     func testSpeechTranscribeRejectsReceiptForRawStreamingStdin() {
         XCTAssertThrowsError(try SpeechTranscribe.parse([
             "-", "--stream", "--input-format", "pcm-s16le", "--sample-rate", "16000", "--receipt",

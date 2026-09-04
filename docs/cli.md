@@ -3141,7 +3141,8 @@ the rest:
   `daw-bundle`).
 - `kind` is one of `image`, `video`, `audio`, `text`, `json`, `directory`.
 - The receipt is printed only after a successful run, so `exit` is always `0`;
-  a failed run exits nonzero without a receipt.
+  a failed run exits nonzero without a receipt. `--receipt` is rejected
+  together with `--preflight`, which prints a report and produces no result.
 - Supported by `image generate`, `video generate`, `music generate`,
   `sfx generate`, `speech synthesize`, `speech transcribe`, `vision ground`,
   `vision segment`, and `vision track`.
@@ -3154,16 +3155,23 @@ replacing the human-readable progress text and taking precedence over
 {"event":"progress","stage":"denoising","step":2,"total_steps":4}
 ```
 
-- `step` is the pipeline's step counter (0-based for the image generators,
-  1-based where the pipeline counts that way); every stage emits a final event
-  with `step == total_steps`.
+One convention holds for every lane:
+
+- `step` is 0-based while a stage is in progress: `step: 2` of
+  `total_steps: 4` means the third step is running.
+- Every determinate stage (`total_steps > 0`) ends with exactly one event
+  whose `step == total_steps`. It is written when the stage completes (the
+  next stage begins, or the same stage restarts for the next sliding window)
+  and, for the last stage, when the pipeline returns, so a wrapper can wait
+  for it without hanging at `total_steps - 1`.
 - `total_steps: 0` marks an indeterminate stage, for example
-  `speech synthesize` token counts.
+  `speech synthesize` token counts; it carries no terminal event, so treat the
+  receipt or the exit status as completion.
 - Supported by `image generate` (all models), `video generate` (MiniMax-H3
-  and Wan lanes), `music generate` (MiniMax Music 3 and Magenta RT2 lanes),
-  `sfx generate` (Woosh and MMAudio), and `speech synthesize`. The native LTX
-  video lanes and the ACE-Step music pipeline expose no cheap per-step callback
-  and emit no progress events.
+  and Wan lanes; `window` counts H3 sliding windows), `music generate`
+  (MiniMax Music 3 and Magenta RT2 lanes), `sfx generate` (Woosh and MMAudio),
+  and `speech synthesize`. The native LTX video lanes and the ACE-Step music
+  pipeline expose no cheap per-step callback and emit no progress events.
 
 `mere.run catalog --json` declares both flags per capability and carries the
 additive option metadata (`default_value`, `group`, `tier`, `range`,

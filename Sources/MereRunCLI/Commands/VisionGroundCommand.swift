@@ -84,6 +84,7 @@ struct VisionGround: AsyncParsableCommand {
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for vision ground.")
         }
+        try RunReceipt.validate(receipt: receipt, preflight: preflight)
     }
 
     func run() async throws {

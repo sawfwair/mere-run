@@ -694,6 +694,10 @@ struct VideoGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
     var receipt: Bool = false
 
+    func validate() throws {
+        try RunReceipt.validate(receipt: receipt, preflight: preflight)
+    }
+
     var variant: LTXVideoVariant {
         effectiveOutputMode.compatibilityVariant
     }
@@ -1320,10 +1324,10 @@ struct VideoGenerate: AsyncParsableCommand {
             )
             let generator = MiniMaxH3Generator(retainsRuntime: slidingWindowOptions != nil)
             let reportsProgress = !quiet
-            let progressJson = progressJson
+            let progressStream = progressJson ? JSONProgressStream() : nil
             let progressHandler: @Sendable (MiniMaxH3GenerationProgress) -> Void = { progress in
-                if progressJson {
-                    CLIGenerationProgressPrinter.writeJSONProgress(
+                if let progressStream {
+                    progressStream.report(
                         stage: progress.stage.rawValue,
                         step: progress.stepIndex,
                         totalSteps: progress.totalSteps
@@ -1348,12 +1352,8 @@ struct VideoGenerate: AsyncParsableCommand {
                             slidingWindowOptions: slidingWindowOptions,
                             resources: h3Resources,
                             windowHandler: { index, count in
-                                if progressJson {
-                                    CLIGenerationProgressPrinter.writeJSONProgress(
-                                        stage: "window",
-                                        step: index,
-                                        totalSteps: count
-                                    )
+                                if let progressStream {
+                                    progressStream.mark(stage: "window", step: index, totalSteps: count)
                                     return
                                 }
                                 guard reportsProgress else { return }
@@ -1369,6 +1369,7 @@ struct VideoGenerate: AsyncParsableCommand {
                     )
                 }
             }
+            progressStream?.finish()
             try LTXVideoMP4Writer.writeMP4(
                 frames: result.frames,
                 fps: MiniMaxH3Geometry.framesPerSecond,
@@ -1904,14 +1905,14 @@ struct VideoGenerate: AsyncParsableCommand {
             CLIStderr.write("Mode: image-to-video\n")
         }
         let reportsProgress = !quiet
-        let progressJson = progressJson
+        let progressStream = progressJson ? JSONProgressStream() : nil
         let generator = Wan2TI2VGenerator()
         let result = try await generator.generate(
             options: options,
             resources: Wan2Resources(rootURL: modelRoot),
             progressHandler: { progress in
-                if progressJson {
-                    CLIGenerationProgressPrinter.writeJSONProgress(
+                if let progressStream {
+                    progressStream.report(
                         stage: progress.stage.rawValue,
                         step: progress.stepIndex,
                         totalSteps: progress.totalSteps
@@ -1930,6 +1931,7 @@ struct VideoGenerate: AsyncParsableCommand {
             CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
             CLIStderr.write("Writing MP4...\n")
         }
+        progressStream?.finish()
         try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: fps, to: outputURL)
         if !quiet {
             CLIStderr.write("Saved: \(outputURL.path)\n")

@@ -22,13 +22,15 @@ The format is based on Keep a Changelog.
   `{"event":"result","exit":0,"outputs":[{"path":…,"kind":…}]}` line to stdout
   after the unchanged human output, listing the primary artifact first and any
   sidecars (detections, masks, recipes, candidates, stems, timings) with a
-  `role`.
+  `role`. `--receipt` is rejected together with `--preflight`.
 - extended `--progress-json` from `image generate` to `video generate`
   (MiniMax-H3 and Wan lanes), `music generate` (MiniMax Music 3 and Magenta
   RT2 lanes), `sfx generate`, and `speech synthesize`, using the same
-  `{"event":"progress","stage":…,"step":…,"total_steps":…}` line. The native
-  LTX video lanes and the ACE-Step pipeline expose no per-step callback and
-  emit no events.
+  `{"event":"progress","stage":…,"step":…,"total_steps":…}` line under one
+  convention: `step` is 0-based while a stage runs, every determinate stage
+  ends with exactly one `step == total_steps` event, and `total_steps: 0`
+  marks an indeterminate stage. The native LTX video lanes and the ACE-Step
+  music pipeline expose no per-step callback and emit no events.
 
 ### macOS
 

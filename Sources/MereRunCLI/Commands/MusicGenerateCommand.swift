@@ -1393,6 +1393,7 @@ struct MusicGenerate: AsyncParsableCommand {
             loadingStrategy: loadingStrategy,
             performanceMode: performanceMode
         )
+        let progressStream = progressJson ? JSONProgressStream() : nil
         let result = try pipeline.generate(
             options: MiniMaxMusic3GenerationOptions(
                 caption: effectiveCaption,
@@ -1411,8 +1412,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 seedStrategy: seedStrategy
             ),
             progress: { event in
-                if progressJson {
-                    CLIStderr.write(Self.miniMaxProgressJSONLine(event) + "\n")
+                if let progressStream {
+                    let progress = Self.miniMaxProgressEvent(event)
+                    progressStream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
                     return
                 }
                 guard !quiet else { return }
@@ -1432,6 +1434,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 }
             }
         )
+        progressStream?.finish()
         if let miniMaxProfileOutput {
             guard let profile = result.profile else {
                 throw ValidationError("MiniMax Music 3 profiling did not produce a receipt.")
@@ -1524,21 +1527,18 @@ struct MusicGenerate: AsyncParsableCommand {
         try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL, sidecars: receiptSidecars), enabled: receipt)
     }
 
-    /// MiniMax Music 3 reports three sequential stages with 1-based counters;
-    /// flow denoising is flattened across chunks so `step` reaches `total_steps`
-    /// exactly once at the end of the last chunk.
-    static func miniMaxProgressJSONLine(_ event: MiniMaxMusic3Progress) -> String {
+    /// MiniMax Music 3 reports three sequential stages with 1-based completion
+    /// counters. Flow denoising is flattened across chunks, and every counter is
+    /// shifted to the 0-based in-progress index `JSONProgressStream` expects; the
+    /// stream adds the terminal `step == total_steps` event when a stage ends.
+    static func miniMaxProgressEvent(_ event: MiniMaxMusic3Progress) -> (stage: String, step: Int, totalSteps: Int) {
         switch event {
         case .semantic(let frame, let maximum):
-            return CLIGenerationProgressPrinter.progressJSONLine(stage: "semantic", step: frame, totalSteps: maximum)
+            return ("semantic", frame - 1, maximum)
         case .denoise(let chunk, let chunkCount, let step, let stepCount):
-            return CLIGenerationProgressPrinter.progressJSONLine(
-                stage: "denoising",
-                step: (chunk - 1) * stepCount + step,
-                totalSteps: chunkCount * stepCount
-            )
+            return ("denoising", (chunk - 1) * stepCount + step - 1, chunkCount * stepCount)
         case .decode(let chunk, let chunkCount):
-            return CLIGenerationProgressPrinter.progressJSONLine(stage: "decoding", step: chunk, totalSteps: chunkCount)
+            return ("decoding", chunk - 1, chunkCount)
         }
     }
 
@@ -1801,6 +1801,7 @@ struct MusicGenerate: AsyncParsableCommand {
         if !quiet {
             CLIStderr.write("Loading Magenta RT2 model from \(resources.modelURL.path)\n")
         }
+        let progressStream = progressJson ? JSONProgressStream() : nil
         let audio = try await MagentaRT2Renderer.render(
             MagentaRT2RenderRequest(
                 prompt: caption,
@@ -1810,18 +1811,15 @@ struct MusicGenerate: AsyncParsableCommand {
             ),
             progress: { frame, total in
                 guard frame % 10 == 0 || frame + 1 == total else { return }
-                if progressJson {
-                    CLIGenerationProgressPrinter.writeJSONProgress(
-                        stage: "generating",
-                        step: frame + 1 == total ? total : frame,
-                        totalSteps: total
-                    )
+                if let progressStream {
+                    progressStream.report(stage: "generating", step: frame, totalSteps: total)
                     return
                 }
                 guard !quiet else { return }
                 CLIStderr.write("Generated Magenta RT2 frame \(frame + 1)/\(total)\n")
             }
         )
+        progressStream?.finish()
         let writer = try StreamingWAVWriter(
             outputURL: outputURL,
             sampleRate: MagentaRT2Resources.sampleRate,

@@ -41,6 +41,16 @@ struct RunReceipt: Codable, Equatable {
     static let flagName = "receipt"
     static let flagHelpText = "Print a final JSON result line to stdout listing every output path and kind."
     static let flagHelp = ArgumentHelp(flagHelpText)
+    static let preflightConflictMessage =
+        "--receipt cannot be combined with --preflight; preflight prints a report without producing a result."
+
+    /// Rejects `--receipt --preflight`, which would otherwise exit 0 without
+    /// ever printing a receipt.
+    static func validate(receipt: Bool, preflight: Bool) throws {
+        if receipt && preflight {
+            throw ValidationError(preflightConflictMessage)
+        }
+    }
 
     let event: String
     let outputs: [Output]

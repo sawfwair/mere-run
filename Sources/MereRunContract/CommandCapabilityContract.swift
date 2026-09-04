@@ -243,16 +243,18 @@ public enum MereRunCapabilityCatalog {
     public static let schemaVersion = 1
 
     /// The `--progress-json` stderr event shape, one JSON object per line.
-    /// `step` is the pipeline's 0-based step index (or a 1-based counter for
-    /// pipelines that count that way); every stage emits a final event with
-    /// `step == total_steps`, and `total_steps == 0` marks an indeterminate
-    /// stage such as token streaming with no known length.
+    /// `step` is 0-based while a stage is in progress; every determinate stage
+    /// ends with exactly one event whose `step == total_steps`, written when
+    /// the stage completes or at the end of the run at the latest.
+    /// `total_steps == 0` marks an indeterminate stage (token streaming with no
+    /// known length) that carries no terminal event.
     public static let progressEventExample =
         #"{"event":"progress","stage":"denoising","step":2,"total_steps":4}"#
 
     /// The `--receipt` final stdout line. The first output is the primary
     /// artifact; sidecars follow with a `role`. It is printed only after a
-    /// successful run, so `exit` is always `0`.
+    /// successful run, so `exit` is always `0`; `--receipt` is rejected
+    /// together with `--preflight`, which produces no result.
     public static let resultReceiptExample =
         #"{"event":"result","exit":0,"outputs":[{"kind":"image","path":"/abs/out.png"}]}"#
 
@@ -3013,7 +3015,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--input-format", label: "Input format", kind: .string, group: Group.inputs, tier: .expert, dependsOn: "--stream"),
             .init(
                 flag: "--sample-rate", label: "Sample rate", kind: .integer,
-                group: Group.inputs, tier: .expert, range: .init(min: 8_000, max: 48_000, step: 1), dependsOn: "--stream"
+                group: Group.inputs, tier: .expert, dependsOn: "--stream"
             ),
             .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream"),
             .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean, group: Group.output, tier: .standard),

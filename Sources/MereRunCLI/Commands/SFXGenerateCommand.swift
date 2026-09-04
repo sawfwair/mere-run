@@ -91,6 +91,7 @@ struct SFXGenerate: AsyncParsableCommand {
             CLIStderr.write("Loading Woosh checkpoints from \(resolved.checkpointsRootURL.path)\n")
         }
         let generator = try WooshGenerator(resources: resolved)
+        let progressStream = progressJson ? JSONProgressStream() : nil
         let result = try generator.generate(
             prompt: prompt,
             config: WooshDenoiseConfig(
@@ -101,8 +102,8 @@ struct SFXGenerate: AsyncParsableCommand {
                 renoiseSchedule: renoiseSchedule
             ),
             progress: { completed, total in
-                if progressJson {
-                    CLIGenerationProgressPrinter.writeJSONProgress(stage: "denoising", step: completed, totalSteps: total)
+                if let progressStream {
+                    progressStream.report(stage: "denoising", step: completed - 1, totalSteps: total)
                     return
                 }
                 guard !quiet else { return }
@@ -110,6 +111,7 @@ struct SFXGenerate: AsyncParsableCommand {
             }
         )
 
+        progressStream?.finish()
         try SFXWAVWriter.writeMonoPCM16(samples: result.samples, to: outputURL, sampleRate: result.sampleRate)
         if !quiet {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
@@ -136,6 +138,7 @@ struct SFXGenerate: AsyncParsableCommand {
             CLIStderr.write("Loading native MMAudio assets from \(resources.rootURL.path)\n")
         }
         let generator = try MMAudioGenerator(resources: resources)
+        let progressStream = progressJson ? JSONProgressStream() : nil
         let result = try await generator.generateText(
             prompt: prompt,
             negativePrompt: negativePrompt,
@@ -146,14 +149,15 @@ struct SFXGenerate: AsyncParsableCommand {
                 seed: seed
             ),
             progress: { completed, total in
-                if progressJson {
-                    CLIGenerationProgressPrinter.writeJSONProgress(stage: "denoising", step: completed, totalSteps: total)
+                if let progressStream {
+                    progressStream.report(stage: "denoising", step: completed - 1, totalSteps: total)
                     return
                 }
                 guard !quiet else { return }
                 CLIStderr.write("Generated MMAudio step \(completed)/\(total)\n")
             }
         )
+        progressStream?.finish()
         try SFXWAVWriter.writeMonoPCM16(
             samples: result.samples,
             to: outputURL,

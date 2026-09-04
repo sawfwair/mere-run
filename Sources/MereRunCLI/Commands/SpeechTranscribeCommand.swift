@@ -102,6 +102,14 @@ struct SpeechTranscribe: AsyncParsableCommand {
     @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
     var receipt: Bool = false
 
+    /// Test seam: forwarded to `CLIASRRouting.transcribe` so the file path can
+    /// run against a fixture backend. Setting it also skips the Metal bundle
+    /// check, which the fixture does not need. Tests set and clear it around
+    /// one `run()`; the CLI never touches it.
+    nonisolated(unsafe) static var transcriptionExecutorOverride: (any CLIASRTranscriptionExecutor)?
+
+    private var transcriptionExecutor: (any CLIASRTranscriptionExecutor)? { Self.transcriptionExecutorOverride }
+
     func validate() throws {
         let readsStandardInput = audio == "-"
         if receipt && readsStandardInput {
@@ -146,7 +154,9 @@ struct SpeechTranscribe: AsyncParsableCommand {
     func run() async throws {
         let readsStandardInput = audio == "-"
 
-        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        if transcriptionExecutor == nil {
+            try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        }
         if readsStandardInput {
             try await runStandardInput()
             return
@@ -197,7 +207,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
             request: request,
             preferredBackend: backend.backend,
             modelOverride: model,
-            progressHandler: progressHandler
+            progressHandler: progressHandler,
+            executor: transcriptionExecutor
         )
         let result = execution.result
         let outputText = renderOutput(result: result, includeTimestamps: timestamps)

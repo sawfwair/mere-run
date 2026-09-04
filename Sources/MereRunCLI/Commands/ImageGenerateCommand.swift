@@ -156,6 +156,10 @@ struct ImageGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
     var receipt: Bool = false
 
+    func validate() throws {
+        try RunReceipt.validate(receipt: receipt, preflight: preflight)
+    }
+
     func run() async throws {
         try validateStaticOptions()
         let kreaConditioningRebalance = try Self.resolveKreaConditioningRebalance(
