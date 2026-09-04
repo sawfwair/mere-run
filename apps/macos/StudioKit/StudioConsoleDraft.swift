@@ -13,7 +13,7 @@ import MereRunContract
 
 /// Every option of one capability, keyed by the flag the contract declares, plus its positional
 /// arguments and anything typed by hand.
-package struct StudioConsoleDraft: Equatable {
+package struct StudioConsoleDraft: Codable, Equatable, Sendable {
     /// Positional values, in the order `MereRunCommandCapability.arguments` declares them.
     package var arguments: [String] = []
     /// One entry per flag the form carries a value for. A flag with no entry is not emitted.
@@ -78,6 +78,13 @@ extension StudioContractBinding where Draft == StudioConsoleDraft {
 
 /// The console's form and argv, both read from `MereRunCapabilityCatalog`.
 package enum StudioConsoleCommand {
+    package static func connectionValidationMessage(for templateID: CommandTemplateID, draft: CommandDraft) -> String? {
+        guard [.apiServe, .musicServe, .worldServe, .visionServe].contains(templateID),
+              !["127.0.0.1", "localhost", "::1"].contains(draft.host.trimmingCharacters(in: .whitespacesAndNewlines)),
+              draft.apiKey.isBlank else { return nil }
+        return "An API key is required before serving beyond this Mac."
+    }
+
     /// A capability's positional arguments as contract fields, so the form draws them with the
     /// same controls it draws options with. They file under their own eyebrow, ahead of the
     /// contract's groups, the way the Command view lists them.
@@ -182,6 +189,19 @@ package enum StudioConsoleCommand {
                 return "\(option.label) (\(option.flag)) is required."
             }
         }
+        for option in capability.options where carries(option, in: draft) {
+            for value in values(option, in: draft) {
+                if option.kind == .integer, Int(value) == nil {
+                    return "\(option.label) must be a whole number."
+                }
+                if option.kind == .number, Double(value)?.isFinite != true {
+                    return "\(option.label) must be a finite number."
+                }
+                if !option.choices.isEmpty, !option.choices.contains(value), option.kind != .boolean {
+                    return "Choose a supported value for \(option.label): \(option.choices.joined(separator: ", "))."
+                }
+            }
+        }
         return nil
     }
 
@@ -206,36 +226,42 @@ package enum StudioConsoleCommand {
     /// arguments its run launched, so "Edit command" reopens the console on that command rather
     /// than on the draft it was built from.
     package static func seed(capability: MereRunCommandCapability, arguments argv: [String]) -> StudioConsoleDraft {
-        let parsed = StudioCommandRows.parse(arguments: argv, commandPathCount: capability.command.count)
         var console = StudioConsoleDraft()
-        console.arguments = capability.arguments.enumerated().map { index, _ in
-            index < parsed.positional.count ? parsed.positional[index] : ""
-        }
-        // Positionals the contract does not declare would otherwise be dropped; keep them where
-        // the user can see and edit them.
-        if parsed.positional.count > capability.arguments.count {
-            console.extraArguments = parsed.positional
-                .dropFirst(capability.arguments.count)
-                .joined(separator: " ")
-        }
-        let declared = Dictionary(
-            capability.options.map { ($0.flag, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        var repeated: [String: [String]] = [:]
-        for (flag, value) in parsed.flags {
-            guard let option = declared[flag] else { continue }
-            if option.kind == .boolean {
-                console[flag] = .flag(true)
-            } else if let value {
-                repeated[flag, default: []].append(value)
+        let declared = Dictionary(capability.options.map { ($0.flag, $0) }, uniquingKeysWith: { first, _ in first })
+        var extras: [String] = []
+        var index = capability.command.count
+        while index < argv.count {
+            let token = argv[index]
+            let parts = token.split(separator: "=", maxSplits: 1).map(String.init)
+            let flag = parts.first ?? token
+            if let option = declared[flag] {
+                if option.kind == .boolean {
+                    console[flag] = .flag(parts.count == 1 || parts[1] != "false")
+                } else {
+                    let value: String
+                    if parts.count == 2 {
+                        value = parts[1]
+                    } else if index + 1 < argv.count, !argv[index + 1].hasPrefix("--") {
+                        index += 1
+                        value = argv[index]
+                    } else {
+                        value = ""
+                    }
+                    let previous = console.text(flag)
+                    console[flag] = .text(option.repeatable && !previous.isEmpty ? previous + "\n" + value : value)
+                }
+            } else if !token.hasPrefix("-"), console.arguments.count < capability.arguments.count {
+                console.arguments.append(token)
+            } else {
+                extras.append(token)
+                if token.hasPrefix("--"), parts.count == 1, index + 1 < argv.count, !argv[index + 1].hasPrefix("--") {
+                    index += 1
+                    extras.append(argv[index])
+                }
             }
+            index += 1
         }
-        // Values stay the text the argv carried. Re-reading `--learning-rate 0.0001` as a number
-        // and formatting it back would change the command the console shows.
-        for (flag, values) in repeated {
-            console[flag] = .text(values.joined(separator: "\n"))
-        }
+        console.extraArguments = extras.shellQuoted()
         return console
     }
 
@@ -249,8 +275,58 @@ package enum StudioConsoleCommand {
         draft: StudioConsoleDraft
     ) -> CommandDraft {
         var command = seed
+        let defaults = Dictionary(capability.options.map { ($0.flag, $0.defaultValue ?? "") }, uniquingKeysWith: { first, _ in first })
+        func value(_ flag: String) -> String { draft.values[flag] == nil ? (defaults[flag] ?? "") : draft.text(flag) }
+        command.prompt = ["--prompt", "--text", "--query"].first(where: { defaults[$0] != nil }).map(value)
+            ?? draft.arguments.first ?? ""
+        command.secondaryText = ["--negative-prompt", "--system", "--system-prompt", "--lyrics"]
+            .first(where: { defaults[$0] != nil }).map(value) ?? ""
+        command.model = value("--model")
+        if defaults["--host"] != nil {
+            command.host = value("--host").isEmpty ? "127.0.0.1" : value("--host")
+        }
+        command.port = Int(value("--port")) ?? seed.port
+        if [.modelPull, .modelInfo, .modelRemove, .modelRuntimeGet, .modelRuntimeSet].contains(template.id) {
+            command.model = draft.arguments.first ?? ""
+        }
+        command.inputPath = ["--input", "--image", "--audio", "--video", "--data"]
+            .first(where: { defaults[$0] != nil }).map(value) ?? ""
         command.outputPath = outputPath(for: capability, draft: draft)
-        for (flag, keyPath) in CommandLaunchEnvironment.secretFlags(for: template.id) {
+        command.width = Int(value("--width")) ?? 0
+        command.height = Int(value("--height")) ?? 0
+        command.steps = Int(value("--steps")) ?? 0
+        command.seed = value("--seed")
+        command.cfgScale = Double(value("--cfg")) ?? 1
+        command.strength = Double(value("--strength")) ?? 0
+        command.sigmaShift = Double(value("--sigma-shift")) ?? 0
+        command.referenceImagePaths = value("--ref-image")
+        command.imageMaskPath = value("--mask").isEmpty ? nil : value("--mask")
+        command.imageOutpaint = value("--outpaint").isEmpty ? nil : value("--outpaint")
+        command.imageMaskFeather = Int(value("--mask-feather"))
+        command.loraPath = value("--lora")
+        command.loraScale = Double(value("--lora-scale")) ?? 1
+        command.maxTokens = Int(value("--max-tokens")) ?? 0
+        command.contextSize = Int(value("--context-size")) ?? 0
+        command.temperature = Double(value("--temperature")) ?? 0
+        command.topP = Double(value("--top-p")) ?? 1
+        command.visionJSONOutputPath = value("--json-output")
+        command.visionMaskOutputDirectory = value("--mask-output-dir")
+        command.structuredPromptOutputPath = value("--structured-prompt-output")
+        command.musicRecipeOutput = value("--recipe-output")
+        command.musicLRCOutput = value("--lrc-output")
+        command.musicDAWBundle = value("--daw-bundle")
+        command.timingsOutputPath = value("--timings-output")
+        command.durationSeconds = Double(value("--duration")) ?? seed.durationSeconds
+        command.fps = Int(value("--fps")) ?? seed.fps
+        command.numFrames = Int(value("--num-frames")) ?? seed.numFrames
+        command.musicInteractive = draft["--interactive"].flag == true
+        command.musicPlay = draft["--play"].flag == true
+        command.all = draft["--all"].flag == true
+        command.force = draft["--force"].flag == true
+        command.dryRun = draft["--dry-run"].flag == true
+        command.preflight = draft["--preflight"].flag == true
+        command.json = draft["--json"].flag == true
+        for (flag, keyPath) in CommandLaunchEnvironment.secretFlags(for: template.id) where draft.values[flag] != nil {
             command[keyPath: keyPath] = draft.text(flag)
         }
         return command
@@ -304,15 +380,21 @@ package struct StudioConsoleRun {
             validationMessage = template.validationMessage(for: command)
             return
         }
-        let secrets = Set(CommandLaunchEnvironment.secretFlags(for: template.id).keys)
-        arguments = StudioConsoleCommand.arguments(for: capability, draft: draft, secretFlags: secrets)
+        let secretFields = CommandLaunchEnvironment.secretFlags(for: template.id)
+        var launchSeed = seed
+        for (flag, keyPath) in secretFields where draft.values[flag] != nil {
+            launchSeed[keyPath: keyPath] = draft.text(flag)
+        }
+        let allArguments = StudioConsoleCommand.arguments(for: capability, draft: draft)
+        let effective = StudioConsoleCommand.seed(capability: capability, arguments: allArguments)
+        var execution = StudioExecution(templateID: template.id, arguments: allArguments)
+        for flag in secretFields.keys { execution = execution.replacing(flag, with: nil) }
+        arguments = execution.arguments
         commandDraft = StudioConsoleCommand.commandDraft(
-            seed: seed,
-            template: template,
-            capability: capability,
-            draft: draft
+            seed: launchSeed, template: template, capability: capability, draft: effective
         )
-        validationMessage = StudioConsoleCommand.validationMessage(for: capability, draft: draft)
+        validationMessage = StudioConsoleCommand.validationMessage(for: capability, draft: effective)
+            ?? StudioConsoleCommand.connectionValidationMessage(for: template.id, draft: commandDraft)
     }
 }
 

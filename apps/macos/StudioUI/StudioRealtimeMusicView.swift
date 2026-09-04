@@ -9,34 +9,36 @@ import SwiftUI
 /// sent over the documented stdin protocol, the clock and log are read back from the run. The
 /// view re-attaches to a session that is already running when the user navigates back to it.
 struct StudioRealtimeMusicView: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
     @Environment(\.studioRealtimeSteeringSeed) private var steeringSeed
 
     // Launch options (fixed once a session starts; edits apply to the next session).
-    @State private var model: String
-    @State private var duration = 300.0
-    @State private var capturesAudio = true
-    @State private var playsAudio = true
-    @State private var outputPath: String
+    @StudioStoredValue("RealtimeMusic.model") private var model: String = ""
+    @StudioStoredValue("RealtimeMusic.duration") private var duration = 300.0
+    @StudioStoredValue("RealtimeMusic.capturesAudio") private var capturesAudio = true
+    @StudioStoredValue("RealtimeMusic.playsAudio") private var playsAudio = true
+    @StudioStoredValue("RealtimeMusic.outputPath") private var outputPath: String = ""
     @State private var midiInputs: [String] = []
-    @State private var midiInput = ""
-    @State private var midiChannel = "all"
+    @StudioStoredValue("RealtimeMusic.midiInput") private var midiInput = ""
+    @StudioStoredValue("RealtimeMusic.midiChannel") private var midiChannel = "all"
 
     // Steering (sent live over stdin; also the initial controls at launch).
-    @State private var promptA: String
-    @State private var promptB = ""
-    @State private var blend = 0.0
-    @State private var temperature = 1.0
-    @State private var topK = 100
-    @State private var guidance = 3.0
-    @State private var noteGuidance = 5.0
-    @State private var drumGuidance = 1.0
-    @State private var drumless = false
-    @State private var style = "streaming"
+    @StudioStoredValue("RealtimeMusic.promptA") private var promptA: String = ""
+    @StudioStoredValue("RealtimeMusic.promptB") private var promptB = ""
+    @StudioStoredValue("RealtimeMusic.blend") private var blend = 0.0
+    @StudioStoredValue("RealtimeMusic.temperature") private var temperature = 1.0
+    @StudioStoredValue("RealtimeMusic.topK") private var topK = 100
+    @StudioStoredValue("RealtimeMusic.guidance") private var guidance = 3.0
+    @StudioStoredValue("RealtimeMusic.noteGuidance") private var noteGuidance = 5.0
+    @StudioStoredValue("RealtimeMusic.drumGuidance") private var drumGuidance = 1.0
+    @StudioStoredValue("RealtimeMusic.drumless") private var drumless = false
+    @StudioStoredValue("RealtimeMusic.style") private var style = "streaming"
 
     // Session
-    @State private var requestID: UUID?
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var peaks: [Float] = []
     @State private var banner: Banner?
     @State private var showsSessionOptions = false
@@ -59,17 +61,16 @@ struct StudioRealtimeMusicView: View {
     private static let logHeight: CGFloat = 120
 
     init(initialDraft: StudioDraft) {
-        _promptA = State(initialValue: initialDraft.prompt)
-        _model = State(initialValue: Self.preferredModel(from: initialDraft.model))
+        _promptA = StudioStoredValue(initialValue: initialDraft.prompt, "RealtimeMusic.promptA")
+        _model = StudioStoredValue(initialValue: Self.preferredModel(from: initialDraft.model), "RealtimeMusic.model")
         let directory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Music/MereRun", isDirectory: true)
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        _outputPath = State(
+        _outputPath = StudioStoredValue(
             initialValue: directory
-                .appendingPathComponent("realtime-\(formatter.string(from: Date())).wav")
-                .path
-        )
+                .appendingPathComponent("realtime-\(formatter.string(from: StudioDisplayClock.now)).wav")
+                .path, "RealtimeMusic.outputPath")
     }
 
     nonisolated static func preferredModel(from activeModel: String) -> String {
@@ -77,6 +78,27 @@ struct StudioRealtimeMusicView: View {
         return normalized.localizedCaseInsensitiveContains("magenta-rt2")
             ? normalized
             : "music-magenta-rt2-small"
+    }
+
+    private var commandDraft: CommandDraft {
+        var draft = CommandCatalog.template(id: .musicRealtime)?.defaultDraft() ?? CommandDraft()
+        draft.prompt = promptA.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft.durationSeconds = duration
+        draft.musicPlay = playsAudio
+        draft.outputPath = capturesAudio ? outputPath : ""
+        draft.musicInteractive = true
+        draft.musicStyleConditioning = style
+        draft.musicTemperature = temperature
+        draft.musicTopK = topK
+        draft.musicCFGMusicCoCa = guidance
+        draft.musicCFGNotes = noteGuidance
+        draft.musicCFGDrums = drumGuidance
+        draft.musicDrumless = drumless
+        draft.musicMIDIInput = midiInput
+        draft.musicMIDIChannel = midiChannel
+
+        return draft
     }
 
     // MARK: - Derived session state
@@ -97,7 +119,7 @@ struct StudioRealtimeMusicView: View {
         switch item.status {
         case .queued: return .queued
         case .running: return .live
-        case .completed, .failed: return .ended(exitCode: item.exitCode)
+        case .completed, .failed, .cancelled, .interrupted: return .ended(exitCode: item.exitCode)
         }
     }
 
@@ -158,6 +180,7 @@ struct StudioRealtimeMusicView: View {
             jobBar
         }
         .background(MereRunTheme.background)
+        .studioTaskCommand(.musicRealtime, draft: commandDraft)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onAppear(perform: attachToRunningSession)
         .task {
@@ -233,7 +256,7 @@ struct StudioRealtimeMusicView: View {
             TimelineView(.periodic(from: startedAt, by: 1)) { context in
                 clockText(
                     StudioRealtimeTransport.statusLine(
-                        wallElapsed: context.date.timeIntervalSince(startedAt),
+                        wallElapsed: (referenceDate ?? context.date).timeIntervalSince(startedAt),
                         rendered: renderedSeconds
                     )
                 )
@@ -280,7 +303,7 @@ struct StudioRealtimeMusicView: View {
         case .live:
             guard let startedAt, sessionDuration > 0 else { return 0 }
             let playback = StudioRealtimeTransport.playbackPosition(
-                wallElapsed: Date().timeIntervalSince(startedAt),
+                wallElapsed: (referenceDate ?? Date()).timeIntervalSince(startedAt),
                 rendered: renderedSeconds
             )
             return min(1, playback / sessionDuration)
@@ -675,30 +698,13 @@ struct StudioRealtimeMusicView: View {
             banner = Banner(severity: .error, text: "Enable playback or recording (Record to file) before starting.")
             return
         }
-        var draft = template.defaultDraft()
-        draft.prompt = prompt
-        draft.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        draft.durationSeconds = duration
-        draft.musicPlay = playsAudio
-        draft.outputPath = capturesAudio ? outputPath : ""
-        draft.musicInteractive = true
-        draft.musicStyleConditioning = style
-        draft.musicTemperature = temperature
-        draft.musicTopK = topK
-        draft.musicCFGMusicCoCa = guidance
-        draft.musicCFGNotes = noteGuidance
-        draft.musicCFGDrums = drumGuidance
-        draft.musicDrumless = drumless
-        draft.musicMIDIInput = midiInput
-        draft.musicMIDIChannel = midiChannel
-
-        let request = StudioRunRequest(
+        let request = controller.taskSessions.resolving(StudioRunRequest(
             mode: .music,
             templateID: .musicRealtime,
             template: template,
-            draft: draft
-        )
-        let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
+            draft: commandDraft
+        ))
+        let preview = controller.commandPreview(arguments: request.execution?.arguments ?? template.arguments(from: request.draft), masksSecrets: true)
         let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
             ? .queued
             : .running

@@ -14,9 +14,25 @@ struct ModelList: ParsableCommand {
     )
     var measureSizes = false
 
+    @Flag(name: .long, help: "Print typed inventory, declared context windows, and usage terms as JSON.")
+    var json = false
+
+    private struct Document: Encodable {
+        let inventory: ModelInventorySnapshot
+        let usageTerms: [String]
+    }
+
     func run() throws {
         let mode: ModelInventoryMode = measureSizes ? .measured : .fast
-        let rows = ModelInventory.snapshot(mode: mode).rows
+        let snapshot = ModelInventory.snapshot(mode: mode)
+        if json {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let document = Document(inventory: snapshot, usageTerms: Self.usageRestrictionLines())
+            print(String(decoding: try encoder.encode(document), as: UTF8.self))
+            return
+        }
+        let rows = snapshot.rows
 
         let widths = ModelListColumnWidths(rows: rows)
         printRow("ID", "Category", "Status", "Referenced", widths: widths)

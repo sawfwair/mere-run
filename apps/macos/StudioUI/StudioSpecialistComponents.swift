@@ -47,13 +47,14 @@ package enum StudioSpecialistFiles {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
+    @MainActor
     static func timestampedDirectory(component: String) -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Movies/MereRun", isDirectory: true)
             .appendingPathComponent(component, isDirectory: true)
-            .appendingPathComponent(formatter.string(from: Date()), isDirectory: true)
+            .appendingPathComponent(formatter.string(from: StudioDisplayClock.now), isDirectory: true)
     }
 }
 
@@ -269,6 +270,7 @@ struct StudioSpecialistResultView: View {
         case .running: MereRunTheme.yellow
         case .completed: MereRunTheme.green
         case .failed: MereRunTheme.red
+        case .cancelled, .interrupted: MereRunTheme.textSecondary
         }
     }
 }
@@ -283,13 +285,14 @@ enum StudioSpecialistRunner {
         library: StudioLibraryStore
     ) -> UUID? {
         guard let template = CommandCatalog.template(id: templateID) else { return nil }
-        let request = StudioRunRequest(
+        let base = StudioRunRequest(
             mode: mode,
             templateID: templateID,
             template: template,
             draft: draft
         )
-        let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
+        let request = controller.taskSessions.resolving(base)
+        let preview = controller.commandPreview(arguments: request.execution?.arguments ?? template.arguments(from: request.draft), masksSecrets: true)
         let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
             ? .queued
             : .running

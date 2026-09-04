@@ -22,6 +22,7 @@ struct StudioFeedActions {
     let showDetails: () -> Void
     let useExample: (String) -> Void
     let attach: () -> Void
+    var focus: (StudioLibraryItem, URL) -> Void = { _, _ in }
 }
 
 /// The feed of generations for a prompt mode: oldest at the top, the newest just above the
@@ -88,7 +89,7 @@ struct StudioFeedCanvas: View {
         ScrollViewReader { proxy in
             GeometryReader { container in
                 ScrollView {
-                    VStack(spacing: Metrics.cardSpacing) {
+                    LazyVStack(spacing: Metrics.cardSpacing) {
                         if cards.isEmpty {
                             StudioEmptyState(mode: mode, onUseExample: actions.useExample, onAttach: actions.attach)
                                 .padding(.vertical, MereRunTheme.Spacing.xl)
@@ -242,7 +243,7 @@ private struct StudioCardHeader: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
                 Text(when)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)
                     .fixedSize()
@@ -252,7 +253,7 @@ private struct StudioCardHeader: View {
                 HStack(spacing: 6) {
                     ForEach(chips, id: \.self) { chip in
                         Text(chip)
-                            .font(.system(size: 10.5, weight: .medium))
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(MereRunTheme.textPrimary)
                             .lineLimit(1)
                             .padding(.horizontal, 7)
@@ -346,6 +347,8 @@ enum StudioFeedChips {
 
 /// A finished run: prompt, chips, every output in a grid, and the actions that continue from it.
 struct StudioGenerationCard: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
     let mode: StudioMode
     let item: StudioLibraryItem
     let isHighlighted: Bool
@@ -400,7 +403,7 @@ struct StudioGenerationCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt))
+            StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date()))
             outputs
             actionRow
         }
@@ -414,7 +417,7 @@ struct StudioGenerationCard: View {
     @ViewBuilder
     private var outputs: some View {
         if !mediaFiles.isEmpty {
-            StudioOutputGrid(urls: mediaFiles, tileSide: Self.tileSide)
+            StudioOutputGrid(urls: mediaFiles, tileSide: Self.tileSide, onOpen: { actions.focus(item, $0) })
         }
         ForEach(textFiles, id: \.self) { url in
             StudioTextFilePreview(url: url)
@@ -423,7 +426,7 @@ struct StudioGenerationCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         }
         if mediaFiles.isEmpty, textFiles.isEmpty, let outputText {
-            StudioMarkdownText(content: outputText, bodyFont: .system(size: 13))
+            StudioMarkdownText(content: outputText, bodyFont: .callout)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
@@ -441,7 +444,7 @@ struct StudioGenerationCard: View {
                             // The receipt says what the file is ("Structured prompt"); only a
                             // run that reported no role falls back to its name.
                             Text(item.artifactRoleLabel(for: url) ?? url.lastPathComponent)
-                                .font(.system(size: 10.5, weight: .medium))
+                                .font(.caption.weight(.medium))
                                 .lineLimit(1)
                         }
                         .foregroundStyle(MereRunTheme.textSecondary)
@@ -461,48 +464,47 @@ struct StudioGenerationCard: View {
     }
 
     private var actionRow: some View {
-        HStack(spacing: 2) {
-            if item.commandDraft != nil, item.templateID != nil {
-                cardIcon("shuffle", help: "Vary — run again with a new seed") { actions.vary(item) }
-                cardIcon("arrow.clockwise", help: "Rerun") { actions.rerun(item) }
-            }
-            if let primaryURL {
-                cardIcon("arrow.right.to.line", help: "Use as input") { actions.useAsInput(primaryURL) }
-                    .disabled(!canUseAsInput)
-                    .opacity(canUseAsInput ? 1 : 0.4)
-                cardIcon("eye", help: "Quick Look (Space)") { QuickLookCoordinator.shared.preview(primaryURL) }
-                cardIcon("folder", help: "Reveal in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([primaryURL])
+        HStack(spacing: 8) {
+            if let primaryURL, StudioOutputFileKind.classify(primaryURL) == .image {
+                Button { actions.focus(item, primaryURL) } label: {
+                    Label("Focus", systemImage: "arrow.up.left.and.arrow.down.right")
                 }
+                .buttonStyle(.mereSecondary)
             }
-            if primaryURL != nil || outputText != nil {
-                cardIcon(copied ? "checkmark" : "doc.on.doc", help: copied ? "Copied" : "Copy") { copyOutput() }
+            if item.commandDraft != nil, item.templateID != nil {
+                cardIcon("shuffle", help: "Vary with a new seed") { actions.vary(item) }
             }
+            Menu {
+                if item.commandDraft != nil, item.templateID != nil {
+                    Button("Rerun with the same settings") { actions.rerun(item) }
+                }
+                if let primaryURL {
+                    Button("Use as input") { actions.useAsInput(primaryURL) }.disabled(!canUseAsInput)
+                    Button("Quick Look") { QuickLookCoordinator.shared.preview(primaryURL) }
+                    Button("Open") { NSWorkspace.shared.open(primaryURL) }
+                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([primaryURL]) }
+                }
+                Button(copied ? "Copied" : "Copy") { copyOutput() }
+                    .disabled(primaryURL == nil && outputText == nil)
+                Divider()
+                Button("Delete from Library", role: .destructive) { actions.delete(item) }
+            } label: { Image(systemName: "ellipsis") }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .accessibilityLabel("More result actions")
             Spacer(minLength: 8)
             if let primaryURL {
                 Button("Save to…") { actions.saveTo(primaryURL) }
                     .buttonStyle(.mereSecondary)
-                    .help("Save a copy of the output somewhere else")
+                    .help("Save a copy of the output")
             }
-        }
-        .contextMenu {
-            if item.commandDraft != nil, item.templateID != nil {
-                Button("Vary") { actions.vary(item) }
-                Button("Rerun") { actions.rerun(item) }
-            }
-            if let primaryURL {
-                Button("Open") { NSWorkspace.shared.open(primaryURL) }
-                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([primaryURL]) }
-            }
-            Divider()
-            Button("Delete", role: .destructive) { actions.delete(item) }
         }
     }
 
     private func cardIcon(_ systemImage: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 13, weight: .medium))
+                .font(.callout.weight(.medium))
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.mereIcon)
@@ -530,6 +532,7 @@ struct StudioGenerationCard: View {
 private struct StudioOutputGrid: View {
     let urls: [URL]
     let tileSide: CGFloat
+    var onOpen: ((URL) -> Void)?
 
     private var tiled: [URL] {
         urls.filter { StudioOutputFileKind.classify($0) != .audio }
@@ -583,7 +586,10 @@ private struct StudioOutputGrid: View {
         .background(MereRunTheme.surfaceRaised)
         .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
-        .onTapGesture { QuickLookCoordinator.shared.preview(url) }
+        .onTapGesture {
+            if StudioOutputFileKind.classify(url) == .image, let onOpen { onOpen(url) }
+            else { QuickLookCoordinator.shared.preview(url) }
+        }
         .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
         .contextMenu {
             Button("Open") { NSWorkspace.shared.open(url) }
@@ -592,7 +598,7 @@ private struct StudioOutputGrid: View {
         }
         .help(url.lastPathComponent)
         .accessibilityLabel("Output \(url.lastPathComponent)")
-        .accessibilityHint("Click for Quick Look; drag to copy the file out")
+        .accessibilityHint("Click to inspect the output; drag to copy the file out")
     }
 }
 
@@ -601,6 +607,8 @@ private struct StudioOutputGrid: View {
 /// A run in flight. Observes its `Job` directly: progress, status, and the log tail update here
 /// without the workspace re-rendering.
 struct StudioRunningCard: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
     let item: StudioLibraryItem
     @ObservedObject var job: Job
     let isHighlighted: Bool
@@ -646,7 +654,7 @@ struct StudioRunningCard: View {
                         Image(systemName: showActivity ? "chevron.down" : "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
                         Text("Activity")
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(.caption.weight(.medium))
                     }
                     .foregroundStyle(MereRunTheme.textMuted)
                 }
@@ -682,7 +690,7 @@ struct StudioRunningCard: View {
     private var elapsed: some View {
         if let startedAt = job.startedAt {
             TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                Text(" · \(StudioTimeFormat.string(context.date.timeIntervalSince(startedAt)))")
+                Text(" · \(StudioTimeFormat.string((referenceDate ?? context.date).timeIntervalSince(startedAt)))")
                     .monospacedDigit()
             }
         }
@@ -739,11 +747,11 @@ struct StudioQueuedRow: View {
                 .fill(MereRunTheme.yellow)
                 .frame(width: 8, height: 8)
             Text(positionText)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(MereRunTheme.textSecondary)
                 .fixedSize()
             Text(item.displayTitle)
-                .font(.system(size: 13, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(MereRunTheme.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -765,6 +773,8 @@ struct StudioQueuedRow: View {
 
 /// A run that did not finish: one line that says why, the log behind a disclosure, and Retry.
 struct StudioFailureCard: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
     let item: StudioLibraryItem
     let job: Job?
     let isHighlighted: Bool
@@ -778,7 +788,9 @@ struct StudioFailureCard: View {
     }
 
     private var summary: String {
-        StudioFailureSummary.summary(
+        if item.status == .interrupted { return "Interrupted when Studio closed. Retry to start a new run." }
+        if item.status == .cancelled { return "Cancelled. Your previous results are preserved." }
+        return StudioFailureSummary.summary(
             outputText: item.outputText,
             logLines: job?.log.lines.map(\.text) ?? [],
             exitCode: job?.exitCode ?? item.exitCode
@@ -787,16 +799,16 @@ struct StudioFailureCard: View {
 
     private var wasCancelled: Bool {
         if let job, case .cancelled = job.state { return true }
-        return item.exitCode == JobResult.cancelledBeforeStartExitCode
+        return item.status == .cancelled || item.exitCode == JobResult.cancelledBeforeStartExitCode
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt))
+            StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date()))
 
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: wasCancelled ? "stop.circle" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(wasCancelled ? MereRunTheme.textMuted : MereRunTheme.red)
                     .padding(.top, 1)
                 Text(summary)
@@ -818,7 +830,7 @@ struct StudioFailureCard: View {
                                 Image(systemName: showLog ? "chevron.down" : "chevron.right")
                                     .font(.system(size: 9, weight: .semibold))
                                 Text(showLog ? "Hide log" : "Show log")
-                                    .font(.system(size: 11.5, weight: .medium))
+                                    .font(.caption.weight(.medium))
                             }
                             .foregroundStyle(MereRunTheme.textMuted)
                         }
@@ -888,7 +900,7 @@ struct StudioReadinessCard: View {
                         .font(.system(size: 13.5, weight: .semibold))
                         .foregroundStyle(MereRunTheme.textPrimary)
                     Text(readiness.message)
-                        .font(.system(size: 12))
+                        .font(.callout)
                         .foregroundStyle(MereRunTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -958,7 +970,7 @@ private struct StudioNewResultPill: View {
     var body: some View {
         Button(action: action) {
             Text("New result ↓")
-                .font(.system(size: 11.5, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(MereRunTheme.onAccent)
                 .padding(.horizontal, 12)
                 .frame(height: 26)

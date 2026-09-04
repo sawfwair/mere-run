@@ -1823,6 +1823,9 @@ extension CommandFlags {
     /// `mere.run model list` — List models
     package enum ModelList: CommandFlagNamespace {
         package static let command = ["model", "list"]
+
+        package static let measureSizes = "--measure-sizes"
+        package static let json = "--json"
     }
 }
 

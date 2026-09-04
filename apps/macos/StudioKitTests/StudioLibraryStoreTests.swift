@@ -90,7 +90,7 @@ final class StudioLibraryStoreTests: XCTestCase {
         let reloaded = StudioLibraryStore(libraryURL: url)
         let item = try XCTUnwrap(reloaded.items.first)
         XCTAssertEqual(item.templateID, .musicTrainAdapter)
-        XCTAssertEqual(item.commandDraft, draft)
+        XCTAssertEqual(item.commandDraft, draft.withoutSecrets)
         XCTAssertEqual(item.displayKindTitle, "Train music adapter")
         XCTAssertEqual(item.allArtifactURLs.count, 2)
     }
@@ -285,7 +285,7 @@ final class StudioLibraryStoreTests: XCTestCase {
         // Thread-level values follow the latest turn for compatibility with retry.
         XCTAssertEqual(item.model, "text-chat-gemma4-12b-4bit")
         XCTAssertEqual(item.systemPrompt, "Be terse.")
-        XCTAssertNil(item.messages?.first?.model)
+        XCTAssertEqual(item.messages?.first?.model, "text-chat-qwen3.6-4b")
     }
 
     func testPresetChangeOnAThreadIsRecordedWhenTheNextTurnIsSent() throws {

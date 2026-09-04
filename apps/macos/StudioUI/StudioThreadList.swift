@@ -95,6 +95,8 @@ enum StudioThreadListPresenter {
 /// with a compose button for a new thread (also ⌘N). Replaces the Library column in the Chat
 /// domain; threads never appear in the media Library.
 struct StudioThreadList: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
     /// Every Library row; the list keeps the threads.
     let items: [StudioLibraryItem]
     let selectedID: UUID?
@@ -119,7 +121,7 @@ struct StudioThreadList: View {
     }
 
     private var sections: [StudioThreadListPresenter.Section] {
-        StudioThreadListPresenter.sections(visibleThreads)
+        StudioThreadListPresenter.sections(visibleThreads, now: referenceDate ?? Date())
     }
 
     var body: some View {
@@ -150,13 +152,13 @@ struct StudioThreadList: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text("Threads")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(MereRunTheme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
             Button(action: onNewThread) {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.body.weight(.medium))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.mereIcon)
@@ -172,18 +174,18 @@ struct StudioThreadList: View {
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(MereRunTheme.textMuted)
             TextField("Search threads", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(MereRunTheme.textPrimary)
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.caption)
                 }
                 .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
                 .accessibilityLabel("Clear search")
@@ -264,13 +266,15 @@ struct StudioThreadList: View {
 
 /// One thread: the title on one line and a meta line naming the preset, model, and last activity.
 private struct StudioThreadRow: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
     let thread: StudioLibraryItem
     let isSelected: Bool
     let action: () -> Void
 
     @State private var hovering = false
 
-    private var meta: String { StudioThreadListPresenter.meta(for: thread) }
+    private var meta: String { StudioThreadListPresenter.meta(for: thread, now: referenceDate ?? Date()) }
 
     var body: some View {
         Button(action: action) {
@@ -281,7 +285,7 @@ private struct StudioThreadRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text(meta)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)
             }

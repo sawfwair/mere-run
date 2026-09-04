@@ -130,7 +130,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
     package init(templateID: CommandTemplateID) {
         switch templateID {
         case .imageGenerate, .imageTrainLoRA, .imageValidate, .imageDatasetDiscover, .imageRunPlan,
-             .imageVisualizeRun, .adapterList, .adapterPull:
+             .imageVisualizeRun:
             self = .image
         case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview:
             self = .threeD
@@ -158,7 +158,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
             self = .text
         case .geoFlood, .geoFire, .geoTessera, .geoOlmoEarth:
             self = .earth
-        case .modelList, .modelCapabilities, .modelPull, .modelInfo, .modelRemove, .modelRepairManifests,
+        case .adapterList, .adapterPull, .modelList, .modelCapabilities, .modelPull, .modelInfo, .modelRemove, .modelRepairManifests,
              .modelOptimize, .modelStorage, .modelGarbageCollect, .modelRuntimeGet, .modelRuntimeSet,
              .modelLocationList, .modelLocationAdd, .modelLocationRemove, .modelLocationBind,
              .modelLocationUnbind, .qualityGate, .modelBenchmark, .modelBenchmarkLagunaDFlash,

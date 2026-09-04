@@ -99,7 +99,7 @@ struct StudioInspector: View {
                 .lineLimit(1)
             if changedCount > 0 {
                 Text("\(changedCount) changed")
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(MereRunTheme.accent)
                     .padding(.horizontal, 6)
                     .frame(height: 18)
@@ -109,7 +109,7 @@ struct StudioInspector: View {
             Spacer(minLength: 0)
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
@@ -146,7 +146,7 @@ struct StudioInspector: View {
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(MereRunTheme.textMuted)
                         Text("Advanced · \(advancedFields.count) more")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.callout.weight(.medium))
                             .foregroundStyle(MereRunTheme.textSecondary)
                     }
                 }
@@ -179,7 +179,7 @@ struct StudioInspector: View {
     private func resetButton(_ action: @escaping () -> Void) -> some View {
         Button("Reset", action: action)
             .buttonStyle(.plain)
-            .font(.system(size: 11, weight: .medium))
+            .font(.caption.weight(.medium))
             .foregroundStyle(MereRunTheme.textMuted)
             .help("Back to the defaults")
     }
@@ -244,11 +244,11 @@ struct StudioInspector: View {
             HStack(spacing: 8) {
                 if let glyph = modelStatusGlyph {
                     Image(systemName: glyph)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(MereRunTheme.accent)
                 }
                 Text(StudioModelNaming.displayLabel(for: mode, model: draft.model))
-                    .font(.system(size: 13))
+                    .font(.callout)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -284,10 +284,10 @@ struct StudioInspector: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(MereRunTheme.textMuted)
                     Text("Add LoRA adapter")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.callout.weight(.medium))
                         .foregroundStyle(MereRunTheme.textSecondary)
                 }
             }
@@ -298,10 +298,10 @@ struct StudioInspector: View {
         } else {
             HStack(spacing: 8) {
                 Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.accent)
                 Text(URL(fileURLWithPath: draft.loraPath).lastPathComponent)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -332,10 +332,10 @@ struct StudioInspector: View {
         ForEach(Array(adapters.enumerated()), id: \.offset) { _, path in
             HStack(spacing: 8) {
                 Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.accent)
                 Text(URL(fileURLWithPath: path).lastPathComponent)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -358,10 +358,10 @@ struct StudioInspector: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                 Text("Add ACE-Step adapter")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(MereRunTheme.textSecondary)
             }
         }
@@ -392,7 +392,7 @@ struct StudioInspector: View {
             HStack(spacing: 8) {
                 StudioInspectorNumberField(label: "Width", value: $draft.width, range: 64...4096)
                 Text("×")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(MereRunTheme.textMuted)
                 StudioInspectorNumberField(label: "Height", value: $draft.height, range: 64...4096)
                 Button("Swap") { StudioAspectPreset.swap(&draft) }
@@ -426,7 +426,7 @@ struct StudioInspector: View {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Set exact length", isOn: $draft.useDuration)
                     .toggleStyle(.checkbox)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(MereRunTheme.textSecondary)
                 if draft.useDuration {
                     StudioInspectorSlider(label: "Length", value: $draft.durationSeconds, range: 5...300, step: 1, format: { "\(StudioComposerPresets.secondsText($0)) s" })
@@ -449,7 +449,7 @@ struct StudioInspector: View {
                     isOn: Binding(get: { draft.h3Steps != nil }, set: { draft.h3Steps = $0 ? 21 : nil })
                 )
                 .toggleStyle(.checkbox)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(MereRunTheme.textSecondary)
                 if draft.h3Steps != nil {
                     StudioInspectorSlider(
@@ -465,7 +465,7 @@ struct StudioInspector: View {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Override preset steps", isOn: $draft.musicOverrideSteps)
                     .toggleStyle(.checkbox)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(MereRunTheme.textSecondary)
                 if draft.musicOverrideSteps { stepsSlider(range: 1...120) }
             }
@@ -486,7 +486,7 @@ struct StudioInspector: View {
         let seedMode = StudioSeedMode(draft: draft)
         return HStack(spacing: 8) {
             Text("Seed")
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(MereRunTheme.textSecondary)
             Spacer(minLength: 0)
             if editingSeed {
@@ -671,13 +671,13 @@ struct StudioInspectorSectionView<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 Button("Reset", action: onReset)
                     .buttonStyle(.plain)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                     .opacity(canReset ? 1 : 0.55)
                     .disabled(!canReset)
@@ -774,7 +774,7 @@ struct StudioInspectorLabeledRow<Content: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(MereRunTheme.textSecondary)
             Spacer(minLength: 0)
             content()
@@ -801,7 +801,7 @@ struct StudioInspectorSlider: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(MereRunTheme.textSecondary)
                 Spacer(minLength: 0)
                 Text(format(value))

@@ -15,35 +15,74 @@ struct StudioContentHeader: View {
     let showsPanelToggles: Bool
     let isLibraryShown: Bool
     let isInspectorShown: Bool
-    /// The Command view column is open (prompt tasks) or the Command Console window is (others).
+    /// The current task's Command column is open.
     let isCommandShown: Bool
-    /// Extra leading space when the traffic lights and sidebar toggle sit over this header.
+    let isSidebarShown: Bool
+    let onToggleSidebar: () -> Void
+    /// Extra leading space when the traffic lights sit over this header.
     var leadingInset: CGFloat = 0
     let onToggleLibrary: () -> Void
     let onToggleInspector: () -> Void
     let onToggleCommand: () -> Void
 
     static let height: CGFloat = 52
-    /// Clears the traffic lights and the sidebar toggle while the sidebar is collapsed.
-    static let collapsedSidebarInset: CGFloat = 112
+    /// Clears the native traffic lights while the sidebar is collapsed.
+    static let collapsedSidebarInset: CGFloat = 80
 
     var body: some View {
         // Balanced like the design (220pt leading and trailing blocks, so the pill sits at the
         // column's center) when the column is wide enough; otherwise the blocks shrink to their
         // content so the pill never truncates at the default window width.
-        ViewThatFits(in: .horizontal) {
-            row(sideBlockWidth: 220)
-            row(sideBlockWidth: nil)
+        HStack(spacing: 10) {
+            MereToolbarIconButton(
+                systemImage: "sidebar.leading",
+                isActive: isSidebarShown,
+                action: onToggleSidebar
+            )
+            .help(isSidebarShown ? "Hide Sidebar (⌃⌘S)" : "Show Sidebar (⌃⌘S)")
+            .accessibilityLabel(isSidebarShown ? "Hide Sidebar" : "Show Sidebar")
+            .keyboardShortcut("s", modifiers: [.control, .command])
+            ViewThatFits(in: .horizontal) {
+                row(sideBlockWidth: 220)
+                row(sideBlockWidth: nil)
+                compactRow
+            }
         }
         .padding(.leading, 18 + leadingInset)
         .padding(.trailing, 16)
         .frame(height: Self.height)
         .frame(maxWidth: .infinity)
-        .background(MereRunTheme.background)
+        .background {
+            MereRunTheme.background
+                .contentShape(Rectangle())
+                .gesture(WindowDragGesture())
+        }
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(MereRunTheme.border.opacity(0.53))
                 .frame(height: 1)
+        }
+    }
+
+    private var compactRow: some View {
+        HStack(spacing: 10) {
+            Label(domain.title, systemImage: domain.systemImage)
+                .font(.headline).lineLimit(1)
+            Spacer(minLength: 0)
+            if domain.tasks.count > 1 {
+                Menu {
+                    Picker("Task", selection: $task) {
+                        ForEach(domain.tasks) { Text($0.title).tag($0) }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(task.title).lineLimit(1)
+                        Image(systemName: "chevron.down").font(.caption)
+                    }
+                }.menuStyle(.borderlessButton).fixedSize()
+                    .accessibilityLabel("Task: " + task.title)
+            }
+            toggles
         }
     }
 
@@ -63,16 +102,16 @@ struct StudioContentHeader: View {
     private var title: some View {
         HStack(spacing: MereRunTheme.Spacing.sm) {
             Image(systemName: domain.systemImage)
-                .font(.system(size: 14, weight: .medium))
+                .font(.body.weight(.medium))
                 .foregroundStyle(MereRunTheme.accent)
                 .frame(width: 16, height: 16)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(domain.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.headline)
                     .foregroundStyle(MereRunTheme.textPrimary)
                 Text(subtitle)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.caption)
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -119,8 +158,8 @@ struct StudioContentHeader: View {
                 isActive: isCommandShown,
                 action: onToggleCommand
             )
-            .help(showsPanelToggles ? "Command view (⌥⌘C)" : "Command Console (⌥⌘C)")
-            .accessibilityLabel(showsPanelToggles ? "Command view" : "Command Console")
+            .help("Command (⌥⌘C)")
+            .accessibilityLabel("Command")
         }
     }
 }

@@ -9,6 +9,9 @@ package final class StudioLibraryStore: ObservableObject {
 
     package let libraryURL: URL
     private let fileManager: FileManager
+    private weak var observedController: MereRunController?
+    private var subscriptions = Set<AnyCancellable>()
+    private var completedRequests = Set<UUID>()
     /// How a deleted row's files reach the Trash. Injected so tests can delete without a Trash.
     private let trashItem: (URL) throws -> Void
 
@@ -30,6 +33,52 @@ package final class StudioLibraryStore: ObservableObject {
             .appendingPathComponent("library.json", isDirectory: false)
     }
 
+    /// Keeps durable history current even with every Studio window closed.
+    package func observe(controller: MereRunController) {
+        guard observedController !== controller else { return }
+        subscriptions.removeAll()
+        completedRequests.removeAll()
+        observedController = controller
+        controller.runCompletions.sink { [weak self, weak controller] result in
+            guard let self, let controller, let requestID = result.requestID,
+                  self.completedRequests.insert(requestID).inserted else { return }
+            let job = controller.jobs.job(requestID: requestID)
+            if let conversationID = result.conversationID {
+                let text = result.outputText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                self.appendAssistant(
+                    conversationID: conversationID,
+                    content: text.isEmpty ? (result.exitCode == 0 ? "(No output.)" : "Run stopped before a reply was received.") : text,
+                    exitCode: result.exitCode,
+                    model: job?.request.draft?.model,
+                    systemPrompt: job?.request.draft?.secondaryText,
+                    tokensPerSecond: job.flatMap { ConversationTranscript.decodeTokensPerSecond(in: $0.log.lines.map(\.text)) }
+                )
+            } else {
+                self.complete(id: requestID, exitCode: result.exitCode, outputURL: result.outputURL,
+                              outputText: result.outputText, commandPreview: result.commandPreview.maskingAPIKeyValue(),
+                              artifactURLs: result.artifactURLs, artifactRoles: result.artifactRoles)
+            }
+            if let job, case .cancelled = job.state,
+               let index = self.items.firstIndex(where: { $0.id == (result.conversationID ?? requestID) }) {
+                self.items[index].status = .cancelled
+                self.save()
+            }
+        }.store(in: &subscriptions)
+        controller.jobs.events.sink { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .started(let job):
+                guard let id = job.request.requestID else { return }
+                self.markRunning(id: job.request.conversationID ?? id)
+            case .changed(let job):
+                guard let id = job.request.requestID, let output = job.primaryArtifactURL,
+                      self.items.first(where: { $0.id == id })?.outputURL != output else { return }
+                self.updateOutput(id: id, outputURL: output)
+            case .output, .finished: break
+            }
+        }.store(in: &subscriptions)
+    }
+
     package func load() {
         do {
             guard fileManager.fileExists(atPath: libraryURL.path) else {
@@ -43,6 +92,18 @@ package final class StudioLibraryStore: ObservableObject {
             // array at all) falls through to corrupt-file recovery.
             let rows = try JSONDecoder.mereRunApp.decode([FailableDecodable<StudioLibraryItem>].self, from: data)
             items = rows.compactMap(\.value).sorted { $0.createdAt > $1.createdAt }
+            var reconciled = false
+            for index in items.indices where items[index].status == .running || items[index].status == .queued {
+                let item = items[index]
+                let owned = observedController?.jobs.all.contains {
+                    $0.state.isActive && ($0.request.requestID == item.id || $0.request.conversationID == item.id)
+                } ?? false
+                if !owned {
+                    items[index].status = .interrupted
+                    reconciled = true
+                }
+            }
+            if reconciled { save() }
         } catch {
             items = []
             recoverCorruptLibrary()
@@ -56,11 +117,17 @@ package final class StudioLibraryStore: ObservableObject {
         status: StudioLibraryStatus = .running,
         arguments: [String]? = nil
     ) -> StudioLibraryItem {
-        let item = StudioLibraryItem(
+        let execution = request.execution ?? StudioExecution(
+            templateID: request.templateID,
+            arguments: arguments ?? request.template.arguments(from: request.draft)
+        )
+        let recordedDraft = (request.execution == nil && arguments == nil
+            ? request.draft : execution.project(onto: request.draft)).withoutSecrets
+        var item = StudioLibraryItem(
             id: request.id,
             mode: request.mode,
-            prompt: request.draft.prompt,
-            inputURL: request.draft.inputPath.isBlank ? nil : URL(fileURLWithPath: request.draft.inputPath),
+            prompt: recordedDraft.prompt,
+            inputURL: recordedDraft.inputPath.isBlank ? nil : URL(fileURLWithPath: recordedDraft.inputPath),
             outputURL: nil,
             createdAt: request.createdAt,
             updatedAt: Date(),
@@ -69,9 +136,11 @@ package final class StudioLibraryStore: ObservableObject {
             commandPreview: commandPreview,
             outputText: nil,
             templateID: request.templateID,
-            commandDraft: request.draft,
-            commandArguments: arguments
+            commandDraft: recordedDraft,
+            commandArguments: execution.arguments.maskingSecrets(),
+            parentID: request.parentID
         )
+        item.inputIdentity = item.inputURL.flatMap(StudioInputIdentity.read)
         upsert(item)
         return item
     }
@@ -150,7 +219,7 @@ package final class StudioLibraryStore: ObservableObject {
     ) -> StudioLibraryItem {
         if let index = items.firstIndex(where: { $0.id == conversationID }) {
             var item = items[index]
-            item.messages = (item.messages ?? []) + [StudioMessage(role: .user, content: content, imagePath: imagePath)]
+            item.messages = (item.messages ?? []) + [StudioMessage(role: .user, content: content, imagePath: imagePath, model: model, systemPrompt: systemPrompt, preset: mode)]
             item.mode = mode
             item.model = model
             item.systemPrompt = systemPrompt
@@ -174,7 +243,7 @@ package final class StudioLibraryStore: ObservableObject {
             exitCode: nil,
             commandPreview: mode == .code ? "mere.run text code" : "mere.run text chat",
             outputText: nil,
-            messages: [StudioMessage(role: .user, content: content, imagePath: imagePath)],
+            messages: [StudioMessage(role: .user, content: content, imagePath: imagePath, model: model, systemPrompt: systemPrompt, preset: mode)],
             systemPrompt: systemPrompt,
             model: model
         )
@@ -203,7 +272,8 @@ package final class StudioLibraryStore: ObservableObject {
             failed: exitCode != 0,
             model: model,
             systemPrompt: systemPrompt,
-            tokensPerSecond: tokensPerSecond
+            tokensPerSecond: tokensPerSecond,
+            preset: item.mode
         ))
         item.messages = messages
         item.status = exitCode == 0 ? .completed : .failed
@@ -250,13 +320,17 @@ package final class StudioLibraryStore: ObservableObject {
                 imagePath: message.imagePath,
                 model: message.model,
                 systemPrompt: message.systemPrompt,
-                tokensPerSecond: message.tokensPerSecond
+                tokensPerSecond: message.tokensPerSecond,
+                preset: message.preset
             )
         }
+        // An edited user turn adopts that turn's settings, even though it is excluded from history.
+        let point = messages[messageIndex]
+        let effective = point.preset != nil ? point : messages[...messageIndex].last { $0.model != nil || $0.systemPrompt != nil }
         let now = Date()
         let branch = StudioLibraryItem(
             id: UUID(),
-            mode: source.mode,
+            mode: effective?.preset ?? source.mode,
             prompt: "",
             inputURL: nil,
             outputURL: nil,
@@ -267,8 +341,8 @@ package final class StudioLibraryStore: ObservableObject {
             commandPreview: source.commandPreview,
             outputText: nil,
             messages: kept,
-            systemPrompt: source.systemPrompt,
-            model: source.model
+            systemPrompt: effective.map(\.systemPrompt) ?? source.systemPrompt,
+            model: effective.map(\.model) ?? source.model
         )
         items.insert(branch, at: 0)
         save()

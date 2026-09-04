@@ -157,8 +157,7 @@ struct StudioAnalyzeImageView: View {
             .offset(x: rect.minX, y: rect.minY)
     }
 
-    /// The mask PNG the run wrote, tinted; a detection with no mask file falls back to a tinted
-    /// box so the Masks view never comes up empty.
+    /// A real mask when present; otherwise an explicitly labeled bounding box.
     @ViewBuilder
     private func maskLayer(_ detection: StudioAnalyzeDetection, in size: CGSize) -> some View {
         if let maskURL = detection.maskURL {
@@ -168,8 +167,15 @@ struct StudioAnalyzeImageView: View {
                 for: detection.box, imageSize: pixelSize, displaySize: size
             )
             RoundedRectangle(cornerRadius: 4)
-                .fill(MereRunTheme.accent.opacity(0.45))
+                .strokeBorder(MereRunTheme.accent, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
                 .frame(width: max(rect.width, 2), height: max(rect.height, 2))
+                .overlay(alignment: .topLeading) {
+                    Text("Box · mask unavailable")
+                        .font(.caption)
+                        .padding(3)
+                        .background(MereRunTheme.surface)
+                }
+                .accessibilityLabel("Bounding box. No segmentation mask available.")
                 .offset(x: rect.minX, y: rect.minY)
         }
     }

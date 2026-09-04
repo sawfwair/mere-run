@@ -333,6 +333,8 @@ enum StudioModelsPresenter {
             return ("Quality gate failed · \(shortDate(latest.updatedAt))", false)
         case .running, .queued:
             return ("Quality gate running", true)
+        case .cancelled, .interrupted:
+            return ("Quality gate " + latest.status.rawValue, false)
         }
     }
 

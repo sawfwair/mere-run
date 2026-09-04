@@ -3,10 +3,9 @@ import StudioKit
 import SwiftUI
 
 /// The Command Console's third pane: the run's log, its structured receipt when the command
-/// printed JSON, and the artifact it wrote. It mirrors the foreground job the same way the
-/// Studio window's job bar does, so a run started here is visible wherever you are looking.
+/// printed JSON, and the artifact it wrote. It observes the selected Console run directly.
 struct StudioConsoleLog: View {
-    @EnvironmentObject private var controller: MereRunController
+    @ObservedObject var job: Job
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,14 +14,14 @@ struct StudioConsoleLog: View {
                     Text("Run")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(MereRunTheme.textPrimary)
-                    Text(controller.status)
+                    Text(job.status)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(MereRunTheme.textMuted)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                if controller.isRunning {
-                    if let progress = controller.currentProgress,
+                if job.state.isActive {
+                    if let progress = job.progress,
                        let fraction = progress.fractionCompleted {
                         ProgressView(value: fraction)
                             .frame(width: 110)
@@ -33,7 +32,7 @@ struct StudioConsoleLog: View {
                             .controlSize(.small)
                     }
                 }
-                if !controller.logs.isEmpty {
+                if !job.log.lines.isEmpty {
                     Button {
                         copyConsole()
                     } label: {
@@ -63,7 +62,7 @@ struct StudioConsoleLog: View {
                 Rectangle().fill(MereRunTheme.border.opacity(0.4)).frame(height: 1)
             }
 
-            if controller.logs.isEmpty {
+            if job.log.lines.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "terminal")
                         .font(.system(size: 28, weight: .medium))
@@ -77,7 +76,7 @@ struct StudioConsoleLog: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 6) {
-                            ForEach(controller.logs) { line in
+                            ForEach(job.log.lines) { line in
                                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                                     Text(line.stream.label)
                                         .font(MereRunTheme.monoFont)
@@ -94,8 +93,8 @@ struct StudioConsoleLog: View {
                         }
                         .padding(14)
                     }
-                    .onChange(of: controller.logs.count) {
-                        if let last = controller.logs.last {
+                    .onChange(of: job.log.lines.count) {
+                        if let last = job.log.lines.last {
                             proxy.scrollTo(last.id, anchor: .bottom)
                         }
                     }
@@ -114,7 +113,7 @@ struct StudioConsoleLog: View {
                     .padding(14)
             }
 
-            if let output = controller.lastOutputURL {
+            if let output = job.primaryArtifactURL {
                 Divider()
                     .overlay(MereRunTheme.border.opacity(0.6))
                 OutputPreview(url: output)
@@ -133,11 +132,11 @@ struct StudioConsoleLog: View {
     }
 
     private var consoleText: String {
-        controller.logs.map { "[\($0.stream.label)] \($0.text)" }.joined(separator: "\n")
+        job.log.lines.map { "[\($0.stream.label)] \($0.text)" }.joined(separator: "\n")
     }
 
     private var resultText: String? {
-        controller.lastRunResult?.outputText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        job.result?.outputText?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var prettyJSON: String? {
@@ -152,7 +151,7 @@ struct StudioConsoleLog: View {
     }
 
     private var adapterCatalog: StudioAdapterCatalog? {
-        guard controller.lastRunResult?.templateID == .adapterList,
+        guard job.result?.templateID == .adapterList,
               let resultText,
               let data = resultText.data(using: .utf8) else {
             return nil

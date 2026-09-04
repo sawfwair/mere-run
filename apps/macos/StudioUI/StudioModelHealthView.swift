@@ -631,6 +631,7 @@ struct StudioModelHealthView: View {
         case .running: "progress.indicator"
         case .completed: "checkmark.seal.fill"
         case .failed: "xmark.octagon.fill"
+        case .cancelled, .interrupted: "stop.circle"
         }
     }
 
@@ -640,6 +641,7 @@ struct StudioModelHealthView: View {
         case .running: MereRunTheme.accent
         case .completed: MereRunTheme.green
         case .failed: MereRunTheme.red
+        case .cancelled, .interrupted: MereRunTheme.textSecondary
         }
     }
 }

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+@testable import StudioUI
 
 /// Which system appearance a snapshot is rendered under.
 enum StudioSnapshotAppearance: String, CaseIterable {
@@ -36,6 +37,8 @@ enum StudioSnapshotAppearance: String, CaseIterable {
 /// shell background does not extend under the toolbar the way it does in the app.
 @MainActor
 enum StudioSnapshotRenderer {
+    static let referenceDate = Date(timeIntervalSince1970: 1_788_527_400)
+
     /// Render `view` at `size` (points) under `appearance` and return the bitmap.
     ///
     /// `settle` bounds how long the main run loop is pumped so SwiftUI and AppKit finish laying
@@ -51,6 +54,9 @@ enum StudioSnapshotRenderer {
         afterAppear: (() -> Void)? = nil
     ) throws -> NSBitmapImageRep {
         prohibitActivation()
+        let previousDate = StudioDisplayClock.fixedDate
+        StudioDisplayClock.fixedDate = Self.referenceDate
+        defer { StudioDisplayClock.fixedDate = previousDate }
 
         let window = makeOffscreenWindow(size: size)
         defer {
@@ -59,7 +65,9 @@ enum StudioSnapshotRenderer {
         }
         window.appearance = appearance.nsAppearance
 
-        let hostingView = NSHostingView(rootView: view)
+        let hostingView = NSHostingView(rootView: view
+            .environment(\.studioReferenceDate, Self.referenceDate)
+            .environment(\.studioVoiceProfileSeed, []))
         hostingView.sceneBridgingOptions = [.toolbars, .title]
         hostingView.frame = CGRect(origin: .zero, size: size)
         window.contentView = hostingView
