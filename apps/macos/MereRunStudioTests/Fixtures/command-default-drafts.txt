@@ -1,0 +1,280 @@
+adapterList	json	true
+adapterPull	prompt	mere-platform-assistant
+agentOnboard	model	text-code-north-mini
+agentStart	prompt	Guide me through setting up mere.run on this machine. Start by summarizing what this Mac can run, then help me install only supported models.
+apiServe	contextSize	32768
+apiServe	model	text-chat-gemma4-12b-4bit
+audioEnhance	audioChunkSeconds	Optional(10)
+audioEnhance	audioDType	Optional("float32")
+audioEnhance	audioGuidanceScale	Optional(1.5)
+audioEnhance	audioODEMethod	Optional("midpoint")
+audioEnhance	audioODESteps	Optional(4)
+audioEnhance	model	audio-enhance-ap-bwe-16kto48k
+audioEnhance	outputPath	~/Music/mere.run/Audio/enhance-audio-<stamp>.wav
+audioEnhance	seed	42
+audioGenerate	model	video-ltx25-full-bf16
+audioGenerate	outputPath	~/Music/mere.run/Sound/generate-audio-<stamp>.wav
+audioGenerate	prompt	a quiet forest at dawn with distant birds
+audioGenerate	seed	42
+audioGenerate	steps	30
+audioGenerate	useDuration	true
+custom	extraArguments	--help
+evaluationPackValidate	json	true
+evaluationPromote	json	true
+evaluationPromote	outputPath	~/Documents/mere.run/Runs/promote-evaluation-report-<stamp>.json
+evaluationRun	dryRun	true
+evaluationRun	json	true
+evaluationRun	outputPath	~/Documents/mere.run/Runs/run-evaluation-pack-<stamp>.json
+geoFire	json	true
+geoFire	outputPath	~/Documents/mere.run/Earth/fire-inference-<stamp>.safetensors
+geoFlood	json	true
+geoFlood	outputPath	~/Documents/mere.run/Earth/flood-inference-<stamp>.safetensors
+geoOlmoEarth	json	true
+geoOlmoEarth	outputPath	~/Documents/mere.run/Earth/olmoearth-embeddings-<stamp>.safetensors
+geoTessera	json	true
+geoTessera	outputPath	~/Documents/mere.run/Earth/tessera-embeddings-<stamp>.safetensors
+imageDatasetDiscover	json	true
+imageGenerate	maxSequenceLength	512
+imageGenerate	model	image-zimage-nano
+imageGenerate	outputPath	~/Pictures/mere.run/Image/generate-or-edit-<stamp>.png
+imageGenerate	prompt	a ceramic coffee mug in soft morning light
+imageReconstruct3D	model	image-3d-triposr
+imageReconstruct3D	outputPath	~/Documents/mere.run/3D/triposr-3d-<stamp>
+imageReconstruct3DMultiview	model	image-3d-instantmesh-base
+imageReconstruct3DMultiview	outputPath	~/Documents/mere.run/3D/instantmesh-multiview-<stamp>
+imageReconstruct3DMultiview	reconstructionResolution	128
+imageReconstruct3DTrellis2	maxTokens	2097152
+imageReconstruct3DTrellis2	model	image-3d-trellis2-4b
+imageReconstruct3DTrellis2	outputPath	~/Documents/mere.run/3D/trellis-2-pbr-3d-<stamp>
+imageReconstruct3DTrellis2	seed	42
+imageReconstruct3DTrellis2	trellisNoRemesh	Optional(false)
+imageReconstruct3DTrellis2	trellisRemeshBand	Optional(1.0)
+imageReconstruct3DTrellis2	trellisSealRadius	Optional(12)
+imageReconstruct3DTrellis2	trellisTextureSeed	Optional("42")
+imageRunPlan	json	true
+imageRunPlan	preflight	true
+imageTrainLoRA	maxSequenceLength	512
+imageTrainLoRA	model	image-krea2-raw
+imageTrainLoRA	outputPath	~/Documents/mere.run/Image/train-lora-<stamp>.safetensors
+imageTrainLoRA	steps	1000
+imageValidate	backend	all
+imageValidate	outputPath	~/Documents/mere.run/Image/validate-image-stack-<stamp>
+imageVisualizeRun	port	8787
+modelBenchmark	contextSize	16384
+modelBenchmark	model	text-chat-q36-nano
+modelBenchmark	temperature	0.0
+modelBenchmarkAPIWorkload	json	true
+modelBenchmarkChat	json	true
+modelBenchmarkCode	benchmarkSandbox	auto
+modelBenchmarkCode	json	true
+modelBenchmarkFused	benchmarkSuite	lite
+modelBenchmarkFused	json	true
+modelBenchmarkGemma4KV	json	true
+modelBenchmarkGemma4MTP	json	true
+modelBenchmarkLagunaDFlash	benchmarkDecodeTokenValues	8,12,16,24,32,48
+modelBenchmarkLagunaDFlash	contextSize	4096
+modelBenchmarkLagunaDFlash	json	true
+modelBenchmarkLagunaDFlash	minP	0.02
+modelBenchmarkLagunaDFlash	temperature	0.0
+modelBenchmarkLagunaDFlash	topP	1.0
+modelBenchmarkToolCalls	json	true
+modelBenchmarkToolContinuations	json	true
+modelBenchmarkVLM	benchmarkDataset	synthetic-vqa-v1
+modelBenchmarkVLM	json	true
+modelBenchmarkVLM	outputPath	~/Documents/mere.run/Models/vision-language-benchmark-<stamp>
+modelGarbageCollect	json	true
+modelInfo	model	image-zimage-nano
+modelLocationList	json	true
+modelOptimize	json	true
+modelOptimize	model	video-minimax-h3-fl2va-mlx
+modelPull	model	image-zimage-nano
+modelRemove	model	image-zimage-nano
+modelRepairManifests	force	true
+modelRepairManifests	json	true
+modelRuntimeGet	json	true
+modelRuntimeGet	model	text-chat-gemma4-12b-4bit
+modelRuntimeSet	json	true
+modelRuntimeSet	model	text-chat-gemma4-12b-4bit
+modelStorage	json	true
+musicAnalyze	model	music-acestep
+musicGenerate	model	music-acestep
+musicGenerate	outputPath	~/Music/mere.run/Music/generate-music-<stamp>.wav
+musicGenerate	prompt	upbeat electronic groove
+musicGenerate	steps	8
+musicRealtime	durationSeconds	30.0
+musicRealtime	model	music-magenta-rt2-small
+musicRealtime	outputPath	~/Music/mere.run/Music/realtime-music-<stamp>.wav
+musicRealtime	prompt	warm ambient pads with a slow build
+musicSeparate	audioDType	Optional("float16")
+musicSeparate	model	music-separate-bs-roformer-viperx-1297
+musicSeparate	outputPath	~/Documents/mere.run/Music/separate-or-restore-<stamp>
+musicServe	model	music-acestep
+musicServe	port	8081
+musicTrainAdapter	alpha	16.0
+musicTrainAdapter	model	music-acestep
+musicTrainAdapter	outputPath	~/Documents/mere.run/Music/train-music-adapter-<stamp>.safetensors
+musicTrainAdapter	rank	8
+musicTrainAdapter	seed	42
+musicTrainAdapter	steps	1000
+musicTranscribe	model	music-muscriptor-medium
+musicTranscribe	outputPath	~/Music/mere.run/Music/transcribe-to-midi-<stamp>.mid
+musicTranscribe	temperature	1.0
+openWebui	host	0.0.0.0
+openWebui	model	text-chat-gemma4-12b-4bit
+pluginDoctor	prompt	mere-runpod
+pluginInfo	json	true
+pluginInstall	prompt	mere-runpod
+qualityGate	outputPath	~/Documents/mere.run/Models/quality-gate-<stamp>.json
+runCancel	json	true
+runFetch	json	true
+runFetch	outputPath	~/Documents/mere.run/Runs/fetch-remote-run-<stamp>
+runInspect	json	true
+runList	json	true
+runRetry	json	true
+sfxAEDecode	model	sfx-woosh-dflow
+sfxAEDecode	outputPath	~/Music/mere.run/Sound/autoencoder-decode-<stamp>.wav
+sfxAEEncode	model	sfx-woosh-dflow
+sfxAEEncode	outputPath	~/Documents/mere.run/Sound/autoencoder-encode-<stamp>.npy
+sfxClapScore	model	sfx-woosh-clap
+sfxClapScore	prompt	a heavy wooden door creaking open
+sfxConditionText	model	sfx-woosh-dflow
+sfxConditionText	outputPath	~/Documents/mere.run/Sound/conditioning-text-<stamp>.safetensors
+sfxConditionText	prompt	a heavy wooden door creaking open
+sfxGenerate	cfgScale	4.5
+sfxGenerate	durationSeconds	8.0
+sfxGenerate	model	sfx-woosh-dflow
+sfxGenerate	outputPath	~/Music/mere.run/Sound/generate-sound-effect-<stamp>.wav
+sfxGenerate	prompt	a heavy wooden door creaking open
+sfxVideo	cfgScale	3.0
+sfxVideo	durationSeconds	8.0
+sfxVideo	model	sfx-woosh-dvflow-8s
+sfxVideo	outputPath	~/Music/mere.run/Sound/video-foley-<stamp>.wav
+sfxVideo	prompt	footsteps on gravel
+speechDiarize	model	speech-diarization-sortformer
+speechDiarize	outputPath	~/Documents/mere.run/Audio/diarize-speakers-<stamp>.json
+speechDiarize	quiet	true
+speechDiarize	speechDiarizationFormat	Optional("json")
+speechDiarize	speechDiarizationMergeGap	Optional(0.25)
+speechDiarize	speechDiarizationMinDuration	Optional(0.25)
+speechDiarize	speechDiarizationThreshold	Optional(0.5)
+speechProfileCreate	prompt	Narration profile
+speechSynthesize	model	speech-tts-qwen3-nano
+speechSynthesize	outputPath	~/Music/mere.run/Voice/synthesize-<stamp>.wav
+speechSynthesize	prompt	Hello from mere.run.
+speechSynthesize	secondaryText	A calm female voice with clear pronunciation
+speechTranscribe	maxTokens	448
+speechTranscribe	outputPath	~/Documents/mere.run/Audio/transcribe-<stamp>.txt
+statusSnapshot	json	true
+textAnonymize	model	text-anonymize-privacy-filter
+textAnonymize	outputPath	~/Documents/mere.run/Text/anonymize-<stamp>.txt
+textAnonymize	prompt	My name is Alice Smith and my email is alice@example.com
+textChat	model	text-chat-gemma4-12b-4bit
+textChat	prompt	Summarize diffusion models in one paragraph.
+textChat	stream	true
+textCode	model	text-code-north-mini
+textCode	prompt	Write a tiny Swift function that formats byte counts.
+textCode	stream	true
+textCode	temperature	1.0
+textCode	topP	0.95
+textEmbed	model	text-embed-qwen3-0.6b
+textEmbed	outputPath	~/Documents/mere.run/Text/embeddings-<stamp>.json
+textEmbed	prompt	semantic search query
+textTrainLoRA	model	text-chat-gemma4-12b-4bit
+textTrainLoRA	outputPath	~/Documents/mere.run/Chat/train-text-lora-<stamp>.safetensors
+textTrainLoRA	seed	42
+textTrainLoRA	steps	600
+videoAnimate	cfgScale	5.0
+videoAnimate	fps	16
+videoAnimate	height	480
+videoAnimate	model	video-scail2-14b-mlx
+videoAnimate	outputPath	~/Pictures/mere.run/Video/animate-subject-<stamp>.mp4
+videoAnimate	prompt	a dancer in a red silk dress
+videoAnimate	scheduleShift	3.0
+videoAnimate	seed	42
+videoAnimate	steps	40
+videoAnimate	width	832
+videoCosmos3	cfgScale	0.0
+videoCosmos3	fps	0
+videoCosmos3	height	720
+videoCosmos3	model	video-cosmos3-edge-mlx
+videoCosmos3	numFrames	189
+videoCosmos3	outputPath	~/Pictures/mere.run/Video/cosmos3-<stamp>.mp4
+videoCosmos3	prompt	a cinematic rover crossing a windswept alien plain
+videoCosmos3	scheduleShift	0.0
+videoCosmos3	seed	0
+videoCosmos3	steps	0
+videoCosmos3	width	1280
+videoDubIt	height	512
+videoDubIt	model	video-ltx25-distilled-bf16
+videoDubIt	outputPath	~/Pictures/mere.run/Video/dub-it-<stamp>.mp4
+videoDubIt	prompt	the speaker performs on a rain-lit street
+videoDubIt	seed	42
+videoDubIt	width	768
+videoExportLatents	height	512
+videoExportLatents	model	video-ltx-av
+videoExportLatents	outputPath	~/Documents/mere.run/Video/export-video-latents-<stamp>.safetensors
+videoExportLatents	prompt	a cinematic drone flythrough over snowy mountains
+videoExportLatents	seed	42
+videoExportLatents	width	768
+videoGenerate	cfgScale	5.0
+videoGenerate	height	512
+videoGenerate	model	video-ltx25-full-bf16
+videoGenerate	outputPath	~/Pictures/mere.run/Video/generate-video-<stamp>.mp4
+videoGenerate	prompt	a cinematic drone flythrough over snowy mountains
+videoGenerate	steps	40
+videoGenerate	width	768
+videoPrepareMasks	model	vision-segment-sam31
+videoPrepareMasks	outputPath	~/Documents/mere.run/Video/prepare-scail-2-masks-<stamp>
+videoRetake	model	video-ltx25-distilled-bf16
+videoRetake	outputPath	~/Pictures/mere.run/Video/retake-video-<stamp>.mp4
+videoRetake	prompt	continue the performance with natural synchronized motion
+videoRetake	seed	42
+videoRetake	steps	30
+videoSession	model	video-ltx23-full-mlx
+visionCaption	maxTokens	96
+visionCaption	outputPath	~/Documents/mere.run/Vision/caption-<stamp>
+visionCaption	prompt	Write a short, concrete caption describing the image for LoRA training. Avoid fluff.
+visionCaption	temperature	0.2
+visionDepthVideo	dryRun	true
+visionDepthVideo	model	vision-depth-vda-small
+visionDepthVideo	outputPath	~/Documents/mere.run/Vision/video-depth-<stamp>
+visionEmbed	maxTokens	8192
+visionEmbed	model	vision-embed-qwen3-vl-2b
+visionEmbed	outputPath	~/Documents/mere.run/Vision/embed-text-image-<stamp>.json
+visionEmbed	secondaryText	Represent the item for retrieval.
+visionFaceBatch	json	true
+visionFaceBatch	model	vision-face-buffalo-l
+visionFaceCompare	json	true
+visionFaceCompare	model	vision-face-buffalo-l
+visionFaceDetect	json	true
+visionFaceDetect	model	vision-face-buffalo-l
+visionFaceEmbed	json	true
+visionFaceEmbed	model	vision-face-buffalo-l
+visionFlow	outputPath	~/Documents/mere.run/Vision/optical-flow-<stamp>.flo
+visionGeometry	dryRun	true
+visionGeometry	model	vision-geometry-moge2-small
+visionGeometry	outputPath	~/Documents/mere.run/Vision/metric-geometry-<stamp>
+visionGeometryMultiview	dryRun	true
+visionGeometryMultiview	model	vision-geometry-da3-small
+visionGeometryMultiview	outputPath	~/Documents/mere.run/Vision/multi-view-geometry-<stamp>
+visionGround	model	vision-ground-falcon-perception
+visionGround	outputPath	~/Pictures/mere.run/Vision/ground-objects-<stamp>.png
+visionGround	prompt	a person
+visionInspect	prompt	Describe this image.
+visionOCR	backend	lighton
+visionOCR	maxTokens	4096
+visionOCR	model	vision-ocr-lighton
+visionOCR	outputPath	~/Documents/mere.run/Vision/ocr-<stamp>
+visionOCR	temperature	0.2
+visionSegment	model	vision-segment-sam31
+visionSegment	outputPath	~/Pictures/mere.run/Vision/segment-<stamp>.png
+visionSegment	prompt	a person
+visionServe	port	8091
+visionTrack	model	vision-segment-sam31
+visionTrack	outputPath	~/Pictures/mere.run/Vision/track-video-<stamp>.mp4
+visionTrack	prompt	a person
+visionTrackLive	model	vision-segment-sam31
+visionTrackLive	outputPath	~/Pictures/mere.run/Vision/track-camera-<stamp>.mp4
+visionTrackLive	prompt	a person
+worldServe	model	video-dreamx-world-5b-ar-mlx
+worldServe	port	8791

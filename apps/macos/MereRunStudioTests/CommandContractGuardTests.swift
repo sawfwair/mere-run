@@ -4,11 +4,13 @@ import XCTest
 
 /// Guards the app's argv builder against the shared CLI contract.
 ///
-/// `StudioTypesTests.testEveryLocalAdvancedTemplateIsBackedByTheSharedCLIContract` only
-/// builds argv from each template's default draft, so a flag that is emitted only when a
-/// field is set is never checked. These tests build probe drafts that reach every guarded
-/// branch of `CommandTemplate.arguments(from:)` and assert that each emitted `--flag` is
-/// declared for the template's capability in `MereRunCapabilityCatalog`.
+/// `CommandArguments` builds argv from the `CommandFlags` constants generated out of the
+/// contract, so a flag the contract does not declare cannot be spelled at all. What a
+/// compile cannot see is a flag borrowed from a neighbouring capability — the shared face
+/// options are read off one of the four capabilities that declare them — or a subcommand path
+/// that drifts. These tests build probe drafts that reach every guarded branch of
+/// `CommandArguments` and assert that each emitted `--flag` is declared for the template's own
+/// capability in `MereRunCapabilityCatalog`.
 final class CommandContractGuardTests: XCTestCase {
     func testEveryFlagEmittedFromProbeDraftsIsDeclaredByTheContract() throws {
         var driftedCommandPaths: [String] = []
@@ -82,32 +84,6 @@ final class CommandContractGuardTests: XCTestCase {
         }
     }
 
-    /// Reads the flag literals in `CommandTemplate.arguments(from:)` and asserts that the
-    /// probe drafts emit each of them for at least one template. Without this, a guard the
-    /// generic per-type rule cannot satisfy (for example `field == "specific-choice"`) would
-    /// leave its flag unverified while every other test stayed green. A new literal that
-    /// fails here needs a named entry in `CommandDraftProbes.variantValuesByField`.
-    func testProbeDraftsReachEveryFlagLiteralInTheArgumentBuilder() throws {
-        let literals = try CommandCatalogSource.argumentBuilderFlagLiterals()
-        XCTAssertGreaterThan(literals.count, 400, "Flag literal scan found too few flags to be trusted")
-
-        var emitted = Set<String>()
-        for emission in try CommandDraftProbes.emissions.get() {
-            for flag in emission.arguments where flag.hasPrefix("--") {
-                emitted.insert(flag)
-            }
-        }
-
-        let unreached = literals.subtracting(emitted).sorted()
-        XCTAssertEqual(
-            unreached,
-            [],
-            """
-            arguments(from:) contains flag literals no probe draft reaches. Add a named variant \
-            to CommandDraftProbes.variantValuesByField that satisfies the guard in front of each.
-            """
-        )
-    }
 }
 
 private extension CommandTemplate {
@@ -151,9 +127,9 @@ enum CommandDraftProbes {
     static let genericString = "1"
 
     /// Field values the generic per-type rule cannot produce because the argv builder compares
-    /// the field against a specific literal. Each entry names the guard it exists for. The
-    /// literal reach test fails when a guard whose flag appears nowhere else is missing here;
-    /// the per-template contract check is what the remaining entries feed.
+    /// the field against a specific literal. Each entry names the guard it exists for, so the
+    /// branch behind it reaches both the contract check here and the recorded argv in
+    /// `CommandArgumentGoldenTests`.
     static let variantValuesByField: [String: [String]] = [
         // `musicLMMode == "use"` emits --use-lm; `== "disable"` emits --no-lm.
         "musicLMMode": ["use", "disable"],
@@ -213,7 +189,7 @@ enum CommandDraftProbes {
 
     /// Every raw-value enum field contributes all of its cases, so `switch` statements over
     /// enum fields are fully exercised.
-    private static func enumCaseVariants(in draft: CommandDraft) -> [(String, [Any])] {
+    static func enumCaseVariants(in draft: CommandDraft) -> [(String, [Any])] {
         Mirror(reflecting: draft).children.compactMap { child in
             guard let label = child.label,
                   let iterable = type(of: child.value) as? any CaseIterable.Type else { return nil }
@@ -278,34 +254,3 @@ extension Optional: OptionalWrapping {
     static var wrappedType: Any.Type { Wrapped.self }
 }
 
-/// Reads flag literals out of `CommandCatalog.swift` so the reach test can prove the probes
-/// exercise every branch of the argv builder.
-enum CommandCatalogSource {
-    static func argumentBuilderFlagLiterals() throws -> Set<String> {
-        let testsDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        let source = testsDirectory
-            .deletingLastPathComponent()
-            .appendingPathComponent("MereRunStudio/CommandCatalog.swift")
-        let lines = try String(contentsOf: source, encoding: .utf8).split(separator: "\n", omittingEmptySubsequences: false)
-
-        let start = try XCTUnwrap(
-            lines.firstIndex { $0.contains("func arguments(from draft: CommandDraft) -> [String]") },
-            "arguments(from:) moved; update CommandCatalogSource"
-        )
-        // The builder and its private helpers end where the enclosing type closes.
-        let end = lines[start...].firstIndex { $0 == "}" } ?? lines.endIndex
-
-        let pattern = try NSRegularExpression(pattern: #""(--[a-z0-9][a-z0-9-]*)""#)
-        var flags = Set<String>()
-        for line in lines[start..<end] {
-            let text = String(line)
-            let range = NSRange(text.startIndex..., in: text)
-            for match in pattern.matches(in: text, range: range) {
-                if let flagRange = Range(match.range(at: 1), in: text) {
-                    flags.insert(String(text[flagRange]))
-                }
-            }
-        }
-        return flags
-    }
-}
