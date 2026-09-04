@@ -275,6 +275,56 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .visionServe: return "vision.serve"
         }
     }
+
+    /// The capability's contract entry, when the command is one the shared contract declares.
+    var capability: MereRunCommandCapability? {
+        capabilityID.flatMap { MereRunCapabilityCatalog.command(id: $0) }
+    }
+
+    /// True when the CLI prints the `{"event":"result"}` receipt line for this command under
+    /// `--receipt`. The contract owns the list, so a capability that gains the flag needs no
+    /// change here.
+    var emitsRunReceipt: Bool {
+        guard let capabilityID else { return false }
+        return MereRunCapabilityCatalog.receiptCapabilityIDs.contains(capabilityID)
+    }
+
+    /// True when the CLI streams `--progress-json` events for this command.
+    var emitsProgressJSON: Bool {
+        guard let capabilityID else { return false }
+        return MereRunCapabilityCatalog.progressJSONCapabilityIDs.contains(capabilityID)
+    }
+}
+
+/// The flags the app adds to a run's argv so it can read the CLI's structured output: the
+/// result receipt it resolves artifacts from, and the progress event stream it renders.
+///
+/// They are transport rather than user intent, so they are appended to the launched argv only —
+/// never to the "Will run" preview, a library row's command, or the console's echo of the
+/// command, all of which stay the command a person would type. `--preflight` runs get neither:
+/// the CLI rejects `--receipt --preflight`, and a preflight report has no progress to stream.
+enum StudioMachineOutputFlags {
+    static let receipt = "--receipt"
+    static let progressJSON = "--progress-json"
+
+    /// The flags to append to `arguments` for one run, in a stable order. Empty when the
+    /// capability declares neither, when the run is a preflight, or when the app already passes
+    /// the flag from the draft.
+    static func arguments(
+        template: CommandTemplate,
+        draft: CommandDraft,
+        appendingTo arguments: [String]
+    ) -> [String] {
+        guard !draft.preflight, !arguments.contains("--preflight") else { return [] }
+        var flags: [String] = []
+        if template.id.emitsRunReceipt, !arguments.contains(receipt) {
+            flags.append(receipt)
+        }
+        if template.id.emitsProgressJSON, !arguments.contains(progressJSON) {
+            flags.append(progressJSON)
+        }
+        return flags
+    }
 }
 
 enum CommandInputKind: Equatable {
@@ -971,6 +1021,28 @@ struct CommandTemplate: Identifiable, Equatable {
         self.defaultModel = defaultModel
         self.defaultExtraArguments = defaultExtraArguments
         self.externalURL = externalURL
+    }
+
+    /// The output kind the shared contract declares for this command, or nil for the rows the
+    /// contract does not cover (`.custom`, and launcher-only entries).
+    var declaredOutputKind: MereRunCapabilityOutputKind? {
+        id.capability?.output.kind
+    }
+
+    /// True when the command materializes a file or directory the app can adopt as the run's
+    /// primary artifact.
+    ///
+    /// The contract's declared kind is read first, so a command the app models as producing
+    /// nothing still resolves its `--output` path when the contract says it writes one. The
+    /// app's own `outputKind` still counts, because a handful of commands write a file the
+    /// contract summarizes as `text` (the benchmarks' `--output` report) or as a `service`
+    /// (`music realtime`, which also records a WAV); see
+    /// `ArtifactReceiptTests.testDeclaredOutputKindsDriftOnlyWhereRecorded`.
+    var producesOutputFile: Bool {
+        if declaredOutputKind == .file || declaredOutputKind == .directory {
+            return true
+        }
+        return outputKind != .none
     }
 
     func defaultDraft() -> CommandDraft {
