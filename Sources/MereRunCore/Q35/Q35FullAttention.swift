@@ -162,7 +162,8 @@ final class Q35FullAttention: Module {
         let queryCount = q.dim(2)
         let keyCount = k.dim(2)
         let attn: MLXArray
-        if let indexer, targetVerify, b == 1, (2...9).contains(queryCount),
+        if let indexer, targetVerify, b == 1, (2...32).contains(queryCount),
+           (queryCount <= 9 || Q38WideVerificationPolicy.exactSparseAttention),
            keyCount >= queryCount, case .causal = mask {
             // Flash-Next's BF16 dense attention and sparse reductions can
             // round differently with multiple query rows. Also, a block can

@@ -17,7 +17,7 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
                 weight: weight, bias: nil, scales: scales, biases: biases,
                 groupSize: 64, bits: 4, mode: .affine
             )
-            for count in [2, 3, 4] {
+            for count in [2, 4, 8, 16, 32] {
                 let input = MLXRandom.normal([1, count, inputSize]).asType(.bfloat16)
                 let serial = (0..<count).map { row in
                     let result = layer(input[0..., row..<(row + 1), 0...])
@@ -35,23 +35,35 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
         MLXRandom.seed(121)
         let layer = Q38GatedResidual(config: try configuration())
         installMixedWeights(layer)
-        let input = MLXRandom.normal([1, 4, 10_240]).asType(.bfloat16)
-        let mixed = layer.mix(input)
-        var serialMixed: [MLXArray] = []
-        var serialInjection: [MLXArray] = []
-        var serialCombined: [MLXArray] = []
-        for row in 0..<4 {
-            let piece = input[0..., row..<(row + 1), 0...]
-            let result = layer.mix(piece)
-            let combined = layer.combine(piece)
-            MLX.eval(result.mixed, result.injectionWeights, combined)
-            serialMixed.append(result.mixed)
-            serialInjection.append(result.injectionWeights)
-            serialCombined.append(combined)
+        for width in [4, 8, 16, 32] {
+            let input = MLXRandom.normal([1, width, 10_240]).asType(.bfloat16)
+            let mixed = layer.mix(input)
+            var serialMixed: [MLXArray] = []
+            var serialInjection: [MLXArray] = []
+            var serialCombined: [MLXArray] = []
+            for row in 0..<width {
+                let piece = input[0..., row..<(row + 1), 0...]
+                let result = layer.mix(piece)
+                let combined = layer.combine(piece)
+                MLX.eval(result.mixed, result.injectionWeights, combined)
+                serialMixed.append(result.mixed)
+                serialInjection.append(result.injectionWeights)
+                serialCombined.append(combined)
+            }
+            assertVerificationParity(
+                mixed.mixed, MLX.concatenated(serialMixed, axis: 1), "hyper mix M=\(width)", width: width
+            )
+            assertVerificationParity(
+                mixed.injectionWeights,
+                MLX.concatenated(serialInjection, axis: 1),
+                "hyper injection M=\(width)", width: width
+            )
+            assertVerificationParity(
+                layer.combine(input),
+                MLX.concatenated(serialCombined, axis: 1),
+                "hyper combine M=\(width)", width: width
+            )
         }
-        assertExact(mixed.mixed, MLX.concatenated(serialMixed, axis: 1), "hyper mix")
-        assertExact(mixed.injectionWeights, MLX.concatenated(serialInjection, axis: 1), "hyper injection")
-        assertExact(layer.combine(input), MLX.concatenated(serialCombined, axis: 1), "hyper combine")
     }
 
     func testMixedExpertBlockMatchesSerialRows() throws {
@@ -59,14 +71,18 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
         MLXRandom.seed(122)
         let layer = Q35FeedForward(config: try configuration())
         installMixedWeights(layer)
-        let input = MLXRandom.normal([1, 4, 2_560]).asType(.bfloat16)
-        let actual = layer(input)
-        let serial = (0..<4).map { row in
-            let result = layer(input[0..., row..<(row + 1), 0...])
-            MLX.eval(result)
-            return result
+        for width in [4, 16, 32] {
+            let input = MLXRandom.normal([1, width, 2_560]).asType(.bfloat16)
+            let actual = layer(input, targetVerify: width > 4)
+            let serial = (0..<width).map { row in
+                let result = layer(input[0..., row..<(row + 1), 0...])
+                MLX.eval(result)
+                return result
+            }
+            assertVerificationParity(
+                actual, MLX.concatenated(serial, axis: 1), "mixed experts M=\(width)", width: width
+            )
         }
-        assertExact(actual, MLX.concatenated(serial, axis: 1), "mixed experts")
     }
 
     func testMixedPLEMatchesSerialRows() throws {
@@ -145,7 +161,16 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
         }
     }
 
-    private func qualifyDecoder(layerType: Q35AttentionLayerType, prefixCount: Int) throws {
+    func testWideMixedDecoderBlocksMatchSerialRows() throws {
+        try qualifyDecoder(layerType: .linear, prefixCount: 31, widths: [16, 32])
+        try qualifyDecoder(layerType: .full, prefixCount: 2_053, widths: [16, 32])
+    }
+
+    private func qualifyDecoder(
+        layerType: Q35AttentionLayerType,
+        prefixCount: Int,
+        widths: [Int] = [2, 3, 4]
+    ) throws {
         try requireGPU()
         MLXRandom.seed(123)
         let layer = Q35DecoderLayer(config: try configuration(), layerIndex: 0, layerTypeOverride: layerType)
@@ -168,7 +193,7 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
             let prefix = MLXRandom.normal([1, prefixCount, 10_240]).asType(.bfloat16)
             MLX.eval(layer(prefix, fullMask: .causal, cache: base))
         }
-        for width in [2, 3, 4] {
+        for width in widths {
             let input = MLXRandom.normal([1, width, 10_240]).asType(.bfloat16)
             let candidate = base.fork()
             let reference = base.fork()
@@ -179,8 +204,12 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
                 MLX.eval(result)
                 return result
             }
-            assertExact(actual, MLX.concatenated(serial, axis: 1),
-                        "\(layerType.rawValue) decoder, prefix=\(prefixCount), width=\(width)")
+            assertVerificationParity(
+                actual,
+                MLX.concatenated(serial, axis: 1),
+                "\(layerType.rawValue) decoder, prefix=\(prefixCount), width=\(width)",
+                width: width
+            )
         }
     }
 
@@ -189,9 +218,9 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
         var replacements: [(String, Module)] = []
         for (key, child) in module.leafModules().flattened() {
             if let expert = child as? Q35SwitchLinear {
-                let (weight, scales, biases) = MLX.quantized(expert.weight, groupSize: 128, bits: 2)
+                let (weight, scales, biases) = MLX.quantized(expert.weight, groupSize: 64, bits: 3)
                 replacements.append((key, Q35SwitchLinear(
-                    weight: weight, scales: scales, biases: biases, bias: nil, groupSize: 128, bits: 2
+                    weight: weight, scales: scales, biases: biases, bias: nil, groupSize: 64, bits: 3
                 )))
             } else if let linear = child as? Linear,
                       key != "gate", key != "shared_expert_gate",
@@ -216,6 +245,24 @@ final class Q38LayerVerificationParityTests: MereRunCoreTestCase {
     private func assertExact(_ actual: MLXArray, _ expected: MLXArray, _ label: String) {
         let difference = (actual.asType(.float32) - expected.asType(.float32)).abs()
         XCTAssertEqual(difference.max().item(Float.self), 0, "\(label) changed serial arithmetic")
+    }
+
+    private func assertVerificationParity(
+        _ actual: MLXArray,
+        _ expected: MLXArray,
+        _ label: String,
+        width: Int
+    ) {
+        guard width > 9 else {
+            assertExact(actual, expected, label)
+            return
+        }
+        let difference = (actual.asType(.float32) - expected.asType(.float32)).abs()
+        XCTAssertLessThanOrEqual(
+            difference.max().item(Float.self),
+            0.04,
+            "\(label) exceeded the qualified wide-verification numerical envelope"
+        )
     }
 
     private func configuration() throws -> Q35Config {

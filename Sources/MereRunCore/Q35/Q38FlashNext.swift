@@ -2,15 +2,46 @@ import Foundation
 import MLX
 import MLXNN
 
+enum Q38WideVerificationPolicy {
+    static let exactDenseProjections = enabled(
+        "MERERUN_Q38_EXACT_WIDE_DENSE", defaultValue: false
+    )
+    static let exactSparseAttention = enabled("MERERUN_Q38_EXACT_WIDE_QSA")
+    static let exactExpertRoutes = enabled("MERERUN_Q38_EXACT_WIDE_MOE")
+    private static let denseProjectionShapes: Set<String>? = {
+        guard let raw = ProcessInfo.processInfo.environment["MERERUN_Q38_EXACT_WIDE_DENSE_SHAPES"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        return Set(raw.split(separator: ",").map(String.init))
+    }()
+
+    static func exactDenseProjection(output: Int, input: Int) -> Bool {
+        guard exactDenseProjections else { return false }
+        guard let denseProjectionShapes else { return true }
+        return denseProjectionShapes.contains("\(output)x\(input)")
+    }
+
+    private static func enabled(_ key: String, defaultValue: Bool = true) -> Bool {
+        guard let value = ProcessInfo.processInfo.environment[key]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() else { return defaultValue }
+        return value != "0" && value != "false" && value != "off"
+    }
+}
+
 /// Flash-Next keeps its readout, router, and indexer in BF16. Small-batch GEMM
 /// can round differently from one-token GEMV, including at three/four rows.
-/// Keep those short batches on serial arithmetic; quantized projections
-/// retain their own weight-reusing QMV path and prefill stays batched.
+/// Keep short verification batches on serial arithmetic; selected wide dense
+/// shapes can opt in for diagnostics. Quantized projections retain their own
+/// weight-reusing QMV path and prefill stays batched.
 func q38SmallBatchProjection(_ layer: Linear, _ input: MLXArray) -> MLXArray {
     #if os(macOS)
-    if Device.defaultDevice().deviceType == .gpu,
+    if (input.dim(1) <= 9 || Q38WideVerificationPolicy.exactDenseProjection(
+        output: layer.weight.dim(0), input: layer.weight.dim(1)
+    )),
+       Device.defaultDevice().deviceType == .gpu,
        input.ndim == 3, input.dim(0) == 1,
-       (2...9).contains(input.dim(1)),
+       (2...32).contains(input.dim(1)),
        input.dtype == .bfloat16, layer.weight.dtype == .bfloat16 {
         return MLX.concatenated((0..<input.dim(1)).map { row in
             layer(input[0..., row..<(row + 1), 0...])

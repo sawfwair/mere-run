@@ -88,6 +88,125 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
             }
         }
     }
+
+    func testQ38WideAffineQMVShapesMatchSerialRowsBitExactly() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip(
+                "Wide Flash-Next affine QMV parity requires MERERUN_TEST_MLX_DEVICE=gpu."
+            )
+        }
+        MLXRandom.seed(73)
+        for (outputSize, inputSize) in [(320, 10_240), (10_240, 320)] {
+            let denseWeight = MLXRandom.uniform(
+                -0.2..<0.2,
+                [outputSize, inputSize]
+            ).asType(.bfloat16)
+            let (weight, scales, optionalBiases) = MLX.quantized(
+                denseWeight,
+                groupSize: 64,
+                bits: 4,
+                mode: .affine
+            )
+            let biases = try XCTUnwrap(optionalBiases)
+
+            for width in [16, 32] {
+                let input = MLXRandom.uniform(
+                    -0.5..<0.5,
+                    [1, width, inputSize]
+                ).asType(.bfloat16)
+                let expected = MLX.concatenated((0..<width).map { row in
+                    MLX.quantizedMM(
+                        input[0..., row..<(row + 1), 0...],
+                        weight,
+                        scales: scales,
+                        biases: biases,
+                        transpose: true,
+                        groupSize: 64,
+                        bits: 4,
+                        mode: .affine
+                    )
+                }, axis: 1)
+                let actual = try XCTUnwrap(SmallBatchAffineQMV.matmul(
+                    input,
+                    weight: weight,
+                    scales: scales,
+                    biases: biases,
+                    groupSize: 64,
+                    bits: 4,
+                    mode: .affine
+                ))
+                MLX.eval(expected, actual)
+
+                let maximumError = MLX.max(MLX.abs(
+                    expected.asType(.float32) - actual.asType(.float32)
+                )).item(Float.self)
+                XCTAssertEqual(maximumError, 0, "\(outputSize)x\(inputSize), width \(width)")
+            }
+        }
+    }
+
+    func testSmallBatchAffineGatherQMVMatchesSerialRoutesBitExactly() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip(
+                "Small-batch affine gather QMV parity requires MERERUN_TEST_MLX_DEVICE=gpu."
+            )
+        }
+        MLXRandom.seed(72)
+        let expertCount = 7
+        let routeCount = 23
+        for inputSize in [512, 640] {
+            let outputSize = 96
+            let denseWeight = MLXRandom.uniform(
+                -0.2..<0.2,
+                [expertCount, outputSize, inputSize]
+            ).asType(.bfloat16)
+            let (weight, scales, optionalBiases) = MLX.quantized(
+                denseWeight,
+                groupSize: 64,
+                bits: 3,
+                mode: .affine
+            )
+            let biases = try XCTUnwrap(optionalBiases)
+            let input = MLXRandom.uniform(
+                -0.5..<0.5,
+                [routeCount, 1, inputSize]
+            ).asType(.bfloat16)
+            let indexValues = (0..<routeCount).map { UInt32(($0 * 3) % expertCount) }
+            let indices = MLXArray(indexValues)
+            let expected = MLX.concatenated((0..<routeCount).map { route in
+                let expert = Int(indexValues[route])
+                return MLX.quantizedMM(
+                    input[route..<(route + 1), 0..., 0...],
+                    weight[expert, 0..., 0...],
+                    scales: scales[expert, 0..., 0...],
+                    biases: biases[expert, 0..., 0...],
+                    transpose: true,
+                    groupSize: 64,
+                    bits: 3,
+                    mode: .affine
+                )
+            }, axis: 0)
+            let actual = try XCTUnwrap(SmallBatchAffineGatherQMV.matmul(
+                input,
+                weight: weight,
+                scales: scales,
+                biases: biases,
+                indices: indices,
+                groupSize: 64,
+                bits: 3
+            ))
+            MLX.eval(expected, actual)
+
+            let maximumError = MLX.max(MLX.abs(
+                expected.asType(.float32) - actual.asType(.float32)
+            )).item(Float.self)
+            XCTAssertEqual(
+                maximumError,
+                0,
+                "K=\(inputSize) changed serial gather QMV output"
+            )
+        }
+    }
     func testFlashNextUnalignedQuantizedProjectionsMatchSerialRows() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("Flash-Next projection parity requires MERERUN_TEST_MLX_DEVICE=gpu.")
@@ -100,7 +219,8 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
                 weight: weight, bias: nil, scales: scales, biases: biases,
                 groupSize: 64, bits: 4, mode: .affine
             )
-            for count in [2, 3, 4, 7, 9] {
+            let counts = inputSize == 320 ? [2, 3, 4, 7, 9, 16, 32] : [2, 3, 4, 7, 9]
+            for count in counts {
                 let input = MLXRandom.uniform(-0.5..<0.5, [1, count, inputSize]).asType(.bfloat16)
                 let serial = MLX.concatenated((0..<count).map {
                     layer(input[0..., $0..<($0 + 1), 0...])
@@ -134,7 +254,7 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
 
     func testFlashNextDenseProjectionKeepsPrefillAndBatchingNative() {
         let layer = Linear(weight: MLXArray.ones([16, 32], dtype: .bfloat16), bias: nil)
-        for shape in [[1, 1, 32], [1, 10, 32], [2, 4, 32]] {
+        for shape in [[1, 1, 32], [1, 33, 32], [2, 4, 32]] {
             let input = MLXRandom.uniform(-0.5..<0.5, shape).asType(.bfloat16)
             let expected = layer(input)
             let actual = q38SmallBatchProjection(layer, input)
