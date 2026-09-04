@@ -166,25 +166,59 @@ enum StudioMarkdownParser {
 struct StudioMarkdownText: View {
     let content: String
     var bodyFont: Font = MereRunTheme.bodyFont
+    /// Extra leading between prose lines (the chat transcript reads at 1.55).
+    var lineSpacing: CGFloat = 0
+    /// Draws the live-reply caret at the end of the last block while a reply streams in, so the
+    /// cursor sits where the next character will land instead of on a line of its own.
+    var streamingCaret = false
+
+    /// The caret glyph: a thin accent bar at text height (a left one-eighth block, about 2pt
+    /// wide at body size), appended inline to the last run.
+    static let caret = Text("\u{258F}").foregroundColor(MereRunTheme.accent)
 
     var body: some View {
         let blocks = StudioMarkdownParser.parse(content)
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                blockView(block)
+            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
+                blockView(block, caret: streamingCaret && index == blocks.count - 1)
+            }
+            if streamingCaret && blocks.isEmpty {
+                Self.caret.font(bodyFont)
             }
         }
     }
 
     @ViewBuilder
-    private func blockView(_ block: StudioMarkdownBlock) -> some View {
+    private func blockView(_ block: StudioMarkdownBlock, caret: Bool) -> some View {
         switch block {
         case .paragraph(let text):
-            Text(StudioMarkdownParser.inline(text))
-                .font(bodyFont)
-                .foregroundStyle(MereRunTheme.textPrimary)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+            paragraph(Text(StudioMarkdownParser.inline(text)), caret: caret)
+        case .code(let language, let content):
+            StudioCodeBlock(language: language, content: content, trailingCaret: caret)
+        default:
+            if caret {
+                plainBlock(block)
+                Self.caret.font(bodyFont)
+            } else {
+                plainBlock(block)
+            }
+        }
+    }
+
+    private func paragraph(_ text: Text, caret: Bool) -> some View {
+        (caret ? text + Self.caret : text)
+            .font(bodyFont)
+            .lineSpacing(lineSpacing)
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private func plainBlock(_ block: StudioMarkdownBlock) -> some View {
+        switch block {
+        case .paragraph(let text):
+            paragraph(Text(StudioMarkdownParser.inline(text)), caret: false)
         case .heading(let level, let text):
             Text(StudioMarkdownParser.inline(text))
                 .font(headingFont(level))
@@ -223,6 +257,7 @@ struct StudioMarkdownText: View {
                         .foregroundStyle(MereRunTheme.accent)
                     Text(StudioMarkdownParser.inline(item))
                         .font(bodyFont)
+                        .lineSpacing(lineSpacing)
                         .foregroundStyle(MereRunTheme.textPrimary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -241,12 +276,15 @@ struct StudioMarkdownText: View {
     }
 }
 
-/// A fenced code panel: language chip, hover-revealed copy, wrapped monospaced text.
+/// A fenced code panel on `surfaceRaised`: a header row with the language eyebrow and Copy
+/// over a hairline, then wrapped 12pt monospaced text. Only the code is monospaced — prose
+/// around it stays proportional in every preset.
 private struct StudioCodeBlock: View {
     let language: String?
     let content: String
+    /// Appends the live-reply caret to the code while it is still streaming in.
+    var trailingCaret = false
 
-    @State private var hovering = false
     @State private var copied = false
 
     var body: some View {
@@ -254,44 +292,55 @@ private struct StudioCodeBlock: View {
             HStack(spacing: 8) {
                 Text(language ?? "code")
                     .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.textMuted)
+                    .kerning(0.5)
                     .textCase(.uppercase)
+                    .foregroundStyle(MereRunTheme.textMuted)
                 Spacer(minLength: 0)
                 Button {
                     copy()
                 } label: {
-                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 10.5, weight: .medium))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
+                    HStack(spacing: 4) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11, weight: .medium))
+                        Text(copied ? "Copied" : "Copy")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
                 }
-                .buttonStyle(.mereIcon)
-                .opacity(hovering || copied ? 1 : 0)
+                .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
                 .accessibilityLabel("Copy code")
             }
-            .padding(.horizontal, MereRunTheme.Spacing.sm)
-            .padding(.top, MereRunTheme.Spacing.xs)
-            .padding(.bottom, 4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(MereRunTheme.border.opacity(0.4))
+                    .frame(height: 1)
+            }
 
-            Text(content)
-                .font(.system(size: 12.5, design: .monospaced))
+            codeText
+                .font(.system(size: 12, design: .monospaced))
+                .lineSpacing(4)
                 .foregroundStyle(MereRunTheme.textPrimary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, MereRunTheme.Spacing.sm)
-                .padding(.bottom, MereRunTheme.Spacing.sm)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
         }
         .background {
-            RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                .fill(MereRunTheme.surface)
+            RoundedRectangle(cornerRadius: MereRunTheme.Radius.base)
+                .fill(MereRunTheme.surfaceRaised)
                 .overlay {
-                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                        .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.base)
+                        .strokeBorder(MereRunTheme.border.opacity(0.4), lineWidth: 1)
                 }
         }
-        .onHover { hovering = $0 }
-        .animation(MereRunTheme.Motion.quick, value: hovering)
+    }
+
+    private var codeText: Text {
+        trailingCaret ? Text(content) + StudioMarkdownText.caret : Text(content)
     }
 
     private func copy() {

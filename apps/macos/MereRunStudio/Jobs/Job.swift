@@ -52,6 +52,11 @@ enum JobCommand {
         return nil
     }
 
+    var rawArguments: [String]? {
+        if case .raw(let arguments) = self { return arguments }
+        return nil
+    }
+
     var isRaw: Bool {
         if case .raw = self { return true }
         return false
@@ -150,6 +155,7 @@ struct JobRequest {
 
     var template: CommandTemplate? { command.template }
     var draft: CommandDraft? { command.draft }
+    var rawArguments: [String]? { command.rawArguments }
     var templateID: CommandTemplateID? { command.template?.id }
 }
 

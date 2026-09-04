@@ -19,16 +19,28 @@ struct StudioRootView: View {
     @SceneStorage("studio.mode") private var lastPromptMode: StudioMode = .createImage
     @SceneStorage("studio.showLibrary") private var storedShowLibrary = true
     @SceneStorage("studio.libraryScope") private var libraryScope: StudioLibraryScope = .domain
+    /// The prompt tasks whose inspector stays open, as `StudioInspectorTaskMemory` encodes them.
+    @SceneStorage("studio.inspectorTasks") private var storedInspectorTasks = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    /// The status probe never answered within its grace period, so the footer says so.
+    @State private var probeTimedOut = false
     /// The prompt mode the composer, canvas, and readiness were last set up for, so the
     /// destination observer activates a mode exactly once however the destination arrived.
     @State private var activatedMode: StudioMode?
     @State private var draft = StudioDraft()
-    @State private var showOptions = false
     @State private var isDropTargeted = false
+    /// Which jobs exist; the feed re-derives its cards when one starts or finishes.
+    @StateObject private var jobMonitor = StudioJobMonitor()
+    /// The card of the Library row the user just picked, outlined for a moment.
+    @State private var highlightedCardID: UUID?
+    @State private var highlightReset: Task<Void, Never>?
+    /// A run of this mode that finished while its card was off-screen ("New result ↓").
+    @State private var newResultID: UUID?
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
     @State private var activeConversationID: UUID?
+    /// An Analyze next step in flight: the input and prompt to hand the task being opened.
+    @State private var pendingAnalyzeHandoff: StudioAnalyzeHandoff?
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var pendingRestrictedPull: StudioRunRequest?
     @State private var studioError: String?
@@ -60,10 +72,48 @@ struct StudioRootView: View {
         destination.task.mode != nil
     }
 
-    /// The Library column belongs to domains with a prompt workspace; System pages and the
-    /// form-shaped domains (3D, Earth, Text) use the full width.
+    /// The Library column belongs to prompt tasks only: Subjects, Realtime, Models, and the other
+    /// Project, Session, and Manage tasks take the full width even inside a Create domain.
     private var showsLibraryColumn: Bool {
-        navigation.showLibrary && destination.domain.hasPromptWorkspace
+        navigation.showLibrary && destination.task.isPromptTask
+    }
+
+    private var showsInspectorColumn: Bool {
+        showsPromptWorkspace && navigation.showsInspector(for: destination.task)
+    }
+
+    private var showsCommandColumn: Bool {
+        showsPromptWorkspace && navigation.showsCommandColumn(for: destination.task)
+    }
+
+    /// The feed's cards for the current mode: the Library rows plus the jobs still alive.
+    private var feedCards: [StudioFeedCard] {
+        _ = jobMonitor.generation
+        return StudioFeedCardBuilder.cards(items: library.items, mode: mode, job: jobMonitor.job(requestID:))
+    }
+
+    private var runningFeedJob: Job? {
+        feedCards.last { $0.kind == .running }?.job
+    }
+
+    private var queuedFeedCount: Int {
+        feedCards.filter { $0.kind == .queued }.count
+    }
+
+    /// Whether the composer shows Stop instead of Run: only a conversation turn in flight. A
+    /// generation in flight keeps Run available (the next one queues) and has Cancel on its card.
+    private var isModeRunning: Bool {
+        mode.isConversational && activeConversationRunning
+    }
+
+    private var showsConversation: Bool {
+        mode.isConversational && (selectedItem == nil || selectedItem?.isConversation == true)
+    }
+
+    /// The `model pull` in flight for this mode's model, so the readiness card shows its progress.
+    private var activePullJob: Job? {
+        _ = jobMonitor.generation
+        return jobMonitor.pullJob(for: StudioCommandAdapter.requiredModel(for: mode, draft: draft))
     }
 
     private var selectedItem: StudioLibraryItem? {
@@ -128,12 +178,6 @@ struct StudioRootView: View {
         return message
     }
 
-    private var displayStatus: String {
-        guard controller.queuedRunCount > 0 else { return controller.status }
-        let suffix = controller.queuedRunCount == 1 ? "1 queued" : "\(controller.queuedRunCount) queued"
-        return "\(controller.status) · \(suffix)"
-    }
-
     /// Domains whose default task needs a managed model this machine cannot run.
     private var domainUnavailableMessages: [StudioDomain: String] {
         var messages: [StudioDomain: String] = [:]
@@ -156,6 +200,24 @@ struct StudioRootView: View {
         Binding(
             get: { navigation.showLibrary },
             set: { navigation.showLibrary = $0 }
+        )
+    }
+
+    private var showInspectorBinding: Binding<Bool> {
+        Binding(
+            get: { navigation.showsInspector(for: destination.task) },
+            set: { shown in
+                if shown != navigation.showsInspector(for: destination.task) { toggleInspector() }
+            }
+        )
+    }
+
+    private var showCommandBinding: Binding<Bool> {
+        Binding(
+            get: { navigation.showsCommandColumn(for: destination.task) },
+            set: { shown in
+                if shown != navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
+            }
         )
     }
 
@@ -186,15 +248,74 @@ struct StudioRootView: View {
             StudioSidebar(
                 selectedDomain: domainBinding,
                 unavailableMessages: domainUnavailableMessages,
-                serverStatus: controller.serverStatus,
-                resolvedCLI: controller.resolvedCLI,
-                onShowServer: { navigation.open(domain: .server) },
-                onShowModels: { navigation.open(task: .modelsInstalled) }
+                status: machineStatus,
+                runningJobs: runningJobCount,
+                isActivityOpen: $navigation.showActivity
             )
         } detail: {
             detailArea
         }
         .background(MereRunTheme.background.ignoresSafeArea())
+        // The controller publishes nil until the status probe answers; a probe that never answers
+        // must still resolve, so the footer stops saying "Checking…" after the grace period.
+        .task(id: controller.serverStatus == nil) {
+            guard controller.serverStatus == nil else {
+                probeTimedOut = false
+                return
+            }
+            try? await Task.sleep(for: .seconds(StudioMachineStatus.checkingGracePeriod))
+            guard !Task.isCancelled, controller.serverStatus == nil else { return }
+            probeTimedOut = true
+        }
+        .overlay(alignment: .bottomLeading) { activityOverlay }
+    }
+
+    private var machineStatus: StudioMachineStatus {
+        StudioMachineStatus(serverStatus: controller.serverStatus, probeTimedOut: probeTimedOut)
+    }
+
+    /// How many jobs the footer pill counts: the user's work, never a readiness probe.
+    private var runningJobCount: Int {
+        _ = jobMonitor.generation
+        return StudioActivity.lanes.reduce(0) { $0 + controller.jobs.running(in: $1).count }
+    }
+
+    /// The Activity popover, drawn over the whole window rather than inside the sidebar column: it
+    /// is 340pt wide and would be clipped by the column, and it must float over the Library.
+    @ViewBuilder
+    private var activityOverlay: some View {
+        if navigation.showActivity {
+            ZStack(alignment: .bottomLeading) {
+                // Anywhere else in the window dismisses it, the way a popover does.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { navigation.showActivity = false }
+                StudioActivityPopover(
+                    jobs: controller.jobs,
+                    status: machineStatus,
+                    appVersion: controller.appVersion,
+                    cliVersion: controller.cliVersion,
+                    modelsRoot: controller.modelsRoot,
+                    resolvedCLI: controller.resolvedCLI,
+                    onOpenServer: {
+                        navigation.showActivity = false
+                        navigation.open(domain: .server)
+                    },
+                    onOpenModels: {
+                        navigation.showActivity = false
+                        navigation.open(task: .modelsInstalled)
+                    }
+                )
+                .padding(.leading, 10)
+                .padding(.bottom, 56)
+                Button("Close Activity") { navigation.showActivity = false }
+                    .keyboardShortcut(.cancelAction)
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
+            .transition(reduceMotion ? .identity : .opacity)
+        }
     }
 
     // The detail area runs to the top of the window (the title bar is hidden and nothing sits in
@@ -205,9 +326,17 @@ struct StudioRootView: View {
     private var detailArea: some View {
         HStack(spacing: 0) {
             if showsLibraryColumn {
-                libraryColumn
-                    .frame(width: StudioLayoutPolicy.libraryWidth)
-                    .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
+                Group {
+                    // Converse keeps its threads in their own column; they never file into
+                    // the media Library.
+                    if destination.domain == .chat {
+                        threadListColumn
+                    } else {
+                        libraryColumn
+                    }
+                }
+                .frame(width: StudioLayoutPolicy.libraryWidth)
+                .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
 
                 Divider()
                     .overlay(MereRunTheme.border.opacity(0.53))
@@ -216,8 +345,17 @@ struct StudioRootView: View {
             VStack(spacing: 0) {
                 contentHeader
                 banners
-                domainContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                HStack(spacing: 0) {
+                    domainContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if showsInspectorColumn {
+                        inspectorColumn
+                            .transition(reduceMotion ? .identity : .move(edge: .trailing).combined(with: .opacity))
+                    } else if showsCommandColumn {
+                        commandColumn
+                            .transition(reduceMotion ? .identity : .move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
             }
         }
         .ignoresSafeArea(.container, edges: .top)
@@ -255,7 +393,7 @@ struct StudioRootView: View {
 
     private var libraryColumn: some View {
         StudioLibraryPanel(
-            items: library.items,
+            items: StudioThreadListPresenter.mediaItems(in: library.items),
             domain: destination.domain,
             scope: $libraryScope,
             progressByID: controller.progressByRequestID,
@@ -270,6 +408,18 @@ struct StudioRootView: View {
         )
     }
 
+    private var threadListColumn: some View {
+        StudioThreadList(
+            items: library.items,
+            selectedID: activeConversationID,
+            onSelect: openThread,
+            onNewThread: startNewConversation,
+            onDelete: deleteLibraryItem,
+            onRename: library.rename,
+            leadingInset: windowChromeInset
+        )
+    }
+
     // MARK: - Content header
 
     /// The 52pt header row at the top of the content column: domain glyph, title, and subtitle
@@ -279,13 +429,51 @@ struct StudioRootView: View {
             domain: destination.domain,
             subtitle: domainSubtitle,
             task: taskBinding,
-            showsLibraryToggle: destination.domain.hasPromptWorkspace,
+            showsPanelToggles: destination.task.isPromptTask,
             isLibraryShown: navigation.showLibrary,
-            isConsoleOpen: navigation.isConsoleOpen,
+            isInspectorShown: navigation.showsInspector(for: destination.task),
+            isCommandShown: destination.task.isPromptTask
+                ? navigation.showsCommandColumn(for: destination.task)
+                : navigation.isConsoleOpen,
             leadingInset: showsLibraryColumn ? 0 : windowChromeInset,
             onToggleLibrary: toggleLibrary,
-            onOpenConsole: { openConsole() }
+            onToggleInspector: toggleInspector,
+            onToggleCommand: toggleCommand
         )
+    }
+
+    // MARK: - Inspector and Command view
+
+    private var inspectorColumn: some View {
+        StudioInspector(
+            mode: mode,
+            draft: $draft,
+            baseline: freshDraft(for: mode),
+            modelInventory: modelInventory,
+            readiness: readiness,
+            lastSeed: lastSeed,
+            onShowModels: { navigation.open(task: .modelsInstalled) },
+            onShowAdapters: { navigation.open(task: .modelsAdapters) },
+            onShowRealtimeMusic: { navigation.open(task: .musicRealtime) },
+            onClose: toggleInspector
+        )
+    }
+
+    @ViewBuilder
+    private var commandColumn: some View {
+        if let request = try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false) {
+            StudioCommandView(
+                mode: mode,
+                template: request.template,
+                draft: request.draft,
+                displayCommand: controller.commandPreview(
+                    template: request.template, draft: request.draft, masksSecrets: true
+                ),
+                canRun: !readiness.blocksRun && !(mode.isConversational && activeConversationRunning),
+                onRun: runStudioCommand,
+                onClose: toggleCommand
+            )
+        }
     }
 
     /// Models reports its installed count and store size; every other domain keeps its tagline.
@@ -514,10 +702,23 @@ struct StudioRootView: View {
 
     private var promptWorkspace: some View {
         VStack(spacing: 0) {
-            canvas
+            if mode.isConversational {
+                converseSurface
+            } else {
+                canvas
+            }
 
             composer
+
+            if let studioError {
+                MereBanner(severity: .error, text: studioError, onDismiss: { self.studioError = nil })
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+                    .padding(.top, -8)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
+        .animation(reduceMotion ? nil : MereRunTheme.Motion.standard, value: studioError)
         .frame(minWidth: StudioLayoutPolicy.minimumCanvasWidth)
         .background {
             ZStack {
@@ -556,37 +757,107 @@ struct StudioRootView: View {
         .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
     }
 
+    @ViewBuilder
     private var canvas: some View {
-        StudioCanvas(
+        if showsConversation {
+            StudioConversationView(
+                item: activeConversationItem,
+                liveText: activeConversationLiveText,
+                isRunning: activeConversationRunning,
+                mode: mode,
+                onNewChat: startNewConversation,
+                onCopy: copyToClipboard,
+                onRetry: retryLastTurn,
+                onEdit: editMessage,
+                onUseExample: useExamplePrompt
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let archetype = destination.task.analyzeArchetype {
+            StudioAnalyzeCanvas(
+                archetype: archetype,
+                mode: mode,
+                cards: feedCards,
+                selectedID: navigation.selectedLibraryID,
+                inputPath: draft.inputPath,
+                readiness: readiness,
+                pullJob: activePullJob,
+                actions: feedActions,
+                analyze: analyzeActions
+            )
+        } else {
+            StudioFeedCanvas(
+                mode: mode,
+                cards: feedCards,
+                readiness: readiness,
+                pullJob: activePullJob,
+                highlightedID: highlightedCardID,
+                newResultID: $newResultID,
+                actions: feedActions
+            )
+        }
+    }
+
+    private var analyzeActions: StudioAnalyzeActions {
+        StudioAnalyzeActions(
+            replaceInput: chooseAttachment,
+            openTask: openSiblingTask,
+            save: saveAnalyzeResult
+        )
+    }
+
+    private var feedActions: StudioFeedActions {
+        StudioFeedActions(
+            vary: varyLibraryItem,
+            rerun: retryLibraryItem,
+            useAsInput: useOutputAsInput,
+            saveTo: saveOutput,
+            cancel: { jobMonitor.cancel($0) },
+            remove: removeQueued,
+            retry: retryLibraryItem,
+            delete: { deleteLibraryItem($0.id) },
+            pullModel: pullModel,
+            showDetails: {
+                if !navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
+            },
+            useExample: useExamplePrompt,
+            attach: chooseAttachment
+        )
+    }
+
+    /// The Converse archetype: thread header, transcript, and readiness in place of the canvas.
+    private var converseSurface: some View {
+        StudioConverseView(
             mode: mode,
-            item: selectedItem,
-            conversationItem: activeConversationItem,
-            conversationLiveText: activeConversationLiveText,
-            isConversationRunning: activeConversationRunning,
-            isRunning: controller.isRunning,
-            status: displayStatus,
+            item: activeConversationItem,
+            liveText: activeConversationLiveText,
+            isRunning: activeConversationRunning,
             readiness: readiness,
             error: studioError,
-            logs: controller.logs,
-            liveOutputText: controller.liveOutputText,
-            progress: selectedItem.flatMap { controller.progressByRequestID[$0.id] }
-                ?? controller.currentProgress,
-            onOpen: openSelectedOutput,
-            onReveal: revealSelectedOutput,
-            onQuickLook: {
-                if let url = selectedItem?.outputURL { QuickLookCoordinator.shared.preview(url) }
-            },
+            budgetChars: conversationBudgetChars,
+            modelInventory: modelInventory,
+            model: $draft.model,
+            systemPrompt: $draft.secondaryText,
             onPullModel: pullModel,
             onShowDetails: { openConsole() },
-            onNewChat: startNewConversation,
+            onShowModels: { navigation.open(task: .modelsInstalled) },
             onCopy: copyToClipboard,
             onRetry: retryLastTurn,
-            onRerunItem: retryLibraryItem,
-            onEditRun: editLibraryItem,
             onEdit: editMessage,
-            onStop: controller.cancel,
-            onUseExample: useExamplePrompt,
-            onAttach: chooseAttachment
+            onBranch: branchFromMessage,
+            onUseExample: useExamplePrompt
+        )
+    }
+
+    /// The history budget for the next turn: sized from the model's context window when the
+    /// inventory (or an explicit context size) reports one, else the fixed default.
+    private var conversationBudgetChars: Int {
+        ConversationTranscript.budgetChars(
+            contextTokens: ConversationTranscript.contextTokens(
+                requestedContextSize: draft.contextSize,
+                model: StudioModelNaming.resolvedModelID(for: mode, model: draft.model),
+                inventory: modelInventory
+            ),
+            maxOutputTokens: draft.maxTokens
         )
     }
 
@@ -594,25 +865,15 @@ struct StudioRootView: View {
         StudioComposer(
             mode: mode,
             draft: $draft,
-            showOptions: $showOptions,
-            isRunning: controller.isRunning,
-            queuedCount: controller.queuedRunCount,
+            isRunning: isModeRunning,
+            queuedCount: mode.isConversational ? 0 : queuedFeedCount,
             readiness: readiness,
-            sendBlocked: mode.isConversational && activeConversationRunning,
             modelInventory: modelInventory,
             lastSeed: lastSeed,
             promptFocus: $promptFocused,
             onRun: runStudioCommand,
-            onStop: controller.cancel,
-            onShowModels: { navigation.open(task: .modelsInstalled) },
-            onShowAdapters: {
-                showOptions = false
-                navigation.open(task: .modelsAdapters)
-            },
-            onShowRealtimeMusic: {
-                showOptions = false
-                navigation.open(task: .musicRealtime)
-            }
+            onStop: stopModeRun,
+            onShowModels: { navigation.open(task: .modelsInstalled) }
         )
     }
 
@@ -669,7 +930,11 @@ struct StudioRootView: View {
         StudioSceneActions(
             destination: destination,
             showLibrary: showLibraryBinding,
-            canShowLibrary: destination.domain.hasPromptWorkspace,
+            canShowLibrary: destination.task.isPromptTask,
+            showInspector: showInspectorBinding,
+            canShowInspector: destination.task.isPromptTask,
+            showCommand: showCommandBinding,
+            canShowCommand: destination.task.isPromptTask,
             open: { navigation.open(destination: $0) },
             openDomain: { navigation.open(domain: $0) },
             newChat: startNewConversation,
@@ -677,8 +942,8 @@ struct StudioRootView: View {
             runComposer: runStudioCommand,
             canRun: showsPromptWorkspace && !readiness.blocksRun
                 && !(mode.isConversational && activeConversationRunning),
-            stop: controller.cancel,
-            canStop: controller.isRunning,
+            stop: stopCurrentRun,
+            canStop: controller.isRunning || (mode.isConversational && activeConversationRunning),
             openConsole: { openConsole() },
             showGuide: { navigation.showGuide = true },
             importReceipt: importReceipt
@@ -697,6 +962,8 @@ struct StudioRootView: View {
         }
         .onAppear {
             navigation.showLibrary = storedShowLibrary
+            navigation.inspectorTasks = StudioInspectorTaskMemory.decode(storedInspectorTasks)
+            jobMonitor.attach(controller.jobs)
             // Restore goes through the model so remembered tasks and the Vision Lab variant learn
             // the persisted destination; the reconciled prompt mode replaces a stale studio.mode.
             let restoredMode = navigation.restore(destination: storedDestination, lastPromptMode: lastPromptMode)
@@ -724,6 +991,9 @@ struct StudioRootView: View {
         .onChange(of: navigation.showLibrary) { _, isShown in
             storedShowLibrary = isShown
         }
+        .onChange(of: navigation.inspectorTasks) { _, tasks in
+            storedInspectorTasks = StudioInspectorTaskMemory.encode(tasks)
+        }
         .onChange(of: controller.recommendedChatModelID) { _, _ in
             guard mode == .chat, activeConversationID == nil else { return }
             controller.applyRecommendedDefaults(to: &draft, for: mode)
@@ -735,12 +1005,17 @@ struct StudioRootView: View {
             refreshReadiness()
         }
         .onChange(of: navigation.selectedLibraryID) { _, id in
-            // Selecting a thread of the current conversation mode opens it in the canvas.
+            // A thread selected while Converse is shown (a deep link, or the list) opens in the
+            // transcript; a thread of the other preset switches the task control to match.
             guard mode.isConversational,
                   let id,
                   let item = library.items.first(where: { $0.id == id }),
-                  item.isConversation, item.mode == mode,
+                  item.isConversation,
                   id != activeConversationID else { return }
+            guard item.mode == mode else {
+                navigation.open(task: item.mode.task)
+                return
+            }
             activeConversationID = id
             applyConversationSettings(from: item, to: &draft)
             draft.prompt = ""
@@ -789,10 +1064,19 @@ struct StudioRootView: View {
             // Conversation turns append the assistant reply to the thread instead of taking the
             // single-shot completion path.
             if let conversationID = result.conversationID {
+                // The turn records what it actually ran with (the job's own command snapshot),
+                // so a thread whose model or system prompt changed mid-way says which turn used what.
+                let job = result.requestID.flatMap { controller.jobs.job(requestID: $0) }
+                let turnDraft = job?.request.draft
                 library.appendAssistant(
                     conversationID: conversationID,
                     content: conversationReplyContent(for: result),
-                    exitCode: result.exitCode
+                    exitCode: result.exitCode,
+                    model: turnDraft.map(\.model).flatMap { $0.isBlank ? nil : $0 },
+                    systemPrompt: turnDraft.map(\.secondaryText).flatMap { $0.isBlank ? nil : $0 },
+                    tokensPerSecond: job.flatMap {
+                        ConversationTranscript.decodeTokensPerSecond(in: $0.log.lines.map(\.text))
+                    }
                 )
                 // Only follow selection if this is the thread the user is currently viewing — a
                 // background turn completing must not yank selection away from the foreground.
@@ -803,6 +1087,8 @@ struct StudioRootView: View {
                 return
             }
 
+            // The card updates in place; selection stays where the user left it, and a finished
+            // card that is scrolled out of view announces itself with the "New result" pill.
             let completedLibraryItem = result.requestID != nil
             if let requestID = result.requestID {
                 library.complete(
@@ -813,7 +1099,9 @@ struct StudioRootView: View {
                     commandPreview: result.commandPreview.maskingAPIKeyValue(),
                     artifactURLs: result.artifactURLs
                 )
-                navigation.selectedLibraryID = requestID
+                if result.exitCode == 0, library.items.first(where: { $0.id == requestID })?.mode == mode {
+                    newResultID = requestID
+                }
             }
 
             let mutatedModels = result.templateID == .modelPull
@@ -831,18 +1119,23 @@ struct StudioRootView: View {
                 refreshInstalledModels()
             }
         }
-        .onChange(of: controller.activeRunRequestID) { _, requestID in
-            // Conversation turns use a per-turn request id with no matching library row, so the
-            // guard keeps the thread selected instead of deselecting it.
-            guard let requestID, library.items.contains(where: { $0.id == requestID }) else { return }
-            library.markRunning(id: requestID)
-            navigation.selectedLibraryID = requestID
-        }
-        .onChange(of: controller.lastOutputURL) { _, outputURL in
-            guard let requestID = controller.activeRunRequestID, let outputURL,
-                  library.items.contains(where: { $0.id == requestID }) else { return }
-            library.updateOutput(id: requestID, outputURL: outputURL)
-            navigation.selectedLibraryID = requestID
+        .onReceive(controller.jobs.events) { event in
+            // Library bookkeeping follows every job, foreground or background: a row turns
+            // "running" when its process launches and learns its output the moment the file
+            // appears, without moving the selection.
+            switch event {
+            case .started(let job):
+                guard let requestID = job.request.requestID,
+                      library.items.contains(where: { $0.id == requestID }) else { return }
+                library.markRunning(id: requestID)
+            case .changed(let job):
+                guard let requestID = job.request.requestID, let url = job.primaryArtifactURL,
+                      let item = library.items.first(where: { $0.id == requestID }),
+                      item.outputURL != url else { return }
+                library.updateOutput(id: requestID, outputURL: url)
+            case .output, .finished:
+                break
+            }
         }
     }
 
@@ -859,35 +1152,127 @@ struct StudioRootView: View {
             library.items.first { $0.id == id && $0.mode == newMode }
         }
         if newMode.isConversational {
-            // Open the picked or most recent thread for this mode (or a fresh one) and reuse its
-            // system/model so follow-ups match; the composer starts empty.
-            let thread = preferred?.isConversation == true
-                ? preferred
-                : library.items.first { $0.mode == newMode && $0.isConversation }
-            activeConversationID = thread?.id
-            navigation.selectedLibraryID = thread?.id
-            if let thread { applyConversationSettings(from: thread, to: &nextDraft) }
+            if let preferred, preferred.isConversation {
+                // A thread the user picked: open it and reuse its system/model so follow-ups match.
+                activeConversationID = preferred.id
+                applyConversationSettings(from: preferred, to: &nextDraft)
+            } else if let current = activeConversationItem {
+                // Chat ↔ Code is a preset change, not a thread change: keep the thread open and
+                // apply the preset's defaults (its command, model, and system prompt) to the
+                // next turn.
+                navigation.selectedLibraryID = current.id
+            } else if let recent = StudioThreadListPresenter.threads(in: library.items).first {
+                // Arriving fresh: open the most recent thread of either preset. One of the other
+                // preset re-enters here through the task control with it selected.
+                activeConversationID = recent.id
+                navigation.selectedLibraryID = recent.id
+                if recent.mode != newMode {
+                    navigation.open(task: recent.mode.task)
+                    return
+                }
+                applyConversationSettings(from: recent, to: &nextDraft)
+            } else {
+                activeConversationID = nil
+                navigation.selectedLibraryID = nil
+            }
             nextDraft.prompt = ""
         } else {
             activeConversationID = nil
-            navigation.selectedLibraryID = preferred?.id ?? library.items.first { $0.mode == newMode }?.id
+            let selected = preferred ?? library.items.first { $0.mode == newMode }
+            navigation.selectedLibraryID = selected?.id
+            // An input-first task is about a file: opening it on a past run should show that run's
+            // input, so the canvas and the composer's well never disagree.
+            if newMode.destination.task.isAnalyzeTask, nextDraft.inputPath.isBlank {
+                applyAnalyzeInput(from: selected, to: &nextDraft)
+            }
         }
+        if let handoff = pendingAnalyzeHandoff, handoff.task.mode == newMode {
+            handoff.apply(to: &nextDraft)
+            navigation.selectedLibraryID = nil
+        }
+        pendingAnalyzeHandoff = nil
         draft = nextDraft
         controller.checkReadiness(for: newMode, draft: draft)
         if newMode != .listen { promptFocused = true }
     }
 
     /// A Library row the user clicked. Rows of another mode switch the destination first;
-    /// `activateMode` then keeps the clicked row selected.
+    /// `activateMode` then keeps the clicked row selected. The feed scrolls to the row's card
+    /// and outlines it briefly.
     private func selectLibraryItem(_ item: StudioLibraryItem) {
         navigation.selectedLibraryID = item.id
-        guard item.mode != mode || !showsPromptWorkspace else { return }
+        highlightCard(item.id)
+        guard item.mode != mode || !showsPromptWorkspace else {
+            if destination.task.isAnalyzeTask { applyAnalyzeInput(from: item, to: &draft) }
+            return
+        }
         navigation.open(destination: item.mode.destination)
+    }
+
+    /// Puts a past Analyze run's input and prompt back in the composer, so the canvas shows the
+    /// picture that run was about and re-running it is one click away.
+    private func applyAnalyzeInput(from item: StudioLibraryItem?, to draft: inout StudioDraft) {
+        guard let item, let inputURL = item.inputURL else { return }
+        draft.inputPath = inputURL.path
+        if !item.prompt.isBlank { draft.prompt = item.prompt }
+    }
+
+    private func highlightCard(_ id: UUID) {
+        highlightReset?.cancel()
+        highlightedCardID = id
+        highlightReset = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard !Task.isCancelled, highlightedCardID == id else { return }
+            highlightedCardID = nil
+        }
+    }
+
+    private func toggleInspector() {
+        if reduceMotion {
+            navigation.toggleInspector(for: destination.task)
+        } else {
+            withAnimation(MereRunTheme.Motion.standard) {
+                navigation.toggleInspector(for: destination.task)
+            }
+        }
+    }
+
+    /// Prompt tasks flip the Command view column; every other task still opens the Console
+    /// window, which stays the raw surface for their templates.
+    private func toggleCommand() {
+        guard destination.task.isPromptTask else {
+            openConsole()
+            return
+        }
+        if reduceMotion {
+            navigation.toggleCommandColumn(for: destination.task)
+        } else {
+            withAnimation(MereRunTheme.Motion.standard) {
+                navigation.toggleCommandColumn(for: destination.task)
+            }
+        }
+    }
+
+    /// A thread picked in the Converse list. Threads of the other preset switch the task first
+    /// (the selection observer then opens the thread); same-preset threads open directly.
+    private func openThread(_ thread: StudioLibraryItem) {
+        guard thread.id != activeConversationID else { return }
+        navigation.selectedLibraryID = thread.id
+        guard thread.mode == mode else {
+            navigation.open(task: thread.mode.task)
+            return
+        }
+        activeConversationID = thread.id
+        applyConversationSettings(from: thread, to: &draft)
+        draft.prompt = ""
+        studioError = nil
+        promptFocused = true
     }
 
     private func deleteLibraryItem(_ id: UUID) {
         library.delete(id: id)
         if navigation.selectedLibraryID == id { navigation.selectedLibraryID = nil }
+        if activeConversationID == id { activeConversationID = nil }
     }
 
     /// Opens the Command Console window with the composer's draft carried into the Advanced
@@ -956,14 +1341,128 @@ struct StudioRootView: View {
             let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
             let preview = controller
                 .commandPreview(template: request.template, draft: request.draft, masksSecrets: true)
-            let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
-                ? .queued
-                : .running
+            let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
             library.start(request: request, commandPreview: preview, status: status)
             navigation.selectedLibraryID = request.id
             controller.run(studio: request)
         } catch {
             studioError = error.localizedDescription
+        }
+    }
+
+    /// The composer's Stop: the run of this mode in flight, or the thread's turn.
+    private func stopModeRun() {
+        if let job = runningFeedJob {
+            jobMonitor.cancel(job)
+        } else {
+            controller.cancel()
+        }
+    }
+
+    /// Takes a queued run out of the queue and drops its row; a stale queued row from an earlier
+    /// launch has no job and is simply dropped.
+    private func removeQueued(_ card: StudioFeedCard) {
+        if let job = card.job { jobMonitor.cancel(job) }
+        deleteLibraryItem(card.id)
+    }
+
+    /// Runs the same command again with a fresh, recorded seed, so the variation is repeatable.
+    private func varyLibraryItem(_ item: StudioLibraryItem) {
+        guard var commandDraft = item.commandDraft else {
+            studioError = "This older Library item does not include a replayable command."
+            return
+        }
+        commandDraft.seed = String(Int.random(in: 1...Int(Int32.max)))
+        runLibraryItem(item, draft: commandDraft)
+    }
+
+    /// A contextual next step on an Analyze result: opens the sibling task with this run's input
+    /// and prompt carried over, so "Segment these" continues from the same picture.
+    private func openSiblingTask(_ task: StudioTask) {
+        if task.mode != nil {
+            pendingAnalyzeHandoff = StudioAnalyzeHandoff.make(
+                to: task, inputPath: draft.inputPath, prompt: draft.prompt
+            )
+            navigation.selectedLibraryID = nil
+        }
+        // A task without a composer reads this same draft, so its input is already carried.
+        navigation.open(destination: task.destination)
+    }
+
+    /// The Analyze result column's "Save…" steps.
+    private func saveAnalyzeResult(_ kind: StudioAnalyzeSaveKind) {
+        guard let item = analyzeResultItem else { return }
+        switch kind {
+        case .json:
+            guard let url = StudioAnalyzeDocumentSource.url(for: item) else {
+                studioError = "This run did not write a result document."
+                return
+            }
+            saveOutput(url)
+        case .media:
+            guard let url = item.outputURL else {
+                studioError = "This run did not write an output file."
+                return
+            }
+            saveOutput(url)
+        case .text:
+            if let url = StudioAnalyzeDocumentSource.url(for: item), url.pathExtension != "json" {
+                saveOutput(url)
+                return
+            }
+            saveText(item.outputText, suggestedName: "transcript.txt")
+        }
+    }
+
+    /// The run the Analyze canvas is showing: the picked Library row, else this mode's newest.
+    private var analyzeResultItem: StudioLibraryItem? {
+        let finished = feedCards.filter { $0.kind == .generation }
+        if let selectedLibraryID = navigation.selectedLibraryID,
+           let picked = finished.first(where: { $0.id == selectedLibraryID }) {
+            return picked.item
+        }
+        return finished.last?.item
+    }
+
+    private func saveText(_ text: String?, suggestedName: String) {
+        guard let text, !text.isBlank else {
+            studioError = "This run left no text to save."
+            return
+        }
+        guard let destination = StudioSpecialistFiles.saveFile(
+            title: "Save result",
+            suggestedName: suggestedName
+        ) else { return }
+        do {
+            try text.write(to: destination, atomically: true, encoding: .utf8)
+        } catch {
+            studioError = "Could not save \(destination.lastPathComponent): \(error.localizedDescription)"
+        }
+    }
+
+    /// Loads an output into the composer's well as the next run's input.
+    private func useOutputAsInput(_ url: URL) {
+        guard draft.attach(dropped: [url], for: mode) else {
+            studioError = "\(mode.title) does not take \(url.lastPathComponent) as an input."
+            return
+        }
+        studioError = nil
+        promptFocused = true
+    }
+
+    /// Copies an output to a location the user picks.
+    private func saveOutput(_ url: URL) {
+        guard let destination = StudioSpecialistFiles.saveFile(
+            title: "Save output",
+            suggestedName: url.lastPathComponent
+        ) else { return }
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: url, to: destination)
+        } catch {
+            studioError = "Could not save \(url.lastPathComponent): \(error.localizedDescription)"
         }
     }
 
@@ -992,12 +1491,15 @@ struct StudioRootView: View {
 
         let rendered = ConversationTranscript.render(
             messages: item.messages ?? [],
-            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
+            budgetChars: conversationBudgetChars
         )
 
         do {
             var runDraft = draft
             runDraft.prompt = rendered.prompt
+            // `--stats` reports the decode speed on stderr; the turn's meta line shows it.
+            runDraft.stats = true
             let request = try StudioCommandAdapter.makeRequest(
                 mode: mode, draft: runDraft, conversationID: conversationID
             )
@@ -1009,6 +1511,20 @@ struct StudioRootView: View {
             draft.inputPath = ""
         } catch {
             studioError = error.localizedDescription
+        }
+    }
+
+    /// Stops what the composer's Stop circle points at: the streaming turn of the open thread
+    /// in Converse, otherwise the foreground run.
+    private func stopCurrentRun() {
+        guard mode.isConversational, let conversationID = activeConversationID,
+              controller.runningConversationIDs.contains(conversationID) else {
+            controller.cancel()
+            return
+        }
+        for job in controller.jobs.all
+        where job.request.conversationID == conversationID && job.state.isActive {
+            controller.jobs.cancel(job.id)
         }
     }
 
@@ -1030,11 +1546,13 @@ struct StudioRootView: View {
         let systemPrompt = item.systemPrompt
         let rendered = ConversationTranscript.render(
             messages: item.messages ?? [],
-            systemPrompt: systemPrompt
+            systemPrompt: systemPrompt,
+            budgetChars: conversationBudgetChars
         )
         do {
             var runDraft = draft
             runDraft.prompt = rendered.prompt
+            runDraft.stats = true
             runDraft.secondaryText = systemPrompt ?? ""
             // Re-attach the image the last user turn carried (or none), not the cleared composer's.
             runDraft.inputPath = item.messages?.last?.imagePath ?? ""
@@ -1049,8 +1567,16 @@ struct StudioRootView: View {
     }
 
     private func retryLibraryItem(_ item: StudioLibraryItem) {
+        guard let commandDraft = item.commandDraft else {
+            studioError = "This older Library item does not include a replayable command."
+            return
+        }
+        runLibraryItem(item, draft: commandDraft)
+    }
+
+    /// Submits a Library row's command again as a new row, with `draft` in place of its own.
+    private func runLibraryItem(_ item: StudioLibraryItem, draft commandDraft: CommandDraft) {
         guard let templateID = item.templateID,
-              let commandDraft = item.commandDraft,
               let template = CommandCatalog.template(id: templateID) else {
             studioError = "This older Library item does not include a replayable command."
             return
@@ -1062,9 +1588,7 @@ struct StudioRootView: View {
             draft: commandDraft
         )
         let preview = controller.commandPreview(template: template, draft: commandDraft, masksSecrets: true)
-        let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
-            ? .queued
-            : .running
+        let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
         library.start(request: request, commandPreview: preview, status: status)
         navigation.selectedLibraryID = request.id
         _ = controller.run(studio: request)
@@ -1108,6 +1632,7 @@ struct StudioRootView: View {
         case .createImage, .chat, .code:
             draft.loraPath = reference
             navigation.open(destination: mode.destination)
+            if !navigation.showsInspector(for: mode.task) { navigation.toggleInspector(for: mode.task) }
         default:
             openConsole()
         }
@@ -1160,6 +1685,37 @@ struct StudioRootView: View {
             activeConversationID = nil
             navigation.selectedLibraryID = nil
         }
+    }
+
+    /// Branches a new thread at a turn. From a user turn: the thread up to (not including) that
+    /// turn, with its text loaded into the composer so the edit runs in the branch and the
+    /// original keeps its history. From an assistant turn: the thread through that reply.
+    private func branchFromMessage(_ messageID: UUID) {
+        guard let conversationID = activeConversationID,
+              !controller.runningConversationIDs.contains(conversationID),
+              let source = library.items.first(where: { $0.id == conversationID }),
+              let message = source.messages?.first(where: { $0.id == messageID }) else { return }
+        let inclusive = message.role == .assistant
+        guard let branch = library.branch(conversationID: conversationID, at: messageID, inclusive: inclusive) else {
+            return
+        }
+        if branch.messages?.isEmpty ?? true {
+            // Branching before the first turn is just a new thread carrying that prompt.
+            library.delete(id: branch.id)
+            startNewConversation()
+        } else {
+            activeConversationID = branch.id
+            navigation.selectedLibraryID = branch.id
+            applyConversationSettings(from: branch, to: &draft)
+        }
+        if message.role == .user {
+            draft.prompt = message.content
+            if mode == .chat { draft.inputPath = message.imagePath ?? "" }
+        } else {
+            draft.prompt = ""
+        }
+        studioError = nil
+        promptFocused = true
     }
 
     /// Starts a fresh, not-yet-persisted conversation (no library row until the first message).
@@ -1237,7 +1793,7 @@ struct StudioRootView: View {
         )
         pendingPullRefresh = StudioReadinessRefresh(mode: request.mode, draft: draft)
         controller.readinessByMode[request.mode] = .checking
-        // The canvas running overlay shows pull progress (bytes, speed, cancel) in place.
+        // The feed's readiness card shows the pull's own progress (bytes, speed, Cancel).
         if !controller.run(studio: effectiveRequest) {
             pendingPullRefresh = nil
             refreshReadiness()
@@ -1305,15 +1861,6 @@ struct StudioRootView: View {
         }
     }
 
-    private func openSelectedOutput() {
-        guard let url = selectedItem?.outputURL else { return }
-        NSWorkspace.shared.open(url)
-    }
-
-    private func revealSelectedOutput() {
-        guard let url = selectedItem?.outputURL else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
 }
 
 /// Which Library rows the column shows: the current domain's, or everything.

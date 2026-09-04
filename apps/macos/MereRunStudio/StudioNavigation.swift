@@ -119,8 +119,9 @@ enum StudioDomain: String, CaseIterable, Codable, Identifiable {
         StudioDestination(domain: self, task: defaultTask)
     }
 
-    /// Whether one of this domain's tasks is a composer-driven prompt mode. Only those domains
-    /// show the Library column; the others host list-and-detail or form pages full width.
+    /// Whether one of this domain's tasks is a composer-driven prompt mode. The Library column
+    /// itself follows the task (`StudioTask.isPromptTask`), so a Create domain's Project or
+    /// Session task still takes the full width.
     var hasPromptWorkspace: Bool {
         tasks.contains { $0.mode != nil }
     }
@@ -363,6 +364,13 @@ enum StudioTask: String, CaseIterable, Codable, Identifiable {
     var destination: StudioDestination {
         StudioDestination(domain: domain, task: self)
     }
+
+    /// Whether this task is one of the composer-driven prompt tasks (Generate, Compose, Chat,
+    /// Read, Find, Segment, Track, Transcribe, Speak). Only prompt tasks show the Library column
+    /// and the inspector; Project, Session, and Manage tasks take the full content width.
+    var isPromptTask: Bool {
+        mode != nil
+    }
 }
 
 /// Where the window is: one domain and one of its tasks. The raw value is what `@SceneStorage`
@@ -483,8 +491,17 @@ final class NavigationModel: ObservableObject {
     /// Set by the Command Console scene while its window exists. Opening the console syncs the
     /// composer draft only when this is false, so raising an open console never clobbers edits.
     @Published var isConsoleOpen = false
+    /// The prompt tasks whose inspector column is shown. Remembered per task, so Image ▸ Generate
+    /// can keep its inspector open while Chat stays a plain thread.
+    @Published var inspectorTasks: Set<StudioTask> = []
+    /// Whether the Command view column is shown for the current prompt task. It takes the
+    /// inspector's place while open (the two are never side by side) and is not remembered.
+    @Published var showCommandColumn = false
     /// Help ▸ mere.run Guide presents the Guide sheet on the Studio window from any key window.
     @Published var showGuide = false
+    /// Whether the sidebar footer's Activity popover is open. The shell draws it over the window,
+    /// so the state lives here rather than inside the sidebar column.
+    @Published var showActivity = false
 
     init(destination: StudioDestination = .default) {
         self.destination = destination
@@ -499,6 +516,8 @@ final class NavigationModel: ObservableObject {
         }
         guard destination != self.destination else { return }
         self.destination = destination
+        // The Command view belongs to the task it was opened on; a new task starts closed.
+        showCommandColumn = false
     }
 
     /// Whether opening the Console should carry the composer's draft into it: only when the
@@ -520,6 +539,34 @@ final class NavigationModel: ObservableObject {
     func restore(destination: StudioDestination, lastPromptMode: StudioMode) -> StudioMode {
         open(destination: destination)
         return destination.task.mode ?? lastPromptMode
+    }
+
+    /// Whether the inspector column is shown for `task`: remembered on, and not displaced by the
+    /// Command view column.
+    func showsInspector(for task: StudioTask) -> Bool {
+        task.isPromptTask && inspectorTasks.contains(task) && !showCommandColumn
+    }
+
+    /// Whether the Command view column is shown for `task`.
+    func showsCommandColumn(for task: StudioTask) -> Bool {
+        task.isPromptTask && showCommandColumn
+    }
+
+    /// Shows or hides the inspector for `task`. Showing it closes the Command view column.
+    func toggleInspector(for task: StudioTask) {
+        guard task.isPromptTask else { return }
+        if showsInspector(for: task) {
+            inspectorTasks.remove(task)
+        } else {
+            inspectorTasks.insert(task)
+            showCommandColumn = false
+        }
+    }
+
+    /// Shows or hides the Command view column; the inspector's memory for the task survives.
+    func toggleCommandColumn(for task: StudioTask) {
+        guard task.isPromptTask else { return }
+        showCommandColumn.toggle()
     }
 
     func open(domain: StudioDomain) {
@@ -559,5 +606,17 @@ final class NavigationModel: ObservableObject {
         } catch {
             deepLinkError = error.localizedDescription
         }
+    }
+}
+
+/// Encodes the set of tasks whose inspector stays open as one `@SceneStorage` string
+/// (`studio.inspectorTasks`), comma-separated task ids in a stable order.
+enum StudioInspectorTaskMemory {
+    static func encode(_ tasks: Set<StudioTask>) -> String {
+        tasks.map(\.rawValue).sorted().joined(separator: ",")
+    }
+
+    static func decode(_ raw: String) -> Set<StudioTask> {
+        Set(raw.split(separator: ",").compactMap { StudioTask(rawValue: String($0)) })
     }
 }

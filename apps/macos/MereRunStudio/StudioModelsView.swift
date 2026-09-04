@@ -25,6 +25,9 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
     let reclaimableBytes: Int64?
     let sharedBytes: Int64?
     let externalBytes: Int64?
+    /// The model's context window in tokens, when the inventory reports one. Conversation
+    /// threads size their transcript budget from it; nil keeps the fixed default budget.
+    let contextWindow: Int?
 
     init(
         id: String,
@@ -44,7 +47,8 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
         referencedBytes: Int64? = nil,
         reclaimableBytes: Int64? = nil,
         sharedBytes: Int64? = nil,
-        externalBytes: Int64? = nil
+        externalBytes: Int64? = nil,
+        contextWindow: Int? = nil
     ) {
         self.id = id
         self.category = category
@@ -64,6 +68,7 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
         self.reclaimableBytes = reclaimableBytes
         self.sharedBytes = sharedBytes
         self.externalBytes = externalBytes
+        self.contextWindow = contextWindow
     }
 
     var isInstalled: Bool {
