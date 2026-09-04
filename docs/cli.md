@@ -3178,6 +3178,16 @@ additive option metadata (`default_value`, `group`, `tier`, `range`,
 `depends_on`) that shells use to build forms without a second copy of the
 command surface.
 
+Each capability's `output` describes what one successful run leaves behind.
+`kind` covers the run with no destination named — `text` prints to stdout,
+`service` runs until it is stopped, and `file` or `directory` always writes the
+artifact. `flag` names the option that carries the destination path, and
+`optional` marks an artifact written only when that flag is passed, so
+`speech transcribe` reads as a `text` run that additionally saves the
+transcript to `--output` on request. `flag` is absent only where the command
+picks the path itself: `adapter pull` installs into the managed adapter store,
+and `image run-plan` writes wherever the saved plan says.
+
 ## Validation and smoke runs
 
 Standard repository validation:

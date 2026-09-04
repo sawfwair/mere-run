@@ -153,6 +153,10 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     }
 }
 
+/// What a successful run leaves behind when the caller passes no destination.
+/// `text` prints its result to stdout, `service` runs until it is stopped, and
+/// `file` and `directory` always write the artifact, at a default path when the
+/// caller names none.
 public enum MereRunCapabilityOutputKind: String, Codable, Sendable {
     case text
     case file
@@ -160,18 +164,61 @@ public enum MereRunCapabilityOutputKind: String, Codable, Sendable {
     case service
 }
 
+/// The artifact one run produces, and how the caller asks for it.
+///
+/// A `text` or `service` capability that still declares a `flag` writes that
+/// artifact only when the flag is passed (`optional` is then `true`); `kind`
+/// describes what the run does without it. Look `flag` up in the capability's
+/// `options` to learn whether it names a file or a directory.
 public struct MereRunCapabilityOutput: Codable, Equatable, Sendable {
     public let kind: MereRunCapabilityOutputKind
+    /// The written artifact's extension when it is a file, and the command
+    /// always writes the same one. Absent for directories and for commands
+    /// whose extension follows another option (`speech diarize --format`).
     public let fileExtension: String?
+    /// The option whose value names the destination. Absent when the run writes
+    /// nothing, or chooses the location itself (`adapter pull`, `image run-plan`).
+    public let flag: String?
+    /// True when the artifact is written only if `flag` is passed.
+    public let optional: Bool
 
     enum CodingKeys: String, CodingKey {
         case kind
         case fileExtension = "file_extension"
+        case flag
+        case optional
     }
 
-    public init(kind: MereRunCapabilityOutputKind, fileExtension: String? = nil) {
+    public init(
+        kind: MereRunCapabilityOutputKind,
+        fileExtension: String? = nil,
+        flag: String? = nil,
+        optional: Bool = false
+    ) {
         self.kind = kind
         self.fileExtension = fileExtension
+        self.flag = flag
+        self.optional = optional
+    }
+
+    /// `flag` and `optional` are additive: a document written before they
+    /// existed decodes with no destination flag and a mandatory artifact.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(MereRunCapabilityOutputKind.self, forKey: .kind)
+        fileExtension = try container.decodeIfPresent(String.self, forKey: .fileExtension)
+        flag = try container.decodeIfPresent(String.self, forKey: .flag)
+        optional = try container.decodeIfPresent(Bool.self, forKey: .optional) ?? false
+    }
+
+    /// Absent fields stay absent so a decoder that predates them sees the same
+    /// JSON it always did.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(fileExtension, forKey: .fileExtension)
+        try container.encodeIfPresent(flag, forKey: .flag)
+        if optional { try container.encode(true, forKey: .optional) }
     }
 }
 
@@ -559,7 +606,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--output", label: "Output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "json")
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
     )
 
     public static let textAnonymize = MereRunCommandCapability(
@@ -578,7 +625,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean),
             .init(flag: "--output", label: "Output", kind: .file)
         ],
-        output: .init(kind: .file)
+        output: .init(kind: .text, flag: "--output", optional: true)
     )
 
     public static let textTrainLoRA = MereRunCommandCapability(
@@ -607,7 +654,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--visualize-port", label: "Visualization port", kind: .integer),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     public static let imageGenerate = MereRunCommandCapability(
@@ -712,7 +759,7 @@ public enum MereRunCapabilityCatalog {
             progressJSONOption,
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "png")
+        output: .init(kind: .file, fileExtension: "png", flag: "--output")
     )
 
     public static let imageTrainLoRA = MereRunCommandCapability(
@@ -795,7 +842,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--synthetic-samples", label: "Synthetic samples", kind: .integer),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     public static let imageValidate = MereRunCommandCapability(
@@ -816,7 +863,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--compare", label: "Compare", kind: .boolean),
             .init(flag: "--reference-dir", label: "Reference directory", kind: .directory)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output")
     )
 
     public static let imageDatasetDiscover = MereRunCommandCapability(
@@ -850,7 +897,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--json", label: "JSON", kind: .boolean),
             .init(flag: "--materialize", label: "Materialize run", kind: .directory)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .file)
     )
 
     public static let imageVisualizeRun = MereRunCommandCapability(
@@ -886,7 +933,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output")
     )
 
     public static let imageReconstruct3DTrellis2 = MereRunCommandCapability(
@@ -910,7 +957,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output")
     )
 
     public static let imageReconstruct3DMultiview = MereRunCommandCapability(
@@ -928,7 +975,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output")
     )
 
     public static let visionInspect = MereRunCommandCapability(
@@ -974,7 +1021,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--output", label: "Output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "json")
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
     )
 
     public static let visionCaption = MereRunCommandCapability(
@@ -1003,7 +1050,7 @@ public enum MereRunCapabilityCatalog {
                 defaultValue: "0.9", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
             )
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output-dir")
     )
 
     public static let visionOCR = MereRunCommandCapability(
@@ -1090,7 +1137,7 @@ public enum MereRunCapabilityCatalog {
             ),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .text, flag: "--output-dir", optional: true)
     )
 
     public static let visionGround = MereRunCommandCapability(
@@ -1110,7 +1157,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "png")
+        output: .init(kind: .file, fileExtension: "png", flag: "--output")
     )
 
     public static let visionSegment = MereRunCommandCapability(
@@ -1142,7 +1189,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "png")
+        output: .init(kind: .file, fileExtension: "png", flag: "--output")
     )
 
     public static let visionTrack = MereRunCommandCapability(
@@ -1182,7 +1229,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "mp4")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
     )
 
     public static let visionTrackLive = MereRunCommandCapability(
@@ -1204,7 +1251,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--show-boxes", label: "Show boxes", kind: .boolean),
             .init(flag: "--show-labels", label: "Show labels", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "mp4")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
     )
 
     public static let visionFaceDetect = MereRunCommandCapability(
@@ -1217,7 +1264,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--max-faces", label: "Max faces", kind: .integer),
             .init(flag: "--include-embeddings", label: "Embeddings", kind: .boolean)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true)
     )
 
     public static let visionFaceEmbed = MereRunCommandCapability(
@@ -1229,7 +1276,7 @@ public enum MereRunCapabilityCatalog {
         options: faceOptions + [
             .init(flag: "--face-index", label: "Face index", kind: .integer)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true)
     )
 
     public static let visionFaceCompare = MereRunCommandCapability(
@@ -1245,7 +1292,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--reference-face-index", label: "Reference index", kind: .integer),
             .init(flag: "--candidate-face-index", label: "Candidate index", kind: .integer)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true)
     )
 
     public static let visionFaceBatch = MereRunCommandCapability(
@@ -1264,7 +1311,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--jsonl-output", label: "JSONL output", kind: .file),
             .init(flag: "--fail-fast", label: "Fail fast", kind: .boolean)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text, fileExtension: "jsonl", flag: "--jsonl-output", optional: true)
     )
 
     private static let faceOptions: [MereRunCapabilityOption] = [
@@ -1290,7 +1337,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--minimum-confidence", label: "Confidence", kind: .number),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .file, fileExtension: "json", flag: "--json-output")
     )
 
     public static let visionFlow = MereRunCommandCapability(
@@ -1308,7 +1355,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--accuracy", label: "Accuracy", kind: .choice, choices: ["low", "medium", "high", "very-high"]),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "flo")
+        output: .init(kind: .file, fileExtension: "flo", flag: "--output")
     )
 
     public static let visionDepthVideo = MereRunCommandCapability(
@@ -1325,7 +1372,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output")
     )
 
     public static let visionGeometry = MereRunCommandCapability(
@@ -1343,7 +1390,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output")
     )
 
     public static let visionGeometryMultiview = MereRunCommandCapability(
@@ -1363,7 +1410,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output")
     )
 
     public static let audioEnhance = MereRunCommandCapability(
@@ -1398,7 +1445,7 @@ public enum MereRunCapabilityCatalog {
             ),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "wav")
+        output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
 
     public static let audioGenerate = MereRunCommandCapability(
@@ -1432,7 +1479,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--lora", label: "Audio LoRA", kind: .string, repeatable: true),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "wav")
+        output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
 
     public static let musicGenerate = MereRunCommandCapability(
@@ -1713,7 +1760,7 @@ public enum MereRunCapabilityCatalog {
             progressJSONOption,
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "wav")
+        output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
 
     public static let musicAnalyze = MereRunCommandCapability(
@@ -1770,7 +1817,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--context-output", label: "Context output", kind: .file),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file)
+        output: .init(kind: .file, flag: "--output")
     )
 
     public static let musicSeparate = MereRunCommandCapability(
@@ -1794,7 +1841,7 @@ public enum MereRunCapabilityCatalog {
             ),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output-dir")
     )
 
     public static let musicRealtime = MereRunCommandCapability(
@@ -1832,7 +1879,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--midi-cc", label: "MIDI CC map", kind: .string, repeatable: true),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .service)
+        output: .init(kind: .service, fileExtension: "wav", flag: "--output", optional: true)
     )
 
     public static let musicTrainAdapter = MereRunCommandCapability(
@@ -1859,7 +1906,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string),
             .init(flag: "--log-every", label: "Progress interval", kind: .integer)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     public static let musicServe = MereRunCommandCapability(
@@ -2159,7 +2206,7 @@ public enum MereRunCapabilityCatalog {
             progressJSONOption,
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "mp4")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
     )
 
     public static let videoRetake = MereRunCommandCapability(
@@ -2205,7 +2252,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--preserve-audio", label: "Preserve audio", kind: .boolean),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "mp4")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
     )
 
     public static let videoDubIt = MereRunCommandCapability(
@@ -2236,7 +2283,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["diffusion", "convolutional"]),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "mp4")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
     )
 
     public static let videoAnimate = MereRunCommandCapability(
@@ -2278,7 +2325,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--json", label: "JSON", kind: .boolean),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "mp4")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
     )
 
     public static let videoCosmos3 = MereRunCommandCapability(
@@ -2327,7 +2374,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--max-video-frames", label: "Reasoner video frames", kind: .integer),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file)
+        output: .init(kind: .file, flag: "--output")
     )
 
     public static let videoPrepareMasks = MereRunCommandCapability(
@@ -2344,7 +2391,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--json", label: "JSON", kind: .boolean),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--output-dir")
     )
 
     public static let videoExportLatents = MereRunCommandCapability(
@@ -2365,7 +2412,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--seed", label: "Seed", kind: .integer),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     public static let videoSession = MereRunCommandCapability(
@@ -2466,7 +2513,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--artifact", label: "Named artifact", kind: .string, repeatable: true),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory)
+        output: .init(kind: .directory, flag: "--into")
     )
 
     public static let runCancel = MereRunCommandCapability(
@@ -2542,7 +2589,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--json-output", label: "JSON report", kind: .file),
             .init(flag: "--list", label: "List checks", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "json")
+        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true)
     )
 
     public static let evaluationPackValidate = MereRunCommandCapability(
@@ -2589,7 +2636,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--output", label: "Report", kind: .file),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "json")
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
     )
 
     public static let evaluationPromote = MereRunCommandCapability(
@@ -2604,7 +2651,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--output", label: "Promotion receipt", kind: .file),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "json")
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
     )
 
     public static let modelStorage = MereRunCommandCapability(
@@ -2866,9 +2913,10 @@ public enum MereRunCapabilityCatalog {
         ],
         options: [
             .init(flag: "--force", label: "Replace cache", kind: .boolean),
+            .init(flag: "--output", label: "Standalone checkpoint", kind: .directory),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text, flag: "--output", optional: true)
     )
 
     public static let modelBenchmarkQ36MTP = MereRunCommandCapability(
@@ -2976,7 +3024,7 @@ public enum MereRunCapabilityCatalog {
             progressJSONOption,
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "wav")
+        output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
 
     public static let speechTranscribe = MereRunCommandCapability(
@@ -3025,7 +3073,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
-        output: .init(kind: .file)
+        output: .init(kind: .text, fileExtension: "txt", flag: "--output", optional: true)
     )
 
     public static let speechDiarize = MereRunCommandCapability(
@@ -3045,7 +3093,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--merge-gap", label: "Merge gap", kind: .number),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text, flag: "--output", optional: true)
     )
 
     public static let speechProfileList = MereRunCommandCapability(
@@ -3116,7 +3164,7 @@ public enum MereRunCapabilityCatalog {
             progressJSONOption,
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "wav")
+        output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
 
     public static let sfxVideoGenerate = MereRunCommandCapability(
@@ -3144,7 +3192,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--json", label: "JSON", kind: .boolean),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "wav")
+        output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
 
     public static let sfxAEEncode = MereRunCommandCapability(
@@ -3158,7 +3206,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "npy")
+        output: .init(kind: .file, fileExtension: "npy", flag: "--output")
     )
 
     public static let sfxAEDecode = MereRunCommandCapability(
@@ -3172,7 +3220,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "wav")
+        output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
 
     public static let sfxCLAPScore = MereRunCommandCapability(
@@ -3202,7 +3250,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     public static let pluginList = MereRunCommandCapability(
@@ -3398,7 +3446,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     public static let geoFire = MereRunCommandCapability(
@@ -3415,7 +3463,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     public static let geoTessera = MereRunCommandCapability(
@@ -3433,7 +3481,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     public static let geoOlmoEarth = MereRunCommandCapability(
@@ -3453,7 +3501,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
 
     // MARK: - Model store locations
@@ -3695,7 +3743,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text, flag: "--output-dir", optional: true)
     )
 
     public static let modelBenchmarkToolCalls = MereRunCommandCapability(

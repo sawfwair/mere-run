@@ -266,6 +266,84 @@ private let knownOptionGroups: Set<String> = [
     #expect(decoded.range == nil && decoded.dependsOn == nil)
 }
 
+/// Capabilities whose artifact path is not caller-chosen, with the reason. Any
+/// other file or directory output has to name the option that carries its
+/// destination so a shell can request one.
+private let selfLocatingOutputCapabilityIDs: [String: String] = [
+    "adapter.pull": "Installs into the managed adapter store and prints the verified path.",
+    "image.run-plan": "The saved plan names its own output path; --materialize adds a run directory."
+]
+
+@Test func capabilityFileOutputsDeclareADestinationFlag() {
+    for command in MereRunCapabilityCatalog.document.commands {
+        let output = command.output
+        guard output.kind == .file || output.kind == .directory else { continue }
+        if output.flag == nil {
+            #expect(
+                selfLocatingOutputCapabilityIDs[command.id] != nil,
+                "\(command.id) writes a \(output.kind.rawValue) but names no destination flag"
+            )
+        }
+        #expect(!output.optional, "\(command.id) declares a \(output.kind.rawValue) it does not always write")
+    }
+
+    for (id, reason) in selfLocatingOutputCapabilityIDs {
+        let command = MereRunCapabilityCatalog.command(id: id)
+        #expect(command != nil, "Exemption \(id) no longer matches a capability: \(reason)")
+        #expect(command?.output.flag == nil, "\(id) names a destination flag now; remove its exemption.")
+    }
+}
+
+@Test func capabilityOutputFlagsAreDeclaredOptions() {
+    for command in MereRunCapabilityCatalog.document.commands {
+        guard let flag = command.output.flag else {
+            #expect(!command.output.optional, "\(command.id) declares an optional output with no flag to request it")
+            continue
+        }
+        #expect(
+            command.options.contains { $0.flag == flag },
+            "\(command.id) writes its output to \(flag), which it does not declare as an option"
+        )
+    }
+}
+
+@Test func outputMetadataSerializesAdditivelyAndDecodesLegacyJSON() throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+
+    // A mandatory artifact encodes exactly the keys the previous schema had, plus `flag`.
+    let image = String(decoding: try encoder.encode(MereRunCapabilityCatalog.imageGenerate.output), as: UTF8.self)
+    #expect(image == #"{"file_extension":"png","flag":"--output","kind":"file"}"#)
+
+    // `optional` appears only where a run may write nothing.
+    let diarize = String(decoding: try encoder.encode(MereRunCapabilityCatalog.speechDiarize.output), as: UTF8.self)
+    #expect(diarize == #"{"flag":"--output","kind":"text","optional":true}"#)
+
+    let chat = String(decoding: try encoder.encode(MereRunCapabilityCatalog.textChat.output), as: UTF8.self)
+    #expect(chat == #"{"kind":"text"}"#)
+
+    let legacy = Data(#"{"kind":"file","file_extension":"png"}"#.utf8)
+    let decoded = try JSONDecoder().decode(MereRunCapabilityOutput.self, from: legacy)
+    #expect(decoded == MereRunCapabilityOutput(kind: .file, fileExtension: "png"))
+    #expect(decoded.flag == nil && !decoded.optional)
+}
+
+/// The commands that print their whole result to stdout and write nothing, even
+/// though a neighbouring command in the same family writes a file.
+@Test func stdoutOnlyCapabilitiesDeclareNoDestination() {
+    for id in [
+        "text.chat", "text.code", "vision.inspect", "music.analyze", "sfx.clap.score",
+        "image.dataset.discover", "eval.pack.validate", "speech.listen",
+        "model.benchmark.chat", "model.benchmark.code", "model.benchmark.fused",
+        "model.benchmark.tool-calls", "model.benchmark.tool-continuations",
+        "model.benchmark.api-workload"
+    ] {
+        let command = MereRunCapabilityCatalog.command(id: id)
+        #expect(command?.output.kind == .text, "\(id) no longer declares a text output")
+        #expect(command?.output.flag == nil, "\(id) names a destination flag now; declare the artifact it writes")
+    }
+}
+
 @Test func speechTranscribeSampleRatePinsTheOnlyRateTheCLIAccepts() throws {
     // `SpeechTranscribe.validate()` requires `--sample-rate 16000` on raw stdin
     // and rejects the flag entirely off it.

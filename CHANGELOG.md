@@ -8,6 +8,20 @@ The format is based on Keep a Changelog.
 
 ### CLI
 
+- reconciled every capability's declared `output` with what the command
+  actually writes, and gave the declaration two additive fields: `flag`, the
+  option that carries the destination path, and `optional`, true when the
+  artifact is written only if that flag is passed. `kind` now consistently
+  describes a run that names no destination, so `speech transcribe`,
+  `speech diarize`, `text embed`, `text anonymize`, `vision embed`,
+  `vision ocr`, `vision face detect`/`embed`/`compare`/`batch`, `gate`,
+  `eval run`, `eval promote`, `model optimize`, and `model benchmark vlm` read
+  as the stdout runs they are, `vision pose` declares the JSON landmark file it
+  always writes, `music realtime` declares the WAV it captures on request, and
+  `image run-plan` declares the file the saved plan names rather than a run
+  directory. `model optimize` also declares its `--output` option. The fields
+  are additive, `mere.run catalog --json` omits them when unset, and contract
+  and CLI tests prove every declared destination flag is one the command parses.
 - added optional `default_value`, `group`, `tier`, `range`, and `depends_on`
   metadata to every option in the shared capability contract and populated it
   for the prompt-mode capabilities (`image.generate`, `text.chat`, `text.code`,

@@ -174,6 +174,27 @@ private let exactCapabilityOptionIDs: Set<String> = [
     "plugin.info", "plugin.run", "plugin.rollback", "speech.listen", "vision.serve"
 ]
 
+/// A capability that declares an artifact has to name a flag the CLI really
+/// parses, so the contract cannot promise shells a destination the command
+/// would reject. `adapter pull` and `image run-plan` choose their own paths and
+/// declare no flag; `capabilityFileOutputsDeclareADestinationFlag` covers them.
+@Test func capabilityOutputFlagsAreAcceptedByTheCLI() {
+    let helpByID = capabilityHelpMessages()
+
+    for capability in MereRunCapabilityCatalog.document.commands {
+        guard let flag = capability.output.flag else { continue }
+        guard let help = helpByID[capability.id] else {
+            Issue.record("Missing help fixture for \(capability.id)")
+            continue
+        }
+        let path = capability.command.joined(separator: " ")
+        #expect(
+            longOptionFlags(in: help).contains(flag),
+            "\(capability.id) writes its output to \(flag), which `mere.run \(path) --help` does not advertise"
+        )
+    }
+}
+
 /// Every `default_value` the contract advertises must be the default
 /// ArgumentParser renders in `--help`, so a CLI default change that forgets the
 /// contract fails here instead of drifting into the shells' forms.
