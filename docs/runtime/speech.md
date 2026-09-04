@@ -123,8 +123,11 @@ own runtime integration and does not require a third-party inference SDK,
 telemetry, or an opaque model download.
 
 This provider is limited to non-streaming files. Each Core ML encoder call has
-batch size 1 and a maximum 15-second input. Longer files use 15-second windows
-with two seconds of overlap. The runtime decodes as many as 16 windows in one
+batch size 1 and a maximum 15-second input. Longer files use windows of up to
+15 seconds. The next window starts in a nearby quiet interval when one is
+available, keeping between two and eight seconds of overlap. This reduces
+speech loss from starting a window inside a word. Without a quiet interval,
+the runtime retains two seconds of overlap. It decodes as many as 16 windows in one
 Core ML call, then reconciles matching token IDs and global timestamps at each
 boundary. Mere's native Swift/Accelerate feature extractor remains in the path,
 but the standalone artifact no longer requires `speech-asr-parakeet` or its

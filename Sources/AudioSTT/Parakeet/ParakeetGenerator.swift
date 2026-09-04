@@ -204,7 +204,7 @@ public actor ParakeetGenerator: ASRGenerator {
     ) throws -> ParakeetAlignedResult {
         let sampleRate = modelConfig.preprocessor.sampleRate
         let ranges = ParakeetCoreMLWindowing.sampleRanges(
-            sampleCount: samples.count,
+            samples: samples,
             sampleRate: sampleRate
         )
         timings.windowCount = ranges.count
@@ -252,12 +252,15 @@ public actor ParakeetGenerator: ASRGenerator {
                 let mergeStarted = ParakeetMonotonicClock.now()
                 let range = batchRanges[offset]
                 let timeOffset = TimeInterval(range.lowerBound) / TimeInterval(sampleRate)
+                let windowIndex = batchStart + offset
+                let previousEnd = windowIndex > 0 ? ranges[windowIndex - 1].upperBound : 0
+                let overlapEnd = TimeInterval(previousEnd) / TimeInterval(sampleRate)
                 let shifted = ParakeetCoreMLWindowing.shiftedTokens(from: result, by: timeOffset)
                 mergedTokens = ParakeetAlignment.mergeLongestCommonSubsequence(
                     mergedTokens,
                     shifted,
                     overlapDuration: ParakeetCoreMLWindowing.overlapSeconds,
-                    windowOverlap: timeOffset..<(timeOffset + ParakeetCoreMLWindowing.overlapSeconds)
+                    windowOverlap: timeOffset..<overlapEnd
                 )
                 timings.windowMergeSeconds += ParakeetMonotonicClock.seconds(since: mergeStarted)
             }

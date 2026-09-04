@@ -15,8 +15,8 @@ Parakeet speech-to-text backend implementation.
 - `ParakeetCoreMLDecoderOutput.swift`: returned Core ML tensors and stride-aware
   decoder state transfer.
 - `ParakeetBenchmark.swift`: resident pipeline stage timings.
-- `ParakeetCoreMLWindowing.swift`: overlapped long-file windows and global
-  alignment offsets for the static-shape Core ML encoder.
+- `ParakeetCoreMLWindowing.swift`: quiet-boundary selection, bounded overlap,
+  and global alignment offsets for the static-shape Core ML encoder.
 
 Keep backend routing in `AudioCore`; this directory should only own Parakeet
 loading, inference, and decoding behavior.

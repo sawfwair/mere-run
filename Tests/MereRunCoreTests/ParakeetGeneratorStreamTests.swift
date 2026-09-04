@@ -113,7 +113,7 @@ final class ParakeetGeneratorStreamTests: MereRunCoreTestCase {
 
     func testCoreMLWindowRangesUseTwoSecondOverlap() {
         XCTAssertEqual(
-            ParakeetCoreMLWindowing.sampleRanges(sampleCount: 3_200, sampleRate: 100),
+            ParakeetCoreMLWindowing.sampleRanges(samples: Array(repeating: 0.1, count: 3_200), sampleRate: 100),
             [0..<1_500, 1_300..<2_800, 2_600..<3_200]
         )
     }
