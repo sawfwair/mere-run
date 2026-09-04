@@ -1413,7 +1413,7 @@ struct MusicGenerate: AsyncParsableCommand {
             ),
             progress: { event in
                 if let progressStream {
-                    let progress = Self.miniMaxProgressEvent(event)
+                    let progress = Self.miniMaxProgressEvent(event, strategy: flowStrategy)
                     progressStream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
                     return
                 }
@@ -1531,12 +1531,25 @@ struct MusicGenerate: AsyncParsableCommand {
     /// counters. Flow denoising is flattened across chunks, and every counter is
     /// shifted to the 0-based in-progress index `JSONProgressStream` expects; the
     /// stream adds the terminal `step == total_steps` event when a stage ends.
-    static func miniMaxProgressEvent(_ event: MiniMaxMusic3Progress) -> (stage: String, step: Int, totalSteps: Int) {
+    ///
+    /// The two flow strategies visit the (chunk, step) grid in opposite orders —
+    /// `sequential` denoises one chunk at a time, `overlap-average` runs one step
+    /// across every window — so the flattening has to follow the strategy for
+    /// `step` to stay monotonic. A counter that went backwards would read as a
+    /// restarted stage and close `denoising` early.
+    static func miniMaxProgressEvent(
+        _ event: MiniMaxMusic3Progress,
+        strategy: MiniMaxMusic3FlowStrategy
+    ) -> (stage: String, step: Int, totalSteps: Int) {
         switch event {
         case .semantic(let frame, let maximum):
             return ("semantic", frame - 1, maximum)
         case .denoise(let chunk, let chunkCount, let step, let stepCount):
-            return ("denoising", (chunk - 1) * stepCount + step - 1, chunkCount * stepCount)
+            let completed = switch strategy {
+            case .sequential: (chunk - 1) * stepCount + step
+            case .overlapAverage: (step - 1) * chunkCount + chunk
+            }
+            return ("denoising", completed - 1, chunkCount * stepCount)
         case .decode(let chunk, let chunkCount):
             return ("decoding", chunk - 1, chunkCount)
         }

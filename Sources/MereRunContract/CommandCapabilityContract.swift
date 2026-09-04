@@ -3013,9 +3013,12 @@ public enum MereRunCapabilityCatalog {
                 defaultValue: "2000", group: Group.run, tier: .expert, range: .init(min: 100, max: 10_000, step: 100), dependsOn: "--stream"
             ),
             .init(flag: "--input-format", label: "Input format", kind: .string, group: Group.inputs, tier: .expert, dependsOn: "--stream"),
+            // Raw stdin protocol v1 accepts exactly 16 kHz, so the range pins
+            // the single value a shell may send rather than a span.
             .init(
                 flag: "--sample-rate", label: "Sample rate", kind: .integer,
-                group: Group.inputs, tier: .expert, dependsOn: "--stream"
+                group: Group.inputs, tier: .expert, range: .init(min: 16_000, max: 16_000, step: 1),
+                dependsOn: "--stream"
             ),
             .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream"),
             .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean, group: Group.output, tier: .standard),

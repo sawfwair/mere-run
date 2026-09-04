@@ -103,7 +103,8 @@ struct SFXGenerate: AsyncParsableCommand {
             ),
             progress: { completed, total in
                 if let progressStream {
-                    progressStream.report(stage: "denoising", step: completed - 1, totalSteps: total)
+                    let progress = Self.denoiseProgressEvent(completed: completed, total: total)
+                    progressStream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
                     return
                 }
                 guard !quiet else { return }
@@ -150,7 +151,8 @@ struct SFXGenerate: AsyncParsableCommand {
             ),
             progress: { completed, total in
                 if let progressStream {
-                    progressStream.report(stage: "denoising", step: completed - 1, totalSteps: total)
+                    let progress = Self.denoiseProgressEvent(completed: completed, total: total)
+                    progressStream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
                     return
                 }
                 guard !quiet else { return }
@@ -168,6 +170,13 @@ struct SFXGenerate: AsyncParsableCommand {
         }
         print(outputURL.path)
         try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL), enabled: receipt)
+    }
+
+    /// Woosh and MMAudio both count denoise *completions* from 1, so the counter
+    /// is shifted onto the 0-based in-progress index `JSONProgressStream`
+    /// expects; the stream adds the terminal `step == total_steps` event.
+    static func denoiseProgressEvent(completed: Int, total: Int) -> (stage: String, step: Int, totalSteps: Int) {
+        ("denoising", completed - 1, total)
     }
 
     func parseRenoiseSchedule() throws -> [Float] {

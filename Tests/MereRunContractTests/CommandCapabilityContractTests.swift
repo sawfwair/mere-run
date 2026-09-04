@@ -266,6 +266,17 @@ private let knownOptionGroups: Set<String> = [
     #expect(decoded.range == nil && decoded.dependsOn == nil)
 }
 
+@Test func speechTranscribeSampleRatePinsTheOnlyRateTheCLIAccepts() throws {
+    // `SpeechTranscribe.validate()` requires `--sample-rate 16000` on raw stdin
+    // and rejects the flag entirely off it.
+    let sampleRate = try #require(
+        MereRunCapabilityCatalog.speechTranscribe.options.first { $0.flag == "--sample-rate" }
+    )
+    #expect(sampleRate.range?.min == 16_000)
+    #expect(sampleRate.range?.max == 16_000)
+    #expect(sampleRate.dependsOn == "--stream")
+}
+
 @Test func capabilityFlagsAreUniqueWithinCommands() {
     for command in MereRunCapabilityCatalog.document.commands {
         let flags = command.options.map(\.flag)

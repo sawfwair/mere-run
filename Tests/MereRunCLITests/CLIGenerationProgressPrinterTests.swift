@@ -75,9 +75,11 @@ final class CLIGenerationProgressPrinterTests: XCTestCase {
 
     func testSFXCompletionCountsBecomeZeroBasedStepsPlusOneTerminalEvent() throws {
         let (stream, lines) = makeStream()
-        // Woosh and MMAudio report `completed` 1...N; the command passes `completed - 1`.
+        // Woosh and MMAudio both report `completed` 1...N (WooshGenerator and
+        // MMAudioNetwork call `progress?(step + 1, config.steps)`).
         for completed in 1...4 {
-            stream.report(stage: "denoising", step: completed - 1, totalSteps: 4)
+            let progress = SFXGenerate.denoiseProgressEvent(completed: completed, total: 4)
+            stream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
         }
         stream.finish()
 
@@ -91,20 +93,25 @@ final class CLIGenerationProgressPrinterTests: XCTestCase {
     }
 
     func testMiniMaxMusicCountersFlattenToZeroBasedStepsAndCloseEachStage() throws {
-        let semantic = MusicGenerate.miniMaxProgressEvent(.semantic(frame: 1, maximum: 1_500))
+        let semantic = MusicGenerate.miniMaxProgressEvent(.semantic(frame: 1, maximum: 1_500), strategy: .sequential)
         XCTAssertEqual(semantic.stage, "semantic")
         XCTAssertEqual(semantic.step, 0)
         XCTAssertEqual(semantic.totalSteps, 1_500)
 
-        let firstChunk = MusicGenerate.miniMaxProgressEvent(.denoise(chunk: 1, chunkCount: 3, step: 1, stepCount: 30))
+        let firstChunk = MusicGenerate.miniMaxProgressEvent(
+            .denoise(chunk: 1, chunkCount: 3, step: 1, stepCount: 30), strategy: .sequential
+        )
         XCTAssertEqual(firstChunk.stage, "denoising")
         XCTAssertEqual(firstChunk.step, 0)
         XCTAssertEqual(firstChunk.totalSteps, 90)
 
-        let lastChunk = MusicGenerate.miniMaxProgressEvent(.denoise(chunk: 3, chunkCount: 3, step: 30, stepCount: 30))
+        let lastChunk = MusicGenerate.miniMaxProgressEvent(
+            .denoise(chunk: 3, chunkCount: 3, step: 30, stepCount: 30), strategy: .sequential
+        )
         XCTAssertEqual(lastChunk.step, 89)
         XCTAssertEqual(lastChunk.totalSteps, 90)
 
+        // `sequential` denoises chunk by chunk (MiniMaxMusic3Pipeline.denoise).
         let (stream, lines) = makeStream()
         for event: MiniMaxMusic3Progress in [
             .semantic(frame: 1, maximum: 2), .semantic(frame: 2, maximum: 2),
@@ -112,7 +119,7 @@ final class CLIGenerationProgressPrinterTests: XCTestCase {
             .denoise(chunk: 2, chunkCount: 2, step: 1, stepCount: 2), .denoise(chunk: 2, chunkCount: 2, step: 2, stepCount: 2),
             .decode(chunk: 1, chunkCount: 2), .decode(chunk: 2, chunkCount: 2),
         ] {
-            let progress = MusicGenerate.miniMaxProgressEvent(event)
+            let progress = MusicGenerate.miniMaxProgressEvent(event, strategy: .sequential)
             stream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
         }
         stream.finish()
@@ -129,6 +136,29 @@ final class CLIGenerationProgressPrinterTests: XCTestCase {
             Event(stage: "decoding", step: 0, total: 2),
             Event(stage: "decoding", step: 1, total: 2),
             Event(stage: "decoding", step: 2, total: 2),
+        ])
+    }
+
+    func testMiniMaxMusicOverlapAverageStaysMonotonicAcrossWindows() throws {
+        // `denoiseOverlapAverage` runs one flow step across every window before
+        // advancing, the opposite order from `sequential`. Flattening chunk-major
+        // there would make `step` fall back and close `denoising` on every step.
+        let (stream, lines) = makeStream()
+        for event: MiniMaxMusic3Progress in [
+            .denoise(chunk: 1, chunkCount: 2, step: 1, stepCount: 2), .denoise(chunk: 2, chunkCount: 2, step: 1, stepCount: 2),
+            .denoise(chunk: 1, chunkCount: 2, step: 2, stepCount: 2), .denoise(chunk: 2, chunkCount: 2, step: 2, stepCount: 2),
+        ] {
+            let progress = MusicGenerate.miniMaxProgressEvent(event, strategy: .overlapAverage)
+            stream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
+        }
+        stream.finish()
+
+        XCTAssertEqual(try events(lines()), [
+            Event(stage: "denoising", step: 0, total: 4),
+            Event(stage: "denoising", step: 1, total: 4),
+            Event(stage: "denoising", step: 2, total: 4),
+            Event(stage: "denoising", step: 3, total: 4),
+            Event(stage: "denoising", step: 4, total: 4),
         ])
     }
 
