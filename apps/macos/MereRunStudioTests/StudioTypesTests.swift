@@ -1304,7 +1304,7 @@ final class StudioTypesTests: XCTestCase {
         let generation = StudioProgressParser.parse(
             #"{"event":"progress","stage":"denoising","step":2,"total_steps":4}"#
         )
-        XCTAssertEqual(generation?.label, "Generating")
+        XCTAssertEqual(generation?.label, "Denoising")
         XCTAssertEqual(generation?.fractionCompleted ?? -1, 0.75, accuracy: 0.001)
         XCTAssertEqual(generation?.detail, "Step 3 of 4")
 

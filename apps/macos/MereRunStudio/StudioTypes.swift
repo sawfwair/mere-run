@@ -628,17 +628,22 @@ enum StudioCommandError: LocalizedError, Equatable {
 }
 
 enum StudioCommandAdapter {
+    /// Translates the composer's draft into the command it runs. `validating: false` skips the
+    /// prompt/attachment checks so a preview (the Command view) can show an incomplete draft.
     static func makeRequest(
         mode: StudioMode,
         draft studioDraft: StudioDraft,
-        conversationID: UUID? = nil
+        conversationID: UUID? = nil,
+        validating: Bool = true
     ) throws -> StudioRunRequest {
         let templateID = templateID(for: mode, draft: studioDraft)
         guard let template = CommandCatalog.template(id: templateID) else {
             throw StudioCommandError.missingTemplate(templateID)
         }
 
-        try validate(mode: mode, templateID: templateID, draft: studioDraft)
+        if validating {
+            try validate(mode: mode, templateID: templateID, draft: studioDraft)
+        }
 
         var draft = template.defaultDraft()
         let prompt = studioDraft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -752,6 +757,10 @@ enum StudioCommandAdapter {
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.visionThreshold = studioDraft.visionThreshold
+            // Studio renders these results natively, so it always asks for the structured
+            // document beside the annotated output. Masks are per-detection PNG sidecars; a
+            // tracked clip writes one set per frame, so only the still tasks request them.
+            StudioVisionResultPaths.apply(to: &draft, wantsMasks: mode != .track)
 
         case .music:
             draft.prompt = prompt
@@ -963,6 +972,14 @@ struct StudioMessage: Codable, Identifiable, Equatable {
     /// The image attached to this user turn (vision chat), so edit/retry resend it. Optional so
     /// older persisted threads decode unchanged.
     var imagePath: String?
+    /// The model that produced this assistant turn, recorded when the reply lands so a thread
+    /// whose model changed mid-way says which turn ran on what. nil on user turns and on threads
+    /// persisted before turns recorded it.
+    var model: String?
+    /// The system prompt in effect for this assistant turn (nil = the command's default).
+    var systemPrompt: String?
+    /// Decode throughput the CLI reported for this assistant turn (`--stats`), when it did.
+    var tokensPerSecond: Double?
 
     init(
         id: UUID = UUID(),
@@ -970,7 +987,10 @@ struct StudioMessage: Codable, Identifiable, Equatable {
         content: String,
         createdAt: Date = Date(),
         failed: Bool = false,
-        imagePath: String? = nil
+        imagePath: String? = nil,
+        model: String? = nil,
+        systemPrompt: String? = nil,
+        tokensPerSecond: Double? = nil
     ) {
         self.id = id
         self.role = role
@@ -978,6 +998,9 @@ struct StudioMessage: Codable, Identifiable, Equatable {
         self.createdAt = createdAt
         self.failed = failed
         self.imagePath = imagePath
+        self.model = model
+        self.systemPrompt = systemPrompt
+        self.tokensPerSecond = tokensPerSecond
     }
 }
 
@@ -1370,7 +1393,7 @@ enum StudioProgressParser {
               progress.totalSteps > 0 else { return nil }
         let current = min(progress.step + 1, progress.totalSteps) // the CLI emits a 0-based step index
         return StudioRunProgress(
-            label: "Generating",
+            label: progress.stage.capitalized,
             fractionCompleted: Double(current) / Double(progress.totalSteps),
             detail: "Step \(current) of \(progress.totalSteps)"
         )

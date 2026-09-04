@@ -110,7 +110,16 @@ breathe (24–32), rows and chips stay tight (8–12).
   glyph tile), one-line title, and meta with an 8pt status dot while queued (yellow),
   running (accent), or failed (red). Rows are 6/8 padded, radius 9, `accentSoft` when
   selected, `hoverFill` on hover, in a 6pt-inset column with 2pt gaps.
-- Chat: user turns in `accentSoft` bubbles right-aligned; assistant turns as unboxed
-  text blocks with a small mode glyph; fenced code in mono panels with copy.
+- Chat (Converse): a 248pt thread list in place of the Library ("Threads" 13pt semibold, a
+  compose icon button, a "Search threads" capsule, Today / Earlier eyebrows, 8/10-padded
+  rows of a 12.5pt title over an 11pt muted "Model · time" meta, `accentSoft` when
+  selected). The transcript is a 760pt centered column: a header (13.5pt semibold title,
+  model and "System: default" chips, hairline below), then turns 20pt apart, bottom-aligned,
+  22/24 padded. User turns are 14pt in `accentSoft` bubbles (radius 14/14/4/14, 10/14
+  padding, max 520pt) on the right; assistant turns are unboxed 14pt Markdown at 1.55 line
+  height behind a 16pt accent chat glyph (max 640pt), with fenced code on `surfaceRaised`
+  (radius 8, a header row of the language eyebrow and Copy over a hairline, 12pt mono) and a
+  row of 28pt Copy / Retry / Branch icon buttons beside "model · tok/s · time" in 11pt muted.
+  A streaming turn ends in a thin accent caret.
 - Media: audio renders as an interactive waveform (accent = played), video via AVKit in
   a rounded, shadowed frame.

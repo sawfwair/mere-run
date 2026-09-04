@@ -16,9 +16,40 @@ enum ConversationTranscript {
         let approxChars: Int
     }
 
-    /// A conservative character budget (~4 chars/token). Tunable; a per-model budget is a later
-    /// refinement. The system prompt rides in `--system` and is reserved out of the history room.
+    /// The character budget when nothing reports the model's context size (~4 chars/token, so
+    /// roughly 12k tokens of history). The system prompt rides in `--system` and is reserved
+    /// out of the history room.
     static let defaultBudgetChars = 48_000
+    /// Characters of history assumed per context token when sizing from a real context window.
+    /// Deliberately below the English average so code-heavy threads still fit.
+    static let charsPerContextToken = 3
+    /// The smallest budget a derived context can shrink to; the latest turn is always sent
+    /// regardless, so this only bounds how much history rides along.
+    static let minimumBudgetChars = 4_000
+
+    /// The history budget for a model with `contextTokens` of context, keeping `maxOutputTokens`
+    /// free for the reply. nil or a non-positive context keeps `defaultBudgetChars`, so a model
+    /// the inventory says nothing about behaves exactly as before.
+    static func budgetChars(contextTokens: Int?, maxOutputTokens: Int) -> Int {
+        guard let contextTokens, contextTokens > 0 else { return defaultBudgetChars }
+        let historyTokens = contextTokens - max(0, maxOutputTokens)
+        return max(minimumBudgetChars, historyTokens * charsPerContextToken)
+    }
+
+    /// The context size the next turn will run with: an explicit `--context-size` in the draft
+    /// wins, else what the model inventory reports for the model, else nothing (fixed budget).
+    static func contextTokens(
+        requestedContextSize: Int,
+        model: String,
+        inventory: [StudioModelInventoryRow]
+    ) -> Int? {
+        if requestedContextSize > 0 { return requestedContextSize }
+        let identity = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !identity.isEmpty,
+              let window = inventory.first(where: { $0.id == identity })?.contextWindow,
+              window > 0 else { return nil }
+        return window
+    }
 
     static func render(
         messages: [StudioMessage],
@@ -102,5 +133,17 @@ enum ConversationTranscript {
             )
         }
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The decode throughput from the CLI's `--stats` line
+    /// (`time=… tokens=… decode_tps=41.20 e2e_tps=…`), scanning the run's log from the end so
+    /// the turn's own line wins over anything echoed earlier. nil when no line reports it.
+    static func decodeTokensPerSecond(in logLines: [String]) -> Double? {
+        for line in logLines.reversed() {
+            guard let range = line.range(of: "decode_tps=") else { continue }
+            let value = line[range.upperBound...].prefix { $0.isNumber || $0 == "." }
+            if let parsed = Double(value), parsed > 0 { return parsed }
+        }
+        return nil
     }
 }

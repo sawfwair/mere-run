@@ -128,8 +128,9 @@ final class StudioLibraryStore: ObservableObject {
     }
 
     /// Appends a user turn to a chat/code conversation, creating the thread item lazily on the
-    /// first message (so a "New chat" that is never sent leaves no empty row). System prompt and
-    /// model are captured on the item so later turns and retries replay with the same settings.
+    /// first message (so a "New chat" that is never sent leaves no empty row). The thread-level
+    /// preset, model, and system prompt follow the latest turn, so retries replay the settings
+    /// the user last chose; which turn ran with what is recorded on the assistant turns.
     @discardableResult
     func appendUser(
         conversationID: UUID,
@@ -142,6 +143,10 @@ final class StudioLibraryStore: ObservableObject {
         if let index = items.firstIndex(where: { $0.id == conversationID }) {
             var item = items[index]
             item.messages = (item.messages ?? []) + [StudioMessage(role: .user, content: content, imagePath: imagePath)]
+            item.mode = mode
+            item.model = model
+            item.systemPrompt = systemPrompt
+            item.commandPreview = mode == .code ? "mere.run text code" : "mere.run text chat"
             item.status = .running
             item.updatedAt = Date()
             items[index] = item
@@ -170,13 +175,28 @@ final class StudioLibraryStore: ObservableObject {
         return item
     }
 
-    /// Appends the assistant reply for the latest turn. A non-zero exit marks the message failed
-    /// but keeps the thread so the user can retry.
-    func appendAssistant(conversationID: UUID, content: String, exitCode: Int32) {
+    /// Appends the assistant reply for the latest turn, recording the model and system prompt
+    /// that produced it (and the decode speed when the run reported one). A non-zero exit marks
+    /// the message failed but keeps the thread so the user can retry.
+    func appendAssistant(
+        conversationID: UUID,
+        content: String,
+        exitCode: Int32,
+        model: String? = nil,
+        systemPrompt: String? = nil,
+        tokensPerSecond: Double? = nil
+    ) {
         guard let index = items.firstIndex(where: { $0.id == conversationID }) else { return }
         var item = items[index]
         var messages = item.messages ?? []
-        messages.append(StudioMessage(role: .assistant, content: content, failed: exitCode != 0))
+        messages.append(StudioMessage(
+            role: .assistant,
+            content: content,
+            failed: exitCode != 0,
+            model: model,
+            systemPrompt: systemPrompt,
+            tokensPerSecond: tokensPerSecond
+        ))
         item.messages = messages
         item.status = exitCode == 0 ? .completed : .failed
         item.exitCode = exitCode
@@ -200,6 +220,51 @@ final class StudioLibraryStore: ObservableObject {
         items[index] = item
         save()
         return removed.role == .user ? removed : nil
+    }
+
+    /// Starts a new thread from a point in an existing one: the messages before `messageID`,
+    /// plus that message itself when `inclusive`. Branching from a user turn (exclusive) leaves
+    /// the original untouched and gives the edited turn a fresh thread; branching from an
+    /// assistant turn (inclusive) forks the conversation after that reply. The branch inherits
+    /// the source's preset, model, and system prompt and gets its own message identities.
+    @discardableResult
+    func branch(conversationID: UUID, at messageID: UUID, inclusive: Bool) -> StudioLibraryItem? {
+        guard let source = items.first(where: { $0.id == conversationID }),
+              let messages = source.messages,
+              let messageIndex = messages.firstIndex(where: { $0.id == messageID }) else { return nil }
+        let end = inclusive ? messageIndex + 1 : messageIndex
+        let kept = messages[..<end].map { message in
+            StudioMessage(
+                role: message.role,
+                content: message.content,
+                createdAt: message.createdAt,
+                failed: message.failed,
+                imagePath: message.imagePath,
+                model: message.model,
+                systemPrompt: message.systemPrompt,
+                tokensPerSecond: message.tokensPerSecond
+            )
+        }
+        let now = Date()
+        let branch = StudioLibraryItem(
+            id: UUID(),
+            mode: source.mode,
+            prompt: "",
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: now,
+            updatedAt: now,
+            status: kept.last?.failed == true ? .failed : .completed,
+            exitCode: kept.last?.failed == true ? 1 : 0,
+            commandPreview: source.commandPreview,
+            outputText: nil,
+            messages: kept,
+            systemPrompt: source.systemPrompt,
+            model: source.model
+        )
+        items.insert(branch, at: 0)
+        save()
+        return branch
     }
 
     /// Drops the last assistant message of a thread (used by retry before re-running the turn).
