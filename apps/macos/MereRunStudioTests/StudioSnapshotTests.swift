@@ -92,6 +92,64 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// The Activity popover over the Main board, as `ActivityDark.png` shows it: the sidebar
+    /// footer's popover open on the same three jobs the board runs — the fox generation denoising,
+    /// the model pull a quarter of the way through, and the diner generation queued behind them.
+    /// Light and dark; the jobs come from the harness's scripted process runner, so no CLI runs.
+    func testActivityPopoverFidelitySnapshots() throws {
+        let fidelity = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .mockup,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
+        )
+        defer { fidelity.tearDown() }
+        try fidelity.startMainBoardJobs()
+        // The popover's footer reports the version handshake, which the shell never probes itself.
+        fidelity.controller.refreshCLIVersion()
+
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "a ceramic coffee mug in soft morning light"
+        draft.cfgScale = 3.5
+        draft.sigmaShift = 3.0
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.createImage: draft])
+                .environmentObject(fidelity.controller)
+                .environmentObject(fidelity.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fidelity.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "f11-activity-\(appearance.rawValue)",
+                settle: 3.0,
+                afterAppear: {
+                    navigation.toggleInspector(for: .imageGenerate)
+                    navigation.showActivity = true
+                }
+            )
+        }
+
+        // With nothing in flight the same popover carries the machine's own state instead.
+        let idleNavigation = NavigationModel()
+        let idle = StudioRootView()
+            .environmentObject(fixture.controller)
+            .environmentObject(fixture.library)
+            .environmentObject(idleNavigation)
+            .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+        try fixture.write(
+            idle,
+            size: Self.fidelitySize,
+            appearance: .dark,
+            name: "f11-activity-idle-dark",
+            settle: 3.0,
+            afterAppear: { idleNavigation.showActivity = true }
+        )
+    }
+
     override func tearDownWithError() throws {
         fixture?.tearDown()
         fixture = nil
@@ -767,7 +825,10 @@ private final class SnapshotFixture {
         var pullDraft = pullTemplate.defaultDraft()
         pullDraft.model = ModelsInventoryScript.pullingModelID
         let pull = StudioRunRequest(mode: .readImage, templateID: .modelPull, template: pullTemplate, draft: pullDraft)
-        guard controller.run(studio: pull) else { throw StudioSnapshotError.noContentView }
+        guard controller.run(studio: pull), let pullLive = runner.liveStarts.last else {
+            throw StudioSnapshotError.noContentView
+        }
+        pullLive.stderr("[\(ModelsInventoryScript.pullingModelID)] 25%  1.2 GB / 4.8 GB  9.7 MB/s  ETA 3m 20s\n")
 
         var queuedDraft = StudioDraft()
         queuedDraft.reset(for: .createImage)
@@ -1328,6 +1389,7 @@ private enum ModelsInventoryScript {
         [
             .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
+            version,
         ]
     }
 
@@ -1359,6 +1421,13 @@ private enum ModelsInventoryScript {
             .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
         ]
+    }
+
+    /// The CLI's own version, answered with the app's, so the Activity popover's footer shows the
+    /// matched handshake a bundled CLI produces.
+    static var version: SnapshotProcessRunner.Response {
+        let bundled = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return .init(matches: { $0 == ["--version"] }, stdout: (bundled ?? "dev") + "\n", exitCode: 0)
     }
 
     static var responses: [SnapshotProcessRunner.Response] {
