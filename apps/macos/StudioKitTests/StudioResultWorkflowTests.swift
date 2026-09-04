@@ -50,6 +50,43 @@ final class StudioResultWorkflowTests: XCTestCase {
         XCTAssertEqual(changes.first?.second, "99")
     }
 
+    func testComparisonIncludesPositionalPromptsAndAdditionalOptionsWithoutSecrets() throws {
+        var first = try image(library())
+        first.templateID = .musicGenerate
+        first.commandArguments = ["music", "generate", "A quiet piano", "--future-option", "one", "--hf-token", "first-secret"]
+        var second = first
+        second.commandArguments = ["music", "generate", "A brass band", "--future-option", "two", "--hf-token", "second-secret"]
+        let changes = StudioResultComparison.differences(first, second)
+        XCTAssertEqual(changes.map(\.id), ["argument.0", "extraArguments"])
+        XCTAssertEqual(changes.first?.first, "A quiet piano")
+        XCTAssertEqual(changes.first?.second, "A brass band")
+        XCTAssertTrue(changes.last?.second.contains("two") == true)
+        XCTAssertFalse(changes.description.contains("first-secret"))
+        XCTAssertFalse(changes.description.contains("second-secret"))
+    }
+
+    func testComparisonIdentifiesCommandsAndDoesNotInventSettingsForLegacyResults() throws {
+        let first = try image(library())
+        var second = first
+        second.templateID = .musicGenerate
+        second.commandArguments = ["music", "generate", "A quiet piano"]
+        XCTAssertEqual(StudioResultComparison.differences(first, second).first?.id, "command")
+        second.commandArguments = nil
+        second.commandDraft = nil
+        XCTAssertFalse(StudioResultComparison.hasSettings(second))
+        XCTAssertTrue(StudioResultComparison.differences(first, second).isEmpty)
+    }
+
+    func testImagePanningStaysInsideTheViewportAfterZoomingOutOrResizing() {
+        let pan = CGSize(width: 400, height: -600)
+        XCTAssertEqual(StudioResultViewport.clampedPan(pan, zoom: 3, size: CGSize(width: 800, height: 600)), pan)
+        XCTAssertEqual(StudioResultViewport.clampedPan(pan, zoom: 2, size: CGSize(width: 800, height: 600)),
+                       CGSize(width: 400, height: -300))
+        XCTAssertEqual(StudioResultViewport.clampedPan(pan, zoom: 2, size: CGSize(width: 400, height: 300)),
+                       CGSize(width: 200, height: -150))
+        XCTAssertEqual(StudioResultViewport.clampedPan(pan, zoom: 1, size: CGSize(width: 800, height: 600)), .zero)
+    }
+
     func testEveryContinuationCarriesSourceAndLineageWithoutChangingOriginal() throws {
         let item = try image(library())
         let url = URL(fileURLWithPath: "/tmp/source.png")

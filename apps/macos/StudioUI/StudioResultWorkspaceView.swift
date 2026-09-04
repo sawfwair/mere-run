@@ -50,6 +50,12 @@ struct StudioResultWorkspaceView: View {
         .background(MereRunTheme.background)
         .onAppear { comparison = initialComparison }
         .onChange(of: url) { _, _ in comparison = nil; resetViewport() }
+        .onChange(of: items) { _, items in
+            if let comparison, !items.contains(where: { $0.id == comparison.itemID && $0.allArtifactURLs.contains(comparison.url) }) {
+                self.comparison = nil
+                resetViewport()
+            }
+        }
         .onExitCommand(perform: onClose)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(comparison == nil ? "Focused result" : "Compare results")
@@ -86,10 +92,13 @@ struct StudioResultWorkspaceView: View {
             Button { zoom = max(1, zoom / 1.5); if zoom == 1 { pan = .zero } } label: {
                 Image(systemName: "minus.magnifyingglass")
             }.keyboardShortcut("-", modifiers: .command).help("Zoom out")
+                .accessibilityLabel("Zoom out").disabled(zoom <= 1)
             Button { resetViewport() } label: { Text(zoom == 1 ? "Fit" : "\(Int(zoom * 100))%") }
                 .keyboardShortcut("0", modifiers: .command).help("Fit both images")
+                .accessibilityLabel("Fit images").accessibilityValue("\(Int(zoom * 100)) percent")
             Button { zoom = min(8, zoom * 1.5) } label: { Image(systemName: "plus.magnifyingglass") }
                 .keyboardShortcut("+", modifiers: .command).help("Zoom in")
+                .accessibilityLabel("Zoom in").disabled(zoom >= 8)
             Menu {
                 if comparison != nil { Button("Single image") { comparison = nil; resetViewport() }; Divider() }
                 ForEach(candidates.indices, id: \.self) { index in
@@ -200,7 +209,9 @@ private struct StudioResultImagePane: View {
                     guard zoom > 1 else { return }
                     let origin = dragOrigin ?? pan
                     dragOrigin = origin
-                    pan = CGSize(width: origin.width + value.translation.width, height: origin.height + value.translation.height)
+                    pan = StudioResultViewport.clampedPan(
+                        CGSize(width: origin.width + value.translation.width, height: origin.height + value.translation.height),
+                        zoom: zoom, size: geometry.size)
                 }.onEnded { _ in dragOrigin = nil })
                 .simultaneousGesture(MagnifyGesture().onChanged { value in
                     let origin = zoomOrigin ?? zoom
@@ -208,6 +219,8 @@ private struct StudioResultImagePane: View {
                     zoom = min(8, max(1, origin * value.magnification))
                     if zoom == 1 { pan = .zero }
                 }.onEnded { _ in zoomOrigin = nil })
+                .onChange(of: zoom) { _, _ in pan = StudioResultViewport.clampedPan(pan, zoom: zoom, size: geometry.size) }
+                .onChange(of: geometry.size) { _, size in pan = StudioResultViewport.clampedPan(pan, zoom: zoom, size: size) }
                 .overlay(alignment: .topLeading) {
                     Text(label).font(.caption.weight(.semibold)).padding(8)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6)).padding(10)

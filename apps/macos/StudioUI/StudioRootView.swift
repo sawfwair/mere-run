@@ -1160,7 +1160,7 @@ package struct StudioRootView: View {
             }
             // A thread selected while Converse is shown (a deep link, or the list) opens in the
             // transcript; a thread of the other preset switches the task control to match.
-            guard mode.isConversational,
+            guard showsPromptWorkspace, activatedMode == mode, mode.isConversational,
                   let id,
                   let item = library.items.first(where: { $0.id == id }),
                   item.isConversation,
@@ -1169,9 +1169,7 @@ package struct StudioRootView: View {
                 navigation.open(task: item.mode.task)
                 return
             }
-            activeConversationID = id
-            applyConversationSettings(from: item, to: &draft)
-            draft.prompt = ""
+            restoreConversation(item)
         }
     }
 
@@ -1265,7 +1263,8 @@ package struct StudioRootView: View {
     private func activateMode(_ newMode: StudioMode) {
         // Park the task being left before anything else touches `draft`, so nothing typed here is
         // lost by the switch; the task being entered gets its own draft back.
-        if let leaving = activatedMode, leaving != newMode {
+        let leavingMode = activatedMode
+        if let leaving = leavingMode, leaving != newMode {
             park(draft, for: leaving)
         }
         activatedMode = newMode
@@ -1277,7 +1276,7 @@ package struct StudioRootView: View {
                                                           preferredID: navigation.selectedLibraryID)
         // Chat ↔ Code changes the preset of an open thread. Other task detours restore the
         // saved selection, so an unsent message returns to its own conversation.
-        let keepsOpenThread = newMode.isConversational && activeConversationItem != nil
+        let keepsOpenThread = leavingMode?.isConversational == true && newMode.isConversational && activeConversationItem != nil
             && navigation.selectedLibraryID == activeConversationID && !selection.isExplicit
         let preferred = keepsOpenThread ? nil : selection.item
         if newMode.isConversational {
@@ -1288,7 +1287,7 @@ package struct StudioRootView: View {
                 if !hadParkedDraft || selection.isExplicit {
                     applyConversationSettings(from: preferred, to: &nextDraft)
                 }
-            } else if let current = activeConversationItem {
+            } else if keepsOpenThread, let current = activeConversationItem {
                 // Chat ↔ Code is a preset change, not a thread change: keep the thread open and
                 // apply the preset's defaults (its command, model, and system prompt) to the
                 // next turn.
@@ -1307,9 +1306,15 @@ package struct StudioRootView: View {
                 activeConversationID = nil
                 navigation.selectedLibraryID = nil
             }
-            // Opening a thread clears the composer, but a half-written message this task was
-            // already holding survives the detour.
-            if !hadParkedDraft || selection.isExplicit { nextDraft.prompt = "" }
+            if let saved = controller.taskSessions.conversationDraft(conversationID: activeConversationID, mode: newMode) {
+                nextDraft = saved
+            } else if !hadParkedDraft || selection.isExplicit || (keepsOpenThread && leavingMode != newMode) {
+                nextDraft = seededDrafts[newMode] ?? freshDraft(for: newMode)
+                if !keepsOpenThread, let item = activeConversationItem {
+                    applyConversationSettings(from: item, to: &nextDraft)
+                }
+                nextDraft.prompt = ""
+            }
         } else {
             activeConversationID = nil
             let selected = preferred ?? library.items.first { $0.mode == newMode }
@@ -1336,6 +1341,9 @@ package struct StudioRootView: View {
     private func park(_ draft: StudioDraft, for mode: StudioMode) {
         draftsByTask[mode.task] = draft
         controller.taskSessions.set(draft, for: mode.task.rawValue + ".draft")
+        if mode.isConversational {
+            controller.taskSessions.rememberConversationDraft(draft, conversationID: activeConversationID, mode: mode)
+        }
         storedDrafts = StudioDraftMemory.encode(draftsByTask.mapValues(StudioDraftMemory.entry(for:)))
     }
 
@@ -1356,6 +1364,7 @@ package struct StudioRootView: View {
     /// `activateMode` then keeps the clicked row selected. The feed scrolls to the row's card
     /// and outlines it briefly.
     private func selectLibraryItem(_ item: StudioLibraryItem) {
+        libraryOverlay = false
         navigation.selectedLibraryID = item.id
         highlightCard(item.id)
         guard item.mode != mode || !showsPromptWorkspace else {
@@ -1407,15 +1416,23 @@ package struct StudioRootView: View {
     /// A thread picked in the Converse list. Threads of the other preset switch the task first
     /// (the selection observer then opens the thread); same-preset threads open directly.
     private func openThread(_ thread: StudioLibraryItem) {
+        libraryOverlay = false
         guard thread.id != activeConversationID else { return }
         navigation.selectedLibraryID = thread.id
         guard thread.mode == mode else {
             navigation.open(task: thread.mode.task)
             return
         }
+        restoreConversation(thread)
+    }
+
+    private func restoreConversation(_ thread: StudioLibraryItem) {
+        park(draft, for: mode)
         activeConversationID = thread.id
-        applyConversationSettings(from: thread, to: &draft)
-        draft.prompt = ""
+        var restored = freshDraft(for: mode)
+        applyConversationSettings(from: thread, to: &restored)
+        draft = controller.taskSessions.conversationDraft(conversationID: thread.id, mode: mode) ?? restored
+        controller.taskSessions.rememberSelection(thread.id, for: mode)
         studioError = nil
         promptFocused = true
     }
@@ -1428,6 +1445,7 @@ package struct StudioRootView: View {
     /// only when the user chose that in the confirmation.
     private func deleteLibraryItems(_ ids: Set<UUID>, trashingFiles: Bool) {
         let failures = library.delete(ids: ids, trashingFiles: trashingFiles)
+        controller.taskSessions.forgetConversationDrafts(ids)
         if let first = failures.first {
             studioError = failures.count == 1
                 ? "Could not move \(first.lastPathComponent) to the Trash."
@@ -1438,6 +1456,7 @@ package struct StudioRootView: View {
         }
         if let conversation = activeConversationID, ids.contains(conversation) {
             activeConversationID = nil
+            draft = controller.taskSessions.conversationDraft(conversationID: nil, mode: mode) ?? freshDraft(for: mode)
         }
     }
 
@@ -1748,17 +1767,9 @@ package struct StudioRootView: View {
         let model = draft.model.isBlank ? nil : draft.model
         // Vision chat attaches an image to this turn (chat only); persist it so edit/retry resend it.
         let turnImage = (mode == .chat && !draft.inputPath.isBlank) ? draft.inputPath : nil
-        let item = library.appendUser(
-            conversationID: conversationID,
-            mode: mode,
-            model: model,
-            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
-            content: content,
-            imagePath: turnImage
-        )
-
+        let messages = (activeConversationItem?.messages ?? []) + [StudioMessage(role: .user, content: content, imagePath: turnImage)]
         let rendered = ConversationTranscript.render(
-            messages: item.messages ?? [],
+            messages: messages,
             systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
             budgetChars: conversationBudgetChars
         )
@@ -1771,7 +1782,20 @@ package struct StudioRootView: View {
             let request = try resolvedCommand(StudioCommandAdapter.makeRequest(
                 mode: mode, draft: runDraft, conversationID: conversationID
             ))
+            if let message = request.execution?.validationMessage {
+                studioError = message
+                return
+            }
+            // Validate the request before changing history. A malformed draft stays editable.
+            library.appendUser(conversationID: conversationID, mode: mode, model: model,
+                systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt, content: content, imagePath: turnImage)
             controller.run(studio: request)
+            if activeConversationID == nil {
+                var sent = draft
+                sent.prompt = ""
+                sent.inputPath = ""
+                controller.taskSessions.rememberConversationDraft(sent, conversationID: nil, mode: mode)
+            }
             activeConversationID = conversationID
             navigation.selectedLibraryID = conversationID
             draft.prompt = ""
@@ -1925,6 +1949,7 @@ package struct StudioRootView: View {
         var nextDraft = StudioDraft()
         nextDraft.reset(for: mode)
         controller.applyRecommendedDefaults(to: &nextDraft, for: mode)
+        if mode.isConversational { nextDraft.prompt = "" }
         return nextDraft
     }
 
@@ -1950,6 +1975,7 @@ package struct StudioRootView: View {
         if let item = library.items.first(where: { $0.id == conversationID }),
            item.messages?.isEmpty ?? true {
             library.delete(id: conversationID)
+            controller.taskSessions.forgetConversationDrafts([conversationID])
             activeConversationID = nil
             navigation.selectedLibraryID = nil
         }
@@ -1967,20 +1993,31 @@ package struct StudioRootView: View {
         guard let branch = library.branch(conversationID: conversationID, at: messageID, inclusive: inclusive) else {
             return
         }
+        park(draft, for: mode)
+        var branchDraft = freshDraft(for: branch.mode)
+        applyConversationSettings(from: branch, to: &branchDraft)
+        if message.role == .user {
+            branchDraft.prompt = message.content
+            if branch.mode == .chat { branchDraft.inputPath = message.imagePath ?? "" }
+        }
+        let branchID: UUID?
         if branch.messages?.isEmpty ?? true {
             // Branching before the first turn is just a new thread carrying that prompt.
             library.delete(id: branch.id)
-            startNewConversation()
+            branchID = nil
         } else {
-            activeConversationID = branch.id
-            navigation.selectedLibraryID = branch.id
-            applyConversationSettings(from: branch, to: &draft)
+            branchID = branch.id
         }
-        if message.role == .user {
-            draft.prompt = message.content
-            if mode == .chat { draft.inputPath = message.imagePath ?? "" }
+        controller.taskSessions.rememberConversationDraft(branchDraft, conversationID: branchID, mode: branch.mode)
+        controller.taskSessions.rememberSelection(branchID, for: branch.mode)
+        navigation.selectedLibraryID = branchID
+        if branch.mode == mode {
+            activeConversationID = branchID
+            draft = branchDraft
         } else {
-            draft.prompt = ""
+            // The branch's recorded preset owns its composer and command, even if the source
+            // thread has switched from Chat to Code since that turn.
+            navigation.open(task: branch.mode.task)
         }
         studioError = nil
         promptFocused = true
@@ -1988,14 +2025,14 @@ package struct StudioRootView: View {
 
     /// Starts a fresh, not-yet-persisted conversation (no library row until the first message).
     private func startNewConversation() {
+        libraryOverlay = false
+        guard activeConversationID != nil else { promptFocused = true; return }
+        park(draft, for: mode)
         activeConversationID = nil
         navigation.selectedLibraryID = nil
         controller.taskSessions.rememberSelection(nil, for: mode)
         studioError = nil
-        var fresh = StudioDraft()
-        fresh.reset(for: mode)
-        fresh.prompt = ""
-        draft = fresh
+        draft = controller.taskSessions.conversationDraft(conversationID: nil, mode: mode) ?? freshDraft(for: mode)
         promptFocused = true
     }
 

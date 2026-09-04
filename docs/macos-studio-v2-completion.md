@@ -9,11 +9,14 @@ The app continues to run the public CLI; it does not load model runtimes itself.
 2. Use the zoom controls, pinch, or drag to inspect it. **Fit** restores the viewport.
 3. Select **Compare** and choose another image. Both views share zoom and pan.
 4. Review **Changed settings**. Output paths and credentials do not appear as
-   generation differences. Older results without settings are identified as such.
+   generation differences. The comparison includes positional prompts, different
+   commands, and additional options entered in Command. Older results without
+   settings are identified as such.
 5. Select **Results** or press Escape to return to the feed and its existing draft.
 
 The feed keeps earlier work visible while new runs finish. Image focus stays on
 the selected result, and another finished image becomes a comparison candidate.
+Panning stays within the image surface when you zoom out or resize the window.
 
 ## Continue from a result
 
@@ -44,8 +47,10 @@ credentials are removed or masked in saved task and history state.
 ## Resume work
 
 Task sessions retain full prompt drafts, specialist input and settings values,
-and selected runs. Unsent chat text returns to its selected thread; a new chat
-stays new. Switching tasks does not discard unsent text. Relaunch restores
+and selected runs. Each chat thread retains its own unsent text, attachment,
+model, and settings, including separate Chat and Code drafts. **New thread**
+returns to an unsent new thread when one exists. Switching threads or tasks
+does not discard unsent text. Relaunch restores
 saved state; an earlier queued or running row becomes **Interrupted** when no
 process owns it. Malformed session files are preserved instead of overwritten.
 
@@ -68,7 +73,8 @@ Control-Command-S toggles the sidebar. Native window controls remain available.
 The default window is 1440 by 820 points. At smaller widths, task navigation
 compacts and auxiliary panels overlay the workspace. Analysis controls and
 results stack vertically when they cannot fit beside one another. Each pane
-scrolls independently. The result feed loads cards lazily.
+scrolls independently. Selecting a result or thread dismisses the Library
+overlay so you can continue working. The result feed loads cards lazily.
 
 Primary reading surfaces use semantic text styles. Secondary text and selected
 controls use stronger contrast in light and dark appearances. Icons retain

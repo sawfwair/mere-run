@@ -167,4 +167,38 @@ final class StudioContinuityTests: XCTestCase {
         XCTAssertFalse(text.contains("test-only-secret"))
         XCTAssertFalse(text.contains("test-only-password"))
     }
+
+    func testUnsentConversationDraftsKeepTheirOwnTextAttachmentAndPresetAfterRelaunch() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("thread-drafts-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let sessions = StudioTaskSessions(url: url)
+        let older = UUID()
+        let newer = UUID()
+        var draft = StudioDraft()
+        draft.prompt = "Unsent follow-up"
+        draft.inputPath = "/tmp/attached.png"
+        draft.model = "chosen-model"
+        draft.secondaryText = "Custom instruction"
+        draft.temperature = 0.7
+        sessions.rememberConversationDraft(draft, conversationID: older, mode: .chat)
+        var other = StudioDraft()
+        other.prompt = "Different thread"
+        sessions.rememberConversationDraft(other, conversationID: newer, mode: .chat)
+        other.prompt = "A new thread"
+        sessions.rememberConversationDraft(other, conversationID: nil, mode: .chat)
+        other.prompt = "Code preset"
+        sessions.rememberConversationDraft(other, conversationID: older, mode: .code)
+        sessions.flush()
+        let restored = StudioTaskSessions(url: url)
+        XCTAssertEqual(restored.conversationDraft(conversationID: older, mode: .chat), draft)
+        XCTAssertEqual(restored.conversationDraft(conversationID: newer, mode: .chat)?.prompt, "Different thread")
+        XCTAssertEqual(restored.conversationDraft(conversationID: nil, mode: .chat)?.prompt, "A new thread")
+        XCTAssertEqual(restored.conversationDraft(conversationID: older, mode: .code), other)
+        restored.forgetConversationDrafts([older])
+        restored.flush()
+        let afterDeletion = StudioTaskSessions(url: url)
+        XCTAssertNil(afterDeletion.conversationDraft(conversationID: older, mode: .chat))
+        XCTAssertNil(afterDeletion.conversationDraft(conversationID: older, mode: .code))
+        XCTAssertEqual(afterDeletion.conversationDraft(conversationID: newer, mode: .chat)?.prompt, "Different thread")
+    }
 }
