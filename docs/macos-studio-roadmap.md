@@ -5,15 +5,19 @@ This page preserves a historical source review of `apps/macos/MereRunStudio`
 `Sources/MereRunCLI` and the bundling pipeline. The implementation update
 identifies which findings no longer describe the product.
 
-> **Implementation update (July 27, 2026):** This document preserves the original
-> pre-parity audit and sequencing rationale. The capability gaps in the
-> historical findings no longer describe the product. The app consumes the shared
-> machine-readable 127-command capability contract and has executable drift tests
-> for every local Advanced template. Studio provides typed Text, Image, Video,
-> Music, Speech, SFX, Vision/VFX, geospatial, adapter, run, world, setup, model,
-> model-location, plugin, benchmark, Open WebUI, and API workflows; Graph Studio
-> and Node remain explicit external boundaries, now recorded as named exemptions
-> in the CLI coverage test rather than as silent absences. Structured receipts, file pickers, validation, retry and
+> **Implementation update (September 2026):** This document preserves the
+> original pre-parity audit and sequencing rationale. The capability gaps in the
+> historical findings no longer describe the product, and neither does its
+> vocabulary: the Advanced surface, the sheets, and the mode header's lab
+> buttons were all retired by [macOS Studio v2](./macos-studio-v2.md), which
+> replaced them with domain-and-task navigation. The app consumes the shared
+> machine-readable 127-command capability contract and has executable drift
+> tests for every template it can run. Studio provides typed text, image, video,
+> music, speech, sound, vision and VFX, Earth-observation, adapter, run, world,
+> setup, model, model-location, plugin, benchmark, Open WebUI, and API
+> workflows; Graph Studio and Node remain explicit external boundaries, now
+> recorded as named exemptions in the CLI coverage test rather than as silent
+> absences. Structured receipts, file pickers, validation, retry and
 > resume controls are implemented. See
 > [`apps/macos/README.md`](../apps/macos/README.md) for the
 > implemented surface. On July 27, 2026, the release pipeline produced a Developer

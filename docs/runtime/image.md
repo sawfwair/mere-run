@@ -23,37 +23,32 @@ Dev, FLUX.2 Dev and Klein, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image Edit
 
 ## macOS Studio
 
-The primary Create Image workspace covers text-to-image, image-to-image, and
-multi-reference editing. Its options include negative prompts, size and
-sampling, edit strength, HiDream aspect preservation, structured-prompt
-expansion, LoRA catalog IDs or local safetensors, Krea conditioning and
-quantization controls, preflight JSON, and JSON progress events.
+**Image ▸ Generate** covers text-to-image, image-to-image, and multi-reference
+editing. Its settings include negative prompts, size and sampling, edit
+strength, HiDream aspect preservation, structured-prompt expansion, LoRA catalog
+IDs or local safetensors, and Krea conditioning and quantization controls. The
+two to four settings that matter most sit as chips under the prompt; the rest
+are in the inspector (⌥⌘I), rendered from the capability contract.
 
-Create Image's **Create 3D** button opens the first-class reconstruction
-workspace. It provides single-image TripoSR and TRELLIS.2 PBR flows, ordered and
-reorderable 4/6-view InstantMesh inputs, every engine-specific runtime control,
-preflight, immutable output directories, manifest statistics, and embedded
-orbitable GLB/OBJ/PLY previews. Progress and every mesh, texture, voxel, and
-manifest artifact remain in Library.
+**Image ▸ Train** is the trainer: image-caption previews, Krea 2 and FLUX.2
+Klein recipes, memory and schedule controls, preflight, launch and resume, live
+loss charts, samples, checkpoints, history, and run comparison.
 
-Create Image's **Training** button opens the unified Training Studio with
-image-caption previews, Krea/Klein recipes, memory and schedule controls,
-preflight, launch/resume, live loss charts, samples, checkpoints, history, and
-run comparison. **Utilities** opens deterministic validation, dataset discovery
-candidate cards, and saved-plan preflight/materialization with durable paths.
+**Image ▸ Datasets** covers deterministic validation, dataset-discovery
+candidate cards, and saved-plan preflight and materialization with durable paths.
 
-**Advanced > Image** also exposes the public command family as guided forms:
+Reconstruction lives in the **3D** domain rather than under Image: single-image
+TripoSR and TRELLIS.2 PBR flows, ordered and reorderable 4- and 6-view
+InstantMesh inputs, every engine-specific runtime control, preflight, immutable
+output directories, manifest statistics, and embedded orbitable GLB, OBJ, and
+PLY previews. Progress and every mesh, texture, voxel, and manifest artifact
+stay in the Library.
 
-- Generation and editing with repeatable references, structured prompts, and LoRAs
-- Krea 2 and FLUX.2 Klein LoRA training, recipes, memory controls, checkpoints,
-  preview samples, schedules, benchmarks, and the live dashboard;
-- Dataset discovery, saved-workflow preflight, materialization, execution, and
-  durable-run visualization
-- Deterministic image-stack validation
-- TripoSR, TRELLIS.2, and four-view or six-view InstantMesh reconstruction
-
-The app launches the public CLI for all work. `mere.run catalog --json` and the
-shared contract tests keep every form flag aligned with ArgumentParser help.
+The **Command view** (⌥⌘C) shows the exact command any of these settings build,
+and the **Command Console** window runs any image command the contract declares,
+including the ones with no designed surface. The app launches the public CLI for
+all work. `mere.run catalog --json` and the shared contract tests keep every form
+flag aligned with ArgumentParser help.
 
 ## Model families
 
@@ -302,7 +297,7 @@ surface.
 
 Klein resume restores the selected adapter checkpoint before the next optimizer
 step. Krea 2 rejects `--resume-from` explicitly instead of silently starting
-another run. Training Studio discovers checkpoint artifacts beside a prior output
+another run. Image ▸ Train discovers checkpoint artifacts beside a prior output
 and sends the same public flag.
 
 ```bash

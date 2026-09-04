@@ -62,14 +62,14 @@ To understand the CLI end to end, start with `Sources/MereRunCLI`.
 ### `apps/macos/StudioKit`, `apps/macos/StudioUI`, `apps/macos/MereRunStudio`
 
 The optional macOS studio, split into a SwiftUI-free model library
-(`StudioKit`), the views (`StudioUI`), and the executable that owns the
-scenes, menus, and Sparkle wiring (`MereRunStudio`). It does not own runtime
-behavior; it turns
-user-facing studio requests into `mere.run` arguments, launches the CLI as a
-child process, streams stdout and stderr, saves local library metadata, and keeps
-the raw command surface available in Advanced details.
+(`StudioKit`), the views (`StudioUI`), and the executable that owns the scenes,
+menus, and Sparkle wiring (`MereRunStudio`). It does not own runtime behavior;
+it turns user-facing studio requests into `mere.run` arguments, launches the CLI
+as a child process, streams stdout and stderr, saves local library metadata, and
+keeps the raw command surface available in the Command view and the Command
+Console, both rendered from the shared capability contract.
 
-Do not make this target part of Linux compatibility work. Linux contributors
+Do not make these targets part of Linux compatibility work. Linux contributors
 must validate the CLI and local API surfaces directly.
 
 ### `apps/ios`

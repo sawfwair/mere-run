@@ -6,8 +6,8 @@ Guidance for AI coding agents working in this repo. For human contributor expect
 
 mere.run is a Swift package, CLI, and optional macOS GUI for local-first inference on Apple Silicon. The repo ships five things:
 
-- Swift package — `Package.swift`, `Sources/`, `Tests/`. Targets: `MereRunCLI` (the `mere.run` executable), `MereRunApp` (the optional `mere.run.app` executable), `MereRunRelayKit` (the portable relay client library), `MereRunCore`, `AudioCore`, `AudioCodecs`, `AudioSTT`, `AudioTTS`.
-- macOS client — `apps/macos/` holds the optional Studio sources, tests, and assets; its `MereRunApp` target builds the `mere.run.app` executable and runs the public CLI.
+- Swift package — `Package.swift`, `Sources/`, `Tests/`. Targets: `MereRunCLI` (the `mere.run` executable), `MereRunApp` (the optional `mere.run.app` executable) over the `StudioKit` and `StudioUI` libraries, `MereRunRelayKit` (the portable relay client library), `MereRunCore`, `AudioCore`, `AudioCodecs`, `AudioSTT`, `AudioTTS`.
+- macOS client — `apps/macos/` holds the optional Studio sources, tests, and assets, split into `StudioKit/` (no SwiftUI), `StudioUI/` (the views), and `MereRunStudio/` (the executable); its `MereRunApp` target builds `mere.run.app` and runs the public CLI.
 - iOS client — `apps/ios/` holds the XcodeGen-generated iOS Studio app, a relay client over `MereRunRelayKit`; see `docs/ios-studio.md`.
 - VitePress docs site — `package.json`, `pnpm-lock.yaml`, `docs/`. Used only to build and preview the public docs.
 - Vendored runtime artifacts — `vendor/llama.xcframework`, `vendor/mlx-swift_Cmlx.bundle`.

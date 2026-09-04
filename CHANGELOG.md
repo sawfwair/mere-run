@@ -48,6 +48,68 @@ The format is based on Keep a Changelog.
 
 ### macOS
 
+macOS Studio has been rebuilt around one navigation. Everything the CLI can do
+now lives in a sidebar domain and a task inside it, reached the same way, and
+nothing opens in a modal window on top of your work.
+
+- replaced the sheets with **domains and tasks**. The sidebar lists fifteen
+  domains in four groups — Create, Converse, Understand, System — and each
+  domain's tasks sit in a segmented control at the top of the page. Models,
+  Server, Runs, Plugins, Geospatial (now **Earth**), and every specialist lab
+  are pages you navigate to rather than windows that cover the app, so you can
+  leave one mid-run and come back to it. Go ▸ takes you to any domain with
+  ⌘1–⌘9 and to any task of the one you are in.
+- replaced the single result stage with a **feed**. Every run of a mode is a
+  card, oldest at the top, newest above the composer: the prompt, the settings
+  it ran with, its outputs, and Vary, Rerun, Use as input, Quick Look, Reveal,
+  Copy, and Save to…. A run in flight has its own progress and Cancel on its
+  own card, a queued run has Remove, and a finished run no longer yanks the
+  selection away from whatever you were looking at — it shows a "New result"
+  pill instead. A failure leads with the reason rather than a wall of stderr,
+  and the log stays one click away.
+- gave the input-first tasks their own layout. Vision ▸ Read, Find, Segment and
+  Track and Audio ▸ Transcribe now show the answer beside the thing it is
+  about: detection boxes drawn over the picture, masks composited on it, track
+  spans under the video's scrubber, a timestamped transcript beside the
+  waveform — with contextual next steps that carry your file into the next task.
+- added the **inspector** (⌥⌘I) and removed the Options popover. Every setting
+  is grouped into sections with a Reset each and a badge counting what you
+  changed, with the rarely-used flags folded under Advanced. The two to four
+  settings that matter most stay as chips under the prompt, and the two edit the
+  same thing. Studio no longer shows CLI plumbing in either place.
+- **saved generations where you can find them.** Runs now write to
+  `~/Pictures/mere.run/<Domain>`, `~/Music/mere.run/<Domain>`, or
+  `~/Documents/mere.run/<Domain>`, named after the prompt
+  (`a-ceramic-coffee-mug-in-soft-morning-light-8812.png`) instead of into a
+  hidden Application Support folder under a template id and a timestamp.
+  Settings ▸ General takes one root that overrides all three. Existing library
+  rows keep the paths they already recorded.
+- made the **Library** browsable: a grid view beside the list, a kind filter
+  (Images, Video, Audio, Text) and Favorites, real thumbnails per kind including
+  video poster frames and audio waveforms, a hover star, rename in place, drag
+  out to Finder, and ⌘/⇧ click to build a batch for Reveal, Save to…, and
+  Delete. Delete now asks first and offers to move the run's files to the Trash.
+- added the **Activity popover** on the status pill: every job running or queued
+  anywhere in the app, with its progress and a stop control, so a model pull
+  started in one domain is visible from another. The pill also reports how many
+  jobs are running.
+- gave every task a **Command view** (⌥⌘C): the exact command your settings
+  build, option by option, with Copy, Open in Terminal, and Run. The Command
+  Console window is now generated from the capability contract rather than
+  hand-written per command, so it can run any `mere.run` command the CLI
+  declares, and "Edit command…" on a library row reopens the exact command that
+  run used.
+- rebuilt **Chat** around a thread list of its own, with the model and system
+  prompt on the thread header, Branch as well as truncate when you edit a turn,
+  and each reply recording the model and speed it ran with. Code is a preset
+  inside the same threads. Chat threads no longer clutter the media library.
+- kept your work when you move: each prompt task remembers its own prompt and
+  attachment, across task switches and across relaunches.
+- **for CLI users:** the generation commands gained `--receipt`, which prints one
+  final `{"event":"result",…}` line naming every file the run wrote and each
+  sidecar's role, and `--progress-json` now covers video, music, sound effects,
+  and speech as well as images. Studio uses both, so it stops guessing at output
+  paths by polling the filesystem — and they are just as useful in a script.
 - added `--lm-model` (music generate, analyze, and serve), `--h3-acceleration`,
   and `--audio-max-duration` (video generate) to the shared capability
   contract, so `mere.run catalog --json` and Studio agree with the CLI's

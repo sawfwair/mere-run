@@ -65,10 +65,12 @@ The public executable target.
 
 Exercise product Linux compatibility through this target.
 
-### `MereRunApp`
+### `StudioKit`, `StudioUI`, `MereRunApp`
 
-The optional SwiftUI Studio target. It stays macOS-only and must not become a
-Linux compatibility dependency.
+The optional Studio, in three targets under `apps/macos/`: `StudioKit` is the
+SwiftUI-free model layer, `StudioUI` holds every view, and `MereRunApp` is the
+`mere.run.app` executable that composes them. All three stay macOS-only and must
+not become Linux compatibility dependencies.
 
 ## Tests
 

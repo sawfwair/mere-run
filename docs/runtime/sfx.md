@@ -25,14 +25,16 @@ on-screen action.
 - `sfx-woosh-vflow-8s`
 - `sfx-mmaudio-large-44k-v2`
 
-## macOS SFX Lab
+## macOS Studio
 
-The Sound FX workspace opens **SFX Lab**, a dedicated surface for all six
-command families. It provides text generation and video-synchronized Foley,
-renoise and negative-conditioning controls, text-conditioning export, Woosh-AE
-encode/decode, and CLAP prompt/audio scoring. Generated audio and source video
-are reviewable in place. Encoded NPY results show their data type, shape, NumPy
-version, layout, and size. Progress and every output remain durable in Library.
+The **Sound** domain covers all six command families. **Sound ▸ Generate** is
+the prompt task for text-to-audio and **Sound ▸ Video Foley** synchronizes to a
+clip; **Condition**, **Encode**, **Decode**, and **Score** cover
+negative-conditioning and renoise controls, text-conditioning export, Woosh-AE
+encode and decode, and CLAP prompt and audio scoring. Generated audio and source
+video are reviewable in place. Encoded NPY results show their data type, shape,
+NumPy version, layout, and size. Progress and every output stay durable in the
+Library.
 
 ## Writing prompts
 

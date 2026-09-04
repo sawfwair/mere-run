@@ -207,7 +207,7 @@ mere.run model pull --all --accept-model-license
 Without that flag, a single-model pull and its preflight are blocked; `--all`
 skips restricted models. Restricted models never auto-download from an
 inference command. The macOS app presents the same explicit acceptance before a
-download and exposes the term links in its Models and Advanced views.
+download and exposes the term links in its Models pages.
 Batch downloads through `agent onboard --pull-recommended` skip restricted
 entries without acceptance, while `open-webui quickstart --pull`
 validates all configured models before downloading any; both accept the same

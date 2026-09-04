@@ -19,16 +19,18 @@ redaction.
 ## macOS Studio
 
 The macOS app compiles against the same `MereRunContract` emitted by
-`mere.run catalog --json`. Chat's Options panel exposes text versus constrained
-`json_object` output, model-default/show/disable reasoning, context and sampling
-controls, key-value (KV) quantization, a catalog adapter ID or local LoRA file, tool
-permissions, preflight, and installed-model enforcement. **Utilities** turns
-Embeddings into a vector explorer with dimensions, norms, previews, and cosine
-similarity, and turns Anonymize into original/protected text review with labeled
-PII spans. **Training** opens a text-dataset preview, preflight, live metrics,
-artifacts, history, and comparison workspace for native LoRA. Advanced retains
-guided raw forms; every generated flag is checked against public ArgumentParser
-help in the repository gate.
+`mere.run catalog --json`. **Chat ▸ Chat**'s inspector exposes text versus
+constrained `json_object` output, model-default, show, or disable reasoning,
+context and sampling controls, key-value (KV) quantization, a catalog adapter ID
+or local LoRA file, tool permissions, preflight, and installed-model
+enforcement, rendered from the contract's own option metadata.
+**Text ▸ Embeddings** is a vector explorer with dimensions, norms, previews, and
+cosine similarity; **Text ▸ Anonymize** shows original and protected text with
+labeled PII spans. **Chat ▸ Train** opens a text-dataset preview, preflight,
+live metrics, artifacts, history, and run comparison for native LoRA. The
+Command view and the Command Console keep the raw command surface; every
+generated flag is checked against public ArgumentParser help in the repository
+gate.
 
 ## Model families
 

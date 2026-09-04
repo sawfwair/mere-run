@@ -6,6 +6,110 @@ Reviewed on September 3, 2026 against `main` at `1ef4fda3` (v0.50.0).
 prompt-to-result loop, the nineteen specialist workspaces, and the code
 architecture, each read in full.
 
+## Status
+
+Fifteen pull requests carried the plan. The Studio is now three targets —
+`StudioKit` (20,711 lines, no SwiftUI), `StudioUI` (31,112 lines), and a
+323-line `MereRunStudio` executable — with a 14,631-line test suite split the
+same way. `MereRunRootView.swift` and its 5,500 lines of Advanced forms are
+gone, and nothing is presented as a sheet except three true task sheets. What
+follows records what shipped, in which pull request, and what did not.
+
+### Shipped
+
+| # | Pull requests | Notes |
+|---|---|---|
+| A0 | [#406](https://github.com/sawfwair/mere-run/pull/406) | The argv builder is checked against the contract from maximal drafts; the three drifted flags were added to the contract |
+| A1 | [#407](https://github.com/sawfwair/mere-run/pull/407) | `Job`, `JobStore`, `JobLane`, `ArtifactResolver`, `ProcessRunner` under `Jobs/` |
+| A2 | [#410](https://github.com/sawfwair/mere-run/pull/410) | `utilityCommandResult`, readiness, and `status --json` are lane jobs; `Process()` is confined to `Jobs/ProcessRunner.swift` and `CLIBootstrapInstaller` |
+| A4 | [#408](https://github.com/sawfwair/mere-run/pull/408), [#416](https://github.com/sawfwair/mere-run/pull/416) | Landed as two pull requests, not three: the shell and navigation first, then the v2 drawing of the sidebar, content header, composer, Models, and Realtime |
+| A5 | [#425](https://github.com/sawfwair/mere-run/pull/425) | Views observe a `Job` by id; the Activity popover replaced the machine-facts popover; the global running overlay is gone |
+| A6 | [#408](https://github.com/sawfwair/mere-run/pull/408), [#429](https://github.com/sawfwair/mere-run/pull/429) | Library scope and row-to-domain switching, then per-task drafts and their `studio.drafts` scene memory. The Welcome sheet became a one-time banner in #408 |
+| B1 | [#425](https://github.com/sawfwair/mere-run/pull/425), [#428](https://github.com/sawfwair/mere-run/pull/428) | The inspector replaced the Options popover first, then was rebuilt to render from the contract's `group`, `tier`, `range`, `depends_on`, and `default_value` |
+| B2 | [#416](https://github.com/sawfwair/mere-run/pull/416) | Attachment well from `StudioComposerSchema`; the free-text Model field is gone |
+| B3 | [#425](https://github.com/sawfwair/mere-run/pull/425) | Feed canvas with generation, running, queued, failed, and readiness cards |
+| B4 | [#429](https://github.com/sawfwair/mere-run/pull/429) | Grid, kind filter, favorites, real thumbnails, batches, and visible output folders with prompt-derived names |
+| B5 | [#425](https://github.com/sawfwair/mere-run/pull/425) | Thread list, per-turn model, Code as a preset, Branch |
+| C1 | [#425](https://github.com/sawfwair/mere-run/pull/425) | `StudioAnalyzeSchema` declares the Analyze surface per task; the five input-first prompt tasks render it |
+| C2 | [#418](https://github.com/sawfwair/mere-run/pull/418), [#427](https://github.com/sawfwair/mere-run/pull/427), [#431](https://github.com/sawfwair/mere-run/pull/431) | Option metadata, `--receipt`, `--progress-json`, then the declared outputs reconciled with what the commands write |
+| C4 | [#416](https://github.com/sawfwair/mere-run/pull/416), [#425](https://github.com/sawfwair/mere-run/pull/425) | Music ▸ Realtime as the Session shape and Video ▸ Subjects as the Project shape |
+| C5 | [#432](https://github.com/sawfwair/mere-run/pull/432) | `CommandFlags` generated from the contract, `ArgumentBuilder`, `Catalog/` per category; `arguments(from:)` and `defaultDraft()` deleted |
+| C6 | [#428](https://github.com/sawfwair/mere-run/pull/428), [#430](https://github.com/sawfwair/mere-run/pull/430) | The Command view groups by the contract; the Command Console is `ContractForm` over any capability; `MereRunRootView.swift` deleted and Settings moved |
+| C7 | [#424](https://github.com/sawfwair/mere-run/pull/424) | `ArtifactResolver` prefers the receipt; the 350 ms poll runs only for commands that print none |
+| D1 | [#434](https://github.com/sawfwair/mere-run/pull/434) | `StudioKit` / `StudioUI` / `MereRunStudio`, plus `StudioKitTests`, `StudioUITests`, and a shared `StudioTestSupport`. A move-and-declare refactor: cross-boundary declarations are `package`, nothing became `public`, and all 559 tests still run |
+| D2 | [#416](https://github.com/sawfwair/mere-run/pull/416), [#425](https://github.com/sawfwair/mere-run/pull/425), [#429](https://github.com/sawfwair/mere-run/pull/429) | The offscreen snapshot harness grew with the boards it renders rather than landing at once |
+| D3 | this pull request | Documentation |
+
+### Not shipped
+
+- **The app-lifetime serving monitor.** D1 split the targets but left the
+  monitor where it was: `StudioServingMonitor` is a `@StateObject` inside
+  `StudioUI/StudioServingConsoleView.swift`, so it polls only while
+  Server ▸ Serving is on screen rather than for the life of the app.
+- **A reproducible snapshot gate.** D2's harness renders every board offscreen
+  and is what visual review runs on, but six boards draw elapsed time and
+  relative dates, so about twenty of the sixty-seven shots differ between two
+  renders of the same commit. It is a tool for looking at a surface, not a
+  comparison gate, until those strings are frozen.
+- **The `StudioTask` protocol and six archetype shells.** `StudioTask` shipped
+  as an enum of 54 tasks in `StudioKit/StudioNavigation.swift`, not a protocol
+  with a
+  `Draft` type, `requests(from:)`, and registered renderers. Three shells exist
+  in practice — the prompt workspace, the Analyze canvas, and the Converse
+  surface — and the rest of the tasks host their v1 views inline.
+- **A3, the Library write-through.** `JobStore` does not write Library rows.
+  `StudioUI/StudioRootView.swift` still keeps them current from
+  `controller.runCompletions` and `controller.jobs.events`.
+- **The controller's foreground mirror.** A5 planned to delete it. `logs`,
+  `isRunning`, `liveOutputText`, `currentProgress`, and `lastOutputURL` are
+  still published, because the Command Console window and several re-hosted
+  views read them.
+- **Contract metadata beyond the prompt modes.** 14 of the 127 capabilities
+  populate `group` and `tier` on every option, and the contract test requires it
+  of those 14 only. Every other capability's options fall to the "Options" group
+  and the `standard` tier, so the Console renders them as one flat list with
+  nothing folded under an Advanced disclosure.
+- **An editable Command view.** The Command view column lists the run's options
+  read-only over the argv preview; the chips and the inspector are what edit
+  them. The Console's form is editable, so a value no `StudioDraft` field
+  carries is set there.
+- **Purging CLI plumbing from the designed surfaces.** B1 said preflight, the
+  JSON report, timings, and their siblings would live in the Command view only.
+  They are declared `expert` in the contract instead, so they sit in the
+  inspector's collapsed "Advanced · N more" fold — out of the way, but still in
+  the inspector.
+- **A complete inspector for every prompt mode.** The inspector renders only the
+  flags `StudioKit/StudioContractSchema.swift`'s binding table maps to a
+  `StudioDraft` field, so a control can
+  never look live and change nothing. Read, Find, Segment, Track, and Code bind
+  between one and five flags, and their inspectors are correspondingly thin; the
+  rest of their options are reachable in the Command Console.
+- **A Command view on every task.** It is a column on the twelve prompt tasks
+  only. Every other task's Command toggle opens the Command Console window.
+- **C3, the Analyze migration.** `StudioKit/StudioAnalyzeSchema.swift` declares
+  an archetype for
+  22 tasks, and 5 render it: Vision ▸ Read, Find, Segment, Track and
+  Audio ▸ Transcribe. Vision ▸ Depth, Pose, Faces, Flow, Geometry, Live,
+  Audio ▸ Who Spoke, Enhance, Separate, Text ▸ Embeddings, Anonymize, the four
+  Earth tasks, and Sound ▸ Score and Condition still render their v1 lab forms
+  inside their tasks.
+- **A capability-to-task coverage test.** The guard asserts that the app's
+  capability set equals the contract's, that every public CLI leaf command is
+  cataloged or exempt, and that every command template maps to exactly one
+  domain (`testEveryCommandTemplateMapsToADomain`). Nothing asserts a mapping to
+  a single *task*; the Console is what guarantees every capability a home.
+- **`--receipt` and `--progress-json` everywhere.** `--receipt` is on 9
+  capabilities and `--progress-json` on 5. The native LTX video lanes and the
+  ACE-Step music pipeline expose no per-step callback and emit no progress
+  events; every other command keeps the `fileExists` fallback for its outputs.
+- **Release 2.0.** Not cut. This work is one Unreleased entry in `CHANGELOG.md`.
+
+The five decisions at the end of this document were resolved as written:
+Vision is one domain with ten tasks, Code is a Converse preset, the Library is a
+column, output goes to `~/Pictures`, `~/Music`, or `~/Documents` under
+`mere.run/<Domain>` by media kind, and training is a task inside Image, Chat,
+and Music.
+
 ## Verdict
 
 v1 is two products in one window. The first is the prompt-first Studio: a

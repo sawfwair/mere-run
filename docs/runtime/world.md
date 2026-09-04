@@ -13,9 +13,9 @@ native Swift/MLX backends:
 - `cosmos3`: the official Cosmos3-Edge checkpoint with learned action
   conditioning and the `camera_pose` action domain
 
-The macOS Studio app exposes the same resident server in **Advanced > Operations**
-with typed backend, model, state-directory, warmup, host, port, and
-authentication controls. API keys are injected with `MERERUN_API_KEY` so they
+The macOS Studio app has no designed surface for this server; it runs from
+the **Command Console**, which builds typed backend, model, state-directory,
+warmup, host, port, and authentication controls from the capability contract. API keys are injected with `MERERUN_API_KEY` so they
 do not appear in the child process argument list.
 
 ## Commands
