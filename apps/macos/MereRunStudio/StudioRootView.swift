@@ -1059,7 +1059,7 @@ struct StudioRootView: View {
                       let item = library.items.first(where: { $0.id == requestID }),
                       item.outputURL != url else { return }
                 library.updateOutput(id: requestID, outputURL: url)
-            case .finished:
+            case .output, .finished:
                 break
             }
         }

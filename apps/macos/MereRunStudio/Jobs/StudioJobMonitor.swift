@@ -22,7 +22,7 @@ final class StudioJobMonitor: ObservableObject {
             switch event {
             case .started, .finished:
                 self?.generation += 1
-            case .changed:
+            case .changed, .output:
                 break
             }
         }
@@ -47,7 +47,7 @@ final class StudioJobMonitor: ObservableObject {
     func pullJob(for modelID: String) -> Job? {
         guard let store, !modelID.isEmpty else { return nil }
         return (store.running(in: .inference) + store.queued(in: .inference)).first {
-            $0.request.template.id == .modelPull && $0.request.draft.model == modelID
+            $0.request.templateID == .modelPull && $0.request.draft?.model == modelID
         }
     }
 

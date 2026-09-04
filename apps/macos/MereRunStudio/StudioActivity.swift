@@ -39,9 +39,11 @@ enum StudioActivity {
     }
 
     /// The domain and task a job belongs to, so a row names the work rather than the command.
+    /// A raw utility read or write has no template, so it names its own CLI subcommand.
     @MainActor
     static func title(for job: Job) -> String {
-        "\(StudioDomain(templateID: job.request.template.id).title) · \(task(for: job))"
+        guard let templateID = job.request.templateID else { return rawTitle(for: job) }
+        return "\(StudioDomain(templateID: templateID).title) · \(task(for: job))"
     }
 
     /// The line under the title: step progress and elapsed time for a run, transferred bytes and
@@ -51,7 +53,7 @@ enum StudioActivity {
         guard !job.state.isQueued else {
             return isNextInQueue ? "Queued · next" : "Queued"
         }
-        if job.request.template.id == .modelPull, let download = downloadDetail(job.progress) {
+        if job.request.templateID == .modelPull, let download = downloadDetail(job.progress) {
             return download
         }
         let status = StudioRunningStatus.text(progress: job.progress, fallback: job.status)
@@ -88,9 +90,9 @@ enum StudioActivity {
 
     @MainActor
     private static func task(for job: Job) -> String {
-        let template = job.request.template
+        guard let template = job.request.template else { return rawTitle(for: job) }
         if template.id == .modelPull {
-            let model = job.request.draft.model.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = (job.request.draft?.model ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             // The same friendly name the composer's model chip shows, so one model reads the same
             // way wherever it appears.
             return model.isEmpty ? "Pull model" : "Pull \(StudioModelNaming.displayName(model))"
@@ -101,6 +103,14 @@ enum StudioActivity {
             return task.title
         }
         return template.title
+    }
+
+    /// A raw-argument job (`model list`, `config set`) is named by the CLI subcommand it runs:
+    /// "System · model list". Nothing else describes it, and the user did start it.
+    private static func rawTitle(for job: Job) -> String {
+        let words = (job.request.rawArguments ?? []).prefix { !$0.hasPrefix("-") }
+        let subcommand = words.joined(separator: " ")
+        return subcommand.isEmpty ? "System · Command" : "System · \(subcommand)"
     }
 
     /// "1.2 GB / 4.8 GB" → "1.2 of 4.8 GB" (one unit when both sides agree, both when they differ).
