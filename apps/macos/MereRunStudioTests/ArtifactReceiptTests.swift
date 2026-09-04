@@ -407,31 +407,76 @@ final class ArtifactReceiptTests: XCTestCase {
         XCTAssertNil(StudioArtifactRole.label(for: nil))
     }
 
-    /// `ArtifactResolver.expectedOutput` reads the contract's declared output kind first and
-    /// falls back to the app's. These are the commands where the two disagree: each writes a
-    /// file the contract summarizes as `text` (a benchmark report) or as a `service`
-    /// (`music realtime`, which also records a WAV), or writes one the app models as producing
-    /// nothing. New drift means either the contract or `CommandCatalog` is wrong.
-    func testDeclaredOutputKindsDriftOnlyWhereRecorded() throws {
-        let recorded: Set<CommandTemplateID> = [
-            .imageRunPlan, .speechDiarize, .adapterPull, .musicRealtime,
-            .modelBenchmarkFused, .modelBenchmarkChat, .modelBenchmarkCode, .modelBenchmarkVLM,
-            .modelBenchmarkToolCalls, .modelBenchmarkToolContinuations, .modelBenchmarkAPIWorkload,
-        ]
-        var drift: Set<CommandTemplateID> = []
+    /// The commands that write a file whether or not they were asked to, and that the app still
+    /// offers no destination for, because the CLI picks the location itself. Each entry says why
+    /// the app cannot name it.
+    static let selfLocatingOutputTemplateIDs: [CommandTemplateID: String] = [
+        .adapterPull: "Installs the adapter into the managed store; there is no destination option.",
+        .imageRunPlan: "Materializes into the managed run store, named by `--materialize`.",
+        .visionPose: "Writes `<image>_pose.json` beside the image unless `--json-output` moves it.",
+    ]
+
+    /// `CommandTemplate.outputKind` is the destination the app offers for `draft.outputPath`;
+    /// the contract says whether the CLI has anywhere to put it. A command writes a file either
+    /// because that is all it does (`kind` is `file` or `directory`) or because the caller can
+    /// name a destination (`flag`) — a `text` or `service` command prints to stdout until it is
+    /// asked to write.
+    ///
+    /// So the app may only offer a destination the contract declares, and every command that
+    /// writes one unasked must either take that destination or be recorded above with its
+    /// reason. Drift means either the contract or `CommandCatalog` is wrong.
+    func testTheAppOffersExactlyTheDestinationsTheContractDeclares() throws {
+        var offered: Set<CommandTemplateID> = []
+        var unnamed: Set<CommandTemplateID> = []
         for template in CommandCatalog.templates {
             guard let declared = template.declaredOutputKind else { continue }
-            let contractProducesFile = declared == .file || declared == .directory
-            if contractProducesFile != (template.outputKind != .none) {
-                drift.insert(template.id)
+            if template.outputKind != .none, !template.producesOutputFile {
+                offered.insert(template.id)
+            }
+            let writesUnasked = declared == .file || declared == .directory
+            if writesUnasked, template.outputKind == .none {
+                unnamed.insert(template.id)
             }
         }
-        XCTAssertEqual(drift, recorded)
-        // Whichever side declares a file, the resolver adopts the requested `--output` path.
-        for id in recorded {
+        XCTAssertEqual(offered, [], "The app asks for an output path the CLI does not parse.")
+        XCTAssertEqual(unnamed, Set(Self.selfLocatingOutputTemplateIDs.keys))
+
+        // An exemption is only for a command that writes without being told where.
+        for (id, reason) in Self.selfLocatingOutputTemplateIDs {
             let template = try XCTUnwrap(CommandCatalog.template(id: id))
-            XCTAssertTrue(template.producesOutputFile, "\(id)")
+            XCTAssertTrue(template.producesOutputFile, "\(id): \(reason)")
+            XCTAssertEqual(template.outputKind, CommandOutputKind.none, "\(id): \(reason)")
+            XCTAssertNotEqual(template.declaredOutputKind, .text, "\(id): \(reason)")
         }
+    }
+
+    /// A command that only writes when asked has nothing to wait for until it is asked: the
+    /// resolver adopts the requested destination, and stays empty-handed without one.
+    func testTheResolverOnlyExpectsAFileTheRunWasAskedToWrite() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .speechTranscribe))
+        XCTAssertTrue(template.producesOutputFile)
+
+        var draft = template.defaultDraft()
+        draft.outputPath = ""
+        XCTAssertNil(ArtifactResolver.expectedOutput(template: template, draft: draft))
+
+        draft.outputPath = "/out/interview.txt"
+        XCTAssertEqual(
+            ArtifactResolver.expectedOutput(template: template, draft: draft),
+            URL(fileURLWithPath: "/out/interview.txt")
+        )
+
+        // `model benchmark chat` parses no destination at all, so it offers no path to expect.
+        let benchmark = try XCTUnwrap(CommandCatalog.template(id: .modelBenchmarkChat))
+        XCTAssertFalse(benchmark.producesOutputFile)
+        XCTAssertEqual(benchmark.outputKind, CommandOutputKind.none)
+        XCTAssertNil(
+            StudioOutputLocation.templateOutputPath(
+                templateID: benchmark.id,
+                title: benchmark.title,
+                outputKind: benchmark.outputKind
+            )
+        )
     }
 
     // MARK: Helpers

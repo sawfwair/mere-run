@@ -445,7 +445,9 @@ beside Models ▸ Health's manifest audit and quality gate: the fused Mere Lite 
 Comprehensive suites, the chat, code, and vision-language slices, tool-call and
 tool-continuation evaluations, the Gemma4 KV and MTP and Qwen3.6 MTP decode
 comparisons, Laguna DFlash, API workload replay, and fixture hashing. Each run
-produces a reviewable, revealable JSON report.
+prints its JSON report to the Library row rather than to a file — the benchmarks
+take no destination option — except the vision-language slice, whose
+`--output-dir` collects the external lmms-eval run.
 
 Audio ▸ Live is the live lane over `speech listen`. It enumerates capture
 devices through the CLI, streams partial transcripts as the recognizer emits

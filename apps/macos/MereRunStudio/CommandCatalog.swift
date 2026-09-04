@@ -1029,20 +1029,21 @@ struct CommandTemplate: Identifiable, Equatable {
         id.capability?.output.kind
     }
 
-    /// True when the command materializes a file or directory the app can adopt as the run's
+    /// True when the command can materialize a file or directory the app adopts as the run's
     /// primary artifact.
     ///
-    /// The contract's declared kind is read first, so a command the app models as producing
-    /// nothing still resolves its `--output` path when the contract says it writes one. The
-    /// app's own `outputKind` still counts, because a handful of commands write a file the
-    /// contract summarizes as `text` (the benchmarks' `--output` report) or as a `service`
-    /// (`music realtime`, which also records a WAV); see
-    /// `ArtifactReceiptTests.testDeclaredOutputKindsDriftOnlyWhereRecorded`.
+    /// The contract is the authority: a command writes one either because that is all it does
+    /// (`kind` is `file` or `directory`) or because the caller can name a destination
+    /// (`flag`) — a `text` or `service` command that prints to stdout until it is asked to
+    /// write. Only the rows the contract does not cover (`.custom`, the launcher entries) fall
+    /// back to the app's own `outputKind`.
+    ///
+    /// The caller still pairs this with a non-blank `outputPath`, so a run that was never asked
+    /// to write never waits for a file that will not appear; see
+    /// `ArtifactResolver.expectedOutput`.
     var producesOutputFile: Bool {
-        if declaredOutputKind == .file || declaredOutputKind == .directory {
-            return true
-        }
-        return outputKind != .none
+        guard let output = id.capability?.output else { return outputKind != .none }
+        return output.kind == .file || output.kind == .directory || output.flag != nil
     }
 
     func defaultDraft() -> CommandDraft {
@@ -4610,24 +4611,21 @@ enum CommandCatalog {
             category: .models,
             title: "Fused quality suite",
             subtitle: "Mere Lite or Mere Comprehensive versioned suite",
-            systemImage: "chart.bar.doc.horizontal",
-            outputKind: .file("json")
+            systemImage: "chart.bar.doc.horizontal"
         ),
         CommandTemplate(
             id: .modelBenchmarkChat,
             category: .models,
             title: "Chat benchmark",
             subtitle: "Grounded-chat evaluation slice",
-            systemImage: "bubble.left.and.text.bubble.right",
-            outputKind: .file("json")
+            systemImage: "bubble.left.and.text.bubble.right"
         ),
         CommandTemplate(
             id: .modelBenchmarkCode,
             category: .models,
             title: "Code benchmark",
             subtitle: "Real coding-evaluation slice with sandboxed execution",
-            systemImage: "chevron.left.forwardslash.chevron.right",
-            outputKind: .file("json")
+            systemImage: "chevron.left.forwardslash.chevron.right"
         ),
         CommandTemplate(
             id: .modelBenchmarkVLM,
@@ -4635,23 +4633,21 @@ enum CommandCatalog {
             title: "Vision-language benchmark",
             subtitle: "Synthetic or lmms-eval multimodal datasets",
             systemImage: "photo.badge.checkmark",
-            outputKind: .file("json")
+            outputKind: .directory
         ),
         CommandTemplate(
             id: .modelBenchmarkToolCalls,
             category: .models,
             title: "Tool-call benchmark",
             subtitle: "Tool selection accuracy across chat models",
-            systemImage: "wrench.and.screwdriver",
-            outputKind: .file("json")
+            systemImage: "wrench.and.screwdriver"
         ),
         CommandTemplate(
             id: .modelBenchmarkToolContinuations,
             category: .models,
             title: "Tool continuation benchmark",
             subtitle: "Gemma 4 continuation after completed tool calls",
-            systemImage: "arrow.turn.down.right",
-            outputKind: .file("json")
+            systemImage: "arrow.turn.down.right"
         ),
         CommandTemplate(
             id: .modelBenchmarkGemma4KV,
@@ -4672,8 +4668,7 @@ enum CommandCatalog {
             category: .models,
             title: "API workload benchmark",
             subtitle: "Replay a chat workload against a running API server",
-            systemImage: "server.rack",
-            outputKind: .file("json")
+            systemImage: "server.rack"
         ),
         CommandTemplate(
             id: .modelBenchmarkFusedFixture,
