@@ -28,10 +28,10 @@ they do not maintain a second plugin registry.
 
 ## macOS Studio
 
-Open **Plugins** from the Studio sidebar or **View → Plugins**. The first-class
-workspace supports catalog search, installed and verified status, channel
-selection, repository access, copyable install commands, confirmed install or
-update, and the fixed plugin doctor operation. A custom catalog URL or local
+Open the **Plugins** domain in the Studio sidebar (Go ▸ Plugins). The page
+supports catalog search, installed and verified status, channel selection,
+repository access, copyable install commands, confirmed install or update,
+rollback to a retained signed bundle, and the fixed plugin doctor operation. A custom catalog URL or local
 JSON path is available for development.
 
 The UI calls the same `plugin list`, `plugin install`, and `plugin doctor`

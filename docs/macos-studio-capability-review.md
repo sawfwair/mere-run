@@ -1,30 +1,84 @@
-# macOS Studio capability review
+# macOS Studio capability coverage
 
-This review compares the public CLI command tree against the surfaces macOS
-Studio owns, and identifies every capability that has not been brought to the
+## The policy
+
+Every capability the CLI declares is filed under exactly one **domain** and
+reached at a **task** inside it. Coverage is that mapping, not a count of
+bespoke views.
+
+Three things follow from it.
+
+1. **A capability's home is never in question.** `CommandTemplateID.studioDomain`
+   (`apps/macos/StudioKit/StudioNavigation.swift`) is an exhaustive mapping from
+   every command template to one of the fifteen
+   domains, so a Library row files where the work was done and a command is
+   always somewhere a person can name.
+2. **Designed surfaces are a deliberate subset.** Some capabilities have a task
+   built for what they actually produce — the Analyze canvas draws detection
+   boxes over the picture, Video ▸ Subjects is a three-stage board, Models ▸
+   Installed is a list and detail. Most do not, and that is a decision about
+   where the effort goes, not a gap in reachability.
+3. **The Command Console is the guaranteed home.** It renders any capability
+   from `MereRunCapabilityCatalog`: the option's `kind` picks the control, its
+   `choices` fill the picker, its `depends_on` gates the row, and the "Will run"
+   block is built from the same values. Nothing has to be written for a new
+   command. The day the contract declares one, the console can run it.
+
+What that retires is the earlier reading of "first class", recorded in the audit
+below: that every command must have a dedicated workspace, which in v1 was built
+as a dedicated modal sheet per command. Twenty-two sheets and a second
+navigation system in the sidebar footer were the cost.
+[macOS Studio v2](./macos-studio-v2.md) keeps the coverage goal and drops that
+reading.
+
+## What is enforced today
+
+| Guard | Where | What it proves |
+|---|---|---|
+| `everyPublicCLICommandIsCatalogedOrExplicitlyExempt` | `Tests/MereRunCLITests/CapabilityCatalogTests.swift` | Every public CLI leaf command is either in the contract or in `contractExemptCommandIDs` with the reason it stays CLI-only. It also rejects a stale exemption, so the list cannot rot. |
+| `capabilityFlagsMatchArgumentParserHelp` | same file | Every flag the contract declares is one the command's ArgumentParser help accepts. |
+| `testEverySharedCLICapabilityHasAnAppOwnedSurface` | `apps/macos/StudioUITests/StudioTypesTests.swift` | Set equality between the app's capability IDs and the contract's, in both directions. |
+| `testEveryCommandTemplateMapsToADomain` | `apps/macos/StudioUITests/NavigationModelTests.swift` | Every command template files into exactly one domain, and every domain owns at least one command. |
+| `CommandContractGuardTests` | `apps/macos/StudioKitTests` | Every flag the app can emit, from a sweep of maximal drafts, is one the contract declares, under the subcommand path the contract names. |
+
+The chain is closed in both directions: a CLI command cannot ship without a
+contract entry or a recorded exemption, a contract entry cannot ship without an
+app surface, and an app surface cannot emit a flag the contract does not
+declare.
+
+One thing is deliberately *not* asserted: that each capability maps to a single
+named task. The domain mapping is total and tested; the task mapping is a design
+decision made surface by surface, and the console is what makes the absence of a
+task assertion safe.
+
+## Exemptions
+
+Thirty-one leaf commands stay CLI-only, each named in `contractExemptCommandIDs`
+with its reason: the twelve `executor` commands and `relay serve` (the Relay
+console owns node identity, placement, scheduling, and fleet telemetry), the
+fourteen `graph` commands (Graph Studio owns workflow authoring and execution,
+and the worker verbs are a machine-to-machine protocol), the three
+`vision image-to-3d` aliases (surfaced through the 3D domain as
+`image reconstruct-3d`), and `catalog` (it emits the contract that the shells
+compile against).
+
+---
+
+# Historical audit (August 2026)
+
+Everything below is the original review, preserved as the record of how the
+coverage gaps were found and closed. It describes v1 as it shipped: the counts
+are accurate for that moment, and the "workspace" language is the superseded
+reading. Do not read it as a description of the app today — see
+[`apps/macos/README.md`](../apps/macos/README.md) for that.
+
+This review compared the public CLI command tree against the surfaces macOS
+Studio owned, and identified every capability that had not been brought to the
 app as a first-class path.
 
 Reviewed at commit `5525608` against `Sources/MereRunCLI`,
 `Sources/MereRunContract/CommandCapabilityContract.swift`, and
 `apps/macos/MereRunStudio`.
-
-> **Superseded reading (September 2026).** This review's "first-class workspace
-> per command" requirement was implemented as a dedicated sheet per command.
-> [macOS Studio v2](./macos-studio-v2.md) keeps the coverage goal and replaces
-> that reading: every capability is a peer task inside its domain, and what
-> varies is the surface archetype the task declares, not whether it has its own
-> sheet. The findings and counts below describe v1 as shipped.
-
-> **Reachability closed; workspaces outstanding.** The contract now describes
-> 127 of the CLI's 158 leaf commands, every one has a Studio surface, and the
-> remaining 31 are named exemptions in `contractExemptCommandIDs` rather than
-> silent absences. `everyPublicCLICommandIsCatalogedOrExplicitlyExempt` walks
-> the CLI command tree itself, closing the unguarded link this review
-> identified, so no future command can go missing silently.
->
-> Each capability is also first class in this repo's sense: a dedicated
-> workspace with typed controls, result rendering, and the Library lifecycle,
-> rather than a generic form. See [What shipped](#what-shipped).
 
 ## Summary
 
@@ -74,11 +128,10 @@ Because the Studio gate is keyed to the contract rather than to the CLI, an
 omission at that first link propagates silently: the command ships, Studio
 never gets a surface, and every test still passes.
 
-`apps/macos/README.md` states the intent precisely:
-
-> The inverse coverage test also requires every command in the shared contract
-> to have an App-owned template or utility surface, so a newly cataloged CLI
-> command cannot silently ship without a macOS path.
+`apps/macos/README.md` stated the intent precisely: the inverse coverage test
+requires every command in the shared contract to have an app-owned template or
+utility surface, so a newly cataloged CLI command cannot silently ship without a
+macOS path.
 
 The guarantee holds only for a *cataloged* command. Cataloging is the manual
 step, and it is where these 26 commands were lost.
@@ -202,9 +255,8 @@ instead of copying those controls.
 
 **Aliases already covered — 3 commands.** `vision image-to-3d`,
 `vision image-to-3d-trellis2`, and `vision image-to-3d-multiview` are VFX
-aliases of the `image reconstruct-3d` family, which Studio surfaces through the
-3D Creation workspace. `apps/macos/README.md` states the intent: "Image-to-3D
-workflows share the Image workspace instead of being duplicated."
+aliases of the `image reconstruct-3d` family, which Studio surfaces once rather
+than twice.
 
 **Contract introspection — 1 command.** `mere.run catalog` emits the contract
 that Studio compiles against, so the app has no need to shell out for it.
@@ -238,20 +290,20 @@ that Studio compiles against, so the app has no need to shell out for it.
    as consuming an "89-command capability contract"; it now names the current
    127 and records the external boundaries as named exemptions.
 
-## Workspaces
+## Where the closed gaps live now
 
-Reachability and promotion are both done. Each capability owns a real surface.
+The v1 destinations named in this audit were renamed and re-hosted by v2. Their
+current addresses:
 
-| Capability | Surface |
-|---|---|
-| `geo` (4) | **Geospatial Lab**, a top-level destination. Per-engine controls, the required-tensor list shown before a run, preflight, and durable Library artifacts |
-| `model benchmark` (12) | **Health & Repair**. The whole family, including the fused Lite and Comprehensive suites, runs as durable Library jobs with revealable JSON reports |
-| `model location` (5) | **Models → Locations**. Writable store, read-only roots, and explicit bindings with live availability, a directory picker, Reveal in Finder, and confirmation before removal |
-| `speech listen` (1) | **Voice Studio → Listen Live**. Device enumeration, streaming partial transcripts, operator-owned stop, copy and save |
-| `vision serve` (1) | **Serving → Vision Grounding**. Preflight, start/stop/restart, process ownership, a loopback-exposure warning, and the live server log |
-| `plugin` info/run/rollback (3) | **Plugins**. Catalog details, out-of-PATH runs with forwarded arguments, and confirmed rollback to a retained signed bundle |
-| `config list` / `path` (2) | **Settings**. Masked stored values and the resolved config path with Reveal in Finder |
+| Capability | v1 destination | Today |
+|---|---|---|
+| `geo` (4) | Geospatial Lab, a sheet | **Earth** ▸ Flood, Fire, TESSERA, OlmoEarth |
+| `model benchmark` (12) | Health & Repair, a sheet | **Models ▸ Benchmarks**, beside **Models ▸ Health** |
+| `model location` (5) | Models → Locations, a nested sheet | **Models ▸ Locations** |
+| `speech listen` (1) | Voice Studio → Listen Live | **Audio ▸ Live** |
+| `vision serve` (1) | Serving → Vision Grounding | **Server ▸ Serving**, its Vision Grounding section |
+| `plugin` info/run/rollback (3) | Plugins, a sheet | **Plugins ▸ Catalog** |
+| `config list` / `path` (2) | Settings | **Settings ▸ Advanced** |
 
-The contract and the coverage guard made this possible: each workspace is built
-against a typed capability already proven to match CLI help, rather than a
-hand-copied argument list.
+Each was built against a typed capability already proven to match CLI help,
+rather than a hand-copied argument list — which is what made the move cheap.

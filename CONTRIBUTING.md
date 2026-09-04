@@ -20,7 +20,7 @@ in its job summary, together with the lane it selected:
 
 | Lane | Selected when | What the `swift` job runs |
 | --- | --- | --- |
-| Fast | Only `apps/macos/**`, `apps/ios/**`, `docs/**`, Markdown, ordinary `scripts/**`, or `assets/`, `integrations/`, `skills/` changed | SwiftLint, the agent readiness, evaluation boundary, and documentation example checks, `swift build`, the MLX metallib verification, and `MereRunAppTests` |
+| Fast | Only `apps/macos/**`, `apps/ios/**`, `docs/**`, Markdown, ordinary `scripts/**`, or `assets/`, `integrations/`, `skills/` changed | SwiftLint, the agent readiness, evaluation boundary, and documentation example checks, `swift build`, the MLX metallib verification, and the three Studio test targets (`StudioKitTests`, `StudioUITests`, `MereRunAppTests`) |
 | Full | Anything under `Sources/**`, `Tests/**`, `vendor/**`, `Package.swift`, `Package.resolved`, `.github/**`, or the gate scripts themselves changed | `./scripts/check.sh`, which is every package test target |
 
 Both lanes build and verify the ad-hoc `MereRun.app` bundle, and both verify the

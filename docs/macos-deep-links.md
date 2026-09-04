@@ -59,8 +59,8 @@ maintained client emits receipts under another source name, add a source case
 and contract tests.
 
 MereRun validates the receipt and referenced artifact, deduplicates repeated
-handoffs, records the completed result through its own Library store, activates
-the matching workspace, reveals Library, and selects the imported row. The
+handoffs, records the completed result through its own Library store, opens the
+domain the row belongs to, reveals Library, and selects the imported row. The
 caller must not read or write `library.json` directly.
 
 ## Local and security boundaries

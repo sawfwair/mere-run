@@ -34,21 +34,26 @@ the audio does not leave the machine.
 
 - `speech-diarization-sortformer` (NVIDIA Streaming Sortformer v2.1, up to four speakers)
 
-## macOS Voice Studio
+## macOS Studio
 
-The Speak and Listen workspaces expose **Voice Studio** as the purpose-built
-speech surface. It covers styled and reference/profile-cloned synthesis,
-reference recording, reusable profile create/list/delete, streaming chunk
-controls and feedback, A/B playback of recent renders, backend/task/language
-selection, transcription, and an editable transcript that can be saved as a
-durable artifact. Runs use the public CLI contract and stay in Library.
+Speech is split across two domains. **Voice ▸ Speak** is the prompt task for
+synthesis, with **Voice ▸ Clone** and **Voice ▸ Voices** covering styled and
+reference-cloned synthesis, reference recording, reusable profile create, list,
+and delete, streaming chunk controls and feedback, A/B playback of recent
+renders, and backend, task, and language selection.
+
+**Audio ▸ Transcribe** shows the timestamped transcript beside the recording's
+waveform, with a Timeline and a raw JSON view, and saves the transcript as a
+durable artifact. **Audio ▸ Who Spoke** is `speech diarize`, with an audio
+picker, the managed Sortformer default, JSON and RTTM timelines, and
+segment-tuning controls. **Audio ▸ Live** is `speech listen`: it enumerates
+capture devices through the CLI and streams partial transcripts as the
+recognizer emits them, with an operator-owned stop. Every run uses the public
+CLI contract and stays in the Library.
 
 The packaged app declares `NSMicrophoneUsageDescription` and signs both the app
 and embedded CLI with the audio-input entitlement. Recording is local; granting
 microphone access does not enable a network upload path.
-
-The app's Advanced command catalog also exposes **Diarize speakers** with an
-audio picker, managed Sortformer default, and durable JSON output in Library.
 
 ## Typical workflows
 

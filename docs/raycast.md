@@ -54,7 +54,8 @@ Raycast's **Uninstall Extension** action.
 Choose a command, enter its prompt in Raycast, and press Return. Raycast shows
 the CLI's most recent diagnostic while generation is active. After the command exits
 successfully and the output is readable, the extension imports the artifact,
-opens its owning MereRun workspace, reveals Library, and selects the imported row.
+opens the MereRun domain the row belongs to, reveals Library, and selects the
+imported row.
 
 Generated files are durable. By default they are written to
 `~/MereRun/Raycast` with a media-specific name and UTC timestamp, for example:

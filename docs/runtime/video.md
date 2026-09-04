@@ -26,24 +26,25 @@ emitted by:
 mere.run catalog video.generate --json
 ```
 
-The primary Video composer exposes independent quality and output choices,
+**Video ▸ Generate** exposes independent quality and output choices,
 text-to-video, a start image, an end keyframe, source-audio A2V with segment
 offset and modality guidance, duration or frame-count targeting, negative
 prompts, Wan controls, preflight, and timing receipts. Attaching source audio
 selects final quality plus synchronized audio-video output automatically.
 
-Video's **SCAIL** button opens a first-class Subject Studio. It authors one to
-six reference subjects with text, box, and point selectors; previews palette-safe
-SAM 3.1 masks; tracks the complete driving clip; accepts immutable keyframe
-corrections or painted binary masks; and shows reference, driving, contact-sheet,
-and result playback together. Animation/replacement semantics, trim range,
-dimensions, profile, adapter, seed, segmentation/overlap, tail, audio, output,
-and preflight controls map directly to the public CLI contract. Every mask and
-animation run remains live and restartable in Library.
+**Video ▸ Subjects** is the SCAIL subject flow, laid out as a three-stage board
+(Plan → Track → Animate). It authors one to six reference subjects with text,
+box, and point selectors; previews palette-safe SAM 3.1 masks; tracks the
+complete driving clip; accepts immutable keyframe corrections or painted binary
+masks; and shows reference, driving, contact-sheet, and result playback
+together. Animation and replacement semantics, trim range, dimensions, profile,
+adapter, seed, segmentation and overlap, tail, audio, output, and preflight
+controls map directly to the public CLI contract. Every mask and animation run
+stays live and restartable in the Library.
 
-**Advanced Video** provides typed controls for Cosmos3 generation and action modes, raw
-mask-plan execution, LTX latent export, and resident LTX sessions. Raw arguments
-are an escape hatch, not the capability contract.
+Cosmos3 generation and action modes, raw mask-plan execution, LTX latent export,
+and resident LTX sessions have no designed surface; they run from the **Command
+Console**, which builds their form from the same capability contract.
 
 ## Model family
 

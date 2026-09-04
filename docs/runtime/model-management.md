@@ -90,14 +90,15 @@ remove registrations. Both operations preserve every payload byte.
 
 ## macOS Studio
 
-Open **Models**, switch the scope to **All**, and select any missing model to
-download it directly. Studio streams the underlying `model pull` output, keeps
-canceled partial downloads resumable, and refreshes the inventory after a
-successful install. Models with restricted third-party terms show their source
-links and require **Accept & Download** before transfer. Continuing confirms
-that you reviewed and accept the listed terms and agree to comply. The
-**Files** button opens the configured model store in Finder; it does not start
-a download.
+Open **Models ▸ Installed** and use **Pull…** to pick any model that is not
+installed yet and download it directly. Studio streams the underlying
+`model pull` output, keeps canceled partial downloads resumable, and refreshes
+the inventory after a successful install. Models with restricted third-party
+terms show their source links and require an explicit acceptance
+(**Accept & Pull** here, **Accept & Download** when a pull starts from a
+composer's readiness card) before transfer. Continuing confirms that you
+reviewed and accept the listed terms and agree to comply. **Open model store in
+Finder** opens the configured store; it does not start a download.
 
 ## Canonical model IDs
 
@@ -382,7 +383,7 @@ The report identifies healthy manifests, proposed or completed writes, absent
 model directories, and write errors without treating models that were never
 installed as damaged.
 
-In macOS Studio, open **Models → Health**. The workspace presents the structured
+In macOS Studio, open **Models ▸ Health**. The page presents the structured
 manifest audit, confirms repair before writing, and runs `mere.run gate` suites
 as durable Library jobs. Correctness suites can be selected independently,
 strict performance thresholds are opt-in, and baseline replacement requires a

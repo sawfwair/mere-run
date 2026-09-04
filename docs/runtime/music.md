@@ -21,16 +21,19 @@ vocoder stack locally; Magenta RT2 takes CC knobs while it is still generating.
 | `mere.run music separate` | Separate stems or restore audio with native BS/MelBand RoFormer models. |
 | `mere.run music transcribe` | Transcribe a full music mix into instrument-separated MIDI with MuScriptor. |
 
-The macOS Studio app exposes its music workflows through first-class
-workspaces backed by `MereRunContract`. Its primary Music composer covers the
-production loop: create or edit, source or reference audio, quality and language-model (LM)
+The macOS Studio app exposes its music workflows through the **Music**
+domain, backed by `MereRunContract`. **Music ▸ Compose** covers the production
+loop: create or edit, source or reference audio, quality and language-model (LM)
 planning, ranked candidates, adapter stacks, stems, LRC, recipes, and DAW
-export. **Music Tools** provides structured audio analysis, MuScriptor controls
-and an embedded MIDI piano roll, plus resident-server start/stop and health.
-**Real-time** owns Magenta playback and MIDI steering. **Training Studio** owns
-LoRA/LoKr dataset inspection, launch, metrics, and run comparison. Advanced
-remains available for raw command-level control. App-to-CLI tests reject any
-emitted flag absent from `mere.run catalog --json`.
+export. **Music ▸ Analyze** provides structured audio analysis and
+**Music ▸ Transcribe** the MuScriptor controls with an embedded MIDI piano roll;
+the resident server's start, stop, and health live under **Server ▸ Music
+server**. **Music ▸ Realtime** owns Magenta playback and MIDI steering, with the
+transport, the recording's waveform, and Prompt A/B steering sent over the CLI's
+stdin protocol. **Music ▸ Train** owns LoRA/LoKr dataset inspection, launch,
+metrics, and run comparison. **Music ▸ Separate** shares the restoration surface
+with Audio. The Command Console remains available for raw command-level control.
+App-to-CLI tests reject any emitted flag absent from `mere.run catalog --json`.
 
 ## Model family
 
@@ -375,8 +378,9 @@ Kronecker evaluation instead of materializing full decoder deltas. Train either
 format with `music train-adapter`; its objective matches ACE-Step flow
 matching, and its output is directly reloadable by `music generate` or the
 resident server. Adapter training writes the same durable `run_started`,
-per-step loss/progress, `run_finished`, and `run_failed` event stream used by
-Training Studio, so a music run has live feedback and survives app relaunch.
+per-step loss/progress, `run_finished`, and `run_failed` event stream the
+Studio's Train tasks read, so a music run has live feedback and survives app
+relaunch.
 
 `music serve` holds the complete pipeline and its adapters in memory. It
 provides `GET /health`, `POST /v1/audio/music`, and serialized
