@@ -33,6 +33,30 @@ a change can reach the Linux CLI or the scripts it invokes, and reports success
 from a no-op step otherwise, so its required check always reports. The iOS job
 runs only when a change can reach the iOS project.
 
+## Merge queue
+
+`main` merges through a merge queue. GitHub builds a `merge_group` ref for each
+queued pull request and waits for the six required checks — `swift`,
+`macos-app-bundle`, `linux-cli`, `linux-cli-compatibility-docs`,
+`dependency-review`, and `secret-scan` — to report on it, so both `ci.yml` and
+`security.yml` also trigger on `merge_group`.
+
+Two rules keep the queue moving:
+
+- Every required check runs and reports under its own name on a merge group.
+  A job with nothing to prove reports success from a no-op step rather than
+  being skipped, because a required check that never reports leaves a merge
+  group waiting until it times out. `dependency-review` is the clearest case:
+  the action it wraps only supports pull requests, so on a merge group the job
+  reports that the pull request's own review already ran.
+- Lane selection still applies. A merge group diffs against
+  `github.event.merge_group.base_sha`. If that diff cannot be computed the run
+  falls back to the full gate, because a merge group is the last check before
+  `main`.
+
+Merge-queue runs are never cancelled by concurrency, since a cancelled run
+reports nothing and stalls the queue.
+
 The macOS job restores the SwiftPM build directory from a cache that only pushes
 to `main` write. Its key covers the Xcode version, `Package.swift`,
 `Package.resolved`, and the lane. The MLX Metal library is never restored or

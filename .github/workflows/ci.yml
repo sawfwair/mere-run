@@ -4,13 +4,16 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Merge-queue runs each get their own gh-readonly-queue ref, and cancelling
+  # one would leave the queue waiting on a check that never reports.
+  group: ci-${{ github.event_name }}-${{ github.event.merge_group.head_ref || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 jobs:
   changes:
@@ -28,7 +31,9 @@ jobs:
       - name: Classify the changed paths
         id: filter
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # A merge-queue run has no pull request; it diffs the queued branch
+          # against the main tip the group was formed on.
+          BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -47,6 +52,9 @@ jobs:
           # All three are default-deny: a path this classifier does not
           # recognise lands in `other`, which selects the full gate everywhere,
           # so a new top-level directory can never silently take a short route.
+          # The same applies when the base commit cannot be resolved, which is
+          # what keeps a merge-queue run on the full gate whenever its diff is
+          # not computable: that run is the last gate before main.
           # Required checks keep reporting under their own names in both lanes;
           # a job with nothing to prove reports success from a no-op step rather
           # than being skipped.
@@ -169,24 +177,34 @@ jobs:
             printf -- '- iOS build required: %s\n' "$ios_required"
           } >>"$GITHUB_STEP_SUMMARY"
 
+  # A required check, so this job always runs and always reports under its own
+  # name. A documentation-only change has no native build to prove and reports
+  # success from the step below instead of being skipped, which matters for the
+  # merge queue: a required check that never reports leaves a merge group
+  # waiting until it times out.
   swift:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: always()
     runs-on: macos-26
     env:
       MERERUN_SWIFT_DISABLE_INDEX_STORE: '1'
       LANE: ${{ needs.changes.outputs.lane }}
+      RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '26.4'
       - name: Report selected lane
+        shell: bash
+        env:
+          CHANGE_DETECTION_RESULT: ${{ needs.changes.result }}
         run: |
           set -euo pipefail
-          if [[ "$LANE" == "fast" ]]; then
+          if [[ "$CHANGE_DETECTION_RESULT" != "success" ]]; then
+            echo "Change detection did not succeed: $CHANGE_DETECTION_RESULT" >&2
+            exit 1
+          fi
+          if [[ "$RUN_GATE" != "true" ]]; then
+            note='no native change'
+            detail='Nothing outside documentation changed, so there is no package gate to run.'
+          elif [[ "$LANE" == "fast" ]]; then
             note='fast lane: app-only change'
             detail='SwiftLint, agent readiness, evaluation boundary, docs examples, swift build, metallib verification, MereRunAppTests, and the app bundle build.'
           else
@@ -198,8 +216,18 @@ jobs:
             printf -- '- **%s**\n' "$note"
             printf -- '- %s\n' "$detail"
           } >>"$GITHUB_STEP_SUMMARY"
+          printf 'Native gate required: %s\n' "$RUN_GATE"
           printf 'Lane: %s\n' "$LANE"
+      - uses: actions/checkout@v7
+        if: env.RUN_GATE == 'true'
+        with:
+          persist-credentials: false
+      - uses: maxim-lobanov/setup-xcode@v1
+        if: env.RUN_GATE == 'true'
+        with:
+          xcode-version: '26.4'
       - name: Restore SwiftPM dependencies
+        if: env.RUN_GATE == 'true'
         uses: actions/cache@v6
         with:
           path: |
@@ -218,6 +246,7 @@ jobs:
       # either lane seed the other: both compile the same package graph with the
       # same flags.
       - name: Restore SwiftPM build directory
+        if: env.RUN_GATE == 'true'
         id: build-cache
         uses: actions/cache/restore@v6
         with:
@@ -233,6 +262,7 @@ jobs:
             swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-
             swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-
       - name: Discard cached MLX Metal libraries
+        if: env.RUN_GATE == 'true'
         run: |
           set -euo pipefail
           # A stale metallib silently corrupts inference, so it is the one build
@@ -249,16 +279,17 @@ jobs:
             \) -print -delete
           fi
       - name: Install check dependencies
+        if: env.RUN_GATE == 'true'
         run: |
           # macos-26 currently carries an untrusted aws/tap that causes every
           # Homebrew command to fail before resolving Homebrew/core formulae.
           brew untap --force aws/tap
           brew install swiftlint ripgrep
       - name: Run package checks
-        if: env.LANE != 'fast'
+        if: env.RUN_GATE == 'true' && env.LANE != 'fast'
         run: ./scripts/check.sh
       - name: Run app-scoped package checks
-        if: env.LANE == 'fast'
+        if: env.RUN_GATE == 'true' && env.LANE == 'fast'
         run: |
           set -euo pipefail
           # Same non-test checks as ./scripts/check.sh, then only the macOS app
@@ -272,8 +303,10 @@ jobs:
           ./scripts/build_mlx_metallib.sh --verify-only vendor/mlx-swift_Cmlx.bundle
           swift test --disable-index-store --filter MereRunAppTests
       - name: Build app bundle (ad-hoc)
+        if: env.RUN_GATE == 'true'
         run: ./scripts/build_mere_run_app.sh debug
       - name: Verify bundle structure
+        if: env.RUN_GATE == 'true'
         run: |
           set -euo pipefail
           bundle="$(swift build --disable-index-store --show-bin-path)/MereRun.app"
@@ -302,7 +335,7 @@ jobs:
       # from scratch by build_mere_run_app.sh, and the metallib is deliberately
       # never carried between runs.
       - name: Prune reproducible products before caching
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           rm -rf .build/arm64-apple-macosx/debug/ModuleCache
@@ -315,7 +348,7 @@ jobs:
           \) -delete
           du -sh .build/arm64-apple-macosx
       - name: Save SwiftPM build directory
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: |
@@ -436,7 +469,9 @@ jobs:
             echo "Change detection did not succeed: $CHANGE_DETECTION_RESULT" >&2
             exit 1
           fi
-          if [[ "$CODE_REQUIRED" == "true" && "$SWIFT_RESULT" != "success" ]]; then
+          # The swift job now always runs and always concludes, so any result
+          # other than success is a failure here regardless of the lane.
+          if [[ "$SWIFT_RESULT" != "success" ]]; then
             echo "macOS package and bundle checks did not succeed: $SWIFT_RESULT" >&2
             exit 1
           fi
@@ -486,6 +521,7 @@ jobs:
       RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' && needs.changes.outputs.linux == 'true' }}
     steps:
       - name: Verify change detection
+        shell: bash
         env:
           CHANGE_DETECTION_RESULT: ${{ needs.changes.result }}
         run: |
