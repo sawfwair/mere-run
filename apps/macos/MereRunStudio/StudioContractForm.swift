@@ -10,13 +10,27 @@ import UniformTypeIdentifiers
 /// aspect pair, the seed row, the mask canvas, the ordered MiniMax references — the caller's
 /// `override` builder draws it instead, keyed by `StudioContractOverrideID`.
 ///
-/// The form never builds a command. It writes the same `StudioDraft` fields the hand-written
-/// controls wrote, so `StudioCommandAdapter` and `CommandTemplate.arguments(from:)` decide the
-/// argv exactly as before.
-struct ContractForm<Override: View>: View {
-    let mode: StudioMode
-    let fields: [StudioContractField]
-    @Binding var draft: StudioDraft
+/// The form never builds a command. It writes whatever draft the surface hands it: the prompt
+/// tasks pass the typed `StudioDraft` the composer and inspector share, so `StudioCommandAdapter`
+/// and `CommandTemplate.arguments(from:)` decide the argv exactly as before, and the Command
+/// Console passes a `StudioConsoleDraft`, whose entries the contract itself turns into argv.
+/// How a contract row names the option it edits.
+enum ContractFormLabelStyle {
+    /// The option's user-language label, at the head of an inspector row.
+    case label
+    /// The raw flag in a fixed monospaced column, the way the Command board draws it.
+    case flag
+}
+
+struct ContractForm<Draft, Override: View>: View {
+    let fields: [StudioContractField<Draft>]
+    /// Per flag, whether the draft gives it a value and what it in turn depends on, so a row
+    /// gated on another option stays hidden until that option carries something. The caller
+    /// supplies it because the dependency walk spans every flag, including the ones a composite
+    /// editor folds away and the ones another column owns.
+    let dependencies: [String: (carries: Bool, dependsOn: String?)]
+    @Binding var draft: Draft
+    var labelStyle: ContractFormLabelStyle = .label
     @ViewBuilder let override: (StudioContractOverrideID) -> Override
 
     var body: some View {
@@ -29,27 +43,40 @@ struct ContractForm<Override: View>: View {
     }
 
     /// The fields whose dependencies are satisfied, in contract order.
-    private var visibleFields: [StudioContractField] {
-        let dependencies = StudioContractSchema.dependencies(for: mode, draft: draft)
-        return fields.filter { StudioContractSchema.isVisible($0, in: draft, dependencies: dependencies) }
+    private var visibleFields: [StudioContractField<Draft>] {
+        fields.filter { StudioContractSchema.isVisible($0, in: draft, dependencies: dependencies) }
     }
 
     @ViewBuilder
-    private func row(_ field: StudioContractField) -> some View {
+    private func row(_ field: StudioContractField<Draft>) -> some View {
         if let id = field.overrideID {
             override(id)
         } else {
-            ContractFormControl(field: field, draft: $draft)
+            ContractFormControl(field: field, draft: $draft, labelStyle: labelStyle)
         }
     }
 }
 
 /// One contract option as the control its `kind` calls for.
-struct ContractFormControl: View {
-    let field: StudioContractField
-    @Binding var draft: StudioDraft
+struct ContractFormControl<Draft>: View {
+    let field: StudioContractField<Draft>
+    @Binding var draft: Draft
+    var labelStyle: ContractFormLabelStyle = .label
+
+    /// The flag column's width, so every row's control starts at the same x the way the board
+    /// draws the raw form.
+    static var flagColumnWidth: CGFloat { 168 }
 
     var body: some View {
+        switch labelStyle {
+        case .label: labelled
+        case .flag: flagged
+        }
+    }
+
+    /// The inspector's shape: the option's label, then its control.
+    @ViewBuilder
+    private var labelled: some View {
         switch field.control {
         case .toggle:
             Toggle(field.label, isOn: flagBinding)
@@ -95,6 +122,79 @@ struct ContractFormControl: View {
             // The caller's builder draws this row; `ContractForm` never reaches here.
             EmptyView()
         }
+    }
+
+    /// The Command board's shape: the flag in a monospaced column, then its control. Numbers
+    /// are typed rather than dragged here — this is the surface that shows what the argv says.
+    @ViewBuilder
+    private var flagged: some View {
+        switch field.control {
+        case .toggle:
+            flagRow {
+                Toggle("", isOn: flagBinding)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+                    .accessibilityLabel(field.label)
+                Spacer(minLength: 0)
+            }
+        case .segmented:
+            flagRow {
+                MereSegmentedControl(field.option.choices, selection: choiceBinding, accessibilityLabel: field.label) {
+                    StudioContractChoiceTitles.title(for: $0, flag: field.flag)
+                }
+            }
+        case .picker:
+            flagRow {
+                Picker(field.label, selection: choiceBinding) {
+                    ForEach(field.option.choices, id: \.self) { choice in
+                        Text(StudioContractChoiceTitles.title(for: choice, flag: field.flag)).tag(choice)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 180)
+                Spacer(minLength: 0)
+            }
+        case .slider, .stepper:
+            // Typed, not dragged, and stored as the text the argv carries: the raw surface must
+            // not round `0.0001` to what a slider would show, and an empty field means no flag.
+            flagRow {
+                StudioInspectorTextField(
+                    placeholder: field.option.defaultValue ?? "",
+                    text: textBinding,
+                    isMonospaced: true
+                )
+            }
+        case .path:
+            flagRow {
+                ContractFormPathRow(
+                    label: field.label,
+                    path: textBinding,
+                    isDirectory: field.kind == .directory,
+                    allowedTypes: Self.allowedTypes(for: field)
+                )
+            }
+        case .field:
+            flagRow {
+                StudioInspectorTextField(placeholder: field.label, text: textBinding, lines: 1...4)
+            }
+        case .override:
+            EmptyView()
+        }
+    }
+
+    private func flagRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text(field.flag)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(width: Self.flagColumnWidth, alignment: .leading)
+                .help(field.option.label)
+            content()
+        }
+        .frame(minHeight: 28)
     }
 
     // MARK: Numeric controls
@@ -169,7 +269,7 @@ struct ContractFormControl: View {
         )
     }
 
-    private static func allowedTypes(for field: StudioContractField) -> [UTType] {
+    private static func allowedTypes(for field: StudioContractField<Draft>) -> [UTType] {
         switch field.flag {
         case "--audio", "--ref-audio", "--source-audio", "--reference-audio": return [.audio]
         case "--image", "--input", "--end-image", "--ref-image", "--mask": return [.image]

@@ -35,7 +35,7 @@ struct StudioInspector: View {
         StudioInspectorSchema.sections(for: mode, draft: draft)
     }
 
-    private var advancedFields: [StudioContractField] {
+    private var advancedFields: [StudioContractField<StudioDraft>] {
         StudioInspectorSchema.advancedFields(for: mode, draft: draft)
     }
 
@@ -165,8 +165,12 @@ struct StudioInspector: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func form(_ fields: [StudioContractField]) -> some View {
-        ContractForm(mode: mode, fields: fields, draft: $draft) { override in
+    private func form(_ fields: [StudioContractField<StudioDraft>]) -> some View {
+        ContractForm(
+            fields: fields,
+            dependencies: StudioContractSchema.dependencies(for: mode, draft: draft),
+            draft: $draft
+        ) { override in
             overrideControl(override)
         }
     }
@@ -708,6 +712,9 @@ struct StudioInspectorTextField: View {
     let placeholder: String
     @Binding var text: String
     var lines: ClosedRange<Int> = 1...1
+    /// Monospaced where the value is a number or a path the reader compares character by
+    /// character; proportional everywhere else.
+    var isMonospaced = false
 
     var body: some View {
         TextField(
@@ -717,7 +724,7 @@ struct StudioInspectorTextField: View {
             axis: lines.upperBound > 1 ? .vertical : .horizontal
         )
         .textFieldStyle(.plain)
-        .font(.system(size: 13))
+        .font(.system(size: 13, design: isMonospaced ? .monospaced : .default))
         .foregroundStyle(MereRunTheme.textPrimary)
         .lineLimit(lines)
         .padding(.horizontal, 10)

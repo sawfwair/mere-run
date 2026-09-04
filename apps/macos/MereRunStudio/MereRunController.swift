@@ -226,6 +226,10 @@ struct MereRunUtilityCommandResult: Equatable {
 final class MereRunController: ObservableObject {
     @Published var selectedTemplate: CommandTemplate
     @Published var draft: CommandDraft
+    /// The exact `mere.run` arguments the Command Console should open on, when a Library row
+    /// recorded one. `select(_:)` clears it: choosing a template means starting from that
+    /// template's own default command rather than from a past run's.
+    @Published var consoleSeedArguments: [String]?
     @Published var logs: [LogLine] = []
     @Published var isRunning = false
     @Published var status = "Idle"
@@ -354,9 +358,6 @@ final class MereRunController: ObservableObject {
         commandPreview(template: selectedTemplate, draft: draft, masksSecrets: true)
     }
 
-    var advancedCommandPreview: String {
-        commandPreview(template: selectedTemplate, draft: draft, masksSecrets: false)
-    }
 
     var canSubmitVideoSessionRequest: Bool {
         guard let job = foregroundJob else { return false }
@@ -414,6 +415,7 @@ final class MereRunController: ObservableObject {
     func select(_ template: CommandTemplate) {
         selectedTemplate = template
         draft = defaultDraft(for: template)
+        consoleSeedArguments = nil
         lastOutputURL = nil
         lastExitCode = nil
         status = "Idle"
@@ -753,8 +755,14 @@ final class MereRunController: ObservableObject {
     }
 
     func commandPreview(template: CommandTemplate, draft: CommandDraft, masksSecrets: Bool) -> String {
+        commandPreview(arguments: commandArguments(template: template, draft: draft), masksSecrets: masksSecrets)
+    }
+
+    /// The shell-quoted command line for argv the caller built itself — the Command Console
+    /// builds its own from the contract — resolved against the same CLI a run would launch.
+    func commandPreview(arguments: [String], masksSecrets: Bool) -> String {
         let launch = cliResolve(cliPath)
-        let args = commandArguments(template: template, draft: draft)
+        let args = cliArguments(arguments)
         return launch.displayCommand(for: masksSecrets ? args.maskingSecrets() : args)
     }
 
@@ -1077,6 +1085,22 @@ final class MereRunController: ObservableObject {
         )
     }
 
+    /// Runs argv the Command Console built from the contract, as `template`'s job: it queues in
+    /// the inference lane, reports progress, and adopts the file `draft.outputPath` names, the
+    /// same as a run started from the draft itself. Returns false only when the job failed
+    /// preflight or could not launch.
+    @discardableResult
+    func runConsole(template: CommandTemplate, draft: CommandDraft, arguments: [String], requestID: UUID?) -> Bool {
+        submitInferenceJob(
+            template: template,
+            draft: draft,
+            requestID: requestID,
+            conversationID: nil,
+            queueNotice: nil,
+            arguments: arguments
+        )
+    }
+
     /// Snapshots the launch (resolved CLI, argv, environment, working directory) into a
     /// `JobRequest` and hands it to the inference lane. Returns false only when the job failed
     /// preflight or could not launch; a queued job returns true.
@@ -1085,11 +1109,12 @@ final class MereRunController: ObservableObject {
         draft: CommandDraft,
         requestID: UUID?,
         conversationID: UUID?,
-        queueNotice: String?
+        queueNotice: String?,
+        arguments: [String]? = nil
     ) -> Bool {
         refreshResolvedCLI()
         let launch = cliResolve(cliPath)
-        let args = commandArguments(template: template, draft: draft)
+        let args = arguments.map(cliArguments) ?? commandArguments(template: template, draft: draft)
         // The structured-output flags are the app's own transport: the launched process gets
         // them, the preview and the library row keep the command a person would type.
         let launchArgs = args + StudioMachineOutputFlags.arguments(

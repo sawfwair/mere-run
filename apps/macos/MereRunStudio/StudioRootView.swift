@@ -1783,6 +1783,9 @@ struct StudioRootView: View {
         }
         controller.select(template)
         controller.draft = commandDraft
+        // A console run recorded the argv it launched; reopen on that rather than on the draft,
+        // which cannot carry an option the console form edited but the draft has no field for.
+        controller.consoleSeedArguments = item.commandArguments
         openConsole(syncingComposer: false)
     }
 

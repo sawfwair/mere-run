@@ -14,7 +14,7 @@ enum StudioInspectorSchema {
 
     /// Everything else the mode's command takes, collapsed under "Advanced · N more". The count is
     /// this list's length; Reset restores every draft field behind it.
-    static func advancedFields(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> [StudioContractField] {
+    static func advancedFields(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> [StudioContractField<StudioDraft>] {
         StudioContractSchema.expertFields(for: mode, draft: draft)
     }
 

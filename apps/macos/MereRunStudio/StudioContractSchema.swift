@@ -55,24 +55,28 @@ enum StudioContractValue: Equatable {
 
 // MARK: - Bindings
 
-/// One contract option bound to the `StudioDraft` field the app keeps it in.
-struct StudioContractBinding {
+/// One contract option bound to the field the app keeps it in.
+///
+/// `Draft` is whatever the surface edits: the prompt tasks bind a typed `StudioDraft` property
+/// per option, and the Command Console binds a `StudioConsoleDraft` entry per flag, so one
+/// option kind renders the same control either way.
+struct StudioContractBinding<Draft> {
     /// The draft property name. It doubles as the inspector's field id, so the modified count and
     /// per-section Reset key off the same identity the hand-written schema used.
     let fieldID: String
-    let read: (StudioDraft) -> StudioContractValue
-    let write: (inout StudioDraft, StudioContractValue) -> Void
+    let read: (Draft) -> StudioContractValue
+    let write: (inout Draft, StudioContractValue) -> Void
 
-    func isChanged(_ draft: StudioDraft, _ baseline: StudioDraft) -> Bool {
+    func isChanged(_ draft: Draft, _ baseline: Draft) -> Bool {
         read(draft) != read(baseline)
     }
 
-    func reset(_ draft: inout StudioDraft, to baseline: StudioDraft) {
+    func reset(_ draft: inout Draft, to baseline: Draft) {
         write(&draft, read(baseline))
     }
 }
 
-extension StudioContractBinding {
+extension StudioContractBinding where Draft == StudioDraft {
     static func text(_ id: String, _ keyPath: WritableKeyPath<StudioDraft, String>) -> Self {
         Self(
             fieldID: id,
@@ -321,15 +325,15 @@ enum StudioContractControl: Equatable {
 /// A plain option writes exactly one draft field. A composite editor — the aspect pair, the mask
 /// canvas, seconds-or-frames — writes several, and every one of them counts toward the modified
 /// badge and is restored by Reset, so the row behaves as one control either way.
-struct StudioContractField: Identifiable {
+struct StudioContractField<Draft>: Identifiable {
     let option: MereRunCapabilityOption
-    let bindings: [StudioContractBinding]
+    let bindings: [StudioContractBinding<Draft>]
     /// nil renders from the contract; otherwise the caller's override builder draws this row.
     var overrideID: StudioContractOverrideID?
 
     init(
         option: MereRunCapabilityOption,
-        bindings: [StudioContractBinding],
+        bindings: [StudioContractBinding<Draft>],
         overrideID: StudioContractOverrideID? = nil
     ) {
         precondition(!bindings.isEmpty, "\(option.flag) needs at least one draft binding to render")
@@ -339,7 +343,7 @@ struct StudioContractField: Identifiable {
     }
 
     /// The binding the contract-rendered control reads and writes.
-    var binding: StudioContractBinding { bindings[0] }
+    var binding: StudioContractBinding<Draft> { bindings[0] }
 
     var draftFieldIDs: [String] { bindings.map(\.fieldID) }
 
@@ -385,13 +389,13 @@ struct StudioContractField: Identifiable {
         }
     }
 
-    func value(in draft: StudioDraft) -> StudioContractValue {
+    func value(in draft: Draft) -> StudioContractValue {
         binding.read(draft)
     }
 
     /// Whether the control sits at the contract's declared default (or at nothing at all). A
     /// control at its default emits no flag.
-    func isAtDefault(in draft: StudioDraft) -> Bool {
+    func isAtDefault(in draft: Draft) -> Bool {
         let value = binding.read(draft)
         if case .unset = value { return true }
         if case .flag(let on) = value { return !on }
@@ -412,7 +416,7 @@ struct StudioContractField: Identifiable {
     }
 
     /// Whether the draft gives this option a value the command line would carry.
-    func emits(in draft: StudioDraft) -> Bool {
+    func emits(in draft: Draft) -> Bool {
         !isAtDefault(in: draft)
     }
 
@@ -433,16 +437,16 @@ struct StudioContractField: Identifiable {
         }
     }
 
-    func write(_ value: StudioContractValue, to draft: inout StudioDraft) {
+    func write(_ value: StudioContractValue, to draft: inout Draft) {
         binding.write(&draft, clamped(value))
     }
 
     /// How many of the draft fields this row owns differ from the mode's defaults.
-    func changedCount(draft: StudioDraft, baseline: StudioDraft) -> Int {
+    func changedCount(draft: Draft, baseline: Draft) -> Int {
         bindings.filter { $0.isChanged(draft, baseline) }.count
     }
 
-    func reset(_ draft: inout StudioDraft, to baseline: StudioDraft) {
+    func reset(_ draft: inout Draft, to baseline: Draft) {
         for binding in bindings { binding.reset(&draft, to: baseline) }
     }
 }
@@ -450,7 +454,7 @@ struct StudioContractField: Identifiable {
 /// One group of contract fields, in the order the contract declares them.
 struct StudioContractSection: Identifiable {
     let group: StudioContractGroup
-    let fields: [StudioContractField]
+    let fields: [StudioContractField<StudioDraft>]
 
     var id: StudioContractGroup { group }
     var title: String { group.title }
@@ -484,18 +488,18 @@ enum StudioContractSchema {
     /// Every option of the mode's capability the app has a draft field for, in contract order.
     /// Options the contract declares that the Studio draft does not carry are left out: the app
     /// has no state to bind them to, so a control for them could not change the command.
-    static func fields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField] {
+    static func fields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField<StudioDraft>] {
         fields(for: mode, readImageAction: draft.readImageAction)
     }
 
     static func fields(
         for mode: StudioMode,
         readImageAction: StudioReadImageAction = .inspect
-    ) -> [StudioContractField] {
+    ) -> [StudioContractField<StudioDraft>] {
         guard let capability = capability(for: mode, readImageAction: readImageAction) else { return [] }
         let bindings = StudioContractBindings.bindings(for: mode)
         var claimed: Set<StudioContractOverrideID> = []
-        var fields: [StudioContractField] = []
+        var fields: [StudioContractField<StudioDraft>] = []
         for option in capability.options {
             guard let override = StudioContractOverrides.override(forFlag: option.flag, mode: mode) else {
                 guard let binding = bindings[option.flag] else { continue }
@@ -515,7 +519,7 @@ enum StudioContractSchema {
 
     /// The fields the inspector edits itself: everything except the ones the composer's prompt and
     /// attachment well already own.
-    static func inspectorFields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField] {
+    static func inspectorFields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField<StudioDraft>] {
         fields(for: mode, draft: draft).filter { field in
             StudioContractOverrides.override(forFlag: field.flag, mode: mode)?.isExternal != true
         }
@@ -524,7 +528,7 @@ enum StudioContractSchema {
     /// Controls the contract has no option for yet, declared here in the contract's own shape so
     /// the form renders them the same way. Read Image's task picker is the only one: it chooses
     /// which capability runs rather than an argument of one.
-    static func uncoveredFields(for mode: StudioMode) -> [StudioContractField] {
+    static func uncoveredFields(for mode: StudioMode) -> [StudioContractField<StudioDraft>] {
         guard mode == .readImage else { return [] }
         return [
             StudioContractField(
@@ -559,14 +563,14 @@ enum StudioContractSchema {
     }
 
     /// Everything the mode's command takes that the inspector collapses under "Advanced · N more".
-    static func expertFields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField] {
+    static func expertFields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField<StudioDraft>] {
         inspectorFields(for: mode, draft: draft).filter { $0.tier == .expert }
     }
 
     /// Whether `field` is reachable: every option it declares a dependency on must carry a value.
     /// A dependency the app does not bind (an attachment the well owns, say) is read from the
     /// draft all the same, so an editor stays hidden until its input exists.
-    static func isVisible(_ field: StudioContractField, for mode: StudioMode, in draft: StudioDraft) -> Bool {
+    static func isVisible(_ field: StudioContractField<StudioDraft>, for mode: StudioMode, in draft: StudioDraft) -> Bool {
         isVisible(field, in: draft, dependencies: dependencies(for: mode, draft: draft))
     }
 
@@ -585,7 +589,7 @@ enum StudioContractSchema {
     /// One field per bound option, before the composite editors fold their flags together. This is
     /// the per-flag view the dependency walk and the Command view need; `fields(for:)` is the
     /// per-row view the forms render.
-    static func boundFields(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> [StudioContractField] {
+    static func boundFields(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> [StudioContractField<StudioDraft>] {
         guard let capability = capability(for: mode, draft: draft) else { return [] }
         let bindings = StudioContractBindings.bindings(for: mode)
         return capability.options.compactMap { option in
@@ -594,9 +598,9 @@ enum StudioContractSchema {
         }
     }
 
-    static func isVisible(
-        _ field: StudioContractField,
-        in draft: StudioDraft,
+    static func isVisible<Draft>(
+        _ field: StudioContractField<Draft>,
+        in draft: Draft,
         dependencies: [String: (carries: Bool, dependsOn: String?)]
     ) -> Bool {
         var flag = field.option.dependsOn
@@ -676,7 +680,7 @@ struct StudioContractOverride {
     /// Every flag the editor writes. The editor renders where the first of them is declared.
     let flags: [String]
     /// Draft fields the editor owns that the contract has no option for.
-    var companions: [StudioContractBinding] = []
+    var companions: [StudioContractBinding<StudioDraft>] = []
     /// The editor lives in the composer, not the inspector.
     var isExternal = false
 }
@@ -778,7 +782,7 @@ enum StudioContractOverrides {
 /// `StudioCommandAdapter` actually forwards are listed: a control for a flag the adapter drops
 /// would look live and change nothing.
 enum StudioContractBindings {
-    static func bindings(for mode: StudioMode) -> [String: StudioContractBinding] {
+    static func bindings(for mode: StudioMode) -> [String: StudioContractBinding<StudioDraft>] {
         switch mode {
         case .createImage: return image
         case .video: return video
@@ -794,9 +798,9 @@ enum StudioContractBindings {
         }
     }
 
-    private static var model: [String: StudioContractBinding] { ["--model": .text("model", \.model)] }
+    private static var model: [String: StudioContractBinding<StudioDraft>] { ["--model": .text("model", \.model)] }
 
-    private static var image: [String: StudioContractBinding] { model.merging([
+    private static var image: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--negative-prompt": .text("secondaryText", \.secondaryText),
         "--input": .text("inputPath", \.inputPath),
         "--ref-image": .text("referenceImagePaths", \.referenceImagePaths),
@@ -824,7 +828,7 @@ enum StudioContractBindings {
         "--progress-json": .flag("progressJSON", \.progressJSON),
     ]) { first, _ in first } }
 
-    private static var video: [String: StudioContractBinding] { model.merging([
+    private static var video: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--negative-prompt": .text("secondaryText", \.secondaryText),
         "--image": .text("inputPath", \.inputPath),
         "--end-image": .text("endImagePath", \.endImagePath),
@@ -857,7 +861,7 @@ enum StudioContractBindings {
         "--timings-output": .text("timingsOutputPath", \.timingsOutputPath),
     ]) { first, _ in first } }
 
-    private static var music: [String: StudioContractBinding] { model.merging([
+    private static var music: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--lyrics": .text("secondaryText", \.secondaryText),
         "--source-audio": .text("musicSourceAudio", \.musicSourceAudio),
         "--reference-audio": .text("musicReferenceAudioPaths", \.musicReferenceAudioPaths),
@@ -895,13 +899,13 @@ enum StudioContractBindings {
         "--no-recipe": .flag("musicNoRecipe", \.musicNoRecipe),
     ]) { first, _ in first } }
 
-    private static var sfx: [String: StudioContractBinding] { model.merging([
+    private static var sfx: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--duration": .number("durationSeconds", \.durationSeconds),
         "--steps": .integer("steps", \.steps),
         "--seed": .integerText("seed", \.seed),
     ]) { first, _ in first } }
 
-    private static var speak: [String: StudioContractBinding] { model.merging([
+    private static var speak: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--voice": .text("secondaryText", \.secondaryText),
         "--mode": .text("voiceMode", \.voiceMode),
         "--profile": .text("voiceProfile", \.voiceProfile),
@@ -909,13 +913,13 @@ enum StudioContractBindings {
         "--save-profile": .text("saveProfileName", \.saveProfileName),
     ]) { first, _ in first } }
 
-    private static var listen: [String: StudioContractBinding] { model.merging([
+    private static var listen: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--backend": .text("backend", \.backend),
         "--language": .text("language", \.language),
         "--no-timestamps": .invertedFlag("timestamps", \.timestamps),
     ]) { first, _ in first } }
 
-    private static var chat: [String: StudioContractBinding] { model.merging([
+    private static var chat: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--system": .text("secondaryText", \.secondaryText),
         "--image": .text("inputPath", \.inputPath),
         "--temperature": .number("temperature", \.temperature),
@@ -944,7 +948,7 @@ enum StudioContractBindings {
         "--require-installed": .flag("requireInstalled", \.requireInstalled),
     ]) { first, _ in first } }
 
-    private static var code: [String: StudioContractBinding] { model.merging([
+    private static var code: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--system": .text("secondaryText", \.secondaryText),
         "--temperature": .number("temperature", \.temperature),
         "--top-p": .number("topP", \.topP),
@@ -952,11 +956,11 @@ enum StudioContractBindings {
         "--max-tokens": .integer("maxTokens", \.maxTokens),
     ]) { first, _ in first } }
 
-    private static var readImage: [String: StudioContractBinding] { model }
+    private static var readImage: [String: StudioContractBinding<StudioDraft>] { model }
 
-    private static var findObjects: [String: StudioContractBinding] { model }
+    private static var findObjects: [String: StudioContractBinding<StudioDraft>] { model }
 
-    private static var segmentAndTrack: [String: StudioContractBinding] { model.merging([
+    private static var segmentAndTrack: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--threshold": .number("visionThreshold", \.visionThreshold),
     ]) { first, _ in first } }
 }

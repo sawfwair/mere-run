@@ -982,6 +982,10 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     /// A durable, typed retry/edit snapshot. This intentionally stores app state rather than
     /// reparsing the masked command preview.
     var commandDraft: CommandDraft? = nil
+    /// The exact `mere.run` arguments the run launched, for rows the Command Console started:
+    /// its form edits the contract's options rather than a `CommandDraft`, so this is what
+    /// "Edit command" reopens. Optional and additive; rows written elsewhere leave it nil.
+    var commandArguments: [String]? = nil
     /// Every materialized artifact associated with the run. `outputURL` remains the primary item
     /// for backward compatibility and Quick Look.
     var artifactURLs: [URL]? = nil

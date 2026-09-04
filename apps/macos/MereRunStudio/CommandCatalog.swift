@@ -1571,6 +1571,21 @@ enum CommandLaunchEnvironment {
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
     static let openWebUIAdminPasswordEnvironmentKey = "MERERUN_OPEN_WEBUI_ADMIN_PASSWORD"
 
+    /// The options whose value the app carries in the environment instead of argv, and the
+    /// `CommandDraft` field each one is read from. The Command Console leaves these flags out of
+    /// the command it builds from the contract and fills the draft field instead, so a key typed
+    /// there travels the same way one typed anywhere else in the app does.
+    static func secretFlags(for templateID: CommandTemplateID) -> [String: WritableKeyPath<CommandDraft, String>] {
+        switch templateID {
+        case .apiServe, .musicServe, .worldServe, .visionServe, .statusSnapshot:
+            return ["--api-key": \.apiKey]
+        case .openWebui:
+            return ["--api-key": \.apiKey, "--admin-password": \.openWebUIAdminPassword]
+        default:
+            return [:]
+        }
+    }
+
     static func overrides(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
         guard templateID == .apiServe
             || templateID == .openWebui

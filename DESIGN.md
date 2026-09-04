@@ -103,6 +103,13 @@ breathe (24–32), rows and chips stay tight (8–12).
   14pt accent domain glyph, title, one-line subtitle. Center: the task pill. Trailing
   (16pt in): Library, Inspector, and Command toggles. With the sidebar collapsed the first
   header leaves room for the traffic lights.
+- Raw command form (the Command view column and the Command Console's middle pane):
+  eyebrow groups from the capability contract, each row a monospaced 12pt medium
+  `textSecondary` flag in a 168pt column beside the control the option's kind calls for,
+  over a "Will run" block — the shell-quoted command wrapped at the column width on
+  `surfaceRaised` (radius 6, 12/10 padding, 11.5pt mono), with Copy, Open in Terminal,
+  and the accent Run. The Console adds a 52pt header per pane and a template catalog
+  column that reuses the sidebar's row shape.
 - Library column: 248pt on `background` with a right hairline, running from the window
   top to the bottom. Header ("Library" 13pt
   semibold, count 11pt muted, scope segments) at 14/14/8 padding; a 28pt capsule search
