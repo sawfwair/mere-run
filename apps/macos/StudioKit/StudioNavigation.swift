@@ -164,7 +164,8 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
              .modelLocationUnbind, .qualityGate, .modelBenchmark, .modelBenchmarkLagunaDFlash,
              .modelBenchmarkChat, .modelBenchmarkCode, .modelBenchmarkFused, .modelBenchmarkFusedFixture,
              .modelBenchmarkVLM, .modelBenchmarkToolCalls, .modelBenchmarkToolContinuations,
-             .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP, .modelBenchmarkAPIWorkload:
+             .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP, .modelBenchmarkParakeetCoreML,
+             .modelBenchmarkAPIWorkload:
             self = .models
         case .apiServe, .visionServe, .musicServe, .openWebui, .worldServe, .statusSnapshot, .agentOnboard,
              .agentStatus, .agentInstallPi, .agentStart, .setup, .graphStudio, .nodeConsole, .custom:

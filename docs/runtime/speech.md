@@ -88,6 +88,65 @@ swift run mere.run speech listen --device <core-audio-uid>
 
 `speech listen` remains the Qwen-backed macOS microphone convenience command.
 
+#### Optional Parakeet Core ML/MLX package
+
+Parakeet uses MLX by default. For controlled Apple-platform experiments, Mere
+also provides a pinned conversion tool and a typed Core ML encoder provider:
+
+```bash
+uv run --script scripts/model-conversion/convert_parakeet_coreml.py --plan
+uv run --script scripts/model-conversion/convert_parakeet_coreml.py \
+  --workspace /path/to/parakeet-conversion-workspace \
+  --output /path/to/parakeet-coreml
+
+mere.run speech transcribe ./short.wav \
+  --backend parakeet \
+  --provider coreml \
+  --coreml-encoder /path/to/parakeet-coreml
+```
+
+The converter downloads NVIDIA's exact
+`nvidia/parakeet-tdt-0.6b-v3` revision
+`541d1f99c6b0c3cd0b11a95167540bb8edefd82b`, verifies the source file sizes and
+SHA-256 values, exports the FastConformer encoder with pinned tool versions,
+and exports the TDT decoder and joint network as a second Core ML model. The
+package retains the 13 required decoder and joint tensors in a 69 MiB MLX
+fallback checkpoint. `parakeet-coreml.json` records the complete Core ML
+models, decoder embedding table, generated runtime configuration, vocabulary,
+tokenizer, and notice closure. The
+runtime verifies that closure before loading the model. The package uses Mere's
+own runtime integration and does not require a third-party inference SDK,
+telemetry, or an opaque model download.
+
+This provider is limited to non-streaming files. Each Core ML encoder call has
+batch size 1 and a maximum 15-second input. Longer files use 15-second windows
+with two seconds of overlap. The runtime decodes as many as 16 windows in one
+Core ML call, then reconciles matching token IDs and global timestamps at each
+boundary. Mere's native Swift/Accelerate feature extractor remains in the path,
+but the standalone artifact no longer requires `speech-asr-parakeet` or its
+complete 2.3 GiB weight file.
+
+Core ML is configured for CPU and Neural Engine execution. That preference
+doesn't prove that every operation runs on the Neural Engine or that the path
+is faster or more accurate. Treat performance, placement, boundary merging,
+and transcript parity as unqualified until you measure them on the target Mac.
+The conversion needs at least 10 GiB of free working space and the exact Xcode
+version printed by `--plan`.
+
+To report resident model-load, feature extraction, encoder, decoder, alignment,
+merge, and total timings, use an optimized executable:
+
+```bash
+.build/release/mere.run model benchmark parakeet-coreml ./sample.wav \
+  --artifact /path/to/parakeet-coreml \
+  --warmups 2 \
+  --repetitions 5 \
+  --json
+```
+
+The benchmark records transcript consistency across repetitions. It doesn't
+compare transcript quality with a reference corpus.
+
 ### Identify speakers
 
 Install the pinned public Sortformer checkpoint:
@@ -188,6 +247,7 @@ Tokenizer internals:
 - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
 - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRLiveSession.swift`
 - `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
+- `Sources/AudioSTT/Parakeet/ParakeetCoreMLEncoder.swift`
 - `Sources/AudioSTT/Parakeet/ParakeetASRLiveSession.swift`
 
 ### Diarization runtime

@@ -718,6 +718,26 @@ modelBenchmarkLagunaDFlash	videoOutputMode=video-only	model benchmark laguna-dfl
 modelBenchmarkLagunaDFlash	videoQuality=draft	model benchmark laguna-dflash --laguna-path 1 --laguna-dflash-path 1 --decode-token-values 1 --repetitions 4 --laguna-dflash-tokens 13 --temperature 0.5 --top-p 1.5 --top-k 1 --min-p 0.52 --fixture 1 --context-size 4097 --warmup-repetitions 2 --prompt 1 --prompt-file 1 --concurrency-values 1 --mixed-fixtures --include-automatic --log-responses --json 1
 modelBenchmarkLagunaDFlash	videoQuality=final	model benchmark laguna-dflash --laguna-path 1 --laguna-dflash-path 1 --decode-token-values 1 --repetitions 4 --laguna-dflash-tokens 13 --temperature 0.5 --top-p 1.5 --top-k 1 --min-p 0.52 --fixture 1 --context-size 4097 --warmup-repetitions 2 --prompt 1 --prompt-file 1 --concurrency-values 1 --mixed-fixtures --include-automatic --log-responses --json 1
 modelBenchmarkLagunaDFlash	voiceMode=clone	model benchmark laguna-dflash --laguna-path 1 --laguna-dflash-path 1 --decode-token-values 1 --repetitions 4 --laguna-dflash-tokens 13 --temperature 0.5 --top-p 1.5 --top-k 1 --min-p 0.52 --fixture 1 --context-size 4097 --warmup-repetitions 2 --prompt 1 --prompt-file 1 --concurrency-values 1 --mixed-fixtures --include-automatic --log-responses --json 1
+modelBenchmarkParakeetCoreML	default	model benchmark parakeet-coreml '' --artifact '' --warmups 2 --repetitions 5 --json
+modelBenchmarkParakeetCoreML	maximal	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	maximal-booleans-off	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 1
+modelBenchmarkParakeetCoreML	modelRoot=video-minimax-h3-ref2va	model benchmark parakeet-coreml 1 --artifact video-minimax-h3-ref2va --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	modelRoot=video-wan22-ti2v-5b-mlx	model benchmark parakeet-coreml 1 --artifact video-wan22-ti2v-5b-mlx --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	musicLMMode=disable	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	musicLMMode=use	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	musicTask=lego	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	musicTask=repaint	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	renderProfile=quality	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	responseFormat=json_object	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	responseFormat=text	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	thinkingMode=automatic	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	thinkingMode=hide	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	thinkingMode=show	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	videoOutputMode=audio-video	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	videoOutputMode=video-only	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	videoQuality=draft	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	videoQuality=final	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
+modelBenchmarkParakeetCoreML	voiceMode=clone	model benchmark parakeet-coreml 1 --artifact 1 --warmups 3 --repetitions 6 --language 1 --json 1
 modelBenchmarkToolCalls	default	model benchmark tool-calls --max-tokens 2048 --json
 modelBenchmarkToolCalls	maximal	model benchmark tool-calls --models 1 --cases 1 --max-tokens 2049 --context-size 1 --dry-run --log-responses --json 1
 modelBenchmarkToolCalls	maximal-booleans-off	model benchmark tool-calls --models 1 --cases 1 --max-tokens 2049 --context-size 1 1

@@ -77,6 +77,9 @@ modelBenchmarkLagunaDFlash	json	true
 modelBenchmarkLagunaDFlash	minP	0.02
 modelBenchmarkLagunaDFlash	temperature	0.0
 modelBenchmarkLagunaDFlash	topP	1.0
+modelBenchmarkParakeetCoreML	benchmarkRepetitions	5
+modelBenchmarkParakeetCoreML	benchmarkWarmupRepetitions	2
+modelBenchmarkParakeetCoreML	json	true
 modelBenchmarkToolCalls	json	true
 modelBenchmarkToolContinuations	json	true
 modelBenchmarkVLM	benchmarkDataset	synthetic-vqa-v1

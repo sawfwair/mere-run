@@ -311,6 +311,13 @@ final class StudioTypesTests: XCTestCase {
             try args(.modelBenchmarkLagunaDFlash).prefix(3).map { $0 },
             ["model", "benchmark", "laguna-dflash"]
         )
+        XCTAssertEqual(
+            try args(.modelBenchmarkParakeetCoreML) {
+                $0.inputPath = "/tmp/audio.wav"
+                $0.modelRoot = "/tmp/parakeet-coreml"
+            }.prefix(3).map { $0 },
+            ["model", "benchmark", "parakeet-coreml"]
+        )
         XCTAssertEqual(try args(.modelOptimize).prefix(2).map { $0 }, ["model", "optimize"])
         XCTAssertEqual(try args(.pluginList).prefix(2).map { $0 }, ["plugin", "list"])
         XCTAssertEqual(
@@ -421,6 +428,14 @@ final class StudioTypesTests: XCTestCase {
                 $0.benchmarkMixedFixtures = true
                 $0.benchmarkIncludeAutomatic = true
                 $0.benchmarkLogResponses = true
+            }),
+            (.modelBenchmarkParakeetCoreML, "model.benchmark.parakeet-coreml", {
+                $0.inputPath = "/tmp/audio.wav"
+                $0.modelRoot = "/tmp/parakeet-coreml"
+                $0.benchmarkWarmupRepetitions = 2
+                $0.benchmarkRepetitions = 5
+                $0.language = "en"
+                $0.json = true
             }),
             (.speechSynthesize, "speech.synthesize", {
                 $0.stream = true

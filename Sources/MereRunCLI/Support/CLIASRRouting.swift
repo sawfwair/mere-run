@@ -30,10 +30,13 @@ enum CLIASRRouting {
         request: ASRRequest,
         preferredBackend: ASRBackend,
         modelOverride: String? = nil,
+        parakeetExecutionProvider: ParakeetExecutionProvider = .mlx,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil,
         executor: (any CLIASRTranscriptionExecutor)? = nil
     ) async throws -> CLIASRExecutionResult {
-        let normalizedOverride = normalized(modelOverride)
+        let normalizedOverride = normalized(
+            modelOverride ?? parakeetExecutionProvider.bundledModelURL?.path
+        )
         let inferredBackend = inferredBackendFromModelOverride(normalizedOverride)
         let effectivePreferredBackend: ASRBackend = {
             guard preferredBackend == .auto, normalizedOverride != nil else { return preferredBackend }
@@ -113,7 +116,10 @@ enum CLIASRRouting {
                     progressHandler: progressHandler
                 )
             } else {
-                let generator = ParakeetGenerator(modelId: modelID)
+                let generator = ParakeetGenerator(
+                    modelId: modelID,
+                    executionProvider: parakeetExecutionProvider
+                )
                 result = try await generator.transcribe(
                     request,
                     modelPath: modelPath,

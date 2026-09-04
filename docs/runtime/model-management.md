@@ -447,6 +447,7 @@ not part of the everyday inference workflow. Lanes:
   adaptive and forced MTP speculative decode.
 - `q38-verification` — measures Flash-Next target-only linear verification at
   widths from one through 32 and checks greedy output parity.
+- `parakeet-coreml` — measures the resident Parakeet Core ML pipeline by stage.
 - `api-workload` — replays a chat workload against a running API server and
   measures runtime cache counters.
 - `vlm` — compares vision-language chat models on synthetic or lmms-eval

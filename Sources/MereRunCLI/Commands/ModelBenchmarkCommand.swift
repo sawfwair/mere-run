@@ -23,6 +23,7 @@ struct ModelBenchmark: ParsableCommand {
             ModelBenchmarkQ36MTP.self,
             ModelBenchmarkQ38Verification.self,
             ModelBenchmarkLagunaDFlash.self,
+            ModelBenchmarkParakeetCoreML.self,
             ModelBenchmarkAPIWorkload.self,
             ModelBenchmarkVLM.self,
         ]

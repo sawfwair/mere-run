@@ -91,7 +91,7 @@ public enum ParakeetAlignment {
 
         let aEnd = a[a.count - 1].end
         let bStart = b[0].start
-        if aEnd <= bStart {
+        if aEnd < bStart {
             return a + b
         }
 
@@ -147,14 +147,14 @@ public enum ParakeetAlignment {
 
         let aEnd = a[a.count - 1].end
         let bStart = b[0].start
-        if aEnd <= bStart {
+        if aEnd < bStart {
             return a + b
         }
 
         let overlapA = a.filter { $0.end > bStart - overlapDuration }
         let overlapB = b.filter { $0.start < aEnd + overlapDuration }
 
-        if overlapA.count < 2 || overlapB.count < 2 {
+        if overlapA.isEmpty || overlapB.isEmpty {
             return midpointMerge(a, b, aEnd: aEnd, bStart: bStart)
         }
 

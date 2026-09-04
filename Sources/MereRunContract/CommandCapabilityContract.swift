@@ -406,6 +406,7 @@ public enum MereRunCapabilityCatalog {
             modelOptimize,
             modelBenchmarkQ36MTP,
             modelBenchmarkLagunaDFlash,
+            modelBenchmarkParakeetCoreML,
             modelBenchmarkChat,
             modelBenchmarkCode,
             modelBenchmarkFused,
@@ -2978,6 +2979,24 @@ public enum MereRunCapabilityCatalog {
         output: .init(kind: .text)
     )
 
+    public static let modelBenchmarkParakeetCoreML = MereRunCommandCapability(
+        id: "model.benchmark.parakeet-coreml",
+        command: ["model", "benchmark", "parakeet-coreml"],
+        title: "Parakeet Core ML benchmark",
+        summary: "Measure the prepared Parakeet Core ML pipeline in one resident release process.",
+        arguments: [
+            .init(name: "audio", label: "Audio", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--artifact", label: "Core ML artifact", kind: .directory, required: true),
+            .init(flag: "--warmups", label: "Warmups", kind: .integer),
+            .init(flag: "--repetitions", label: "Repetitions", kind: .integer),
+            .init(flag: "--language", label: "Language", kind: .string),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
     public static let speechSynthesize = MereRunCommandCapability(
         id: "speech.synthesize",
         command: ["speech", "synthesize"],
@@ -3041,6 +3060,14 @@ public enum MereRunCapabilityCatalog {
             .init(
                 flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen"],
                 defaultValue: "auto", group: Group.modelAndAdapters, tier: .essential
+            ),
+            .init(
+                flag: "--provider", label: "Parakeet provider", kind: .choice, choices: ["mlx", "coreml"],
+                defaultValue: "mlx", group: Group.modelAndAdapters, tier: .standard
+            ),
+            .init(
+                flag: "--coreml-encoder", label: "Core ML artifact", kind: .directory,
+                group: Group.modelAndAdapters, tier: .expert, dependsOn: "--provider"
             ),
             .init(
                 flag: "--task", label: "Task", kind: .choice, choices: ["transcribe", "translate"],

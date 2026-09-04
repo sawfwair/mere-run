@@ -1,5 +1,52 @@
 # Native model conversion
 
+## Parakeet Core ML/MLX package
+
+`convert_parakeet_coreml.py` builds a Mere-controlled FP16 Core ML encoder and
+TDT decoder for NVIDIA Parakeet TDT 0.6B v3. It retains a compact MLX decoder
+as a compatibility fallback. The converter pins the NVIDIA
+repository revision, source file sizes and SHA-256 values, Python packages,
+Xcode version, tensor names, and static 15-second input shape. The output is
+transactional and contains a complete hash closure in `parakeet-coreml.json`.
+
+Inspect the plan without installing the conversion dependencies or downloading
+the 2.5 GB checkpoint:
+
+```bash
+uv run --script scripts/model-conversion/convert_parakeet_coreml.py --plan
+```
+
+Run the conversion only on a machine with the pinned Xcode version and at
+least 10 GiB of free working space:
+
+```bash
+uv run --script scripts/model-conversion/convert_parakeet_coreml.py \
+  --workspace /path/to/parakeet-conversion-workspace \
+  --output /path/to/parakeet-coreml
+```
+
+The result is a standalone runtime root. The schema-v3 package contains Core ML
+encoder and decoder models, the decoder embedding table, and a 13-tensor MLX
+fallback. It doesn't duplicate the full MLX encoder. Use it through `speech
+transcribe --backend parakeet --provider coreml --coreml-encoder PATH`. The
+runtime divides longer files into overlapping 15-second windows. It encodes
+each window separately, applies the mel filterbank with Accelerate, and decodes
+as many as 16 windows in parallel.
+
+To measure the resident Release path, run the following command:
+
+```bash
+.build/release/mere.run model benchmark parakeet-coreml ./sample.wav \
+  --artifact /path/to/parakeet-coreml \
+  --warmups 2 \
+  --repetitions 5 \
+  --json
+```
+
+Generating the artifact doesn't qualify Neural Engine placement, speed,
+boundary merging, or transcript parity. Profile and compare the compiled result
+on each supported hardware target before publication.
+
 ## NVIDIA Nemotron 3 Nano Omni BF16 native layout
 
 `mere.run model optimize` can stream NVIDIA's pinned 17-shard Nemotron Omni

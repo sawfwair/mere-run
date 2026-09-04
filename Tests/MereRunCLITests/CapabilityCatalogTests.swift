@@ -87,6 +87,7 @@ private func capabilityHelpMessages() -> [String: String] {
         "model.optimize": ModelOptimize.helpMessage(),
         "model.benchmark.q36-mtp": ModelBenchmarkQ36MTP.helpMessage(),
         "model.benchmark.laguna-dflash": ModelBenchmarkLagunaDFlash.helpMessage(),
+        "model.benchmark.parakeet-coreml": ModelBenchmarkParakeetCoreML.helpMessage(),
         "speech.synthesize": SpeechSynthesize.helpMessage(),
         "speech.transcribe": SpeechTranscribe.helpMessage(),
         "speech.diarize": SpeechDiarize.helpMessage(),

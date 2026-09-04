@@ -1960,6 +1960,21 @@ extension CommandFlags {
     }
 }
 
+// MARK: - model benchmark parakeet-coreml
+
+extension CommandFlags {
+    /// `mere.run model benchmark parakeet-coreml` — Parakeet Core ML benchmark
+    package enum ModelBenchmarkParakeetCoreml: CommandFlagNamespace {
+        package static let command = ["model", "benchmark", "parakeet-coreml"]
+
+        package static let artifact = "--artifact"
+        package static let warmups = "--warmups"
+        package static let repetitions = "--repetitions"
+        package static let language = "--language"
+        package static let json = "--json"
+    }
+}
+
 // MARK: - model benchmark chat
 
 extension CommandFlags {
@@ -2240,6 +2255,7 @@ extension CommandFlags {
         package static let command = ["speech", "transcribe"]
         package static let defaultValues = [
             "--backend": "auto",
+            "--provider": "mlx",
             "--task": "transcribe",
             "--max-tokens": "448",
             "--stream-chunk-ms": "200",
@@ -2249,6 +2265,8 @@ extension CommandFlags {
         package static let output = "--output"
         package static let model = "--model"
         package static let backend = "--backend"
+        package static let provider = "--provider"
+        package static let coremlEncoder = "--coreml-encoder"
         package static let task = "--task"
         package static let language = "--language"
         package static let maxTokens = "--max-tokens"

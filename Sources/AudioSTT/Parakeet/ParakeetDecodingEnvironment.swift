@@ -13,6 +13,6 @@ enum ParakeetDecodingEnvironment {
            let value = Int(raw), value >= 1 {
             return value
         }
-        return 16
+        return 8
     }()
 }

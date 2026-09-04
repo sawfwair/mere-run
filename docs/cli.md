@@ -186,6 +186,7 @@ Public tree:
     - `mere.run model benchmark q36-mtp` — Compare Qwen-family serial decode against adaptive and forced MTP speculative decode.
     - `mere.run model benchmark q38-verification` — Measure the Flash-Next target-only verification frontier.
     - `mere.run model benchmark laguna-dflash` — Measure Laguna target-only and DFlash decode in one resident process.
+    - `mere.run model benchmark parakeet-coreml` — Benchmark the prepared Parakeet Core ML pipeline in one resident process.
     - `mere.run model benchmark api-workload` — Replay a chat workload against a running API server and measure runtime cache counters.
     - `mere.run model benchmark vlm` — Compare vision-language chat models on synthetic or lmms-eval datasets.
   - `mere.run model repair-manifests` — Write missing mererun_model.json for known models in the local mere.run model store.
@@ -2476,6 +2477,26 @@ FastH3 roots automatically use the Metal tiled MLP; developers can set
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 following subsections provide the command reference for each benchmark lane.
+
+### `mere.run model benchmark parakeet-coreml`
+
+Measure a prepared Parakeet Core ML artifact in one optimized resident process.
+The command loads and verifies the artifact once, runs unmeasured warmups, and
+reports feature extraction, encoder, decoder, alignment, merge, and total
+duration for each repetition.
+
+```bash
+.build/release/mere.run model benchmark parakeet-coreml ./sample.wav \
+  --artifact /path/to/parakeet-coreml \
+  --warmups 2 \
+  --repetitions 5 \
+  --json
+```
+
+The command rejects Debug builds because compiler optimization changes the
+Swift feature extraction and host-side decoder work. The report includes
+transcript consistency across repetitions. It isn't a transcript-quality
+evaluation.
 
 ### `mere.run model benchmark gemma4-kv`
 
