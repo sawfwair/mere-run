@@ -72,11 +72,11 @@ final class StudioThreadListPresenterTests: XCTestCase {
 
     func testModelLabelFallsBackToThePresetDefault() {
         let untitled = thread(title: "x", mode: .code, updatedAgo: 0, model: nil)
-        let expected = StudioModelPicker.resolvedModelID("", mode: .code)
+        let expected = StudioModelNaming.resolvedModelID(for: .code, model: "")
         XCTAssertFalse(expected.isEmpty)
         XCTAssertEqual(
             StudioThreadListPresenter.modelLabel(for: untitled),
-            StudioModelPicker.displayModelName(expected)
+            StudioModelNaming.displayName(expected)
         )
     }
 
