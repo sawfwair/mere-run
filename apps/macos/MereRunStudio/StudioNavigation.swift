@@ -620,3 +620,68 @@ enum StudioInspectorTaskMemory {
         Set(raw.split(separator: ",").compactMap { StudioTask(rawValue: String($0)) })
     }
 }
+
+/// What a per-task draft is worth keeping across a relaunch: the words the user typed and the
+/// file they attached. Sampling settings are not persisted — they come back from the task's own
+/// defaults, which is also the baseline the inspector diffs against — so `@SceneStorage` stays
+/// small enough to be a scene value rather than a database.
+struct StudioDraftMemoryEntry: Codable, Equatable {
+    var prompt = ""
+    var secondaryText = ""
+    var inputPath = ""
+
+    var isEmpty: Bool {
+        prompt.isBlank && secondaryText.isBlank && inputPath.isBlank
+    }
+}
+
+/// Encodes the unsent work of every prompt task as one `@SceneStorage` string, keyed by task, so
+/// switching domains or tasks — and quitting — never throws away a half-written prompt.
+enum StudioDraftMemory {
+    static func entry(for draft: StudioDraft) -> StudioDraftMemoryEntry {
+        StudioDraftMemoryEntry(
+            prompt: draft.prompt,
+            secondaryText: draft.secondaryText,
+            inputPath: draft.inputPath
+        )
+    }
+
+    static func encode(_ entries: [StudioTask: StudioDraftMemoryEntry]) -> String {
+        let kept = entries.filter { !$0.value.isEmpty }
+        guard !kept.isEmpty else { return "" }
+        let keyed = Dictionary(uniqueKeysWithValues: kept.map { ($0.key.rawValue, $0.value) })
+        guard let data = try? JSONEncoder.mereRunApp.encode(keyed),
+              let text = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        return text
+    }
+
+    static func decode(_ raw: String) -> [StudioTask: StudioDraftMemoryEntry] {
+        guard !raw.isBlank, let data = raw.data(using: .utf8),
+              let keyed = try? JSONDecoder.mereRunApp.decode([String: StudioDraftMemoryEntry].self, from: data) else {
+            return [:]
+        }
+        var entries: [StudioTask: StudioDraftMemoryEntry] = [:]
+        for (key, value) in keyed {
+            guard let task = StudioTask(rawValue: key), task.isPromptTask, !value.isEmpty else { continue }
+            entries[task] = value
+        }
+        return entries
+    }
+
+    /// Puts a remembered entry back into a fresh draft. An attachment whose file has since moved
+    /// or been emptied out of a temporary directory is dropped rather than restored as a dangling
+    /// path the composer would show as a chip and the run would fail on.
+    static func apply(
+        _ entry: StudioDraftMemoryEntry,
+        to draft: inout StudioDraft,
+        fileManager: FileManager = .default
+    ) {
+        if !entry.prompt.isBlank { draft.prompt = entry.prompt }
+        if !entry.secondaryText.isBlank { draft.secondaryText = entry.secondaryText }
+        if !entry.inputPath.isBlank, fileManager.fileExists(atPath: entry.inputPath) {
+            draft.inputPath = entry.inputPath
+        }
+    }
+}

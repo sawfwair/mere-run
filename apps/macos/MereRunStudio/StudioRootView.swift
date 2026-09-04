@@ -24,6 +24,9 @@ struct StudioRootView: View {
     @SceneStorage("studio.libraryFavorites") private var libraryFavoritesOnly = false
     /// The prompt tasks whose inspector stays open, as `StudioInspectorTaskMemory` encodes them.
     @SceneStorage("studio.inspectorTasks") private var storedInspectorTasks = ""
+    /// The unsent prompt, system text, and attachment of every prompt task, as
+    /// `StudioDraftMemory` encodes them, so a relaunch resumes mid-sentence.
+    @SceneStorage("studio.drafts") private var storedDrafts = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// The status probe never answered within its grace period, so the footer says so.
     @State private var probeTimedOut = false
@@ -31,6 +34,11 @@ struct StudioRootView: View {
     /// destination observer activates a mode exactly once however the destination arrived.
     @State private var activatedMode: StudioMode?
     @State private var draft = StudioDraft()
+    /// The draft each prompt task is holding, so leaving Image ▸ Generate for Video ▸ Generate and
+    /// coming back finds the prompt, the attachment, and the settings exactly as they were. The
+    /// composer, the inspector, and the Command view all read `draft`, which is this dictionary's
+    /// entry for the current task.
+    @State private var draftsByTask: [StudioTask: StudioDraft] = [:]
     @State private var isDropTargeted = false
     /// Which jobs exist; the feed re-derives its cards when one starts or finishes.
     @StateObject private var jobMonitor = StudioJobMonitor()
@@ -1057,12 +1065,15 @@ struct StudioRootView: View {
         }
         .onChange(of: draft.inputPath) { _, _ in
             studioError = nil
+            park(draft, for: mode)
         }
         .onChange(of: draft.prompt) { _, _ in
             studioError = nil
+            park(draft, for: mode)
         }
         .onChange(of: draft.secondaryText) { _, _ in
             studioError = nil
+            park(draft, for: mode)
         }
         .onChange(of: controller.cliPath) { _, _ in
             studioError = nil
@@ -1168,8 +1179,15 @@ struct StudioRootView: View {
     /// Library row the user just picked (so selecting a row of another domain lands on that row),
     /// otherwise opens the most recent item or thread of the mode.
     private func activateMode(_ newMode: StudioMode) {
+        // Park the task being left before anything else touches `draft`, so nothing typed here is
+        // lost by the switch; the task being entered gets its own draft back.
+        if let leaving = activatedMode, leaving != newMode {
+            park(draft, for: leaving)
+        }
         activatedMode = newMode
-        var nextDraft = seededDrafts[newMode] ?? freshDraft(for: newMode)
+        let parked = seededDrafts[newMode] == nil ? parkedDraft(for: newMode) : nil
+        var nextDraft = seededDrafts[newMode] ?? parked ?? freshDraft(for: newMode)
+        let hadParkedDraft = parked != nil
         studioError = nil
         let preferred = navigation.selectedLibraryID.flatMap { id in
             library.items.first { $0.id == id && $0.mode == newMode }
@@ -1198,7 +1216,9 @@ struct StudioRootView: View {
                 activeConversationID = nil
                 navigation.selectedLibraryID = nil
             }
-            nextDraft.prompt = ""
+            // Opening a thread clears the composer, but a half-written message this task was
+            // already holding survives the detour.
+            if !hadParkedDraft { nextDraft.prompt = "" }
         } else {
             activeConversationID = nil
             let selected = preferred ?? library.items.first { $0.mode == newMode }
@@ -1215,8 +1235,26 @@ struct StudioRootView: View {
         }
         pendingAnalyzeHandoff = nil
         draft = nextDraft
+        park(nextDraft, for: newMode)
         controller.checkReadiness(for: newMode, draft: draft)
         if newMode != .listen { promptFocused = true }
+    }
+
+    /// Remembers a task's draft: in full for this launch, and — for the prompt, the system text,
+    /// and the attachment — across relaunches through `@SceneStorage`.
+    private func park(_ draft: StudioDraft, for mode: StudioMode) {
+        draftsByTask[mode.task] = draft
+        storedDrafts = StudioDraftMemory.encode(draftsByTask.mapValues(StudioDraftMemory.entry(for:)))
+    }
+
+    /// The draft this task was last holding: the live one when it has been visited this launch,
+    /// otherwise the task's defaults with whatever the last session left unsent laid back on top.
+    private func parkedDraft(for mode: StudioMode) -> StudioDraft? {
+        if let parked = draftsByTask[mode.task] { return parked }
+        guard let entry = StudioDraftMemory.decode(storedDrafts)[mode.task] else { return nil }
+        var restored = freshDraft(for: mode)
+        StudioDraftMemory.apply(entry, to: &restored)
+        return restored
     }
 
     /// A Library row the user clicked. Rows of another mode switch the destination first;
