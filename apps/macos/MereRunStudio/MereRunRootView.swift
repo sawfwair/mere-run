@@ -50,7 +50,11 @@ struct AdvancedControlSurface: View {
                 get: { navigation.showLibrary },
                 set: { navigation.showLibrary = $0 }
             ),
-            canShowLibrary: navigation.destination.domain.hasPromptWorkspace,
+            canShowLibrary: navigation.destination.task.isPromptTask,
+            showInspector: .constant(false),
+            canShowInspector: false,
+            showCommand: .constant(false),
+            canShowCommand: false,
             open: { navigation.open(destination: $0) },
             openDomain: { navigation.open(domain: $0) },
             newChat: {},

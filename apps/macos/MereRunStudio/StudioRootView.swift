@@ -19,13 +19,21 @@ struct StudioRootView: View {
     @SceneStorage("studio.mode") private var lastPromptMode: StudioMode = .createImage
     @SceneStorage("studio.showLibrary") private var storedShowLibrary = true
     @SceneStorage("studio.libraryScope") private var libraryScope: StudioLibraryScope = .domain
+    /// The prompt tasks whose inspector stays open, as `StudioInspectorTaskMemory` encodes them.
+    @SceneStorage("studio.inspectorTasks") private var storedInspectorTasks = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// The prompt mode the composer, canvas, and readiness were last set up for, so the
     /// destination observer activates a mode exactly once however the destination arrived.
     @State private var activatedMode: StudioMode?
     @State private var draft = StudioDraft()
-    @State private var showOptions = false
     @State private var isDropTargeted = false
+    /// Which jobs exist; the feed re-derives its cards when one starts or finishes.
+    @StateObject private var jobMonitor = StudioJobMonitor()
+    /// The card of the Library row the user just picked, outlined for a moment.
+    @State private var highlightedCardID: UUID?
+    @State private var highlightReset: Task<Void, Never>?
+    /// A run of this mode that finished while its card was off-screen ("New result ↓").
+    @State private var newResultID: UUID?
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
     @State private var activeConversationID: UUID?
@@ -60,10 +68,48 @@ struct StudioRootView: View {
         destination.task.mode != nil
     }
 
-    /// The Library column belongs to domains with a prompt workspace; System pages and the
-    /// form-shaped domains (3D, Earth, Text) use the full width.
+    /// The Library column belongs to prompt tasks only: Subjects, Realtime, Models, and the other
+    /// Project, Session, and Manage tasks take the full width even inside a Create domain.
     private var showsLibraryColumn: Bool {
-        navigation.showLibrary && destination.domain.hasPromptWorkspace
+        navigation.showLibrary && destination.task.isPromptTask
+    }
+
+    private var showsInspectorColumn: Bool {
+        showsPromptWorkspace && navigation.showsInspector(for: destination.task)
+    }
+
+    private var showsCommandColumn: Bool {
+        showsPromptWorkspace && navigation.showsCommandColumn(for: destination.task)
+    }
+
+    /// The feed's cards for the current mode: the Library rows plus the jobs still alive.
+    private var feedCards: [StudioFeedCard] {
+        _ = jobMonitor.generation
+        return StudioFeedCardBuilder.cards(items: library.items, mode: mode, job: jobMonitor.job(requestID:))
+    }
+
+    private var runningFeedJob: Job? {
+        feedCards.last { $0.kind == .running }?.job
+    }
+
+    private var queuedFeedCount: Int {
+        feedCards.filter { $0.kind == .queued }.count
+    }
+
+    /// Whether the composer shows Stop instead of Run: only a conversation turn in flight. A
+    /// generation in flight keeps Run available (the next one queues) and has Cancel on its card.
+    private var isModeRunning: Bool {
+        mode.isConversational && activeConversationRunning
+    }
+
+    private var showsConversation: Bool {
+        mode.isConversational && (selectedItem == nil || selectedItem?.isConversation == true)
+    }
+
+    /// The `model pull` in flight for this mode's model, so the readiness card shows its progress.
+    private var activePullJob: Job? {
+        _ = jobMonitor.generation
+        return jobMonitor.pullJob(for: StudioCommandAdapter.requiredModel(for: mode, draft: draft))
     }
 
     private var selectedItem: StudioLibraryItem? {
@@ -128,12 +174,6 @@ struct StudioRootView: View {
         return message
     }
 
-    private var displayStatus: String {
-        guard controller.queuedRunCount > 0 else { return controller.status }
-        let suffix = controller.queuedRunCount == 1 ? "1 queued" : "\(controller.queuedRunCount) queued"
-        return "\(controller.status) · \(suffix)"
-    }
-
     /// Domains whose default task needs a managed model this machine cannot run.
     private var domainUnavailableMessages: [StudioDomain: String] {
         var messages: [StudioDomain: String] = [:]
@@ -156,6 +196,24 @@ struct StudioRootView: View {
         Binding(
             get: { navigation.showLibrary },
             set: { navigation.showLibrary = $0 }
+        )
+    }
+
+    private var showInspectorBinding: Binding<Bool> {
+        Binding(
+            get: { navigation.showsInspector(for: destination.task) },
+            set: { shown in
+                if shown != navigation.showsInspector(for: destination.task) { toggleInspector() }
+            }
+        )
+    }
+
+    private var showCommandBinding: Binding<Bool> {
+        Binding(
+            get: { navigation.showsCommandColumn(for: destination.task) },
+            set: { shown in
+                if shown != navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
+            }
         )
     }
 
@@ -216,8 +274,17 @@ struct StudioRootView: View {
             VStack(spacing: 0) {
                 contentHeader
                 banners
-                domainContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                HStack(spacing: 0) {
+                    domainContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if showsInspectorColumn {
+                        inspectorColumn
+                            .transition(reduceMotion ? .identity : .move(edge: .trailing).combined(with: .opacity))
+                    } else if showsCommandColumn {
+                        commandColumn
+                            .transition(reduceMotion ? .identity : .move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
             }
         }
         .ignoresSafeArea(.container, edges: .top)
@@ -279,13 +346,51 @@ struct StudioRootView: View {
             domain: destination.domain,
             subtitle: domainSubtitle,
             task: taskBinding,
-            showsLibraryToggle: destination.domain.hasPromptWorkspace,
+            showsPanelToggles: destination.task.isPromptTask,
             isLibraryShown: navigation.showLibrary,
-            isConsoleOpen: navigation.isConsoleOpen,
+            isInspectorShown: navigation.showsInspector(for: destination.task),
+            isCommandShown: destination.task.isPromptTask
+                ? navigation.showsCommandColumn(for: destination.task)
+                : navigation.isConsoleOpen,
             leadingInset: showsLibraryColumn ? 0 : windowChromeInset,
             onToggleLibrary: toggleLibrary,
-            onOpenConsole: { openConsole() }
+            onToggleInspector: toggleInspector,
+            onToggleCommand: toggleCommand
         )
+    }
+
+    // MARK: - Inspector and Command view
+
+    private var inspectorColumn: some View {
+        StudioInspector(
+            mode: mode,
+            draft: $draft,
+            baseline: freshDraft(for: mode),
+            modelInventory: modelInventory,
+            readiness: readiness,
+            lastSeed: lastSeed,
+            onShowModels: { navigation.open(task: .modelsInstalled) },
+            onShowAdapters: { navigation.open(task: .modelsAdapters) },
+            onShowRealtimeMusic: { navigation.open(task: .musicRealtime) },
+            onClose: toggleInspector
+        )
+    }
+
+    @ViewBuilder
+    private var commandColumn: some View {
+        if let request = try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false) {
+            StudioCommandView(
+                mode: mode,
+                template: request.template,
+                draft: request.draft,
+                displayCommand: controller.commandPreview(
+                    template: request.template, draft: request.draft, masksSecrets: true
+                ),
+                canRun: !readiness.blocksRun && !(mode.isConversational && activeConversationRunning),
+                onRun: runStudioCommand,
+                onClose: toggleCommand
+            )
+        }
     }
 
     /// Models reports its installed count and store size; every other domain keeps its tagline.
@@ -517,7 +622,16 @@ struct StudioRootView: View {
             canvas
 
             composer
+
+            if let studioError {
+                MereBanner(severity: .error, text: studioError, onDismiss: { self.studioError = nil })
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+                    .padding(.top, -8)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
+        .animation(reduceMotion ? nil : MereRunTheme.Motion.standard, value: studioError)
         .frame(minWidth: StudioLayoutPolicy.minimumCanvasWidth)
         .background {
             ZStack {
@@ -556,37 +670,50 @@ struct StudioRootView: View {
         .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
     }
 
+    @ViewBuilder
     private var canvas: some View {
-        StudioCanvas(
-            mode: mode,
-            item: selectedItem,
-            conversationItem: activeConversationItem,
-            conversationLiveText: activeConversationLiveText,
-            isConversationRunning: activeConversationRunning,
-            isRunning: controller.isRunning,
-            status: displayStatus,
-            readiness: readiness,
-            error: studioError,
-            logs: controller.logs,
-            liveOutputText: controller.liveOutputText,
-            progress: selectedItem.flatMap { controller.progressByRequestID[$0.id] }
-                ?? controller.currentProgress,
-            onOpen: openSelectedOutput,
-            onReveal: revealSelectedOutput,
-            onQuickLook: {
-                if let url = selectedItem?.outputURL { QuickLookCoordinator.shared.preview(url) }
+        if showsConversation {
+            StudioConversationView(
+                item: activeConversationItem,
+                liveText: activeConversationLiveText,
+                isRunning: activeConversationRunning,
+                mode: mode,
+                onNewChat: startNewConversation,
+                onCopy: copyToClipboard,
+                onRetry: retryLastTurn,
+                onEdit: editMessage,
+                onUseExample: useExamplePrompt
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            StudioFeedCanvas(
+                mode: mode,
+                cards: feedCards,
+                readiness: readiness,
+                pullJob: activePullJob,
+                highlightedID: highlightedCardID,
+                newResultID: $newResultID,
+                actions: feedActions
+            )
+        }
+    }
+
+    private var feedActions: StudioFeedActions {
+        StudioFeedActions(
+            vary: varyLibraryItem,
+            rerun: retryLibraryItem,
+            useAsInput: useOutputAsInput,
+            saveTo: saveOutput,
+            cancel: { jobMonitor.cancel($0) },
+            remove: removeQueued,
+            retry: retryLibraryItem,
+            delete: { deleteLibraryItem($0.id) },
+            pullModel: pullModel,
+            showDetails: {
+                if !navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
             },
-            onPullModel: pullModel,
-            onShowDetails: { openConsole() },
-            onNewChat: startNewConversation,
-            onCopy: copyToClipboard,
-            onRetry: retryLastTurn,
-            onRerunItem: retryLibraryItem,
-            onEditRun: editLibraryItem,
-            onEdit: editMessage,
-            onStop: controller.cancel,
-            onUseExample: useExamplePrompt,
-            onAttach: chooseAttachment
+            useExample: useExamplePrompt,
+            attach: chooseAttachment
         )
     }
 
@@ -594,25 +721,16 @@ struct StudioRootView: View {
         StudioComposer(
             mode: mode,
             draft: $draft,
-            showOptions: $showOptions,
-            isRunning: controller.isRunning,
-            queuedCount: controller.queuedRunCount,
+            isRunning: isModeRunning,
+            queuedCount: mode.isConversational ? 0 : queuedFeedCount,
             readiness: readiness,
             sendBlocked: mode.isConversational && activeConversationRunning,
             modelInventory: modelInventory,
             lastSeed: lastSeed,
             promptFocus: $promptFocused,
             onRun: runStudioCommand,
-            onStop: controller.cancel,
-            onShowModels: { navigation.open(task: .modelsInstalled) },
-            onShowAdapters: {
-                showOptions = false
-                navigation.open(task: .modelsAdapters)
-            },
-            onShowRealtimeMusic: {
-                showOptions = false
-                navigation.open(task: .musicRealtime)
-            }
+            onStop: stopModeRun,
+            onShowModels: { navigation.open(task: .modelsInstalled) }
         )
     }
 
@@ -669,7 +787,11 @@ struct StudioRootView: View {
         StudioSceneActions(
             destination: destination,
             showLibrary: showLibraryBinding,
-            canShowLibrary: destination.domain.hasPromptWorkspace,
+            canShowLibrary: destination.task.isPromptTask,
+            showInspector: showInspectorBinding,
+            canShowInspector: destination.task.isPromptTask,
+            showCommand: showCommandBinding,
+            canShowCommand: destination.task.isPromptTask,
             open: { navigation.open(destination: $0) },
             openDomain: { navigation.open(domain: $0) },
             newChat: startNewConversation,
@@ -697,6 +819,8 @@ struct StudioRootView: View {
         }
         .onAppear {
             navigation.showLibrary = storedShowLibrary
+            navigation.inspectorTasks = StudioInspectorTaskMemory.decode(storedInspectorTasks)
+            jobMonitor.attach(controller.jobs)
             // Restore goes through the model so remembered tasks and the Vision Lab variant learn
             // the persisted destination; the reconciled prompt mode replaces a stale studio.mode.
             let restoredMode = navigation.restore(destination: storedDestination, lastPromptMode: lastPromptMode)
@@ -723,6 +847,9 @@ struct StudioRootView: View {
         }
         .onChange(of: navigation.showLibrary) { _, isShown in
             storedShowLibrary = isShown
+        }
+        .onChange(of: navigation.inspectorTasks) { _, tasks in
+            storedInspectorTasks = StudioInspectorTaskMemory.encode(tasks)
         }
         .onChange(of: controller.recommendedChatModelID) { _, _ in
             guard mode == .chat, activeConversationID == nil else { return }
@@ -803,6 +930,8 @@ struct StudioRootView: View {
                 return
             }
 
+            // The card updates in place; selection stays where the user left it, and a finished
+            // card that is scrolled out of view announces itself with the "New result" pill.
             let completedLibraryItem = result.requestID != nil
             if let requestID = result.requestID {
                 library.complete(
@@ -813,7 +942,9 @@ struct StudioRootView: View {
                     commandPreview: result.commandPreview.maskingAPIKeyValue(),
                     artifactURLs: result.artifactURLs
                 )
-                navigation.selectedLibraryID = requestID
+                if result.exitCode == 0, library.items.first(where: { $0.id == requestID })?.mode == mode {
+                    newResultID = requestID
+                }
             }
 
             let mutatedModels = result.templateID == .modelPull
@@ -831,18 +962,23 @@ struct StudioRootView: View {
                 refreshInstalledModels()
             }
         }
-        .onChange(of: controller.activeRunRequestID) { _, requestID in
-            // Conversation turns use a per-turn request id with no matching library row, so the
-            // guard keeps the thread selected instead of deselecting it.
-            guard let requestID, library.items.contains(where: { $0.id == requestID }) else { return }
-            library.markRunning(id: requestID)
-            navigation.selectedLibraryID = requestID
-        }
-        .onChange(of: controller.lastOutputURL) { _, outputURL in
-            guard let requestID = controller.activeRunRequestID, let outputURL,
-                  library.items.contains(where: { $0.id == requestID }) else { return }
-            library.updateOutput(id: requestID, outputURL: outputURL)
-            navigation.selectedLibraryID = requestID
+        .onReceive(controller.jobs.events) { event in
+            // Library bookkeeping follows every job, foreground or background: a row turns
+            // "running" when its process launches and learns its output the moment the file
+            // appears, without moving the selection.
+            switch event {
+            case .started(let job):
+                guard let requestID = job.request.requestID,
+                      library.items.contains(where: { $0.id == requestID }) else { return }
+                library.markRunning(id: requestID)
+            case .changed(let job):
+                guard let requestID = job.request.requestID, let url = job.primaryArtifactURL,
+                      let item = library.items.first(where: { $0.id == requestID }),
+                      item.outputURL != url else { return }
+                library.updateOutput(id: requestID, outputURL: url)
+            case .finished:
+                break
+            }
         }
     }
 
@@ -878,11 +1014,49 @@ struct StudioRootView: View {
     }
 
     /// A Library row the user clicked. Rows of another mode switch the destination first;
-    /// `activateMode` then keeps the clicked row selected.
+    /// `activateMode` then keeps the clicked row selected. The feed scrolls to the row's card
+    /// and outlines it briefly.
     private func selectLibraryItem(_ item: StudioLibraryItem) {
         navigation.selectedLibraryID = item.id
+        highlightCard(item.id)
         guard item.mode != mode || !showsPromptWorkspace else { return }
         navigation.open(destination: item.mode.destination)
+    }
+
+    private func highlightCard(_ id: UUID) {
+        highlightReset?.cancel()
+        highlightedCardID = id
+        highlightReset = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard !Task.isCancelled, highlightedCardID == id else { return }
+            highlightedCardID = nil
+        }
+    }
+
+    private func toggleInspector() {
+        if reduceMotion {
+            navigation.toggleInspector(for: destination.task)
+        } else {
+            withAnimation(MereRunTheme.Motion.standard) {
+                navigation.toggleInspector(for: destination.task)
+            }
+        }
+    }
+
+    /// Prompt tasks flip the Command view column; every other task still opens the Console
+    /// window, which stays the raw surface for their templates.
+    private func toggleCommand() {
+        guard destination.task.isPromptTask else {
+            openConsole()
+            return
+        }
+        if reduceMotion {
+            navigation.toggleCommandColumn(for: destination.task)
+        } else {
+            withAnimation(MereRunTheme.Motion.standard) {
+                navigation.toggleCommandColumn(for: destination.task)
+            }
+        }
     }
 
     private func deleteLibraryItem(_ id: UUID) {
@@ -956,14 +1130,64 @@ struct StudioRootView: View {
             let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
             let preview = controller
                 .commandPreview(template: request.template, draft: request.draft, masksSecrets: true)
-            let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
-                ? .queued
-                : .running
+            let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
             library.start(request: request, commandPreview: preview, status: status)
             navigation.selectedLibraryID = request.id
             controller.run(studio: request)
         } catch {
             studioError = error.localizedDescription
+        }
+    }
+
+    /// The composer's Stop: the run of this mode in flight, or the thread's turn.
+    private func stopModeRun() {
+        if let job = runningFeedJob {
+            jobMonitor.cancel(job)
+        } else {
+            controller.cancel()
+        }
+    }
+
+    /// Takes a queued run out of the queue and drops its row; a stale queued row from an earlier
+    /// launch has no job and is simply dropped.
+    private func removeQueued(_ card: StudioFeedCard) {
+        if let job = card.job { jobMonitor.cancel(job) }
+        deleteLibraryItem(card.id)
+    }
+
+    /// Runs the same command again with a fresh, recorded seed, so the variation is repeatable.
+    private func varyLibraryItem(_ item: StudioLibraryItem) {
+        guard var commandDraft = item.commandDraft else {
+            studioError = "This older Library item does not include a replayable command."
+            return
+        }
+        commandDraft.seed = String(Int.random(in: 1...Int(Int32.max)))
+        runLibraryItem(item, draft: commandDraft)
+    }
+
+    /// Loads an output into the composer's well as the next run's input.
+    private func useOutputAsInput(_ url: URL) {
+        guard draft.attach(dropped: [url], for: mode) else {
+            studioError = "\(mode.title) does not take \(url.lastPathComponent) as an input."
+            return
+        }
+        studioError = nil
+        promptFocused = true
+    }
+
+    /// Copies an output to a location the user picks.
+    private func saveOutput(_ url: URL) {
+        guard let destination = StudioSpecialistFiles.saveFile(
+            title: "Save output",
+            suggestedName: url.lastPathComponent
+        ) else { return }
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: url, to: destination)
+        } catch {
+            studioError = "Could not save \(url.lastPathComponent): \(error.localizedDescription)"
         }
     }
 
@@ -1049,8 +1273,16 @@ struct StudioRootView: View {
     }
 
     private func retryLibraryItem(_ item: StudioLibraryItem) {
+        guard let commandDraft = item.commandDraft else {
+            studioError = "This older Library item does not include a replayable command."
+            return
+        }
+        runLibraryItem(item, draft: commandDraft)
+    }
+
+    /// Submits a Library row's command again as a new row, with `draft` in place of its own.
+    private func runLibraryItem(_ item: StudioLibraryItem, draft commandDraft: CommandDraft) {
         guard let templateID = item.templateID,
-              let commandDraft = item.commandDraft,
               let template = CommandCatalog.template(id: templateID) else {
             studioError = "This older Library item does not include a replayable command."
             return
@@ -1062,9 +1294,7 @@ struct StudioRootView: View {
             draft: commandDraft
         )
         let preview = controller.commandPreview(template: template, draft: commandDraft, masksSecrets: true)
-        let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
-            ? .queued
-            : .running
+        let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
         library.start(request: request, commandPreview: preview, status: status)
         navigation.selectedLibraryID = request.id
         _ = controller.run(studio: request)
@@ -1108,6 +1338,7 @@ struct StudioRootView: View {
         case .createImage, .chat, .code:
             draft.loraPath = reference
             navigation.open(destination: mode.destination)
+            if !navigation.showsInspector(for: mode.task) { navigation.toggleInspector(for: mode.task) }
         default:
             openConsole()
         }
@@ -1237,7 +1468,7 @@ struct StudioRootView: View {
         )
         pendingPullRefresh = StudioReadinessRefresh(mode: request.mode, draft: draft)
         controller.readinessByMode[request.mode] = .checking
-        // The canvas running overlay shows pull progress (bytes, speed, cancel) in place.
+        // The feed's readiness card shows the pull's own progress (bytes, speed, Cancel).
         if !controller.run(studio: effectiveRequest) {
             pendingPullRefresh = nil
             refreshReadiness()
@@ -1305,15 +1536,6 @@ struct StudioRootView: View {
         }
     }
 
-    private func openSelectedOutput() {
-        guard let url = selectedItem?.outputURL else { return }
-        NSWorkspace.shared.open(url)
-    }
-
-    private func revealSelectedOutput() {
-        guard let url = selectedItem?.outputURL else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
 }
 
 /// Which Library rows the column shows: the current domain's, or everything.

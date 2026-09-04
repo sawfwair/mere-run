@@ -6,8 +6,14 @@ import SwiftUI
 struct StudioSceneActions {
     let destination: StudioDestination
     let showLibrary: Binding<Bool>
-    /// False on domains without a prompt workspace, which have no Library column.
+    /// False on tasks without a prompt workspace, which have no Library column.
     let canShowLibrary: Bool
+    /// The inspector column of the current prompt task; false elsewhere.
+    let showInspector: Binding<Bool>
+    let canShowInspector: Bool
+    /// The Command view column on a prompt task; false elsewhere.
+    let showCommand: Binding<Bool>
+    let canShowCommand: Bool
     let open: (StudioDestination) -> Void
     /// Opens a domain at the task last shown there.
     let openDomain: (StudioDomain) -> Void
@@ -17,6 +23,7 @@ struct StudioSceneActions {
     let canRun: Bool
     let stop: () -> Void
     let canStop: Bool
+    /// Opens the Command Console window (the raw surface for every template).
     let openConsole: () -> Void
     let showGuide: () -> Void
     let importReceipt: () -> Void

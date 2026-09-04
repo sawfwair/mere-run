@@ -58,11 +58,22 @@ struct MereRunCommands: Commands {
                 .keyboardShortcut("l", modifiers: [.command, .option])
                 .disabled(actions?.canShowLibrary != true)
 
-            Button("Command Console") {
-                actions?.openConsole()
+            Toggle("Show Inspector", isOn: actions?.showInspector ?? .constant(false))
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                .disabled(actions?.canShowInspector != true)
+
+            // On a prompt task ⌥⌘C flips the Command view column; elsewhere the raw surface is
+            // still the Command Console window until every task renders its own Command view.
+            if actions?.canShowCommand == true {
+                Toggle("Show Command View", isOn: actions?.showCommand ?? .constant(false))
+                    .keyboardShortcut("c", modifiers: [.command, .option])
+            } else {
+                Button("Command Console") {
+                    actions?.openConsole()
+                }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+                .disabled(actions == nil)
             }
-            .keyboardShortcut("c", modifiers: [.command, .option])
-            .disabled(actions == nil)
 
             Divider()
         }
@@ -130,6 +141,10 @@ struct MereRunCommands: Commands {
 
             Link("mere.run", destination: URL(string: "https://mere.run")!)
             Divider()
+            Button("Command Console") {
+                actions?.openConsole()
+            }
+            .disabled(actions == nil)
             Button("Export Diagnostics…") { exportDiagnostics() }
         }
     }
