@@ -12,10 +12,12 @@ import SwiftUI
 struct StudioSidebar: View {
     @Binding var selectedDomain: StudioDomain
     let unavailableMessages: [StudioDomain: String]
-    let serverStatus: StudioServerStatus?
-    let resolvedCLI: String
-    let onShowServer: () -> Void
-    let onShowModels: () -> Void
+    let status: StudioMachineStatus
+    /// How many jobs are running right now; the footer pill counts them beside the machine state.
+    let runningJobs: Int
+    /// Whether the Activity popover is open. The popover itself is drawn by the shell, over the
+    /// whole window: it is wider than this column and would otherwise be clipped by it.
+    @Binding var isActivityOpen: Bool
 
     var body: some View {
         List(selection: selectionBinding) {
@@ -104,15 +106,10 @@ struct StudioSidebar: View {
     }
 
     private var footer: some View {
-        StudioStatusCluster(
-            serverStatus: serverStatus,
-            resolvedCLI: resolvedCLI,
-            onShowServer: onShowServer,
-            onShowModels: onShowModels
-        )
-        .padding(.horizontal, 10)
-        .padding(.top, 10)
-        .padding(.bottom, 14)
+        StudioStatusCluster(status: status, runningJobs: runningJobs, isActivityOpen: $isActivityOpen)
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 14)
     }
 }
 
@@ -174,6 +171,13 @@ enum StudioMachineStatus: Equatable {
         }
     }
 
+    /// The footer pill with the work count appended: "Ready · 92 models · 2 running". The count is
+    /// dropped when nothing is in flight, so a quiet machine keeps the quiet line.
+    func summary(runningJobs: Int) -> String {
+        guard runningJobs > 0 else { return summary }
+        return "\(summary) · \(runningJobs) running"
+    }
+
     /// The server line in the details popover.
     var serverDetail: String {
         switch self {
@@ -206,6 +210,12 @@ enum StudioMachineStatus: Equatable {
         }
     }
 
+    /// The pill's label color. Only a machine we cannot reach is worth colouring: it is the one
+    /// state the user has to act on.
+    var summaryColor: Color {
+        self == .unreachable ? MereRunTheme.red : MereRunTheme.textSecondary
+    }
+
     var isServing: Bool {
         if case .serving = self { return true }
         return false
@@ -216,32 +226,30 @@ enum StudioMachineStatus: Equatable {
     }
 }
 
-/// One quiet line for machine state — dot, word, count — with the full story in a popover.
+/// One quiet line for machine state — dot, word, count — and the button that opens the Activity
+/// popover with the work in flight.
 private struct StudioStatusCluster: View {
-    let serverStatus: StudioServerStatus?
-    let resolvedCLI: String
-    let onShowServer: () -> Void
-    let onShowModels: () -> Void
+    let status: StudioMachineStatus
+    let runningJobs: Int
+    @Binding var isActivityOpen: Bool
 
-    @State private var showDetails = false
     @State private var hovering = false
-    @State private var probeTimedOut = false
 
-    private var status: StudioMachineStatus {
-        StudioMachineStatus(serverStatus: serverStatus, probeTimedOut: probeTimedOut)
+    private var summary: String {
+        status.summary(runningJobs: runningJobs)
     }
 
     var body: some View {
         Button {
-            showDetails.toggle()
+            isActivityOpen.toggle()
         } label: {
             HStack(spacing: 8) {
                 Circle()
                     .fill(status.dotColor)
                     .frame(width: 8, height: 8)
-                Text(status.summary)
+                Text(summary)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .foregroundStyle(status.summaryColor)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.down")
@@ -252,150 +260,18 @@ private struct StudioStatusCluster: View {
             .frame(height: 32)
             .background {
                 RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
-                    .fill(hovering || showDetails ? MereRunTheme.hoverFill : Color.clear)
+                    .fill(hovering || isActivityOpen ? MereRunTheme.hoverFill : Color.clear)
             }
             .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.md))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(MereRunTheme.Motion.quick, value: hovering)
-        // The controller publishes nil until the probe answers; a probe that never answers must
-        // still resolve, so the footer stops saying "Checking…" after the grace period.
-        .task(id: serverStatus == nil) {
-            guard serverStatus == nil else {
-                probeTimedOut = false
-                return
-            }
-            try? await Task.sleep(for: .seconds(StudioMachineStatus.checkingGracePeriod))
-            guard !Task.isCancelled, serverStatus == nil else { return }
-            probeTimedOut = true
-        }
-        .popover(isPresented: $showDetails, arrowEdge: .top) {
-            StudioStatusDetails(
-                status: status,
-                resolvedCLI: resolvedCLI,
-                onShowServer: {
-                    showDetails = false
-                    onShowServer()
-                },
-                onShowModels: {
-                    showDetails = false
-                    onShowModels()
-                }
-            )
-        }
-        .accessibilityLabel("Machine status")
-        .accessibilityValue(status.summary)
-        .accessibilityHint("Shows local server details and opens the Server domain")
-    }
-}
-
-private struct StudioStatusDetails: View {
-    let status: StudioMachineStatus
-    let resolvedCLI: String
-    let onShowServer: () -> Void
-    let onShowModels: () -> Void
-
-    @State private var copiedCLI = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
-            detailRow(
-                icon: "bolt.horizontal.circle",
-                title: "Local server",
-                value: status.serverDetail,
-                valueColor: serverValueColor
-            )
-
-            Button {
-                onShowServer()
-            } label: {
-                Label("Open Server", systemImage: "network")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.merePrimary)
-
-            HStack(alignment: .firstTextBaseline) {
-                detailRow(
-                    icon: "shippingbox",
-                    title: "Models",
-                    value: status.modelsDetail,
-                    valueColor: MereRunTheme.textSecondary
-                )
-                Spacer(minLength: 12)
-                Button("Browse…", action: onShowModels)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 7) {
-                    Image(systemName: "terminal")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(MereRunTheme.accent)
-                        .frame(width: 16)
-                    Text("CLI")
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                    Spacer(minLength: 12)
-                    Button {
-                        copyCLI()
-                    } label: {
-                        Image(systemName: copiedCLI ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 10, weight: .semibold))
-                            .padding(3)
-                    }
-                    .buttonStyle(.mereIcon)
-                    .help("Copy CLI path")
-                    .accessibilityLabel("Copy CLI path")
-                }
-                Text(resolvedCLI)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(MereRunTheme.textSecondary)
-                    .textSelection(.enabled)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-            }
-        }
-        .padding(MereRunTheme.Spacing.lg)
-        .frame(width: 320)
-    }
-
-    private var serverValueColor: Color {
-        switch status {
-        case .serving: return MereRunTheme.green
-        case .unreachable: return MereRunTheme.red
-        case .checking, .ready: return MereRunTheme.textSecondary
-        }
-    }
-
-    private func detailRow(icon: String, title: String, value: String, valueColor: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-                    .frame(width: 16)
-                Text(title)
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Text(value)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(valueColor)
-                .lineLimit(2)
-        }
-    }
-
-    private func copyCLI() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(resolvedCLI, forType: .string)
-        copiedCLI = true
-        Task {
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            copiedCLI = false
-        }
+        // A narrow sidebar truncates the line; the tooltip keeps the whole of it reachable.
+        .help(summary)
+        .accessibilityLabel("Activity and machine status")
+        .accessibilityValue(summary)
+        .accessibilityHint("Shows the jobs in flight, the local server, and a way into the Server page")
     }
 }
 

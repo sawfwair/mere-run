@@ -138,6 +138,8 @@ enum MereRunTheme {
         static let base: CGFloat = 8
         static let md: CGFloat = 9
         static let lg: CGFloat = 10
+        /// Floating panels that overlay the shell (the Activity popover).
+        static let popover: CGFloat = 12
         static let xl: CGFloat = 18
         static let xxl: CGFloat = 20
     }

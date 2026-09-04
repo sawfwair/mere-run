@@ -499,6 +499,9 @@ final class NavigationModel: ObservableObject {
     @Published var showCommandColumn = false
     /// Help ▸ mere.run Guide presents the Guide sheet on the Studio window from any key window.
     @Published var showGuide = false
+    /// Whether the sidebar footer's Activity popover is open. The shell draws it over the window,
+    /// so the state lives here rather than inside the sidebar column.
+    @Published var showActivity = false
 
     init(destination: StudioDestination = .default) {
         self.destination = destination
