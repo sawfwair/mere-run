@@ -54,8 +54,8 @@ imported row. External launchers must never edit `library.json` directly.
   and the CLI launch into a `JobRequest` for every lane, awaits utility and
   probe jobs on behalf of their callers (readiness results are evaluated
   against the request current at completion), mirrors the foreground inference
-  job into its published console fields, and still owns the Advanced draft and
-  persisted settings.
+  job into its published console fields, and still owns the template selection
+  the Command Console opens on and the persisted settings.
 - `StudioLibraryStore.swift`: local library persistence.
 
 ## Shell
@@ -255,16 +255,32 @@ brings Terminal forward; the app never scripts another application), and Run.
 Values are read-only until every task renders an editable contract form; the
 chips and inspector edit them. Readiness cards' Details button opens it.
 
-The **Command Console** window (`Window("Command Console")`) remains the raw
-surface for every other template — template sidebar, editor, and run console in
-three resizable panes. It opens from the header's Command toggle on non-prompt
-tasks, ⌥⌘C there, Help ▸ Command Console anywhere, a Library row's "Edit
-command…", and the adapter fallbacks for modes whose adapters are typed only in
-the raw command. Opening it from the header carries the composer's draft into
-the matching template; raising an already-open console only brings it forward,
-so its edits stay. The console's own Run stays independent of the composer's,
-and while the console is key the Run menu drives it while Go and Help keep
-acting on the Studio window.
+The **Command Console** window (`Window("Command Console")`,
+`StudioConsoleView.swift`) is the raw surface for every capability, in three
+resizable panes: the catalog of templates by category, the selected
+capability's form, and the run's log with its receipt and artifact
+(`StudioConsoleLog.swift`). The middle pane is the same `ContractForm`, drawn
+with the flag rather than the label at the head of each row, so the console has
+no per-command view of its own: `StudioConsoleDraft` keeps one value per flag,
+`StudioConsoleCommand` reads a template's own argv into those values and builds
+the argv back out of them, and the eyebrows, controls, dependencies, positional
+arguments and "Will run" block all come from `MereRunCapabilityCatalog`. A
+capability nobody has designed a surface for is therefore reachable here the day
+the contract declares it, and `StudioConsoleDraftTests` holds the identity that
+makes that safe: for every template in the catalog, seeding from its default
+command and rebuilding produces the same command. Options the contract does not
+describe go in Extra arguments; the Custom template is a plain argument editor.
+
+It opens from the header's Command toggle on non-prompt tasks, ⌥⌘C there,
+Help ▸ Command Console anywhere, a Library row's "Edit command…", and the
+adapter fallbacks for modes whose adapters are typed only in the raw command.
+Opening it from the header carries the composer's draft into the matching
+template; a Library row reopens on the exact argv its run launched
+(`StudioLibraryItem.commandArguments`); raising an already-open console only
+brings it forward, so its edits stay. A console run is a normal inference job —
+same queue, progress, artifact resolution and Library row — and while the
+console is key the Run menu drives it while Go and Help keep acting on the
+Studio window.
 
 Do not duplicate runtime logic here. The app should translate UI state into CLI
 arguments and let the public executable remain the behavioral source of truth.
@@ -474,8 +490,9 @@ recorded decision that it should not have one.
 
 `StudioSnapshotTests` renders the shell for visual review without driving the
 live app: every domain at its default task at 1280×820 in light and dark, plus
-the Settings content and the Command Console, and fidelity renders at the
-1440×900 mockup size for comparing against the design boards: the Main board
+the Settings content, and fidelity renders at the
+1440×900 mockup size for comparing against the design boards: the Command
+Console on `image generate`, the Main board
 (Image ▸ Generate with a finished generation of two in-test images, a run held
 open by the process seam mid-denoise, a queued run behind a concurrent model
 pull, and the inspector open with two changed settings; then the same feed with
