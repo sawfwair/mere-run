@@ -21,6 +21,16 @@ where the pipeline reports steps, `--progress-json`; the line shapes are
 documented on `MereRunCapabilityCatalog.resultReceiptExample` and
 `progressEventExample`.
 
+Each capability's `output` says what one successful run leaves behind. `kind`
+describes the run with no destination named: `text` prints to stdout, `service`
+runs until it is stopped, and `file` or `directory` always writes the artifact.
+`flag` names the option that carries the destination path, and `optional` marks
+the artifact a run writes only when that flag is passed — so a `text`
+capability with a `flag` prints its result and additionally saves it on
+request. Look `flag` up in `options` to learn whether it names a file or a
+directory. `flag` stays `nil` only where the command chooses the location
+itself; `capabilityFileOutputsDeclareADestinationFlag` lists those.
+
 When extending the contract:
 
 - Add only public CLI capabilities that a shell needs to discover or invoke.
