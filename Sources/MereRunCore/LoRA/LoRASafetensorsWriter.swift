@@ -28,16 +28,16 @@ public enum LoRASafetensorsWriter {
             // Optionally save optimizer state (for resumable training)
             if includeOptimizerState {
                 if let m = layer.loraDownM {
-                    arrays["\(path).lora_down.m"] = m.asType(dtype)
+                    arrays["\(path).lora_down.m"] = m.asType(.float32)
                 }
                 if let v = layer.loraDownV {
-                    arrays["\(path).lora_down.v"] = v.asType(dtype)
+                    arrays["\(path).lora_down.v"] = v.asType(.float32)
                 }
                 if let m = layer.loraUpM {
-                    arrays["\(path).lora_up.m"] = m.asType(dtype)
+                    arrays["\(path).lora_up.m"] = m.asType(.float32)
                 }
                 if let v = layer.loraUpV {
-                    arrays["\(path).lora_up.v"] = v.asType(dtype)
+                    arrays["\(path).lora_up.v"] = v.asType(.float32)
                 }
             }
         }

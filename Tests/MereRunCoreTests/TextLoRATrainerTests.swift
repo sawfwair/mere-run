@@ -102,6 +102,313 @@ final class TextLoRATrainerTests: MereRunCoreTestCase {
         XCTAssertTrue(recorder.savingSeen)
     }
 
+    func testNativeTrainerResumesLegacyCheckpointAtGlobalStep() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let example = TextSFTTokenizedExample(
+            inputTokenIds: [0, 1, 2],
+            labelTokenIds: [1, 2, 3],
+            lossMask: [0, 1, 1]
+        )
+        let metadata = [
+            "base_model": "tiny-causal-lm",
+            "dataset_fingerprint": "tiny-dataset",
+            "format": "mererun.text-lora.test",
+            "max_sequence_length": "128",
+        ]
+
+        MLXRandom.seed(73)
+        let continuousModel = TinyCausalLM()
+        let continuousLayers = try Gemma4TextLoRAInjector.inject(
+            into: continuousModel,
+            rank: 2,
+            targetSuffixes: ["proj"]
+        )
+        let continuousReport = try TextLoRATrainer.train(
+            model: continuousModel,
+            loraLayers: continuousLayers,
+            examples: [example],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 4,
+                batchSize: 1,
+                learningRate: 0.02,
+                seed: 19
+            ),
+            metadata: metadata
+        ) { model, inputIds in
+            model(inputIds)
+        }
+
+        MLXRandom.seed(73)
+        let interruptedModel = TinyCausalLM()
+        let interruptedLayers = try Gemma4TextLoRAInjector.inject(
+            into: interruptedModel,
+            rank: 2,
+            targetSuffixes: ["proj"]
+        )
+        _ = try TextLoRATrainer.train(
+            model: interruptedModel,
+            loraLayers: interruptedLayers,
+            examples: [example],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 2,
+                batchSize: 1,
+                learningRate: 0.02,
+                seed: 19
+            ),
+            metadata: metadata
+        ) { model, inputIds in
+            model(inputIds)
+        }
+        let legacyCheckpointURL = directory.appendingPathComponent("legacy.partial.safetensors")
+        try LoRASafetensorsWriter.save(
+            loraLayers: interruptedLayers,
+            to: legacyCheckpointURL,
+            includeOptimizerState: true,
+            metadata: metadata
+        )
+        let (legacyArrays, _) = try MLX.loadArraysAndMetadata(url: legacyCheckpointURL)
+        XCTAssertEqual(legacyArrays["proj.lora_down.weight"]?.dtype, .float16)
+        XCTAssertEqual(legacyArrays["proj.lora_down.m"]?.dtype, .float32)
+        XCTAssertEqual(legacyArrays["proj.lora_down.v"]?.dtype, .float32)
+
+        MLXRandom.seed(73)
+        let resumedModel = TinyCausalLM()
+        let resumedLayers = try Gemma4TextLoRAInjector.inject(
+            into: resumedModel,
+            rank: 2,
+            targetSuffixes: ["proj"]
+        )
+        let recorder = TextTrainingProgressRecorder()
+        let resumedOutputURL = directory.appendingPathComponent("resumed.safetensors")
+        let report = try TextLoRATrainer.train(
+            model: resumedModel,
+            loraLayers: resumedLayers,
+            examples: [example],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 4,
+                batchSize: 1,
+                learningRate: 0.02,
+                seed: 19,
+                resumeFrom: legacyCheckpointURL,
+                resumeStep: 2
+            ),
+            outputURL: resumedOutputURL,
+            metadata: metadata,
+            progressHandler: { progress in
+                if case .training(let step, _, _) = progress.stage {
+                    recorder.record(step: step)
+                }
+            }
+        ) { model, inputIds in
+            model(inputIds)
+        }
+
+        XCTAssertEqual(report.steps, 4)
+        XCTAssertEqual(recorder.steps, [4])
+        let continuousLayer = try XCTUnwrap(continuousLayers["proj"])
+        let resumedLayer = try XCTUnwrap(resumedLayers["proj"])
+        XCTAssertLessThan(
+            MLX.abs(continuousLayer.loraDown - resumedLayer.loraDown).max().item(Float.self),
+            0.02
+        )
+        XCTAssertLessThan(
+            MLX.abs(continuousLayer.loraUp - resumedLayer.loraUp).max().item(Float.self),
+            0.02
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(report.finalLoss),
+            try XCTUnwrap(continuousReport.finalLoss),
+            accuracy: 0.003
+        )
+
+        let (_, savedMetadata) = try MLX.loadArraysAndMetadata(url: resumedOutputURL)
+        XCTAssertEqual(savedMetadata["checkpoint_schema"], TextLoRACheckpointLoader.checkpointSchema)
+        XCTAssertEqual(savedMetadata["completed_steps"], "4")
+        let sidecar = try XCTUnwrap(LoRATrainingCheckpointState.load(nextTo: resumedOutputURL))
+        XCTAssertEqual(sidecar.step, 4)
+        XCTAssertEqual(sidecar.totalSteps, 4)
+    }
+
+    func testResumeCheckpointRequiresCompleteOptimizerState() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        MLXRandom.seed(79)
+        let model = TinyCausalLM()
+        let layers = try Gemma4TextLoRAInjector.inject(
+            into: model,
+            rank: 2,
+            targetSuffixes: ["proj"]
+        )
+        let checkpointURL = directory.appendingPathComponent("weights-only.safetensors")
+        let metadata = [
+            "base_model": "tiny-causal-lm",
+            "dataset_fingerprint": "tiny-dataset",
+            "format": "mererun.text-lora.test",
+            "max_sequence_length": "128",
+        ]
+        try LoRASafetensorsWriter.save(
+            loraLayers: layers,
+            to: checkpointURL,
+            metadata: metadata
+        )
+
+        XCTAssertThrowsError(
+            try TextLoRACheckpointLoader.load(
+                from: checkpointURL,
+                into: layers,
+                config: TextLoRATrainingConfig(
+                    trainingSteps: 4,
+                    batchSize: 1,
+                    learningRate: 0.02,
+                    resumeFrom: checkpointURL,
+                    resumeStep: 2
+                ),
+                expectedMetadata: metadata
+            )
+        ) { error in
+            guard case TextLoRACheckpointError.optimizerStateRequired = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testResumeCheckpointRejectsLossyOptimizerState() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        MLXRandom.seed(81)
+        let model = TinyCausalLM()
+        let layers = try Gemma4TextLoRAInjector.inject(
+            into: model,
+            rank: 2,
+            targetSuffixes: ["proj"]
+        )
+        TextLoRATrainer.initializeAdamStateIfNeeded(for: layers)
+        let checkpointURL = directory.appendingPathComponent("lossy.safetensors")
+        let metadata = [
+            "base_model": "tiny-causal-lm",
+            "dataset_fingerprint": "tiny-dataset",
+            "format": "mererun.text-lora.test",
+            "has_optimizer_state": "true",
+            "lora_alpha": String(try XCTUnwrap(layers["proj"]).loraAlpha),
+            "lora_rank": "2",
+            "max_sequence_length": "128",
+        ]
+        var arrays: [String: MLXArray] = [:]
+        for (path, layer) in layers {
+            arrays["\(path).lora_down.weight"] = layer.loraDown.asType(.float16)
+            arrays["\(path).lora_up.weight"] = layer.loraUp.asType(.float16)
+            arrays["\(path).lora_down.m"] = try XCTUnwrap(layer.loraDownM).asType(.float16)
+            arrays["\(path).lora_down.v"] = try XCTUnwrap(layer.loraDownV).asType(.float16)
+            arrays["\(path).lora_up.m"] = try XCTUnwrap(layer.loraUpM).asType(.float16)
+            arrays["\(path).lora_up.v"] = try XCTUnwrap(layer.loraUpV).asType(.float16)
+        }
+        try MLX.save(arrays: arrays, metadata: metadata, url: checkpointURL)
+
+        XCTAssertThrowsError(
+            try TextLoRACheckpointLoader.load(
+                from: checkpointURL,
+                into: layers,
+                config: TextLoRATrainingConfig(
+                    trainingSteps: 4,
+                    batchSize: 1,
+                    learningRate: 0.02,
+                    seed: 23,
+                    resumeFrom: checkpointURL,
+                    resumeStep: 2
+                ),
+                expectedMetadata: metadata
+            )
+        ) { error in
+            guard case TextLoRACheckpointError.optimizerStateDTypeMismatch = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testSelfDescribingResumeCheckpointLoadsWithoutStepOverride() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        MLXRandom.seed(83)
+        let sourceModel = TinyCausalLM()
+        let sourceLayers = try Gemma4TextLoRAInjector.inject(
+            into: sourceModel,
+            rank: 2,
+            targetSuffixes: ["proj"]
+        )
+        TextLoRATrainer.initializeAdamStateIfNeeded(for: sourceLayers)
+        let checkpointURL = directory.appendingPathComponent("step-2.safetensors")
+        let metadata = [
+            "base_model": "tiny-causal-lm",
+            "dataset_fingerprint": "tiny-dataset",
+            "format": "mererun.text-lora.test",
+            "max_sequence_length": "128",
+        ]
+        let config = TextLoRATrainingConfig(
+            trainingSteps: 4,
+            batchSize: 1,
+            learningRate: 0.02,
+            seed: 23,
+            resumeFrom: checkpointURL
+        )
+        try LoRASafetensorsWriter.save(
+            loraLayers: sourceLayers,
+            to: checkpointURL,
+            includeOptimizerState: true,
+            metadata: TextLoRACheckpointLoader.checkpointMetadata(
+                base: metadata,
+                config: config,
+                loraLayers: sourceLayers,
+                completedSteps: 2
+            )
+        )
+        try LoRATrainingCheckpointState(
+            format: "mererun.text-lora.test",
+            baseModel: "tiny-causal-lm",
+            checkpointFile: checkpointURL.lastPathComponent,
+            step: 2,
+            totalSteps: 4,
+            seed: 23,
+            rngState: nil,
+            datasetFingerprint: "tiny-dataset",
+            configFingerprint: TextLoRACheckpointLoader.configFingerprint(
+                config: config,
+                loraLayers: sourceLayers,
+                metadata: metadata
+            )
+        ).write(nextTo: checkpointURL)
+
+        MLXRandom.seed(89)
+        let destinationModel = TinyCausalLM()
+        let destinationLayers = try Gemma4TextLoRAInjector.inject(
+            into: destinationModel,
+            rank: 2,
+            targetSuffixes: ["proj"]
+        )
+        let report = try TextLoRACheckpointLoader.load(
+            from: checkpointURL,
+            into: destinationLayers,
+            config: config,
+            expectedMetadata: metadata
+        )
+
+        XCTAssertEqual(report.completedSteps, 2)
+        XCTAssertEqual(report.layerCount, 1)
+        XCTAssertFalse(report.usedLegacyStepOverride)
+    }
+
     func testNativeTrainerReportsBeforeAndAfterEvaluationLoss() throws {
         MLXRandom.seed(31)
         let model = TinyCausalLM()

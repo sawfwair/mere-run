@@ -120,6 +120,25 @@ mere.run text train-lora \
   --visualize
 ```
 
+The trainer writes an optimizer-bearing partial checkpoint every 100 steps.
+To continue an interrupted run, use the same model, dataset, recipe, seed, and
+total step count:
+
+```bash
+mere.run text train-lora \
+  --data ./pairs.seed.jsonl \
+  --eval ./eval.prompts.jsonl \
+  --output ./local-assistant-resumed.safetensors \
+  --model text-chat-gemma4-12b-4bit \
+  --training-steps 600 \
+  --resume-from ./local-assistant.partial.safetensors
+```
+
+The command restores the global data-order and Adam optimizer step. It rejects
+mismatched models, datasets, recipes, layer inventories, and tensor shapes.
+For a checkpoint that predates embedded step state, also specify the verified
+completed step with `--resume-step`.
+
 For an LFM2.5 A1B canary, use the same reviewed dataset format and a 10-step
 attention-only run:
 

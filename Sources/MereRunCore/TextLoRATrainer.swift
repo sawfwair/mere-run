@@ -11,6 +11,8 @@ public struct TextLoRATrainingConfig: Sendable, Hashable {
     public let beta2: Float
     public let epsilon: Float
     public let seed: UInt64
+    public let resumeFrom: URL?
+    public let resumeStep: Int?
 
     public init(
         trainingSteps: Int,
@@ -20,7 +22,9 @@ public struct TextLoRATrainingConfig: Sendable, Hashable {
         beta1: Float = 0.9,
         beta2: Float = 0.999,
         epsilon: Float = 1e-8,
-        seed: UInt64 = 42
+        seed: UInt64 = 42,
+        resumeFrom: URL? = nil,
+        resumeStep: Int? = nil
     ) {
         self.trainingSteps = trainingSteps
         self.batchSize = batchSize
@@ -30,6 +34,8 @@ public struct TextLoRATrainingConfig: Sendable, Hashable {
         self.beta2 = beta2
         self.epsilon = epsilon
         self.seed = seed
+        self.resumeFrom = resumeFrom
+        self.resumeStep = resumeStep
     }
 }
 
@@ -136,6 +142,31 @@ public enum TextLoRATrainer {
             guard let module = layer as? Module else { continue }
             try module.unfreeze(recursive: false, keys: ["loraDown", "loraUp"], strict: true)
         }
+
+        var resolvedResumeCheckpoint: LoRAResolvedCheckpoint?
+        var resumeStep = 0
+        if let resumeFrom = config.resumeFrom {
+            let resolved = try LoRACheckpointResolver.resolve(resumeFrom)
+            resolvedResumeCheckpoint = resolved
+            let report = try TextLoRACheckpointLoader.load(
+                from: resolved.checkpointURL,
+                into: loraLayers,
+                config: config,
+                expectedMetadata: metadata
+            )
+            resumeStep = report.completedSteps
+            if let outputURL {
+                LoRATrainingResumeArtifacts.restore(
+                    from: resolved.checkpointURL,
+                    sidecar: try LoRATrainingCheckpointState.load(nextTo: resolved.checkpointURL),
+                    to: outputURL
+                )
+            }
+            FileHandle.standardError.write(Data(
+                "[text-lora-train] resumed_from=\(resolved.checkpointURL.lastPathComponent) completed_steps=\(resumeStep) layers=\(report.layerCount) legacy_step_override=\(report.usedLegacyStepOverride)\n".utf8
+            ))
+        }
+        defer { resolvedResumeCheckpoint?.cleanup() }
         initializeAdamStateIfNeeded(for: loraLayers)
 
         let orderedLayers = loraLayers
@@ -210,7 +241,9 @@ public enum TextLoRATrainer {
                 withIntermediateDirectories: true
             )
         }
-        let metricsLogger = try outputURL.map { try LoRATrainingMetricsLogger(baseOutputURL: $0, resumeExisting: false) }
+        let metricsLogger = try outputURL.map {
+            try LoRATrainingMetricsLogger(baseOutputURL: $0, resumeExisting: resumeStep > 0)
+        }
         let trainingOrder = makeTrainingOrder(
             exampleCount: examples.count,
             drawCount: config.trainingSteps * config.batchSize,
@@ -223,9 +256,9 @@ public enum TextLoRATrainer {
             $0.deletingPathExtension().appendingPathExtension("partial").appendingPathExtension("safetensors")
         }
         var lastBoundaryTime = Date()
-        var lastBoundaryStep = 0
+        var lastBoundaryStep = resumeStep
 
-        for step in 0..<config.trainingSteps {
+        for step in resumeStep..<config.trainingSteps {
             let batchExamples = scheduledBatch(
                 examples,
                 order: trainingOrder,
@@ -300,11 +333,26 @@ public enum TextLoRATrainer {
                 )
             )
             if shouldSavePartial, let partialURL {
+                let checkpointMetadata = TextLoRACheckpointLoader.checkpointMetadata(
+                    base: metadata,
+                    config: config,
+                    loraLayers: loraLayers,
+                    completedSteps: stepNumber
+                )
                 try LoRASafetensorsWriter.save(
                     loraLayers: loraLayers,
                     to: partialURL,
                     includeOptimizerState: true,
-                    metadata: metadata
+                    metadata: checkpointMetadata
+                )
+                try writeCheckpointState(
+                    nextTo: partialURL,
+                    step: stepNumber,
+                    config: config,
+                    loraLayers: loraLayers,
+                    metadata: metadata,
+                    lossCSVFile: metricsLogger?.csvURL.lastPathComponent,
+                    lossHTMLFile: metricsLogger?.htmlURL.lastPathComponent
                 )
             }
         }
@@ -325,11 +373,26 @@ public enum TextLoRATrainer {
             ))
         }
         if let outputURL {
+            let checkpointMetadata = TextLoRACheckpointLoader.checkpointMetadata(
+                base: metadata,
+                config: config,
+                loraLayers: loraLayers,
+                completedSteps: config.trainingSteps
+            )
             try LoRASafetensorsWriter.save(
                 loraLayers: loraLayers,
                 to: outputURL,
                 includeOptimizerState: true,
-                metadata: metadata
+                metadata: checkpointMetadata
+            )
+            try writeCheckpointState(
+                nextTo: outputURL,
+                step: config.trainingSteps,
+                config: config,
+                loraLayers: loraLayers,
+                metadata: metadata,
+                lossCSVFile: metricsLogger?.csvURL.lastPathComponent,
+                lossHTMLFile: metricsLogger?.htmlURL.lastPathComponent
             )
             try metricsLogger?.writeArtifacts()
             if let partialURL, FileManager.default.fileExists(atPath: partialURL.path) {
@@ -481,6 +544,51 @@ public enum TextLoRATrainer {
         guard !loraLayers.isEmpty else {
             throw TextLoRATrainerError.noLoRALayers
         }
+        guard config.resumeFrom != nil || config.resumeStep == nil else {
+            throw TextLoRATrainerError.resumeStepWithoutCheckpoint
+        }
+        if let resumeStep = config.resumeStep {
+            guard resumeStep > 0, resumeStep < config.trainingSteps else {
+                throw TextLoRATrainerError.invalidResumeStep(resumeStep, config.trainingSteps)
+            }
+        }
+    }
+
+    private static func writeCheckpointState(
+        nextTo checkpointURL: URL,
+        step: Int,
+        config: TextLoRATrainingConfig,
+        loraLayers: [String: TrainableLoRALayer],
+        metadata: [String: String],
+        lossCSVFile: String?,
+        lossHTMLFile: String?
+    ) throws {
+        let state = LoRATrainingCheckpointState(
+            format: metadata["format"] ?? "mererun.text-lora",
+            baseModel: metadata["base_model"] ?? "",
+            checkpointFile: checkpointURL.lastPathComponent,
+            step: step,
+            totalSteps: config.trainingSteps,
+            seed: config.seed,
+            rngState: nil,
+            datasetFingerprint: metadata["dataset_fingerprint"],
+            configFingerprint: TextLoRACheckpointLoader.configFingerprint(
+                config: config,
+                loraLayers: loraLayers,
+                metadata: metadata
+            ),
+            configSnapshot: [
+                "batch_size": String(config.batchSize),
+                "beta1": String(config.beta1),
+                "beta2": String(config.beta2),
+                "epsilon": String(config.epsilon),
+                "learning_rate": String(config.learningRate),
+                "weight_decay": String(config.weightDecay),
+            ],
+            lossCSVFile: lossCSVFile,
+            lossHTMLFile: lossHTMLFile
+        )
+        try state.write(nextTo: checkpointURL)
     }
 
     static func makeTrainingOrder(
@@ -547,6 +655,8 @@ public enum TextLoRATrainerError: Error, LocalizedError, Sendable {
     case emptyDataset
     case noLoRALayers
     case incompleteMultimodalConfiguration
+    case resumeStepWithoutCheckpoint
+    case invalidResumeStep(Int, Int)
 
     public var errorDescription: String? {
         switch self {
@@ -562,6 +672,10 @@ public enum TextLoRATrainerError: Error, LocalizedError, Sendable {
             return "Text LoRA training requires at least one injected LoRA layer."
         case .incompleteMultimodalConfiguration:
             return "Text LoRA multimodal training requires both a batch builder and gathered forward."
+        case .resumeStepWithoutCheckpoint:
+            return "Text LoRA resume step requires a checkpoint."
+        case .invalidResumeStep(let step, let total):
+            return "Text LoRA resume step \(step) must be greater than zero and below total steps \(total)."
         }
     }
 }

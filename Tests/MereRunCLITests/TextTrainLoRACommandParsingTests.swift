@@ -24,6 +24,8 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.rank, 16)
         XCTAssertEqual(cmd.maxSequenceLength, 4096)
         XCTAssertEqual(cmd.reasoningEffort, 0.9)
+        XCTAssertNil(cmd.resumeFrom)
+        XCTAssertNil(cmd.resumeStep)
         XCTAssertFalse(cmd.dryRun)
         XCTAssertFalse(cmd.visualize)
         XCTAssertEqual(cmd.visualizePort, 8787)
@@ -45,6 +47,8 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
             "--max-sequence-length", "2048",
             "--reasoning-effort", "0.2",
             "--target-modules", "q_proj,v_proj",
+            "--resume-from", "/tmp/checkpoint.safetensors",
+            "--resume-step", "12",
             "--visualize",
             "--visualize-port", "8788",
             "--dry-run",
@@ -62,6 +66,8 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.alpha, 16)
         XCTAssertEqual(cmd.maxSequenceLength, 2048)
         XCTAssertEqual(cmd.reasoningEffort, 0.2)
+        XCTAssertEqual(cmd.resumeFrom, "/tmp/checkpoint.safetensors")
+        XCTAssertEqual(cmd.resumeStep, 12)
         XCTAssertTrue(cmd.visualize)
         XCTAssertEqual(cmd.visualizePort, 8788)
         XCTAssertTrue(cmd.dryRun)
