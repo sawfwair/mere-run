@@ -67,14 +67,23 @@ struct StudioConverseView: View {
             // A thread that has not started yet gets the full readiness card; one with turns
             // keeps its transcript visible and shows the compact notice above it instead.
             if needsAttention && !hasTurns {
-                StudioReadinessOverlay(
-                    title: error == nil ? readiness.title : "Needs attention",
-                    message: error ?? readiness.message,
-                    canPull: error == nil && readiness.canPull,
-                    isChecking: error == nil && readiness.isChecking,
-                    onPullModel: onPullModel,
-                    onShowDetails: onShowDetails
-                )
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    if error == nil {
+                        StudioReadinessCard(
+                            readiness: readiness,
+                            pullJob: nil,
+                            onPullModel: onPullModel,
+                            onShowDetails: onShowDetails,
+                            onCancelPull: { _ in }
+                        )
+                    } else {
+                        readinessNotice
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: StudioThreadHeader.maxWidth)
+                .padding(.horizontal, 24)
                 .transition(.opacity)
             }
         }
@@ -136,10 +145,10 @@ struct StudioThreadHeader: View {
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
-            StudioModelPicker(
+            StudioModelChip(
                 mode: mode,
                 model: $model,
-                inventory: modelInventory,
+                modelInventory: modelInventory,
                 readiness: readiness,
                 onShowModels: onShowModels
             )
@@ -307,7 +316,7 @@ struct StudioConversationView: View {
         var parts: [String] = []
         let modelID = message.model ?? item?.model ?? ""
         if !modelID.isBlank {
-            parts.append(StudioModelPicker.displayModelName(modelID))
+            parts.append(StudioModelNaming.displayName(modelID))
         }
         if let tokensPerSecond = message.tokensPerSecond, tokensPerSecond > 0 {
             parts.append("\(Int(tokensPerSecond.rounded())) tok/s")

@@ -854,7 +854,7 @@ struct StudioRootView: View {
         ConversationTranscript.budgetChars(
             contextTokens: ConversationTranscript.contextTokens(
                 requestedContextSize: draft.contextSize,
-                model: StudioModelPicker.resolvedModelID(draft.model, mode: mode),
+                model: StudioModelNaming.resolvedModelID(for: mode, model: draft.model),
                 inventory: modelInventory
             ),
             maxOutputTokens: draft.maxTokens

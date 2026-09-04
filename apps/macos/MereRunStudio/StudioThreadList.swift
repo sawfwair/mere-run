@@ -61,8 +61,8 @@ enum StudioThreadListPresenter {
 
     /// The friendly name of the model the thread last ran with, or the preset's default.
     static func modelLabel(for thread: StudioLibraryItem) -> String {
-        let identity = StudioModelPicker.resolvedModelID(thread.model ?? "", mode: thread.mode)
-        return identity.isEmpty ? "Auto" : StudioModelPicker.displayModelName(identity)
+        let identity = StudioModelNaming.resolvedModelID(for: thread.mode, model: thread.model ?? "")
+        return identity.isEmpty ? "Auto" : StudioModelNaming.displayName(identity)
     }
 
     static func activityLabel(for date: Date, now: Date, calendar: Calendar) -> String {
