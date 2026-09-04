@@ -47,10 +47,10 @@ domain has **tasks** in a 52pt header at the top of the content column, beside
 the Library (the window toolbar stays empty so the Library column runs to the
 top of the window): one segmented pill for up to six tasks, or five segments
 plus a "More" menu segment for Vision. The header's leading item is the domain
-glyph, title, and one-line subtitle; trailing are the Library, Inspector
-(placeholder, disabled), and Command Console toggles.
+glyph, title, and one-line subtitle; trailing are the Library, Inspector, and
+Command toggles (the Library and Inspector toggles appear on prompt tasks only).
 Twelve tasks are the composer-driven prompt modes (`StudioMode`) and
-keep the canvas, composer, and Library column; every other task hosts a former
+keep the feed, composer, and Library column; every other task hosts a former
 specialist sheet inline, full height, with its own controls and no Done button.
 Nothing that used to be a sheet is modal any more; the remaining sheets are
 true tasks (third-party terms, the image mask editor, Relay sign-in, rename,
@@ -58,9 +58,10 @@ and the Guide). `StudioDestination` (domain + task) persists per window under
 `studio.destination`; `studio.mode` still records the last prompt mode so its
 draft and readiness survive a detour through a System task.
 
-The Library column appears in the domains that have a prompt mode (Image, Video,
-Music, Sound, Voice, Chat, Vision, Audio); the form- and list-shaped domains use
-the full width. It is filtered to the current domain by default with an All
+The Library column appears on the prompt tasks (`StudioTask.isPromptTask`:
+Generate, Compose, Speak, Chat, Code, Read, Find, Segment, Track, Transcribe);
+every other task — Subjects, Realtime, Models, Train, the labs — takes the full
+content width even inside a Create domain. It is filtered to the current domain by default with an All
 segment — a row is filed under its command's domain (`CommandTemplateID.studioDomain`),
 so 3D meshes land under 3D and benchmark reports under Models — and picking a
 row from another domain switches the destination to it.
@@ -76,26 +77,70 @@ field the CLI flag reads. Under the prompt, a **chip strip** shows the mode's tw
 to four essentials (size, steps, seed, length, threshold, thinking) as menus, and
 the **model chip** is the only model control: it lists `model list` rows filtered
 to the mode's category, installed first, with "Auto" for the mode's default. The
-remaining depth stays in the options popover behind the sliders button until the
-inspector replaces it.
+chips and the inspector bind the same `StudioDraft`, so a value changed in one
+shows in the other.
+
+The **feed** above the composer (`StudioFeedCanvas.swift`, cards derived in
+`StudioFeedCards.swift`) lists the mode's runs oldest first, newest beside the
+composer. A finished run is a generation card: prompt, the chips it ran with
+(read from its own command), every output in a grid of 236pt tiles (images,
+video, 3D; audio gets the waveform player, text the Markdown renderer), and
+Vary (rerun with a fresh, recorded seed), Rerun, Use as input, Quick Look,
+Reveal, Copy, and Save to…; outputs drag out to Finder. A run in flight is a
+card that observes its `Job` directly — progress bar, "Denoising 15/24 · 0:41",
+Cancel, and the log tail behind an Activity disclosure — and a queued run is a
+row with Remove; both come from `JobStore`, not from the controller's foreground
+mirror. A failed run leads with the last meaningful stderr line, keeps the log
+behind "Show log", and offers Retry. Validation errors ("Prompt is required.")
+render as a banner under the composer; readiness (missing model, missing CLI)
+is a card at the bottom of the feed with "Get the model" and the pull's own
+progress, so it never hides earlier work. Completion never moves the Library
+selection; a result that finishes off-screen shows a "New result ↓" pill.
+Picking a Library row scrolls to its card and outlines it briefly.
+
+The **inspector** (⌥⌘I, the header's Inspector toggle, remembered per task under
+`studio.inspectorTasks`) is a 300pt column rendered from
+`StudioInspectorSchema.swift`: Prompt (negative or system prompt, lyrics, voice
+style, the Read task), Output (aspect presets 1:1/3:2/16:9/9:16 with width ×
+height and Swap; length and quality for Video, Music, and Sound), Model &
+adapters (the same model picker as the chip, LoRA or ACE-Step adapters, voice
+mode), Sampling (steps and guidance sliders, the seed with Random and Reuse
+last; temperature, top-p, max tokens, thinking, and response format for Chat),
+Transcript (language, timestamps) for Audio ▸ Transcribe, and a collapsed
+"Advanced · N more" holding every other control the command takes
+(`StudioAdvancedOptions.swift`, the former options popover). Each section has
+Reset, and the header badge counts the fields that differ from the mode's
+defaults.
 
 Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…, View ▸
-Show Library (⌥⌘L), Command Console (⌥⌘C), and the system sidebar toggle, Go ▸
+Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C; Command
+Console on other tasks), and the system sidebar toggle, Go ▸
 every domain (⌘1–⌘9, then ⌥⌘1…) plus the current domain's tasks, Run ▸ Run
 (⌘↩) and Stop (⌘.) acting on the current composer, Help ▸ Guide (⌘?). Settings
 has General, Models, Server, and Advanced tabs. First run shows the Image empty
 state with its "Get the model" path and a one-time dismissible banner.
 
-The **Command Console** is a separate window (`Window("Command Console")`)
-hosting the complete raw contract surface — template sidebar, editor, and run
-console in three resizable panes. It opens from the content header, the View menu, the
-readiness overlay's Details button, a Library row's "Edit command…", and the
-adapter fallbacks for modes whose adapters are typed only in the raw command.
-Opening it from the header carries the composer's draft into the matching
-template; raising an already-open console only brings it forward, so its edits
-stay. The console's own Run stays independent of the composer's, and while the
-console is key the Run menu drives it while Go and Help keep acting on the
-Studio window.
+The **Command view** (⌥⌘C on a prompt task, or the header's Command toggle)
+is a 520pt column in the inspector's place — the two are never side by side —
+showing the task's raw form from the same draft: every option the capability
+contract declares for the template, grouped under Prompt, Output, Model,
+Sampling, Run, and Options (`StudioCommandRows.swift`), with the value the
+argv carries (set rows first) or a switch for boolean flags, then "Will run"
+with the masked command line, Copy, "Open in Terminal" (copies the command and
+brings Terminal forward; the app never scripts another application), and Run.
+Values are read-only until every task renders an editable contract form; the
+chips and inspector edit them. Readiness cards' Details button opens it.
+
+The **Command Console** window (`Window("Command Console")`) remains the raw
+surface for every other template — template sidebar, editor, and run console in
+three resizable panes. It opens from the header's Command toggle on non-prompt
+tasks, ⌥⌘C there, Help ▸ Command Console anywhere, a Library row's "Edit
+command…", and the adapter fallbacks for modes whose adapters are typed only in
+the raw command. Opening it from the header carries the composer's draft into
+the matching template; raising an already-open console only brings it forward,
+so its edits stay. The console's own Run stays independent of the composer's,
+and while the console is key the Run menu drives it while Go and Help keep
+acting on the Studio window.
 
 Do not duplicate runtime logic here. The app should translate UI state into CLI
 arguments and let the public executable remain the behavioral source of truth.
@@ -300,8 +345,11 @@ recorded decision that it should not have one.
 `StudioSnapshotTests` renders the shell for visual review without driving the
 live app: every domain at its default task at 1280×820 in light and dark, plus
 the Settings content and the Command Console, and fidelity renders at the
-1440×900 mockup size for comparing against the design boards: Image ▸ Generate
-with the boards' four Library rows, the composer with the boards' sample prompt
+1440×900 mockup size for comparing against the design boards: the Main board
+(Image ▸ Generate with a finished generation of two in-test images, a run held
+open by the process seam mid-denoise, a queued run behind a concurrent model
+pull, and the inspector open with two changed settings; then the same feed with
+the Command view column), the composer with the boards' sample prompt
 and an in-test image attached (Image ▸ Generate and Vision ▸ Find), Music ▸
 Realtime mid-session (a run the process seam holds open, fed the CLI's frame
 progress and steering echoes, with its recording synthesized on disk), and
@@ -319,9 +367,10 @@ MERERUN_STUDIO_SNAPSHOT_DIR=/tmp/shell-shots swift test --filter StudioSnapshotT
 `StudioSnapshotRenderer` hosts each view in an `NSWindow` that is never ordered
 on screen and captures it with `cacheDisplay`, so nothing appears on the Mac
 running it. The controller uses a process runner that refuses every launch
-(answering only the sidebar's status probe; for the Realtime render it holds
-the session launch open, and for the Models render it answers only the
-scripted inventory commands) and
+(answering only the sidebar's status probe; for the Main board and Realtime
+renders it holds the generation, pull, or session launches open, and for the
+Main board and Models renders it answers the scripted `model list` and
+`capabilities` commands) and
 the Library is a temporary `library.json` seeded with fixture rows, so no CLI
 process starts and the user's Library is never read or written. Two fidelity
 gaps are deliberate: macOS 26 glass and scroll-edge effects only composite on
