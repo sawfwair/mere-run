@@ -37,6 +37,8 @@ struct StudioRootView: View {
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
     @State private var activeConversationID: UUID?
+    /// An Analyze next step in flight: the input and prompt to hand the task being opened.
+    @State private var pendingAnalyzeHandoff: StudioAnalyzeHandoff?
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var pendingRestrictedPull: StudioRunRequest?
     @State private var studioError: String?
@@ -685,6 +687,18 @@ struct StudioRootView: View {
                 onUseExample: useExamplePrompt
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let archetype = destination.task.analyzeArchetype {
+            StudioAnalyzeCanvas(
+                archetype: archetype,
+                mode: mode,
+                cards: feedCards,
+                selectedID: navigation.selectedLibraryID,
+                inputPath: draft.inputPath,
+                readiness: readiness,
+                pullJob: activePullJob,
+                actions: feedActions,
+                analyze: analyzeActions
+            )
         } else {
             StudioFeedCanvas(
                 mode: mode,
@@ -696,6 +710,14 @@ struct StudioRootView: View {
                 actions: feedActions
             )
         }
+    }
+
+    private var analyzeActions: StudioAnalyzeActions {
+        StudioAnalyzeActions(
+            replaceInput: chooseAttachment,
+            openTask: openSiblingTask,
+            save: saveAnalyzeResult
+        )
     }
 
     private var feedActions: StudioFeedActions {
@@ -1006,8 +1028,19 @@ struct StudioRootView: View {
             nextDraft.prompt = ""
         } else {
             activeConversationID = nil
-            navigation.selectedLibraryID = preferred?.id ?? library.items.first { $0.mode == newMode }?.id
+            let selected = preferred ?? library.items.first { $0.mode == newMode }
+            navigation.selectedLibraryID = selected?.id
+            // An input-first task is about a file: opening it on a past run should show that run's
+            // input, so the canvas and the composer's well never disagree.
+            if newMode.destination.task.isAnalyzeTask, nextDraft.inputPath.isBlank {
+                applyAnalyzeInput(from: selected, to: &nextDraft)
+            }
         }
+        if let handoff = pendingAnalyzeHandoff, handoff.task.mode == newMode {
+            handoff.apply(to: &nextDraft)
+            navigation.selectedLibraryID = nil
+        }
+        pendingAnalyzeHandoff = nil
         draft = nextDraft
         controller.checkReadiness(for: newMode, draft: draft)
         if newMode != .listen { promptFocused = true }
@@ -1019,8 +1052,19 @@ struct StudioRootView: View {
     private func selectLibraryItem(_ item: StudioLibraryItem) {
         navigation.selectedLibraryID = item.id
         highlightCard(item.id)
-        guard item.mode != mode || !showsPromptWorkspace else { return }
+        guard item.mode != mode || !showsPromptWorkspace else {
+            if destination.task.isAnalyzeTask { applyAnalyzeInput(from: item, to: &draft) }
+            return
+        }
         navigation.open(destination: item.mode.destination)
+    }
+
+    /// Puts a past Analyze run's input and prompt back in the composer, so the canvas shows the
+    /// picture that run was about and re-running it is one click away.
+    private func applyAnalyzeInput(from item: StudioLibraryItem?, to draft: inout StudioDraft) {
+        guard let item, let inputURL = item.inputURL else { return }
+        draft.inputPath = inputURL.path
+        if !item.prompt.isBlank { draft.prompt = item.prompt }
     }
 
     private func highlightCard(_ id: UUID) {
@@ -1163,6 +1207,70 @@ struct StudioRootView: View {
         }
         commandDraft.seed = String(Int.random(in: 1...Int(Int32.max)))
         runLibraryItem(item, draft: commandDraft)
+    }
+
+    /// A contextual next step on an Analyze result: opens the sibling task with this run's input
+    /// and prompt carried over, so "Segment these" continues from the same picture.
+    private func openSiblingTask(_ task: StudioTask) {
+        if task.mode != nil {
+            pendingAnalyzeHandoff = StudioAnalyzeHandoff.make(
+                to: task, inputPath: draft.inputPath, prompt: draft.prompt
+            )
+            navigation.selectedLibraryID = nil
+        }
+        // A task without a composer reads this same draft, so its input is already carried.
+        navigation.open(destination: task.destination)
+    }
+
+    /// The Analyze result column's "Save…" steps.
+    private func saveAnalyzeResult(_ kind: StudioAnalyzeSaveKind) {
+        guard let item = analyzeResultItem else { return }
+        switch kind {
+        case .json:
+            guard let url = StudioAnalyzeDocumentSource.url(for: item) else {
+                studioError = "This run did not write a result document."
+                return
+            }
+            saveOutput(url)
+        case .media:
+            guard let url = item.outputURL else {
+                studioError = "This run did not write an output file."
+                return
+            }
+            saveOutput(url)
+        case .text:
+            if let url = StudioAnalyzeDocumentSource.url(for: item), url.pathExtension != "json" {
+                saveOutput(url)
+                return
+            }
+            saveText(item.outputText, suggestedName: "transcript.txt")
+        }
+    }
+
+    /// The run the Analyze canvas is showing: the picked Library row, else this mode's newest.
+    private var analyzeResultItem: StudioLibraryItem? {
+        let finished = feedCards.filter { $0.kind == .generation }
+        if let selectedLibraryID = navigation.selectedLibraryID,
+           let picked = finished.first(where: { $0.id == selectedLibraryID }) {
+            return picked.item
+        }
+        return finished.last?.item
+    }
+
+    private func saveText(_ text: String?, suggestedName: String) {
+        guard let text, !text.isBlank else {
+            studioError = "This run left no text to save."
+            return
+        }
+        guard let destination = StudioSpecialistFiles.saveFile(
+            title: "Save result",
+            suggestedName: suggestedName
+        ) else { return }
+        do {
+            try text.write(to: destination, atomically: true, encoding: .utf8)
+        } catch {
+            studioError = "Could not save \(destination.lastPathComponent): \(error.localizedDescription)"
+        }
     }
 
     /// Loads an output into the composer's well as the next run's input.

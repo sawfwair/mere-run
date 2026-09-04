@@ -757,6 +757,10 @@ enum StudioCommandAdapter {
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.visionThreshold = studioDraft.visionThreshold
+            // Studio renders these results natively, so it always asks for the structured
+            // document beside the annotated output. Masks are per-detection PNG sidecars; a
+            // tracked clip writes one set per frame, so only the still tasks request them.
+            StudioVisionResultPaths.apply(to: &draft, wantsMasks: mode != .track)
 
         case .music:
             draft.prompt = prompt

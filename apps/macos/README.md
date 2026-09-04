@@ -98,6 +98,33 @@ progress, so it never hides earlier work. Completion never moves the Library
 selection; a result that finishes off-screen shows a "New result ↓" pill.
 Picking a Library row scrolls to its card and outlines it briefly.
 
+The input-first tasks — Vision ▸ Read, Find, Segment, and Track, and Audio
+▸ Transcribe — render the **Analyze canvas** (`StudioAnalyzeCanvas.swift`,
+`StudioAnalyzeViews.swift`) instead of the feed, because the answer belongs
+beside the thing it is about rather than in a stream. It is one 940pt column:
+an input strip naming the attached file with its dimensions or duration, a
+Replace button that writes the same composer well, and a view switch whose
+segments come from the task's own result kind (Boxes / Masks / JSON for Find
+and Segment, Video / JSON for Track, Transcript / Timeline / JSON for
+Transcribe); below it the input rendered large on the left — the image with
+the result drawn over it, a video with its scrubber and per-object track spans,
+audio with the waveform player — and a 360pt result column on the right
+holding what the model found, the contextual next steps, and the prompt it ran
+with. Results are read from the documents the CLI actually writes
+(`StudioAnalyzeResults.swift`): `vision ground`'s normalized boxes, `vision
+segment`'s pixel boxes with their mask PNGs, `vision track`'s per-frame
+detections, `speech diarize`'s speaker turns, and the timestamped transcript
+`speech transcribe` prints. Studio always asks for that document, passing
+`--json-output` (and `--mask-output-dir` for the still tasks) beside the
+annotated output. A run in flight, a queue, a failure, and readiness use the
+feed's own cards above the result column, and earlier runs stay one click away
+in the Library column, which also puts their input back in the composer. The
+next steps open the sibling task carrying the input when the target accepts it
+(Find ▸ "Segment these" keeps the picture; "Track in video" keeps only the
+prompt, because Track needs a clip). The archetype is declared per task in
+`StudioAnalyzeSchema.swift`, which also describes the Vision Lab, Audio, Text,
+Earth, and Sound analysis tasks that still render their lab forms.
+
 The **inspector** (⌥⌘I, the header's Inspector toggle, remembered per task under
 `studio.inspectorTasks`) is a 300pt column rendered from
 `StudioInspectorSchema.swift`: Prompt (negative or system prompt, lyrics, voice
@@ -350,7 +377,10 @@ the Settings content and the Command Console, and fidelity renders at the
 open by the process seam mid-denoise, a queued run behind a concurrent model
 pull, and the inspector open with two changed settings; then the same feed with
 the Command view column), the composer with the boards' sample prompt
-and an in-test image attached (Image ▸ Generate and Vision ▸ Find), Music ▸
+and an in-test image attached (Image ▸ Generate and Vision ▸ Find), the
+Analyze board (Vision ▸ Find over a 1024×1024 in-test image with a seeded
+`vision ground` document, and Audio ▸ Transcribe with a synthesized recording
+and a timestamped transcript), Music ▸
 Realtime mid-session (a run the process seam holds open, fed the CLI's frame
 progress and steering echoes, with its recording synthesized on disk), and
 Models ▸ Installed with a scripted model inventory (`model list`,
