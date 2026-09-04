@@ -1,5 +1,7 @@
 import Combine
 import Sparkle
+import StudioKit
+import StudioUI
 import SwiftUI
 
 enum MereRunUpdateConfiguration {

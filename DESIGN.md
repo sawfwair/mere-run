@@ -1,6 +1,6 @@
 # Design
 
-Visual system for the mere.run macOS Studio (`apps/macos/MereRunStudio`). The source of truth
+Visual system for the mere.run macOS Studio (`apps/macos/StudioUI`). The source of truth
 in code is `MereRunTheme.swift`; every color resolves dynamically for light and dark.
 
 ## Theme

@@ -528,20 +528,52 @@ targets.append(contentsOf: [
 ])
 
 if !isLinuxPackage {
+  // The Studio is three targets: StudioKit is the SwiftUI-free model layer (CLI environment,
+  // process runner, jobs, catalog, library, readiness), StudioUI is every view, and MereRunApp is
+  // the executable shell that owns the scenes, the menus, Settings, and Sparkle. Cross-module
+  // declarations use `package` so the split keeps the visibility the single target had without
+  // widening any public API.
   targets.append(
-    .executableTarget(
-      name: "MereRunApp",
-      dependencies: [
-        "MereRunContract",
-        .product(name: "Sparkle", package: "Sparkle")
-      ],
-      path: "apps/macos/MereRunStudio",
+    .target(
+      name: "StudioKit",
+      dependencies: ["MereRunContract"],
+      path: "apps/macos/StudioKit"
+    )
+  )
+  targets.append(
+    .target(
+      name: "StudioUI",
+      dependencies: ["StudioKit", "MereRunContract"],
+      path: "apps/macos/StudioUI",
       resources: [
         // Caveat (OFL 1.1) for the sidebar wordmark; registered at launch by MereRunTheme.Brand.
         .copy("Resources/Fonts")
       ],
       linkerSettings: [
-        .linkedFramework("AVKit"),
+        .linkedFramework("AVKit")
+      ]
+    )
+  )
+  // Test doubles shared by StudioKitTests and StudioUITests. Nothing that ships depends on it, so
+  // the recording process runner stays out of the app binary.
+  targets.append(
+    .target(
+      name: "StudioTestSupport",
+      dependencies: ["StudioKit"],
+      path: "apps/macos/StudioTestSupport"
+    )
+  )
+  targets.append(
+    .executableTarget(
+      name: "MereRunApp",
+      dependencies: [
+        "StudioKit",
+        "StudioUI",
+        "MereRunContract",
+        .product(name: "Sparkle", package: "Sparkle")
+      ],
+      path: "apps/macos/MereRunStudio",
+      linkerSettings: [
         .unsafeFlags([
           "-Xlinker", "-rpath",
           "-Xlinker", "@loader_path/../Frameworks"
@@ -551,11 +583,25 @@ if !isLinuxPackage {
   )
   targets.append(
     .testTarget(
-      name: "MereRunAppTests",
-      dependencies: ["MereRunApp", "MereRunContract"],
-      path: "apps/macos/MereRunStudioTests",
+      name: "StudioKitTests",
+      dependencies: ["StudioKit", "StudioTestSupport", "MereRunContract"],
+      path: "apps/macos/StudioKitTests",
       // Read from source with #filePath by CommandArgumentGoldenTests, not from the bundle.
       exclude: ["Fixtures"]
+    )
+  )
+  targets.append(
+    .testTarget(
+      name: "StudioUITests",
+      dependencies: ["StudioUI", "StudioKit", "StudioTestSupport", "MereRunContract"],
+      path: "apps/macos/StudioUITests"
+    )
+  )
+  targets.append(
+    .testTarget(
+      name: "MereRunAppTests",
+      dependencies: ["MereRunApp", "MereRunContract"],
+      path: "apps/macos/MereRunStudioTests"
     )
   )
 }

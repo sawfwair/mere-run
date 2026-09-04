@@ -771,9 +771,9 @@ the mere.run source license and from the MIT license on the MMAudio graph.
   the variable `Caveat[wght].ttf` as published in
   [`google/fonts`](https://github.com/google/fonts/tree/main/ofl/caveat);
   SIL Open Font License 1.1
-- package location: `apps/macos/MereRunStudio/Resources/Fonts/Caveat[wght].ttf`
+- package location: `apps/macos/StudioUI/Resources/Fonts/Caveat[wght].ttf`
   with the license beside it in `OFL.txt`; shipped in
-  `MereRun.app/Contents/Resources/MereRun_MereRunApp.bundle/Fonts`
+  `MereRun.app/Contents/Resources/MereRun_StudioUI.bundle/Fonts`
 
 ```text
 Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)

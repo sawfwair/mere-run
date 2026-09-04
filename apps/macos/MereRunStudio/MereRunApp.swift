@@ -1,6 +1,8 @@
 import AppKit
 import Quartz
 import Sparkle
+import StudioKit
+import StudioUI
 import SwiftUI
 
 final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
@@ -21,14 +23,6 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
     override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
         MainActor.assumeIsolated { panel.dataSource = nil }
     }
-}
-
-/// The Command Console: the raw contract surface in its own resizable window, opened from the
-/// toolbar, View ▸ Command Console, readiness "Details", Library "Edit command", and the adapter
-/// fallbacks. There is no docked or detached variant any more.
-enum StudioConsoleWindow {
-    static let id = "console"
-    static let title = "Command Console"
 }
 
 /// The Studio window's content: the shell, on the theme, with the CLI resolved once the window

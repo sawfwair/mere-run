@@ -2,6 +2,33 @@
 
 Optional SwiftUI studio wrapper around the public `mere.run` CLI.
 
+## Targets
+
+The Studio is three SwiftPM targets, so the model layer can be built and tested
+without SwiftUI and the views can be rendered without the app's scenes:
+
+- `StudioKit/` — library, no SwiftUI: the CLI resolver and environment,
+  `ProcessRunner`, `Job`/`JobStore`/lanes/`ArtifactResolver`/progress, the
+  command catalog (generated flags, `ArgumentBuilder`, `CommandDraft`), the
+  Library store and its receipts, the conversation transcript, the navigation
+  vocabulary (`StudioDomain`, `StudioTask`, `StudioDestination`), readiness,
+  configuration, the serving monitor, the CLI installer, diagnostics, and crash
+  reporting.
+- `StudioUI/` — library, SwiftUI: the shell, the navigation model, the boards
+  (feed, inspector, Command view, analyze, converse, session, project, manage),
+  `ContractForm`, the theme (which owns the bundled Caveat wordmark font),
+  controls, and result renderers.
+- `MereRunStudio/` — the `mere.run.app` executable: `MereRunApp`, the app
+  delegate, the menu bar commands, the Settings scene, and the Sparkle wiring.
+
+Declarations that cross a target boundary are `package`, which is exactly the
+visibility they had while the Studio was one target; nothing became `public`.
+
+Tests follow the same split: `StudioKitTests/` (model layer, including the argv
+and default-draft fixtures), `StudioUITests/` (views, presenters, and the
+offscreen snapshot harness), and `MereRunStudioTests/` (the executable). Shared
+test doubles live in `StudioTestSupport/`, which nothing that ships depends on.
+
 The packaged app registers two typed local-launcher routes. The strict
 `mererun://preview?path=…` route accepts one readable absolute artifact path and
 may show Quick Look but must not import or mutate artifacts. The strict
@@ -10,8 +37,9 @@ path; `StudioLibraryStore` validates the versioned receipt and referenced media,
 owns persistence and deduplication, and the window's `NavigationModel` opens the
 imported row. External launchers must never edit `library.json` directly.
 
-- `StudioNavigation.swift`: `StudioDomain`, `StudioTask`, `StudioDestination`,
-  and the per-window `NavigationModel`.
+- `StudioKit/StudioNavigation.swift`: `StudioDomain`, `StudioTask`,
+  `StudioDestination`, and the `@SceneStorage` codecs; the per-window
+  `NavigationModel` that drives them is `StudioUI/StudioNavigationModel.swift`.
 - `StudioRootView.swift`: the `NavigationSplitView` shell, the content header
   (`StudioTaskControl.swift`), and the prompt workspace; hosts every task in
   the detail area.

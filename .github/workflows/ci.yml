@@ -44,8 +44,9 @@ jobs:
           #   code   native builds are needed at all (unchanged behaviour)
           #   lane   which package gate the macOS `swift` job runs:
           #          `full` is ./scripts/check.sh (every test target), `fast` is
-          #          the same non-test checks plus the macOS app target and its
-          #          tests. Both lanes build and verify the app bundle.
+          #          the same non-test checks plus the macOS Studio targets
+          #          (StudioKit, StudioUI, MereRunApp) and their tests. Both
+          #          lanes build and verify the app bundle.
           #   linux  the Linux CLI compatibility gate has something to prove
           #   ios    the iOS app build and tests have something to prove
           #
@@ -150,7 +151,7 @@ jobs:
           [[ -n "$categories" ]] || categories='(none detected)'
 
           if [[ "$lane" == "fast" ]]; then
-            lane_note='**fast lane: app-only change** (SwiftLint, repository checks, swift build, MereRunAppTests, app bundle)'
+            lane_note='**fast lane: app-only change** (SwiftLint, repository checks, swift build, the Studio test targets, app bundle)'
           else
             lane_note='**full gate** (scripts/check.sh, every package test target, plus the app bundle)'
           fi
@@ -206,7 +207,7 @@ jobs:
             detail='Nothing outside documentation changed, so there is no package gate to run.'
           elif [[ "$LANE" == "fast" ]]; then
             note='fast lane: app-only change'
-            detail='SwiftLint, agent readiness, evaluation boundary, docs examples, swift build, metallib verification, MereRunAppTests, and the app bundle build.'
+            detail='SwiftLint, agent readiness, evaluation boundary, docs examples, swift build, metallib verification, the Studio test targets, and the app bundle build.'
           else
             note='full gate'
             detail='./scripts/check.sh (every package test target) plus the app bundle build.'
@@ -292,16 +293,17 @@ jobs:
         if: env.RUN_GATE == 'true' && env.LANE == 'fast'
         run: |
           set -euo pipefail
-          # Same non-test checks as ./scripts/check.sh, then only the macOS app
-          # target's tests. Anything that can change CLI or Core behaviour
-          # selects the full lane in the `changes` job.
+          # Same non-test checks as ./scripts/check.sh, then only the macOS
+          # Studio's own test targets. Anything that can change CLI or Core
+          # behaviour selects the full lane in the `changes` job.
           swiftlint --strict --cache-path .build/swiftlint.cache
           bash ./scripts/agent_readiness_check.sh
           bash ./scripts/check-evaluation-boundary.sh
           bash ./scripts/check-docs-examples.sh
           swift build --disable-index-store
           ./scripts/build_mlx_metallib.sh --verify-only vendor/mlx-swift_Cmlx.bundle
-          swift test --disable-index-store --filter MereRunAppTests
+          swift test --disable-index-store \
+            --filter StudioKitTests --filter StudioUITests --filter MereRunAppTests
       - name: Build app bundle (ad-hoc)
         if: env.RUN_GATE == 'true'
         run: ./scripts/build_mere_run_app.sh debug

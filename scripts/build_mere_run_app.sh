@@ -193,16 +193,16 @@ third_party_licenses="${resources}/ThirdPartyLicenses"
 mkdir -p "$third_party_licenses"
 cp "${repo_root}/THIRD_PARTY_NOTICES.md" "${third_party_licenses}/THIRD_PARTY_NOTICES.md"
 
-# The app target's SwiftPM resource bundle (the Caveat wordmark font) belongs in
+# The StudioUI target's SwiftPM resource bundle (the Caveat wordmark font) belongs in
 # Contents/Resources, where codesign seals it as data rather than nested code and
 # MereRunTheme.Brand looks for it first. Its absence would ship a fallback wordmark.
-app_resource_bundle="${build_dir}/MereRun_MereRunApp.bundle"
+app_resource_bundle="${build_dir}/MereRun_StudioUI.bundle"
 if [[ ! -d "$app_resource_bundle" ]]; then
   echo "App resource bundle not found: ${app_resource_bundle}" >&2
   exit 66
 fi
-cp -R "$app_resource_bundle" "${resources}/MereRun_MereRunApp.bundle"
-if [[ ! -f "${resources}/MereRun_MereRunApp.bundle/Fonts/Caveat[wght].ttf" ]]; then
+cp -R "$app_resource_bundle" "${resources}/MereRun_StudioUI.bundle"
+if [[ ! -f "${resources}/MereRun_StudioUI.bundle/Fonts/Caveat[wght].ttf" ]]; then
   echo "Wordmark font missing from the app resource bundle" >&2
   exit 66
 fi

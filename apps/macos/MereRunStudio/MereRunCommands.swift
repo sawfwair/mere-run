@@ -1,5 +1,7 @@
 import AppKit
 import Sparkle
+import StudioKit
+import StudioUI
 import SwiftUI
 import UniformTypeIdentifiers
 
