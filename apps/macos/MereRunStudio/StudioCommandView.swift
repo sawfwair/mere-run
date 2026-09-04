@@ -81,7 +81,7 @@ struct StudioCommandView: View {
 
     private func groupView(_ group: StudioCommandRowGroupRows) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            MereEyebrow(group.group.rawValue)
+            MereEyebrow(group.group.title)
             ForEach(group.rows) { row in
                 rowView(row)
             }

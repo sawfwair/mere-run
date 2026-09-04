@@ -20,7 +20,7 @@ final class StudioInspectorSchemaTests: XCTestCase {
         for mode in StudioMode.allCases {
             let ids = StudioInspectorSchema.sections(for: mode).flatMap { $0.fields.map(\.id) }
                 + StudioInspectorSchema.advancedFields(for: mode).map(\.id)
-            XCTAssertEqual(ids.count, Set(ids).count, "\(mode) lists a field twice: \(ids)")
+            XCTAssertEqual(ids.count, Set(ids).count, "\(mode) lists a flag twice: \(ids)")
         }
     }
 
@@ -39,7 +39,7 @@ final class StudioInspectorSchemaTests: XCTestCase {
         draft.prompt = "prompts are the composer's, not the inspector's"
         XCTAssertEqual(StudioInspectorSchema.changedCount(mode: .createImage, draft: draft, baseline: baseline), 4)
 
-        let output = StudioInspectorSchema.sections(for: .createImage).first { $0.kind == .output }!
+        let output = StudioInspectorSchema.sections(for: .createImage).first { $0.group == .output }!
         XCTAssertEqual(output.changedCount(draft: draft, baseline: baseline), 2)
         output.reset(&draft, to: baseline)
         XCTAssertEqual(draft.width, 1024)

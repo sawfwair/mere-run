@@ -186,18 +186,24 @@ prompt, because Track needs a clip). The archetype is declared per task in
 Earth, and Sound analysis tasks that still render their lab forms.
 
 The **inspector** (⌥⌘I, the header's Inspector toggle, remembered per task under
-`studio.inspectorTasks`) is a 300pt column rendered from
-`StudioInspectorSchema.swift`: Prompt (negative or system prompt, lyrics, voice
-style, the Read task), Output (aspect presets 1:1/3:2/16:9/9:16 with width ×
-height and Swap; length and quality for Video, Music, and Sound), Model &
-adapters (the same model picker as the chip, LoRA or ACE-Step adapters, voice
-mode), Sampling (steps and guidance sliders, the seed with Random and Reuse
-last; temperature, top-p, max tokens, thinking, and response format for Chat),
-Transcript (language, timestamps) for Audio ▸ Transcribe, and a collapsed
-"Advanced · N more" holding every other control the command takes
-(`StudioAdvancedOptions.swift`, the former options popover). Each section has
-Reset, and the header badge counts the fields that differ from the mode's
-defaults.
+`studio.inspectorTasks`) is a 300pt column rendered from the capability
+contract. `StudioContractSchema.swift` binds each option
+`MereRunCapabilityCatalog` declares to the `StudioDraft` field the app keeps it
+in, and `ContractForm` (`StudioContractForm.swift`) draws it: the option's
+`kind` picks the control (a field, a checkbox, a segmented control or pop-up
+from its `choices`, a path well, a slider when its `range` has both ends and a
+stepper when it does not), its `group` picks the section (Prompt, Inputs,
+Output, Model & adapters, Sampling, Run), its `tier` decides whether it sits in
+a section or under the collapsed "Advanced · N more", its `depends_on` hides it
+until the option it needs carries a value, and a control at its `default_value`
+emits no flag. A per-flag override registry keeps the composite editors the
+contract cannot describe — the aspect presets with width × height and Swap, the
+seed with Random and Reuse last, the steps and guidance sliders over the range
+the mode's models use, seconds-or-frames, the model picker, the LoRA and
+ACE-Step adapter rows, the mask and outpaint canvas, and the ordered MiniMax
+references — and marks the attachments the composer's well owns so the
+inspector never repeats them. Each section has Reset, and the header badge
+counts the draft fields that differ from the mode's defaults.
 
 Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…, View ▸
 Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C; Command
@@ -210,8 +216,9 @@ state with its "Get the model" path and a one-time dismissible banner.
 The **Command view** (⌥⌘C on a prompt task, or the header's Command toggle)
 is a 520pt column in the inspector's place — the two are never side by side —
 showing the task's raw form from the same draft: every option the capability
-contract declares for the template, grouped under Prompt, Output, Model,
-Sampling, Run, and Options (`StudioCommandRows.swift`), with the value the
+contract declares for the template, under the contract's own groups — Prompt,
+Inputs, Output, Model & adapters, Sampling, Run, and Options for a flag the
+contract has yet to describe (`StudioCommandRows.swift`) — with the value the
 argv carries (set rows first) or a switch for boolean flags, then "Will run"
 with the masked command line, Copy, "Open in Terminal" (copies the command and
 brings Terminal forward; the app never scripts another application), and Run.
