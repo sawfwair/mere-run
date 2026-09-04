@@ -52,10 +52,20 @@ the selected row is a solid accent pill drawn by the row itself (the native
 `List` highlight is switched off; selection, arrow keys, and VoiceOver are
 unchanged). The footer pill reads "Ready · N models" once the status probe
 answers, "Serving · N models" while the local server is up, and "Server
-unreachable" if the probe never answers; its popover holds the details. Every
-domain has **tasks** in a 52pt header at the top of the content column, beside
-the Library (the window toolbar stays empty so the Library column runs to the
-top of the window): one segmented pill for up to six tasks, or five segments
+unreachable" (in red) if the probe never answers, with "· N running" appended
+while jobs are in flight. It opens the **Activity popover**
+(`StudioActivity.swift`), a 340pt panel the shell draws over the window from the
+bottom-left: one row per running or queued job in the inference and utility
+lanes (never a probe) with its progress and a stop control, over the app↔CLI
+version handshake and a link into the Server page. With nothing running the same
+panel shows the local server, the models root, and the resolved CLI path. It
+reads the `JobStore` directly — the lanes for which rows exist, each `Job` for
+its own progress — so nothing about the work in flight is mirrored on the
+controller.
+
+Every domain has **tasks** in a 52pt header at the top of the content column,
+beside the Library (the window toolbar stays empty so the Library column runs to
+the top of the window): one segmented pill for up to six tasks, or five segments
 plus a "More" menu segment for Vision. The header's leading item is the domain
 glyph, title, and one-line subtitle; trailing are the Library, Inspector, and
 Command toggles (the Library and Inspector toggles appear on prompt tasks only).
