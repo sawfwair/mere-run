@@ -252,7 +252,7 @@ final class StudioContractFormTests: XCTestCase {
     }
 
     /// A value one edit away from the one it is given, inside whatever the contract allows.
-    private static func perturbed(_ value: StudioContractValue, field: StudioContractField) -> StudioContractValue {
+    private static func perturbed(_ value: StudioContractValue, field: StudioContractField<StudioDraft>) -> StudioContractValue {
         switch value {
         case .flag(let on):
             return .flag(!on)
@@ -272,7 +272,7 @@ final class StudioContractFormTests: XCTestCase {
         }
     }
 
-    private static func replacement(for field: StudioContractField, avoiding current: String) -> String {
+    private static func replacement(for field: StudioContractField<StudioDraft>, avoiding current: String) -> String {
         if !field.option.choices.isEmpty {
             return field.option.choices.first { $0 != current } ?? current
         }
