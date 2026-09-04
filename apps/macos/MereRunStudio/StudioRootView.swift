@@ -454,7 +454,6 @@ struct StudioRootView: View {
             lastSeed: lastSeed,
             onShowModels: { navigation.open(task: .modelsInstalled) },
             onShowAdapters: { navigation.open(task: .modelsAdapters) },
-            onShowRealtimeMusic: { navigation.open(task: .musicRealtime) },
             onClose: toggleInspector
         )
     }

@@ -230,7 +230,7 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable {
+enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable, Sendable {
     case inspect
     case ocr
     case caption
@@ -254,7 +254,7 @@ enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-struct StudioDraft: Codable, Equatable {
+struct StudioDraft: Codable, Equatable, Sendable {
     var prompt = ""
     var secondaryText = ""
     var inputPath = ""
@@ -273,8 +273,8 @@ struct StudioDraft: Codable, Equatable {
     var voiceProfile = ""
     var refAudioPath = ""
     var saveProfileName = ""
-    // Advanced depth shared with the Advanced surface (see StudioOptionSchema). Defaults are
-    // seeded from the matching template's CommandDraft so the two surfaces never drift.
+    // Advanced depth the contract-driven inspector binds. Defaults are seeded from the matching
+    // template's CommandDraft so the two surfaces never drift.
     var temperature = 0.7
     var topP = 0.9
     var minP = 0.0
@@ -512,61 +512,6 @@ struct StudioDraft: Codable, Equatable {
 
     private func modeDefaultSecondaryText(_ mode: StudioMode) -> String {
         CommandCatalog.template(id: mode.defaultTemplateID)?.defaultSecondaryText ?? ""
-    }
-}
-
-/// One advanced option for a Studio mode: a label plus a typed control bound to a `StudioDraft`
-/// key path. This is the single source of truth for the depth controls — the Studio sheet renders
-/// it, and the adapter maps the same fields to the identical CLI flags the Advanced surface emits.
-struct StudioOptionField: Identifiable {
-    let id: String
-    let label: String
-    let control: Control
-
-    enum Control {
-        case int(WritableKeyPath<StudioDraft, Int>, range: ClosedRange<Int>, step: Int)
-        case double(WritableKeyPath<StudioDraft, Double>)
-        case bool(WritableKeyPath<StudioDraft, Bool>)
-        case text(WritableKeyPath<StudioDraft, String>, placeholder: String)
-    }
-}
-
-enum StudioOptionSchema {
-    static func fields(for mode: StudioMode) -> [StudioOptionField] {
-        switch mode {
-        case .chat, .code:
-            return [
-                StudioOptionField(id: "temperature", label: "Temperature", control: .double(\.temperature)),
-                StudioOptionField(id: "topP", label: "Top-p", control: .double(\.topP)),
-                StudioOptionField(id: "minP", label: "Min-p (0 = model default)", control: .double(\.minP)),
-                StudioOptionField(id: "maxTokens", label: "Max tokens", control: .int(\.maxTokens, range: 1...32_768, step: 64)),
-            ]
-        case .createImage:
-            return [
-                StudioOptionField(id: "cfg", label: "CFG scale", control: .double(\.cfgScale)),
-                StudioOptionField(id: "strength", label: "Img2img strength", control: .double(\.strength)),
-                StudioOptionField(id: "sigmaShift", label: "Sigma shift", control: .double(\.sigmaShift)),
-                StudioOptionField(
-                    id: "maxSequence",
-                    label: "Max sequence",
-                    control: .int(\.imageMaxSequenceLength, range: 64...8_192, step: 64)
-                ),
-            ]
-        case .listen:
-            return [
-                StudioOptionField(id: "language", label: "Language", control: .text(\.language, placeholder: "auto")),
-                StudioOptionField(id: "backend", label: "Backend", control: .text(\.backend, placeholder: "auto")),
-                StudioOptionField(id: "timestamps", label: "Timestamps", control: .bool(\.timestamps)),
-            ]
-        case .video:
-            return [
-                StudioOptionField(id: "fps", label: "Frames per second", control: .int(\.fps, range: 1...60, step: 1)),
-                StudioOptionField(id: "numFrames", label: "Frames", control: .int(\.numFrames, range: 1...600, step: 1)),
-                StudioOptionField(id: "strength", label: "Image strength", control: .double(\.strength)),
-            ]
-        default:
-            return []
-        }
     }
 }
 

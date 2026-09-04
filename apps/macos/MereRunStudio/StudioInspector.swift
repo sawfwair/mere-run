@@ -3,11 +3,14 @@ import MereRunContract
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The inspector column: the current prompt task's standard parameters in sections (Prompt,
-/// Output, Model & adapters, Sampling), each with Reset, and everything else the command takes
-/// under a collapsed Advanced row. It binds the same `StudioDraft` the composer's chips edit,
-/// so a change in either shows in both, and the header counts what differs from the mode's
-/// defaults.
+/// The inspector column, rendered from the contract. `StudioContractSchema` turns the current
+/// task's capability into sections (the contract's `group`), a disclosure (its `tier`), and one
+/// control per option (its `kind`, `range`, `choices`, and `depends_on`); `ContractForm` draws
+/// them. The handful of controls the contract cannot describe — the aspect pair, the seed row, the
+/// mask canvas, the ordered MiniMax references — come from this file through the override builder.
+///
+/// Every control binds the same `StudioDraft` the composer's chips edit, so a change in either
+/// shows in both, and the header counts what differs from the mode's defaults.
 struct StudioInspector: View {
     let mode: StudioMode
     @Binding var draft: StudioDraft
@@ -18,20 +21,22 @@ struct StudioInspector: View {
     let lastSeed: String?
     let onShowModels: () -> Void
     let onShowAdapters: () -> Void
-    let onShowRealtimeMusic: () -> Void
     let onClose: () -> Void
 
+    @EnvironmentObject private var controller: MereRunController
     @State private var showAdvanced = false
     @State private var editingSeed = false
+    @State private var showImageEditor = false
+    @State private var voiceProfiles: [StudioVoiceProfile] = []
 
     static let width = StudioLayoutPolicy.inspectorWidth
 
-    private var sections: [StudioInspectorSection] {
-        StudioInspectorSchema.sections(for: mode)
+    private var sections: [StudioContractSection] {
+        StudioInspectorSchema.sections(for: mode, draft: draft)
     }
 
-    private var advancedCount: Int {
-        StudioInspectorSchema.advancedFields(for: mode).count
+    private var advancedFields: [StudioContractField] {
+        StudioInspectorSchema.advancedFields(for: mode, draft: draft)
     }
 
     private var changedCount: Int {
@@ -46,7 +51,7 @@ struct StudioInspector: View {
                     ForEach(sections) { section in
                         sectionView(section)
                     }
-                    if advancedCount > 0 {
+                    if !advancedFields.isEmpty {
                         advancedSection
                     }
                 }
@@ -58,6 +63,26 @@ struct StudioInspector: View {
             Rectangle()
                 .fill(MereRunTheme.border.opacity(0.53))
                 .frame(width: 1)
+        }
+        .task {
+            if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
+        }
+        .onAppear(perform: normalizeMiniMaxH3Draft)
+        .onChange(of: draft.model) { _, _ in normalizeMiniMaxH3Draft() }
+        .sheet(isPresented: $showImageEditor) {
+            if !draft.inputPath.isBlank {
+                StudioImageEditor(
+                    inputURL: URL(fileURLWithPath: draft.inputPath),
+                    outputWidth: draft.width,
+                    outputHeight: draft.height,
+                    maskPath: $draft.imageMaskPath,
+                    outpaintTop: $draft.imageOutpaintTop,
+                    outpaintRight: $draft.imageOutpaintRight,
+                    outpaintBottom: $draft.imageOutpaintBottom,
+                    outpaintLeft: $draft.imageOutpaintLeft,
+                    feather: $draft.imageMaskFeather
+                )
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Inspector")
@@ -99,19 +124,13 @@ struct StudioInspector: View {
 
     // MARK: Sections
 
-    private func sectionView(_ section: StudioInspectorSection) -> some View {
+    private func sectionView(_ section: StudioContractSection) -> some View {
         StudioInspectorSectionView(
-            title: section.kind.title,
+            title: section.title,
             canReset: section.changedCount(draft: draft, baseline: baseline) > 0,
             onReset: { section.reset(&draft, to: baseline) }
         ) {
-            switch section.kind {
-            case .prompt: promptSection
-            case .output: outputSection
-            case .model: modelSection
-            case .sampling: samplingSection
-            case .transcript: transcriptSection
-            }
+            form(section.fields)
         }
     }
 
@@ -125,25 +144,20 @@ struct StudioInspector: View {
                         Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(MereRunTheme.textMuted)
-                        Text("Advanced · \(advancedCount) more")
+                        Text("Advanced · \(advancedFields.count) more")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(MereRunTheme.textSecondary)
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(showAdvanced ? "Hide advanced settings" : "Show \(advancedCount) advanced settings")
+                .accessibilityLabel(showAdvanced ? "Hide advanced settings" : "Show \(advancedFields.count) advanced settings")
                 Spacer(minLength: 0)
-                if showAdvanced, advancedChanged {
+                if showAdvanced, StudioInspectorSchema.advancedChanged(mode: mode, draft: draft, baseline: baseline) {
                     resetButton { StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline) }
                 }
             }
             if showAdvanced {
-                StudioAdvancedOptions(
-                    mode: mode,
-                    draft: $draft,
-                    onShowAdapters: onShowAdapters,
-                    onShowRealtimeMusic: onShowRealtimeMusic
-                )
+                form(advancedFields)
             }
         }
         .padding(.horizontal, 16)
@@ -151,8 +165,10 @@ struct StudioInspector: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var advancedChanged: Bool {
-        StudioInspectorSchema.advancedFields(for: mode).contains { $0.isChanged(draft, baseline) }
+    private func form(_ fields: [StudioContractField]) -> some View {
+        ContractForm(mode: mode, fields: fields, draft: $draft) { override in
+            overrideControl(override)
+        }
     }
 
     private func resetButton(_ action: @escaping () -> Void) -> some View {
@@ -163,101 +179,62 @@ struct StudioInspector: View {
             .help("Back to the defaults")
     }
 
-    // MARK: Prompt
+    // MARK: Overrides
 
+    /// The controls the contract cannot describe: one editor spanning several flags, or one whose
+    /// choices come from the machine rather than the contract.
     @ViewBuilder
-    private var promptSection: some View {
-        switch mode {
-        case .readImage:
+    private func overrideControl(_ override: StudioContractOverrideID) -> some View {
+        switch override {
+        case .model: modelPicker
+        case .dimensions: aspectControls
+        case .seed: seedRow
+        case .steps: stepsControl
+        case .guidance:
+            StudioInspectorSlider(
+                label: "Guidance", value: $draft.cfgScale, range: 0...8, step: 0.1,
+                format: { StudioComposerPresets.decimalText($0) }
+            )
+        case .duration: durationControls
+        case .voiceProfile: voiceProfilePicker
+        case .lora: loraRow
+        case .imageCanvas: imageCanvasRow
+        case .musicAdapters: musicAdaptersRow
+        case .musicLMMode:
+            StudioInspectorLabeledRow("LM planning") {
+                MereSegmentedControl(["auto", "use", "disable"], selection: $draft.musicLMMode, accessibilityLabel: "LM planning") {
+                    switch $0 {
+                    case "use": return "On"
+                    case "disable": return "Off"
+                    default: return "Preset"
+                    }
+                }
+            }
+        case .thinking:
+            StudioInspectorLabeledRow("Thinking") {
+                MereSegmentedControl(TextThinkingMode.allCases, selection: $draft.thinkingMode, accessibilityLabel: "Thinking") {
+                    switch $0 {
+                    case .automatic: return "Auto"
+                    case .show: return "Show"
+                    case .hide: return "Off"
+                    }
+                }
+            }
+        case .orderedReferences: orderedReferences
+        case .readImageAction:
             MereSegmentedControl(
                 StudioReadImageAction.allCases,
                 selection: $draft.readImageAction,
                 accessibilityLabel: "Read task"
             ) { $0.title }
-        default:
-            if let label = secondaryLabel {
-                StudioInspectorTextField(placeholder: label, text: $draft.secondaryText, lines: 1...4)
-            }
-        }
-    }
-
-    private var secondaryLabel: String? {
-        switch mode {
-        case .createImage, .video: return "Negative prompt"
-        case .chat, .code: return "System prompt"
-        case .speak: return "Voice style"
-        case .music: return "Lyrics"
-        default: return nil
-        }
-    }
-
-    // MARK: Output
-
-    @ViewBuilder
-    private var outputSection: some View {
-        switch mode {
-        case .createImage, .video:
-            aspectControls
-            if mode == .video { videoLengthControls }
-        case .music:
-            Toggle("Set exact length", isOn: $draft.useDuration)
-                .toggleStyle(.checkbox)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MereRunTheme.textSecondary)
-            if draft.useDuration {
-                StudioInspectorSlider(label: "Length", value: $draft.durationSeconds, range: 5...300, step: 1, format: { "\(StudioComposerPresets.secondsText($0)) s" })
-            }
-            StudioInspectorLabeledRow("Quality") {
-                MereSegmentedControl(["draft", "song", "final", "edit"], selection: $draft.musicQuality, accessibilityLabel: "Quality") {
-                    $0.capitalized
-                }
-            }
-        case .sfx:
-            StudioInspectorSlider(label: "Length", value: $draft.durationSeconds, range: 0.5...30, step: 0.5, format: { "\(StudioComposerPresets.secondsText($0)) s" })
-        default:
+        case .attachment:
             EmptyView()
-        }
-    }
-
-    private var aspectControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            StudioAspectSegmentedControl(mode: mode, draft: $draft)
-            HStack(spacing: 8) {
-                StudioInspectorNumberField(label: "Width", value: $draft.width, range: 64...4096)
-                Text("×")
-                    .font(.system(size: 12))
-                    .foregroundStyle(MereRunTheme.textMuted)
-                StudioInspectorNumberField(label: "Height", value: $draft.height, range: 64...4096)
-                Button("Swap") { StudioAspectPreset.swap(&draft) }
-                    .buttonStyle(.mereSecondary)
-                    .help("Swap width and height")
-            }
-        }
-    }
-
-    private var videoLengthControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            StudioInspectorLabeledRow("Length") {
-                MereSegmentedControl([false, true], selection: $draft.useDuration, accessibilityLabel: "Length unit") {
-                    $0 ? "Seconds" : "Frames"
-                }
-            }
-            if draft.useDuration {
-                StudioInspectorSlider(label: "Seconds", value: $draft.durationSeconds, range: 1...30, step: 0.5, format: { StudioComposerPresets.secondsText($0) })
-            } else {
-                StudioInspectorSlider(
-                    label: "Frames",
-                    value: Binding(get: { Double(draft.numFrames) }, set: { draft.numFrames = Int($0) }),
-                    range: 9...321, step: 8, format: { String(Int($0)) }
-                )
-            }
         }
     }
 
     // MARK: Model & adapters
 
-    @ViewBuilder
-    private var modelSection: some View {
+    private var modelPicker: some View {
         StudioModelPicker(mode: mode, model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels) {
             HStack(spacing: 8) {
                 if let glyph = modelStatusGlyph {
@@ -283,19 +260,6 @@ struct StudioInspector: View {
         .help(readiness.blocksRun ? readiness.message : "Model")
         .accessibilityLabel("Model")
         .accessibilityValue(StudioModelNaming.resolvedModelID(for: mode, model: draft.model))
-
-        switch mode {
-        case .createImage, .chat:
-            loraRow
-        case .music:
-            musicAdaptersRow
-        case .speak:
-            MereSegmentedControl(["style", "clone"], selection: $draft.voiceMode, accessibilityLabel: "Voice") {
-                $0 == "clone" ? "Cloned voice" : "Preset voice"
-            }
-        default:
-            EmptyView()
-        }
     }
 
     private var modelStatusGlyph: String? {
@@ -402,60 +366,106 @@ struct StudioInspector: View {
         .accessibilityLabel("Add ACE-Step adapter")
     }
 
+    private var voiceProfilePicker: some View {
+        StudioInspectorLabeledRow("Profile") {
+            Picker("Profile", selection: $draft.voiceProfile) {
+                Text("None").tag("")
+                ForEach(voiceProfiles) { profile in
+                    Text(profile.name).tag(profile.id)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: 150)
+        }
+    }
+
+    // MARK: Output
+
+    private var aspectControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            StudioAspectSegmentedControl(mode: mode, draft: $draft)
+            HStack(spacing: 8) {
+                StudioInspectorNumberField(label: "Width", value: $draft.width, range: 64...4096)
+                Text("×")
+                    .font(.system(size: 12))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                StudioInspectorNumberField(label: "Height", value: $draft.height, range: 64...4096)
+                Button("Swap") { StudioAspectPreset.swap(&draft) }
+                    .buttonStyle(.mereSecondary)
+                    .help("Swap width and height")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var durationControls: some View {
+        switch mode {
+        case .video:
+            VStack(alignment: .leading, spacing: 8) {
+                StudioInspectorLabeledRow("Length") {
+                    MereSegmentedControl([false, true], selection: $draft.useDuration, accessibilityLabel: "Length unit") {
+                        $0 ? "Seconds" : "Frames"
+                    }
+                }
+                if draft.useDuration {
+                    StudioInspectorSlider(label: "Seconds", value: $draft.durationSeconds, range: 1...30, step: 0.5, format: { StudioComposerPresets.secondsText($0) })
+                } else {
+                    StudioInspectorSlider(
+                        label: "Frames",
+                        value: Binding(get: { Double(draft.numFrames) }, set: { draft.numFrames = Int($0) }),
+                        range: 9...321, step: 8, format: { String(Int($0)) }
+                    )
+                }
+            }
+        default:
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Set exact length", isOn: $draft.useDuration)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                if draft.useDuration {
+                    StudioInspectorSlider(label: "Length", value: $draft.durationSeconds, range: 5...300, step: 1, format: { "\(StudioComposerPresets.secondsText($0)) s" })
+                }
+            }
+        }
+    }
+
     // MARK: Sampling
 
     @ViewBuilder
-    private var samplingSection: some View {
+    private var stepsControl: some View {
         switch mode {
         case .createImage:
             stepsSlider(range: 1...30)
-            StudioInspectorSlider(label: "Guidance", value: $draft.cfgScale, range: 0...8, step: 0.1, format: { StudioComposerPresets.decimalText($0) })
-            seedRow
-        case .video:
-            stepsSlider(range: 1...60)
-            StudioInspectorSlider(label: "Guidance", value: $draft.cfgScale, range: 0...8, step: 0.1, format: { StudioComposerPresets.decimalText($0) })
-            seedRow
-        case .music:
-            Toggle("Override preset steps", isOn: $draft.musicOverrideSteps)
+        case .video where StudioVideoModelFamily(model: draft.model).isMiniMaxH3:
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(
+                    "Override adaptive schedule",
+                    isOn: Binding(get: { draft.h3Steps != nil }, set: { draft.h3Steps = $0 ? 21 : nil })
+                )
                 .toggleStyle(.checkbox)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(MereRunTheme.textSecondary)
-            if draft.musicOverrideSteps { stepsSlider(range: 1...120) }
-            seedRow
-        case .sfx:
-            stepsSlider(range: 1...64)
-            seedRow
-        case .chat, .code:
-            StudioInspectorSlider(label: "Temperature", value: $draft.temperature, range: 0...2, step: 0.05, format: { StudioComposerPresets.decimalText($0) })
-            StudioInspectorSlider(label: "Top-p", value: $draft.topP, range: 0...1, step: 0.01, format: { StudioComposerPresets.decimalText($0) })
-            StudioInspectorLabeledRow("Max tokens") {
-                StudioInspectorNumberField(label: "Max tokens", value: $draft.maxTokens, range: 1...32_768)
-                    .frame(width: 88)
-            }
-            if mode == .chat {
-                StudioInspectorLabeledRow("Thinking") {
-                    MereSegmentedControl(TextThinkingMode.allCases, selection: $draft.thinkingMode, accessibilityLabel: "Thinking") {
-                        switch $0 {
-                        case .automatic: return "Auto"
-                        case .show: return "Show"
-                        case .hide: return "Off"
-                        }
-                    }
-                }
-                StudioInspectorLabeledRow("Response") {
-                    MereSegmentedControl([TextResponseFormat.text, .jsonObject], selection: $draft.responseFormat, accessibilityLabel: "Response format") {
-                        $0 == .text ? "Text" : "JSON"
-                    }
+                if draft.h3Steps != nil {
+                    StudioInspectorSlider(
+                        label: "Schedule points",
+                        value: Binding(get: { Double(draft.h3Steps ?? 21) }, set: { draft.h3Steps = Int($0.rounded()) }),
+                        range: 1...64, step: 1, format: { String(Int($0)) }
+                    )
                 }
             }
-        case .findObjects, .segment, .track:
-            StudioInspectorSlider(
-                label: "Threshold",
-                value: Binding(get: { draft.visionThreshold }, set: { draft.visionThreshold = min(max($0, 0), 1) }),
-                range: 0...1, step: 0.01, format: { StudioComposerPresets.decimalText($0) }
-            )
+        case .video:
+            stepsSlider(range: 1...60)
+        case .music:
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Override preset steps", isOn: $draft.musicOverrideSteps)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                if draft.musicOverrideSteps { stepsSlider(range: 1...120) }
+            }
         default:
-            EmptyView()
+            stepsSlider(range: 1...64)
         }
     }
 
@@ -509,23 +519,72 @@ struct StudioInspector: View {
         }
     }
 
-    // MARK: Transcript
+    // MARK: Inputs
 
-    private var transcriptSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            StudioInspectorLabeledRow("Language") {
-                TextField("auto", text: $draft.language)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12, design: .monospaced))
-                    .padding(.horizontal, 8)
-                    .frame(width: 96, height: 24)
-                    .background { StudioInspectorFieldChrome(cornerRadius: MereRunTheme.Radius.sm) }
-                    .accessibilityLabel("Language")
+    @ViewBuilder
+    private var imageCanvasRow: some View {
+        if !draft.inputPath.isBlank {
+            HStack(spacing: MereRunTheme.Spacing.sm) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(draft.imageMaskPath.isBlank && !hasImageOutpaint ? "Whole-image transform" : "Masked image edit")
+                        .font(.system(size: 12.5, weight: .medium))
+                    Text(draft.imageMaskPath.isBlank
+                        ? (hasImageOutpaint ? "Outpaint edges are editable" : "Paint a mask or expand the canvas")
+                        : URL(fileURLWithPath: draft.imageMaskPath).lastPathComponent)
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+                Spacer()
+                Button("Edit canvas…") { showImageEditor = true }
+                    .buttonStyle(.mereSecondary)
             }
-            Toggle("Timestamps", isOn: $draft.timestamps)
-                .toggleStyle(.checkbox)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MereRunTheme.textSecondary)
+            .padding(MereRunTheme.Spacing.sm)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                    .fill(MereRunTheme.accentSoft.opacity(0.55))
+            }
+        }
+    }
+
+    private var hasImageOutpaint: Bool {
+        [
+            draft.imageOutpaintTop,
+            draft.imageOutpaintRight,
+            draft.imageOutpaintBottom,
+            draft.imageOutpaintLeft,
+        ].contains { $0 > 0 }
+    }
+
+    @ViewBuilder
+    private var orderedReferences: some View {
+        let references = draft.h3ReferenceInputs ?? []
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Ordered Ref2VA references")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            ForEach(Array(references.enumerated()), id: \.offset) { index, reference in
+                HStack(spacing: 5) {
+                    Text(reference)
+                        .font(MereRunTheme.captionFont)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button { moveH3Reference(index, by: -1) } label: { Image(systemName: "arrow.up") }
+                        .disabled(index == 0)
+                        .accessibilityLabel("Move up")
+                    Button { moveH3Reference(index, by: 1) } label: { Image(systemName: "arrow.down") }
+                        .disabled(index == references.count - 1)
+                        .accessibilityLabel("Move down")
+                    Button(role: .destructive) { removeH3Reference(index) } label: { Image(systemName: "trash") }
+                        .accessibilityLabel("Remove reference")
+                }
+            }
+            HStack {
+                Button("Image") { chooseH3Reference(kind: "image", type: .image) }
+                Button("Video") { chooseH3Reference(kind: "video", type: .movie) }
+                Button("Audio") { chooseH3Reference(kind: "audio", type: .audio) }
+            }
+            .controlSize(.small)
         }
     }
 
@@ -550,6 +609,46 @@ struct StudioInspector: View {
             let existing = StudioAttachmentSlot.separatedPaths(draft.musicAdapterPaths)
             let added = panel.urls.map(\.path).filter { !existing.contains($0) }
             draft.musicAdapterPaths = (existing + added).joined(separator: "\n")
+        }
+    }
+
+    private func chooseH3Reference(kind: String, type: UTType) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [type]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        draft.h3ReferenceInputs = (draft.h3ReferenceInputs ?? []) + ["\(kind):\(url.path)"]
+    }
+
+    private func moveH3Reference(_ index: Int, by offset: Int) {
+        var references = draft.h3ReferenceInputs ?? []
+        references.swapAt(index, index + offset)
+        draft.h3ReferenceInputs = references
+    }
+
+    private func removeH3Reference(_ index: Int) {
+        var references = draft.h3ReferenceInputs ?? []
+        references.remove(at: index)
+        draft.h3ReferenceInputs = references
+    }
+
+    /// MiniMax-H3 fixes the frame rate, aligns the size to 32 pixels and the frame count to 17n+5,
+    /// and takes either an ordered reference list or a start/end keyframe pair, never both.
+    private func normalizeMiniMaxH3Draft() {
+        guard mode == .video, StudioVideoModelFamily(model: draft.model).isMiniMaxH3 else { return }
+        draft.fps = 24
+        draft.width = max(32, (draft.width / 32) * 32)
+        draft.height = max(32, (draft.height / 32) * 32)
+        draft.numFrames = StudioVideoModelFamily.alignedMiniMaxH3FrameCount(draft.numFrames)
+        draft.audioPath = ""
+        draft.timings = false
+        draft.timingsOutputPath = ""
+        if StudioVideoModelFamily(model: draft.model) == .miniMaxH3Ref2VA {
+            draft.inputPath = ""
+            draft.endImagePath = ""
+        } else {
+            draft.h3ReferenceInputs = []
         }
     }
 }
