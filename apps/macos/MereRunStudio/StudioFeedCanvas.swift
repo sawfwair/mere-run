@@ -364,12 +364,20 @@ struct StudioGenerationCard: View {
         files.filter { [.image, .video, .audio, .model3D].contains(StudioOutputFileKind.classify($0)) }
     }
 
+    /// Prose the card previews inline. A file the run reported a role for is never prose: its
+    /// structured-prompt or timings JSON belongs in the sidecar row under its own name.
     private var textFiles: [URL] {
-        files.filter { StudioOutputFileKind.classify($0) == .text }
+        files.filter { StudioOutputFileKind.classify($0) == .text && item.artifactRole(for: $0) == nil }
     }
 
+    /// The run's non-media companions: everything the CLI's receipt named with a role, plus
+    /// whatever the extension leaves unclassified for a run that reported none.
     private var sidecars: [URL] {
-        files.filter { StudioOutputFileKind.classify($0) == .other }
+        files.filter { url in
+            let kind = StudioOutputFileKind.classify(url)
+            guard ![.image, .video, .audio, .model3D].contains(kind) else { return false }
+            return item.artifactRole(for: url) != nil || kind == .other
+        }
     }
 
     private var primaryURL: URL? {
@@ -429,7 +437,9 @@ struct StudioGenerationCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: "doc")
                                 .font(.system(size: 9, weight: .semibold))
-                            Text(url.lastPathComponent)
+                            // The receipt says what the file is ("Structured prompt"); only a
+                            // run that reported no role falls back to its name.
+                            Text(item.artifactRoleLabel(for: url) ?? url.lastPathComponent)
                                 .font(.system(size: 10.5, weight: .medium))
                                 .lineLimit(1)
                         }
