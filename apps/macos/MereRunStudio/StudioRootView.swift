@@ -1097,7 +1097,8 @@ struct StudioRootView: View {
                     outputURL: result.outputURL,
                     outputText: result.outputText,
                     commandPreview: result.commandPreview.maskingAPIKeyValue(),
-                    artifactURLs: result.artifactURLs
+                    artifactURLs: result.artifactURLs,
+                    artifactRoles: result.artifactRoles
                 )
                 if result.exitCode == 0, library.items.first(where: { $0.id == requestID })?.mode == mode {
                     newResultID = requestID

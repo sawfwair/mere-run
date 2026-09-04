@@ -298,8 +298,24 @@ struct Artifact: Hashable, Identifiable {
 
     let url: URL
     let role: Role
+    /// What this sidecar is, in the CLI receipt's vocabulary (`detections`, `masks`,
+    /// `daw-bundle`, …). Nil for the primary artifact, and for a sidecar found by probing whose
+    /// purpose could not be inferred. See `StudioArtifactRole`.
+    let sidecarRole: String?
 
     var id: URL { url }
+
+    /// A display label for the sidecar's role ("Structured prompt", "DAW bundle"), or nil when
+    /// the run reported none and the result surface should fall back to the file name.
+    var roleLabel: String? {
+        StudioArtifactRole.label(for: sidecarRole)
+    }
+
+    init(url: URL, role: Role, sidecarRole: String? = nil) {
+        self.url = url
+        self.role = role
+        self.sidecarRole = role == .primary ? nil : sidecarRole
+    }
 }
 
 /// The durable outcome of one job, delivered exactly once through `JobStore.completions`.
@@ -317,6 +333,10 @@ struct JobResult: Identifiable, Equatable {
     let exitCode: Int32
     let outputURL: URL?
     let artifactURLs: [URL]
+    /// What each sidecar in `artifactURLs` is, keyed by its standardized path. Empty for runs
+    /// that produced no sidecars and for CLIs older than `--receipt` whose sidecar roles could
+    /// not be inferred.
+    let artifactRoles: [String: String]
     let outputText: String?
     let completedAt: Date
     /// When this run was a chat/code turn, the conversation it belongs to (so completion routes
@@ -336,6 +356,7 @@ struct JobResult: Identifiable, Equatable {
         exitCode: Int32,
         outputURL: URL?,
         artifactURLs: [URL] = [],
+        artifactRoles: [String: String] = [:],
         outputText: String?,
         completedAt: Date = Date(),
         conversationID: UUID? = nil,
@@ -349,6 +370,7 @@ struct JobResult: Identifiable, Equatable {
         self.exitCode = exitCode
         self.outputURL = outputURL
         self.artifactURLs = artifactURLs
+        self.artifactRoles = artifactRoles
         self.outputText = outputText
         self.completedAt = completedAt
         self.conversationID = conversationID
@@ -455,6 +477,13 @@ final class Job: ObservableObject, Identifiable {
     /// Whether output-file detection applies: catalog commands other than conversation turns.
     /// Conversation replies are prose, and raw commands have no output contract to read.
     var detectsArtifacts: Bool { !request.command.isRaw && !isConversationTurn }
+    /// Whether this run will print the `--receipt` result line naming everything it wrote. Such
+    /// a run needs no filesystem poll: the receipt arrives on stdout and settles the artifacts.
+    var expectsRunReceipt: Bool {
+        detectsArtifacts
+            && request.templateID?.emitsRunReceipt == true
+            && request.configuration.arguments.contains(StudioMachineOutputFlags.receipt)
+    }
     private var isConversationTurn: Bool { request.conversationID != nil }
     private var isRawCommand: Bool { request.command.isRaw }
     /// The template a result is attributed to; raw commands report the catalog's raw-argument one.
@@ -534,6 +563,9 @@ final class Job: ObservableObject, Identifiable {
                 self.progress = progress
                 continue
             }
+            // The receipt is the app's transport for reading the run's outputs, not something a
+            // person asked the CLI to print, so it stays out of the console.
+            if StudioRunReceipt.isReceiptLine(line) { continue }
             log.append(LogLine(stream: stream, text: line))
         }
     }
@@ -560,21 +592,18 @@ final class Job: ObservableObject, Identifiable {
         // Conversation replies are prose, not artifacts — never run output-file detection on them
         // (a path-like substring in a reply must not become a bogus artifact or status). Raw
         // commands have no output contract to read either.
-        let detectedOutput = detectsArtifacts
-            ? resolver.primaryOutput(expected: expectedOutput, stdout: stdoutBuffer)
-            : nil
-        let reportedOutputs = detectsArtifacts ? resolver.reportedOutputs(stdout: stdoutBuffer) : []
-        let artifactURLs: [URL]
-        if case .templated(let template, let draft) = request.command {
-            artifactURLs = StudioArtifactDiscovery.urls(
-                templateID: template.id,
+        let resolution: ArtifactResolution
+        if detectsArtifacts, case .templated(let template, let draft) = request.command {
+            resolution = resolver.resolve(
+                template: template,
                 draft: draft,
-                primaryOutput: detectedOutput,
-                reportedOutputs: reportedOutputs
+                expected: expectedOutput,
+                stdout: stdoutBuffer
             )
         } else {
-            artifactURLs = []
+            resolution = .empty
         }
+        let detectedOutput = resolution.primary
         // Conversation turns finalize from the unbounded, think-stripped accumulator so long
         // replies are not clipped by the 32 KB console buffer; raw commands from their complete
         // stdout/stderr for the same reason; other modes use the console buffers.
@@ -586,12 +615,27 @@ final class Job: ObservableObject, Identifiable {
         } else if isRawCommand {
             outputText = Self.capturedResultText(stdout: fullOutput, stderr: fullErrorOutput, exitCode: exitCode)
         } else {
-            outputText = Self.capturedResultText(stdout: stdoutBuffer, stderr: stderrBuffer, exitCode: exitCode)
+            // The receipt is the app's own transport, not part of the run's output: it must not
+            // land in a library row or in a transcript the CLI printed to stdout.
+            outputText = Self.capturedResultText(
+                stdout: StudioRunReceipt.strippingReceiptLines(from: stdoutBuffer),
+                stderr: stderrBuffer,
+                exitCode: exitCode
+            )
         }
 
+        // A resident session (`video session`) reports its render over its own stdin protocol,
+        // so keep the live primary when nothing was resolved from the run's output.
         let primary = detectedOutput ?? primaryArtifactURL
-        artifacts = (primary.map { [Artifact(url: $0, role: .primary)] } ?? [])
-            + artifactURLs.filter { $0 != primary }.map { Artifact(url: $0, role: .sidecar) }
+        let sidecars = resolution.sidecars.filter { $0.url != primary }
+        artifacts = (primary.map { [Artifact(url: $0, role: .primary)] } ?? []) + sidecars
+        let artifactURLs = artifacts.map(\.url)
+        let artifactRoles = Dictionary(
+            sidecars.compactMap { artifact in
+                artifact.sidecarRole.map { (artifact.url.standardizedFileURL.path, $0) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
 
         if exitCode == 0 {
             status = detectedOutput.map { "Completed: \($0.lastPathComponent)" } ?? "Completed"
@@ -611,6 +655,7 @@ final class Job: ObservableObject, Identifiable {
             exitCode: exitCode,
             outputURL: detectedOutput,
             artifactURLs: artifactURLs,
+            artifactRoles: artifactRoles,
             outputText: outputText,
             completedAt: date,
             conversationID: request.conversationID,

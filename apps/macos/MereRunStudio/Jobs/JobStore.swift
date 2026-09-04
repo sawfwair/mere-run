@@ -50,6 +50,7 @@ final class JobStore: ObservableObject {
     /// Eviction never crosses lanes, so probe and utility churn cannot drop a finished run.
     static let finishedJobRetentionLimit = 50
     /// How often a running job is re-probed for its `--output` file while the CLI is silent.
+    /// Only commands that print no `--receipt` line are watched this way; see `start`.
     static let defaultOutputWatchInterval: Duration = .milliseconds(350)
 
     private let processRunner: MereRunProcessRunning
@@ -243,7 +244,9 @@ final class JobStore: ObservableObject {
         events.send(.started(job))
         job.note(job.displayCommand, stream: .system)
         events.send(.changed(job))
-        if job.detectsArtifacts {
+        // A run that prints a receipt names its outputs on stdout, so `consume` settles them the
+        // moment the line arrives; only the commands without one need the filesystem poll.
+        if job.detectsArtifacts, !job.expectsRunReceipt {
             startOutputWatch(for: job)
         }
 

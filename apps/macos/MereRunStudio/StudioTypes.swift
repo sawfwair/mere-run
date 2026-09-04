@@ -1025,6 +1025,11 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     /// Every materialized artifact associated with the run. `outputURL` remains the primary item
     /// for backward compatibility and Quick Look.
     var artifactURLs: [URL]? = nil
+    /// What each sidecar in `artifactURLs` is, keyed by its standardized path: the CLI receipt's
+    /// role (`detections`, `masks`, `recipe`, …) so a result surface labels it rather than
+    /// guessing from the file extension. Absent for rows written before receipts and for files
+    /// whose role could not be determined. See `StudioArtifactRole`.
+    var artifactRoles: [String: String]? = nil
     // Conversation channel — non-nil only for .chat / .code threads. Optional + additive so
     // legacy library.json rows (which lack these keys) decode unchanged with nil.
     var messages: [StudioMessage]? = nil
@@ -1065,6 +1070,18 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
 
     var isConversation: Bool {
         messages != nil
+    }
+
+    /// The receipt role recorded for one artifact, or nil for the primary output and for rows
+    /// whose run predates receipts.
+    func artifactRole(for url: URL) -> String? {
+        artifactRoles?[url.standardizedFileURL.path]
+    }
+
+    /// A display label for one artifact's role ("Detections", "DAW bundle"), or nil when the run
+    /// reported none.
+    func artifactRoleLabel(for url: URL) -> String? {
+        StudioArtifactRole.label(for: artifactRole(for: url))
     }
 }
 
@@ -1383,20 +1400,68 @@ enum StudioProgressParser {
         )
     }
 
-    /// One NDJSON progress event; only the denoising stage carries the step bar (load
-    /// stages stay indeterminate and are left to the running overlay's status line).
+    /// Human labels for the stage names the `--progress-json` lanes emit: the image and video
+    /// generation stages (`GenerationStage`), the speech stages (`TTSStage`), and the music
+    /// milestones. The label names the stage the CLI reported, so the feed card and the Activity
+    /// popover read "Denoising 15/24". A stage this build does not know is humanized from its own
+    /// name, so a newer CLI still renders a labelled bar.
+    private static let jsonStageLabels: [String: String] = [
+        "loadingModel": "Loading model",
+        "loadingEncoder": "Loading encoder",
+        "encodingText": "Encoding prompt",
+        "encodingReferenceImages": "Encoding references",
+        "loadingVAE": "Loading VAE",
+        "loadingTransformer": "Loading transformer",
+        "loadingLoRA": "Loading adapter",
+        "denoising": "Denoising",
+        "decoding": "Decoding",
+        "saving": "Saving output",
+        "preprocessingReference": "Preparing reference",
+        "encodingReference": "Encoding reference",
+        "buildingPrompt": "Building prompt",
+        "tokenizing": "Tokenizing",
+        "generating": "Generating",
+        "semantic": "Semantic frames",
+        "window": "Window",
+    ]
+
+    /// One NDJSON progress event, in the convention every `--progress-json` lane follows:
+    /// `step` is 0-based while a stage runs, each determinate stage ends with exactly one event
+    /// whose `step == total_steps`, and `total_steps == 0` marks an indeterminate stage (token
+    /// streaming with no known length). Indeterminate stages resolve to a labelled value with no
+    /// fraction, which every progress surface renders as a spinner rather than a 0% bar.
     private static func parseGenerationJSON(_ line: String) -> StudioRunProgress? {
         guard let data = line.data(using: .utf8),
               let progress = try? JSONDecoder().decode(GenerationProgressEvent.self, from: data),
               progress.event == "progress",
-              progress.stage == "denoising",
-              progress.totalSteps > 0 else { return nil }
+              !progress.stage.isBlank else { return nil }
+        let label = jsonStageLabels[progress.stage] ?? humanizedStage(progress.stage)
+        guard progress.totalSteps > 0 else {
+            // Indeterminate: report how far it has come without claiming a percentage.
+            let detail = progress.step > 0 ? "Step \(progress.step)" : nil
+            return StudioRunProgress(label: label, fractionCompleted: nil, detail: detail)
+        }
         let current = min(progress.step + 1, progress.totalSteps) // the CLI emits a 0-based step index
         return StudioRunProgress(
-            label: progress.stage.capitalized,
+            label: label,
             fractionCompleted: Double(current) / Double(progress.totalSteps),
             detail: "Step \(current) of \(progress.totalSteps)"
         )
+    }
+
+    /// "encodingSomething" / "encoding-something" → "Encoding something".
+    private static func humanizedStage(_ stage: String) -> String {
+        var words = ""
+        for character in stage.replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ") {
+            if character.isUppercase, !words.isEmpty, words.last != " " {
+                words.append(" ")
+                words.append(contentsOf: character.lowercased())
+            } else {
+                words.append(character)
+            }
+        }
+        return words.prefix(1).uppercased() + words.dropFirst()
     }
 
     /// Specialist workflows use concise human progress lines rather than the image-generation
@@ -1541,6 +1606,160 @@ enum StudioResultParser {
     /// True when a line is an absolute or tilde-rooted filesystem path rather than prose.
     static func isPathLike(_ candidate: String) -> Bool {
         candidate.hasPrefix("/") || candidate.hasPrefix("~/")
+    }
+}
+
+/// The CLI's structured result line, printed as the final stdout line when a run was launched
+/// with `--receipt`:
+///
+///     {"event":"result","exit":0,"outputs":[{"kind":"image","path":"/abs/out.png"}]}
+///
+/// The first output is the run's primary artifact; the rest are sidecars carrying a `role`
+/// (`detections`, `masks`, `recipe`, …). Only a successful run prints one, so `exit` is always
+/// `0`. Human output above the line is unchanged, which is why parsing scans the trailing lines
+/// rather than assuming the receipt is last: a resident process or a shell wrapper may print
+/// after it.
+struct StudioRunReceipt: Decodable, Equatable {
+    struct Output: Decodable, Equatable {
+        let path: String
+        /// The CLI's output kind (`image`, `video`, `audio`, `text`, `json`, `directory`). Kept
+        /// as a string so a kind the app does not know yet still decodes.
+        let kind: String
+        /// The sidecar's purpose; nil for the primary artifact.
+        let role: String?
+
+        var url: URL {
+            URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
+        }
+    }
+
+    static let eventName = "result"
+    /// How many trailing stdout lines are searched for the receipt.
+    static let trailingLineLimit = 40
+
+    let event: String
+    let exit: Int32
+    let outputs: [Output]
+
+    /// The last receipt in `stdout`, or nil when the run predates `--receipt` or did not emit one.
+    /// Lines that merely look like JSON are skipped, so a trailing progress or protocol line
+    /// after the receipt does not hide it.
+    static func parse(stdout: String) -> StudioRunReceipt? {
+        let candidates = stdout
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.hasPrefix("{") && $0.contains("\"\(eventName)\"") }
+            .suffix(trailingLineLimit)
+        for line in candidates.reversed() {
+            guard let data = line.data(using: .utf8),
+                  let receipt = try? JSONDecoder().decode(StudioRunReceipt.self, from: data),
+                  receipt.event == eventName else {
+                continue
+            }
+            return receipt
+        }
+        return nil
+    }
+
+    /// `stdout` without its receipt lines, so a receipt never reaches the console log, a library
+    /// row's captured text, or a transcript the CLI printed to stdout.
+    static func strippingReceiptLines(from stdout: String) -> String {
+        guard stdout.contains("\"\(eventName)\"") else { return stdout }
+        return stdout
+            .components(separatedBy: "\n")
+            .filter { !isReceiptLine($0) }
+            .joined(separator: "\n")
+    }
+
+    static func isReceiptLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("{"), trimmed.contains("\"\(eventName)\""),
+              let data = trimmed.data(using: .utf8),
+              let receipt = try? JSONDecoder().decode(StudioRunReceipt.self, from: data) else {
+            return false
+        }
+        return receipt.event == eventName
+    }
+}
+
+/// The receipt vocabulary for what a sidecar file is, so the output grid and the Analyze result
+/// column label sidecars instead of guessing from a file extension. Unknown roles (a newer CLI
+/// than this build) keep their raw string and are humanized for display.
+enum StudioArtifactRole {
+    static let structuredPrompt = "structured-prompt"
+    static let timings = "timings"
+    static let detections = "detections"
+    static let tracking = "tracking"
+    static let masks = "masks"
+    static let candidate = "candidate"
+    static let stem = "stem"
+    static let lyrics = "lyrics"
+    static let recipe = "recipe"
+    static let composition = "composition"
+    static let profile = "profile"
+    static let dawBundle = "daw-bundle"
+
+    /// Every role the CLI emits today, in the order the receipt lists them per family.
+    static let known = [
+        structuredPrompt, timings, detections, tracking, masks,
+        candidate, stem, lyrics, recipe, composition, profile, dawBundle,
+    ]
+
+    private static let labels: [String: String] = [
+        structuredPrompt: "Structured prompt",
+        timings: "Timings",
+        detections: "Detections",
+        tracking: "Tracking",
+        masks: "Masks",
+        candidate: "Candidate",
+        stem: "Stem",
+        lyrics: "Lyrics",
+        recipe: "Recipe",
+        composition: "Composition",
+        profile: "Profile",
+        dawBundle: "DAW bundle",
+    ]
+
+    /// A display label for a role: the known title, or the raw role humanized ("foo-bar" → "Foo bar").
+    static func label(for role: String?) -> String? {
+        guard let role, !role.isBlank else { return nil }
+        if let label = labels[role] { return label }
+        let words = role.replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+        return words.prefix(1).uppercased() + words.dropFirst()
+    }
+
+    /// The role of a file discovered by probing rather than reported by a receipt. It reads the
+    /// same draft fields `StudioArtifactDiscovery` used to find the file, so older CLIs label
+    /// their sidecars the same way a receipt would.
+    static func inferred(for url: URL, templateID: CommandTemplateID, draft: CommandDraft) -> String? {
+        let path = url.standardizedFileURL.path
+        func matches(_ candidate: String) -> Bool {
+            guard !candidate.isBlank else { return false }
+            let expanded = URL(fileURLWithPath: NSString(string: candidate).expandingTildeInPath)
+            return expanded.standardizedFileURL.path == path
+        }
+        func isInside(_ candidate: String) -> Bool {
+            guard !candidate.isBlank else { return false }
+            let expanded = URL(fileURLWithPath: NSString(string: candidate).expandingTildeInPath)
+                .standardizedFileURL.path
+            return path == expanded || path.hasPrefix(expanded + "/")
+        }
+
+        if matches(draft.visionJSONOutputPath) || matches(draft.visionJSONLOutput) {
+            return templateID == .visionTrack || templateID == .visionTrackLive ? tracking : detections
+        }
+        if isInside(draft.visionMaskOutputDirectory) { return masks }
+        if matches(draft.musicRecipeOutput) { return recipe }
+        if matches(draft.musicLRCOutput) { return lyrics }
+        if isInside(draft.musicDAWBundle) { return dawBundle }
+
+        let name = url.lastPathComponent
+        if name.contains(".candidate-") { return candidate }
+        if name.contains(".stem-") { return stem }
+        if name.hasSuffix(".recipe.json") { return recipe }
+        if name.hasSuffix(".lrc") { return lyrics }
+        return nil
     }
 }
 

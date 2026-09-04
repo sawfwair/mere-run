@@ -103,7 +103,8 @@ final class StudioLibraryStore: ObservableObject {
         outputURL: URL?,
         outputText: String?,
         commandPreview: String,
-        artifactURLs: [URL] = []
+        artifactURLs: [URL] = [],
+        artifactRoles: [String: String] = [:]
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         var item = items[index]
@@ -117,6 +118,7 @@ final class StudioLibraryStore: ObservableObject {
         if !artifactURLs.isEmpty {
             item.artifactURLs = artifactURLs
         }
+        item.artifactRoles = artifactRoles.isEmpty ? nil : artifactRoles
         item.outputText = outputText
 
         if shouldKeep(item) {
