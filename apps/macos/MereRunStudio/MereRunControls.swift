@@ -22,8 +22,10 @@ extension ButtonStyle where Self == MerePrimaryButtonStyle {
     static var merePrimary: MerePrimaryButtonStyle { MerePrimaryButtonStyle() }
 }
 
-/// A quiet secondary action: themed surface + border with hover feedback, replacing the
-/// native `.bordered` look so custom panels stay visually consistent in both appearances.
+/// A quiet secondary action, drawn as the design boards draw it: a 26pt `surfaceRaised` pill
+/// with a `border` hairline at 60% and its label in 11.5pt medium `textPrimary`, so Replace,
+/// Segment these, Save JSON, Re-track, Reveal, Cancel and Log read as filled controls rather
+/// than the near-white cards a translucent `surface` fill produced.
 struct MereSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         MereSecondaryButtonBody(configuration: configuration)
@@ -35,16 +37,20 @@ struct MereSecondaryButtonStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(hovering ? MereRunTheme.textPrimary : MereRunTheme.textSecondary)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(MereRunTheme.textPrimary)
                 .padding(.horizontal, MereRunTheme.Spacing.sm)
                 .frame(minHeight: 26)
                 .background {
                     RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                        .fill(hovering ? MereRunTheme.surfaceRaised : MereRunTheme.surface.opacity(0.5))
+                        .fill(MereRunTheme.surfaceRaised)
                         .overlay {
                             RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                                .strokeBorder(MereRunTheme.border.opacity(0.7), lineWidth: 1)
+                                .fill(hovering ? MereRunTheme.hoverFill : .clear)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                                .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
                         }
                 }
                 .contentShape(Rectangle())
