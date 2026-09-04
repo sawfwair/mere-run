@@ -572,6 +572,233 @@ final class StudioLibraryStoreTests: XCTestCase {
         }
     }
 
+    // MARK: - Favorites
+
+    func testFavoritesSurviveAReloadAndUnstarringLeavesTheKeyOut() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let item = makeItem(prompt: "a ceramic coffee mug")
+        store.upsert(item)
+
+        store.setFavorite(id: item.id, isFavorite: true)
+        XCTAssertTrue(StudioLibraryStore(libraryURL: url).items.first?.isStarred == true)
+
+        store.setFavorite(id: item.id, isFavorite: false)
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        XCTAssertFalse(reloaded.items.first?.isStarred == true)
+        // Unstarred rows keep the shape a build without favorites writes and reads.
+        let text = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(text.contains("isFavorite"))
+    }
+
+    func testFavoritingAnUnknownRowIsANoOp() throws {
+        let store = StudioLibraryStore(libraryURL: try temporaryLibraryURL())
+        store.setFavorite(id: UUID(), isFavorite: true)
+        XCTAssertTrue(store.items.isEmpty)
+    }
+
+    // MARK: - Delete
+
+    func testDeleteMovesEveryArtifactToTheTrashOnlyWhenAsked() throws {
+        let url = try temporaryLibraryURL()
+        let directory = url.deletingLastPathComponent()
+        let primary = directory.appendingPathComponent("mug.png")
+        let sidecar = directory.appendingPathComponent("mug.json")
+        try Data([0]).write(to: primary)
+        try Data([0]).write(to: sidecar)
+
+        var trashed: [URL] = []
+        let store = StudioLibraryStore(libraryURL: url, trashItem: { trashed.append($0) })
+        var kept = makeItem(prompt: "kept")
+        kept.outputURL = primary
+        var item = makeItem(prompt: "a ceramic coffee mug")
+        item.outputURL = primary
+        item.artifactURLs = [primary, sidecar]
+        store.upsert(kept)
+        store.upsert(item)
+
+        store.delete(ids: [kept.id], trashingFiles: false)
+        XCTAssertTrue(trashed.isEmpty, "forgetting a row must not touch its files")
+
+        let failures = store.delete(ids: [item.id], trashingFiles: true)
+        XCTAssertTrue(failures.isEmpty)
+        XCTAssertEqual(Set(trashed), [primary, sidecar], "the primary output and its sidecars go together")
+        XCTAssertTrue(store.items.isEmpty)
+    }
+
+    func testDeleteReportsFilesItCouldNotTrashButStillForgetsTheRow() throws {
+        let url = try temporaryLibraryURL()
+        let file = url.deletingLastPathComponent().appendingPathComponent("locked.png")
+        try Data([0]).write(to: file)
+
+        struct TrashFailure: Error {}
+        let store = StudioLibraryStore(libraryURL: url, trashItem: { _ in throw TrashFailure() })
+        var item = makeItem(prompt: "locked")
+        item.outputURL = file
+        store.upsert(item)
+
+        let failures = store.delete(ids: [item.id], trashingFiles: true)
+        XCTAssertEqual(failures, [file])
+        XCTAssertTrue(store.items.isEmpty)
+    }
+
+    func testDeleteSkipsFilesThatAreAlreadyGone() throws {
+        let url = try temporaryLibraryURL()
+        var trashed: [URL] = []
+        let store = StudioLibraryStore(libraryURL: url, trashItem: { trashed.append($0) })
+        var item = makeItem(prompt: "already gone")
+        item.outputURL = url.deletingLastPathComponent().appendingPathComponent("missing.png")
+        store.upsert(item)
+
+        XCTAssertTrue(store.delete(ids: [item.id], trashingFiles: true).isEmpty)
+        XCTAssertTrue(trashed.isEmpty)
+    }
+
+    func testBatchDeleteRemovesEveryNamedRowAndLeavesTheRest() throws {
+        let store = StudioLibraryStore(libraryURL: try temporaryLibraryURL())
+        let first = makeItem(prompt: "one")
+        let second = makeItem(prompt: "two")
+        let survivor = makeItem(prompt: "three")
+        for row in [first, second, survivor] { store.upsert(row) }
+
+        store.delete(ids: [first.id, second.id], trashingFiles: false)
+        XCTAssertEqual(store.items.map(\.prompt), ["three"])
+    }
+
+    // MARK: - library.json compatibility
+
+    /// A library.json in exactly the shape shipped before favorites existed. It must keep
+    /// decoding, row for row, with `isFavorite` reading as nil.
+    func testRowsWrittenBeforeFavoritesStillDecode() throws {
+        let url = try temporaryLibraryURL()
+        try Self.legacyLibraryFixture.write(to: url, atomically: true, encoding: .utf8)
+
+        let store = StudioLibraryStore(libraryURL: url)
+
+        XCTAssertEqual(store.items.count, 3)
+        let image = try XCTUnwrap(store.items.first { $0.prompt == "A lighthouse on a basalt shore at dusk" })
+        XCTAssertEqual(image.mode, .createImage)
+        XCTAssertEqual(image.templateID, .imageGenerate)
+        XCTAssertEqual(image.outputURL?.path, "/Users/example/Library/Application Support/MereRun/App Outputs/imageGenerate-20260101-120000.png")
+        XCTAssertEqual(image.artifactURLs?.count, 1)
+        XCTAssertEqual(image.status, .completed)
+        XCTAssertNil(image.isFavorite)
+        XCTAssertFalse(image.isStarred)
+
+        let thread = try XCTUnwrap(store.items.first { $0.isConversation })
+        XCTAssertEqual(thread.messages?.count, 2)
+        XCTAssertEqual(thread.model, "gemma4-e4b")
+
+        let imported = try XCTUnwrap(store.items.first { $0.source == .raycast })
+        XCTAssertEqual(imported.customTitle, "Raycast mug")
+
+        // Rewriting must not disturb the rows that were already there.
+        store.setFavorite(id: image.id, isFavorite: true)
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(reloaded.items.count, 3)
+        XCTAssertTrue(reloaded.items.first { $0.id == image.id }?.isStarred == true)
+        XCTAssertEqual(reloaded.items.first { $0.isConversation }?.messages?.count, 2)
+    }
+
+    /// The reverse direction: a row this build wrote, read by a decoder that does not know the
+    /// key, still decodes every field it does know.
+    func testFavoriteRowsDecodeWithoutTheNewKey() throws {
+        var item = makeItem(prompt: "starred")
+        item.isFavorite = true
+        let data = try JSONEncoder.mereRunApp.encode([item])
+
+        struct LegacyRow: Decodable {
+            let id: UUID
+            let mode: String
+            let prompt: String
+            let status: String
+        }
+        let rows = try JSONDecoder.mereRunApp.decode([LegacyRow].self, from: data)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.prompt, "starred")
+        XCTAssertEqual(rows.first?.mode, "createImage")
+        XCTAssertEqual(rows.first?.status, "completed")
+    }
+
+    private static let legacyLibraryFixture = """
+    [
+      {
+        "artifactURLs" : [
+          "file:///Users/example/Library/Application%20Support/MereRun/App%20Outputs/imageGenerate-20260101-120000.png"
+        ],
+        "commandPreview" : "mere.run image generate --model image-zimage-nano",
+        "createdAt" : "2026-01-01T12:00:00Z",
+        "exitCode" : 0,
+        "id" : "6C4F2B22-2C1B-4B3E-9A61-9C2E1F5B7A01",
+        "mode" : "createImage",
+        "outputURL" : "file:///Users/example/Library/Application%20Support/MereRun/App%20Outputs/imageGenerate-20260101-120000.png",
+        "prompt" : "A lighthouse on a basalt shore at dusk",
+        "status" : "completed",
+        "templateID" : "imageGenerate",
+        "updatedAt" : "2026-01-01T12:00:04Z"
+      },
+      {
+        "commandPreview" : "mere.run text chat --model gemma4-e4b",
+        "createdAt" : "2026-01-01T11:00:00Z",
+        "exitCode" : 0,
+        "id" : "6C4F2B22-2C1B-4B3E-9A61-9C2E1F5B7A02",
+        "messages" : [
+          {
+            "content" : "Explain a Fresnel lens.",
+            "createdAt" : "2026-01-01T11:00:00Z",
+            "failed" : false,
+            "id" : "6C4F2B22-2C1B-4B3E-9A61-9C2E1F5B7A03",
+            "role" : "user"
+          },
+          {
+            "content" : "It folds a thick lens into rings.",
+            "createdAt" : "2026-01-01T11:00:09Z",
+            "failed" : false,
+            "id" : "6C4F2B22-2C1B-4B3E-9A61-9C2E1F5B7A04",
+            "model" : "gemma4-e4b",
+            "role" : "assistant"
+          }
+        ],
+        "mode" : "chat",
+        "model" : "gemma4-e4b",
+        "prompt" : "",
+        "status" : "completed",
+        "updatedAt" : "2026-01-01T11:00:09Z"
+      },
+      {
+        "commandPreview" : "mere.run image generate",
+        "createdAt" : "2026-01-01T10:00:00Z",
+        "customTitle" : "Raycast mug",
+        "exitCode" : 0,
+        "id" : "6C4F2B22-2C1B-4B3E-9A61-9C2E1F5B7A05",
+        "mode" : "createImage",
+        "outputURL" : "file:///Users/example/Pictures/mug.png",
+        "prompt" : "a ceramic coffee mug",
+        "source" : "raycast",
+        "status" : "completed",
+        "templateID" : "imageGenerate",
+        "updatedAt" : "2026-01-01T10:00:03Z"
+      }
+    ]
+    """
+
+    private func makeItem(prompt: String) -> StudioLibraryItem {
+        StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: prompt,
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run image generate",
+            outputText: nil,
+            templateID: .imageGenerate
+        )
+    }
+
     private func writeReceipt(_ receipt: StudioLibraryImportReceipt, beside libraryURL: URL) throws -> URL {
         let receiptURL = libraryURL.deletingLastPathComponent()
             .appendingPathComponent("receipt-\(UUID().uuidString).json")
