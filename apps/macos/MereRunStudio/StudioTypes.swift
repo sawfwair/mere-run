@@ -1047,6 +1047,11 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     var model: String? = nil
     /// Origin for entries imported by an external local launcher. nil means a Studio-owned run.
     var source: StudioLibrarySource? = nil
+    /// Starred in the Library column. Optional + additive so rows written before favorites
+    /// existed decode unchanged (nil reads as not favorite).
+    var isFavorite: Bool? = nil
+
+    var isStarred: Bool { isFavorite == true }
 
     var displayTitle: String {
         if let customTitle, !customTitle.isBlank { return customTitle }

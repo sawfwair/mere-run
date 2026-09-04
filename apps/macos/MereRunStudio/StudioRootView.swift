@@ -19,6 +19,9 @@ struct StudioRootView: View {
     @SceneStorage("studio.mode") private var lastPromptMode: StudioMode = .createImage
     @SceneStorage("studio.showLibrary") private var storedShowLibrary = true
     @SceneStorage("studio.libraryScope") private var libraryScope: StudioLibraryScope = .domain
+    @SceneStorage("studio.libraryView") private var libraryViewMode: StudioLibraryViewMode = .list
+    @SceneStorage("studio.libraryKind") private var libraryKind: StudioLibraryKind = .all
+    @SceneStorage("studio.libraryFavorites") private var libraryFavoritesOnly = false
     /// The prompt tasks whose inspector stays open, as `StudioInspectorTaskMemory` encodes them.
     @SceneStorage("studio.inspectorTasks") private var storedInspectorTasks = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -410,12 +413,18 @@ struct StudioRootView: View {
             items: StudioThreadListPresenter.mediaItems(in: library.items),
             domain: destination.domain,
             scope: $libraryScope,
+            viewMode: $libraryViewMode,
+            kind: $libraryKind,
+            favoritesOnly: $libraryFavoritesOnly,
             progressByID: controller.progressByRequestID,
             selectedID: $navigation.selectedLibraryID,
             onSelect: selectLibraryItem,
-            onDelete: deleteLibraryItem,
+            onDelete: deleteLibraryItems,
             onRename: library.rename,
+            onToggleFavorite: toggleLibraryFavorite,
             onQuickLook: { QuickLookCoordinator.shared.preview($0) },
+            onReveal: revealInFinder,
+            onExport: exportLibraryItems,
             onRetry: retryLibraryItem,
             onEdit: editLibraryItem,
             leadingInset: windowChromeInset
@@ -1284,9 +1293,91 @@ struct StudioRootView: View {
     }
 
     private func deleteLibraryItem(_ id: UUID) {
-        library.delete(id: id)
-        if navigation.selectedLibraryID == id { navigation.selectedLibraryID = nil }
-        if activeConversationID == id { activeConversationID = nil }
+        deleteLibraryItems([id], trashingFiles: false)
+    }
+
+    /// Library ▸ Delete, for one row or a whole batch. The files follow the rows into the Trash
+    /// only when the user chose that in the confirmation.
+    private func deleteLibraryItems(_ ids: Set<UUID>, trashingFiles: Bool) {
+        let failures = library.delete(ids: ids, trashingFiles: trashingFiles)
+        if let first = failures.first {
+            studioError = failures.count == 1
+                ? "Could not move \(first.lastPathComponent) to the Trash."
+                : "Could not move \(failures.count) files to the Trash."
+        }
+        if let selected = navigation.selectedLibraryID, ids.contains(selected) {
+            navigation.selectedLibraryID = nil
+        }
+        if let conversation = activeConversationID, ids.contains(conversation) {
+            activeConversationID = nil
+        }
+    }
+
+    private func toggleLibraryFavorite(_ id: UUID) {
+        guard let item = library.items.first(where: { $0.id == id }) else { return }
+        library.setFavorite(id: id, isFavorite: !item.isStarred)
+    }
+
+    private func revealInFinder(_ urls: [URL]) {
+        let existing = urls.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !existing.isEmpty else {
+            studioError = "Those files are no longer on disk."
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting(existing)
+    }
+
+    /// "Save to…": copies a row's artifacts (or a whole batch's) somewhere the user picks, leaving
+    /// the originals — and the Library rows that point at them — untouched.
+    private func exportLibraryItems(_ selected: [StudioLibraryItem]) {
+        let urls = selected.flatMap(\.allArtifactURLs)
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !urls.isEmpty else {
+            studioError = "Those runs have no files to save."
+            return
+        }
+
+        if urls.count == 1, let source = urls.first {
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = source.lastPathComponent
+            panel.canCreateDirectories = true
+            guard panel.runModal() == .OK, let destination = panel.url else { return }
+            copyExport(from: [source], into: destination.deletingLastPathComponent(), names: [destination.lastPathComponent])
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Save"
+        panel.message = "Choose a folder for \(urls.count) files."
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+        copyExport(from: urls, into: directory, names: urls.map(\.lastPathComponent))
+    }
+
+    private func copyExport(from sources: [URL], into directory: URL, names: [String]) {
+        let fileManager = FileManager.default
+        var failures = 0
+        for (source, name) in zip(sources, names) {
+            var destination = directory.appendingPathComponent(name)
+            var counter = 2
+            let stem = destination.deletingPathExtension().lastPathComponent
+            let ext = destination.pathExtension
+            while fileManager.fileExists(atPath: destination.path), counter < 1_000 {
+                let candidate = ext.isEmpty ? "\(stem)-\(counter)" : "\(stem)-\(counter).\(ext)"
+                destination = directory.appendingPathComponent(candidate)
+                counter += 1
+            }
+            do {
+                try fileManager.copyItem(at: source, to: destination)
+            } catch {
+                failures += 1
+            }
+        }
+        if failures > 0 {
+            studioError = failures == 1 ? "One file could not be saved." : "\(failures) files could not be saved."
+        }
     }
 
     /// Opens the Command Console window with the composer's draft carried into the Advanced
