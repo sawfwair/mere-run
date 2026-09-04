@@ -39,15 +39,37 @@ final class StudioSnapshotTests: XCTestCase {
         fixture = try SnapshotFixture(outputDirectory: directory)
     }
 
-    /// Image ▸ Generate at the mockup's 1440×900 with the mockup's own Library rows (a finished
-    /// run, a running one, a queued one, an older one), light and dark, for comparing the shell
-    /// chrome — sidebar, toolbar, footer, Library column — against the design boards.
-    func testFidelityImageGenerateSnapshots() throws {
-        let fidelity = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup)
+    /// The Main board: Image ▸ Generate at the mockup's 1440×900 with the boards' feed — a
+    /// finished generation with two outputs, a run in flight (held open by the process seam at
+    /// "Denoising 15/24 · 0:41"), and a queued run behind a concurrent model pull — the inspector
+    /// open with two settings changed from the defaults, light and dark; then the same feed with
+    /// the Command view column in the inspector's place and the Library hidden, as the Command
+    /// board shows it. Readiness is answered from a scripted `model capabilities` and
+    /// `model list`, so the composer is live and no readiness card appears.
+    func testMainBoardFidelitySnapshots() throws {
+        let fidelity = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .mockup,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
+        )
         defer { fidelity.tearDown() }
-        for appearance in StudioSnapshotAppearance.allCases {
+        try fidelity.startMainBoardJobs()
+
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "a ceramic coffee mug in soft morning light"
+        draft.cfgScale = 3.5
+        draft.sigmaShift = 3.0
+
+        let renders: [(name: String, appearance: StudioSnapshotAppearance, command: Bool)] = [
+            ("f3-main-light", .light, false),
+            ("f3-main-dark", .dark, false),
+            ("f3-command-light", .light, true),
+            ("f3-command-dark", .dark, true),
+        ]
+        for render in renders {
             let navigation = NavigationModel()
-            let view = StudioRootView()
+            let view = StudioRootView(seededDrafts: [.createImage: draft])
                 .environmentObject(fidelity.controller)
                 .environmentObject(fidelity.library)
                 .environmentObject(navigation)
@@ -55,9 +77,17 @@ final class StudioSnapshotTests: XCTestCase {
             try fidelity.write(
                 view,
                 size: Self.fidelitySize,
-                appearance: appearance,
-                name: "fidelity-image-generate-\(appearance.rawValue)",
-                settle: 2.0
+                appearance: render.appearance,
+                name: render.name,
+                settle: 3.0,
+                afterAppear: {
+                    if render.command {
+                        navigation.showLibrary = false
+                        navigation.toggleCommandColumn(for: .imageGenerate)
+                    } else {
+                        navigation.toggleInspector(for: .imageGenerate)
+                    }
+                }
             )
         }
     }
@@ -213,7 +243,7 @@ final class StudioSnapshotTests: XCTestCase {
         fixture.tearDown()
         fixture = try SnapshotFixture(
             outputDirectory: directory,
-            processRunner: ScriptedProcessRunner(script: ModelsInventoryScript.responses)
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.responses)
         )
         try fixture.seedModelsLibrary()
 
@@ -264,7 +294,7 @@ private final class SnapshotFixture {
     enum Seed {
         /// One row per kind of output (image, audio, transcript, chat, code) across several domains.
         case fixture
-        /// The four Image rows the design mockups show, newest first.
+        /// The finished Image rows the design boards show; `startMainBoardJobs` adds the live ones.
         case mockup
     }
 
@@ -461,43 +491,108 @@ private final class SnapshotFixture {
         }
     }
 
-    /// The Image rows of the Studio v2 design boards: prompts, states, and order as drawn there.
+    /// The finished Image rows of the Studio v2 design boards: the astronaut generation with two
+    /// outputs at 12:43 and the older mug, each with the command it ran so the cards show chips.
     private func seedMockupLibrary() throws {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        func at(hour: Int, minute: Int) -> Date {
-            calendar.date(byAdding: DateComponents(hour: hour, minute: minute), to: today) ?? today
+        guard let template = CommandCatalog.template(id: .imageGenerate) else {
+            throw StudioSnapshotError.noContentView
         }
         var rows: [StudioLibraryItem] = []
-
         for (index, seedRow) in Self.mockupImageRows.enumerated() {
-            var outputURL: URL?
-            if seedRow.hasOutput {
-                let url = root.appendingPathComponent("mockup-\(index).png", isDirectory: false)
-                try Self.writeFixturePNG(to: url, size: CGSize(width: 512, height: 512), hueOffset: seedRow.hue)
-                outputURL = url
+            var outputs: [URL] = []
+            for (outputIndex, hue) in seedRow.hues.enumerated() {
+                let url = root.appendingPathComponent("mockup-\(index)-\(outputIndex).png", isDirectory: false)
+                try Self.writeFixturePNG(to: url, size: CGSize(width: 512, height: 512), hueOffset: hue)
+                outputs.append(url)
             }
-            let createdAt = at(hour: seedRow.hour, minute: seedRow.minute)
+            var draft = template.defaultDraft()
+            draft.prompt = seedRow.prompt
+            draft.seed = seedRow.seed
+            draft.model = "image-zimage-nano"
+            let createdAt = Self.mockupTime(hour: seedRow.hour, minute: seedRow.minute)
             rows.append(StudioLibraryItem(
                 id: UUID(),
                 mode: .createImage,
                 prompt: seedRow.prompt,
                 inputURL: nil,
-                outputURL: outputURL,
+                outputURL: outputs.first,
                 createdAt: createdAt,
                 updatedAt: createdAt.addingTimeInterval(30),
-                status: seedRow.status,
-                exitCode: seedRow.status == .completed ? 0 : nil,
-                commandPreview: "mere.run image generate --model zimage-nano --size 1024x1024 --steps 4",
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run image generate --model image-zimage-nano --width 1024 --height 1024 --steps 4",
                 outputText: nil,
                 templateID: .imageGenerate,
-                artifactURLs: outputURL.map { [$0] }
+                commandDraft: draft,
+                artifactURLs: outputs
             ))
         }
 
         for row in rows.sorted(by: { $0.createdAt < $1.createdAt }) {
             library.upsert(row)
         }
+    }
+
+    private static func mockupTime(hour: Int, minute: Int) -> Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return calendar.date(byAdding: DateComponents(hour: hour, minute: minute), to: today) ?? today
+    }
+
+    /// The live part of the Main board, through the real controller and Library paths: the fox
+    /// generation running (held open by the process seam, fed the CLI's denoising progress and
+    /// backdated 41 s), a concurrent model pull taking the second inference slot, and the diner
+    /// generation queued behind them. Returns nothing the render needs; the feed reads the store.
+    func startMainBoardJobs() throws {
+        guard let runner = liveSessionRunner, let pullTemplate = CommandCatalog.template(id: .modelPull) else {
+            throw StudioSnapshotError.noContentView
+        }
+        runner.liveSessionMarkers = ["generate", "pull"]
+
+        var runningDraft = StudioDraft()
+        runningDraft.reset(for: .createImage)
+        runningDraft.prompt = "A polished obsidian fox figurine on a cobalt plinth, studio light"
+        let running = try Self.mockupRequest(mode: .createImage, draft: runningDraft, hour: 12, minute: 44)
+        library.start(
+            request: running,
+            commandPreview: controller.commandPreview(template: running.template, draft: running.draft, masksSecrets: true),
+            status: .running
+        )
+        guard controller.run(studio: running), let live = runner.liveStarts.last,
+              let job = controller.jobs.job(requestID: running.id) else {
+            throw StudioSnapshotError.noContentView
+        }
+        live.stderr("Loading image-zimage-nano\n")
+        live.stderr("{\"event\":\"progress\",\"stage\":\"denoising\",\"step\":14,\"total_steps\":24}\n")
+        job.markRunning(status: job.status, at: Date().addingTimeInterval(-41))
+
+        var pullDraft = pullTemplate.defaultDraft()
+        pullDraft.model = ModelsInventoryScript.pullingModelID
+        let pull = StudioRunRequest(mode: .readImage, templateID: .modelPull, template: pullTemplate, draft: pullDraft)
+        guard controller.run(studio: pull) else { throw StudioSnapshotError.noContentView }
+
+        var queuedDraft = StudioDraft()
+        queuedDraft.reset(for: .createImage)
+        queuedDraft.prompt = "a rainy diner window at dusk, warm neon"
+        let queued = try Self.mockupRequest(mode: .createImage, draft: queuedDraft, hour: 12, minute: 45)
+        library.start(
+            request: queued,
+            commandPreview: controller.commandPreview(template: queued.template, draft: queued.draft, masksSecrets: true),
+            status: .queued
+        )
+        guard controller.run(studio: queued) else { throw StudioSnapshotError.noContentView }
+    }
+
+    private static func mockupRequest(mode: StudioMode, draft: StudioDraft, hour: Int, minute: Int) throws -> StudioRunRequest {
+        let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+        return StudioRunRequest(
+            id: request.id,
+            mode: request.mode,
+            templateID: request.templateID,
+            template: request.template,
+            draft: request.draft,
+            createdAt: mockupTime(hour: hour, minute: minute)
+        )
     }
 
     /// Runs the Models detail column reads: image generations with the seeded default model
@@ -583,29 +678,21 @@ private final class SnapshotFixture {
 
     private struct MockupImageRow {
         let prompt: String
-        let status: StudioLibraryStatus
+        let seed: String
         let hour: Int
         let minute: Int
-        let hue: CGFloat
-        var hasOutput: Bool { status == .completed }
+        /// One output per hue, so the astronaut card shows two pictures.
+        let hues: [CGFloat]
     }
 
     private static let mockupImageRows: [MockupImageRow] = [
         MockupImageRow(
             prompt: "A tiny brass astronaut watering a bonsai tree, cinematic macro",
-            status: .completed, hour: 12, minute: 43, hue: 0.10
-        ),
-        MockupImageRow(
-            prompt: "A polished obsidian fox figurine on a cobalt plinth, studio light",
-            status: .running, hour: 12, minute: 41, hue: 0.62
-        ),
-        MockupImageRow(
-            prompt: "a rainy diner window at dusk, warm neon",
-            status: .queued, hour: 12, minute: 40, hue: 0.95
+            seed: "8812", hour: 12, minute: 43, hues: [0.10, 0.62]
         ),
         MockupImageRow(
             prompt: "a ceramic coffee mug in soft morning light",
-            status: .completed, hour: 9, minute: 5, hue: 0.55
+            seed: "", hour: 9, minute: 5, hues: [0.55]
         )
     ]
 
@@ -647,7 +734,7 @@ private final class SnapshotFixture {
         guard let runner = liveSessionRunner else {
             throw StudioSnapshotError.noContentView
         }
-        runner.liveSessionMarker = "--interactive"
+        runner.liveSessionMarkers = ["--interactive"]
         guard controller.run(studio: request), let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
         }
@@ -831,15 +918,21 @@ private final class SnapshotFixture {
 
 // MARK: - Process seam
 
-/// Refuses every launch: reports one stderr line and a non-zero exit asynchronously so readiness
-/// settles to its "could not check" state without a CLI ever running.
-///
-/// Two exceptions: the sidebar's `status --json` probe is answered with a canned snapshot (server
-/// idle, 92 models installed) so the footer renders its resting "Ready" state rather than a probe
-/// failure, and a launch whose arguments contain `liveSessionMarker` is held open as a live
-/// session (never terminated, stdin recorded) so Session-archetype views can be rendered mid-run.
-/// The test feeds it the lines the CLI would have written.
+/// The harness's process runner. In order: a launch whose arguments match a scripted `Response`
+/// is answered from the script (asynchronously, so a page's `.task` work sees the ordering a
+/// real process would give it); the sidebar's `status --json` probe gets a canned snapshot
+/// (server idle, 92 models installed) so the footer renders its resting "Ready" state; a launch
+/// carrying one of `liveSessionMarkers` is held open as a live session (never terminated, stdin
+/// recorded) so Session views and running feed cards can be rendered mid-run and fed the lines
+/// the CLI would have written; everything else is refused with one stderr line and a non-zero
+/// exit, so no CLI ever runs while rendering.
 private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sendable {
+    struct Response {
+        let matches: ([String]) -> Bool
+        let stdout: String
+        let exitCode: Int32
+    }
+
     struct LiveStart {
         let configuration: MereRunProcessConfiguration
         let stdout: @Sendable (String) -> Void
@@ -847,10 +940,15 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
         let process: SnapshotLiveProcess
     }
 
+    private let script: [Response]
     private let lock = NSLock()
     private var refusedLaunches = 0
     private var _liveStarts: [LiveStart] = []
-    private var _liveSessionMarker: String?
+    private var _liveSessionMarkers: Set<String> = []
+
+    init(script: [Response] = []) {
+        self.script = script
+    }
 
     var refusedLaunchCount: Int {
         lock.lock()
@@ -869,15 +967,16 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
 
     private static let statusSnapshot = statusSnapshot(installedModelCount: installedModelCount)
 
-    var liveSessionMarker: String? {
+    /// Argument tokens that mark a launch to hold open as a live session.
+    var liveSessionMarkers: Set<String> {
         get {
             lock.lock()
             defer { lock.unlock() }
-            return _liveSessionMarker
+            return _liveSessionMarkers
         }
         set {
             lock.lock()
-            _liveSessionMarker = newValue
+            _liveSessionMarkers = newValue
             lock.unlock()
         }
     }
@@ -894,7 +993,20 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
         stderr: @escaping @Sendable (String) -> Void,
         termination: @escaping @Sendable (Int32) -> Void
     ) throws -> MereRunRunningProcess {
-        if configuration.arguments.first == "status", configuration.arguments.contains("--json") {
+        // The controller prepends `--models-root <path>` when a root is configured; match on the
+        // subcommand arguments that follow it.
+        var arguments = configuration.arguments
+        if arguments.first == "--models-root", arguments.count >= 2 {
+            arguments.removeFirst(2)
+        }
+        if let response = script.first(where: { $0.matches(arguments) }) {
+            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
+                if !response.stdout.isEmpty { stdout(response.stdout) }
+                termination(response.exitCode)
+            }
+            return SnapshotRefusedProcess()
+        }
+        if arguments.first == "status", arguments.contains("--json") {
             let snapshot = Self.statusSnapshot
             DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
                 stdout(snapshot)
@@ -903,7 +1015,7 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
             return SnapshotRefusedProcess()
         }
         lock.lock()
-        if let marker = _liveSessionMarker, configuration.arguments.contains(marker) {
+        if !_liveSessionMarkers.isEmpty, arguments.contains(where: { _liveSessionMarkers.contains($0) }) {
             let process = SnapshotLiveProcess()
             _liveStarts.append(LiveStart(configuration: configuration, stdout: stdout, stderr: stderr, process: process))
             lock.unlock()
@@ -940,49 +1052,6 @@ private final class SnapshotLiveProcess: MereRunRunningProcess, @unchecked Senda
         lock.lock()
         _standardInputs.append(text)
         lock.unlock()
-    }
-}
-
-/// Answers the CLI invocations a page makes from a script keyed on their arguments, and refuses
-/// everything else the way `SnapshotProcessRunner` does. Output arrives asynchronously so the
-/// page's `.task` work observes the same ordering it would with a real process.
-private final class ScriptedProcessRunner: MereRunProcessRunning, @unchecked Sendable {
-    struct Response {
-        let matches: ([String]) -> Bool
-        let stdout: String
-        let exitCode: Int32
-    }
-
-    private let script: [Response]
-
-    init(script: [Response]) {
-        self.script = script
-    }
-
-    func start(
-        configuration: MereRunProcessConfiguration,
-        stdout: @escaping @Sendable (String) -> Void,
-        stderr: @escaping @Sendable (String) -> Void,
-        termination: @escaping @Sendable (Int32) -> Void
-    ) throws -> MereRunRunningProcess {
-        // The controller prepends `--models-root <path>` when a root is configured; match on the
-        // subcommand arguments that follow it.
-        var arguments = configuration.arguments
-        if arguments.first == "--models-root", arguments.count >= 2 {
-            arguments.removeFirst(2)
-        }
-        guard let response = script.first(where: { $0.matches(arguments) }) else {
-            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
-                stderr("Snapshot harness: no scripted response for \(arguments.joined(separator: " ")).\n")
-                termination(1)
-            }
-            return SnapshotRefusedProcess()
-        }
-        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
-            if !response.stdout.isEmpty { stdout(response.stdout) }
-            termination(response.exitCode)
-        }
-        return SnapshotRefusedProcess()
     }
 }
 
@@ -1055,7 +1124,16 @@ private enum ModelsInventoryScript {
     ]}
     """
 
-    static var responses: [ScriptedProcessRunner.Response] {
+    /// Only what a prompt mode's readiness check and model chip read, leaving the status probe
+    /// to the runner's default so the footer keeps the boards' "Ready · 92 models".
+    static var readinessResponses: [SnapshotProcessRunner.Response] {
+        [
+            .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
+        ]
+    }
+
+    static var responses: [SnapshotProcessRunner.Response] {
         [
             .init(
                 matches: { $0.first == "status" && $0.contains("--json") },
