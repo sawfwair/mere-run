@@ -45,4 +45,4 @@ When extending the contract:
 
 Contract tests live in `Tests/MereRunContractTests`, CLI serialization and help
 coverage in `Tests/MereRunCLITests`, and shell command-generation coverage in
-`apps/macos/MereRunStudioTests`.
+`apps/macos/StudioKitTests`.

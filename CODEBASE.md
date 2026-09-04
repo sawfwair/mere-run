@@ -13,7 +13,7 @@ GUI shell.
 
 1. `Package.swift` for target and dependency flow
 2. `Sources/MereRunCLI/MereRunCLI.swift` for the public command tree
-3. `apps/macos/MereRunStudio` for the optional SwiftUI wrapper
+3. `apps/macos/StudioKit` and `apps/macos/StudioUI` for the optional SwiftUI wrapper
 4. `docs/repository-tour.md` for top-level ownership
 5. `docs/architecture.md` for runtime reading order
 6. the module README inside the subsystem you are editing

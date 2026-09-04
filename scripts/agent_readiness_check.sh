@@ -99,11 +99,11 @@ dynamic_boundary_files=(
   "Sources/AudioSTT/Qwen3ASR/Qwen3ASRTokenizer.swift"
   # Studio artifact explorers deliberately accept polymorphic manifests/results from saved
   # runs. Voice Studio is included because AVAudioRecorder's settings API requires [String: Any].
-  "apps/macos/MereRunStudio/Studio3DCreationView.swift"
-  "apps/macos/MereRunStudio/StudioMusicToolsView.swift"
-  "apps/macos/MereRunStudio/StudioTrainingView.swift"
-  "apps/macos/MereRunStudio/StudioUtilityLabView.swift"
-  "apps/macos/MereRunStudio/StudioVoiceView.swift"
+  "apps/macos/StudioUI/Studio3DCreationView.swift"
+  "apps/macos/StudioUI/StudioMusicToolsView.swift"
+  "apps/macos/StudioUI/StudioTrainingView.swift"
+  "apps/macos/StudioUI/StudioUtilityLabView.swift"
+  "apps/macos/StudioUI/StudioVoiceView.swift"
   "Sources/MereRunCLI/Support/ResumeLoRABootstrap.swift"
   "Sources/MereRunCore/Asset3D/MeshGLBWriter.swift"
   "Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift"
@@ -144,6 +144,8 @@ dynamic_boundary_roots=(
   Sources
   apps/ios
   apps/macos/MereRunStudio
+  apps/macos/StudioKit
+  apps/macos/StudioUI
 )
 dynamic_matches=()
 while IFS= read -r match; do
