@@ -553,7 +553,9 @@ if !isLinuxPackage {
     .testTarget(
       name: "MereRunAppTests",
       dependencies: ["MereRunApp", "MereRunContract"],
-      path: "apps/macos/MereRunStudioTests"
+      path: "apps/macos/MereRunStudioTests",
+      // Read from source with #filePath by CommandArgumentGoldenTests, not from the bundle.
+      exclude: ["Fixtures"]
     )
   )
 }
