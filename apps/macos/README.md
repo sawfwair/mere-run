@@ -17,17 +17,27 @@ imported row. External launchers must never edit `library.json` directly.
   the detail area.
 - `StudioTypes.swift`: user-facing mode, draft, and request types.
 - `CommandCatalog.swift`: mode-to-command templates.
-- `Jobs/`: the run model. `JobStore` owns every child process behind the
-  `MereRunProcessRunning` seam, with three lanes (`inference`, capped at two
-  with a FIFO queue; `utility`, capped at four; `probe`, deduplicated by key),
-  and publishes one observable `Job` per run (state, status, progress, log,
-  live output, artifacts, result) plus a lossless `completions` stream.
-  `ArtifactResolver` finds a run's outputs from the request and the CLI's
-  stdout.
+- `Jobs/`: the job model. `JobStore` owns every child process the app launches
+  behind the `MereRunProcessRunning` seam (`Process()` appears only in
+  `Jobs/ProcessRunner.swift` and the synchronous `CLIBootstrapInstaller`
+  version probe), with three lanes: `inference` for Studio runs (capped at two
+  with a FIFO queue), `utility` for the hand-built CLI reads and writes behind
+  `utilityCommandResult` (capped at four, FIFO), and `probe` for readiness and
+  `status --json` probes (never queued, deduplicated by key so a repeated probe
+  joins the one in flight and a probe with stale Settings is superseded). A
+  `JobRequest` is either a catalog command (template plus draft, which drive
+  validation and output detection) or raw arguments (`JobRequest.utility` /
+  `.probe`, which skip preflight and capture complete stdout and stderr for the
+  submitter). The store publishes one observable `Job` per job (state, status,
+  progress, log, live output, artifacts, result), raw output chunks through
+  `events`, and a lossless `completions` stream. `ArtifactResolver` finds a
+  run's outputs from the request and the CLI's stdout.
 - `MereRunController.swift`: the facade views bind to. It snapshots Settings
-  and the CLI launch into a `JobRequest`, mirrors the foreground job into its
-  published console fields, and still owns readiness probes, utility commands,
-  the Advanced draft, and persisted settings.
+  and the CLI launch into a `JobRequest` for every lane, awaits utility and
+  probe jobs on behalf of their callers (readiness results are evaluated
+  against the request current at completion), mirrors the foreground inference
+  job into its published console fields, and still owns the Advanced draft and
+  persisted settings.
 - `StudioLibraryStore.swift`: local library persistence.
 
 ## Shell

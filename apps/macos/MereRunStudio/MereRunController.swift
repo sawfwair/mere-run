@@ -188,28 +188,30 @@ enum CLIResolver {
     }
 }
 
-private final class ReadinessOutputBuffer: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value = ""
-
-    func append(_ text: String) {
-        lock.lock()
-        value += text
-        lock.unlock()
-    }
-
-    func text() -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return value
-    }
-}
-
+/// The outcome of a utility-lane job, as the Studio surfaces that hand-build CLI arguments read
+/// it: complete stdout and stderr, kept separate so `--json` output parses without diagnostics.
 struct MereRunUtilityCommandResult: Equatable {
     let commandPreview: String
     let exitCode: Int32
     let stdout: String
     let stderr: String
+
+    init(commandPreview: String, exitCode: Int32, stdout: String, stderr: String) {
+        self.commandPreview = commandPreview
+        self.exitCode = exitCode
+        self.stdout = stdout
+        self.stderr = stderr
+    }
+
+    /// The view of a raw-argument job's result (`JobRequest.utility` / `.probe`).
+    init(_ result: JobResult) {
+        self.init(
+            commandPreview: result.commandPreview,
+            exitCode: result.exitCode,
+            stdout: result.standardOutput ?? "",
+            stderr: result.standardError ?? ""
+        )
+    }
 
     var outputText: String {
         let trimmedStdout = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -308,16 +310,20 @@ final class MereRunController: ObservableObject {
         static let runtimeAPIKey = "mererun.app.runtimeAPIKey"
     }
 
-    private let processRunner: MereRunProcessRunning
     private let fileSystem: MereRunFileProbing
     private let cliResolve: (String) -> MereRunLaunch
     private var didSynchronizeCLIInstallationAfterLaunch = false
-    private var utilityProcesses: [UUID: MereRunRunningProcess] = [:]
-    private var readinessProcesses: [StudioMode: MereRunRunningProcess] = [:]
+    /// The model and settings each mode's readiness was last asked about. A probe's result is
+    /// evaluated against the request current when it completes, so a model change while the
+    /// (model-independent) probe runs reuses it instead of relaunching an identical process.
     private var readinessRequests: [StudioMode: ReadinessRequest] = [:]
-    /// Owns every run's lifecycle: lanes, FIFO queues, child processes, buffers, progress and
-    /// artifact detection. The controller mirrors the foreground job into its published console
-    /// fields and re-broadcasts completions; views may also observe a `Job` directly.
+    /// The readiness probe in flight per mode. A completion whose job id no longer matches was
+    /// superseded (settings changed) or cleared (mode no longer needs a model) and is ignored.
+    private var readinessProbes: [StudioMode: JobID] = [:]
+    /// Owns every child process the app launches: Studio runs in the inference lane, hand-built
+    /// CLI reads and writes in the utility lane, readiness and status probes in the probe lane.
+    /// The controller mirrors the foreground inference job into its published console fields and
+    /// re-broadcasts completions; views may also observe a `Job` directly.
     let jobs: JobStore
     /// The job whose live state mirrors into the published console fields (the run the
     /// single-pane console/canvas currently shows). Background jobs still complete into the
@@ -328,6 +334,10 @@ final class MereRunController: ObservableObject {
     /// Conservative cap on simultaneous inference runs. ML inference is memory-heavy, so this
     /// stays small; `JobLane.inference.capacity` is the single knob.
     static let maxConcurrentRuns = JobLane.inference.capacity
+
+    /// Dedupe key of the `status --json` probe: one poll in flight at a time, and a poll with the
+    /// previous host/port is superseded when Settings change.
+    static let serverStatusProbeKey = "server-status"
 
     private struct ReadinessRequest: Equatable {
         let modelID: String
@@ -350,12 +360,12 @@ final class MereRunController: ObservableObject {
 
     var canSubmitVideoSessionRequest: Bool {
         guard let job = foregroundJob else { return false }
-        return job.request.template.id == .videoSession && job.state.isRunning
+        return job.request.templateID == .videoSession && job.state.isRunning
     }
 
     func canSteerRealtimeMusic(requestID: UUID) -> Bool {
         jobs.running.contains {
-            $0.request.requestID == requestID && $0.request.template.id == .musicRealtime
+            $0.request.requestID == requestID && $0.request.templateID == .musicRealtime
         }
     }
 
@@ -365,7 +375,7 @@ final class MereRunController: ObservableObject {
 
     func runningRequestID(for templateID: CommandTemplateID) -> UUID? {
         jobs.running.first {
-            $0.request.template.id == templateID && $0.request.requestID != nil
+            $0.request.templateID == templateID && $0.request.requestID != nil
         }?.request.requestID
     }
 
@@ -379,7 +389,6 @@ final class MereRunController: ObservableObject {
         cliResolver: @escaping (String) -> MereRunLaunch = { CLIResolver.resolve(customPath: $0) },
         resolvesCLIOnInit: Bool = true
     ) {
-        self.processRunner = processRunner
         self.fileSystem = fileSystem
         self.cliResolve = cliResolver
         jobs = JobStore(processRunner: processRunner, fileSystem: fileSystem)
@@ -637,12 +646,16 @@ final class MereRunController: ObservableObject {
         return result.exitCode == 0
     }
 
-    /// Probes the configured local API server and publishes the parsed snapshot for the status pill.
+    /// Probes the configured local API server and publishes the parsed snapshot for the status
+    /// pill. Concurrent refreshes share one probe; a refresh superseded by a host/port change keeps
+    /// the last snapshot until the replacement reports.
     func refreshServerStatus() async {
         var args = ["status", "--json", "--host", runtimeHost, "--port", String(runtimePort)]
         if !runtimeAPIKey.isBlank { args += ["--api-key", runtimeAPIKey] }
-        let result = await utilityCommandResult(args: args)
-        serverStatus = StudioServerStatus.parse(jsonStdout: result.stdout)
+        let id = jobs.submit(rawRequest(args: args, probeKey: Self.serverStatusProbeKey))
+        guard let result = await jobs.result(for: id) else { return }
+        if case .cancelled = jobs.job(id)?.state { return }
+        serverStatus = StudioServerStatus.parse(jsonStdout: result.standardOutput ?? "")
     }
 
     /// The persisted Hugging Face endpoint (config key hf-endpoint), or "" if unset.
@@ -730,12 +743,13 @@ final class MereRunController: ObservableObject {
     }
 
     func commandArguments(template: CommandTemplate, draft: CommandDraft) -> [String] {
-        var args: [String] = []
-        if !modelsRoot.isBlank {
-            args += ["--models-root", NSString(string: modelsRoot).expandingTildeInPath]
-        }
-        args += template.arguments(from: draft)
-        return args
+        cliArguments(template.arguments(from: draft))
+    }
+
+    /// The complete `mere.run` arguments for a command: the configured models root, then `args`.
+    private func cliArguments(_ args: [String]) -> [String] {
+        guard !modelsRoot.isBlank else { return args }
+        return ["--models-root", NSString(string: modelsRoot).expandingTildeInPath] + args
     }
 
     func commandPreview(template: CommandTemplate, draft: CommandDraft, masksSecrets: Bool) -> String {
@@ -777,7 +791,9 @@ final class MereRunController: ObservableObject {
     }
 
     private struct UtilityOutputCallbacks {
+        /// Receives every stdout and stderr chunk (progress feeds, device-login prompts).
         let onOutput: (@MainActor @Sendable (String) -> Void)?
+        /// Receives stdout chunks only (JSONL protocols that must not see diagnostics).
         let onStandardOutput: (@MainActor @Sendable (String) -> Void)?
 
         init(
@@ -787,8 +803,26 @@ final class MereRunController: ObservableObject {
             self.onOutput = onOutput
             self.onStandardOutput = onStandardOutput
         }
+
+        var isEmpty: Bool { onOutput == nil && onStandardOutput == nil }
+
+        @MainActor
+        func deliver(_ text: String, from stream: LogStream) {
+            switch stream {
+            case .stdout:
+                onOutput?(text)
+                onStandardOutput?(text)
+            case .stderr:
+                onOutput?(text)
+            case .system:
+                break
+            }
+        }
     }
 
+    /// Runs hand-built CLI arguments as a utility-lane job and returns its complete output. The
+    /// job is named by `commandID`, so `cancelUtilityCommand`/`interruptUtilityCommand` reach it
+    /// whether it is running or still waiting for a utility slot.
     private func utilityCommandResult(
         args: [String],
         commandID: UUID,
@@ -796,83 +830,69 @@ final class MereRunController: ObservableObject {
         environmentOverrides: [String: String],
         callbacks: UtilityOutputCallbacks
     ) async -> MereRunUtilityCommandResult {
-        let launch = cliResolve(cliPath)
-        let cliArgs: [String]
-        if !modelsRoot.isBlank {
-            cliArgs = ["--models-root", NSString(string: modelsRoot).expandingTildeInPath] + args
-        } else {
-            cliArgs = args
+        let request = rawRequest(args: args, masksSecrets: masksSecrets, environmentOverrides: environmentOverrides)
+        let id = JobID(raw: commandID)
+        // Subscribe before submitting: the store delivers output synchronously, and a job that
+        // launches straight away may print before `submit` returns.
+        let streaming = callbacks.isEmpty ? nil : jobs.events.sink { event in
+            guard case .output(let job, let stream, let text) = event, job.id == id else { return }
+            callbacks.deliver(text, from: stream)
         }
-        let display = launch.displayCommand(for: masksSecrets ? cliArgs.maskingSecrets() : cliArgs)
-        let output = ReadinessOutputBuffer()
-        let errors = ReadinessOutputBuffer()
-
-        return await withCheckedContinuation { continuation in
-            do {
-                let process = try processRunner.start(
-                    configuration: processConfiguration(
-                        launch: launch,
-                        args: cliArgs,
-                        environmentTemplateID: .custom,
-                        environmentDraft: CommandDraft(),
-                        environmentOverrides: environmentOverrides
-                    ),
-                    stdout: { text in
-                        output.append(text)
-                        if callbacks.onOutput != nil || callbacks.onStandardOutput != nil {
-                            Task { @MainActor in
-                                callbacks.onOutput?(text)
-                                callbacks.onStandardOutput?(text)
-                            }
-                        }
-                    },
-                    stderr: { text in
-                        errors.append(text)
-                        if let onOutput = callbacks.onOutput {
-                            Task { @MainActor in onOutput(text) }
-                        }
-                    },
-                    termination: { [weak self] code in
-                        let result = MereRunUtilityCommandResult(
-                            commandPreview: display,
-                            exitCode: code,
-                            stdout: output.text(),
-                            stderr: errors.text()
-                        )
-                        Task { @MainActor in
-                            self?.utilityProcesses[commandID] = nil
-                            continuation.resume(returning: result)
-                        }
-                    }
-                )
-                utilityProcesses[commandID] = process
-            } catch {
-                continuation.resume(
-                    returning: MereRunUtilityCommandResult(
-                        commandPreview: display,
-                        exitCode: -1,
-                        stdout: "",
-                        stderr: error.localizedDescription
-                    )
-                )
-            }
+        defer { streaming?.cancel() }
+        jobs.submit(request, id: id)
+        guard let result = await jobs.result(for: id) else {
+            return MereRunUtilityCommandResult(
+                commandPreview: request.displayCommand,
+                exitCode: -1,
+                stdout: "",
+                stderr: "The command's job is no longer available."
+            )
         }
+        return MereRunUtilityCommandResult(result)
     }
 
+    /// Terminates (SIGTERM) or dequeues the utility command submitted with `commandID`. Returns
+    /// false when it is unknown or already finished; the awaiting caller receives the result.
     @discardableResult
     func cancelUtilityCommand(_ commandID: UUID) -> Bool {
-        guard let process = utilityProcesses[commandID] else { return false }
-        process.terminate()
-        return true
+        jobs.cancel(JobID(raw: commandID))
     }
 
+    /// Sends SIGINT to the running utility command submitted with `commandID` so a CLI that traps
+    /// it (live listening) finishes cleanly. Returns false unless it is running.
     @discardableResult
     func interruptUtilityCommand(_ commandID: UUID) -> Bool {
-        guard let process = utilityProcesses[commandID] else { return false }
-        process.interrupt()
-        return true
+        jobs.interrupt(JobID(raw: commandID))
     }
 
+    /// Snapshots the launch for raw CLI arguments: the resolved CLI, the models root, the base
+    /// environment plus `environmentOverrides` (secrets travel here, never in argv). With a
+    /// `probeKey` the request is a probe deduplicated under that key; otherwise a utility command.
+    private func rawRequest(
+        args: [String],
+        masksSecrets: Bool = true,
+        environmentOverrides: [String: String] = [:],
+        probeKey: String? = nil
+    ) -> JobRequest {
+        let launch = cliResolve(cliPath)
+        let cliArgs = cliArguments(args)
+        let configuration = processConfiguration(
+            launch: launch,
+            args: cliArgs,
+            environment: processEnvironment(overrides: environmentOverrides),
+            keepsStandardInputOpen: false
+        )
+        let displayCommand = launch.displayCommand(for: masksSecrets ? cliArgs.maskingSecrets() : cliArgs)
+        if let probeKey {
+            return .probe(
+                arguments: cliArgs,
+                configuration: configuration,
+                displayCommand: displayCommand,
+                dedupeKey: probeKey
+            )
+        }
+        return .utility(arguments: cliArgs, configuration: configuration, displayCommand: displayCommand)
+    }
 
     @discardableResult
     func run(studio request: StudioRunRequest) -> Bool {
@@ -897,10 +917,14 @@ final class MereRunController: ObservableObject {
         )
     }
 
+    /// Resolves whether `mode` can run with `studioDraft`'s model: a `model capabilities` probe
+    /// (skipped once capabilities are known) followed by a `model list` probe, both in the probe
+    /// lane under the mode's dedupe key, so at most one readiness process runs per mode and a
+    /// probe launched with stale Settings is superseded rather than raced.
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
         let requirement = StudioCommandAdapter.capabilityRequirement(for: mode, draft: studioDraft)
         guard let requirement else {
-            cancelReadinessCheck(for: mode)
+            cancelReadinessProbe(for: mode)
             readinessRequests[mode] = nil
             readinessByMode[mode] = .ready
             return
@@ -911,7 +935,7 @@ final class MereRunController: ObservableObject {
         case .managedModel(let id):
             modelID = id
         case .unavailable(let message):
-            cancelReadinessCheck(for: mode)
+            cancelReadinessProbe(for: mode)
             readinessRequests[mode] = nil
             readinessByMode[mode] = .unsupported(message)
             return
@@ -923,141 +947,106 @@ final class MereRunController: ObservableObject {
             modelsRoot: modelsRoot,
             hubCache: hubCache
         )
-        if readinessRequests[mode] == request, readinessProcesses[mode] != nil {
+        if readinessRequests[mode] == request, let id = readinessProbes[mode], jobs.job(id)?.state.isActive == true {
             return
         }
 
-        cancelReadinessCheck(for: mode)
         readinessRequests[mode] = request
         readinessByMode[mode] = .checking
 
         if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+            cancelReadinessProbe(for: mode)
             readinessByMode[mode] = .unsupported(message)
             return
         }
 
         if modelCapabilitiesByID[modelID] != nil {
-            startModelListReadinessCheck(for: mode, modelID: modelID, request: request)
+            probeModelList(for: mode)
+        } else {
+            probeCapabilities(for: mode)
+        }
+    }
+
+    private func probeCapabilities(for mode: StudioMode) {
+        guard let template = CommandCatalog.template(id: .modelCapabilities) else { return }
+        var draft = template.defaultDraft()
+        draft.all = true
+        draft.json = true
+        submitReadinessProbe(for: mode, args: template.arguments(from: draft)) { [weak self] result in
+            self?.finishCapabilitiesProbe(for: mode, result: result)
+        }
+    }
+
+    private func finishCapabilitiesProbe(for mode: StudioMode, result: JobResult) {
+        let report = ModelCapabilitiesParser.report(from: result.standardOutput ?? "")
+        if !report.capabilitiesByID.isEmpty {
+            modelCapabilitiesByID = report.capabilitiesByID
+        }
+        if let recommendedChatModelID = report.recommendedChatModelID, !recommendedChatModelID.isBlank {
+            self.recommendedChatModelID = recommendedChatModelID
+        }
+        if let recommendedCodeModelID = report.recommendedCodeModelID, !recommendedCodeModelID.isBlank {
+            self.recommendedCodeModelID = recommendedCodeModelID
+        }
+
+        guard let modelID = readinessRequests[mode]?.modelID else { return }
+        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+            readinessProbes[mode] = nil
+            readinessByMode[mode] = .unsupported(message)
             return
         }
-
-        startCapabilityReadinessCheck(for: mode, modelID: modelID, request: request)
+        if result.exitCode != 0, report.capabilitiesByID.isEmpty {
+            readinessProbes[mode] = nil
+            let detail = (result.standardError ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            readinessByMode[mode] = .unknown(detail.isEmpty ? "Could not check model capabilities." : detail)
+            return
+        }
+        probeModelList(for: mode)
     }
 
-    private func startCapabilityReadinessCheck(
-        for mode: StudioMode,
-        modelID: String,
-        request: ReadinessRequest
-    ) {
-        let launch = cliResolve(cliPath)
-        let capabilityTemplate = CommandCatalog.template(id: .modelCapabilities) ?? selectedTemplate
-        var capabilityDraft = capabilityTemplate.defaultDraft()
-        capabilityDraft.all = true
-        capabilityDraft.json = true
-        let args = commandArguments(
-            template: capabilityTemplate,
-            draft: capabilityDraft
-        )
-        let output = ReadinessOutputBuffer()
-        let errors = ReadinessOutputBuffer()
-
-        do {
-            readinessProcesses[mode] = try processRunner.start(
-                configuration: processConfiguration(
-                    launch: launch,
-                    args: args,
-                    environmentTemplateID: capabilityTemplate.id,
-                    environmentDraft: capabilityDraft
-                ),
-                stdout: { text in output.append(text) },
-                stderr: { text in errors.append(text) },
-                termination: { [weak self] code in
-                    Task { @MainActor in
-                        guard self?.readinessRequests[mode] == request else { return }
-                        guard let self else { return }
-                        let report = ModelCapabilitiesParser.report(from: output.text())
-                        if !report.capabilitiesByID.isEmpty {
-                            self.modelCapabilitiesByID = report.capabilitiesByID
-                        }
-                        if let recommendedChatModelID = report.recommendedChatModelID,
-                           !recommendedChatModelID.isBlank {
-                            self.recommendedChatModelID = recommendedChatModelID
-                        }
-                        if let recommendedCodeModelID = report.recommendedCodeModelID,
-                           !recommendedCodeModelID.isBlank {
-                            self.recommendedCodeModelID = recommendedCodeModelID
-                        }
-
-                        if let message = self.modelCapabilitiesByID[modelID]?.unavailableMessage {
-                            self.readinessProcesses[mode] = nil
-                            self.readinessByMode[mode] = .unsupported(message)
-                            return
-                        }
-
-                        if code != 0, report.capabilitiesByID.isEmpty {
-                            self.readinessProcesses[mode] = nil
-                            let detail = errors.text().trimmingCharacters(in: .whitespacesAndNewlines)
-                            self.readinessByMode[mode] = .unknown(
-                                detail.isEmpty ? "Could not check model capabilities." : detail
-                            )
-                            return
-                        }
-
-                        self.startModelListReadinessCheck(for: mode, modelID: modelID, request: request)
-                    }
-                }
+    private func probeModelList(for mode: StudioMode) {
+        guard let template = CommandCatalog.template(id: .modelList) else { return }
+        let args = template.arguments(from: template.defaultDraft())
+        submitReadinessProbe(for: mode, args: args) { [weak self] result in
+            guard let self else { return }
+            readinessProbes[mode] = nil
+            guard let modelID = readinessRequests[mode]?.modelID else { return }
+            if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+                readinessByMode[mode] = .unsupported(message)
+                return
+            }
+            readinessByMode[mode] = ModelReadinessParser.state(
+                for: modelID,
+                modelListOutput: result.standardOutput ?? ""
             )
-        } catch {
-            readinessRequests[mode] = nil
-            readinessProcesses[mode] = nil
-            readinessByMode[mode] = .unknown(error.localizedDescription)
         }
     }
 
-    private func startModelListReadinessCheck(
+    /// Submits one readiness probe for `mode` and runs `completion` with its result unless a later
+    /// probe replaced it. A submission the store deduplicated onto the probe already tracked for
+    /// the mode returns without a second continuation: that probe's completion will evaluate the
+    /// updated request.
+    private func submitReadinessProbe(
         for mode: StudioMode,
-        modelID: String,
-        request: ReadinessRequest
+        args: [String],
+        completion: @escaping @MainActor (JobResult) -> Void
     ) {
-        let launch = cliResolve(cliPath)
-        let modelListTemplate = CommandCatalog.template(id: .modelList) ?? selectedTemplate
-        let modelListDraft = modelListTemplate.defaultDraft()
-        let args = commandArguments(
-            template: modelListTemplate,
-            draft: modelListDraft
-        )
-        let output = ReadinessOutputBuffer()
-
-        do {
-            readinessProcesses[mode] = try processRunner.start(
-                configuration: processConfiguration(
-                    launch: launch,
-                    args: args,
-                    environmentTemplateID: modelListTemplate.id,
-                    environmentDraft: modelListDraft
-                ),
-                stdout: { text in output.append(text) },
-                stderr: { _ in },
-                termination: { [weak self] _ in
-                    Task { @MainActor in
-                        guard self?.readinessRequests[mode] == request else { return }
-                        self?.readinessProcesses[mode] = nil
-                        if let message = self?.modelCapabilitiesByID[modelID]?.unavailableMessage {
-                            self?.readinessByMode[mode] = .unsupported(message)
-                            return
-                        }
-                        self?.readinessByMode[mode] = ModelReadinessParser.state(
-                            for: modelID,
-                            modelListOutput: output.text()
-                        )
-                    }
-                }
-            )
-        } catch {
-            readinessRequests[mode] = nil
-            readinessProcesses[mode] = nil
-            readinessByMode[mode] = .unknown(error.localizedDescription)
+        let id = jobs.submit(rawRequest(args: args, probeKey: mode.rawValue))
+        guard readinessProbes[mode] != id else { return }
+        readinessProbes[mode] = id
+        Task { @MainActor [weak self] in
+            guard let self, let result = await self.jobs.result(for: id) else { return }
+            guard self.readinessProbes[mode] == id else { return }
+            completion(result)
         }
+    }
+
+    /// Stops the probe in flight for `mode`, if any; its result is then ignored.
+    private func cancelReadinessProbe(for mode: StudioMode) {
+        if let id = readinessProbes[mode] {
+            jobs.cancel(id)
+        }
+        readinessProbes[mode] = nil
     }
 
     @discardableResult
@@ -1107,12 +1096,7 @@ final class MereRunController: ObservableObject {
             draft: draft,
             requestID: requestID,
             conversationID: conversationID,
-            configuration: processConfiguration(
-                launch: launch,
-                args: args,
-                environmentTemplateID: template.id,
-                environmentDraft: draft
-            ),
+            configuration: processConfiguration(launch: launch, args: args, template: template, draft: draft),
             displayCommand: launch.displayCommand(for: args)
         )
         let id = jobs.submit(request)
@@ -1138,7 +1122,7 @@ final class MereRunController: ObservableObject {
     @discardableResult
     func submitRealtimeMusicCommand(_ line: String, requestID: UUID) -> Bool {
         guard let job = jobs.job(requestID: requestID),
-              job.request.template.id == .musicRealtime,
+              job.request.templateID == .musicRealtime,
               job.state.isRunning else {
             return false
         }
@@ -1148,7 +1132,7 @@ final class MereRunController: ObservableObject {
     @discardableResult
     func submitVideoSessionRequest() -> Bool {
         guard let job = foregroundJob,
-              job.request.template.id == .videoSession,
+              job.request.templateID == .videoSession,
               job.state.isRunning else {
             status = "Start the resident session first"
             append("Start the resident LTX session before submitting a render.", stream: .stderr)
@@ -1193,6 +1177,10 @@ final class MereRunController: ObservableObject {
         case .started(let job):
             guard job.lane == .inference else { return }
             setForeground(job)
+        case .output:
+            // Raw chunks are for submitters streaming a utility command; the console mirrors the
+            // folded state on `.changed`.
+            return
         case .changed(let job):
             guard job.lane == .inference else { return }
             mirrorForeground(job)
@@ -1292,17 +1280,11 @@ final class MereRunController: ObservableObject {
         }
     }
 
-    /// Terminates every child process the app launched (runs, queued utility commands, and
-    /// readiness probes, including a long-lived `api serve`). Called on app termination so
-    /// child CLIs are never orphaned.
+    /// Terminates every child process the app launched (runs, utility commands and probes,
+    /// including a long-lived `api serve`) and drops every queued job. Called on app termination
+    /// so child CLIs are never orphaned.
     func terminateAllProcesses() {
         jobs.terminateAll()
-        for process in utilityProcesses.values {
-            process.terminate()
-        }
-        for process in readinessProcesses.values {
-            process.terminate()
-        }
     }
 
     private func requiresCameraAccess(_ templateID: CommandTemplateID) -> Bool {
@@ -1445,11 +1427,6 @@ final class MereRunController: ObservableObject {
         return "\(description) + \(installedURL.abbreviatedForDisplay)"
     }
 
-    private func cancelReadinessCheck(for mode: StudioMode) {
-        readinessProcesses[mode]?.terminate()
-        readinessProcesses[mode] = nil
-    }
-
     private func expandedOptionalPath(_ path: String) -> String? {
         guard !path.isBlank else { return nil }
         return NSString(string: path).expandingTildeInPath
@@ -1474,7 +1451,9 @@ final class MereRunController: ObservableObject {
         ArtifactResolver(fileSystem: fileSystem).primaryOutput(expected: expected, stdout: stdout)
     }
 
-    private func processEnvironment(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
+    /// The child environment: the app's own, a PATH that finds Homebrew and system tools, the
+    /// configured model locations, then `overrides` (per-command secrets, which never go in argv).
+    private func processEnvironment(overrides: [String: String]) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = [
             "/opt/homebrew/bin",
@@ -1491,18 +1470,35 @@ final class MereRunController: ObservableObject {
         if !hubCache.isBlank {
             env["MERERUN_HUB_CACHE"] = NSString(string: hubCache).expandingTildeInPath
         }
-        for (key, value) in CommandLaunchEnvironment.overrides(templateID: templateID, draft: draft) {
+        for (key, value) in overrides {
             env[key] = value
         }
         return env
     }
 
+    /// The launch for a catalog command: the template's environment (serve API keys) and stdin
+    /// policy (open for the resident session templates) apply.
     private func processConfiguration(
         launch: MereRunLaunch,
         args: [String],
-        environmentTemplateID: CommandTemplateID? = nil,
-        environmentDraft: CommandDraft? = nil,
-        environmentOverrides: [String: String] = [:]
+        template: CommandTemplate,
+        draft: CommandDraft
+    ) -> MereRunProcessConfiguration {
+        processConfiguration(
+            launch: launch,
+            args: args,
+            environment: processEnvironment(
+                overrides: CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
+            ),
+            keepsStandardInputOpen: template.id == .videoSession || template.id == .musicRealtime
+        )
+    }
+
+    private func processConfiguration(
+        launch: MereRunLaunch,
+        args: [String],
+        environment: [String: String],
+        keepsStandardInputOpen: Bool
     ) -> MereRunProcessConfiguration {
         let processArgs: [String]
         if case .executable(let url) = launch, url.path == "/usr/bin/env" {
@@ -1510,19 +1506,12 @@ final class MereRunController: ObservableObject {
         } else {
             processArgs = launch.processArguments(for: args)
         }
-        let templateID = environmentTemplateID ?? selectedTemplate.id
-        let environmentDraft = environmentDraft ?? draft
-
-        var environment = processEnvironment(templateID: templateID, draft: environmentDraft)
-        for (key, value) in environmentOverrides {
-            environment[key] = value
-        }
         return MereRunProcessConfiguration(
             executableURL: launch.executableURL,
             arguments: processArgs,
             currentDirectoryURL: workingDirectoryURL(),
             environment: environment,
-            keepsStandardInputOpen: templateID == .videoSession || templateID == .musicRealtime
+            keepsStandardInputOpen: keepsStandardInputOpen
         )
     }
 

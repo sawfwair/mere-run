@@ -26,6 +26,11 @@ final class JobStore: ObservableObject {
     enum Event {
         /// The job left the queue and its process launch was attempted.
         case started(Job)
+        /// One chunk of process output arrived, exactly as the child wrote it. Sent after the job
+        /// folded it into its log and live text and before the matching `.changed`, so a
+        /// submitter that needs the raw stream (a JSONL protocol, a progress feed) reads chunks
+        /// rather than diffing the capped `liveText`.
+        case output(Job, LogStream, String)
         /// Log, progress, status, live text or artifacts changed while running.
         case changed(Job)
         /// The job reached a terminal state; `completions` receives the same result right after.
@@ -99,11 +104,11 @@ final class JobStore: ObservableObject {
     }
 
     func isRunning(capability: String) -> Bool {
-        running.contains { $0.request.template.id.capabilityID == capability }
+        running.contains { $0.request.templateID?.capabilityID == capability }
     }
 
     func isRunning(template: CommandTemplateID) -> Bool {
-        running.contains { $0.request.template.id == template }
+        running.contains { $0.request.templateID == template }
     }
 
     // MARK: Submitting
@@ -111,8 +116,12 @@ final class JobStore: ObservableObject {
     /// Registers the job and starts it when its lane has a free slot; otherwise it waits in FIFO
     /// order. Probe jobs with a `dedupeKey` return the matching in-flight job instead of starting
     /// a duplicate, or supersede it when the configuration differs.
+    ///
+    /// `id` lets a submitter name the job before submitting it (so it can hand the id to a
+    /// cancel button up front); it must be unique for the session. A deduplicated probe keeps
+    /// the in-flight job's id, which is what the call returns.
     @discardableResult
-    func submit(_ request: JobRequest) -> JobID {
+    func submit(_ request: JobRequest, id: JobID = JobID()) -> JobID {
         if request.lane == .probe, let key = request.dedupeKey,
            let existing = all.last(where: {
                // A superseded probe stays `.running` until its process dies; it must not be
@@ -125,7 +134,8 @@ final class JobStore: ObservableObject {
             cancel(existing.id)
         }
 
-        let job = Job(request: request)
+        precondition(jobs[id] == nil, "Job \(id.raw) was already submitted in this session.")
+        let job = Job(id: id, request: request)
         jobs[job.id] = job
         order.append(job.id)
         queues[request.lane, default: []].append(job.id)
@@ -215,21 +225,25 @@ final class JobStore: ObservableObject {
 
     private func start(_ job: Job) {
         let request = job.request
-        if let message = request.template.validationMessage(for: request.draft) {
-            complete(job, with: job.failPreflight(.invalidRequest(message)))
-            return
-        }
-        if let message = Self.prepareOutputLocation(template: request.template, draft: request.draft) {
-            complete(job, with: job.failPreflight(.outputLocationUnavailable(message)))
-            return
+        // Preflight is a catalog concept: a raw command has nothing to validate and no output
+        // location to prepare.
+        if case .templated(let template, let draft) = request.command {
+            if let message = template.validationMessage(for: draft) {
+                complete(job, with: job.failPreflight(.invalidRequest(message)))
+                return
+            }
+            if let message = Self.prepareOutputLocation(template: template, draft: draft) {
+                complete(job, with: job.failPreflight(.outputLocationUnavailable(message)))
+                return
+            }
         }
 
         runningIDs[job.lane, default: []].append(job.id)
-        job.markRunning(status: request.template.id == .modelPull ? "Downloading model" : "Running")
+        job.markRunning(status: request.templateID == .modelPull ? "Downloading model" : "Running")
         events.send(.started(job))
         job.note(job.displayCommand, stream: .system)
         events.send(.changed(job))
-        if request.conversationID == nil {
+        if job.detectsArtifacts {
             startOutputWatch(for: job)
         }
 
@@ -266,6 +280,7 @@ final class JobStore: ObservableObject {
     private func consume(_ text: String, stream: LogStream, for job: Job) {
         guard job.state.isRunning else { return }
         job.consume(text, stream: stream, resolver: resolver)
+        events.send(.output(job, stream, text))
         events.send(.changed(job))
     }
 
