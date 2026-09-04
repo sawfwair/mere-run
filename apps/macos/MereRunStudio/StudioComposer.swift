@@ -445,105 +445,13 @@ struct StudioComposer: View {
     // MARK: - Model chip
 
     private var modelChip: some View {
-        Menu {
-            Toggle(isOn: Binding(get: { draft.model.isBlank }, set: { _ in draft.model = "" })) {
-                Text(defaultModelID.isEmpty ? "Auto" : "Auto · \(Self.displayModelName(defaultModelID))")
-            }
-            let choices = mode.modelChoices(from: modelInventory)
-            let installed = choices.filter(\.isInstalled)
-            let downloadable = choices.filter { !$0.isInstalled }
-            if !installed.isEmpty {
-                Section("Installed") {
-                    ForEach(installed) { row in modelRow(row) }
-                }
-            }
-            if !downloadable.isEmpty {
-                Section("Needs download") {
-                    ForEach(downloadable) { row in modelRow(row) }
-                }
-            }
-            if choices.isEmpty {
-                Text("No \(mode.title.lowercased()) models listed yet")
-            }
-            Divider()
-            Button("Browse Models…", action: onShowModels)
-        } label: {
-            StudioComposerChipLabel(title: modelLabel, leadingSystemImage: modelStatusGlyph)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(modelHelp)
-        .accessibilityLabel("Model")
-        .accessibilityValue(modelAccessibilityValue)
-    }
-
-    private func modelRow(_ row: StudioModelInventoryRow) -> some View {
-        Toggle(isOn: Binding(get: { row.id == draft.model }, set: { _ in draft.model = row.id })) {
-            Label(Self.displayModelName(row.id), systemImage: row.isInstalled ? "internaldrive" : "arrow.down.circle")
-        }
-    }
-
-    /// The mode's template default, shown as "Auto".
-    private var defaultModelID: String {
-        CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
-    }
-
-    /// The resolved model id for this run: the explicit draft model, else the mode's default.
-    private var rawModelID: String {
-        let current = draft.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return current.isEmpty ? defaultModelID : current
-    }
-
-    private var modelLabel: String {
-        rawModelID.isEmpty ? "Auto" : Self.displayModelName(rawModelID)
-    }
-
-    /// A glyph before the model name when the model is not ready: missing locally, or unsupported.
-    private var modelStatusGlyph: String? {
-        switch readiness {
-        case .missingModel: return "arrow.down.circle"
-        case .unsupported: return "exclamationmark.triangle"
-        case .checking, .ready, .unknown: return nil
-        }
-    }
-
-    private var modelHelp: String {
-        let identity = rawModelID.isEmpty ? "Auto — the mode's default model" : "Model: \(rawModelID)"
-        switch readiness {
-        case .ready, .unknown: return identity
-        default: return "\(identity) · \(readiness.message)"
-        }
-    }
-
-    private var modelAccessibilityValue: String {
-        let identity = rawModelID.isEmpty ? "Automatic" : rawModelID
-        return "\(identity), \(readiness.title)"
-    }
-
-    /// A human-facing label for a model id: drop the modality/category prefix and
-    /// title-case the distinctive remainder ("text-agent-deepseek-v4-flash" →
-    /// "Deepseek V4 Flash"). The exact id stays in the chip's tooltip, so the
-    /// friendly name never hides what the CLI actually expects.
-    static func displayModelName(_ id: String) -> String {
-        let leaf = id.components(separatedBy: "/").last ?? id
-        let prefixes = [
-            "text-chat-", "text-agent-", "text-embed-", "text-code-",
-            "image-", "video-", "music-", "sfx-", "speech-tts-", "speech-asr-", "speech-",
-            "embed-", "vision-ground-", "vision-segment-", "vision-chat-", "vision-ocr-", "vision-", "text-"
-        ]
-        var core = leaf
-        for prefix in prefixes where core.hasPrefix(prefix) {
-            core = String(core.dropFirst(prefix.count))
-            break
-        }
-        let words = core.split(separator: "-").map { token -> String in
-            guard let first = token.first, first.isLetter else { return String(token) }
-            return first.uppercased() + token.dropFirst()
-        }
-        let label = words.joined(separator: " ")
-        return label.isEmpty ? leaf : label
+        StudioModelPicker(
+            mode: mode,
+            model: $draft.model,
+            inventory: modelInventory,
+            readiness: readiness,
+            onShowModels: onShowModels
+        )
     }
 
     // MARK: - Right cluster

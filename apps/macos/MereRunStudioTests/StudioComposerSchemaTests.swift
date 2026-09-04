@@ -282,10 +282,10 @@ final class StudioComposerSchemaTests: XCTestCase {
     }
 
     func testDisplayModelNameDropsCategoryPrefixes() {
-        XCTAssertEqual(StudioComposer.displayModelName("image-zimage-nano"), "Zimage Nano")
-        XCTAssertEqual(StudioComposer.displayModelName("vision-ground-falcon-perception"), "Falcon Perception")
-        XCTAssertEqual(StudioComposer.displayModelName("speech-tts-qwen3-nano"), "Qwen3 Nano")
-        XCTAssertEqual(StudioComposer.displayModelName("text-agent-deepseek-v4-flash"), "Deepseek V4 Flash")
+        XCTAssertEqual(StudioModelPicker.displayModelName("image-zimage-nano"), "Zimage Nano")
+        XCTAssertEqual(StudioModelPicker.displayModelName("vision-ground-falcon-perception"), "Falcon Perception")
+        XCTAssertEqual(StudioModelPicker.displayModelName("speech-tts-qwen3-nano"), "Qwen3 Nano")
+        XCTAssertEqual(StudioModelPicker.displayModelName("text-agent-deepseek-v4-flash"), "Deepseek V4 Flash")
     }
 
     // MARK: - Helpers
