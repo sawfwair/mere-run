@@ -25,8 +25,9 @@ enum StudioModelNaming {
     }
 
     /// A human-facing label for a model id: drop the modality/category prefix and title-case the
-    /// distinctive remainder ("text-agent-deepseek-v4-flash" → "Deepseek V4 Flash",
-    /// "text-chat-qwen3.6-4b" → "Qwen3.6 4B").
+    /// distinctive remainder, keeping the casing the model cards print
+    /// ("text-agent-deepseek-v4-flash" → "Deepseek V4 Flash", "text-chat-qwen3.6-4b" →
+    /// "Qwen3.6 4B", "vision-chat-qwen3.6-vl-4b" → "Qwen3.6-VL 4B").
     static func displayName(_ id: String) -> String {
         let leaf = id.components(separatedBy: "/").last ?? id
         var core = leaf
@@ -34,7 +35,18 @@ enum StudioModelNaming {
             core = String(core.dropFirst(prefix.count))
             break
         }
-        let label = core.split(separator: "-").map(capitalize).joined(separator: " ")
+        var words: [String] = []
+        for token in core.split(separator: "-") {
+            let word = capitalize(token)
+            // A family qualifier hyphenates onto the name it qualifies, the way the model cards
+            // print it: "qwen3.6-vl-4b" is "Qwen3.6-VL 4B", not "Qwen3.6 VL 4B".
+            if hyphenatedQualifiers.contains(token.lowercased()), let previous = words.popLast() {
+                words.append("\(previous)-\(word)")
+            } else {
+                words.append(word)
+            }
+        }
+        let label = words.joined(separator: " ")
         return label.isEmpty ? leaf : label
     }
 
@@ -46,15 +58,32 @@ enum StudioModelNaming {
         "embed-", "vision-ground-", "vision-segment-", "vision-chat-", "vision-ocr-", "vision-", "text-"
     ]
 
+    /// Tokens whose printed casing is not title case: acronyms and product names the model cards
+    /// spell a particular way. Everything else title-cases.
+    private static let knownCasing: [String: String] = [
+        "vl": "VL", "tdt": "TDT", "rt": "RT", "rt2": "RT2", "ltx": "LTX", "ltx2": "LTX-2",
+        "mtp": "MTP", "lora": "LoRA", "asr": "ASR", "tts": "TTS", "ocr": "OCR", "vae": "VAE",
+        "clip": "CLIP", "t5": "T5", "mmdit": "MMDiT", "dit": "DiT", "sdxl": "SDXL", "sam": "SAM",
+        "3d": "3D", "hd": "HD", "sfx": "SFX", "ai": "AI", "gguf": "GGUF", "mlx": "MLX",
+        "ace": "ACE", "q4": "Q4", "q8": "Q8", "fp8": "FP8", "bf16": "BF16", "int4": "INT4",
+        "int8": "INT8"
+    ]
+
+    /// Qualifiers that hyphenate onto the name they qualify, the way the model cards print them:
+    /// "qwen3.6-vl-4b" is "Qwen3.6-VL 4B", while "parakeet-tdt" stays "Parakeet TDT".
+    private static let hyphenatedQualifiers: Set<String> = ["vl"]
+
     private static func capitalize(_ token: Substring) -> String {
+        if let known = knownCasing[token.lowercased()] { return known }
         if isParameterCount(token) { return token.uppercased() }
         guard let first = token.first, first.isLetter else { return String(token) }
         return first.uppercased() + token.dropFirst()
     }
 
-    /// "4b", "27b", "1.5b": a parameter count, which reads as "4B" the way model cards print it.
+    /// "4b", "27b", "1.5b", "82m": a parameter count, which reads as "4B" or "82M" the way model
+    /// cards print it.
     private static func isParameterCount(_ token: Substring) -> Bool {
-        guard token.count >= 2, token.last == "b" else { return false }
+        guard token.count >= 2, let last = token.last, last == "b" || last == "m" else { return false }
         let digits = token.dropLast()
         return !digits.isEmpty && digits.allSatisfy { $0.isNumber || $0 == "." } && digits.contains { $0.isNumber }
     }
