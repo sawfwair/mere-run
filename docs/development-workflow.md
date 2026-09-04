@@ -43,6 +43,11 @@ For most changes:
 That keeps the package healthy without forcing a full manual validation cycle
 for every tiny edit.
 
+Continuous integration narrows itself to the paths a pull request changes, so a
+change confined to the macOS app runs a shorter package gate than a change to
+the CLI or Core. `./scripts/check.sh` remains the local gate for everything. See
+the root `CONTRIBUTING.md` file for the lane rules.
+
 ## Which command to run
 
 ### Docs-only change

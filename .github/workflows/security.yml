@@ -4,22 +4,42 @@ on:
   pull_request:
   push:
     branches: [main]
+  merge_group:
 
 permissions:
   contents: read
 
+concurrency:
+  # Merge-queue runs each get their own gh-readonly-queue ref, and cancelling
+  # one would leave the queue waiting on a check that never reports.
+  group: security-${{ github.event_name }}-${{ github.event.merge_group.head_ref || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
+
 jobs:
+  # A required check, so the job always runs and always reports under its own
+  # name. actions/dependency-review-action only supports pull requests, so on a
+  # merge-queue or push run the job reports success from a no-op step instead of
+  # being skipped: a required check that never reports leaves a merge group
+  # waiting until it times out. The review itself already ran on the pull
+  # request that entered the queue.
   dependency-review:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
     steps:
+      - name: Report that dependency review is pull-request only
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "Dependency review runs on pull requests only."
+          echo "Event: ${{ github.event_name }}; the pull request's own review already reported."
+
       - name: Checkout
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@v7
 
       - name: Dependency review
+        if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v5
 
   secret-scan:

@@ -4,68 +4,230 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Merge-queue runs each get their own gh-readonly-queue ref, and cancelling
+  # one would leave the queue waiting on a check that never reports.
+  group: ci-${{ github.event_name }}-${{ github.event.merge_group.head_ref || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      lane: ${{ steps.filter.outputs.lane }}
+      linux: ${{ steps.filter.outputs.linux }}
+      ios: ${{ steps.filter.outputs.ios }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Detect changes that require native builds
+      - name: Classify the changed paths
         id: filter
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # A merge-queue run has no pull request; it diffs the queued branch
+          # against the main tip the group was formed on.
+          BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
+          # Every changed path is sorted into one category, and the categories
+          # decide four things:
+          #
+          #   code   native builds are needed at all (unchanged behaviour)
+          #   lane   which package gate the macOS `swift` job runs:
+          #          `full` is ./scripts/check.sh (every test target), `fast` is
+          #          the same non-test checks plus the macOS app target and its
+          #          tests. Both lanes build and verify the app bundle.
+          #   linux  the Linux CLI compatibility gate has something to prove
+          #   ios    the iOS app build and tests have something to prove
+          #
+          # All three are default-deny: a path this classifier does not
+          # recognise lands in `other`, which selects the full gate everywhere,
+          # so a new top-level directory can never silently take a short route.
+          # The same applies when the base commit cannot be resolved, which is
+          # what keeps a merge-queue run on the full gate whenever its diff is
+          # not computable: that run is the last gate before main.
+          # Required checks keep reporting under their own names in both lanes;
+          # a job with nothing to prove reports success from a no-op step rather
+          # than being skipped.
+
           code_required=true
+          lane=full
+          linux_required=true
+          ios_required=true
+          categories=''
+
+          record_category() {
+            case " $categories " in
+              *" $1 "*) ;;
+              *) categories="${categories:+$categories }$1" ;;
+            esac
+          }
+
           if [[ -n "$BASE_SHA" && ! "$BASE_SHA" =~ ^0+$ ]] \
               && git cat-file -e "${BASE_SHA}^{commit}"; then
             mapfile -t changed_files < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
             if (( ${#changed_files[@]} > 0 )); then
               code_required=false
+              lane=fast
+              linux_required=false
+              ios_required=false
               for path in "${changed_files[@]}"; do
                 case "$path" in
                   docs/*|README.md|CHANGELOG.md|CODEBASE.md|CONTRIBUTING.md|SECURITY.md|LICENSE|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|.github/workflows/docs.yml)
                     ;;
                   *)
                     code_required=true
-                    break
+                    ;;
+                esac
+
+                case "$path" in
+                  # Workflow edits always take every gate: the lanes are defined
+                  # here, so they cannot be trusted to validate themselves.
+                  .github/*)
+                    record_category workflows
+                    lane=full
+                    linux_required=true
+                    ios_required=true
+                    ;;
+                  # The gate scripts are only exercised end to end by the full
+                  # macOS gate and the Linux gate that invoke them.
+                  scripts/check.sh|scripts/check-linux.sh|scripts/build_mlx_metallib.sh|scripts/build_mere_run_app.sh)
+                    record_category gate-scripts
+                    lane=full
+                    linux_required=true
+                    ;;
+                  Sources/*|Tests/*|Package.swift|Package.resolved|vendor/*)
+                    record_category cli-core
+                    lane=full
+                    linux_required=true
+                    ios_required=true
+                    ;;
+                  # scripts/check-linux.sh sources and exercises the rest of
+                  # scripts/, so the Linux gate stays in for any of them.
+                  scripts/*)
+                    record_category scripts
+                    linux_required=true
+                    ;;
+                  # The macOS app target is excluded from the Linux package view
+                  # and is not part of the iOS Xcode project.
+                  apps/macos/*)
+                    record_category app
+                    ;;
+                  apps/ios/*)
+                    record_category ios
+                    ios_required=true
+                    ;;
+                  # The documentation checks are platform independent and run in
+                  # the macOS job in both lanes.
+                  docs/*|*.md|LICENSE|package.json|pnpm-lock.yaml|pnpm-workspace.yaml)
+                    record_category docs
+                    ;;
+                  # Not compiled by Package.swift; the app bundle build in both
+                  # lanes covers the parts that ship inside MereRun.app.
+                  assets/*|integrations/*|skills/*)
+                    record_category resources
+                    ;;
+                  *)
+                    record_category other
+                    lane=full
+                    linux_required=true
+                    ios_required=true
                     ;;
                 esac
               done
             fi
           fi
 
-          echo "code=$code_required" >>"$GITHUB_OUTPUT"
-          printf 'Native builds required: %s\n' "$code_required"
+          [[ -n "$categories" ]] || categories='(none detected)'
 
+          if [[ "$lane" == "fast" ]]; then
+            lane_note='**fast lane: app-only change** (SwiftLint, repository checks, swift build, MereRunAppTests, app bundle)'
+          else
+            lane_note='**full gate** (scripts/check.sh, every package test target, plus the app bundle)'
+          fi
+
+          {
+            echo "code=$code_required"
+            echo "lane=$lane"
+            echo "linux=$linux_required"
+            echo "ios=$ios_required"
+          } >>"$GITHUB_OUTPUT"
+
+          printf 'Change categories: %s\n' "$categories"
+          printf 'Native builds required: %s\n' "$code_required"
+          printf 'Package gate lane: %s\n' "$lane"
+          printf 'Linux CLI gate required: %s\n' "$linux_required"
+          printf 'iOS build required: %s\n' "$ios_required"
+
+          {
+            printf '### CI scope\n\n'
+            printf -- '- Change categories: %s\n' "$categories"
+            printf -- '- Native builds required: %s\n' "$code_required"
+            printf -- '- macOS package gate: %s\n' "$lane_note"
+            printf -- '- Linux CLI gate required: %s\n' "$linux_required"
+            printf -- '- iOS build required: %s\n' "$ios_required"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  # A required check, so this job always runs and always reports under its own
+  # name. A documentation-only change has no native build to prove and reports
+  # success from the step below instead of being skipped, which matters for the
+  # merge queue: a required check that never reports leaves a merge group
+  # waiting until it times out.
   swift:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: always()
     runs-on: macos-26
     env:
       MERERUN_SWIFT_DISABLE_INDEX_STORE: '1'
+      LANE: ${{ needs.changes.outputs.lane }}
+      RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' }}
     steps:
+      - name: Report selected lane
+        shell: bash
+        env:
+          CHANGE_DETECTION_RESULT: ${{ needs.changes.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$CHANGE_DETECTION_RESULT" != "success" ]]; then
+            echo "Change detection did not succeed: $CHANGE_DETECTION_RESULT" >&2
+            exit 1
+          fi
+          if [[ "$RUN_GATE" != "true" ]]; then
+            note='no native change'
+            detail='Nothing outside documentation changed, so there is no package gate to run.'
+          elif [[ "$LANE" == "fast" ]]; then
+            note='fast lane: app-only change'
+            detail='SwiftLint, agent readiness, evaluation boundary, docs examples, swift build, metallib verification, MereRunAppTests, and the app bundle build.'
+          else
+            note='full gate'
+            detail='./scripts/check.sh (every package test target) plus the app bundle build.'
+          fi
+          {
+            printf '### macOS package gate\n\n'
+            printf -- '- **%s**\n' "$note"
+            printf -- '- %s\n' "$detail"
+          } >>"$GITHUB_STEP_SUMMARY"
+          printf 'Native gate required: %s\n' "$RUN_GATE"
+          printf 'Lane: %s\n' "$LANE"
       - uses: actions/checkout@v7
+        if: env.RUN_GATE == 'true'
         with:
           persist-credentials: false
       - uses: maxim-lobanov/setup-xcode@v1
+        if: env.RUN_GATE == 'true'
         with:
           xcode-version: '26.4'
       - name: Restore SwiftPM dependencies
+        if: env.RUN_GATE == 'true'
         uses: actions/cache@v6
         with:
           path: |
@@ -74,17 +236,77 @@ jobs:
             .build/checkouts
             .build/repositories
           key: swiftpm-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}
+      # Compiled objects are restored on every run and re-saved only from main,
+      # so pull requests start from the warm build directory of the commit they
+      # branched from without every PR writing a multi-gigabyte cache entry.
+      # llbuild revalidates restored outputs by path, size, and modification
+      # time, so the dependency checkouts restored above keep their C++ objects
+      # valid while every freshly checked-out first-party source recompiles.
+      # The lane is part of the key, and the lane-agnostic restore key lets
+      # either lane seed the other: both compile the same package graph with the
+      # same flags.
+      - name: Restore SwiftPM build directory
+        if: env.RUN_GATE == 'true'
+        id: build-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            .build/arm64-apple-macosx
+            .build/build.db
+            .build/debug.yaml
+            .build/plugin-tools.yaml
+            .build/plugins
+            .build/swiftlint.cache
+          key: swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-${{ github.sha }}
+          restore-keys: |
+            swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-
+            swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+      - name: Discard cached MLX Metal libraries
+        if: env.RUN_GATE == 'true'
+        run: |
+          set -euo pipefail
+          # A stale metallib silently corrupts inference, so it is the one build
+          # product that is never reused across runs. Deleting the restored
+          # copies puts the build directory back in the state a cold checkout
+          # would have: scripts/build_mlx_metallib.sh regenerates and re-stamps
+          # them from this checkout, and its --verify-only pass still audits the
+          # tracked vendor/mlx-swift_Cmlx.bundle against the pinned sources.
+          if [[ -d .build/arm64-apple-macosx ]]; then
+            find .build/arm64-apple-macosx \( \
+              -name 'default.metallib' \
+              -o -name 'default.metallib.version' \
+              -o -name 'mlx.metallib' \
+            \) -print -delete
+          fi
       - name: Install check dependencies
+        if: env.RUN_GATE == 'true'
         run: |
           # macos-26 currently carries an untrusted aws/tap that causes every
           # Homebrew command to fail before resolving Homebrew/core formulae.
           brew untap --force aws/tap
           brew install swiftlint ripgrep
       - name: Run package checks
+        if: env.RUN_GATE == 'true' && env.LANE != 'fast'
         run: ./scripts/check.sh
+      - name: Run app-scoped package checks
+        if: env.RUN_GATE == 'true' && env.LANE == 'fast'
+        run: |
+          set -euo pipefail
+          # Same non-test checks as ./scripts/check.sh, then only the macOS app
+          # target's tests. Anything that can change CLI or Core behaviour
+          # selects the full lane in the `changes` job.
+          swiftlint --strict --cache-path .build/swiftlint.cache
+          bash ./scripts/agent_readiness_check.sh
+          bash ./scripts/check-evaluation-boundary.sh
+          bash ./scripts/check-docs-examples.sh
+          swift build --disable-index-store
+          ./scripts/build_mlx_metallib.sh --verify-only vendor/mlx-swift_Cmlx.bundle
+          swift test --disable-index-store --filter MereRunAppTests
       - name: Build app bundle (ad-hoc)
+        if: env.RUN_GATE == 'true'
         run: ./scripts/build_mere_run_app.sh debug
       - name: Verify bundle structure
+        if: env.RUN_GATE == 'true'
         run: |
           set -euo pipefail
           bundle="$(swift build --disable-index-store --show-bin-path)/MereRun.app"
@@ -106,10 +328,43 @@ jobs:
           codesign -d --entitlements :- "${bundle}/Contents/Helpers/mere.run" 2>&1 \
             | grep -q 'com.apple.security.device.audio-input'
           codesign --verify --strict --verbose=2 "$bundle"
+      # Only main writes the rolling build cache, and only after every check has
+      # passed. Products that are cheap to reproduce, or that must never be
+      # reused, are removed first: the clang module cache and the debug symbol
+      # bundles are regenerated on demand, the assembled app bundle is rebuilt
+      # from scratch by build_mere_run_app.sh, and the metallib is deliberately
+      # never carried between runs.
+      - name: Prune reproducible products before caching
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          rm -rf .build/arm64-apple-macosx/debug/ModuleCache
+          rm -rf .build/arm64-apple-macosx/debug/MereRun.app
+          find .build/arm64-apple-macosx -maxdepth 2 -name '*.dSYM' -exec rm -rf {} +
+          find .build/arm64-apple-macosx \( \
+            -name 'default.metallib' \
+            -o -name 'default.metallib.version' \
+            -o -name 'mlx.metallib' \
+          \) -delete
+          du -sh .build/arm64-apple-macosx
+      - name: Save SwiftPM build directory
+        if: env.RUN_GATE == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .build/arm64-apple-macosx
+            .build/build.db
+            .build/debug.yaml
+            .build/plugin-tools.yaml
+            .build/plugins
+            .build/swiftlint.cache
+          key: swiftbuild-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ env.LANE }}-${{ github.sha }}
 
+  # Not a required check, so this one is simply skipped when nothing the iOS
+  # project compiles has changed (apps/macos/** is not part of it).
   ios:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.ios == 'true'
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
@@ -214,7 +469,9 @@ jobs:
             echo "Change detection did not succeed: $CHANGE_DETECTION_RESULT" >&2
             exit 1
           fi
-          if [[ "$CODE_REQUIRED" == "true" && "$SWIFT_RESULT" != "success" ]]; then
+          # The swift job now always runs and always concludes, so any result
+          # other than success is a failure here regardless of the lane.
+          if [[ "$SWIFT_RESULT" != "success" ]]; then
             echo "macOS package and bundle checks did not succeed: $SWIFT_RESULT" >&2
             exit 1
           fi
@@ -252,16 +509,38 @@ jobs:
           grep -R "CUDA" README.md docs/development-workflow.md docs/testing.md docs/repository-tour.md docs/internals/source-layout.md >/dev/null
           grep -R "macOS-only" README.md docs/getting-started.md docs/repository-tour.md docs/internals/source-layout.md >/dev/null
 
+  # A required check, so this job always runs and always reports under its own
+  # name. When nothing the Linux CLI compiles or exercises has changed it
+  # reports success from the no-op step below instead of being skipped.
   linux-cli:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: always()
     runs-on: ubuntu-22.04
     container: swift:6.0-jammy
+    env:
+      RUN_GATE: ${{ needs.changes.result == 'success' && needs.changes.outputs.code == 'true' && needs.changes.outputs.linux == 'true' }}
     steps:
+      - name: Verify change detection
+        shell: bash
+        env:
+          CHANGE_DETECTION_RESULT: ${{ needs.changes.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$CHANGE_DETECTION_RESULT" != "success" ]]; then
+            echo "Change detection did not succeed: $CHANGE_DETECTION_RESULT" >&2
+            exit 1
+          fi
+          if [[ "$RUN_GATE" == "true" ]]; then
+            echo "Running the Linux CLI compatibility gate."
+          else
+            echo "No Linux-visible change; the Linux CLI gate has nothing to prove."
+          fi
       - uses: actions/checkout@v7
+        if: env.RUN_GATE == 'true'
         with:
           persist-credentials: false
       - name: Install Linux check dependencies
+        if: env.RUN_GATE == 'true'
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
@@ -285,6 +564,7 @@ jobs:
             zlib1g-dev \
             zstd
       - name: Restore SwiftPM and Linux native dependencies
+        if: env.RUN_GATE == 'true'
         uses: actions/cache@v6
         with:
           path: |
@@ -294,4 +574,5 @@ jobs:
             .build/repositories
           key: swiftpm-${{ runner.os }}-${{ runner.arch }}-swift-6.0-${{ hashFiles('Package.swift', 'Package.resolved', 'scripts/prepare-linux-native.sh', 'scripts/linux-arm64-bf16-toolchain.sh') }}
       - name: Run Linux CLI compatibility gate
+        if: env.RUN_GATE == 'true'
         run: ./scripts/check-linux.sh
