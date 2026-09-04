@@ -38,10 +38,20 @@ struct StudioLibraryPanel: View {
     @State private var anchorID: UUID?
     @State private var pendingDelete: StudioLibraryDeleteRequest?
     @FocusState private var renameFocused: Bool
+    @Environment(\.studioLibrarySeed) private var seed
+
+    /// The layout the column draws in — the user's, unless a render is staging the other one.
+    private var effectiveViewMode: StudioLibraryViewMode {
+        seed?.viewMode ?? viewMode
+    }
+
+    private var effectiveScope: StudioLibraryScope {
+        seed?.scope ?? scope
+    }
 
     private var currentFilter: StudioLibraryFilter {
         StudioLibraryFilter(
-            scope: scope,
+            scope: effectiveScope,
             domain: domain,
             kind: kind,
             favoritesOnly: favoritesOnly,
@@ -50,7 +60,7 @@ struct StudioLibraryPanel: View {
     }
 
     private var scopedItems: [StudioLibraryItem] {
-        StudioLibraryPresenter.scoped(items, scope: scope, domain: domain)
+        StudioLibraryPresenter.scoped(items, scope: effectiveScope, domain: domain)
     }
 
     private var filteredItems: [StudioLibraryItem] {
@@ -112,14 +122,14 @@ struct StudioLibraryPanel: View {
         } message: {
             Text("Deleting removes the run from the Library. Its files stay on disk unless you move them to the Trash.")
         }
+        .onAppear(perform: applyBatchSeed)
         .onChange(of: selectedID) { _, newValue in
             // A programmatic selection (a run finishing, a deep link) replaces the batch, so the
-            // batch bar never claims rows the user can no longer see selected.
-            guard let newValue else { return }
-            if !batch.contains(newValue) {
-                batch = [newValue]
-                anchorID = newValue
-            }
+            // batch bar never claims rows the user can no longer see selected. A seeded batch is
+            // the harness staging a render, and holds.
+            guard seed?.batchCount == nil, let newValue, !batch.contains(newValue) else { return }
+            batch = [newValue]
+            anchorID = newValue
         }
     }
 
@@ -141,7 +151,7 @@ struct StudioLibraryPanel: View {
             Spacer(minLength: 0)
             MereSegmentedControl(
                 StudioLibraryScope.allCases,
-                selection: $scope,
+                selection: Binding(get: { effectiveScope }, set: { scope = $0 }),
                 accessibilityLabel: "Library scope"
             ) { scope in
                 scope == .domain ? domain.title : "All"
@@ -227,13 +237,13 @@ struct StudioLibraryPanel: View {
         Button {
             viewMode = viewMode == .list ? .grid : .list
         } label: {
-            Image(systemName: viewMode == .list ? StudioLibraryViewMode.grid.systemImage : StudioLibraryViewMode.list.systemImage)
+            Image(systemName: effectiveViewMode == .list ? StudioLibraryViewMode.grid.systemImage : StudioLibraryViewMode.list.systemImage)
                 .font(.system(size: 12, weight: .medium))
                 .frame(width: 22, height: 24)
         }
         .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
-        .help(viewMode == .list ? "Show as a grid" : "Show as a list")
-        .accessibilityLabel(viewMode == .list ? "Show as a grid" : "Show as a list")
+        .help(effectiveViewMode == .list ? "Show as a grid" : "Show as a list")
+        .accessibilityLabel(effectiveViewMode == .list ? "Show as a grid" : "Show as a list")
     }
 
     private var emptyState: some View {
@@ -269,7 +279,7 @@ struct StudioLibraryPanel: View {
                         .padding(.top, 6)
                         .padding(.bottom, 2)
 
-                    if viewMode == .list {
+                    if effectiveViewMode == .list {
                         ForEach(section.items) { item in
                             row(for: item)
                         }
@@ -367,22 +377,18 @@ struct StudioLibraryPanel: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(MereRunTheme.textSecondary)
             Spacer(minLength: 0)
-            Button("Reveal") { onReveal(urls(in: batch)) }
-                .buttonStyle(.mereSecondary)
-                .disabled(urls(in: batch).isEmpty)
-            Button("Save to…") { onExport(items(in: batch)) }
-                .buttonStyle(.mereSecondary)
-                .disabled(urls(in: batch).isEmpty)
-            Button {
-                pendingDelete = StudioLibraryDeleteRequest(ids: batch, count: batch.count)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 22, height: 22)
+            // Icons, not labels: three words do not fit a 248pt column beside the count.
+            batchAction(systemImage: "folder", label: "Reveal in Finder", tint: MereRunTheme.textSecondary) {
+                onReveal(urls(in: batch))
             }
-            .buttonStyle(.mereIcon(tint: MereRunTheme.red))
-            .help("Delete the selected runs")
-            .accessibilityLabel("Delete \(batch.count) runs")
+            .disabled(urls(in: batch).isEmpty)
+            batchAction(systemImage: "square.and.arrow.down", label: "Save to…", tint: MereRunTheme.textSecondary) {
+                onExport(items(in: batch))
+            }
+            .disabled(urls(in: batch).isEmpty)
+            batchAction(systemImage: "trash", label: "Delete \(batch.count) runs", tint: MereRunTheme.red) {
+                pendingDelete = StudioLibraryDeleteRequest(ids: batch, count: batch.count)
+            }
         }
         .padding(.horizontal, 12)
         .frame(height: 36)
@@ -392,7 +398,30 @@ struct StudioLibraryPanel: View {
         }
     }
 
+    private func batchAction(
+        systemImage: String,
+        label: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 26, height: 24)
+        }
+        .buttonStyle(.mereIcon(tint: tint))
+        .help(label)
+        .accessibilityLabel(label)
+    }
+
     // MARK: - Selection
+
+    private func applyBatchSeed() {
+        guard let batchCount = seed?.batchCount, batchCount > 1 else { return }
+        let visible = filteredItems.prefix(batchCount).map(\.id)
+        batch = Set(visible)
+        anchorID = visible.first
+    }
 
     private func isSelected(_ id: UUID) -> Bool {
         selectedID == id || batch.contains(id)
@@ -454,6 +483,27 @@ struct StudioLibraryPanel: View {
         guard renamingID == item.id else { return }
         onRename(item.id, renameText)
         renamingID = nil
+    }
+}
+
+/// The state a render wants the column in. Only the snapshot harness sets this — the column's own
+/// view mode lives in `@SceneStorage`, which no scene backs offscreen, and a batch is built by
+/// ⌘-clicking, which a render cannot do. The app leaves it nil.
+struct StudioLibrarySeed: Equatable {
+    var viewMode: StudioLibraryViewMode?
+    var scope: StudioLibraryScope?
+    /// How many of the visible rows start out selected together.
+    var batchCount: Int?
+}
+
+private struct StudioLibrarySeedKey: EnvironmentKey {
+    static let defaultValue: StudioLibrarySeed? = nil
+}
+
+extension EnvironmentValues {
+    var studioLibrarySeed: StudioLibrarySeed? {
+        get { self[StudioLibrarySeedKey.self] }
+        set { self[StudioLibrarySeedKey.self] = newValue }
     }
 }
 
@@ -635,10 +685,13 @@ private struct StudioLibraryTile: View {
 
     var body: some View {
         Button(action: action) {
-            StudioLibraryThumbnail(item: item, side: 72)
+            // The square comes from an empty spacer, not from the thumbnail: a `scaledToFill`
+            // picture has no size of its own to fit, and would otherwise stretch the tile.
+            Color.clear
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
                 .background(MereRunTheme.surfaceRaised)
+                .overlay { StudioLibraryThumbnail(item: item, side: 72) }
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm))
                 .overlay(alignment: .bottom) {
                     if hovering {

@@ -159,6 +159,7 @@ private struct StudioPosterThumbnail: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
+                    .clipped()
             } else if failed {
                 Image(systemName: fallbackSystemImage)
                     .font(.system(size: max(11, side * 0.34), weight: .medium))

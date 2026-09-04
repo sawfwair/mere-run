@@ -1,4 +1,5 @@
 @testable import MereRunApp
+import AVFoundation
 import AppKit
 import Foundation
 import SwiftUI
@@ -88,6 +89,55 @@ final class StudioSnapshotTests: XCTestCase {
                         navigation.toggleInspector(for: .imageGenerate)
                     }
                 }
+            )
+        }
+    }
+
+    /// The Library column at the mockup's 1440×900 on Image ▸ Generate: list mode light and dark
+    /// (which must still read as `Main.png`'s column), grid mode light and dark with the same rows
+    /// as three-across thumbnails, and one render with three rows selected so the batch bar shows.
+    /// The rows come from the mockup fixture, so the thumbnails are real decoded pictures.
+    func testLibraryColumnFidelitySnapshots() throws {
+        let fidelity = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .mockup,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
+        )
+        defer { fidelity.tearDown() }
+        // The same board the Main render shows, so the list column can be laid over `Main.png`:
+        // two finished generations, one running, one queued.
+        try fidelity.startMainBoardJobs()
+        try fidelity.seedLibraryColumnVariety()
+
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "a ceramic coffee mug in soft morning light"
+
+        // List mode keeps the mockup's own scope (this domain) so the column reads as `Main.png`;
+        // grid and the batch render widen it to All, where every kind of thumbnail is on show.
+        let renders: [(name: String, appearance: StudioSnapshotAppearance, seed: StudioLibrarySeed)] = [
+            ("b4-library-list-light", .light, StudioLibrarySeed(viewMode: .list)),
+            ("b4-library-list-dark", .dark, StudioLibrarySeed(viewMode: .list)),
+            ("b4-library-grid-light", .light, StudioLibrarySeed(viewMode: .grid, scope: .all)),
+            ("b4-library-grid-dark", .dark, StudioLibrarySeed(viewMode: .grid, scope: .all)),
+            ("b4-library-kinds-light", .light, StudioLibrarySeed(viewMode: .list, scope: .all)),
+            ("b4-library-multiselect-light", .light, StudioLibrarySeed(viewMode: .list, scope: .all, batchCount: 3)),
+        ]
+        for render in renders {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.createImage: draft])
+                .environmentObject(fidelity.controller)
+                .environmentObject(fidelity.library)
+                .environmentObject(navigation)
+                .environment(\.studioLibrarySeed, render.seed)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fidelity.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: render.appearance,
+                name: render.name,
+                settle: 3.0,
+                afterAppear: { navigation.toggleInspector(for: .imageGenerate) }
             )
         }
     }
@@ -942,6 +992,68 @@ private final class SnapshotFixture {
         )
     }
 
+    /// One finished run per kind of thumbnail the column draws — a clip (poster frame), a spoken
+    /// line (peak silhouette), and a transcript (first line) — plus a star on the mockup's mug, so
+    /// the Library renders exercise every branch with real files rather than glyphs.
+    func seedLibraryColumnVariety() throws {
+        let clip = root.appendingPathComponent("rooftops.mp4", isDirectory: false)
+        try Self.writeFixtureMP4(to: clip, size: CGSize(width: 256, height: 144), frames: 12)
+        let line = root.appendingPathComponent("welcome.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: line, seconds: 3)
+
+        let rows: [StudioLibraryItem] = [
+            StudioLibraryItem(
+                id: UUID(),
+                mode: .video,
+                prompt: "A slow pan over wet rooftops at first light",
+                inputURL: nil,
+                outputURL: clip,
+                createdAt: Self.mockupTime(hour: 12, minute: 12),
+                updatedAt: Self.mockupTime(hour: 12, minute: 13),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run video generate --model video-ltx2 --frames 121",
+                outputText: nil,
+                templateID: .videoGenerate,
+                artifactURLs: [clip]
+            ),
+            StudioLibraryItem(
+                id: UUID(),
+                mode: .speak,
+                prompt: "Welcome aboard. Everything you make here stays on this Mac.",
+                inputURL: nil,
+                outputURL: line,
+                createdAt: Self.mockupTime(hour: 11, minute: 40),
+                updatedAt: Self.mockupTime(hour: 11, minute: 40),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run speech synthesize --voice nova",
+                outputText: nil,
+                templateID: .speechSynthesize,
+                artifactURLs: [line]
+            ),
+            StudioLibraryItem(
+                id: UUID(),
+                mode: .listen,
+                prompt: "",
+                inputURL: line,
+                outputURL: nil,
+                createdAt: Self.mockupTime(hour: 11, minute: 8),
+                updatedAt: Self.mockupTime(hour: 11, minute: 8),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run speech transcribe welcome.wav --timestamps",
+                outputText: Self.transcriptText,
+                templateID: .speechTranscribe
+            )
+        ]
+        for row in rows.sorted(by: { $0.createdAt < $1.createdAt }) { library.upsert(row) }
+
+        if let mug = library.items.last(where: { $0.mode == .createImage }) {
+            library.setFavorite(id: mug.id, isFavorite: true)
+        }
+    }
+
     /// Runs the Models detail column reads: image generations with the seeded default model
     /// (usage and last-run duration), a passed quality gate, a Lite benchmark, and a running
     /// composer-initiated pull that the job bar and list report.
@@ -1483,6 +1595,60 @@ private final class SnapshotFixture {
             throw StudioSnapshotError.pngEncodingFailed
         }
         try data.write(to: url, options: .atomic)
+    }
+
+    /// A real, playable H.264 file: a handful of frames whose hue drifts, so the Library's poster
+    /// frame comes from `AVAssetImageGenerator` decoding an actual movie rather than a stub.
+    private static func writeFixtureMP4(to url: URL, size: CGSize, frames: Int) throws {
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: Int(size.width),
+            AVVideoHeightKey: Int(size.height)
+        ])
+        input.expectsMediaDataInRealTime = false
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB]
+        )
+        writer.add(input)
+        guard writer.startWriting() else { throw StudioSnapshotError.noBitmap }
+        writer.startSession(atSourceTime: .zero)
+
+        for frame in 0..<frames {
+            var buffer: CVPixelBuffer?
+            guard let pool = adaptor.pixelBufferPool,
+                  CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer) == kCVReturnSuccess,
+                  let pixelBuffer = buffer else {
+                throw StudioSnapshotError.noBitmap
+            }
+            CVPixelBufferLockBaseAddress(pixelBuffer, [])
+            if let base = CVPixelBufferGetBaseAddress(pixelBuffer),
+               let context = CGContext(
+                   data: base,
+                   width: Int(size.width),
+                   height: Int(size.height),
+                   bitsPerComponent: 8,
+                   bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
+                   space: CGColorSpaceCreateDeviceRGB(),
+                   bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
+               ) {
+                let hue = CGFloat(frame) / CGFloat(max(1, frames)) * 0.2 + 0.55
+                context.setFillColor(NSColor(calibratedHue: hue, saturation: 0.5, brightness: 0.7, alpha: 1).cgColor)
+                context.fill(CGRect(origin: .zero, size: size))
+                context.setFillColor(NSColor(calibratedWhite: 0.12, alpha: 1).cgColor)
+                context.fill(CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.32))
+            }
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+            while !input.isReadyForMoreMediaData { usleep(2_000) }
+            adaptor.append(pixelBuffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 12))
+        }
+
+        input.markAsFinished()
+        let finished = DispatchSemaphore(value: 0)
+        writer.finishWriting { finished.signal() }
+        finished.wait()
+        guard writer.status == .completed else { throw StudioSnapshotError.noBitmap }
     }
 
     /// A soft two-tone gradient with a horizon line, so the canvas visibly shows an image.
