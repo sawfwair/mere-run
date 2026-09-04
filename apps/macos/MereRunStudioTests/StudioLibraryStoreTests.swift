@@ -253,6 +253,125 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.items.first?.messages?.isEmpty, true)
     }
 
+    func testAssistantTurnsRecordTheModelAndSystemPromptTheyRanWith() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+
+        store.appendUser(
+            conversationID: conversationID, mode: .chat, model: "text-chat-qwen3.6-4b",
+            systemPrompt: nil, content: "first"
+        )
+        store.appendAssistant(
+            conversationID: conversationID, content: "a1", exitCode: 0,
+            model: "text-chat-qwen3.6-4b", systemPrompt: nil, tokensPerSecond: 41.2
+        )
+        // The model and system prompt change for the NEXT turn; the earlier turn keeps its own.
+        store.appendUser(
+            conversationID: conversationID, mode: .chat, model: "text-chat-gemma4-12b-4bit",
+            systemPrompt: "Be terse.", content: "second"
+        )
+        store.appendAssistant(
+            conversationID: conversationID, content: "a2", exitCode: 0,
+            model: "text-chat-gemma4-12b-4bit", systemPrompt: "Be terse."
+        )
+
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        let item = try XCTUnwrap(reloaded.items.first)
+        let assistants = try XCTUnwrap(item.messages?.filter { $0.role == .assistant })
+        XCTAssertEqual(assistants.map(\.model), ["text-chat-qwen3.6-4b", "text-chat-gemma4-12b-4bit"])
+        XCTAssertEqual(assistants.map(\.systemPrompt), [nil, "Be terse."])
+        XCTAssertEqual(assistants.map(\.tokensPerSecond), [41.2, nil])
+        // Thread-level values follow the latest turn for compatibility with retry.
+        XCTAssertEqual(item.model, "text-chat-gemma4-12b-4bit")
+        XCTAssertEqual(item.systemPrompt, "Be terse.")
+        XCTAssertNil(item.messages?.first?.model)
+    }
+
+    func testPresetChangeOnAThreadIsRecordedWhenTheNextTurnIsSent() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+        store.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "hi")
+        store.appendAssistant(conversationID: conversationID, content: "hello", exitCode: 0)
+        XCTAssertEqual(store.items.first?.mode, .chat)
+
+        store.appendUser(conversationID: conversationID, mode: .code, model: "text-code-north-mini", systemPrompt: nil, content: "now code")
+
+        let item = try XCTUnwrap(store.items.first)
+        XCTAssertEqual(item.mode, .code)
+        XCTAssertEqual(item.commandPreview, "mere.run text code")
+        XCTAssertEqual(item.messages?.count, 3)
+    }
+
+    func testBranchBeforeUserTurnKeepsEarlierTurnsAndLeavesSourceIntact() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+        store.appendUser(conversationID: conversationID, mode: .code, model: "m", systemPrompt: "s", content: "one")
+        store.appendAssistant(conversationID: conversationID, content: "a1", exitCode: 0, model: "m", tokensPerSecond: 12)
+        store.appendUser(conversationID: conversationID, mode: .code, model: "m", systemPrompt: "s", content: "two")
+        store.appendAssistant(conversationID: conversationID, content: "a2", exitCode: 0, model: "m")
+
+        let source = try XCTUnwrap(store.items.first)
+        let secondTurnID = try XCTUnwrap(source.messages?.first { $0.content == "two" }?.id)
+        let branch = try XCTUnwrap(store.branch(conversationID: conversationID, at: secondTurnID, inclusive: false))
+
+        XCTAssertNotEqual(branch.id, source.id)
+        XCTAssertEqual(branch.messages?.map(\.content), ["one", "a1"])
+        XCTAssertEqual(branch.mode, .code)
+        XCTAssertEqual(branch.model, "m")
+        XCTAssertEqual(branch.systemPrompt, "s")
+        XCTAssertEqual(branch.messages?.last?.tokensPerSecond, 12)
+        XCTAssertEqual(branch.status, .completed)
+        // Copies get their own identities so both threads can be edited independently.
+        XCTAssertNotEqual(branch.messages?.first?.id, source.messages?.first?.id)
+
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(reloaded.items.count, 2)
+        XCTAssertEqual(reloaded.items.first?.id, branch.id)
+        let original = try XCTUnwrap(reloaded.items.first { $0.id == conversationID })
+        XCTAssertEqual(original.messages?.map(\.content), ["one", "a1", "two", "a2"])
+    }
+
+    func testBranchAfterAssistantTurnIncludesThatReply() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+        store.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "one")
+        store.appendAssistant(conversationID: conversationID, content: "a1", exitCode: 0)
+        store.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "two")
+        store.appendAssistant(conversationID: conversationID, content: "a2", exitCode: 0)
+
+        let firstReplyID = try XCTUnwrap(store.items.first?.messages?.first { $0.content == "a1" }?.id)
+        let branch = try XCTUnwrap(store.branch(conversationID: conversationID, at: firstReplyID, inclusive: true))
+        XCTAssertEqual(branch.messages?.map(\.content), ["one", "a1"])
+
+        XCTAssertNil(store.branch(conversationID: UUID(), at: firstReplyID, inclusive: true))
+        XCTAssertNil(store.branch(conversationID: conversationID, at: UUID(), inclusive: true))
+    }
+
+    func testLegacyThreadRowsDecodeWithoutPerTurnFields() throws {
+        let url = try temporaryLibraryURL()
+        let json = """
+        [{"id":"\(UUID().uuidString)","mode":"chat","prompt":"",\
+        "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z",\
+        "status":"completed","commandPreview":"mere.run text chat",\
+        "messages":[{"id":"\(UUID().uuidString)","role":"user","content":"hi",\
+        "createdAt":"2026-01-01T00:00:00Z","failed":false},\
+        {"id":"\(UUID().uuidString)","role":"assistant","content":"hello",\
+        "createdAt":"2026-01-01T00:00:01Z","failed":false}],"model":"text-chat-gemma4"}]
+        """
+        try XCTUnwrap(json.data(using: .utf8)).write(to: url)
+
+        let store = StudioLibraryStore(libraryURL: url)
+        let item = try XCTUnwrap(store.items.first)
+        XCTAssertEqual(item.messages?.count, 2)
+        XCTAssertNil(item.messages?.last?.model)
+        XCTAssertNil(item.messages?.last?.tokensPerSecond)
+        XCTAssertEqual(item.model, "text-chat-gemma4")
+    }
+
     func testLoadKeepsValidRowsWhenOneIsCorrupt() throws {
         let url = try temporaryLibraryURL()
         let good = """
