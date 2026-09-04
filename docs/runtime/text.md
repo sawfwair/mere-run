@@ -698,6 +698,9 @@ Core hyperparameters (defaults are tuned for local Gemma4 SFT):
 - `--reasoning-effort` — Inkling renderer effort from `0` through `0.99`
   (default `0.9`; use the same value for inference)
 - `--seed` — random seed (default `42`)
+- `--resume-from` — optimizer-bearing text LoRA checkpoint to continue
+- `--resume-step` — verified completed step for a checkpoint that doesn't
+  contain embedded step state
 - `--target-modules` — comma-separated LoRA target suffixes. Gemma and Laguna
   default to q/k/v/o attention. LFM2.5 defaults to q/k/v/output attention.
   Inkling also defaults to MLPs and `lm_head`.
@@ -709,11 +712,21 @@ This list is deliberately not exhaustive; run
 The optimizer projects only loss-masked target positions through the lm_head
 (prompt and padding rows never contribute loss, so gradients are unchanged),
 reads the loss back every 10 steps rather than per step, writes a
-`<name>.partial.safetensors` checkpoint every 100 steps so a killed run can be
-salvaged, and prints `[text-lora-train] step= loss= step_s= footprint_gb=`
+`<name>.partial.safetensors` checkpoint every 100 steps so an interrupted run
+can continue, and prints `[text-lora-train] step= loss= step_s= footprint_gb=`
 diagnostics at each readback. `docs/configuration.md` documents the
 `MERERUN_TEXT_LORA_TRAIN_*` and shared `MERERUN_LORA_TRAIN_*` environment
 switches that tune or disable each behavior.
+
+To continue a self-describing checkpoint, pass `--resume-from` and use the
+same model, dataset, optimizer recipe, seed, target modules, and total
+`--training-steps`. The trainer restores the saved LoRA tensors, FP32 Adam
+moments, global optimizer step, and deterministic data-order position. It
+rejects incomplete optimizer state, changed configuration, changed tensor
+inventories, and shape mismatches. For a checkpoint that doesn't contain
+embedded step state, also pass the verified completed step with
+`--resume-step`. Write resumed output to a different file from the source
+checkpoint.
 
 ```bash
 swift run mere.run text train-lora \

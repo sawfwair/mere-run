@@ -12,6 +12,8 @@ struct TextTrainLoRA: AsyncParsableCommand {
         Inkling-Small, or the LFM2.5 A1B 8-bit text model. Gemma 4 12B vision
         fine-tuning accepts one dataset-relative local image on each user message.
         It writes a model-family-specific MereRun adapter manifest beside the safetensors file.
+        Use --resume-from to continue a matching optimizer-bearing checkpoint toward the
+        original total --training-steps. Legacy checkpoints also require --resume-step.
         Use --dry-run to validate data, create manifests, and prepare a reproducible run.
         """
     )
@@ -63,6 +65,18 @@ struct TextTrainLoRA: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Random seed.")
     var seed: UInt64 = 42
+
+    @Option(
+        name: [.customLong("resume-from")],
+        help: "Resume from a matching text LoRA .safetensors checkpoint with Adam state."
+    )
+    var resumeFrom: String?
+
+    @Option(
+        name: [.customLong("resume-step")],
+        help: "Completed global step for a legacy checkpoint without embedded step state."
+    )
+    var resumeStep: Int?
 
     @Option(
         name: [.customLong("target-modules")],
@@ -130,7 +144,11 @@ struct TextTrainLoRA: AsyncParsableCommand {
                     trainingSteps: trainingSteps,
                     batchSize: batchSize,
                     learningRate: learningRate,
-                    seed: seed
+                    seed: seed,
+                    resumeFrom: resumeFrom.map {
+                        URL(fileURLWithPath: $0).standardizedFileURL
+                    },
+                    resumeStep: resumeStep
                 )
                 var metadata = [
                     "adapter_name": adapterName,
@@ -349,6 +367,33 @@ struct TextTrainLoRA: AsyncParsableCommand {
         guard !resolvedTargetModules().isEmpty else {
             throw ValidationError("--target-modules must include at least one target suffix")
         }
+        if let resumeStep {
+            guard resumeFrom != nil else {
+                throw ValidationError("--resume-step requires --resume-from")
+            }
+            guard resumeStep > 0, resumeStep < trainingSteps else {
+                throw ValidationError(
+                    "--resume-step must be greater than zero and below --training-steps"
+                )
+            }
+        }
+        if let resumeFrom {
+            guard !dryRun else {
+                throw ValidationError("--resume-from cannot be combined with --dry-run")
+            }
+            let resumeURL = URL(fileURLWithPath: resumeFrom).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: resumeURL.path) else {
+                throw ValidationError("--resume-from checkpoint does not exist: \(resumeURL.path)")
+            }
+            guard resumeURL.pathExtension.lowercased() == "safetensors"
+                    || resumeURL.pathExtension.lowercased() == "zip" else {
+                throw ValidationError("--resume-from must be a .safetensors or .zip checkpoint")
+            }
+            let outputURL = URL(fileURLWithPath: output).standardizedFileURL
+            guard resumeURL != outputURL else {
+                throw ValidationError("--resume-from and --output must be different files")
+            }
+        }
         if visualize {
             guard !dryRun else {
                 throw ValidationError("--visualize cannot be combined with --dry-run")
@@ -443,7 +488,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
             datasetSummary: datasetSummary,
             evalPromptCount: evalPromptCount,
             status: "running",
-            step: 0
+            step: resumeStep ?? 0
         )
 
         let logger = try LoRATrainingEventLogger(baseOutputURL: outputURL)
@@ -463,7 +508,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
             type: "run_started",
             stage: "starting",
             message: "Text LoRA training started.",
-            step: 0,
+            step: resumeStep ?? 0,
             totalSteps: trainingSteps,
             fraction: 0,
             path: outputURL.path,

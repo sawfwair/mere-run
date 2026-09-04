@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 ### CLI
 
+- added `text train-lora --resume-from` for deterministic global-step
+  continuation from matching
+  optimizer-bearing checkpoints. Text checkpoints retain Adam moments in FP32,
+  record the completed global step and recipe fingerprint, and reject model,
+  dataset, configuration, layer-inventory, and tensor-shape mismatches. Legacy
+  checkpoints require an explicit verified `--resume-step`.
 - reconciled every capability's declared `output` with what the command
   actually writes, and gave the declaration two additive fields: `flag`, the
   option that carries the destination path, and `optional`, true when the
