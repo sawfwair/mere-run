@@ -6,54 +6,30 @@ import MereRunContract
 // kinds. Nothing here builds a command of its own, so the column can never disagree with what
 // Run launches.
 
-/// The eyebrow a flag files under. The contract declares options flat, so the grouping is the
-/// app's; anything it does not recognize is an Option.
-enum StudioCommandRowGroup: String, CaseIterable, Identifiable {
-    case arguments = "Arguments"
-    case prompt = "Prompt"
-    case output = "Output"
-    case model = "Model"
-    case sampling = "Sampling"
-    case run = "Run"
-    case options = "Options"
+/// The eyebrow a row files under: the contract's own `group` for every option a capability
+/// declares, `Arguments` for positionals, and `Options` for a flag the contract has yet to
+/// describe. The app keeps no grouping table of its own — the inspector's sections and this
+/// column's eyebrows are the same list, read from the same place.
+enum StudioCommandRowGroup: Hashable, Identifiable {
+    case arguments
+    case contract(StudioContractGroup)
 
-    var id: String { rawValue }
+    var id: String { title }
 
-    static func group(forFlag flag: String) -> StudioCommandRowGroup {
-        let name = flag.hasPrefix("--") ? String(flag.dropFirst(2)) : flag
-        if promptFlags.contains(name) { return .prompt }
-        if outputFlags.contains(name) { return .output }
-        if modelFlags.contains(name) || name.hasPrefix("adapter") || name.hasPrefix("lora") { return .model }
-        if samplingFlags.contains(name) { return .sampling }
-        if runFlags.contains(name) { return .run }
-        return .options
+    var title: String {
+        switch self {
+        case .arguments: return "Arguments"
+        case .contract(let group): return group.title
+        }
     }
 
-    private static let promptFlags: Set<String> = [
-        "prompt", "negative-prompt", "system", "system-prompt", "input", "image", "ref-image",
-        "reference", "audio", "end-image", "lyrics", "lyrics-file", "text", "question", "query",
-        "source", "reference-audio", "ref-audio", "mask", "outpaint", "mask-feather",
-    ]
-    private static let outputFlags: Set<String> = [
-        "output", "out", "width", "height", "size", "fps", "num-frames", "frames", "duration",
-        "format", "export-format", "sample-rate", "output-mode", "quality", "stems", "daw-bundle",
-    ]
-    private static let modelFlags: Set<String> = [
-        "model", "model-root", "backend", "weights", "voice", "voice-mode", "profile", "save-profile",
-        "structured-prompt-model", "structured-prompt-model-root", "checkpoints-root",
-    ]
-    private static let samplingFlags: Set<String> = [
-        "steps", "seed", "cfg", "guidance", "guidance-scale", "sigma-shift", "strength", "temperature",
-        "top-p", "top-k", "min-p", "max-tokens", "threshold", "schedule-shift", "thinking", "reasoning-effort",
-        "context-size", "candidates", "lm-mode", "lm-temperature", "lm-cfg-scale", "lm-repetition-penalty",
-        "cover-strength", "retake-variance", "a2v-steps", "a2v-guidance", "video-cfg", "audio-cfg",
-        "v2a-guidance", "end-image-strength", "max-sequence-length",
-    ]
-    private static let runFlags: Set<String> = [
-        "preflight", "json", "progress-json", "quiet", "stream", "stats", "timings", "timings-output",
-        "require-installed", "no-recipe", "skip-recipe", "dry-run", "force", "accept-model-license",
-        "keep-candidates", "allow-unsupported",
-    ]
+    /// Positionals first, then the contract's groups in the order both columns show them.
+    static let allCases: [StudioCommandRowGroup] = [.arguments]
+        + StudioContractGroup.allCases.map { .contract($0) }
+
+    static func group(forFlag flag: String, in capability: MereRunCommandCapability?) -> StudioCommandRowGroup {
+        .contract(StudioContractGroup.group(forFlag: flag, in: capability))
+    }
 }
 
 /// One line of the raw form: a flag and what the draft gives it.
@@ -136,7 +112,7 @@ enum StudioCommandRows {
 
         var rowsByGroup: [StudioCommandRowGroup: [StudioCommandRow]] = [:]
         func append(_ row: StudioCommandRow) {
-            rowsByGroup[StudioCommandRowGroup.group(forFlag: row.flag), default: []].append(row)
+            rowsByGroup[StudioCommandRowGroup.group(forFlag: row.flag, in: capability), default: []].append(row)
         }
 
         for option in declared {

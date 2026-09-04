@@ -1,21 +1,27 @@
 @testable import MereRunApp
+import MereRunContract
 import XCTest
 
 /// The Command view's rows come from the template's own argv for the draft, grouped by flag,
 /// with the contract's labels and boolean kinds; the preview wraps the display command.
 final class StudioCommandRowsTests: XCTestCase {
-    func testFlagsFileUnderTheBoardsGroups() {
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--prompt"), .prompt)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--negative-prompt"), .prompt)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--input"), .prompt)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--width"), .output)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--output"), .output)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--model"), .model)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--lora-scale"), .model)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--steps"), .sampling)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--sigma-shift"), .sampling)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--progress-json"), .run)
-        XCTAssertEqual(StudioCommandRowGroup.group(forFlag: "--krea-conditioning-multiplier"), .options)
+    func testFlagsFileUnderTheContractsGroups() {
+        let image = MereRunCapabilityCatalog.command(id: "image.generate")
+        func group(_ flag: String) -> StudioCommandRowGroup {
+            StudioCommandRowGroup.group(forFlag: flag, in: image)
+        }
+        XCTAssertEqual(group("--prompt"), .contract(.prompt))
+        XCTAssertEqual(group("--negative-prompt"), .contract(.prompt))
+        XCTAssertEqual(group("--input"), .contract(.inputs))
+        XCTAssertEqual(group("--width"), .contract(.output))
+        XCTAssertEqual(group("--output"), .contract(.output))
+        XCTAssertEqual(group("--model"), .contract(.model))
+        XCTAssertEqual(group("--lora-scale"), .contract(.model))
+        XCTAssertEqual(group("--steps"), .contract(.sampling))
+        XCTAssertEqual(group("--sigma-shift"), .contract(.sampling))
+        XCTAssertEqual(group("--progress-json"), .contract(.run))
+        XCTAssertEqual(group("--krea-conditioning-multiplier"), .contract(.sampling))
+        XCTAssertEqual(group("--not-a-contract-flag"), .contract(.options), "a flag the contract has yet to describe")
     }
 
     func testParseSplitsPositionalsAndFlagValues() {
@@ -41,7 +47,10 @@ final class StudioCommandRowsTests: XCTestCase {
         draft.progressJSON = true
 
         let groups = StudioCommandRows.groups(template: template, draft: draft)
-        XCTAssertEqual(groups.map(\.group), [.prompt, .output, .model, .sampling, .run, .options])
+        XCTAssertEqual(
+            groups.map(\.group.title),
+            ["Prompt", "Inputs", "Output", "Model & adapters", "Sampling", "Run"]
+        )
 
         func row(_ flag: String) -> StudioCommandRow? {
             groups.flatMap(\.rows).first { $0.flag == flag }
@@ -57,7 +66,7 @@ final class StudioCommandRowsTests: XCTestCase {
         XCTAssertEqual(row("--preflight")?.value, .toggle(false))
         XCTAssertEqual(row("--model")?.value, .text(template.defaultModel))
 
-        let sampling = try XCTUnwrap(groups.first { $0.group == .sampling })
+        let sampling = try XCTUnwrap(groups.first { $0.group == .contract(.sampling) })
         XCTAssertEqual(sampling.rows.prefix(3).map(\.flag), ["--cfg", "--sigma-shift", "--steps"], "set rows first, in declaration order")
         XCTAssertTrue(sampling.rows.last?.isSet == false)
     }
