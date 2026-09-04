@@ -418,11 +418,19 @@ extension StudioAnalyzeInputKind {
 /// Where a run's result document lives.
 enum StudioAnalyzeDocumentSource {
     private static let documentExtensions = ["json", "txt", "vtt", "srt", "jsonl"]
+    /// The receipt roles that name a structured result, most specific first.
+    private static let documentRoles = [StudioArtifactRole.detections, StudioArtifactRole.tracking]
 
     /// The artifact holding the run's structured result: the `--json-output` sidecar for the
-    /// vision tasks, the transcript the speech tasks write.
+    /// vision tasks, the transcript the speech tasks write. A run whose receipt named its
+    /// sidecars says which file that is; extension order is the fallback for the rest.
     static func url(for item: StudioLibraryItem) -> URL? {
         let artifacts = item.allArtifactURLs
+        for role in documentRoles {
+            if let match = artifacts.first(where: { item.artifactRole(for: $0) == role }) {
+                return match
+            }
+        }
         for pathExtension in documentExtensions {
             if let match = artifacts.first(where: { $0.pathExtension.lowercased() == pathExtension }) {
                 return match

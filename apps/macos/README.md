@@ -30,8 +30,26 @@ imported row. External launchers must never edit `library.json` directly.
   `.probe`, which skip preflight and capture complete stdout and stderr for the
   submitter). The store publishes one observable `Job` per job (state, status,
   progress, log, live output, artifacts, result), raw output chunks through
-  `events`, and a lossless `completions` stream. `ArtifactResolver` finds a
-  run's outputs from the request and the CLI's stdout.
+  `events`, and a lossless `completions` stream.
+- Output detection: `ArtifactResolver` reads, in order, (1) the CLI's
+  `--receipt` line — the final stdout NDJSON object
+  `{"event":"result","exit":0,"outputs":[…]}`, whose first entry is the primary
+  artifact and whose sidecars carry a `role` (`detections`, `masks`, `recipe`,
+  …); (2) the output kind `MereRunCapabilityCatalog` declares for the
+  capability together with the `--output` path the request asked for, once it
+  exists; (3) the stdout path contract and `fileExists` probing, kept as the
+  fallback for the commands that print no receipt and for an older CLI. Roles
+  reach the UI on `Artifact.sidecarRole` / `roleLabel` and are persisted on
+  `StudioLibraryItem.artifactRoles`, so a result surface labels a sidecar
+  instead of guessing from its extension; sidecars found by probing are
+  labelled from the same draft fields that located them
+  (`StudioArtifactRole.inferred`). The app appends `--receipt` and
+  `--progress-json` to the launched argv for the capabilities the contract
+  lists in `receiptCapabilityIDs` / `progressJSONCapabilityIDs`, never on a
+  `--preflight` run (the CLI rejects that pair) and never in the "Will run"
+  preview or a library row's command, which stay the command a person would
+  type. A run that prints a receipt skips the 350 ms output poll; every other
+  command with an output file keeps it.
 - `MereRunController.swift`: the facade views bind to. It snapshots Settings
   and the CLI launch into a `JobRequest` for every lane, awaits utility and
   probe jobs on behalf of their callers (readiness results are evaluated

@@ -1090,13 +1090,25 @@ final class MereRunController: ObservableObject {
         refreshResolvedCLI()
         let launch = cliResolve(cliPath)
         let args = commandArguments(template: template, draft: draft)
+        // The structured-output flags are the app's own transport: the launched process gets
+        // them, the preview and the library row keep the command a person would type.
+        let launchArgs = args + StudioMachineOutputFlags.arguments(
+            template: template,
+            draft: draft,
+            appendingTo: args
+        )
         let request = JobRequest(
             lane: .inference,
             template: template,
             draft: draft,
             requestID: requestID,
             conversationID: conversationID,
-            configuration: processConfiguration(launch: launch, args: args, template: template, draft: draft),
+            configuration: processConfiguration(
+                launch: launch,
+                args: launchArgs,
+                template: template,
+                draft: draft
+            ),
             displayCommand: launch.displayCommand(for: args)
         )
         let id = jobs.submit(request)
