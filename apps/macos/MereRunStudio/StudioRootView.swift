@@ -22,6 +22,8 @@ struct StudioRootView: View {
     /// The prompt tasks whose inspector stays open, as `StudioInspectorTaskMemory` encodes them.
     @SceneStorage("studio.inspectorTasks") private var storedInspectorTasks = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    /// The status probe never answered within its grace period, so the footer says so.
+    @State private var probeTimedOut = false
     /// The prompt mode the composer, canvas, and readiness were last set up for, so the
     /// destination observer activates a mode exactly once however the destination arrived.
     @State private var activatedMode: StudioMode?
@@ -246,15 +248,74 @@ struct StudioRootView: View {
             StudioSidebar(
                 selectedDomain: domainBinding,
                 unavailableMessages: domainUnavailableMessages,
-                serverStatus: controller.serverStatus,
-                resolvedCLI: controller.resolvedCLI,
-                onShowServer: { navigation.open(domain: .server) },
-                onShowModels: { navigation.open(task: .modelsInstalled) }
+                status: machineStatus,
+                runningJobs: runningJobCount,
+                isActivityOpen: $navigation.showActivity
             )
         } detail: {
             detailArea
         }
         .background(MereRunTheme.background.ignoresSafeArea())
+        // The controller publishes nil until the status probe answers; a probe that never answers
+        // must still resolve, so the footer stops saying "Checking…" after the grace period.
+        .task(id: controller.serverStatus == nil) {
+            guard controller.serverStatus == nil else {
+                probeTimedOut = false
+                return
+            }
+            try? await Task.sleep(for: .seconds(StudioMachineStatus.checkingGracePeriod))
+            guard !Task.isCancelled, controller.serverStatus == nil else { return }
+            probeTimedOut = true
+        }
+        .overlay(alignment: .bottomLeading) { activityOverlay }
+    }
+
+    private var machineStatus: StudioMachineStatus {
+        StudioMachineStatus(serverStatus: controller.serverStatus, probeTimedOut: probeTimedOut)
+    }
+
+    /// How many jobs the footer pill counts: the user's work, never a readiness probe.
+    private var runningJobCount: Int {
+        _ = jobMonitor.generation
+        return StudioActivity.lanes.reduce(0) { $0 + controller.jobs.running(in: $1).count }
+    }
+
+    /// The Activity popover, drawn over the whole window rather than inside the sidebar column: it
+    /// is 340pt wide and would be clipped by the column, and it must float over the Library.
+    @ViewBuilder
+    private var activityOverlay: some View {
+        if navigation.showActivity {
+            ZStack(alignment: .bottomLeading) {
+                // Anywhere else in the window dismisses it, the way a popover does.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { navigation.showActivity = false }
+                StudioActivityPopover(
+                    jobs: controller.jobs,
+                    status: machineStatus,
+                    appVersion: controller.appVersion,
+                    cliVersion: controller.cliVersion,
+                    modelsRoot: controller.modelsRoot,
+                    resolvedCLI: controller.resolvedCLI,
+                    onOpenServer: {
+                        navigation.showActivity = false
+                        navigation.open(domain: .server)
+                    },
+                    onOpenModels: {
+                        navigation.showActivity = false
+                        navigation.open(task: .modelsInstalled)
+                    }
+                )
+                .padding(.leading, 10)
+                .padding(.bottom, 56)
+                Button("Close Activity") { navigation.showActivity = false }
+                    .keyboardShortcut(.cancelAction)
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
+            .transition(reduceMotion ? .identity : .opacity)
+        }
     }
 
     // The detail area runs to the top of the window (the title bar is hidden and nothing sits in
