@@ -21,7 +21,11 @@ choice follows the system appearance — the app never forces one.
 | textSecondary | `5C564A` | `C9C1B3` | supporting text |
 | textMuted | `8A8273` | `918A7C` | captions, metadata |
 | accent | `9C7A2E` | `C9A65D` | bronze/gold brand accent |
-| accentSoft | accent @ ~12% | accent @ ~16% | selection washes, user chat bubble |
+| accentSoft | `F0E7D2` | `39331F` | selection washes (Library row, active header toggle), user chat bubble |
+| onAccent | `FFFFFF` | `1B160A` | glyphs and labels on a solid `accent` fill (selected sidebar row) |
+| segmentedSelection | `FFFFFF` | `3A362E` | the raised, selected segment of a segmented control |
+| wordmarkGreen | `2D6A4F` | `2D6A4F` | the wordmark's period only — brand, not status |
+| hoverFill | black @ 6% | white @ 7% | transient pointer hover on rows and icon buttons |
 | green / yellow / red | tuned per appearance | | success / caution / failure |
 
 Color strategy: **Restrained** — tinted neutrals plus the single bronze accent (≤10% of
@@ -36,6 +40,16 @@ where macOS uses it: sidebar and title-bar regions).
 - Display: New York (system serif) for empty-state headlines, welcome hero, and other
   short display moments only — never for controls or body copy. This serif-on-paper
   pairing is a core identity element.
+- Wordmark: `mere` plus a `wordmarkGreen` period in **Caveat Medium** at 27pt
+  (`MereRunTheme.Brand.font()`), the only place the face appears. The font ships in
+  `Resources/Fonts` (OFL 1.1) and is registered for the process on first use; if that
+  fails the wordmark falls back to the system serif at the same size.
+- Eyebrows (`MereEyebrow`): 10.5pt semibold, uppercase, 0.06em tracking, `textMuted` —
+  sidebar sections, Library days, panel groups.
+- Shell sizes are literal: sidebar rows 13pt medium (semibold when selected) with 13pt
+  glyphs; header title 15pt semibold over an 11.5pt medium `textMuted` subtitle on one
+  line; segments 12pt (semibold when selected); Library titles 12.5pt medium with 11pt
+  medium `textMuted` meta; footer 12pt medium `textSecondary`.
 - Hierarchy through weight + size contrast; body line length capped (~65–75ch → max
   widths ~560–680pt on text blocks).
 
@@ -66,10 +80,36 @@ breathe (24–32), rows and chips stay tight (8–12).
 - `MereBanner` — the only inline notice component (info/warning/error).
 - `MerePrimaryButtonStyle` — accent primary action; `.bordered` for secondary.
 - `mereField()` — canonical text-field chrome.
-- Status is one voice: a compact status cluster (dot + word) with a popover for detail —
-  never rows of always-on pills.
-- Navigation: grouped sidebar (Create / Converse / Voice / Vision) with the standard
-  macOS translucent sidebar material; no horizontal chip rails.
+- `MereSegmentedControl` / `MereSegment` — the segmented control: a 2pt-padded
+  `surfaceRaised` pill (radius 7) of 24pt segments with 12pt side padding (radius 5.5);
+  the selected segment is `segmentedSelection` with a 1pt shadow. Used for the header's
+  task control (`StudioTaskControl`, with a "More" menu segment when a domain has more
+  than six tasks) and the Library scope. Never the native `.segmented` picker.
+- `MereToolbarIconButton` — 28pt header toggles (radius 6): `accentSoft` tile and
+  accent glyph while their panel is shown, `textSecondary` glyph otherwise.
+- Status is one voice: the footer pill (32pt, radius 9, an 8pt dot, "Ready · 92 models",
+  a chevron; `hoverFill` only while hovered or open) with a popover for detail — never
+  rows of always-on pills. Dot colors: green ready/serving, yellow checking, red when the
+  status probe never answers ("Server unreachable").
+- Navigation: the grouped sidebar (Create / Converse / Understand / System), 212pt
+  ideal, on the standard macOS sidebar material; the wordmark at its top (20pt leading),
+  eyebrows for sections, 30pt rows (radius 9, 10pt side padding, 13pt glyph + label).
+  The selected row is a solid `accent` pill with `onAccent` glyph and label, drawn by the
+  row: the native `List` highlight is switched off so it looks the same whether or not
+  the window is key. No horizontal chip rails.
+- Content header (`StudioContentHeader`): the first row of the content column, beside the
+  Library, 52pt on `background` with a hairline below — never the window toolbar, which
+  stays empty so the Library column runs to the top of the window. Leading (18pt in):
+  14pt accent domain glyph, title, one-line subtitle. Center: the task pill. Trailing
+  (16pt in): Library, Inspector, and Command toggles. With the sidebar collapsed the first
+  header leaves room for the traffic lights.
+- Library column: 248pt on `background` with a right hairline, running from the window
+  top to the bottom. Header ("Library" 13pt
+  semibold, count 11pt muted, scope segments) at 14/14/8 padding; a 28pt capsule search
+  field (12pt); day eyebrows; rows of a 40pt thumbnail (radius 6, or a `surfaceRaised`
+  glyph tile), one-line title, and meta with an 8pt status dot while queued (yellow),
+  running (accent), or failed (red). Rows are 6/8 padded, radius 9, `accentSoft` when
+  selected, `hoverFill` on hover, in a 6pt-inset column with 2pt gaps.
 - Chat: user turns in `accentSoft` bubbles right-aligned; assistant turns as unboxed
   text blocks with a small mode glyph; fenced code in mono panels with copy.
 - Media: audio renders as an interactive waveform (accent = played), video via AVKit in

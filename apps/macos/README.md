@@ -12,8 +12,9 @@ imported row. External launchers must never edit `library.json` directly.
 
 - `StudioNavigation.swift`: `StudioDomain`, `StudioTask`, `StudioDestination`,
   and the per-window `NavigationModel`.
-- `StudioRootView.swift`: the `NavigationSplitView` shell, toolbar, and the
-  prompt workspace; hosts every task in the detail area.
+- `StudioRootView.swift`: the `NavigationSplitView` shell, the content header
+  (`StudioTaskControl.swift`), and the prompt workspace; hosts every task in
+  the detail area.
 - `StudioTypes.swift`: user-facing mode, draft, and request types.
 - `CommandCatalog.swift`: mode-to-command templates.
 - `Jobs/`: the job model. `JobStore` owns every child process the app launches
@@ -44,9 +45,21 @@ imported row. External launchers must never edit `library.json` directly.
 The window is one `NavigationSplitView`. The sidebar lists fifteen **domains**
 in four sections — Create (Image, Video, Music, Sound, Voice, 3D), Converse
 (Chat), Understand (Vision, Audio, Text, Earth), System (Models, Server, Runs,
-Plugins) — with the machine status cluster as its only footer. Every domain has
-**tasks** in the toolbar: a segmented control for four or fewer, a menu
-otherwise. Twelve tasks are the composer-driven prompt modes (`StudioMode`) and
+Plugins) — with the machine status cluster as its only footer. The sidebar
+header is the wordmark (`mere` and a green period in Caveat Medium, bundled
+under `Resources/Fonts` and registered at launch by `MereRunTheme.Brand`), and
+the selected row is a solid accent pill drawn by the row itself (the native
+`List` highlight is switched off; selection, arrow keys, and VoiceOver are
+unchanged). The footer pill reads "Ready · N models" once the status probe
+answers, "Serving · N models" while the local server is up, and "Server
+unreachable" if the probe never answers; its popover holds the details. Every
+domain has **tasks** in a 52pt header at the top of the content column, beside
+the Library (the window toolbar stays empty so the Library column runs to the
+top of the window): one segmented pill for up to six tasks, or five segments
+plus a "More" menu segment for Vision. The header's leading item is the domain
+glyph, title, and one-line subtitle; trailing are the Library, Inspector
+(placeholder, disabled), and Command Console toggles.
+Twelve tasks are the composer-driven prompt modes (`StudioMode`) and
 keep the canvas, composer, and Library column; every other task hosts a former
 specialist sheet inline, full height, with its own controls and no Done button.
 Nothing that used to be a sheet is modal any more; the remaining sheets are
@@ -61,6 +74,21 @@ the full width. It is filtered to the current domain by default with an All
 segment — a row is filed under its command's domain (`CommandTemplateID.studioDomain`),
 so 3D meshes land under 3D and benchmark reports under Models — and picking a
 row from another domain switches the destination to it.
+
+The **composer** under the canvas is one surface for every prompt mode
+(`StudioComposer.swift`, declarations in `StudioComposerSchema.swift`). An
+**attachment well** shows the mode's slots — Image: input and reference images;
+Video: start frame, end frame, audio; Music: source and timbre references;
+Voice: reference audio; Vision and Audio tasks: their required input; Chat: a
+per-turn image that stays behind the paperclip until attached — and every slot
+takes a drop, a paste (⌘V), or a click to pick, storing straight into the draft
+field the CLI flag reads. Under the prompt, a **chip strip** shows the mode's two
+to four essentials (size, steps, seed, length, threshold, thinking) as menus, and
+the **model chip** is the only model control: it lists `model list` rows filtered
+to the mode's category, installed first, with "Auto" for the mode's default. The
+remaining depth stays in the options popover behind the sliders button until the
+inspector replaces it.
+
 Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…, View ▸
 Show Library (⌥⌘L), Command Console (⌥⌘C), and the system sidebar toggle, Go ▸
 every domain (⌘1–⌘9, then ⌥⌘1…) plus the current domain's tasks, Run ▸ Run
@@ -70,10 +98,10 @@ state with its "Get the model" path and a one-time dismissible banner.
 
 The **Command Console** is a separate window (`Window("Command Console")`)
 hosting the complete raw contract surface — template sidebar, editor, and run
-console in three resizable panes. It opens from the toolbar, the View menu, the
+console in three resizable panes. It opens from the content header, the View menu, the
 readiness overlay's Details button, a Library row's "Edit command…", and the
 adapter fallbacks for modes whose adapters are typed only in the raw command.
-Opening it from the toolbar carries the composer's draft into the matching
+Opening it from the header carries the composer's draft into the matching
 template; raising an already-open console only brings it forward, so its edits
 stay. The console's own Run stays independent of the composer's, and while the
 console is key the Run menu drives it while Go and Help keep acting on the
@@ -129,7 +157,11 @@ candidate ranking, LM planning, adapter stacks, stems, LRC, recipes, and DAW
 delivery. Music ▸ Analyze adds standalone ACE-Step understanding with structured
 results and Music ▸ Transcribe MuScriptor transcription with an embedded MIDI
 piano roll; the resident ACE-Step server's health and lifecycle live under
-Server ▸ Music server. Music ▸ Realtime is the Magenta RT2 workspace;
+Server ▸ Music server. Music ▸ Realtime is the Magenta RT2 session: a transport
+with the live clock, the recording's waveform, Prompt A/B steering with a blend
+slider, temperature, top-k, and guidance sent over the CLI's stdin protocol as
+you release each control, the session log, and a job bar with Cancel and Log;
+it re-attaches to a running session when you navigate back to it.
 Music ▸ Train is the shared LoRA/LoKr trainer with dataset audio previews and live
 loss events. The Command Console retains the complete raw command surface.
 Audio ▸ Enhance and Audio ▸ Separate (also reachable as Music ▸ Separate) are
@@ -169,16 +201,32 @@ owns only the typed local `world serve` runtime endpoint, authentication, model
 selection, status, and the handoff to `https://diorama.mere.run`; it must not
 duplicate Diorama's product experience.
 
-Models ▸ Installed includes one-click managed downloads with live CLI output,
-explicit third-party terms acceptance, cancellation with resumable partials;
+Models ▸ Installed is a list-and-detail page. The content header's subtitle
+reports the real inventory ("92 installed · 48 GB on this Mac", from `model list` and
+`model storage`). The 320pt list shows installed models plus any model being
+pulled, with a family chip row (Image, Chat, Vision, …) and a status dot: green
+installed, accent pulling, yellow when the CLI reports the model as unsupported
+on this Mac. Pull… opens a sheet of the models that are not installed yet; a
+pull keeps its explicit third-party terms acceptance, live CLI output, and
+cancellation with resumable partials. The detail column shows the model's
+facts (store, source, last used and run count from the Library, manifest
+verification from `model info`), a Health panel (latest quality gate and
+manifest audit, with Run gate and Benchmark… routing to those tasks), a
+Performance panel (last run length, unified-memory needs, latest benchmark),
+the adapters whose base model it is (Use in <domain> applies one to the
+composer, Train new… opens the trainer), and the runtime-settings editor and raw
+`model info` output under two folds. Rows whose data the CLI or Library does
+not have are omitted rather than faked. A job bar at the page bottom reports a
+pull, MiniMax-H3 optimize/rebuild, or storage clean-up in flight (composer
+pulls arrive through their Library row) with Cancel and Log. Reveal, Remove…,
+refresh, opening the store, and clean-up stay on the page.
+
 Models ▸ Health is the manifest audit and quality gate. Successful downloads
 refresh the inventory in place. Manifest audit is a structured dry run, repair
 requires confirmation and writes only missing known manifests, and
 installed-model correctness/performance gates run as durable Library jobs with
 JSON reports. Existing model browsing, storage cleanup, and runtime policy
 remain in the Models and Server domains rather than being duplicated.
-Installed MiniMax-H3 models expose a native optimize/rebuild action with streamed
-receipts instead of requiring a terminal round trip.
 
 Server is a sidebar domain. **Server ▸ Serving**
 owns API preflight/start/stop/restart, external-server reconnection, LAN/auth
@@ -258,6 +306,38 @@ command tree itself and requires every public leaf command to be either
 cataloged or listed in `contractExemptCommandIDs` with the reason it stays
 CLI-only, so a new CLI command cannot silently ship without a macOS path or a
 recorded decision that it should not have one.
+
+`StudioSnapshotTests` renders the shell for visual review without driving the
+live app: every domain at its default task at 1280×820 in light and dark, plus
+the Settings content and the Command Console, and fidelity renders at the
+1440×900 mockup size for comparing against the design boards: Image ▸ Generate
+with the boards' four Library rows, the composer with the boards' sample prompt
+and an in-test image attached (Image ▸ Generate and Vision ▸ Find), Music ▸
+Realtime mid-session (a run the process seam holds open, fed the CLI's frame
+progress and steering echoes, with its recording synthesized on disk), and
+Models ▸ Installed with a scripted model inventory (`model list`,
+`capabilities`, `storage`, `info`, `runtime get`, and `adapter list` answered
+from fixtures, plus Library rows for usage, a quality gate, a benchmark, and a
+running composer pull). It is skipped unless
+`MERERUN_STUDIO_SNAPSHOT_DIR` names a directory, so CI and a plain `swift test`
+never render anything:
+
+```
+MERERUN_STUDIO_SNAPSHOT_DIR=/tmp/shell-shots swift test --filter StudioSnapshotTests
+```
+
+`StudioSnapshotRenderer` hosts each view in an `NSWindow` that is never ordered
+on screen and captures it with `cacheDisplay`, so nothing appears on the Mac
+running it. The controller uses a process runner that refuses every launch
+(answering only the sidebar's status probe; for the Realtime render it holds
+the session launch open, and for the Models render it answers only the
+scripted inventory commands) and
+the Library is a temporary `library.json` seeded with fixture rows, so no CLI
+process starts and the user's Library is never read or written. Two fidelity
+gaps are deliberate: macOS 26 glass and scroll-edge effects only composite on
+screen, so the renderer lifts glass content out and hides those effects (the
+sidebar and toolbar draw as plain views), and the window keeps an opaque title
+bar because a transparent one blanks every offscreen `ScrollView`.
 
 The public `scripts/build_mere_run_app.sh` path produces a contributor/CI app
 bundle and verifies its nested-code layout. Maintainer-only Developer ID

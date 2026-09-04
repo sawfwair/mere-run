@@ -44,6 +44,12 @@ struct MereRunApp: App {
         userDriverDelegate: nil
     )
 
+    init() {
+        // The wordmark's face must be registered before the first window draws; a missing bundle
+        // degrades to the system serif rather than failing launch.
+        MereRunTheme.Brand.register()
+    }
+
     var body: some Scene {
         WindowGroup {
             MereRunRootView()
