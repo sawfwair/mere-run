@@ -5223,6 +5223,8 @@ struct MereRunSettingsView: View {
     @State private var hfEndpointStatus: String?
     @State private var configurationSummary = ""
     @State private var configurationPath = ""
+    /// Empty means the per-media defaults in `StudioOutputLocation`.
+    @AppStorage(StudioOutputLocation.rootDefaultsKey) private var outputRoot = ""
 
     var body: some View {
         TabView {
@@ -5271,6 +5273,16 @@ struct MereRunSettingsView: View {
         EditorSection("Models root") {
             PathField(path: $controller.modelsRoot, placeholder: "Optional model links/local-files root", mode: .openDirectory)
         }
+        EditorSection("Where generations are saved") {
+            PathField(path: $outputRoot, placeholder: outputRootPlaceholder, mode: .openDirectory)
+            Text("Leave this empty to file work by what it is: pictures and clips in `~/Pictures/mere.run`, audio in `~/Music/mere.run`, everything else in `~/Documents/mere.run`, each under a folder named for the domain. Set a folder to keep every domain together there instead. Runs already in the Library keep the paths they recorded.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+        }
+    }
+
+    private var outputRootPlaceholder: String {
+        "~/Pictures/mere.run, ~/Music/mere.run, ~/Documents/mere.run"
     }
 
     @ViewBuilder

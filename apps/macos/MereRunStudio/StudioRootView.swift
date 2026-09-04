@@ -19,8 +19,14 @@ struct StudioRootView: View {
     @SceneStorage("studio.mode") private var lastPromptMode: StudioMode = .createImage
     @SceneStorage("studio.showLibrary") private var storedShowLibrary = true
     @SceneStorage("studio.libraryScope") private var libraryScope: StudioLibraryScope = .domain
+    @SceneStorage("studio.libraryView") private var libraryViewMode: StudioLibraryViewMode = .list
+    @SceneStorage("studio.libraryKind") private var libraryKind: StudioLibraryKind = .all
+    @SceneStorage("studio.libraryFavorites") private var libraryFavoritesOnly = false
     /// The prompt tasks whose inspector stays open, as `StudioInspectorTaskMemory` encodes them.
     @SceneStorage("studio.inspectorTasks") private var storedInspectorTasks = ""
+    /// The unsent prompt, system text, and attachment of every prompt task, as
+    /// `StudioDraftMemory` encodes them, so a relaunch resumes mid-sentence.
+    @SceneStorage("studio.drafts") private var storedDrafts = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// The status probe never answered within its grace period, so the footer says so.
     @State private var probeTimedOut = false
@@ -28,6 +34,11 @@ struct StudioRootView: View {
     /// destination observer activates a mode exactly once however the destination arrived.
     @State private var activatedMode: StudioMode?
     @State private var draft = StudioDraft()
+    /// The draft each prompt task is holding, so leaving Image ▸ Generate for Video ▸ Generate and
+    /// coming back finds the prompt, the attachment, and the settings exactly as they were. The
+    /// composer, the inspector, and the Command view all read `draft`, which is this dictionary's
+    /// entry for the current task.
+    @State private var draftsByTask: [StudioTask: StudioDraft] = [:]
     @State private var isDropTargeted = false
     /// Which jobs exist; the feed re-derives its cards when one starts or finishes.
     @StateObject private var jobMonitor = StudioJobMonitor()
@@ -44,6 +55,9 @@ struct StudioRootView: View {
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var pendingRestrictedPull: StudioRunRequest?
     @State private var studioError: String?
+    /// A run whose user-visible destination could not be created, explained once per launch.
+    @State private var outputFallbackNotice: String?
+    @State private var outputFallbackAnnounced = false
     /// Every `model list` row, installed or not, feeding the composer's model chip.
     @State private var modelInventory: [StudioModelInventoryRow] = []
     /// What Models ▸ Installed last reported, so the content header's subtitle shows the real inventory.
@@ -379,6 +393,17 @@ struct StudioRootView: View {
             .padding(.top, MereRunTheme.Spacing.sm)
         }
 
+        if let outputFallbackNotice {
+            MereBanner(
+                severity: .warning,
+                text: outputFallbackNotice,
+                systemImage: "folder.badge.questionmark",
+                onDismiss: { self.outputFallbackNotice = nil }
+            )
+            .padding(.horizontal, MereRunTheme.Spacing.lg)
+            .padding(.top, MereRunTheme.Spacing.sm)
+        }
+
         if !hasCompletedWelcome {
             MereBanner(
                 severity: .info,
@@ -396,12 +421,18 @@ struct StudioRootView: View {
             items: StudioThreadListPresenter.mediaItems(in: library.items),
             domain: destination.domain,
             scope: $libraryScope,
+            viewMode: $libraryViewMode,
+            kind: $libraryKind,
+            favoritesOnly: $libraryFavoritesOnly,
             progressByID: controller.progressByRequestID,
             selectedID: $navigation.selectedLibraryID,
             onSelect: selectLibraryItem,
-            onDelete: deleteLibraryItem,
+            onDelete: deleteLibraryItems,
             onRename: library.rename,
+            onToggleFavorite: toggleLibraryFavorite,
             onQuickLook: { QuickLookCoordinator.shared.preview($0) },
+            onReveal: revealInFinder,
+            onExport: exportLibraryItems,
             onRetry: retryLibraryItem,
             onEdit: editLibraryItem,
             leadingInset: windowChromeInset
@@ -1033,12 +1064,15 @@ struct StudioRootView: View {
         }
         .onChange(of: draft.inputPath) { _, _ in
             studioError = nil
+            park(draft, for: mode)
         }
         .onChange(of: draft.prompt) { _, _ in
             studioError = nil
+            park(draft, for: mode)
         }
         .onChange(of: draft.secondaryText) { _, _ in
             studioError = nil
+            park(draft, for: mode)
         }
         .onChange(of: controller.cliPath) { _, _ in
             studioError = nil
@@ -1145,8 +1179,15 @@ struct StudioRootView: View {
     /// Library row the user just picked (so selecting a row of another domain lands on that row),
     /// otherwise opens the most recent item or thread of the mode.
     private func activateMode(_ newMode: StudioMode) {
+        // Park the task being left before anything else touches `draft`, so nothing typed here is
+        // lost by the switch; the task being entered gets its own draft back.
+        if let leaving = activatedMode, leaving != newMode {
+            park(draft, for: leaving)
+        }
         activatedMode = newMode
-        var nextDraft = seededDrafts[newMode] ?? freshDraft(for: newMode)
+        let parked = seededDrafts[newMode] == nil ? parkedDraft(for: newMode) : nil
+        var nextDraft = seededDrafts[newMode] ?? parked ?? freshDraft(for: newMode)
+        let hadParkedDraft = parked != nil
         studioError = nil
         let preferred = navigation.selectedLibraryID.flatMap { id in
             library.items.first { $0.id == id && $0.mode == newMode }
@@ -1175,7 +1216,9 @@ struct StudioRootView: View {
                 activeConversationID = nil
                 navigation.selectedLibraryID = nil
             }
-            nextDraft.prompt = ""
+            // Opening a thread clears the composer, but a half-written message this task was
+            // already holding survives the detour.
+            if !hadParkedDraft { nextDraft.prompt = "" }
         } else {
             activeConversationID = nil
             let selected = preferred ?? library.items.first { $0.mode == newMode }
@@ -1192,8 +1235,26 @@ struct StudioRootView: View {
         }
         pendingAnalyzeHandoff = nil
         draft = nextDraft
+        park(nextDraft, for: newMode)
         controller.checkReadiness(for: newMode, draft: draft)
         if newMode != .listen { promptFocused = true }
+    }
+
+    /// Remembers a task's draft: in full for this launch, and — for the prompt, the system text,
+    /// and the attachment — across relaunches through `@SceneStorage`.
+    private func park(_ draft: StudioDraft, for mode: StudioMode) {
+        draftsByTask[mode.task] = draft
+        storedDrafts = StudioDraftMemory.encode(draftsByTask.mapValues(StudioDraftMemory.entry(for:)))
+    }
+
+    /// The draft this task was last holding: the live one when it has been visited this launch,
+    /// otherwise the task's defaults with whatever the last session left unsent laid back on top.
+    private func parkedDraft(for mode: StudioMode) -> StudioDraft? {
+        if let parked = draftsByTask[mode.task] { return parked }
+        guard let entry = StudioDraftMemory.decode(storedDrafts)[mode.task] else { return nil }
+        var restored = freshDraft(for: mode)
+        StudioDraftMemory.apply(entry, to: &restored)
+        return restored
     }
 
     /// A Library row the user clicked. Rows of another mode switch the destination first;
@@ -1270,9 +1331,91 @@ struct StudioRootView: View {
     }
 
     private func deleteLibraryItem(_ id: UUID) {
-        library.delete(id: id)
-        if navigation.selectedLibraryID == id { navigation.selectedLibraryID = nil }
-        if activeConversationID == id { activeConversationID = nil }
+        deleteLibraryItems([id], trashingFiles: false)
+    }
+
+    /// Library ▸ Delete, for one row or a whole batch. The files follow the rows into the Trash
+    /// only when the user chose that in the confirmation.
+    private func deleteLibraryItems(_ ids: Set<UUID>, trashingFiles: Bool) {
+        let failures = library.delete(ids: ids, trashingFiles: trashingFiles)
+        if let first = failures.first {
+            studioError = failures.count == 1
+                ? "Could not move \(first.lastPathComponent) to the Trash."
+                : "Could not move \(failures.count) files to the Trash."
+        }
+        if let selected = navigation.selectedLibraryID, ids.contains(selected) {
+            navigation.selectedLibraryID = nil
+        }
+        if let conversation = activeConversationID, ids.contains(conversation) {
+            activeConversationID = nil
+        }
+    }
+
+    private func toggleLibraryFavorite(_ id: UUID) {
+        guard let item = library.items.first(where: { $0.id == id }) else { return }
+        library.setFavorite(id: id, isFavorite: !item.isStarred)
+    }
+
+    private func revealInFinder(_ urls: [URL]) {
+        let existing = urls.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !existing.isEmpty else {
+            studioError = "Those files are no longer on disk."
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting(existing)
+    }
+
+    /// "Save to…": copies a row's artifacts (or a whole batch's) somewhere the user picks, leaving
+    /// the originals — and the Library rows that point at them — untouched.
+    private func exportLibraryItems(_ selected: [StudioLibraryItem]) {
+        let urls = selected.flatMap(\.allArtifactURLs)
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !urls.isEmpty else {
+            studioError = "Those runs have no files to save."
+            return
+        }
+
+        if urls.count == 1, let source = urls.first {
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = source.lastPathComponent
+            panel.canCreateDirectories = true
+            guard panel.runModal() == .OK, let destination = panel.url else { return }
+            copyExport(from: [source], into: destination.deletingLastPathComponent(), names: [destination.lastPathComponent])
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Save"
+        panel.message = "Choose a folder for \(urls.count) files."
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+        copyExport(from: urls, into: directory, names: urls.map(\.lastPathComponent))
+    }
+
+    private func copyExport(from sources: [URL], into directory: URL, names: [String]) {
+        let fileManager = FileManager.default
+        var failures = 0
+        for (source, name) in zip(sources, names) {
+            var destination = directory.appendingPathComponent(name)
+            var counter = 2
+            let stem = destination.deletingPathExtension().lastPathComponent
+            let ext = destination.pathExtension
+            while fileManager.fileExists(atPath: destination.path), counter < 1_000 {
+                let candidate = ext.isEmpty ? "\(stem)-\(counter)" : "\(stem)-\(counter).\(ext)"
+                destination = directory.appendingPathComponent(candidate)
+                counter += 1
+            }
+            do {
+                try fileManager.copyItem(at: source, to: destination)
+            } catch {
+                failures += 1
+            }
+        }
+        if failures > 0 {
+            studioError = failures == 1 ? "One file could not be saved." : "\(failures) files could not be saved."
+        }
     }
 
     /// Opens the Command Console window with the composer's draft carried into the Advanced
@@ -1338,7 +1481,7 @@ struct StudioRootView: View {
         }
 
         do {
-            let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+            let request = try prepareDestination(of: StudioCommandAdapter.makeRequest(mode: mode, draft: draft))
             let preview = controller
                 .commandPreview(template: request.template, draft: request.draft, masksSecrets: true)
             let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
@@ -1348,6 +1491,27 @@ struct StudioRootView: View {
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    /// Makes the run's destination folder exist. A sandbox denial, a read-only home, or a root
+    /// pointing at a volume that is not mounted sends the run back to App Outputs rather than
+    /// failing it; the banner says so once per launch so the surprise is explained, not silent.
+    private func prepareDestination(of request: StudioRunRequest) -> StudioRunRequest {
+        let prepared = StudioOutputLocation.preparingDestination(of: request.draft)
+        if let reason = prepared.fallbackReason, !outputFallbackAnnounced {
+            outputFallbackAnnounced = true
+            outputFallbackNotice = "\(reason) Saving to \(StudioOutputLocation.abbreviate(StudioOutputLocation.appOutputsRoot())) instead."
+        }
+        guard prepared.draft != request.draft else { return request }
+        return StudioRunRequest(
+            id: request.id,
+            mode: request.mode,
+            templateID: request.templateID,
+            template: request.template,
+            draft: prepared.draft,
+            createdAt: request.createdAt,
+            conversationID: request.conversationID
+        )
     }
 
     /// The composer's Stop: the run of this mode in flight, or the thread's turn.
@@ -1581,13 +1745,28 @@ struct StudioRootView: View {
             studioError = "This older Library item does not include a replayable command."
             return
         }
-        let request = StudioRunRequest(
+        // A replay writes its own file: the recorded draft still points at the run that made it,
+        // so Rerun and Vary would otherwise overwrite the picture they came from.
+        var replayDraft = commandDraft
+        if !commandDraft.outputPath.isBlank {
+            replayDraft.outputPath = StudioOutputLocation.namedOutputPath(
+                templateID: templateID,
+                outputKind: template.outputKind,
+                prompt: commandDraft.prompt,
+                seed: commandDraft.seed,
+                fingerprint: "\(templateID.rawValue)\u{1}\(commandDraft.prompt)\u{1}\(commandDraft.model)\u{1}\(item.id)",
+                fallbackStem: template.title,
+                existing: commandDraft.outputPath
+            )
+            StudioVisionResultPaths.rederive(in: &replayDraft, previousOutputPath: commandDraft.outputPath)
+        }
+        let request = prepareDestination(of: StudioRunRequest(
             mode: item.mode,
             templateID: templateID,
             template: template,
-            draft: commandDraft
-        )
-        let preview = controller.commandPreview(template: template, draft: commandDraft, masksSecrets: true)
+            draft: replayDraft
+        ))
+        let preview = controller.commandPreview(template: template, draft: request.draft, masksSecrets: true)
         let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
         library.start(request: request, commandPreview: preview, status: status)
         navigation.selectedLibraryID = request.id

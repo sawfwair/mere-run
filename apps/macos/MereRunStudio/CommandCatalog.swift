@@ -1263,13 +1263,12 @@ struct CommandTemplate: Identifiable, Equatable {
             break
         }
 
-        switch outputKind {
-        case .file(let ext):
-            draft.outputPath = Self.defaultOutputURL(stem: id.rawValue, extension: ext).path
-        case .directory:
-            draft.outputPath = Self.defaultOutputDirectory(stem: id.rawValue).path
-        case .none:
-            break
+        // Destinations are user-visible folders per domain (`StudioOutputLocation`); the composer
+        // renames the file after the prompt, and specialist surfaces keep this stamped name.
+        if let path = StudioOutputLocation.templateOutputPath(
+            templateID: id, title: title, outputKind: outputKind
+        ) {
+            draft.outputPath = path
         }
 
         return draft
@@ -3439,22 +3438,6 @@ struct CommandTemplate: Identifiable, Equatable {
         return args
     }
 
-    private static func defaultOutputDirectory(stem: String) -> URL {
-        outputRoot().appendingPathComponent(stem, isDirectory: true)
-    }
-
-    private static func defaultOutputURL(stem: String, extension ext: String) -> URL {
-        let stamp = DateFormatter.mereRunTimestamp.string(from: Date())
-        return outputRoot()
-            .appendingPathComponent("\(stem)-\(stamp)")
-            .appendingPathExtension(ext)
-    }
-
-    private static func outputRoot() -> URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MereRun", isDirectory: true)
-            .appendingPathComponent("App Outputs", isDirectory: true)
-    }
 
     private func format(_ value: Double) -> String {
         String(format: "%.4g", value)

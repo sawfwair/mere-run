@@ -106,6 +106,27 @@ segment — a row is filed under its command's domain (`CommandTemplateID.studio
 so 3D meshes land under 3D and benchmark reports under Models — and picking a
 row from another domain switches the destination to it.
 
+Beside the search field are a kind filter (All / Images / Video / Audio / Text,
+plus "Favorites only") and a list-or-grid toggle; grid is three thumbnails
+across with the title on hover. Thumbnails are the real thing per kind — the
+picture, an `AVAssetImageGenerator` poster frame for video, a peak silhouette
+for audio, the first line for a text result — decoded off the main actor and
+cached by path, size, and modification date (`StudioLibraryThumbnail.swift`).
+Rows carry a hover star (`StudioLibraryItem.isFavorite`, an additive optional),
+rename in place, and drag out to Finder or any app. ⌘ and ⇧ click build a batch
+(`StudioLibrarySelection`) with a bar for Reveal, Save to…, and Delete; Delete
+asks first and offers to move the run's files to the Trash. Filtering and
+day-grouping live in `StudioLibraryPresenter`, so both are testable without a
+view. The view mode, kind, and favorites filter persist per window under
+`studio.libraryView`, `studio.libraryKind`, and `studio.libraryFavorites`.
+
+Every prompt task holds its own `StudioDraft`: switching tasks or domains parks
+the one being left and restores the one being entered, so a typed prompt and an
+attachment survive the detour. Across relaunches the scene remembers the prompt,
+the system text, and the attachment of each task under `studio.drafts`
+(`StudioDraftMemory`); settings come back from the task's defaults, which is
+also the baseline the inspector diffs against.
+
 **Chat** is the Converse archetype (`StudioConversationView.swift`,
 `StudioThreadList.swift`). A **thread list** replaces the Library column there —
 every chat and code thread, searchable, grouped Today / Earlier, with a compose
@@ -146,7 +167,16 @@ composer. A finished run is a generation card: prompt, the chips it ran with
 (read from its own command), every output in a grid of 236pt tiles (images,
 video, 3D; audio gets the waveform player, text the Markdown renderer), and
 Vary (rerun with a fresh, recorded seed), Rerun, Use as input, Quick Look,
-Reveal, Copy, and Save to…; outputs drag out to Finder. A run in flight is a
+Reveal, Copy, and Save to…; outputs drag out to Finder. Runs write to a
+user-visible folder chosen by what the file is and which domain made it
+(`StudioOutputLocation.swift`): `~/Pictures/mere.run/<Domain>` for pictures and
+clips, `~/Music/mere.run/<Domain>` for audio, `~/Documents/mere.run/<Domain>`
+for everything else, named `<slug-of-prompt>-<seed-or-short-id>.<ext>` with a
+numeric suffix on collision. Settings ▸ General takes one root that overrides
+all three (`mererun.app.outputRoot`). Nothing is migrated: Library rows keep the
+paths they recorded, Application Support holds metadata only, and a destination
+that cannot be created sends the run back to `App Outputs` with its sidecars and
+one banner saying why. A run in flight is a
 card that observes its `Job` directly — progress bar, "Denoising 15/24 · 0:41",
 Cancel, and the log tail behind an Activity disclosure — and a queued run is a
 row with Remove; both come from `JobStore`, not from the controller's foreground

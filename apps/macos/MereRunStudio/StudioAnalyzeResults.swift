@@ -419,10 +419,29 @@ enum StudioVisionResultPaths {
             draft.visionJSONOutputPath = stem.appendingPathExtension("json").path
         }
         if wantsMasks, draft.visionMaskOutputDirectory.isBlank {
-            draft.visionMaskOutputDirectory = stem.deletingLastPathComponent()
-                .appendingPathComponent("\(stem.lastPathComponent)-masks", isDirectory: true)
-                .path
+            draft.visionMaskOutputDirectory = maskDirectory(forStem: stem)
         }
+    }
+
+    /// Moves the sidecars of a replayed run beside its new output. Paths the user chose by hand
+    /// (anything that was not derived from the previous output) are left alone.
+    static func rederive(in draft: inout CommandDraft, previousOutputPath: String) {
+        guard !previousOutputPath.isBlank else { return }
+        let previousStem = URL(fileURLWithPath: previousOutputPath).deletingPathExtension()
+        let wantsMasks = !draft.visionMaskOutputDirectory.isBlank
+        if draft.visionJSONOutputPath == previousStem.appendingPathExtension("json").path {
+            draft.visionJSONOutputPath = ""
+        }
+        if draft.visionMaskOutputDirectory == maskDirectory(forStem: previousStem) {
+            draft.visionMaskOutputDirectory = ""
+        }
+        apply(to: &draft, wantsMasks: wantsMasks)
+    }
+
+    private static func maskDirectory(forStem stem: URL) -> String {
+        stem.deletingLastPathComponent()
+            .appendingPathComponent("\(stem.lastPathComponent)-masks", isDirectory: true)
+            .path
     }
 }
 

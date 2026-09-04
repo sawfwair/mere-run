@@ -9,13 +9,17 @@ final class StudioLibraryStore: ObservableObject {
 
     let libraryURL: URL
     private let fileManager: FileManager
+    /// How a deleted row's files reach the Trash. Injected so tests can delete without a Trash.
+    private let trashItem: (URL) throws -> Void
 
     init(
         libraryURL: URL = StudioLibraryStore.defaultLibraryURL(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        trashItem: @escaping (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
     ) {
         self.libraryURL = libraryURL
         self.fileManager = fileManager
+        self.trashItem = trashItem
         load()
     }
 
@@ -282,7 +286,42 @@ final class StudioLibraryStore: ObservableObject {
     }
 
     func delete(id: UUID) {
-        items.removeAll { $0.id == id }
+        delete(ids: [id], trashingFiles: false)
+    }
+
+    /// Removes rows, and — when the user asked for it — moves every file they produced to the
+    /// Trash. Deleting the row is never blocked by a file that will not move (already deleted,
+    /// on a volume with no Trash); those come back so the caller can say which.
+    @discardableResult
+    func delete(ids: Set<UUID>, trashingFiles: Bool) -> [URL] {
+        guard !ids.isEmpty else { return [] }
+        var failures: [URL] = []
+        if trashingFiles {
+            var seen = Set<URL>()
+            for item in items where ids.contains(item.id) {
+                for url in item.allArtifactURLs where seen.insert(url.standardizedFileURL).inserted {
+                    guard fileManager.fileExists(atPath: url.path) else { continue }
+                    do {
+                        try trashItem(url)
+                    } catch {
+                        failures.append(url)
+                    }
+                }
+            }
+        }
+        items.removeAll { ids.contains($0.id) }
+        save()
+        return failures
+    }
+
+    func setFavorite(id: UUID, isFavorite: Bool) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        var item = items[index]
+        // Written as nil rather than false when unstarred, so a row that was never starred keeps
+        // the shape older builds decode.
+        item.isFavorite = isFavorite ? true : nil
+        item.updatedAt = Date()
+        items[index] = item
         save()
     }
 

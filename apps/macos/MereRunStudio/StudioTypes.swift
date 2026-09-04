@@ -594,6 +594,21 @@ enum StudioCommandAdapter {
         let prompt = studioDraft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let secondary = studioDraft.secondaryText.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // Name the file after what the user asked for, before the per-mode branches derive their
+        // sidecars (the vision result document, the mask directory) from it. Input-first tasks have
+        // no prompt to name themselves after, so they take the attachment's name instead.
+        draft.outputPath = StudioOutputLocation.namedOutputPath(
+            templateID: templateID,
+            outputKind: template.outputKind,
+            prompt: prompt,
+            seed: studioDraft.seed,
+            fingerprint: "\(templateID.rawValue)\u{1}\(prompt)\u{1}\(studioDraft.model)\u{1}\(studioDraft.inputPath)",
+            fallbackStem: studioDraft.inputPath.isBlank
+                ? template.title
+                : URL(fileURLWithPath: studioDraft.inputPath).deletingPathExtension().lastPathComponent,
+            existing: draft.outputPath
+        )
+
         switch mode {
         case .createImage:
             draft.prompt = prompt
@@ -982,6 +997,11 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     var model: String? = nil
     /// Origin for entries imported by an external local launcher. nil means a Studio-owned run.
     var source: StudioLibrarySource? = nil
+    /// Starred in the Library column. Optional + additive so rows written before favorites
+    /// existed decode unchanged (nil reads as not favorite).
+    var isFavorite: Bool? = nil
+
+    var isStarred: Bool { isFavorite == true }
 
     var displayTitle: String {
         if let customTitle, !customTitle.isBlank { return customTitle }
