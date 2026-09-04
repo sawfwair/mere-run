@@ -45,6 +45,12 @@ struct SFXGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(CLIGenerationProgressPrinter.flagName)], help: CLIGenerationProgressPrinter.flagHelp)
+    var progressJson: Bool = false
+
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
     var durationSeconds: Float {
         durationOverride ?? (SFXMMAudioRuntime.isMMAudio(model: model)
             ? MMAudioResources.defaultDurationSeconds
@@ -85,6 +91,7 @@ struct SFXGenerate: AsyncParsableCommand {
             CLIStderr.write("Loading Woosh checkpoints from \(resolved.checkpointsRootURL.path)\n")
         }
         let generator = try WooshGenerator(resources: resolved)
+        let progressStream = progressJson ? JSONProgressStream() : nil
         let result = try generator.generate(
             prompt: prompt,
             config: WooshDenoiseConfig(
@@ -95,16 +102,23 @@ struct SFXGenerate: AsyncParsableCommand {
                 renoiseSchedule: renoiseSchedule
             ),
             progress: { completed, total in
+                if let progressStream {
+                    let progress = Self.denoiseProgressEvent(completed: completed, total: total)
+                    progressStream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
+                    return
+                }
                 guard !quiet else { return }
                 CLIStderr.write("Generated Woosh step \(completed)/\(total)\n")
             }
         )
 
+        progressStream?.finish()
         try SFXWAVWriter.writeMonoPCM16(samples: result.samples, to: outputURL, sampleRate: result.sampleRate)
         if !quiet {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL), enabled: receipt)
     }
 
     private func runMMAudio() async throws {
@@ -125,6 +139,7 @@ struct SFXGenerate: AsyncParsableCommand {
             CLIStderr.write("Loading native MMAudio assets from \(resources.rootURL.path)\n")
         }
         let generator = try MMAudioGenerator(resources: resources)
+        let progressStream = progressJson ? JSONProgressStream() : nil
         let result = try await generator.generateText(
             prompt: prompt,
             negativePrompt: negativePrompt,
@@ -135,10 +150,16 @@ struct SFXGenerate: AsyncParsableCommand {
                 seed: seed
             ),
             progress: { completed, total in
+                if let progressStream {
+                    let progress = Self.denoiseProgressEvent(completed: completed, total: total)
+                    progressStream.report(stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps)
+                    return
+                }
                 guard !quiet else { return }
                 CLIStderr.write("Generated MMAudio step \(completed)/\(total)\n")
             }
         )
+        progressStream?.finish()
         try SFXWAVWriter.writeMonoPCM16(
             samples: result.samples,
             to: outputURL,
@@ -148,6 +169,14 @@ struct SFXGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL), enabled: receipt)
+    }
+
+    /// Woosh and MMAudio both count denoise *completions* from 1, so the counter
+    /// is shifted onto the 0-based in-progress index `JSONProgressStream`
+    /// expects; the stream adds the terminal `step == total_steps` event.
+    static func denoiseProgressEvent(completed: Int, total: Int) -> (stage: String, step: Int, totalSteps: Int) {
+        ("denoising", completed - 1, total)
     }
 
     func parseRenoiseSchedule() throws -> [Float] {

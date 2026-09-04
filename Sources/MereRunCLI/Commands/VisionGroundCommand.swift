@@ -74,6 +74,9 @@ struct VisionGround: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Print only the annotated output image path.")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
     func validate() throws {
         guard !query.isEmpty else {
             throw ValidationError("Provide at least one --query or --prompt value.")
@@ -81,6 +84,7 @@ struct VisionGround: AsyncParsableCommand {
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for vision ground.")
         }
+        try RunReceipt.validate(receipt: receipt, preflight: preflight)
     }
 
     func run() async throws {
@@ -149,6 +153,14 @@ struct VisionGround: AsyncParsableCommand {
                 print("Masks: \(maskOutputDirectoryURL.path)")
             }
         }
+        try RunReceipt.emit(
+            RunReceipt.annotatedImageOutputs(
+                image: result.annotatedImageURL,
+                detections: result.jsonOutputURL,
+                masks: maskOutputDirectoryURL
+            ),
+            enabled: receipt
+        )
     }
 
     static func resolveModelRoot(

@@ -504,6 +504,9 @@ Key options:
   with `step == total_steps`. Takes precedence over `--quiet` for progress
   output, so wrappers can keep stdout limited to the output path while still
   observing per-step progress.
+- `--receipt`: append a final `{"event":"result",...}` JSON line to stdout
+  listing the PNG and, with `--structured-prompt-output`, the prompt JSON; see
+  [Machine-readable receipts and progress](#machine-readable-receipts-and-progress)
 
 Unless `--quiet` is set, progress diagnostics on stderr include the native image
 backend, for example `native MLX/Metal (default device: gpu)` on Apple Silicon.
@@ -1063,6 +1066,10 @@ Key options:
 - `--stream`
 - `--stream-chunk-tokens`
 - `--quiet`
+- `--progress-json`: stage and token-count events on stderr as JSON lines;
+  Qwen3-TTS has no known total, so events carry `total_steps: 0`
+- `--receipt`: final JSON result line listing the WAV; see
+  [Machine-readable receipts and progress](#machine-readable-receipts-and-progress)
 
 Examples:
 
@@ -1097,6 +1104,9 @@ Key options:
 - `--no-timestamps`
 - `--output`
 - `--quiet`
+- `--receipt`: final JSON result line listing the `--output` transcript file
+  (empty `outputs` when the transcript only went to stdout); not available
+  with raw stdin, which already speaks `--jsonl`
 
 Examples:
 
@@ -1196,6 +1206,12 @@ Key options:
 - `--resolution`
 - `--show-boxes`
 - `--multimask`: emit up to three candidates per geometry-prompted object
+- `--preflight`
+- `--json`: only with `--preflight`
+- `--quiet`
+- `--receipt`: final JSON result line listing the annotated image, the
+  detections JSON, and the mask directory; see
+  [Machine-readable receipts and progress](#machine-readable-receipts-and-progress)
 
 Defaults:
 
@@ -1242,6 +1258,10 @@ Key options:
 - `--json`: only with `--preflight`
 - `--show-boxes`
 - `--show-labels`
+- `--quiet`
+- `--receipt`: final JSON result line listing the annotated video, the
+  tracking JSON, and the mask directory; see
+  [Machine-readable receipts and progress](#machine-readable-receipts-and-progress)
 
 Defaults:
 
@@ -1468,6 +1488,12 @@ Key options:
 - `--text-subdirectory`
 - `--seed`
 - `--quiet`
+- `--progress-json`: JSON progress lines on stderr for the MiniMax Music 3
+  (`semantic`, `denoising`, `decoding`) and Magenta RT2 (`generating`) lanes;
+  the ACE-Step pipeline exposes no per-step callback and emits none
+- `--receipt`: final JSON result line listing the WAV first, then any
+  candidates, stems, LRC, recipe, composition, profile, or DAW bundle it wrote;
+  see [Machine-readable receipts and progress](#machine-readable-receipts-and-progress)
 
 Magenta RT2 options:
 
@@ -1686,6 +1712,9 @@ Key options:
 - `--renoise`
 - `--seed`
 - `--quiet`
+- `--progress-json`: one `denoising` JSON progress line per step on stderr
+- `--receipt`: final JSON result line listing the WAV; see
+  [Machine-readable receipts and progress](#machine-readable-receipts-and-progress)
 
 Examples:
 
@@ -1926,6 +1955,12 @@ Key options:
   timings on stderr; unavailable for legacy merged distilled roots
 - `--timings-output`: write those timings as JSON
 - `--quiet`
+- `--progress-json`: JSON progress lines on stderr for the MiniMax-H3 and Wan
+  lanes (stage plus `denoising` steps, and `window` for H3 sliding windows);
+  the native LTX lanes expose no per-step callback and emit none
+- `--receipt`: final JSON result line listing the MP4 (or the EXR directory
+  with `--skip-mp4`) and, on LTX lanes, the `--timings-output` JSON; see
+  [Machine-readable receipts and progress](#machine-readable-receipts-and-progress)
 
 Environment:
 
@@ -3086,6 +3121,62 @@ swift run mere.run model pull text-agent-deepseek-v4-flash
 swift run mere.run agent install-pi
 swift run mere.run agent start --model text-agent-deepseek-v4-flash
 ```
+
+### Machine-readable receipts and progress
+
+Long-running generation commands share two machine-readable surfaces so
+wrappers and the Studio app never have to probe the file system or parse prose.
+
+`--receipt` appends one final JSON line to stdout after the command's normal
+output. Human output above it is unchanged, so parse the last line and ignore
+the rest:
+
+```json
+{"event":"result","exit":0,"outputs":[{"kind":"image","path":"/abs/out.png"},{"kind":"json","path":"/abs/out-prompt.json","role":"structured-prompt"}]}
+```
+
+- `outputs[0]` is the primary artifact; sidecars follow it with a `role`
+  (`structured-prompt`, `timings`, `detections`, `tracking`, `masks`,
+  `candidate`, `stem`, `lyrics`, `recipe`, `composition`, `profile`,
+  `daw-bundle`).
+- `kind` is one of `image`, `video`, `audio`, `text`, `json`, `directory`.
+- The receipt is printed only after a successful run, so `exit` is always `0`;
+  a failed run exits nonzero without a receipt. `--receipt` is rejected
+  together with `--preflight`, which prints a report and produces no result.
+- Supported by `image generate`, `video generate`, `music generate`,
+  `sfx generate`, `speech synthesize`, `speech transcribe`, `vision ground`,
+  `vision segment`, and `vision track`.
+
+`--progress-json` streams one JSON object per progress event on stderr,
+replacing the human-readable progress text and taking precedence over
+`--quiet`:
+
+```json
+{"event":"progress","stage":"denoising","step":2,"total_steps":4}
+```
+
+One convention holds for every lane:
+
+- `step` is 0-based while a stage is in progress: `step: 2` of
+  `total_steps: 4` means the third step is running.
+- Every determinate stage (`total_steps > 0`) ends with exactly one event
+  whose `step == total_steps`. It is written when the stage completes (the
+  next stage begins, or the same stage restarts for the next sliding window)
+  and, for the last stage, when the pipeline returns, so a wrapper can wait
+  for it without hanging at `total_steps - 1`.
+- `total_steps: 0` marks an indeterminate stage, for example
+  `speech synthesize` token counts; it carries no terminal event, so treat the
+  receipt or the exit status as completion.
+- Supported by `image generate` (all models), `video generate` (MiniMax-H3
+  and Wan lanes; `window` counts H3 sliding windows), `music generate`
+  (MiniMax Music 3 and Magenta RT2 lanes), `sfx generate` (Woosh and MMAudio),
+  and `speech synthesize`. The native LTX video lanes and the ACE-Step music
+  pipeline expose no cheap per-step callback and emit no progress events.
+
+`mere.run catalog --json` declares both flags per capability and carries the
+additive option metadata (`default_value`, `group`, `tier`, `range`,
+`depends_on`) that shells use to build forms without a second copy of the
+command surface.
 
 ## Validation and smoke runs
 

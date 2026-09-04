@@ -99,8 +99,22 @@ struct SpeechTranscribe: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress progress output).")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
+    /// Test seam: forwarded to `CLIASRRouting.transcribe` so the file path can
+    /// run against a fixture backend. Setting it also skips the Metal bundle
+    /// check, which the fixture does not need. Tests set and clear it around
+    /// one `run()`; the CLI never touches it.
+    nonisolated(unsafe) static var transcriptionExecutorOverride: (any CLIASRTranscriptionExecutor)?
+
+    private var transcriptionExecutor: (any CLIASRTranscriptionExecutor)? { Self.transcriptionExecutorOverride }
+
     func validate() throws {
         let readsStandardInput = audio == "-"
+        if receipt && readsStandardInput {
+            throw ValidationError("--receipt is not available for raw streaming stdin ('-'); use --jsonl.")
+        }
         if stream {
             guard streamChunkMs > 0 else {
                 throw ValidationError("--stream-chunk-ms must be > 0.")
@@ -140,7 +154,9 @@ struct SpeechTranscribe: AsyncParsableCommand {
     func run() async throws {
         let readsStandardInput = audio == "-"
 
-        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        if transcriptionExecutor == nil {
+            try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        }
         if readsStandardInput {
             try await runStandardInput()
             return
@@ -191,7 +207,8 @@ struct SpeechTranscribe: AsyncParsableCommand {
             request: request,
             preferredBackend: backend.backend,
             modelOverride: model,
-            progressHandler: progressHandler
+            progressHandler: progressHandler,
+            executor: transcriptionExecutor
         )
         let result = execution.result
         let outputText = renderOutput(result: result, includeTimestamps: timestamps)
@@ -207,17 +224,27 @@ struct SpeechTranscribe: AsyncParsableCommand {
             }
         }
 
-        if let outputPath = output {
-            let outputURL = URL(fileURLWithPath: outputPath).standardizedFileURL
-            let outputDir = outputURL.deletingLastPathComponent()
-            try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
-            try outputText.write(to: outputURL, atomically: true, encoding: .utf8)
-            if !quiet {
-                CLIStderr.write("Transcript saved to: \(outputURL.path)\n")
-            }
-        }
-
+        let transcriptURL = try writeTranscriptIfRequested(outputText)
         print(outputText)
+        try emitReceipt(transcriptURL: transcriptURL)
+    }
+
+    /// Writes the transcript to `--output` when set and returns its URL. The
+    /// receipt lists no outputs when the transcript only went to stdout.
+    private func writeTranscriptIfRequested(_ outputText: String) throws -> URL? {
+        guard let outputPath = output else { return nil }
+        let outputURL = URL(fileURLWithPath: outputPath).standardizedFileURL
+        let outputDir = outputURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        try outputText.write(to: outputURL, atomically: true, encoding: .utf8)
+        if !quiet {
+            CLIStderr.write("Transcript saved to: \(outputURL.path)\n")
+        }
+        return outputURL
+    }
+
+    private func emitReceipt(transcriptURL: URL?) throws {
+        try RunReceipt.emit(RunReceipt.transcriptOutputs(transcriptURL), enabled: receipt)
     }
 
     private func runStandardInput() async throws {
@@ -320,17 +347,9 @@ struct SpeechTranscribe: AsyncParsableCommand {
                 }
             }
 
-            if let outputPath = output {
-                let outputURL = URL(fileURLWithPath: outputPath).standardizedFileURL
-                let outputDir = outputURL.deletingLastPathComponent()
-                try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
-                try outputText.write(to: outputURL, atomically: true, encoding: .utf8)
-                if !quiet {
-                    CLIStderr.write("Transcript saved to: \(outputURL.path)\n")
-                }
-            }
-
+            let transcriptURL = try writeTranscriptIfRequested(outputText)
             print(outputText)
+            try emitReceipt(transcriptURL: transcriptURL)
         } catch {
             eventTask.cancel()
             await live.cancel()

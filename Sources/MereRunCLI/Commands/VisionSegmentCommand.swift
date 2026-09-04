@@ -76,10 +76,14 @@ struct VisionSegment: AsyncParsableCommand {
     @Flag(name: [.customShort("q"), .long], help: "Suppress normal progress output.")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
     func validate() throws {
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for vision segment.")
         }
+        try RunReceipt.validate(receipt: receipt, preflight: preflight)
         if preflight {
             return
         }
@@ -146,6 +150,14 @@ struct VisionSegment: AsyncParsableCommand {
                 print("Masks: \(maskOutputDirectoryURL.path)")
             }
         }
+        try RunReceipt.emit(
+            RunReceipt.annotatedImageOutputs(
+                image: result.annotatedImageURL,
+                detections: result.jsonOutputURL,
+                masks: maskOutputDirectoryURL
+            ),
+            enabled: receipt
+        )
     }
 
     func makePreflightEnvelope(

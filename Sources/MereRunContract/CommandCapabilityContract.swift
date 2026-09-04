@@ -58,6 +58,41 @@ public struct MereRunCapabilityArgument: Codable, Equatable, Sendable {
     }
 }
 
+/// How prominently a shell should surface an option. `essential` options are the
+/// two to four controls a shell keeps visible next to the prompt, `standard`
+/// options fill the regular inspector sections, and `expert` options collapse
+/// under an advanced disclosure.
+public enum MereRunCapabilityOptionTier: String, Codable, Sendable {
+    case essential
+    case standard
+    case expert
+}
+
+/// A numeric range hint for integer and number options. Every field is optional
+/// so a contract entry can declare only a lower bound or only a step.
+public struct MereRunCapabilityRange: Codable, Equatable, Sendable {
+    public let min: Double?
+    public let max: Double?
+    public let step: Double?
+
+    public init(min: Double? = nil, max: Double? = nil, step: Double? = nil) {
+        self.min = min
+        self.max = max
+        self.step = step
+    }
+}
+
+/// Shared group names shells use to section options. Capabilities may use other
+/// strings; these are the ones the built-in shells recognize.
+public enum MereRunCapabilityOptionGroup {
+    public static let prompt = "Prompt"
+    public static let inputs = "Inputs"
+    public static let output = "Output"
+    public static let modelAndAdapters = "Model & adapters"
+    public static let sampling = "Sampling"
+    public static let run = "Run"
+}
+
 public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     public let flag: String
     public let label: String
@@ -65,6 +100,31 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     public let required: Bool
     public let repeatable: Bool
     public let choices: [String]
+    /// The CLI's static ArgumentParser default rendered as the CLI would parse it
+    /// (`"1024"`, `"0.7"`, `"peak"`). Absent when the default is machine- or
+    /// model-specific.
+    public let defaultValue: String?
+    /// Section name for shells; see `MereRunCapabilityOptionGroup`.
+    public let group: String?
+    public let tier: MereRunCapabilityOptionTier?
+    public let range: MereRunCapabilityRange?
+    /// Flag of another option on the same capability that must be set for this
+    /// option to have any effect.
+    public let dependsOn: String?
+
+    enum CodingKeys: String, CodingKey {
+        case flag
+        case label
+        case kind
+        case required
+        case repeatable
+        case choices
+        case defaultValue = "default_value"
+        case group
+        case tier
+        case range
+        case dependsOn = "depends_on"
+    }
 
     public init(
         flag: String,
@@ -72,7 +132,12 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         kind: MereRunCapabilityValueKind,
         required: Bool = false,
         repeatable: Bool = false,
-        choices: [String] = []
+        choices: [String] = [],
+        defaultValue: String? = nil,
+        group: String? = nil,
+        tier: MereRunCapabilityOptionTier? = nil,
+        range: MereRunCapabilityRange? = nil,
+        dependsOn: String? = nil
     ) {
         self.flag = flag
         self.label = label
@@ -80,6 +145,11 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         self.required = required
         self.repeatable = repeatable
         self.choices = choices
+        self.defaultValue = defaultValue
+        self.group = group
+        self.tier = tier
+        self.range = range
+        self.dependsOn = dependsOn
     }
 }
 
@@ -148,8 +218,57 @@ public struct MereRunCapabilityDocument: Codable, Equatable, Sendable {
     }
 }
 
+private typealias Group = MereRunCapabilityOptionGroup
+
+/// The machine-readable flags shared by every long-running generation command.
+/// `--receipt` prints the final `{"event":"result",...}` line; `--progress-json`
+/// streams `{"event":"progress",...}` lines on stderr.
+private let receiptOption = MereRunCapabilityOption(
+    flag: "--receipt",
+    label: "Result receipt",
+    kind: .boolean,
+    group: Group.run,
+    tier: .expert
+)
+
+private let progressJSONOption = MereRunCapabilityOption(
+    flag: "--progress-json",
+    label: "Progress JSON",
+    kind: .boolean,
+    group: Group.run,
+    tier: .expert
+)
+
 public enum MereRunCapabilityCatalog {
     public static let schemaVersion = 1
+
+    /// The `--progress-json` stderr event shape, one JSON object per line.
+    /// `step` is 0-based while a stage is in progress; every determinate stage
+    /// ends with exactly one event whose `step == total_steps`, written when
+    /// the stage completes or at the end of the run at the latest.
+    /// `total_steps == 0` marks an indeterminate stage (token streaming with no
+    /// known length) that carries no terminal event.
+    public static let progressEventExample =
+        #"{"event":"progress","stage":"denoising","step":2,"total_steps":4}"#
+
+    /// The `--receipt` final stdout line. The first output is the primary
+    /// artifact; sidecars follow with a `role`. It is printed only after a
+    /// successful run, so `exit` is always `0`; `--receipt` is rejected
+    /// together with `--preflight`, which produces no result.
+    public static let resultReceiptExample =
+        #"{"event":"result","exit":0,"outputs":[{"kind":"image","path":"/abs/out.png"}]}"#
+
+    /// Capability ids whose commands print the `--receipt` line.
+    public static let receiptCapabilityIDs: [String] = [
+        "image.generate", "video.generate", "music.generate", "sfx.generate",
+        "speech.synthesize", "speech.transcribe",
+        "vision.ground", "vision.segment", "vision.track"
+    ]
+
+    /// Capability ids whose commands stream `--progress-json` events.
+    public static let progressJSONCapabilityIDs: [String] = [
+        "image.generate", "video.generate", "music.generate", "sfx.generate", "speech.synthesize"
+    ]
 
     public static let document = MereRunCapabilityDocument(
         schemaVersion: schemaVersion,
@@ -294,49 +413,98 @@ public enum MereRunCapabilityCatalog {
         title: "Chat",
         summary: "Run local chat, vision, JSON, LoRA, reasoning, and tool workflows.",
         options: [
-            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true),
-            .init(flag: "--image", label: "Image", kind: .file),
-            .init(flag: "--system", label: "System prompt", kind: .string),
-            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
-            .init(flag: "--context-size", label: "Context size", kind: .integer),
-            .init(flag: "--temperature", label: "Temperature", kind: .number),
-            .init(flag: "--top-p", label: "Top-p", kind: .number),
-            .init(flag: "--top-k", label: "Top-k", kind: .integer),
-            .init(flag: "--min-p", label: "Min-p", kind: .number),
-            .init(flag: "--kv-bits", label: "KV bits", kind: .integer),
+            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard),
+            .init(flag: "--system", label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--max-tokens", label: "Max tokens", kind: .integer,
+                defaultValue: "2048", group: Group.sampling, tier: .standard,
+                range: .init(min: 1, max: 131_072, step: 1)
+            ),
+            .init(
+                flag: "--context-size", label: "Context size", kind: .integer,
+                group: Group.sampling, tier: .expert, range: .init(min: 512, max: 1_048_576, step: 1)
+            ),
+            .init(
+                flag: "--temperature", label: "Temperature", kind: .number,
+                group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
+            ),
+            .init(
+                flag: "--top-p", label: "Top-p", kind: .number,
+                group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--top-k", label: "Top-k", kind: .integer,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1_000, step: 1)
+            ),
+            .init(
+                flag: "--min-p", label: "Min-p", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--kv-bits", label: "KV bits", kind: .integer,
+                group: Group.run, tier: .expert, range: .init(min: 2, max: 8, step: 1)
+            ),
             .init(
                 flag: "--kv-quant-scheme",
                 label: "KV quantization",
                 kind: .choice,
-                choices: ["uniform", "polar", "turboquant"]
+                choices: ["uniform", "polar", "turboquant"],
+                group: Group.run, tier: .expert, dependsOn: "--kv-bits"
             ),
-            .init(flag: "--kv-group-size", label: "KV group size", kind: .integer),
-            .init(flag: "--quantized-kv-start", label: "Quantized KV start", kind: .integer),
-            .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(
+                flag: "--kv-group-size", label: "KV group size", kind: .integer,
+                group: Group.run, tier: .expert, dependsOn: "--kv-bits"
+            ),
+            .init(
+                flag: "--quantized-kv-start", label: "Quantized KV start", kind: .integer,
+                group: Group.run, tier: .expert, range: .init(min: 0, step: 1), dependsOn: "--kv-bits"
+            ),
+            .init(flag: "--model-root", label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
                 flag: "--response-format",
                 label: "Response format",
                 kind: .choice,
-                choices: TextResponseFormat.allCases.map(\.rawValue)
+                choices: TextResponseFormat.allCases.map(\.rawValue),
+                defaultValue: TextResponseFormat.text.rawValue, group: Group.output, tier: .standard
             ),
-            .init(flag: "--lora", label: "LoRA", kind: .file),
-            .init(flag: "--lora-scale", label: "LoRA scale", kind: .number),
-            .init(flag: "--thinking", label: "Show thinking", kind: .boolean),
-            .init(flag: "--no-thinking", label: "Disable thinking", kind: .boolean),
-            .init(flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number),
-            .init(flag: "--stats", label: "Stats", kind: .boolean),
-            .init(flag: "--stream", label: "Stream", kind: .boolean),
-            .init(flag: "--tools", label: "Tools", kind: .string),
-            .init(flag: "--tool-loop", label: "Tool loop", kind: .boolean),
-            .init(flag: "--sandbox-dir", label: "Sandbox directory", kind: .directory),
-            .init(flag: "--allow-shell-exec", label: "Allow shell", kind: .boolean),
-            .init(flag: "--allow-absolute-tool-paths", label: "Allow absolute paths", kind: .boolean),
-            .init(flag: "--auto-approve-tools", label: "Auto-approve tools", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
-            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
-            .init(flag: "--json", label: "JSON preflight", kind: .boolean),
-            .init(flag: "--require-installed", label: "Require installed", kind: .boolean)
+            .init(flag: "--lora", label: "LoRA", kind: .file, group: Group.modelAndAdapters, tier: .standard),
+            .init(
+                flag: "--lora-scale", label: "LoRA scale", kind: .number,
+                defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
+                range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--lora"
+            ),
+            .init(flag: "--thinking", label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
+            .init(flag: "--no-thinking", label: "Disable thinking", kind: .boolean, group: Group.sampling, tier: .standard),
+            .init(
+                flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(flag: "--stats", label: "Stats", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .standard),
+            .init(flag: "--tools", label: "Tools", kind: .string, group: Group.run, tier: .expert),
+            .init(flag: "--tool-loop", label: "Tool loop", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--tools"),
+            .init(
+                flag: "--sandbox-dir", label: "Sandbox directory", kind: .directory,
+                group: Group.run, tier: .expert, dependsOn: "--tools"
+            ),
+            .init(
+                flag: "--allow-shell-exec", label: "Allow shell", kind: .boolean,
+                group: Group.run, tier: .expert, dependsOn: "--tools"
+            ),
+            .init(
+                flag: "--allow-absolute-tool-paths", label: "Allow absolute paths", kind: .boolean,
+                group: Group.run, tier: .expert, dependsOn: "--tools"
+            ),
+            .init(
+                flag: "--auto-approve-tools", label: "Auto-approve tools", kind: .boolean,
+                group: Group.run, tier: .expert, dependsOn: "--tools"
+            ),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
+            .init(flag: "--require-installed", label: "Require installed", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text)
     )
@@ -347,16 +515,32 @@ public enum MereRunCapabilityCatalog {
         title: "Code",
         summary: "Run local code generation with GGUF models through llama.cpp.",
         options: [
-            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true),
-            .init(flag: "--system", label: "System prompt", kind: .string),
-            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
-            .init(flag: "--temperature", label: "Temperature", kind: .number),
-            .init(flag: "--top-p", label: "Top-p", kind: .number),
-            .init(flag: "--min-p", label: "Min-p", kind: .number),
-            .init(flag: "--model", label: "Model", kind: .file),
-            .init(flag: "--stats", label: "Stats", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
-            .init(flag: "--stream", label: "Stream", kind: .boolean)
+            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
+            .init(
+                flag: "--system", label: "System prompt", kind: .string,
+                defaultValue: "You are a helpful coding assistant.", group: Group.prompt, tier: .standard
+            ),
+            .init(
+                flag: "--max-tokens", label: "Max tokens", kind: .integer,
+                defaultValue: "2048", group: Group.sampling, tier: .standard,
+                range: .init(min: 1, max: 131_072, step: 1)
+            ),
+            .init(
+                flag: "--temperature", label: "Temperature", kind: .number,
+                defaultValue: "1.0", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
+            ),
+            .init(
+                flag: "--top-p", label: "Top-p", kind: .number,
+                defaultValue: "0.95", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--min-p", label: "Min-p", kind: .number,
+                defaultValue: "0.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(flag: "--model", label: "Model", kind: .file, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--stats", label: "Stats", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .standard)
         ],
         output: .init(kind: .text)
     )
@@ -432,43 +616,101 @@ public enum MereRunCapabilityCatalog {
         title: "Generate and edit images",
         summary: "Generate, transform, or personalize images with references, structured prompts, and LoRAs.",
         options: [
-            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true),
-            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
-            .init(flag: "--cfg", label: "CFG scale", kind: .number),
-            .init(flag: "--sigma-shift", label: "Sigma shift", kind: .number),
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--width", label: "Width", kind: .integer),
-            .init(flag: "--height", label: "Height", kind: .integer),
-            .init(flag: "--steps", label: "Steps", kind: .integer),
-            .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--input", label: "Input image", kind: .file),
-            .init(flag: "--mask", label: "Edit mask", kind: .file),
-            .init(flag: "--outpaint", label: "Outpaint padding", kind: .string),
-            .init(flag: "--mask-feather", label: "Mask feather", kind: .integer),
-            .init(flag: "--ref-image", label: "Reference image", kind: .file, repeatable: true),
-            .init(flag: "--keep-original-aspect", label: "Keep original aspect", kind: .boolean),
-            .init(flag: "--strength", label: "Edit strength", kind: .number),
-            .init(flag: "--max-sequence-length", label: "Max sequence length", kind: .integer),
-            .init(flag: "--structured-prompt", label: "Structured prompt", kind: .boolean),
-            .init(flag: "--structured-prompt-model", label: "Prompt model", kind: .string),
-            .init(flag: "--structured-prompt-model-root", label: "Prompt model root", kind: .directory),
-            .init(flag: "--structured-prompt-max-tokens", label: "Prompt max tokens", kind: .integer),
-            .init(flag: "--structured-prompt-output", label: "Structured prompt output", kind: .file),
-            .init(flag: "--lora", label: "LoRA", kind: .file),
-            .init(flag: "--lora-scale", label: "LoRA scale", kind: .number),
-            .init(flag: "--krea-conditioning-multiplier", label: "Krea conditioning", kind: .number),
-            .init(flag: "--krea-conditioning-layer-weights", label: "Krea layer weights", kind: .string),
+            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--cfg", label: "CFG scale", kind: .number,
+                group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.5)
+            ),
+            .init(
+                flag: "--sigma-shift", label: "Sigma shift", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 0.1)
+            ),
+            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(
+                flag: "--width", label: "Width", kind: .integer,
+                defaultValue: "1024", group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
+            ),
+            .init(
+                flag: "--height", label: "Height", kind: .integer,
+                defaultValue: "1024", group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
+            ),
+            .init(
+                flag: "--steps", label: "Steps", kind: .integer,
+                group: Group.sampling, tier: .essential, range: .init(min: 1, max: 100, step: 1)
+            ),
+            .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--input", label: "Input image", kind: .file, group: Group.inputs, tier: .standard),
+            .init(flag: "--mask", label: "Edit mask", kind: .file, group: Group.inputs, tier: .standard, dependsOn: "--input"),
+            .init(
+                flag: "--outpaint", label: "Outpaint padding", kind: .string,
+                group: Group.inputs, tier: .expert, dependsOn: "--input"
+            ),
+            .init(
+                flag: "--mask-feather", label: "Mask feather", kind: .integer,
+                defaultValue: "8", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 128, step: 1), dependsOn: "--input"
+            ),
+            .init(
+                flag: "--ref-image", label: "Reference image", kind: .file, repeatable: true,
+                group: Group.inputs, tier: .standard
+            ),
+            .init(
+                flag: "--keep-original-aspect", label: "Keep original aspect", kind: .boolean,
+                group: Group.inputs, tier: .expert, dependsOn: "--ref-image"
+            ),
+            .init(
+                flag: "--strength", label: "Edit strength", kind: .number,
+                group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05)
+            ),
+            .init(
+                flag: "--max-sequence-length", label: "Max sequence length", kind: .integer,
+                defaultValue: "512", group: Group.sampling, tier: .expert, range: .init(min: 64, max: 4_096, step: 64)
+            ),
+            .init(flag: "--structured-prompt", label: "Structured prompt", kind: .boolean, group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--structured-prompt-model", label: "Prompt model", kind: .string,
+                defaultValue: "text-chat-gemma4-12b-4bit", group: Group.prompt, tier: .expert, dependsOn: "--structured-prompt"
+            ),
+            .init(
+                flag: "--structured-prompt-model-root", label: "Prompt model root", kind: .directory,
+                group: Group.prompt, tier: .expert, dependsOn: "--structured-prompt"
+            ),
+            .init(
+                flag: "--structured-prompt-max-tokens", label: "Prompt max tokens", kind: .integer,
+                defaultValue: "2048", group: Group.prompt, tier: .expert,
+                range: .init(min: 1, max: 8_192, step: 1), dependsOn: "--structured-prompt"
+            ),
+            .init(
+                flag: "--structured-prompt-output", label: "Structured prompt output", kind: .file,
+                group: Group.prompt, tier: .expert, dependsOn: "--structured-prompt"
+            ),
+            .init(flag: "--lora", label: "LoRA", kind: .file, group: Group.modelAndAdapters, tier: .standard),
+            .init(
+                flag: "--lora-scale", label: "LoRA scale", kind: .number,
+                defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
+                range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--lora"
+            ),
+            .init(
+                flag: "--krea-conditioning-multiplier", label: "Krea conditioning", kind: .number,
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--krea-conditioning-layer-weights", label: "Krea layer weights", kind: .string,
+                group: Group.sampling, tier: .expert
+            ),
             .init(
                 flag: "--krea-base-quantization-bits",
                 label: "Krea base quantization",
                 kind: .choice,
-                choices: ["4", "8"]
+                choices: ["4", "8"],
+                group: Group.modelAndAdapters, tier: .expert
             ),
-            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
-            .init(flag: "--json", label: "JSON", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
-            .init(flag: "--progress-json", label: "Progress JSON", kind: .boolean)
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--json", label: "JSON", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            progressJSONOption,
+            receiptOption
         ],
         output: .init(kind: .file, fileExtension: "png")
     )
@@ -696,11 +938,20 @@ public enum MereRunCapabilityCatalog {
         summary: "Describe or answer questions about an image with a local VLM.",
         arguments: [.init(name: "image", label: "Image", kind: .file, required: true)],
         options: [
-            .init(flag: "--prompt", label: "Prompt", kind: .string),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
-            .init(flag: "--temperature", label: "Temperature", kind: .number),
-            .init(flag: "--top-p", label: "Top-p", kind: .number)
+            .init(flag: "--prompt", label: "Prompt", kind: .string, group: Group.prompt, tier: .essential),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(
+                flag: "--max-tokens", label: "Max tokens", kind: .integer,
+                defaultValue: "2048", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8_192, step: 1)
+            ),
+            .init(
+                flag: "--temperature", label: "Temperature", kind: .number,
+                defaultValue: "0.7", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
+            ),
+            .init(
+                flag: "--top-p", label: "Top-p", kind: .number,
+                defaultValue: "0.9", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
+            )
         ],
         output: .init(kind: .text)
     )
@@ -733,15 +984,24 @@ public enum MereRunCapabilityCatalog {
         summary: "Generate training-friendly captions for one or more images.",
         arguments: [.init(name: "images", label: "Images", kind: .file, required: true)],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--output-dir", label: "Output directory", kind: .directory),
-            .init(flag: "--prompt", label: "Prompt", kind: .string),
-            .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
-            .init(flag: "--focus", label: "Focus", kind: .string, repeatable: true),
-            .init(flag: "--trigger-token", label: "Trigger token", kind: .string),
-            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
-            .init(flag: "--temperature", label: "Temperature", kind: .number),
-            .init(flag: "--top-p", label: "Top-p", kind: .number)
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output-dir", label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(flag: "--prompt", label: "Prompt", kind: .string, group: Group.prompt, tier: .essential),
+            .init(flag: "--prompt-file", label: "Prompt file", kind: .file, group: Group.prompt, tier: .expert),
+            .init(flag: "--focus", label: "Focus", kind: .string, repeatable: true, group: Group.prompt, tier: .standard),
+            .init(flag: "--trigger-token", label: "Trigger token", kind: .string, group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--max-tokens", label: "Max tokens", kind: .integer,
+                defaultValue: "96", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 2_048, step: 1)
+            ),
+            .init(
+                flag: "--temperature", label: "Temperature", kind: .number,
+                defaultValue: "0.2", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
+            ),
+            .init(
+                flag: "--top-p", label: "Top-p", kind: .number,
+                defaultValue: "0.9", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
+            )
         ],
         output: .init(kind: .directory)
     )
@@ -753,33 +1013,82 @@ public enum MereRunCapabilityCatalog {
         summary: "Extract text with native LightOn/Infinity or external GLM/Infinity runtimes.",
         arguments: [.init(name: "images", label: "Images", kind: .file, required: true)],
         options: [
-            .init(flag: "--backend", label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity"]),
-            .init(flag: "--compare", label: "Compare", kind: .boolean),
-            .init(flag: "--model", label: "LightOn model", kind: .string),
-            .init(flag: "--glmocr-cli", label: "GLM executable", kind: .file),
-            .init(flag: "--glm-config", label: "GLM config", kind: .file),
-            .init(flag: "--infinity-runtime", label: "Infinity runtime", kind: .choice, choices: ["native", "external"]),
-            .init(flag: "--infinity-parser-cli", label: "Parser executable", kind: .file),
-            .init(flag: "--infinity-model", label: "Infinity model", kind: .string),
+            .init(
+                flag: "--backend", label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity"],
+                defaultValue: "lighton", group: Group.modelAndAdapters, tier: .essential
+            ),
+            .init(flag: "--compare", label: "Compare", kind: .boolean, group: Group.run, tier: .expert),
+            .init(
+                flag: "--model", label: "LightOn model", kind: .string,
+                defaultValue: "vision-ocr-lighton", group: Group.modelAndAdapters, tier: .standard
+            ),
+            .init(
+                flag: "--glmocr-cli", label: "GLM executable", kind: .file,
+                defaultValue: "glmocr", group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(flag: "--glm-config", label: "GLM config", kind: .file, group: Group.modelAndAdapters, tier: .expert),
+            .init(
+                flag: "--infinity-runtime", label: "Infinity runtime", kind: .choice, choices: ["native", "external"],
+                defaultValue: "native", group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--infinity-parser-cli", label: "Parser executable", kind: .file,
+                defaultValue: "parser", group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--infinity-model", label: "Infinity model", kind: .string,
+                defaultValue: "vision-ocr-infinity-pro-int8", group: Group.modelAndAdapters, tier: .expert
+            ),
             .init(
                 flag: "--infinity-backend",
                 label: "Infinity backend",
                 kind: .choice,
-                choices: ["transformers", "vllm-engine", "vllm-server"]
+                choices: ["transformers", "vllm-engine", "vllm-server"],
+                defaultValue: "vllm-server", group: Group.modelAndAdapters, tier: .expert
             ),
-            .init(flag: "--infinity-api-url", label: "Infinity API URL", kind: .string),
-            .init(flag: "--infinity-api-key", label: "Infinity API key", kind: .string),
-            .init(flag: "--infinity-task", label: "Infinity task", kind: .choice, choices: ["doc2json", "doc2md", "custom"]),
-            .init(flag: "--infinity-prompt", label: "Infinity prompt", kind: .string),
-            .init(flag: "--infinity-output-format", label: "Infinity format", kind: .choice, choices: ["md", "json"]),
-            .init(flag: "--infinity-batch-size", label: "Batch size", kind: .integer),
-            .init(flag: "--infinity-model-cache-dir", label: "Model cache", kind: .directory),
-            .init(flag: "--infinity-min-pixels", label: "Minimum pixels", kind: .integer),
-            .init(flag: "--infinity-max-pixels", label: "Maximum pixels", kind: .integer),
-            .init(flag: "--output-dir", label: "Output directory", kind: .directory),
-            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
-            .init(flag: "--temperature", label: "Temperature", kind: .number),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(
+                flag: "--infinity-api-url", label: "Infinity API URL", kind: .string,
+                defaultValue: "http://localhost:8000/v1/chat/completions", group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--infinity-api-key", label: "Infinity API key", kind: .string,
+                defaultValue: "EMPTY", group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--infinity-task", label: "Infinity task", kind: .choice, choices: ["doc2json", "doc2md", "custom"],
+                defaultValue: "doc2json", group: Group.prompt, tier: .expert
+            ),
+            .init(flag: "--infinity-prompt", label: "Infinity prompt", kind: .string, group: Group.prompt, tier: .expert),
+            .init(
+                flag: "--infinity-output-format", label: "Infinity format", kind: .choice, choices: ["md", "json"],
+                defaultValue: "md", group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--infinity-batch-size", label: "Batch size", kind: .integer,
+                defaultValue: "1", group: Group.run, tier: .expert, range: .init(min: 1, max: 64, step: 1)
+            ),
+            .init(
+                flag: "--infinity-model-cache-dir", label: "Model cache", kind: .directory,
+                group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--infinity-min-pixels", label: "Minimum pixels", kind: .integer,
+                defaultValue: "2048", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
+            ),
+            .init(
+                flag: "--infinity-max-pixels", label: "Maximum pixels", kind: .integer,
+                defaultValue: "16777216", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
+            ),
+            .init(flag: "--output-dir", label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(
+                flag: "--max-tokens", label: "Max tokens", kind: .integer,
+                defaultValue: "4096", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 16_384, step: 1)
+            ),
+            .init(
+                flag: "--temperature", label: "Temperature", kind: .number,
+                defaultValue: "0.2", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
+            ),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .directory)
     )
@@ -791,11 +1100,15 @@ public enum MereRunCapabilityCatalog {
         summary: "Ground one or more text expressions with native Falcon Perception.",
         arguments: [.init(name: "image", label: "Image", kind: .file, required: true)],
         options: [
-            .init(flag: "--query", label: "Query", kind: .string, repeatable: true),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--output", label: "Annotated image", kind: .file),
-            .init(flag: "--json-output", label: "JSON output", kind: .file),
-            .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory)
+            .init(flag: "--query", label: "Query", kind: .string, repeatable: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output", label: "Annotated image", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--json-output", label: "JSON output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            receiptOption
         ],
         output: .init(kind: .file, fileExtension: "png")
     )
@@ -807,17 +1120,27 @@ public enum MereRunCapabilityCatalog {
         summary: "Segment text, box, or point prompts with native SAM 3.1.",
         arguments: [.init(name: "image", label: "Image", kind: .file, required: true)],
         options: [
-            .init(flag: "--prompt", label: "Text prompt", kind: .string, repeatable: true),
-            .init(flag: "--box", label: "Box prompt", kind: .string, repeatable: true),
-            .init(flag: "--point", label: "Point prompt", kind: .string, repeatable: true),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--output", label: "Annotated image", kind: .file),
-            .init(flag: "--json-output", label: "JSON output", kind: .file),
-            .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory),
-            .init(flag: "--threshold", label: "Threshold", kind: .number),
-            .init(flag: "--resolution", label: "Resolution", kind: .integer),
-            .init(flag: "--show-boxes", label: "Show boxes", kind: .boolean),
-            .init(flag: "--multimask", label: "Multiple masks", kind: .boolean)
+            .init(flag: "--prompt", label: "Text prompt", kind: .string, repeatable: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--box", label: "Box prompt", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
+            .init(flag: "--point", label: "Point prompt", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output", label: "Annotated image", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--json-output", label: "JSON output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(
+                flag: "--threshold", label: "Threshold", kind: .number,
+                defaultValue: "0.05", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--resolution", label: "Resolution", kind: .integer,
+                defaultValue: "1008", group: Group.sampling, tier: .expert, range: .init(min: 256, max: 2_048, step: 16)
+            ),
+            .init(flag: "--show-boxes", label: "Show boxes", kind: .boolean, group: Group.output, tier: .standard),
+            .init(flag: "--multimask", label: "Multiple masks", kind: .boolean, group: Group.sampling, tier: .expert),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            receiptOption
         ],
         output: .init(kind: .file, fileExtension: "png")
     )
@@ -829,21 +1152,35 @@ public enum MereRunCapabilityCatalog {
         summary: "Track text, box, or point prompted objects through video.",
         arguments: [.init(name: "video", label: "Video", kind: .file, required: true)],
         options: [
-            .init(flag: "--prompt", label: "Text prompt", kind: .string, repeatable: true),
-            .init(flag: "--box", label: "Box prompt", kind: .string, repeatable: true),
-            .init(flag: "--point", label: "Point prompt", kind: .string, repeatable: true),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--output", label: "Annotated video", kind: .file),
-            .init(flag: "--json-output", label: "JSON output", kind: .file),
-            .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory),
-            .init(flag: "--init-frame", label: "Initial frame", kind: .integer),
-            .init(flag: "--end-frame", label: "End frame", kind: .integer),
-            .init(flag: "--threshold", label: "Threshold", kind: .number),
-            .init(flag: "--resolution", label: "Resolution", kind: .integer),
-            .init(flag: "--show-boxes", label: "Show boxes", kind: .boolean),
-            .init(flag: "--show-labels", label: "Show labels", kind: .boolean),
-            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
-            .init(flag: "--json", label: "JSON preflight", kind: .boolean)
+            .init(flag: "--prompt", label: "Text prompt", kind: .string, repeatable: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--box", label: "Box prompt", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
+            .init(flag: "--point", label: "Point prompt", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output", label: "Annotated video", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--json-output", label: "JSON output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(
+                flag: "--init-frame", label: "Initial frame", kind: .integer,
+                defaultValue: "0", group: Group.inputs, tier: .standard, range: .init(min: 0, step: 1)
+            ),
+            .init(
+                flag: "--end-frame", label: "End frame", kind: .integer,
+                group: Group.inputs, tier: .standard, range: .init(min: 0, step: 1)
+            ),
+            .init(
+                flag: "--threshold", label: "Threshold", kind: .number,
+                defaultValue: "0.05", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--resolution", label: "Resolution", kind: .integer,
+                defaultValue: "1008", group: Group.sampling, tier: .expert, range: .init(min: 256, max: 2_048, step: 16)
+            ),
+            .init(flag: "--show-boxes", label: "Show boxes", kind: .boolean, group: Group.output, tier: .standard),
+            .init(flag: "--show-labels", label: "Show labels", kind: .boolean, group: Group.output, tier: .expert),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            receiptOption
         ],
         output: .init(kind: .file, fileExtension: "mp4")
     )
@@ -1107,104 +1444,274 @@ public enum MereRunCapabilityCatalog {
             .init(name: "caption", label: "Music prompt", kind: .string, required: true)
         ],
         options: [
-            .init(flag: "--lyrics", label: "Lyrics", kind: .string),
-            .init(flag: "--lyrics-file", label: "Lyrics file", kind: .file),
-            .init(flag: "--instrumental", label: "Instrumental", kind: .boolean),
-            .init(flag: "--lrc-file", label: "LRC file", kind: .file),
-            .init(flag: "--lrc-output", label: "LRC output", kind: .file),
-            .init(flag: "--output", label: "Audio output", kind: .file),
-            .init(flag: "--export-format", label: "Audio format", kind: .choice, choices: ["pcm16", "pcm24", "float32"]),
-            .init(flag: "--normalize", label: "Normalization", kind: .choice, choices: ["none", "peak"]),
-            .init(flag: "--target-peak-db", label: "Peak target", kind: .number),
-            .init(flag: "--fade-in-ms", label: "Fade in", kind: .number),
-            .init(flag: "--fade-out-ms", label: "Fade out", kind: .number),
-            .init(flag: "--no-dither", label: "Disable dither", kind: .boolean),
-            .init(flag: "--recipe-output", label: "Recipe output", kind: .file),
-            .init(flag: "--no-recipe", label: "Disable recipe", kind: .boolean),
-            .init(flag: "--daw-bundle", label: "DAW bundle", kind: .directory),
-            .init(flag: "--stems", label: "Stems", kind: .string),
-            .init(flag: "--adapter", label: "Adapter", kind: .file, repeatable: true),
-            .init(flag: "--adapter-kind", label: "Adapter kind", kind: .choice, choices: ["auto", "lora", "lokr"]),
-            .init(flag: "--adapter-scale", label: "Adapter scale", kind: .number, repeatable: true),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory),
-            .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
-            .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
-            .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
-            .init(flag: "--lm-model", label: "LM model", kind: .string),
-            .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string),
-            .init(flag: "--use-lm", label: "Use LM planning", kind: .boolean),
-            .init(flag: "--no-lm", label: "Disable LM planning", kind: .boolean),
-            .init(flag: "--analyze-source-audio", label: "Analyze source", kind: .boolean),
-            .init(flag: "--duration", label: "Duration", kind: .number),
-            .init(flag: "--quality", label: "Quality", kind: .choice, choices: ["draft", "song", "final", "edit"]),
-            .init(flag: "--steps", label: "Steps", kind: .integer),
-            .init(flag: "--shift", label: "Scheduler shift", kind: .number),
-            .init(flag: "--infer-method", label: "Inference method", kind: .choice, choices: ["ode", "sde"]),
-            .init(flag: "--sampler", label: "Sampler", kind: .choice, choices: ["euler", "heun"]),
-            .init(flag: "--guidance-scale", label: "Guidance scale", kind: .number),
-            .init(flag: "--guidance-mode", label: "Guidance mode", kind: .choice, choices: ["apg", "adg", "cfg"]),
-            .init(flag: "--cfg-interval-start", label: "CFG start", kind: .number),
-            .init(flag: "--cfg-interval-end", label: "CFG end", kind: .number),
-            .init(flag: "--velocity-norm-threshold", label: "Velocity clamp", kind: .number),
-            .init(flag: "--velocity-ema-factor", label: "Velocity EMA", kind: .number),
-            .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--candidates", label: "Candidate count", kind: .integer),
-            .init(flag: "--keep-candidates", label: "Keep candidates", kind: .boolean),
-            .init(flag: "--audio-cover-strength", label: "Cover strength", kind: .number),
-            .init(flag: "--cover-noise-strength", label: "Cover noise", kind: .number),
-            .init(flag: "--retake-seed", label: "Retake seed", kind: .integer),
-            .init(flag: "--retake-variance", label: "Retake variance", kind: .number),
-            .init(flag: "--vocal-language", label: "Vocal language", kind: .string),
-            .init(flag: "--instruction", label: "Instruction", kind: .string),
+            .init(flag: "--lyrics", label: "Lyrics", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--lyrics-file", label: "Lyrics file", kind: .file, group: Group.prompt, tier: .expert),
+            .init(flag: "--instrumental", label: "Instrumental", kind: .boolean, group: Group.prompt, tier: .standard),
+            .init(flag: "--lrc-file", label: "LRC file", kind: .file, group: Group.prompt, tier: .expert),
+            .init(flag: "--lrc-output", label: "LRC output", kind: .file, group: Group.output, tier: .expert),
+            .init(flag: "--output", label: "Audio output", kind: .file, group: Group.output, tier: .standard),
+            .init(
+                flag: "--export-format", label: "Audio format", kind: .choice, choices: ["pcm16", "pcm24", "float32"],
+                defaultValue: "pcm24", group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--normalize", label: "Normalization", kind: .choice, choices: ["none", "peak"],
+                defaultValue: "peak", group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--target-peak-db", label: "Peak target", kind: .number,
+                defaultValue: "-1.0", group: Group.output, tier: .expert, range: .init(min: -24, max: 0, step: 0.5)
+            ),
+            .init(
+                flag: "--fade-in-ms", label: "Fade in", kind: .number,
+                defaultValue: "5.0", group: Group.output, tier: .expert, range: .init(min: 0, max: 5_000, step: 1)
+            ),
+            .init(
+                flag: "--fade-out-ms", label: "Fade out", kind: .number,
+                defaultValue: "20.0", group: Group.output, tier: .expert, range: .init(min: 0, max: 5_000, step: 1)
+            ),
+            .init(flag: "--no-dither", label: "Disable dither", kind: .boolean, group: Group.output, tier: .expert),
+            .init(flag: "--recipe-output", label: "Recipe output", kind: .file, group: Group.output, tier: .expert),
+            .init(flag: "--no-recipe", label: "Disable recipe", kind: .boolean, group: Group.output, tier: .expert),
+            .init(flag: "--daw-bundle", label: "DAW bundle", kind: .directory, group: Group.output, tier: .expert),
+            .init(flag: "--stems", label: "Stems", kind: .string, group: Group.output, tier: .expert),
+            .init(flag: "--adapter", label: "Adapter", kind: .file, repeatable: true, group: Group.modelAndAdapters, tier: .standard),
+            .init(
+                flag: "--adapter-kind", label: "Adapter kind", kind: .choice, choices: ["auto", "lora", "lokr"],
+                defaultValue: "auto", group: Group.modelAndAdapters, tier: .expert, dependsOn: "--adapter"
+            ),
+            .init(
+                flag: "--adapter-scale", label: "Adapter scale", kind: .number, repeatable: true,
+                group: Group.modelAndAdapters, tier: .standard, range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--adapter"
+            ),
+            .init(
+                flag: "--model", label: "Model", kind: .string,
+                defaultValue: "music-acestep", group: Group.modelAndAdapters, tier: .essential
+            ),
+            .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
+            .init(
+                flag: "--decoder-subdirectory", label: "Decoder", kind: .string,
+                defaultValue: "acestep-v15-turbo", group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--vae-subdirectory", label: "VAE", kind: .string,
+                defaultValue: "vae", group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(flag: "--lm-subdirectory", label: "Language model", kind: .string, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--lm-model", label: "LM model", kind: .string, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--use-lm", label: "Use LM planning", kind: .boolean, group: Group.sampling, tier: .expert),
+            .init(flag: "--no-lm", label: "Disable LM planning", kind: .boolean, group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--analyze-source-audio", label: "Analyze source", kind: .boolean,
+                group: Group.inputs, tier: .expert, dependsOn: "--source-audio"
+            ),
+            .init(
+                flag: "--duration", label: "Duration", kind: .number,
+                group: Group.sampling, tier: .essential, range: .init(min: 1, max: 600, step: 1)
+            ),
+            .init(
+                flag: "--quality", label: "Quality", kind: .choice, choices: ["draft", "song", "final", "edit"],
+                group: Group.sampling, tier: .essential
+            ),
+            .init(
+                flag: "--steps", label: "Steps", kind: .integer,
+                group: Group.sampling, tier: .standard, range: .init(min: 1, max: 200, step: 1)
+            ),
+            .init(
+                flag: "--shift", label: "Scheduler shift", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
+            ),
+            .init(
+                flag: "--infer-method", label: "Inference method", kind: .choice, choices: ["ode", "sde"],
+                group: Group.sampling, tier: .expert
+            ),
+            .init(flag: "--sampler", label: "Sampler", kind: .choice, choices: ["euler", "heun"], group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--guidance-scale", label: "Guidance scale", kind: .number,
+                group: Group.sampling, tier: .standard, range: .init(min: 1, max: 20, step: 0.1)
+            ),
+            .init(
+                flag: "--guidance-mode", label: "Guidance mode", kind: .choice, choices: ["apg", "adg", "cfg"],
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--cfg-interval-start", label: "CFG start", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--cfg-interval-end", label: "CFG end", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--velocity-norm-threshold", label: "Velocity clamp", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, step: 0.1)
+            ),
+            .init(
+                flag: "--velocity-ema-factor", label: "Velocity EMA", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
+            .init(
+                flag: "--candidates", label: "Candidate count", kind: .integer,
+                group: Group.sampling, tier: .standard, range: .init(min: 1, max: 16, step: 1)
+            ),
+            .init(
+                flag: "--keep-candidates", label: "Keep candidates", kind: .boolean,
+                group: Group.output, tier: .expert, dependsOn: "--candidates"
+            ),
+            .init(
+                flag: "--audio-cover-strength", label: "Cover strength", kind: .number,
+                defaultValue: "1.0", group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05),
+                dependsOn: "--source-audio"
+            ),
+            .init(
+                flag: "--cover-noise-strength", label: "Cover noise", kind: .number,
+                defaultValue: "0.0", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 1, step: 0.05),
+                dependsOn: "--source-audio"
+            ),
+            .init(flag: "--retake-seed", label: "Retake seed", kind: .integer, group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)),
+            .init(
+                flag: "--retake-variance", label: "Retake variance", kind: .number,
+                defaultValue: "0.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.05),
+                dependsOn: "--retake-seed"
+            ),
+            .init(flag: "--vocal-language", label: "Vocal language", kind: .string, defaultValue: "en", group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--instruction", label: "Instruction", kind: .string,
+                defaultValue: "Fill the audio semantic mask based on the given conditions:", group: Group.prompt, tier: .expert
+            ),
             .init(
                 flag: "--task-type",
                 label: "Task",
                 kind: .choice,
-                choices: ["text2music", "repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]
+                choices: ["text2music", "repaint", "cover", "cover-nofsq", "extract", "lego", "complete"],
+                defaultValue: "text2music", group: Group.inputs, tier: .standard
             ),
-            .init(flag: "--source-audio", label: "Source audio", kind: .file),
-            .init(flag: "--reference-audio", label: "Reference audio", kind: .file, repeatable: true),
-            .init(flag: "--track-name", label: "Track name", kind: .string),
-            .init(flag: "--complete-track-classes", label: "Track classes", kind: .string),
-            .init(flag: "--non-cover", label: "No FSQ cover", kind: .boolean),
-            .init(flag: "--repaint-start", label: "Repaint start", kind: .number),
-            .init(flag: "--repaint-end", label: "Repaint end", kind: .number),
-            .init(flag: "--chunk-mask-mode", label: "Chunk mask", kind: .choice, choices: ["auto", "explicit"]),
-            .init(flag: "--repaint-mode", label: "Repaint mode", kind: .choice, choices: ["conservative", "balanced", "aggressive"]),
-            .init(flag: "--repaint-strength", label: "Repaint strength", kind: .number),
-            .init(flag: "--flow-edit", label: "Flow edit", kind: .boolean),
-            .init(flag: "--source-caption", label: "Source caption", kind: .string),
-            .init(flag: "--source-lyrics", label: "Source lyrics", kind: .string),
-            .init(flag: "--flow-edit-n-min", label: "Flow start", kind: .number),
-            .init(flag: "--flow-edit-n-max", label: "Flow end", kind: .number),
-            .init(flag: "--flow-edit-n-average", label: "Flow samples", kind: .integer),
-            .init(flag: "--bpm", label: "BPM", kind: .integer),
-            .init(flag: "--keyscale", label: "Key", kind: .string),
-            .init(flag: "--timesignature", label: "Time signature", kind: .string),
-            .init(flag: "--lm-temperature", label: "LM temperature", kind: .number),
-            .init(flag: "--lm-top-k", label: "LM top-k", kind: .integer),
-            .init(flag: "--lm-top-p", label: "LM top-p", kind: .number),
-            .init(flag: "--lm-repetition-penalty", label: "LM repetition penalty", kind: .number),
-            .init(flag: "--lm-cfg-scale", label: "LM CFG scale", kind: .number),
-            .init(flag: "--lm-negative-prompt", label: "LM negative prompt", kind: .string),
-            .init(flag: "--metadata-duration", label: "Metadata duration", kind: .string),
-            .init(flag: "--metadata-language", label: "Metadata language", kind: .string),
-            .init(flag: "--no-tiled-vae", label: "Disable tiled VAE", kind: .boolean),
-            .init(flag: "--vae-chunk-size", label: "VAE chunk", kind: .integer),
-            .init(flag: "--vae-overlap", label: "VAE overlap", kind: .integer),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
-            .init(flag: "--temperature", label: "RT2 temperature", kind: .number),
-            .init(flag: "--style-conditioning", label: "RT2 style", kind: .choice, choices: ["streaming", "full"]),
-            .init(flag: "--top-k", label: "RT2 top-k", kind: .integer),
-            .init(flag: "--cfg-musiccoca", label: "MusicCoCa CFG", kind: .number),
-            .init(flag: "--cfg-notes", label: "Notes CFG", kind: .number),
-            .init(flag: "--cfg-drums", label: "Drums CFG", kind: .number),
-            .init(flag: "--drumless", label: "Drumless", kind: .boolean),
-            .init(flag: "--unmask-width", label: "Unmask width", kind: .integer),
-            .init(flag: "--seed-rotation", label: "Seed rotation", kind: .integer),
-            .init(flag: "--prefill-silence", label: "Prefill silence", kind: .boolean),
-            .init(flag: "--prefill-duration", label: "Prefill duration", kind: .number)
+            .init(flag: "--source-audio", label: "Source audio", kind: .file, group: Group.inputs, tier: .standard),
+            .init(
+                flag: "--reference-audio", label: "Reference audio", kind: .file, repeatable: true,
+                group: Group.inputs, tier: .standard
+            ),
+            .init(flag: "--track-name", label: "Track name", kind: .string, group: Group.inputs, tier: .expert),
+            .init(flag: "--complete-track-classes", label: "Track classes", kind: .string, group: Group.inputs, tier: .expert),
+            .init(flag: "--non-cover", label: "No FSQ cover", kind: .boolean, group: Group.inputs, tier: .expert, dependsOn: "--source-audio"),
+            .init(
+                flag: "--repaint-start", label: "Repaint start", kind: .number,
+                defaultValue: "0.0", group: Group.inputs, tier: .standard, range: .init(min: 0, step: 0.1), dependsOn: "--source-audio"
+            ),
+            .init(
+                flag: "--repaint-end", label: "Repaint end", kind: .number,
+                defaultValue: "-1.0", group: Group.inputs, tier: .standard, range: .init(min: -1, step: 0.1), dependsOn: "--source-audio"
+            ),
+            .init(
+                flag: "--chunk-mask-mode", label: "Chunk mask", kind: .choice, choices: ["auto", "explicit"],
+                defaultValue: "auto", group: Group.inputs, tier: .expert, dependsOn: "--source-audio"
+            ),
+            .init(
+                flag: "--repaint-mode", label: "Repaint mode", kind: .choice, choices: ["conservative", "balanced", "aggressive"],
+                defaultValue: "balanced", group: Group.inputs, tier: .expert, dependsOn: "--source-audio"
+            ),
+            .init(
+                flag: "--repaint-strength", label: "Repaint strength", kind: .number,
+                defaultValue: "0.5", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 1, step: 0.05),
+                dependsOn: "--source-audio"
+            ),
+            .init(flag: "--flow-edit", label: "Flow edit", kind: .boolean, group: Group.inputs, tier: .standard, dependsOn: "--source-audio"),
+            .init(flag: "--source-caption", label: "Source caption", kind: .string, group: Group.inputs, tier: .standard, dependsOn: "--flow-edit"),
+            .init(flag: "--source-lyrics", label: "Source lyrics", kind: .string, group: Group.inputs, tier: .expert, dependsOn: "--flow-edit"),
+            .init(
+                flag: "--flow-edit-n-min", label: "Flow start", kind: .number,
+                defaultValue: "0.0", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 1, step: 0.05), dependsOn: "--flow-edit"
+            ),
+            .init(
+                flag: "--flow-edit-n-max", label: "Flow end", kind: .number,
+                defaultValue: "1.0", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 1, step: 0.05), dependsOn: "--flow-edit"
+            ),
+            .init(
+                flag: "--flow-edit-n-average", label: "Flow samples", kind: .integer,
+                defaultValue: "1", group: Group.inputs, tier: .expert, range: .init(min: 1, max: 16, step: 1), dependsOn: "--flow-edit"
+            ),
+            .init(flag: "--bpm", label: "BPM", kind: .integer, group: Group.prompt, tier: .standard, range: .init(min: 20, max: 300, step: 1)),
+            .init(flag: "--keyscale", label: "Key", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--timesignature", label: "Time signature", kind: .string, group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--lm-temperature", label: "LM temperature", kind: .number,
+                defaultValue: "0.85", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 2, step: 0.05)
+            ),
+            .init(
+                flag: "--lm-top-k", label: "LM top-k", kind: .integer,
+                defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1_000, step: 1)
+            ),
+            .init(
+                flag: "--lm-top-p", label: "LM top-p", kind: .number,
+                defaultValue: "0.9", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--lm-repetition-penalty", label: "LM repetition penalty", kind: .number,
+                defaultValue: "1.0", group: Group.sampling, tier: .expert, range: .init(min: 0.5, max: 2, step: 0.05)
+            ),
+            .init(
+                flag: "--lm-cfg-scale", label: "LM CFG scale", kind: .number,
+                defaultValue: "2.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
+            ),
+            .init(
+                flag: "--lm-negative-prompt", label: "LM negative prompt", kind: .string,
+                defaultValue: "NO USER INPUT", group: Group.sampling, tier: .expert
+            ),
+            .init(flag: "--metadata-duration", label: "Metadata duration", kind: .string, group: Group.prompt, tier: .expert),
+            .init(flag: "--metadata-language", label: "Metadata language", kind: .string, group: Group.prompt, tier: .expert),
+            .init(flag: "--no-tiled-vae", label: "Disable tiled VAE", kind: .boolean, group: Group.run, tier: .expert),
+            .init(
+                flag: "--vae-chunk-size", label: "VAE chunk", kind: .integer,
+                defaultValue: "512", group: Group.run, tier: .expert, range: .init(min: 64, max: 4_096, step: 64)
+            ),
+            .init(
+                flag: "--vae-overlap", label: "VAE overlap", kind: .integer,
+                defaultValue: "64", group: Group.run, tier: .expert, range: .init(min: 0, max: 1_024, step: 8)
+            ),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(
+                flag: "--temperature", label: "RT2 temperature", kind: .number,
+                defaultValue: "1.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 2, step: 0.05)
+            ),
+            .init(
+                flag: "--style-conditioning", label: "RT2 style", kind: .choice, choices: ["streaming", "full"],
+                defaultValue: "streaming", group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--top-k", label: "RT2 top-k", kind: .integer,
+                defaultValue: "100", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1_000, step: 1)
+            ),
+            .init(
+                flag: "--cfg-musiccoca", label: "MusicCoCa CFG", kind: .number,
+                defaultValue: "3.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(
+                flag: "--cfg-notes", label: "Notes CFG", kind: .number,
+                defaultValue: "5.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(
+                flag: "--cfg-drums", label: "Drums CFG", kind: .number,
+                defaultValue: "1.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(flag: "--drumless", label: "Drumless", kind: .boolean, group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--unmask-width", label: "Unmask width", kind: .integer,
+                defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
+            ),
+            .init(
+                flag: "--seed-rotation", label: "Seed rotation", kind: .integer,
+                defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
+            ),
+            .init(flag: "--prefill-silence", label: "Prefill silence", kind: .boolean, group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--prefill-duration", label: "Prefill duration", kind: .number,
+                defaultValue: "1.64", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 30, step: 0.01),
+                dependsOn: "--prefill-silence"
+            ),
+            progressJSONOption,
+            receiptOption
         ],
         output: .init(kind: .file, fileExtension: "wav")
     )
@@ -1387,42 +1894,78 @@ public enum MereRunCapabilityCatalog {
             .init(name: "prompt", label: "Prompt", kind: .string, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
                 flag: "--quality",
                 label: "Quality",
                 kind: .choice,
-                choices: LTXVideoQuality.allCases.map(\.rawValue)
+                choices: LTXVideoQuality.allCases.map(\.rawValue),
+                group: Group.sampling, tier: .essential
             ),
             .init(
                 flag: "--output-mode",
                 label: "Output mode",
                 kind: .choice,
-                choices: LTXVideoOutputMode.allCases.map(\.rawValue)
+                choices: LTXVideoOutputMode.allCases.map(\.rawValue),
+                group: Group.output, tier: .essential
             ),
-            .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--auto-duration", label: "Auto duration range", kind: .string),
-            .init(flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["diffusion", "convolutional"]),
-            .init(flag: "--hdr", label: "HDR color space", kind: .choice, choices: ["srgb-linear", "acescg", "acescct"]),
-            .init(flag: "--hdr-transfer", label: "HDR transfer", kind: .choice, choices: ["acescct", "logc3"]),
-            .init(flag: "--high-quality-hdr", label: "High quality HDR", kind: .boolean),
-            .init(flag: "--text-embeddings", label: "Precomputed text contexts", kind: .file),
-            .init(flag: "--spatial-tile", label: "VAE spatial tile", kind: .integer),
-            .init(flag: "--spatial-overlap", label: "VAE spatial overlap", kind: .integer),
-            .init(flag: "--skip-mp4", label: "EXR only", kind: .boolean),
-            .init(flag: "--width", label: "Width", kind: .integer),
-            .init(flag: "--height", label: "Height", kind: .integer),
-            .init(flag: "--num-frames", label: "Frames", kind: .integer),
-            .init(flag: "--duration", label: "Duration", kind: .number),
-            .init(flag: "--fps", label: "Frames per second", kind: .integer),
-            .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--steps", label: "Denoising steps", kind: .integer),
+            .init(flag: "--model-root", label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--auto-duration", label: "Auto duration range", kind: .string, group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["diffusion", "convolutional"],
+                group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--hdr", label: "HDR color space", kind: .choice, choices: ["srgb-linear", "acescg", "acescct"],
+                group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--hdr-transfer", label: "HDR transfer", kind: .choice, choices: ["acescct", "logc3"],
+                group: Group.output, tier: .expert, dependsOn: "--hdr"
+            ),
+            .init(flag: "--high-quality-hdr", label: "High quality HDR", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--hdr"),
+            .init(flag: "--text-embeddings", label: "Precomputed text contexts", kind: .file, group: Group.inputs, tier: .expert),
+            .init(
+                flag: "--spatial-tile", label: "VAE spatial tile", kind: .integer,
+                group: Group.run, tier: .expert, range: .init(min: 256, max: 4_096, step: 32)
+            ),
+            .init(
+                flag: "--spatial-overlap", label: "VAE spatial overlap", kind: .integer,
+                defaultValue: "256", group: Group.run, tier: .expert, range: .init(min: 0, max: 1_024, step: 32)
+            ),
+            .init(flag: "--skip-mp4", label: "EXR only", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--hdr"),
+            .init(
+                flag: "--width", label: "Width", kind: .integer,
+                group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
+            ),
+            .init(
+                flag: "--height", label: "Height", kind: .integer,
+                group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
+            ),
+            .init(
+                flag: "--num-frames", label: "Frames", kind: .integer,
+                group: Group.sampling, tier: .standard, range: .init(min: 1, max: 1_000, step: 1)
+            ),
+            .init(
+                flag: "--duration", label: "Duration", kind: .number,
+                group: Group.sampling, tier: .essential, range: .init(min: 1, max: 60, step: 0.5)
+            ),
+            .init(
+                flag: "--fps", label: "Frames per second", kind: .integer,
+                group: Group.sampling, tier: .standard, range: .init(min: 1, max: 60, step: 1)
+            ),
+            .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
+            .init(
+                flag: "--steps", label: "Denoising steps", kind: .integer,
+                group: Group.sampling, tier: .standard, range: .init(min: 1, max: 100, step: 1)
+            ),
             .init(
                 flag: "--h3-weight-mode",
                 label: "MiniMax-H3 weight mode",
                 kind: .choice,
-                choices: ["auto", "quantized", "resident-bf16"]
+                choices: ["auto", "quantized", "resident-bf16"],
+                defaultValue: "auto", group: Group.modelAndAdapters, tier: .expert
             ),
             .init(
                 flag: "--h3-acceleration",
@@ -1431,65 +1974,190 @@ public enum MereRunCapabilityCatalog {
                 choices: [
                     "quality", "balanced", "maximum",
                     "layers-45", "layers-40", "velocity-reuse-2", "token-reduction"
-                ]
+                ],
+                defaultValue: "quality", group: Group.sampling, tier: .expert
             ),
-            .init(flag: "--guidance-scale", label: "Wan guidance", kind: .number),
-            .init(flag: "--shift", label: "Wan schedule shift", kind: .number),
-            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
-            .init(flag: "--enhance-prompt", label: "Enhance prompt", kind: .boolean),
-            .init(flag: "--prompt-enhancer-model", label: "Prompt enhancer", kind: .string),
-            .init(flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory),
-            .init(flag: "--audio", label: "Source audio", kind: .file),
-            .init(flag: "--audio-start-time", label: "Audio start", kind: .number),
-            .init(flag: "--audio-max-duration", label: "Audio max duration", kind: .number),
-            .init(flag: "--a2v-guidance-scale", label: "Audio-to-video guidance", kind: .number),
-            .init(flag: "--video-cfg-guidance-scale", label: "Video CFG guidance", kind: .number),
-            .init(flag: "--audio-cfg-guidance-scale", label: "Audio CFG guidance", kind: .number),
-            .init(flag: "--v2a-guidance-scale", label: "Video-to-audio guidance", kind: .number),
-            .init(flag: "--a2v-steps", label: "Audio-to-video steps", kind: .integer),
-            .init(flag: "--ltx-preset", label: "LTX preset", kind: .choice, choices: ["standard", "hq"]),
-            .init(flag: "--ltx-pipeline", label: "LTX pipeline", kind: .choice, choices: ["two-stage", "dev-one-stage"]),
-            .init(flag: "--ltx-sampler", label: "LTX sampler", kind: .choice, choices: ["euler", "res2s", "euler-ancestral", "cfg-plus-plus", "gradient-estimating-euler"]),
-            .init(flag: "--ltx-sigmas", label: "Stage one sigmas", kind: .string),
-            .init(flag: "--ltx-stage-2-sigmas", label: "Stage two sigmas", kind: .string),
-            .init(flag: "--distilled-lora-strength-stage-1", label: "Stage one distilled strength", kind: .number),
-            .init(flag: "--distilled-lora-strength-stage-2", label: "Stage two distilled strength", kind: .number),
-            .init(flag: "--ltx-sampler-eta", label: "Sampler eta", kind: .number),
-            .init(flag: "--video-stg-scale", label: "Video STG", kind: .number),
-            .init(flag: "--video-guidance-rescale", label: "Video rescale", kind: .number),
-            .init(flag: "--video-stg-block", label: "Video STG block", kind: .integer, repeatable: true),
-            .init(flag: "--video-guidance-skip-step", label: "Video guidance skip", kind: .integer),
-            .init(flag: "--audio-stg-scale", label: "Audio STG", kind: .number),
-            .init(flag: "--audio-guidance-rescale", label: "Audio rescale", kind: .number),
-            .init(flag: "--audio-stg-block", label: "Audio STG block", kind: .integer, repeatable: true),
-            .init(flag: "--audio-guidance-skip-step", label: "Audio guidance skip", kind: .integer),
-            .init(flag: "--no-res2s-bong-math", label: "Disable Res2s anchor refinement", kind: .boolean),
-            .init(flag: "--res2s-bong-max-iterations", label: "Res2s iterations", kind: .integer),
-            .init(flag: "--gradient-estimation-gamma", label: "Gradient estimate gamma", kind: .number),
-            .init(flag: "--image", label: "Start image", kind: .file),
-            .init(flag: "--image-strength", label: "Start image strength", kind: .number),
-            .init(flag: "--end-image", label: "End image", kind: .file),
-            .init(flag: "--end-image-strength", label: "End image strength", kind: .number),
-            .init(flag: "--image-conditioning", label: "Timed image guide", kind: .string, repeatable: true),
-            .init(flag: "--num-generated-keyframes", label: "Generated keyframe count", kind: .integer),
-            .init(flag: "--generated-keyframe", label: "Generated keyframe", kind: .integer, repeatable: true),
-            .init(flag: "--lora", label: "LTX LoRA", kind: .string, repeatable: true),
-            .init(flag: "--video-conditioning", label: "IC-LoRA reference video", kind: .string, repeatable: true),
-            .init(flag: "--conditioning-attention-strength", label: "Reference attention", kind: .number),
-            .init(flag: "--conditioning-attention-mask", label: "Reference attention mask", kind: .file),
-            .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean),
-            .init(flag: "--reference-downscale-factor", label: "Reference spatial scale", kind: .integer),
-            .init(flag: "--reference-temporal-scale-factor", label: "Reference temporal scale", kind: .integer),
-            .init(flag: "--dfr", label: "Diffusion fidelity rendering", kind: .boolean),
-            .init(flag: "--temporal-upsample-rounds", label: "Temporal refinement rounds", kind: .integer),
-            .init(flag: "--detailing-lora", label: "Detailing IC-LoRA", kind: .string, repeatable: true),
-            .init(flag: "--detailing-reference-downscale-factor", label: "Detail reference scale", kind: .integer),
-            .init(flag: "--reference", label: "Ordered H3 reference", kind: .string, repeatable: true),
-            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
-            .init(flag: "--json", label: "JSON", kind: .boolean),
-            .init(flag: "--timings", label: "Timings", kind: .boolean),
-            .init(flag: "--timings-output", label: "Timings output", kind: .file),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(
+                flag: "--guidance-scale", label: "Wan guidance", kind: .number,
+                defaultValue: "5.0", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(
+                flag: "--shift", label: "Wan schedule shift", kind: .number,
+                defaultValue: "5.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
+            ),
+            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--enhance-prompt", label: "Enhance prompt", kind: .boolean, group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--prompt-enhancer-model", label: "Prompt enhancer", kind: .string,
+                group: Group.prompt, tier: .expert, dependsOn: "--enhance-prompt"
+            ),
+            .init(
+                flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory,
+                group: Group.prompt, tier: .expert, dependsOn: "--enhance-prompt"
+            ),
+            .init(flag: "--audio", label: "Source audio", kind: .file, group: Group.inputs, tier: .standard),
+            .init(
+                flag: "--audio-start-time", label: "Audio start", kind: .number,
+                defaultValue: "0.0", group: Group.inputs, tier: .standard, range: .init(min: 0, step: 0.1), dependsOn: "--audio"
+            ),
+            .init(
+                flag: "--audio-max-duration", label: "Audio max duration", kind: .number,
+                group: Group.inputs, tier: .expert, range: .init(min: 0, step: 0.1), dependsOn: "--audio"
+            ),
+            .init(
+                flag: "--a2v-guidance-scale", label: "Audio-to-video guidance", kind: .number,
+                defaultValue: "3.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(
+                flag: "--video-cfg-guidance-scale", label: "Video CFG guidance", kind: .number,
+                defaultValue: "3.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(
+                flag: "--audio-cfg-guidance-scale", label: "Audio CFG guidance", kind: .number,
+                defaultValue: "7.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(
+                flag: "--v2a-guidance-scale", label: "Video-to-audio guidance", kind: .number,
+                defaultValue: "3.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(
+                flag: "--a2v-steps", label: "Audio-to-video steps", kind: .integer,
+                defaultValue: "30", group: Group.sampling, tier: .expert, range: .init(min: 1, max: 100, step: 1)
+            ),
+            .init(
+                flag: "--ltx-preset", label: "LTX preset", kind: .choice, choices: ["standard", "hq"],
+                defaultValue: "standard", group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-pipeline", label: "LTX pipeline", kind: .choice, choices: ["two-stage", "dev-one-stage"],
+                defaultValue: "two-stage", group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-sampler", label: "LTX sampler", kind: .choice,
+                choices: ["euler", "res2s", "euler-ancestral", "cfg-plus-plus", "gradient-estimating-euler"],
+                group: Group.sampling, tier: .expert
+            ),
+            .init(flag: "--ltx-sigmas", label: "Stage one sigmas", kind: .string, group: Group.sampling, tier: .expert),
+            .init(flag: "--ltx-stage-2-sigmas", label: "Stage two sigmas", kind: .string, group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--distilled-lora-strength-stage-1", label: "Stage one distilled strength", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.05)
+            ),
+            .init(
+                flag: "--distilled-lora-strength-stage-2", label: "Stage two distilled strength", kind: .number,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.05)
+            ),
+            .init(
+                flag: "--ltx-sampler-eta", label: "Sampler eta", kind: .number,
+                defaultValue: "0.5", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.05)
+            ),
+            .init(
+                flag: "--video-stg-scale", label: "Video STG", kind: .number,
+                defaultValue: "1.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
+            ),
+            .init(
+                flag: "--video-guidance-rescale", label: "Video rescale", kind: .number,
+                defaultValue: "0.7", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.05)
+            ),
+            .init(
+                flag: "--video-stg-block", label: "Video STG block", kind: .integer, repeatable: true,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
+            ),
+            .init(
+                flag: "--video-guidance-skip-step", label: "Video guidance skip", kind: .integer,
+                defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 1)
+            ),
+            .init(
+                flag: "--audio-stg-scale", label: "Audio STG", kind: .number,
+                defaultValue: "1.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
+            ),
+            .init(
+                flag: "--audio-guidance-rescale", label: "Audio rescale", kind: .number,
+                defaultValue: "0.7", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.05)
+            ),
+            .init(
+                flag: "--audio-stg-block", label: "Audio STG block", kind: .integer, repeatable: true,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
+            ),
+            .init(
+                flag: "--audio-guidance-skip-step", label: "Audio guidance skip", kind: .integer,
+                defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 1)
+            ),
+            .init(flag: "--no-res2s-bong-math", label: "Disable Res2s anchor refinement", kind: .boolean, group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--res2s-bong-max-iterations", label: "Res2s iterations", kind: .integer,
+                defaultValue: "100", group: Group.sampling, tier: .expert, range: .init(min: 1, max: 1_000, step: 1)
+            ),
+            .init(
+                flag: "--gradient-estimation-gamma", label: "Gradient estimate gamma", kind: .number,
+                defaultValue: "2.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
+            ),
+            .init(flag: "--image", label: "Start image", kind: .file, group: Group.inputs, tier: .essential),
+            .init(
+                flag: "--image-strength", label: "Start image strength", kind: .number,
+                defaultValue: "1.0", group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05), dependsOn: "--image"
+            ),
+            .init(flag: "--end-image", label: "End image", kind: .file, group: Group.inputs, tier: .standard, dependsOn: "--image"),
+            .init(
+                flag: "--end-image-strength", label: "End image strength", kind: .number,
+                defaultValue: "1.0", group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05), dependsOn: "--end-image"
+            ),
+            .init(
+                flag: "--image-conditioning", label: "Timed image guide", kind: .string, repeatable: true,
+                group: Group.inputs, tier: .expert
+            ),
+            .init(
+                flag: "--num-generated-keyframes", label: "Generated keyframe count", kind: .integer,
+                defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 1)
+            ),
+            .init(
+                flag: "--generated-keyframe", label: "Generated keyframe", kind: .integer, repeatable: true,
+                group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
+            ),
+            .init(flag: "--lora", label: "LTX LoRA", kind: .string, repeatable: true, group: Group.modelAndAdapters, tier: .standard),
+            .init(
+                flag: "--video-conditioning", label: "IC-LoRA reference video", kind: .string, repeatable: true,
+                group: Group.inputs, tier: .expert
+            ),
+            .init(
+                flag: "--conditioning-attention-strength", label: "Reference attention", kind: .number,
+                defaultValue: "1.0", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 1, step: 0.05),
+                dependsOn: "--video-conditioning"
+            ),
+            .init(
+                flag: "--conditioning-attention-mask", label: "Reference attention mask", kind: .file,
+                group: Group.inputs, tier: .expert, dependsOn: "--video-conditioning"
+            ),
+            .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--reference-downscale-factor", label: "Reference spatial scale", kind: .integer,
+                group: Group.inputs, tier: .expert, range: .init(min: 1, max: 8, step: 1), dependsOn: "--video-conditioning"
+            ),
+            .init(
+                flag: "--reference-temporal-scale-factor", label: "Reference temporal scale", kind: .integer,
+                group: Group.inputs, tier: .expert, range: .init(min: 1, max: 8, step: 1), dependsOn: "--video-conditioning"
+            ),
+            .init(flag: "--dfr", label: "Diffusion fidelity rendering", kind: .boolean, group: Group.sampling, tier: .expert),
+            .init(
+                flag: "--temporal-upsample-rounds", label: "Temporal refinement rounds", kind: .integer,
+                defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 2, step: 1), dependsOn: "--dfr"
+            ),
+            .init(
+                flag: "--detailing-lora", label: "Detailing IC-LoRA", kind: .string, repeatable: true,
+                group: Group.modelAndAdapters, tier: .expert, dependsOn: "--dfr"
+            ),
+            .init(
+                flag: "--detailing-reference-downscale-factor", label: "Detail reference scale", kind: .integer,
+                group: Group.modelAndAdapters, tier: .expert, range: .init(min: 1, max: 8, step: 1), dependsOn: "--dfr"
+            ),
+            .init(flag: "--reference", label: "Ordered H3 reference", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--json", label: "JSON", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
+            .init(flag: "--timings", label: "Timings", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--timings-output", label: "Timings output", kind: .file, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            progressJSONOption,
+            receiptOption
         ],
         output: .init(kind: .file, fileExtension: "mp4")
     )
@@ -2271,19 +2939,42 @@ public enum MereRunCapabilityCatalog {
             .init(name: "text", label: "Text", kind: .string, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Output", kind: .file, required: true),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--voice", label: "Voice", kind: .string),
-            .init(flag: "--mode", label: "Mode", kind: .choice, choices: ["style", "clone"]),
-            .init(flag: "--profile", label: "Profile", kind: .string),
-            .init(flag: "--ref-audio", label: "Reference audio", kind: .file),
-            .init(flag: "--ref-text", label: "Reference text", kind: .string),
-            .init(flag: "--language", label: "Language", kind: .string),
-            .init(flag: "--save-profile", label: "Save profile", kind: .string),
-            .init(flag: "--temperature", label: "Temperature", kind: .number),
-            .init(flag: "--stream", label: "Stream", kind: .boolean),
-            .init(flag: "--stream-chunk-tokens", label: "Chunk tokens", kind: .integer),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--output", label: "Output", kind: .file, required: true, group: Group.output, tier: .essential),
+            .init(
+                flag: "--model", label: "Model", kind: .string,
+                defaultValue: "speech-tts-qwen3-nano", group: Group.modelAndAdapters, tier: .essential
+            ),
+            .init(
+                flag: "--voice", label: "Voice", kind: .string,
+                defaultValue: "A calm female voice with clear pronunciation", group: Group.prompt, tier: .essential
+            ),
+            .init(
+                flag: "--mode", label: "Mode", kind: .choice, choices: ["style", "clone"],
+                defaultValue: "style", group: Group.inputs, tier: .standard
+            ),
+            .init(flag: "--profile", label: "Profile", kind: .string, group: Group.inputs, tier: .standard),
+            .init(flag: "--ref-audio", label: "Reference audio", kind: .file, group: Group.inputs, tier: .standard),
+            .init(
+                flag: "--ref-text", label: "Reference text", kind: .string,
+                group: Group.inputs, tier: .standard, dependsOn: "--ref-audio"
+            ),
+            .init(flag: "--language", label: "Language", kind: .string, defaultValue: "auto", group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--save-profile", label: "Save profile", kind: .string,
+                group: Group.inputs, tier: .expert, dependsOn: "--ref-audio"
+            ),
+            .init(
+                flag: "--temperature", label: "Temperature", kind: .number,
+                defaultValue: "0.6", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
+            ),
+            .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .expert),
+            .init(
+                flag: "--stream-chunk-tokens", label: "Chunk tokens", kind: .integer,
+                defaultValue: "25", group: Group.output, tier: .expert, range: .init(min: 1, max: 500, step: 1), dependsOn: "--stream"
+            ),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            progressJSONOption,
+            receiptOption
         ],
         output: .init(kind: .file, fileExtension: "wav")
     )
@@ -2297,20 +2988,42 @@ public enum MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen"]),
-            .init(flag: "--task", label: "Task", kind: .choice, choices: ["transcribe", "translate"]),
-            .init(flag: "--language", label: "Language", kind: .string),
-            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
-            .init(flag: "--stream", label: "Stream", kind: .boolean),
-            .init(flag: "--stream-chunk-ms", label: "Feed interval", kind: .integer),
-            .init(flag: "--stream-decode-ms", label: "Decode interval", kind: .integer),
-            .init(flag: "--input-format", label: "Input format", kind: .string),
-            .init(flag: "--sample-rate", label: "Sample rate", kind: .integer),
-            .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean),
-            .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
+            .init(
+                flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen"],
+                defaultValue: "auto", group: Group.modelAndAdapters, tier: .essential
+            ),
+            .init(
+                flag: "--task", label: "Task", kind: .choice, choices: ["transcribe", "translate"],
+                defaultValue: "transcribe", group: Group.prompt, tier: .essential
+            ),
+            .init(flag: "--language", label: "Language", kind: .string, group: Group.prompt, tier: .standard),
+            .init(
+                flag: "--max-tokens", label: "Max tokens", kind: .integer,
+                defaultValue: "448", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8_192, step: 1)
+            ),
+            .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.run, tier: .expert),
+            .init(
+                flag: "--stream-chunk-ms", label: "Feed interval", kind: .integer,
+                defaultValue: "200", group: Group.run, tier: .expert, range: .init(min: 10, max: 5_000, step: 10), dependsOn: "--stream"
+            ),
+            .init(
+                flag: "--stream-decode-ms", label: "Decode interval", kind: .integer,
+                defaultValue: "2000", group: Group.run, tier: .expert, range: .init(min: 100, max: 10_000, step: 100), dependsOn: "--stream"
+            ),
+            .init(flag: "--input-format", label: "Input format", kind: .string, group: Group.inputs, tier: .expert, dependsOn: "--stream"),
+            // Raw stdin protocol v1 accepts exactly 16 kHz, so the range pins
+            // the single value a shell may send rather than a span.
+            .init(
+                flag: "--sample-rate", label: "Sample rate", kind: .integer,
+                group: Group.inputs, tier: .expert, range: .init(min: 16_000, max: 16_000, step: 1),
+                dependsOn: "--stream"
+            ),
+            .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream"),
+            .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean, group: Group.output, tier: .standard),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            receiptOption
         ],
         output: .init(kind: .file)
     )
@@ -2379,15 +3092,29 @@ public enum MereRunCapabilityCatalog {
             .init(name: "prompt", label: "Prompt", kind: .string, required: true)
         ],
         options: [
-            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--duration", label: "Duration", kind: .number),
-            .init(flag: "--steps", label: "Steps", kind: .integer),
-            .init(flag: "--cfg", label: "CFG", kind: .number),
-            .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--renoise", label: "Renoise", kind: .string),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(
+                flag: "--model", label: "Model", kind: .string,
+                defaultValue: "sfx-woosh-dflow", group: Group.modelAndAdapters, tier: .essential
+            ),
+            .init(
+                flag: "--duration", label: "Duration", kind: .number,
+                group: Group.sampling, tier: .essential, range: .init(min: 0.5, max: 30, step: 0.5)
+            ),
+            .init(
+                flag: "--steps", label: "Steps", kind: .integer,
+                group: Group.sampling, tier: .standard, range: .init(min: 1, max: 100, step: 1)
+            ),
+            .init(
+                flag: "--cfg", label: "CFG", kind: .number,
+                defaultValue: "4.5", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.1)
+            ),
+            .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
+            .init(flag: "--renoise", label: "Renoise", kind: .string, group: Group.sampling, tier: .expert),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            progressJSONOption,
+            receiptOption
         ],
         output: .init(kind: .file, fileExtension: "wav")
     )

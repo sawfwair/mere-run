@@ -8,6 +8,18 @@ import MereRunCore
 
 // MARK: - Speech Synthesize Command
 
+/// The one non-streaming synthesis call `speech synthesize` makes, so a test
+/// can substitute a fixture generator for Qwen3-TTS.
+protocol CLISpeechSynthesizing {
+    func generate(
+        _ request: TTSRequest,
+        modelPath: String?,
+        progressHandler: (@Sendable (TTSProgress) -> Void)?
+    ) async throws -> TTSResult
+}
+
+extension Qwen3TTSGenerator: CLISpeechSynthesizing {}
+
 enum TalkModeOption: String, ExpressibleByArgument {
     case style
     case clone
@@ -69,6 +81,20 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress progress output).")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(CLIGenerationProgressPrinter.flagName)], help: CLIGenerationProgressPrinter.flagHelp)
+    var progressJson: Bool = false
+
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
+    /// Test seam: replaces the Qwen3-TTS generator on the non-streaming path so
+    /// the command's output contract can be exercised without a model. Setting
+    /// it also skips the Metal bundle check, which the fixture does not need.
+    /// Tests set and clear it around one `run()`; the CLI never touches it.
+    nonisolated(unsafe) static var synthesizerOverride: (any CLISpeechSynthesizing)?
+
+    private var synthesizer: (any CLISpeechSynthesizing)? { Self.synthesizerOverride }
+
     func run() async throws {
         if stream {
             guard streamChunkTokens > 0 else {
@@ -76,7 +102,9 @@ struct SpeechSynthesize: AsyncParsableCommand {
             }
         }
 
-        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        if synthesizer == nil {
+            try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        }
         let outputURL = URL(fileURLWithPath: output).standardizedFileURL
 
         // Ensure output directory exists
@@ -84,22 +112,30 @@ struct SpeechSynthesize: AsyncParsableCommand {
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
 
         let modelSelection = try resolveModelSelection()
-        let generator = Qwen3TTSGenerator(modelId: modelSelection.modelId)
+        let qwenGenerator = Qwen3TTSGenerator(modelId: modelSelection.modelId)
         let profileStore = VoiceProfileStore()
 
         let request = try await buildRequest(outputURL: outputURL, profileStore: profileStore)
 
         if stream {
-            try await runStreaming(request: request, generator: generator, modelPath: modelSelection.modelPath)
+            try await runStreaming(request: request, generator: qwenGenerator, modelPath: modelSelection.modelPath)
             return
         }
+        let generator: any CLISpeechSynthesizing = synthesizer ?? qwenGenerator
 
         if !quiet {
             FileHandle.standardError.write(Data("Generating speech with native Qwen3-TTS...\n".utf8))
         }
 
         let progressHandler: (@Sendable (TTSProgress) -> Void)?
-        if quiet {
+        if progressJson {
+            // Qwen3-TTS reports stage changes and a running token count with no
+            // known total, so every event is indeterminate (`total_steps: 0`).
+            let progressStream = JSONProgressStream()
+            progressHandler = { progress in
+                progressStream.report(stage: progress.stage.rawValue, step: progress.tokensGenerated, totalSteps: 0)
+            }
+        } else if quiet {
             progressHandler = nil
         } else {
             progressHandler = { progress in
@@ -127,6 +163,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
         }
 
         print(result.audioURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: result.audioURL), enabled: receipt)
     }
 
     private func runStreaming(
@@ -150,15 +187,20 @@ struct SpeechSynthesize: AsyncParsableCommand {
         var writer: StreamingWAVWriter?
         var tokenCount = 0
         var result: TTSResult?
+        let progressStream = progressJson ? JSONProgressStream() : nil
 
         for try await event in stream {
             switch event {
             case .token:
                 tokenCount += 1
-                if !quiet && tokenCount % 25 == 0 {
-                    FileHandle.standardError.write(
-                        Data("[generating] \(tokenCount) tokens\n".utf8)
-                    )
+                if tokenCount % 25 == 0 {
+                    if let progressStream {
+                        progressStream.report(stage: TTSStage.generating.rawValue, step: tokenCount, totalSteps: 0)
+                    } else if !quiet {
+                        FileHandle.standardError.write(
+                            Data("[generating] \(tokenCount) tokens\n".utf8)
+                        )
+                    }
                 }
 
             case .audioChunk(let samples, let sampleRate):
@@ -183,6 +225,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
         }
 
         print(result.audioURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: result.audioURL), enabled: receipt)
     }
 
     private func buildRequest(

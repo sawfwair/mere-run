@@ -5,8 +5,8 @@ import Testing
 
 @testable import MereRunCLI
 
-@Test func capabilityFlagsMatchArgumentParserHelp() {
-    let helpByID: [String: String] = [
+private func capabilityHelpMessages() -> [String: String] {
+    [
         "text.chat": TextChat.helpMessage(),
         "text.code": TextCode.helpMessage(),
         "text.embed": TextEmbed.helpMessage(),
@@ -135,6 +135,10 @@ import Testing
         "speech.listen": SpeechListen.helpMessage(),
         "vision.serve": VisionServe.helpMessage()
     ]
+}
+
+@Test func capabilityFlagsMatchArgumentParserHelp() {
+    let helpByID = capabilityHelpMessages()
 
     for capability in MereRunCapabilityCatalog.document.commands {
         let help = helpByID[capability.id]
@@ -169,6 +173,56 @@ private let exactCapabilityOptionIDs: Set<String> = [
     "model.benchmark.gemma4-mtp", "model.benchmark.api-workload",
     "plugin.info", "plugin.run", "plugin.rollback", "speech.listen", "vision.serve"
 ]
+
+/// Every `default_value` the contract advertises must be the default
+/// ArgumentParser renders in `--help`, so a CLI default change that forgets the
+/// contract fails here instead of drifting into the shells' forms.
+@Test func capabilityDefaultValuesMatchArgumentParserHelp() {
+    let helpByID = capabilityHelpMessages()
+
+    for capability in MereRunCapabilityCatalog.document.commands {
+        guard let help = helpByID[capability.id] else { continue }
+        for option in capability.options {
+            guard let defaultValue = option.defaultValue else { continue }
+            let block = helpBlock(for: option.flag, in: help)
+            #expect(block != nil, "\(capability.id) \(option.flag) is missing from the CLI help")
+            // ArgumentParser renders `(default: x)` for plain options and
+            // `(values: a, b; default: x)` for enum-backed ones.
+            #expect(
+                block?.contains("default: \(defaultValue))") == true,
+                "\(capability.id) \(option.flag) declares default \(defaultValue) but the CLI help says: \(block ?? "")"
+            )
+        }
+    }
+}
+
+/// The help text for one option: its `  --flag ...` line plus the wrapped
+/// continuation lines up to the next option or section, re-flowed onto one
+/// line so wrapped `(default: …)` clauses can be matched.
+private func helpBlock(for flag: String, in help: String) -> String? {
+    let lines = help.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    guard let start = lines.firstIndex(where: { line in
+        guard line.hasPrefix("  -") else { return false }
+        for token in line.trimmingCharacters(in: .whitespaces).split(whereSeparator: \.isWhitespace) {
+            guard token.hasPrefix("-") else { break }
+            for alias in token.split(whereSeparator: { $0 == "," || $0 == "/" }) {
+                let name = alias.prefix { $0 == "-" || $0.isLetter || $0.isNumber }
+                if name == flag { return true }
+            }
+        }
+        return false
+    }) else { return nil }
+
+    var block = [lines[start]]
+    for line in lines[(start + 1)...] {
+        guard line.hasPrefix(" "), !line.hasPrefix("  -") else { break }
+        block.append(line)
+    }
+    return block
+        .joined(separator: " ")
+        .split(whereSeparator: \.isWhitespace)
+        .joined(separator: " ")
+}
 
 private func longOptionFlags(in help: String) -> Set<String> {
     Set(help.split(separator: "\n").flatMap { line -> [String] in
