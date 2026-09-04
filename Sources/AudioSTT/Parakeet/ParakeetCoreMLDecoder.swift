@@ -123,12 +123,7 @@ final class ParakeetCoreMLDecoder: ParakeetExternalTDTDecoder {
             ]
 
             let prediction = try model.prediction(from: inputs, options: predictionOptions)
-            guard prediction.featureValue(for: manifest.tokenOutputName)?.multiArrayValue != nil,
-                  prediction.featureValue(for: manifest.durationOutputName)?.multiArrayValue != nil,
-                  prediction.featureValue(for: manifest.hiddenOutputName)?.multiArrayValue != nil,
-                  prediction.featureValue(for: manifest.cellOutputName)?.multiArrayValue != nil else {
-                throw ParakeetCoreMLError.missingOutput("Core ML decoder output")
-            }
+            let output = try ParakeetCoreMLDecoderOutput(prediction: prediction, manifest: manifest)
 
             for lane in 0..<batch {
                 let maxLength = min(lengths[lane], encoded.dim(1))
@@ -139,13 +134,8 @@ final class ParakeetCoreMLDecoder: ParakeetExternalTDTDecoder {
 
                 while cursors[lane] < windowEnd {
                     let row = cursors[lane] - windowStart
-                    let outputIndex = lane * manifest.windowFrames + row
-                    let predictedToken = Int(
-                        tokenOutput.dataPointer.assumingMemoryBound(to: Int32.self)[outputIndex]
-                    )
-                    let decisionIndex = Int(
-                        durationOutput.dataPointer.assumingMemoryBound(to: Int32.self)[outputIndex]
-                    )
+                    let predictedToken = output.token(lane: lane, frame: row)
+                    let decisionIndex = output.duration(lane: lane, frame: row)
                     let clampedDecision = min(max(0, decisionIndex), max(0, durations.count - 1))
                     let durationSteps = max(0, durations[clampedDecision])
 
@@ -164,12 +154,12 @@ final class ParakeetCoreMLDecoder: ParakeetExternalTDTDecoder {
                         lastTokens[lane] = predictedToken
                         copyStateLane(
                             lane,
-                            from: nextHidden,
+                            from: output.hidden,
                             to: hiddenState
                         )
                         copyStateLane(
                             lane,
-                            from: nextCell,
+                            from: output.cell,
                             to: cellState
                         )
                         emitted = true
@@ -263,15 +253,7 @@ final class ParakeetCoreMLDecoder: ParakeetExternalTDTDecoder {
         from source: MLMultiArray,
         to destination: MLMultiArray
     ) {
-        let sourcePointer = source.dataPointer.assumingMemoryBound(to: UInt16.self)
-        let destinationPointer = destination.dataPointer.assumingMemoryBound(to: UInt16.self)
-        for layer in 0..<manifest.layers {
-            let offset = (layer * manifest.lanes + lane) * manifest.hiddenSize
-            destinationPointer.advanced(by: offset).update(
-                from: sourcePointer.advanced(by: offset),
-                count: manifest.hiddenSize
-            )
-        }
+        ParakeetCoreMLDecoderOutput.copyStateLane(lane, from: source, to: destination)
     }
 
     private func zero(_ array: MLMultiArray) {

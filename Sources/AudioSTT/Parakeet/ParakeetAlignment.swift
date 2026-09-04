@@ -142,20 +142,35 @@ public enum ParakeetAlignment {
         _ b: [ParakeetAlignedToken],
         overlapDuration: TimeInterval
     ) -> [ParakeetAlignedToken] {
+        mergeLongestCommonSubsequence(a, b, overlapDuration: overlapDuration, windowOverlap: nil)
+    }
+
+    static func mergeLongestCommonSubsequence(
+        _ a: [ParakeetAlignedToken],
+        _ b: [ParakeetAlignedToken],
+        overlapDuration: TimeInterval,
+        windowOverlap: Range<TimeInterval>?
+    ) -> [ParakeetAlignedToken] {
         guard !a.isEmpty else { return b }
         guard !b.isEmpty else { return a }
 
         let aEnd = a[a.count - 1].end
         let bStart = b[0].start
-        if aEnd < bStart {
+        // TDT token durations can be zero. A gap between decoded timestamps
+        // does not establish a gap between the underlying audio windows.
+        if windowOverlap == nil, aEnd < bStart {
             return a + b
         }
 
-        let overlapA = a.filter { $0.end > bStart - overlapDuration }
-        let overlapB = b.filter { $0.start < aEnd + overlapDuration }
+        let overlapA = windowOverlap.map { overlap in
+            Array(a.drop { $0.end < overlap.lowerBound })
+        } ?? a.filter { $0.end > bStart - overlapDuration }
+        let overlapB = windowOverlap.map { overlap in
+            Array(b.prefix { $0.start < overlap.upperBound })
+        } ?? b.filter { $0.start < aEnd + overlapDuration }
 
         if overlapA.isEmpty || overlapB.isEmpty {
-            return midpointMerge(a, b, aEnd: aEnd, bStart: bStart)
+            return unmatchedMerge(a, b, aEnd: aEnd, bStart: bStart, windowOverlap: windowOverlap)
         }
 
         var dp = Array(
@@ -192,7 +207,7 @@ public enum ParakeetAlignment {
 
         pairs.reverse()
         guard !pairs.isEmpty else {
-            return midpointMerge(a, b, aEnd: aEnd, bStart: bStart)
+            return unmatchedMerge(a, b, aEnd: aEnd, bStart: bStart, windowOverlap: windowOverlap)
         }
 
         return stitchMerge(a, b, overlapA: overlapA, overlapPairs: pairs)
@@ -272,6 +287,23 @@ public enum ParakeetAlignment {
     ) -> [ParakeetAlignedToken] {
         let cutoff = (aEnd + bStart) / 2
         return a.filter { $0.end <= cutoff } + b.filter { $0.start >= cutoff }
+    }
+
+    private static func unmatchedMerge(
+        _ a: [ParakeetAlignedToken],
+        _ b: [ParakeetAlignedToken],
+        aEnd: TimeInterval,
+        bStart: TimeInterval,
+        windowOverlap: Range<TimeInterval>?
+    ) -> [ParakeetAlignedToken] {
+        guard let windowOverlap else {
+            return midpointMerge(a, b, aEnd: aEnd, bStart: bStart)
+        }
+        if aEnd < bStart { return a + b }
+        let cutoff = (windowOverlap.lowerBound + windowOverlap.upperBound) / 2
+        // Assign both windows by token start so a token spanning the cutoff
+        // isn't excluded from both halves.
+        return a.filter { $0.start < cutoff } + b.filter { $0.start >= cutoff }
     }
 
     private static func isSentenceBoundary(tokenText: String, nextTokenText: String?) -> Bool {

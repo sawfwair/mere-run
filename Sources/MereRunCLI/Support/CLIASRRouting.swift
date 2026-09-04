@@ -1,3 +1,4 @@
+import ArgumentParser
 import Foundation
 import AudioCore
 import AudioSTT
@@ -73,6 +74,14 @@ enum CLIASRRouting {
             availableBackends: availability,
             parakeetSupportedLanguageCodes: parakeetCodes
         )
+
+        if case .coreML = parakeetExecutionProvider, decision.backend != .parakeet {
+            throw ValidationError(
+                "--provider coreml requires a Parakeet-compatible transcription request. "
+                    + "This request routes to Qwen (\(decision.reason)); "
+                    + "use --backend qwen without --provider coreml or --coreml-encoder."
+            )
+        }
 
         switch decision.backend {
         case .qwen:

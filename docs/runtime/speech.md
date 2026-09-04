@@ -105,6 +105,10 @@ mere.run speech transcribe ./short.wav \
   --coreml-encoder /path/to/parakeet-coreml
 ```
 
+An explicit Core ML request fails if its language hint would route to Qwen.
+To use Qwen, select `--backend qwen` and omit `--provider coreml` and
+`--coreml-encoder`.
+
 The converter downloads NVIDIA's exact
 `nvidia/parakeet-tdt-0.6b-v3` revision
 `541d1f99c6b0c3cd0b11a95167540bb8edefd82b`, verifies the source file sizes and

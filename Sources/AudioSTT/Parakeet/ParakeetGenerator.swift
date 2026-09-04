@@ -256,7 +256,8 @@ public actor ParakeetGenerator: ASRGenerator {
                 mergedTokens = ParakeetAlignment.mergeLongestCommonSubsequence(
                     mergedTokens,
                     shifted,
-                    overlapDuration: ParakeetCoreMLWindowing.overlapSeconds
+                    overlapDuration: ParakeetCoreMLWindowing.overlapSeconds,
+                    windowOverlap: timeOffset..<(timeOffset + ParakeetCoreMLWindowing.overlapSeconds)
                 )
                 timings.windowMergeSeconds += ParakeetMonotonicClock.seconds(since: mergeStarted)
             }

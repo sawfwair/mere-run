@@ -455,7 +455,7 @@ targets.append(contentsOf: [
       "Sortformer/README.md"
     ],
     swiftSettings: commonSwiftSettings,
-    linkerSettings: [
+    linkerSettings: isLinuxPackage ? [] : [
       .linkedFramework("CoreML", .when(platforms: [.macOS, .iOS]))
     ]
   ),
