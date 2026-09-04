@@ -59,11 +59,31 @@ and the Guide). `StudioDestination` (domain + task) persists per window under
 draft and readiness survive a detour through a System task.
 
 The Library column appears in the domains that have a prompt mode (Image, Video,
-Music, Sound, Voice, Chat, Vision, Audio); the form- and list-shaped domains use
+Music, Sound, Voice, Vision, Audio); the form- and list-shaped domains use
 the full width. It is filtered to the current domain by default with an All
 segment — a row is filed under its command's domain (`CommandTemplateID.studioDomain`),
 so 3D meshes land under 3D and benchmark reports under Models — and picking a
 row from another domain switches the destination to it.
+
+**Chat** is the Converse archetype (`StudioConversationView.swift`,
+`StudioThreadList.swift`). A **thread list** replaces the Library column there —
+every chat and code thread, searchable, grouped Today / Earlier, with a compose
+button (⌘N) — and threads never appear in the media Library. The thread header
+carries the title, the model chip (the same filtered picker as the composer,
+`StudioModelPicker.swift`), and a "System" chip that edits the system prompt in a
+popover; changing either applies from the next turn, and every assistant turn
+records the model, system prompt, and decode speed it ran with
+(`StudioMessage.model` / `.systemPrompt` / `.tokensPerSecond`, additive optionals
+in `library.json`). Under a reply: Copy, Retry, Branch, and "model · tok/s ·
+time". Editing a user turn truncates the thread as before, or **Branch** starts
+a new thread from that point (before a user turn, after an assistant turn). The
+task control's **Code** is a preset inside the same thread list — the
+`text code` command, its default model and system prompt, monospaced code
+blocks with proportional prose — and a thread records which preset its latest
+turn used (`mode`). While a reply streams, the composer's Send circle becomes
+Stop for that thread. The transcript budget derives from the model's context
+window when the inventory reports one (or an explicit context size), else stays
+at 48k characters; a banner reports any turns trimmed from the next prompt.
 
 The **composer** under the canvas is one surface for every prompt mode
 (`StudioComposer.swift`, declarations in `StudioComposerSchema.swift`). An

@@ -205,9 +205,17 @@ struct StudioRootView: View {
     private var detailArea: some View {
         HStack(spacing: 0) {
             if showsLibraryColumn {
-                libraryColumn
-                    .frame(width: StudioLayoutPolicy.libraryWidth)
-                    .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
+                Group {
+                    // Converse keeps its threads in their own column; they never file into
+                    // the media Library.
+                    if destination.domain == .chat {
+                        threadListColumn
+                    } else {
+                        libraryColumn
+                    }
+                }
+                .frame(width: StudioLayoutPolicy.libraryWidth)
+                .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
 
                 Divider()
                     .overlay(MereRunTheme.border.opacity(0.53))
@@ -255,7 +263,7 @@ struct StudioRootView: View {
 
     private var libraryColumn: some View {
         StudioLibraryPanel(
-            items: library.items,
+            items: StudioThreadListPresenter.mediaItems(in: library.items),
             domain: destination.domain,
             scope: $libraryScope,
             progressByID: controller.progressByRequestID,
@@ -266,6 +274,18 @@ struct StudioRootView: View {
             onQuickLook: { QuickLookCoordinator.shared.preview($0) },
             onRetry: retryLibraryItem,
             onEdit: editLibraryItem,
+            leadingInset: windowChromeInset
+        )
+    }
+
+    private var threadListColumn: some View {
+        StudioThreadList(
+            items: library.items,
+            selectedID: activeConversationID,
+            onSelect: openThread,
+            onNewThread: startNewConversation,
+            onDelete: deleteLibraryItem,
+            onRename: library.rename,
             leadingInset: windowChromeInset
         )
     }
@@ -514,7 +534,11 @@ struct StudioRootView: View {
 
     private var promptWorkspace: some View {
         VStack(spacing: 0) {
-            canvas
+            if mode.isConversational {
+                converseSurface
+            } else {
+                canvas
+            }
 
             composer
         }
@@ -590,20 +614,58 @@ struct StudioRootView: View {
         )
     }
 
+    /// The Converse archetype: thread header, transcript, and readiness in place of the canvas.
+    private var converseSurface: some View {
+        StudioConverseView(
+            mode: mode,
+            item: activeConversationItem,
+            liveText: activeConversationLiveText,
+            isRunning: activeConversationRunning,
+            readiness: readiness,
+            error: studioError,
+            budgetChars: conversationBudgetChars,
+            modelInventory: modelInventory,
+            model: $draft.model,
+            systemPrompt: $draft.secondaryText,
+            onPullModel: pullModel,
+            onShowDetails: { openConsole() },
+            onShowModels: { navigation.open(task: .modelsInstalled) },
+            onCopy: copyToClipboard,
+            onRetry: retryLastTurn,
+            onEdit: editMessage,
+            onBranch: branchFromMessage,
+            onUseExample: useExamplePrompt
+        )
+    }
+
+    /// The history budget for the next turn: sized from the model's context window when the
+    /// inventory (or an explicit context size) reports one, else the fixed default.
+    private var conversationBudgetChars: Int {
+        ConversationTranscript.budgetChars(
+            contextTokens: ConversationTranscript.contextTokens(
+                requestedContextSize: draft.contextSize,
+                model: StudioModelPicker.resolvedModelID(draft.model, mode: mode),
+                inventory: modelInventory
+            ),
+            maxOutputTokens: draft.maxTokens
+        )
+    }
+
     private var composer: some View {
         StudioComposer(
             mode: mode,
             draft: $draft,
             showOptions: $showOptions,
-            isRunning: controller.isRunning,
+            // A streaming thread turns Send into Stop for that thread; other domains follow
+            // the foreground run.
+            isRunning: mode.isConversational ? activeConversationRunning : controller.isRunning,
             queuedCount: controller.queuedRunCount,
             readiness: readiness,
-            sendBlocked: mode.isConversational && activeConversationRunning,
             modelInventory: modelInventory,
             lastSeed: lastSeed,
             promptFocus: $promptFocused,
             onRun: runStudioCommand,
-            onStop: controller.cancel,
+            onStop: stopCurrentRun,
             onShowModels: { navigation.open(task: .modelsInstalled) },
             onShowAdapters: {
                 showOptions = false
@@ -677,8 +739,8 @@ struct StudioRootView: View {
             runComposer: runStudioCommand,
             canRun: showsPromptWorkspace && !readiness.blocksRun
                 && !(mode.isConversational && activeConversationRunning),
-            stop: controller.cancel,
-            canStop: controller.isRunning,
+            stop: stopCurrentRun,
+            canStop: controller.isRunning || (mode.isConversational && activeConversationRunning),
             openConsole: { openConsole() },
             showGuide: { navigation.showGuide = true },
             importReceipt: importReceipt
@@ -735,12 +797,17 @@ struct StudioRootView: View {
             refreshReadiness()
         }
         .onChange(of: navigation.selectedLibraryID) { _, id in
-            // Selecting a thread of the current conversation mode opens it in the canvas.
+            // A thread selected while Converse is shown (a deep link, or the list) opens in the
+            // transcript; a thread of the other preset switches the task control to match.
             guard mode.isConversational,
                   let id,
                   let item = library.items.first(where: { $0.id == id }),
-                  item.isConversation, item.mode == mode,
+                  item.isConversation,
                   id != activeConversationID else { return }
+            guard item.mode == mode else {
+                navigation.open(task: item.mode.task)
+                return
+            }
             activeConversationID = id
             applyConversationSettings(from: item, to: &draft)
             draft.prompt = ""
@@ -789,10 +856,19 @@ struct StudioRootView: View {
             // Conversation turns append the assistant reply to the thread instead of taking the
             // single-shot completion path.
             if let conversationID = result.conversationID {
+                // The turn records what it actually ran with (the job's own command snapshot),
+                // so a thread whose model or system prompt changed mid-way says which turn used what.
+                let job = result.requestID.flatMap { controller.jobs.job(requestID: $0) }
+                let turnDraft = job?.request.draft
                 library.appendAssistant(
                     conversationID: conversationID,
                     content: conversationReplyContent(for: result),
-                    exitCode: result.exitCode
+                    exitCode: result.exitCode,
+                    model: turnDraft.map(\.model).flatMap { $0.isBlank ? nil : $0 },
+                    systemPrompt: turnDraft.map(\.secondaryText).flatMap { $0.isBlank ? nil : $0 },
+                    tokensPerSecond: job.flatMap {
+                        ConversationTranscript.decodeTokensPerSecond(in: $0.log.lines.map(\.text))
+                    }
                 )
                 // Only follow selection if this is the thread the user is currently viewing — a
                 // background turn completing must not yank selection away from the foreground.
@@ -859,14 +935,29 @@ struct StudioRootView: View {
             library.items.first { $0.id == id && $0.mode == newMode }
         }
         if newMode.isConversational {
-            // Open the picked or most recent thread for this mode (or a fresh one) and reuse its
-            // system/model so follow-ups match; the composer starts empty.
-            let thread = preferred?.isConversation == true
-                ? preferred
-                : library.items.first { $0.mode == newMode && $0.isConversation }
-            activeConversationID = thread?.id
-            navigation.selectedLibraryID = thread?.id
-            if let thread { applyConversationSettings(from: thread, to: &nextDraft) }
+            if let preferred, preferred.isConversation {
+                // A thread the user picked: open it and reuse its system/model so follow-ups match.
+                activeConversationID = preferred.id
+                applyConversationSettings(from: preferred, to: &nextDraft)
+            } else if let current = activeConversationItem {
+                // Chat ↔ Code is a preset change, not a thread change: keep the thread open and
+                // apply the preset's defaults (its command, model, and system prompt) to the
+                // next turn.
+                navigation.selectedLibraryID = current.id
+            } else if let recent = StudioThreadListPresenter.threads(in: library.items).first {
+                // Arriving fresh: open the most recent thread of either preset. One of the other
+                // preset re-enters here through the task control with it selected.
+                activeConversationID = recent.id
+                navigation.selectedLibraryID = recent.id
+                if recent.mode != newMode {
+                    navigation.open(task: recent.mode.task)
+                    return
+                }
+                applyConversationSettings(from: recent, to: &nextDraft)
+            } else {
+                activeConversationID = nil
+                navigation.selectedLibraryID = nil
+            }
             nextDraft.prompt = ""
         } else {
             activeConversationID = nil
@@ -885,9 +976,26 @@ struct StudioRootView: View {
         navigation.open(destination: item.mode.destination)
     }
 
+    /// A thread picked in the Converse list. Threads of the other preset switch the task first
+    /// (the selection observer then opens the thread); same-preset threads open directly.
+    private func openThread(_ thread: StudioLibraryItem) {
+        guard thread.id != activeConversationID else { return }
+        navigation.selectedLibraryID = thread.id
+        guard thread.mode == mode else {
+            navigation.open(task: thread.mode.task)
+            return
+        }
+        activeConversationID = thread.id
+        applyConversationSettings(from: thread, to: &draft)
+        draft.prompt = ""
+        studioError = nil
+        promptFocused = true
+    }
+
     private func deleteLibraryItem(_ id: UUID) {
         library.delete(id: id)
         if navigation.selectedLibraryID == id { navigation.selectedLibraryID = nil }
+        if activeConversationID == id { activeConversationID = nil }
     }
 
     /// Opens the Command Console window with the composer's draft carried into the Advanced
@@ -992,12 +1100,15 @@ struct StudioRootView: View {
 
         let rendered = ConversationTranscript.render(
             messages: item.messages ?? [],
-            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
+            budgetChars: conversationBudgetChars
         )
 
         do {
             var runDraft = draft
             runDraft.prompt = rendered.prompt
+            // `--stats` reports the decode speed on stderr; the turn's meta line shows it.
+            runDraft.stats = true
             let request = try StudioCommandAdapter.makeRequest(
                 mode: mode, draft: runDraft, conversationID: conversationID
             )
@@ -1009,6 +1120,20 @@ struct StudioRootView: View {
             draft.inputPath = ""
         } catch {
             studioError = error.localizedDescription
+        }
+    }
+
+    /// Stops what the composer's Stop circle points at: the streaming turn of the open thread
+    /// in Converse, otherwise the foreground run.
+    private func stopCurrentRun() {
+        guard mode.isConversational, let conversationID = activeConversationID,
+              controller.runningConversationIDs.contains(conversationID) else {
+            controller.cancel()
+            return
+        }
+        for job in controller.jobs.all
+        where job.request.conversationID == conversationID && job.state.isActive {
+            controller.jobs.cancel(job.id)
         }
     }
 
@@ -1030,11 +1155,13 @@ struct StudioRootView: View {
         let systemPrompt = item.systemPrompt
         let rendered = ConversationTranscript.render(
             messages: item.messages ?? [],
-            systemPrompt: systemPrompt
+            systemPrompt: systemPrompt,
+            budgetChars: conversationBudgetChars
         )
         do {
             var runDraft = draft
             runDraft.prompt = rendered.prompt
+            runDraft.stats = true
             runDraft.secondaryText = systemPrompt ?? ""
             // Re-attach the image the last user turn carried (or none), not the cleared composer's.
             runDraft.inputPath = item.messages?.last?.imagePath ?? ""
@@ -1160,6 +1287,37 @@ struct StudioRootView: View {
             activeConversationID = nil
             navigation.selectedLibraryID = nil
         }
+    }
+
+    /// Branches a new thread at a turn. From a user turn: the thread up to (not including) that
+    /// turn, with its text loaded into the composer so the edit runs in the branch and the
+    /// original keeps its history. From an assistant turn: the thread through that reply.
+    private func branchFromMessage(_ messageID: UUID) {
+        guard let conversationID = activeConversationID,
+              !controller.runningConversationIDs.contains(conversationID),
+              let source = library.items.first(where: { $0.id == conversationID }),
+              let message = source.messages?.first(where: { $0.id == messageID }) else { return }
+        let inclusive = message.role == .assistant
+        guard let branch = library.branch(conversationID: conversationID, at: messageID, inclusive: inclusive) else {
+            return
+        }
+        if branch.messages?.isEmpty ?? true {
+            // Branching before the first turn is just a new thread carrying that prompt.
+            library.delete(id: branch.id)
+            startNewConversation()
+        } else {
+            activeConversationID = branch.id
+            navigation.selectedLibraryID = branch.id
+            applyConversationSettings(from: branch, to: &draft)
+        }
+        if message.role == .user {
+            draft.prompt = message.content
+            if mode == .chat { draft.inputPath = message.imagePath ?? "" }
+        } else {
+            draft.prompt = ""
+        }
+        studioError = nil
+        promptFocused = true
     }
 
     /// Starts a fresh, not-yet-persisted conversation (no library row until the first message).

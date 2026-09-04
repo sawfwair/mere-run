@@ -170,6 +170,55 @@ final class StudioSnapshotTests: XCTestCase {
         XCTAssertTrue(fixture.controller.canSteerRealtimeMusic(requestID: requestID))
     }
 
+    /// Chat at the mockup size with the Converse board's threads: the thread list with four
+    /// rows, the diffusion thread open (two user turns, a reply with a Python block, and a reply
+    /// streaming in), the model and system chips, and the composer's Stop circle. `model list`
+    /// and `model capabilities` are scripted so readiness is real; the turn's `text chat` is
+    /// held open by the process seam and fed its first words. Light, dark, and the default
+    /// window size.
+    func testConverseFidelitySnapshots() throws {
+        let directory = try XCTUnwrap(Self.snapshotDirectory())
+        fixture.tearDown()
+        fixture = try SnapshotFixture(
+            outputDirectory: directory,
+            seed: .converse,
+            processRunner: SnapshotProcessRunner(script: ConverseScript.responses)
+        )
+
+        var chat = StudioDraft()
+        chat.reset(for: .chat)
+        chat.model = SnapshotFixture.converseChatModelID
+        chat.thinkingMode = .hide
+
+        let renders: [(name: String, size: CGSize, appearance: StudioSnapshotAppearance)] = [
+            ("f5-converse-light", Self.fidelitySize, .light),
+            ("f5-converse-dark", Self.fidelitySize, .dark),
+            ("f5-converse-compact-light", Self.shellSize, .light)
+        ]
+        for render in renders {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.chat: chat])
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: render.size.width, height: render.size.height)
+            try fixture.write(
+                view,
+                size: render.size,
+                appearance: render.appearance,
+                name: render.name,
+                settle: 2.5,
+                afterAppear: {
+                    navigation.open(task: .chatChat)
+                    if !self.fixture.controller.runningConversationIDs.contains(SnapshotFixture.converseThreadID) {
+                        try? self.fixture.seedLiveChatTurn()
+                    }
+                }
+            )
+        }
+        XCTAssertTrue(fixture.controller.runningConversationIDs.contains(SnapshotFixture.converseThreadID))
+    }
+
     /// The Settings scene content at the width the app gives it.
     func testSettingsSnapshots() throws {
         for appearance in StudioSnapshotAppearance.allCases {
@@ -266,6 +315,8 @@ private final class SnapshotFixture {
         case fixture
         /// The four Image rows the design mockups show, newest first.
         case mockup
+        /// The four Converse threads the design mockups show, the newest with a reply in flight.
+        case converse
     }
 
     init(
@@ -295,6 +346,7 @@ private final class SnapshotFixture {
         switch seed {
         case .fixture: try seedLibrary()
         case .mockup: try seedMockupLibrary()
+        case .converse: seedConverseLibrary()
         }
     }
 
@@ -609,6 +661,143 @@ private final class SnapshotFixture {
         )
     ]
 
+    // MARK: Converse threads
+
+    /// The id of the mockup's open thread, whose last user turn is answered live.
+    static let converseThreadID = UUID()
+    static let converseChatModelID = "text-chat-qwen3.6-4b"
+
+    /// The Converse board's threads: today's diffusion thread (with a Python block and a turn
+    /// awaiting its reply), yesterday's Code thread, and two older chats.
+    private func seedConverseLibrary() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        func at(daysAgo: Int, hour: Int, minute: Int) -> Date {
+            calendar.date(byAdding: DateComponents(day: -daysAgo, hour: hour, minute: minute), to: today) ?? today
+        }
+        let replyAt = at(daysAgo: 0, hour: 13, minute: 20)
+        let diffusion = StudioLibraryItem(
+            id: Self.converseThreadID,
+            mode: .chat,
+            prompt: "",
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: at(daysAgo: 0, hour: 13, minute: 19),
+            updatedAt: replyAt,
+            status: .running,
+            exitCode: nil,
+            commandPreview: "mere.run text chat",
+            outputText: nil,
+            customTitle: "Summarize diffusion models in one paragraph",
+            messages: [
+                StudioMessage(
+                    role: .user,
+                    content: "Summarize diffusion models in one paragraph, for someone who knows what a neural net is.",
+                    createdAt: at(daysAgo: 0, hour: 13, minute: 19)
+                ),
+                StudioMessage(
+                    role: .assistant,
+                    content: """
+                    A diffusion model learns to reverse a gradual noising process. During training, \
+                    images are corrupted with increasing Gaussian noise and a network is taught to \
+                    predict that noise at each step. At sampling time it starts from pure noise and \
+                    repeatedly subtracts its predicted noise, so structure emerges over a few dozen \
+                    steps. Guidance from a text encoder steers each step toward the prompt.
+
+                    ```python
+                    x = torch.randn(1, 4, 64, 64)
+                    for t_ in scheduler.timesteps:
+                        eps = unet(x, t_, cond).sample
+                        x = scheduler.step(eps, t_, x).prev_sample
+                    ```
+                    """,
+                    createdAt: replyAt,
+                    model: Self.converseChatModelID,
+                    tokensPerSecond: 41
+                ),
+                StudioMessage(
+                    role: .user,
+                    content: "Why predict the noise instead of the image?",
+                    createdAt: replyAt
+                )
+            ],
+            systemPrompt: nil,
+            model: Self.converseChatModelID
+        )
+
+        func thread(
+            title: String,
+            reply: String,
+            mode: StudioMode,
+            model: String,
+            daysAgo: Int,
+            hour: Int
+        ) -> StudioLibraryItem {
+            let asked = at(daysAgo: daysAgo, hour: hour, minute: 5)
+            return StudioLibraryItem(
+                id: UUID(),
+                mode: mode,
+                prompt: "",
+                inputURL: nil,
+                outputURL: nil,
+                createdAt: asked,
+                updatedAt: asked.addingTimeInterval(40),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: mode == .code ? "mere.run text code" : "mere.run text chat",
+                outputText: nil,
+                messages: [
+                    StudioMessage(role: .user, content: title, createdAt: asked),
+                    StudioMessage(role: .assistant, content: reply, createdAt: asked.addingTimeInterval(40), model: model)
+                ],
+                systemPrompt: nil,
+                model: model
+            )
+        }
+        let rows = [
+            diffusion,
+            thread(
+                title: "Swift function that formats byte counts",
+                reply: "```swift\nfunc formatted(bytes: Int64) -> String {\n    ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)\n}\n```",
+                mode: .code, model: "text-code-gemma-4", daysAgo: 1, hour: 16
+            ),
+            thread(
+                title: "Draft a friendly reply declining a meeting",
+                reply: "Thanks for the invitation — I can't make Thursday, but I'd be glad to catch up next week.",
+                mode: .chat, model: Self.converseChatModelID, daysAgo: 4, hour: 10
+            ),
+            thread(
+                title: "What can I cook with mushrooms, eggs, spinach?",
+                reply: "A quick frittata: sauté the mushrooms, wilt the spinach, pour over beaten eggs, and finish under the broiler.",
+                mode: .chat, model: Self.converseChatModelID, daysAgo: 6, hour: 19
+            )
+        ]
+        for row in rows.sorted(by: { $0.createdAt < $1.createdAt }) {
+            library.upsert(row)
+        }
+    }
+
+    /// Answers the open thread's last turn live: the turn runs through the real controller and
+    /// transcript paths (the process seam holds `text chat` open), and the first words of the
+    /// reply arrive on stdout so the transcript shows a streaming turn with its caret.
+    func seedLiveChatTurn() throws {
+        guard let thread = library.items.first(where: { $0.id == Self.converseThreadID }),
+              let runner = liveSessionRunner else {
+            throw StudioSnapshotError.noContentView
+        }
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.model = Self.converseChatModelID
+        draft.thinkingMode = .hide
+        draft.prompt = ConversationTranscript.render(messages: thread.messages ?? []).prompt
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: thread.id)
+        runner.liveSessionMarker = "chat"
+        guard controller.run(studio: request), let live = runner.liveStarts.last else {
+            throw StudioSnapshotError.noContentView
+        }
+        live.stdout("Sure. The key idea is that noise is easier to predict than")
+    }
+
     // MARK: Live realtime session
 
     /// Starts a Magenta RT2 session through the real controller and Library paths. The process
@@ -851,6 +1040,13 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
     private var refusedLaunches = 0
     private var _liveStarts: [LiveStart] = []
     private var _liveSessionMarker: String?
+    /// Scripted answers for the short CLI reads a page makes (inventory, capabilities), consulted
+    /// before a launch is refused so a render can be both "ready" and hold a live session.
+    private let script: [ScriptedProcessRunner.Response]
+
+    init(script: [ScriptedProcessRunner.Response] = []) {
+        self.script = script
+    }
 
     var refusedLaunchCount: Int {
         lock.lock()
@@ -899,6 +1095,17 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
             DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
                 stdout(snapshot)
                 termination(0)
+            }
+            return SnapshotRefusedProcess()
+        }
+        var arguments = configuration.arguments
+        if arguments.first == "--models-root", arguments.count >= 2 {
+            arguments.removeFirst(2)
+        }
+        if let response = script.first(where: { $0.matches(arguments) }) {
+            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
+                if !response.stdout.isEmpty { stdout(response.stdout) }
+                termination(response.exitCode)
             }
             return SnapshotRefusedProcess()
         }
@@ -983,6 +1190,26 @@ private final class ScriptedProcessRunner: MereRunProcessRunning, @unchecked Sen
             termination(response.exitCode)
         }
         return SnapshotRefusedProcess()
+    }
+}
+
+/// What the Converse render's CLI reads answer: the mockup's status footer, and the Models
+/// board's inventory and capabilities (which list the chat model installed, so Chat is ready).
+private enum ConverseScript {
+    static var responses: [ScriptedProcessRunner.Response] {
+        [
+            .init(
+                matches: { $0.first == "status" && $0.contains("--json") },
+                stdout: SnapshotProcessRunner.statusSnapshot(installedModelCount: SnapshotProcessRunner.installedModelCount),
+                exitCode: 0
+            ),
+            .init(matches: { $0 == ["model", "list"] }, stdout: ModelsInventoryScript.modelList, exitCode: 0),
+            .init(
+                matches: { $0 == ["model", "capabilities", "--all", "--json"] },
+                stdout: ModelsInventoryScript.capabilities,
+                exitCode: 0
+            ),
+        ]
     }
 }
 
