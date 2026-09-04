@@ -200,6 +200,52 @@ final class StudioSnapshotTests: XCTestCase {
         XCTAssertTrue(fixture.controller.canSteerRealtimeMusic(requestID: requestID))
     }
 
+    /// The Analyze board: Vision ▸ Find at the mockup's 1440×900, with a 1024×1024 image in the
+    /// composer's well and a finished `vision ground` run whose `--json-output` document carries
+    /// the board's two detections, so the boxes, the label tabs, the detection rows, and the
+    /// contextual next steps are all rendered from a real result document. Then Audio ▸ Transcribe
+    /// once, to show the same archetype carrying a waveform and a transcript.
+    func testAnalyzeBoardFidelitySnapshots() throws {
+        let analyze = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .analyze,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { analyze.tearDown() }
+
+        var find = StudioDraft()
+        find.reset(for: .findObjects)
+        find.prompt = SnapshotFixture.analyzePrompt
+        find.inputPath = analyze.largeMugURL.path
+        find.visionThreshold = 0.3
+
+        var listen = StudioDraft()
+        listen.reset(for: .listen)
+        listen.inputPath = analyze.narrationURL.path
+
+        let renders: [(name: String, task: StudioTask, appearance: StudioSnapshotAppearance)] = [
+            ("f6-analyze-find-light", .visionFind, .light),
+            ("f6-analyze-find-dark", .visionFind, .dark),
+            ("f6-analyze-transcribe-light", .audioTranscribe, .light)
+        ]
+        for render in renders {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.findObjects: find, .listen: listen])
+                .environmentObject(analyze.controller)
+                .environmentObject(analyze.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try analyze.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: render.appearance,
+                name: render.name,
+                settle: 3.0,
+                afterAppear: { navigation.open(task: render.task) }
+            )
+        }
+    }
+
     /// The Settings scene content at the width the app gives it.
     func testSettingsSnapshots() throws {
         for appearance in StudioSnapshotAppearance.allCases {
@@ -286,6 +332,10 @@ private final class SnapshotFixture {
     let crashReporter = StudioCrashReporter()
     /// A placeholder "mug.png" for the attachment well, drawn in-test.
     let mugURL: URL
+    /// The same picture at 1024×1024, the size the Analyze board's result document is in.
+    private(set) var largeMugURL: URL!
+    /// A short recording for the Transcribe board's waveform.
+    private(set) var narrationURL: URL!
     private let processRunner: MereRunProcessRunning
     /// The default runner's live-session seam; nil when the fixture was given a scripted runner.
     private var liveSessionRunner: SnapshotProcessRunner? { processRunner as? SnapshotProcessRunner }
@@ -296,6 +346,9 @@ private final class SnapshotFixture {
         case fixture
         /// The finished Image rows the design boards show; `startMainBoardJobs` adds the live ones.
         case mockup
+        /// The Analyze board's rows: a finished `vision ground` with its result document, an
+        /// earlier Read and Segment, and a transcript.
+        case analyze
     }
 
     init(
@@ -325,6 +378,7 @@ private final class SnapshotFixture {
         switch seed {
         case .fixture: try seedLibrary()
         case .mockup: try seedMockupLibrary()
+        case .analyze: try seedAnalyzeLibrary()
         }
     }
 
@@ -532,6 +586,150 @@ private final class SnapshotFixture {
             library.upsert(row)
         }
     }
+
+    /// The prompt the Analyze board asks Vision ▸ Find.
+    static let analyzePrompt = "every coffee cup and what it sits on"
+
+    /// The Analyze board's rows: a finished `vision ground` whose `--json-output` document holds
+    /// the board's two detections in the shape `FalconPerceptionGrounder` writes (normalized
+    /// boxes, camelCase keys), the earlier Read and Segment the Library column lists, and a
+    /// transcript so Audio ▸ Transcribe renders the same archetype.
+    private func seedAnalyzeLibrary() throws {
+        guard let groundTemplate = CommandCatalog.template(id: .visionGround) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let directory = root.appendingPathComponent("analyze", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let mug = directory.appendingPathComponent("mug.png", isDirectory: false)
+        try Self.writeMugPNG(to: mug, side: 1_024)
+        largeMugURL = mug
+        let annotated = directory.appendingPathComponent("mug_grounded.png", isDirectory: false)
+        try Self.writeMugPNG(to: annotated, side: 1_024)
+        let document = directory.appendingPathComponent("mug_grounded.json", isDirectory: false)
+        try Self.groundDocument(input: mug, annotated: annotated, document: document)
+            .write(to: document, atomically: true, encoding: .utf8)
+        let narration = directory.appendingPathComponent("narration.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: narration, seconds: 6)
+        narrationURL = narration
+
+        var findDraft = groundTemplate.defaultDraft()
+        findDraft.prompt = Self.analyzePrompt
+        findDraft.inputPath = mug.path
+        findDraft.outputPath = annotated.path
+        findDraft.visionJSONOutputPath = document.path
+        findDraft.visionThreshold = 0.3
+
+        let findAt = Self.mockupTime(hour: 13, minute: 31)
+        var rows: [StudioLibraryItem] = [
+            StudioLibraryItem(
+                id: UUID(),
+                mode: .findObjects,
+                prompt: Self.analyzePrompt,
+                inputURL: mug,
+                outputURL: annotated,
+                createdAt: findAt,
+                updatedAt: findAt.addingTimeInterval(1.8),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run vision ground mug.png --query \"\(Self.analyzePrompt)\"",
+                outputText: nil,
+                templateID: .visionGround,
+                commandDraft: findDraft,
+                artifactURLs: [annotated, document]
+            ),
+            StudioLibraryItem(
+                id: UUID(),
+                mode: .readImage,
+                prompt: "Describe this scene in one paragraph",
+                inputURL: mug,
+                outputURL: nil,
+                createdAt: Self.mockupTime(hour: 13, minute: 31).addingTimeInterval(-60 * 60 * 24),
+                updatedAt: Self.mockupTime(hour: 13, minute: 32).addingTimeInterval(-60 * 60 * 24),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run vision inspect mug.png",
+                outputText: """
+                A white ceramic mug sits just left of centre on a warm grey table, lit from the \
+                upper right so a soft shadow falls across the saucer beneath it.
+                """
+            ),
+            StudioLibraryItem(
+                id: UUID(),
+                mode: .segment,
+                prompt: "the neon sign",
+                inputURL: mug,
+                outputURL: nil,
+                createdAt: findAt.addingTimeInterval(-60 * 60 * 24 * 5),
+                updatedAt: findAt.addingTimeInterval(-60 * 60 * 24 * 5 + 3),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run vision segment diner.png --prompt \"the neon sign\""
+            ),
+            StudioLibraryItem(
+                id: UUID(),
+                mode: .listen,
+                prompt: "",
+                inputURL: narration,
+                outputURL: nil,
+                createdAt: Self.mockupTime(hour: 11, minute: 8),
+                updatedAt: Self.mockupTime(hour: 11, minute: 8).addingTimeInterval(2.4),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run speech transcribe narration.wav --timestamps",
+                outputText: Self.transcriptText,
+                templateID: .speechTranscribe
+            )
+        ]
+        rows.sort { $0.createdAt < $1.createdAt }
+        for row in rows { library.upsert(row) }
+    }
+
+    /// The board's two detections as `vision ground --json-output` writes them: normalized 0…1
+    /// boxes, camelCase keys, sorted. `[246, 307, 717, 758]` and `[82, 757, 266, 921]` of a
+    /// 1024×1024 image are what the app must show once it scales them back to pixels.
+    private static func groundDocument(input: URL, annotated: URL, document: URL) -> String {
+        func normalized(_ box: [Int]) -> String {
+            let values = box.map { Double($0) / 1_024 }
+            return """
+            { "x1" : \(values[0]), "y1" : \(values[1]), "x2" : \(values[2]), "y2" : \(values[3]) }
+            """
+        }
+        return """
+        {
+          "annotatedImagePath" : "\(annotated.path)",
+          "detections" : [
+            {
+              "box" : \(normalized([246, 307, 717, 758])),
+              "hw" : { "h" : 0.4404296875, "w" : 0.4599609375 },
+              "label" : "coffee cup",
+              "score" : 0.94,
+              "xy" : { "x" : 0.4702148437, "y" : 0.5200195312 }
+            },
+            {
+              "box" : \(normalized([82, 757, 266, 921])),
+              "hw" : { "h" : 0.16015625, "w" : 0.1796875 },
+              "label" : "saucer",
+              "score" : 0.81,
+              "xy" : { "x" : 0.169921875, "y" : 0.8193359375 }
+            }
+          ],
+          "inputImagePath" : "\(input.path)",
+          "jsonOutputPath" : "\(document.path)",
+          "modelID" : "vision-ground-falcon-perception",
+          "queries" : [ "\(analyzePrompt)" ],
+          "schemaVersion" : 1
+        }
+        """
+    }
+
+    private static let transcriptText = """
+    Welcome aboard. Everything you make here stays on this Mac, and nothing is uploaded.
+
+    [00:00.000 --> 00:02.480] Welcome aboard.
+    [00:02.480 --> 00:04.960] Everything you make here stays on this Mac,
+    [00:04.960 --> 00:06.000] and nothing is uploaded.
+    """
 
     private static func mockupTime(hour: Int, minute: Int) -> Date {
         let calendar = Calendar.current
@@ -1130,6 +1328,36 @@ private enum ModelsInventoryScript {
         [
             .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
+        ]
+    }
+
+    /// `model list` and `model capabilities` with Vision ▸ Find's model installed, so the Analyze
+    /// board renders its result rather than a readiness card.
+    static var analyzeReadinessResponses: [SnapshotProcessRunner.Response] {
+        let extraModels = [
+            (id: "vision-ground-falcon-perception", category: "vision-ground", title: "Falcon Perception"),
+            (id: "speech-asr-parakeet", category: "speech-asr", title: "Parakeet")
+        ]
+        let list = modelList.replacingOccurrences(
+            of: "image-zimage-nano          image        installed  2.1 GB",
+            with: (["image-zimage-nano          image        installed  2.1 GB"]
+                + extraModels.map { "\($0.id)  \($0.category)  installed  1.8 GB" })
+                .joined(separator: "\n")
+        )
+        let extraCapabilities = extraModels.map { model in
+            """
+            ,{"id": "\(model.id)", "title": "\(model.title)", "summary": "", \
+            "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, \
+            "reasons": [], "estimatedDownloadBytes": 1800000000, \
+            "sourceRepository": "mere-run/\(model.id)", "publisher": "mere.run"}
+            """
+        }.joined(separator: "\n")
+        let capabilityJSON = capabilities.replacingOccurrences(
+            of: "\n]}", with: "\n\(extraCapabilities)\n]}"
+        )
+        return [
+            .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
+            .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
         ]
     }
 

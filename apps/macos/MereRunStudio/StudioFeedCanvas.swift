@@ -313,8 +313,11 @@ enum StudioFeedChips {
             chips.append("\(StudioComposerPresets.secondsText(draft.durationSeconds)) s")
             chips.append(stepsChip(draft.steps))
             chips.append(seedChip(draft.seed))
-        case .findObjects, .segment, .track:
+        case .segment, .track:
+            // `vision ground` has no threshold flag, so Find never claims one.
             chips.append("threshold \(StudioComposerPresets.decimalText(draft.visionThreshold))")
+        case .findObjects:
+            break
         case .speak:
             chips.append(draft.voiceMode == "clone" ? "cloned voice" : "preset voice")
         case .listen:
