@@ -87,7 +87,7 @@ struct StudioAnalyzeCanvas: View {
     }
 
     private var document: StudioAnalyzeDocument? {
-        guard let loaded, loaded.itemID == resultCard?.id else { return nil }
+        guard resultDescribesInput, let loaded, loaded.itemID == resultCard?.id else { return nil }
         return loaded.document
     }
 
@@ -101,9 +101,8 @@ struct StudioAnalyzeCanvas: View {
     /// leave the previous run's boxes drawn over a different picture, so the overlays wait for
     /// the next run while the panel keeps listing what the last one found.
     private var resultDescribesInput: Bool {
-        guard let itemInput = resultCard?.item.inputURL else { return true }
-        guard let inputURL else { return false }
-        return itemInput.standardizedFileURL == inputURL.standardizedFileURL
+        guard let item = resultCard?.item else { return false }
+        return StudioInputIdentity.matches(item: item, input: inputURL)
     }
 
     private var overlayDetections: [StudioAnalyzeDetection] {
@@ -243,7 +242,7 @@ struct StudioAnalyzeCanvas: View {
 
     /// Track writes an annotated clip; that is the one worth playing when it exists.
     private var playableVideoURL: URL? {
-        guard let outputURL = resultCard?.item.outputURL,
+        guard resultDescribesInput, let outputURL = resultCard?.item.outputURL,
               StudioOutputFileKind.classify(outputURL) == .video else { return nil }
         return outputURL
     }
@@ -356,7 +355,8 @@ struct StudioAnalyzeCanvas: View {
 
     @ViewBuilder
     private func resultPanel(_ card: StudioFeedCard) -> some View {
-        StudioAnalyzeResultPanel(
+        if resultDescribesInput {
+            StudioAnalyzeResultPanel(
             item: card.item,
             document: document,
             detections: detections,
@@ -367,6 +367,10 @@ struct StudioAnalyzeCanvas: View {
             onOpenTask: analyze.openTask,
             onSave: analyze.save
         )
+            } else {
+            ContentUnavailableView("Input changed", systemImage: "arrow.triangle.2.circlepath",
+                description: Text("Run this task again to analyze the selected input. The earlier result remains in Library."))
+        }
     }
 
     // MARK: - Loading

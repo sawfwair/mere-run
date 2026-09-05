@@ -44,8 +44,9 @@ struct MereRunRootView: View {
 @main
 struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
-    @StateObject private var controller = MereRunController()
-    @StateObject private var library = StudioLibraryStore()
+    @StateObject private var session = StudioAppSession()
+    private var controller: MereRunController { session.controller }
+    private var library: StudioLibraryStore { session.library }
     @StateObject private var navigation = NavigationModel()
     @StateObject private var crashReporter = StudioCrashReporter()
     private let updaterController = SPUStandardUpdaterController(
@@ -74,6 +75,8 @@ struct MereRunApp: App {
                     crashReporter.applyStoredPreference()
                     appDelegate.onTerminate = { [weak controller] in
                         MainActor.assumeIsolated {
+                            controller?.taskSessions.flush()
+                            controller?.servingMonitor.stop()
                             controller?.terminateAllProcesses()
                         }
                     }
@@ -83,7 +86,6 @@ struct MereRunApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unified(showsTitle: false))
         .windowResizability(.contentMinSize)
         .defaultSize(
             width: StudioLayoutPolicy.defaultWindowWidth,

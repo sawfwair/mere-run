@@ -215,7 +215,7 @@ final class StudioVoiceRecorder: NSObject, ObservableObject {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyyMMdd-HHmmss"
             let url = directory.appendingPathComponent(
-                "voice-reference-\(formatter.string(from: Date())).wav",
+                "voice-reference-\(formatter.string(from: StudioDisplayClock.now)).wav",
                 isDirectory: false
             )
             let settings: [String: Any] = [
@@ -255,6 +255,7 @@ final class StudioVoiceRecorder: NSObject, ObservableObject {
 }
 
 struct StudioVoiceView: View {
+    @Environment(\.studioVoiceProfileSeed) private var profileSeed
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
 
@@ -263,19 +264,19 @@ struct StudioVoiceView: View {
     /// and Live. The rail mirrors the tasks of its host.
     @Binding var task: StudioVoiceTask
     let tasks: [StudioVoiceTask]
-    @State private var synthesisDraft: CommandDraft
-    @State private var transcriptionDraft: CommandDraft
-    @State private var diarizationDraft: CommandDraft
-    @State private var profileDraft: CommandDraft
+    @StudioStoredValue("Voice.synthesisDraft") private var synthesisDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("Voice.transcriptionDraft") private var transcriptionDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("Voice.diarizationDraft") private var diarizationDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("Voice.profileDraft") private var profileDraft: CommandDraft = CommandDraft()
     @State private var profiles: [StudioVoiceProfileRecord] = []
-    @State private var selectedProfileID: UUID?
-    @State private var requestID: UUID?
-    @State private var transcriptText = ""
-    @State private var transcriptURL: URL?
+    @StudioStoredValue("Voice.selectedProfileID") private var selectedProfileID: UUID? = nil
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
+    @StudioStoredValue("Voice.transcriptText") private var transcriptText = ""
+    @StudioStoredValue("Voice.transcriptURL") private var transcriptURL: URL? = nil
     @State private var statusMessage: String?
-    @State private var comparisonA: UUID?
-    @State private var comparisonB: UUID?
-    @State private var listenDraft: CommandDraft
+    @StudioStoredValue("Voice.comparisonA") private var comparisonA: UUID? = nil
+    @StudioStoredValue("Voice.comparisonB") private var comparisonB: UUID? = nil
+    @StudioStoredValue("Voice.listenDraft") private var listenDraft: CommandDraft = CommandDraft()
     @State private var listenTranscript = StudioLiveTranscriptAccumulator()
     @State private var listenDevices: [StudioListenDevice] = []
     @State private var listenCommandID: UUID?
@@ -294,39 +295,45 @@ struct StudioVoiceView: View {
             ? initialDraft.model
             : synthesis.model
         synthesis.outputPath = Self.timestampedOutput(prefix: "voice", extension: "wav")
-        _synthesisDraft = State(initialValue: synthesis)
+        _synthesisDraft = StudioStoredValue(initialValue: synthesis, "Voice.synthesisDraft")
 
         var transcription = CommandCatalog.template(id: .speechTranscribe)?.defaultDraft() ?? CommandDraft()
         transcription.inputPath = initialDraft.inputPath
         transcription.outputPath = Self.timestampedOutput(prefix: "transcript", extension: "txt")
-        _transcriptionDraft = State(initialValue: transcription)
+        _transcriptionDraft = StudioStoredValue(initialValue: transcription, "Voice.transcriptionDraft")
 
-        _listenDraft = State(
-            initialValue: CommandCatalog.template(id: .speechListen)?.defaultDraft() ?? CommandDraft()
-        )
+        _listenDraft = StudioStoredValue(
+            initialValue: CommandCatalog.template(id: .speechListen)?.defaultDraft() ?? CommandDraft(), "Voice.listenDraft")
 
         var diarization = CommandCatalog.template(id: .speechDiarize)?.defaultDraft() ?? CommandDraft()
         diarization.inputPath = initialDraft.inputPath
         diarization.outputPath = Self.timestampedOutput(prefix: "speakers", extension: "json")
-        _diarizationDraft = State(initialValue: diarization)
+        _diarizationDraft = StudioStoredValue(initialValue: diarization, "Voice.diarizationDraft")
 
         let profile = CommandCatalog.template(id: .speechProfileCreate)?.defaultDraft() ?? CommandDraft()
-        _profileDraft = State(initialValue: profile)
+        _profileDraft = StudioStoredValue(initialValue: profile, "Voice.profileDraft")
+    }
+
+    private var taskCommand: (CommandTemplateID, CommandDraft) {
+        switch task {
+        case .synthesize: (.speechSynthesize, synthesisDraft)
+        case .transcribe: (.speechTranscribe, transcriptionDraft)
+        case .listen: (.speechListen, listenDraft)
+        case .diarize: (.speechDiarize, diarizationDraft)
+        case .profiles: (.speechProfileCreate, profileDraft)
+        }
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            taskRail
-                .frame(width: 170)
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
+        StudioAnalysisLayout {
             configuration
-                .frame(minWidth: 300, idealWidth: 420, maxWidth: 420)
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
+        } result: {
             resultPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        .studioTaskCommand(taskCommand.0, draft: taskCommand.1)
         .task { refreshProfiles() }
         .onReceive(recorderTicker) { _ in
             if recorder.isRecording {
@@ -1008,7 +1015,7 @@ struct StudioVoiceView: View {
     }
 
     private func refreshProfiles() {
-        profiles = StudioVoiceProfileStore.load()
+        profiles = profileSeed ?? StudioVoiceProfileStore.load()
         if selectedProfileID == nil {
             selectedProfileID = profiles.first?.id
         }
@@ -1302,13 +1309,13 @@ struct StudioVoiceView: View {
         .tint(MereRunTheme.accent)
     }
 
-    nonisolated private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
+    private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Music/MereRun/Voice", isDirectory: true)
             .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: Date())).\(pathExtension)",
+                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).\(pathExtension)",
                 isDirectory: false
             )
             .path
@@ -1319,5 +1326,16 @@ struct StudioVoiceView: View {
             .deletingPathExtension()
             .appendingPathExtension(pathExtension)
             .path
+    }
+}
+
+private struct StudioVoiceProfileSeedKey: EnvironmentKey {
+    static let defaultValue: [StudioVoiceProfileRecord]? = nil
+}
+
+extension EnvironmentValues {
+    var studioVoiceProfileSeed: [StudioVoiceProfileRecord]? {
+        get { self[StudioVoiceProfileSeedKey.self] }
+        set { self[StudioVoiceProfileSeedKey.self] = newValue }
     }
 }

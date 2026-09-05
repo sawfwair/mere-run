@@ -69,6 +69,7 @@ package enum JobCommand {
 package struct JobRequest {
     package let lane: JobLane
     package let command: JobCommand
+    package let execution: StudioExecution?
     /// Durable Studio request id (a library row, or a per-turn id for chat). Nil for runs started
     /// from the Advanced console, which have no library row, and for raw commands.
     package let requestID: UUID?
@@ -93,10 +94,12 @@ package struct JobRequest {
         conversationID: UUID? = nil,
         configuration: MereRunProcessConfiguration,
         displayCommand: String,
-        dedupeKey: String? = nil
+        dedupeKey: String? = nil,
+        execution: StudioExecution? = nil
     ) {
         self.lane = lane
         command = .templated(template, draft)
+        self.execution = execution
         self.requestID = requestID
         self.conversationID = conversationID
         self.configuration = configuration
@@ -113,6 +116,7 @@ package struct JobRequest {
     ) {
         self.lane = lane
         command = .raw(arguments: arguments)
+        execution = nil
         requestID = nil
         conversationID = nil
         self.configuration = configuration

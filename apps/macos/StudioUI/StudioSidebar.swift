@@ -21,6 +21,15 @@ struct StudioSidebar: View {
     @Binding var isActivityOpen: Bool
 
     var body: some View {
+        VStack(spacing: 0) {
+            brandHeader
+            navigationList
+            footer
+        }
+        .navigationSplitViewColumnWidth(min: 200, ideal: StudioLayoutPolicy.sidebarWidth, max: 300)
+    }
+
+    private var navigationList: some View {
         List(selection: selectionBinding) {
             ForEach(StudioDomainGroup.allCases) { group in
                 Section {
@@ -39,9 +48,7 @@ struct StudioSidebar: View {
         .scrollContentBackground(.hidden)
         .background(NativeSelectionHighlightHider())
         .environment(\.defaultMinListRowHeight, Self.rowHeight)
-        .safeAreaInset(edge: .top, spacing: 0) { brandHeader }
-        .safeAreaInset(edge: .bottom, spacing: 0) { footer }
-        .navigationSplitViewColumnWidth(min: 200, ideal: StudioLayoutPolicy.sidebarWidth, max: 300)
+        .clipped()
     }
 
     static let rowHeight: CGFloat = 30

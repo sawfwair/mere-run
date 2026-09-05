@@ -8,12 +8,11 @@ architecture, each read in full.
 
 ## Status
 
-Fifteen pull requests carried the plan. The Studio is now three targets —
-`StudioKit` (20,711 lines, no SwiftUI), `StudioUI` (31,112 lines), and a
-323-line `MereRunStudio` executable — with a 14,631-line test suite split the
-same way. `MereRunRootView.swift` and its 5,500 lines of Advanced forms are
-gone, and nothing is presented as a sheet except three true task sheets. What
-follows records what shipped, in which pull request, and what did not.
+The merged foundation separates StudioKit, StudioUI, and the app executable.
+The completion work adds durable task sessions, app-owned history recording,
+editable task commands, and a focused image comparison workflow. See the
+[completion guide](macos-studio-v2-completion.md) for the behavior and validation
+contract. The table records the original implementation sequence.
 
 ### Shipped
 
@@ -40,69 +39,49 @@ follows records what shipped, in which pull request, and what did not.
 | D2 | [#416](https://github.com/sawfwair/mere-run/pull/416), [#425](https://github.com/sawfwair/mere-run/pull/425), [#429](https://github.com/sawfwair/mere-run/pull/429) | The offscreen snapshot harness grew with the boards it renders rather than landing at once |
 | D3 | this pull request | Documentation |
 
-### Not shipped
+### Completion work
 
-- **The app-lifetime serving monitor.** D1 split the targets but left the
-  monitor where it was: `StudioServingMonitor` is a `@StateObject` inside
-  `StudioUI/StudioServingConsoleView.swift`, so it polls only while
-  Server ▸ Serving is on screen rather than for the life of the app.
-- **A reproducible snapshot gate.** D2's harness renders every board offscreen
-  and is what visual review runs on, but six boards draw elapsed time and
-  relative dates, so about twenty of the sixty-seven shots differ between two
-  renders of the same commit. It is a tool for looking at a surface, not a
-  comparison gate, until those strings are frozen.
-- **The `StudioTask` protocol and six archetype shells.** `StudioTask` shipped
-  as an enum of 54 tasks in `StudioKit/StudioNavigation.swift`, not a protocol
-  with a
-  `Draft` type, `requests(from:)`, and registered renderers. Three shells exist
-  in practice — the prompt workspace, the Analyze canvas, and the Converse
-  surface — and the rest of the tasks host their v1 views inline.
-- **A3, the Library write-through.** `JobStore` does not write Library rows.
-  `StudioUI/StudioRootView.swift` still keeps them current from
-  `controller.runCompletions` and `controller.jobs.events`.
-- **The controller's foreground mirror.** A5 planned to delete it. `logs`,
-  `isRunning`, `liveOutputText`, `currentProgress`, and `lastOutputURL` are
-  still published, because the Command Console window and several re-hosted
-  views read them.
-- **Contract metadata beyond the prompt modes.** 14 of the 127 capabilities
-  populate `group` and `tier` on every option, and the contract test requires it
-  of those 14 only. Every other capability's options fall to the "Options" group
-  and the `standard` tier, so the Console renders them as one flat list with
-  nothing folded under an Advanced disclosure.
-- **An editable Command view.** The Command view column lists the run's options
-  read-only over the argv preview; the chips and the inspector are what edit
-  them. The Console's form is editable, so a value no `StudioDraft` field
-  carries is set there.
-- **Purging CLI plumbing from the designed surfaces.** B1 said preflight, the
-  JSON report, timings, and their siblings would live in the Command view only.
-  They are declared `expert` in the contract instead, so they sit in the
-  inspector's collapsed "Advanced · N more" fold — out of the way, but still in
-  the inspector.
-- **A complete inspector for every prompt mode.** The inspector renders only the
-  flags `StudioKit/StudioContractSchema.swift`'s binding table maps to a
-  `StudioDraft` field, so a control can
-  never look live and change nothing. Read, Find, Segment, Track, and Code bind
-  between one and five flags, and their inspectors are correspondingly thin; the
-  rest of their options are reachable in the Command Console.
-- **A Command view on every task.** It is a column on the twelve prompt tasks
-  only. Every other task's Command toggle opens the Command Console window.
-- **C3, the Analyze migration.** `StudioKit/StudioAnalyzeSchema.swift` declares
-  an archetype for
-  22 tasks, and 5 render it: Vision ▸ Read, Find, Segment, Track and
-  Audio ▸ Transcribe. Vision ▸ Depth, Pose, Faces, Flow, Geometry, Live,
-  Audio ▸ Who Spoke, Enhance, Separate, Text ▸ Embeddings, Anonymize, the four
-  Earth tasks, and Sound ▸ Score and Condition still render their v1 lab forms
-  inside their tasks.
-- **A capability-to-task coverage test.** The guard asserts that the app's
-  capability set equals the contract's, that every public CLI leaf command is
-  cataloged or exempt, and that every command template maps to exactly one
-  domain (`testEveryCommandTemplateMapsToADomain`). Nothing asserts a mapping to
-  a single *task*; the Console is what guarantees every capability a home.
-- **`--receipt` and `--progress-json` everywhere.** `--receipt` is on 9
-  capabilities and `--progress-json` on 5. The native LTX video lanes and the
-  ACE-Step music pipeline expose no per-step callback and emit no progress
-  events; every other command keeps the `fileExists` fallback for its outputs.
-- **Release 2.0.** Not cut. This work is one Unreleased entry in `CHANGELOG.md`.
+- **App lifetime:** `StudioAppSession` owns history observation and the serving
+  monitor. Closing a window no longer stops completion recording. Saved active
+  rows become interrupted when no process owns them after relaunch.
+- **Execution and replay:** task Command panels are editable. Console validation,
+  launched arguments, history metadata, and replay share `StudioExecution`.
+  Rerun and Vary keep recorded options and allocate fresh destinations.
+- **Task continuity:** full prompt drafts and specialist inputs, settings, and
+  selections survive navigation and relaunch. Saved state excludes launch
+  credentials. Earlier chat branches restore the settings at the selected turn.
+- **Results:** Focus opens an image in the workspace. Compare links zoom and pan
+  and lists changed settings. Continue opens Edit, Reference, Video, Read, or
+  Segment with a source link. Export preserves the source file.
+- **Layout:** auxiliary columns overlay when space is limited. Analysis forms
+  share a layout that stacks controls and results in narrow windows. Duplicate
+  task rails are removed from the migrated specialist forms.
+- **Contracts:** every runnable template has task ownership; all catalog options
+  receive a group and tier. Existing authored defaults, ranges, and dependencies
+  remain authoritative. `model list --json` includes declared context windows.
+- **Rendered checks:** a reference date controls elapsed and relative time in
+  snapshot views. Added renders cover image focus, comparison, compact specialist
+  tasks, and the Command overlay. Fixtures isolate saved voice profiles.
+
+### Remaining architectural and runtime scope
+
+`StudioTask` remains an enum. Shared execution, durable state, and responsive
+analysis composition provide the common behavior; specialized result renderers
+remain dedicated views. Replacing them with six protocols is not a release
+requirement. Some settings still appear in the inspector's Advanced section;
+the Command panel exposes the complete contract.
+
+The controller retains compatibility properties for older management views.
+Console logs and Stop observe the Console's own job. Broader removal of those
+compatibility properties can proceed without changing the user workflow.
+
+`--receipt` and `--progress-json` still depend on each runtime's callbacks.
+The native LTX and ACE-Step paths do not gain invented per-step progress; commands
+without receipts retain artifact discovery. Model context inventory reports the
+configuration's declared capacity, not measured token use or a guarantee that
+an arbitrary prompt fits. Hardware and installed-model acceptance remain
+separate from the local code and offscreen rendering gates. No 2.0 release is
+cut by this change.
 
 The five decisions at the end of this document were resolved as written:
 Vision is one domain with ten tasks, Code is a Converse preset, the Library is a

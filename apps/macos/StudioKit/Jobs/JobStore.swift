@@ -229,7 +229,10 @@ package final class JobStore: ObservableObject {
         // Preflight is a catalog concept: a raw command has nothing to validate and no output
         // location to prepare.
         if case .templated(let template, let draft) = request.command {
-            if let message = template.validationMessage(for: draft) {
+            let validation = request.execution.map {
+                $0.validationMessage ?? StudioConsoleCommand.connectionValidationMessage(for: template.id, draft: draft)
+            } ?? template.validationMessage(for: draft)
+            if let message = validation {
                 complete(job, with: job.failPreflight(.invalidRequest(message)))
                 return
             }

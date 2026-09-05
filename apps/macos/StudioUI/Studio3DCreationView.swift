@@ -2,7 +2,7 @@ import StudioKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-private enum Studio3DEngine: String, CaseIterable, Identifiable {
+private enum Studio3DEngine: String, CaseIterable, Identifiable, Codable {
     case trellis = "TRELLIS.2"
     case triposr = "TripoSR"
     case instantMesh = "InstantMesh"
@@ -30,27 +30,27 @@ struct Studio3DCreationView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
 
-    @State private var engine: Studio3DEngine = .trellis
-    @State private var sourcePath = ""
-    @State private var orderedViews: [String] = []
-    @State private var outputDirectory = StudioSpecialistFiles
+    @StudioStoredValue("3DCreation.engine") private var engine: Studio3DEngine = .trellis
+    @StudioStoredValue("3DCreation.sourcePath") private var sourcePath = ""
+    @StudioStoredValue("3DCreation.orderedViews") private var orderedViews: [String] = []
+    @StudioStoredValue("3DCreation.outputDirectory") private var outputDirectory = StudioSpecialistFiles
         .timestampedDirectory(component: "3D")
         .path
-    @State private var model = ""
-    @State private var resolution = 256
-    @State private var densityThreshold = 25.0
-    @State private var foregroundRatio = 0.85
-    @State private var alreadyFramed = false
-    @State private var vertexColors = true
-    @State private var seed = "42"
-    @State private var textureSeed = "42"
-    @State private var maxTokens = 2_097_152
-    @State private var remesh = true
-    @State private var remeshBand = 1.0
-    @State private var sealRadius = 12
-    @State private var camerasPath = ""
-    @State private var preflight = false
-    @State private var requestID: UUID?
+    @StudioStoredValue("3DCreation.model") private var model = ""
+    @StudioStoredValue("3DCreation.resolution") private var resolution = 256
+    @StudioStoredValue("3DCreation.densityThreshold") private var densityThreshold = 25.0
+    @StudioStoredValue("3DCreation.foregroundRatio") private var foregroundRatio = 0.85
+    @StudioStoredValue("3DCreation.alreadyFramed") private var alreadyFramed = false
+    @StudioStoredValue("3DCreation.vertexColors") private var vertexColors = true
+    @StudioStoredValue("3DCreation.seed") private var seed = "42"
+    @StudioStoredValue("3DCreation.textureSeed") private var textureSeed = "42"
+    @StudioStoredValue("3DCreation.maxTokens") private var maxTokens = 2_097_152
+    @StudioStoredValue("3DCreation.remesh") private var remesh = true
+    @StudioStoredValue("3DCreation.remeshBand") private var remeshBand = 1.0
+    @StudioStoredValue("3DCreation.sealRadius") private var sealRadius = 12
+    @StudioStoredValue("3DCreation.camerasPath") private var camerasPath = ""
+    @StudioStoredValue("3DCreation.preflight") private var preflight = false
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var errorMessage: String?
 
     private var currentItem: StudioLibraryItem? {
@@ -59,10 +59,9 @@ struct Studio3DCreationView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        StudioAnalysisLayout {
             configuration
-                .frame(minWidth: 300, idealWidth: 430, maxWidth: 430)
-            Divider().overlay(MereRunTheme.border.opacity(0.55))
+        } result: {
             VStack(alignment: .leading, spacing: 12) {
                 resultHeader
                 StudioSpecialistResultView(
@@ -75,6 +74,7 @@ struct Studio3DCreationView: View {
         }
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        .studioTaskCommand(engine.templateID, draft: commandDraft)
         .onChange(of: engine) { _, _ in
             model = ""
             outputDirectory = StudioSpecialistFiles.timestampedDirectory(component: "3D").path
@@ -283,6 +283,29 @@ struct Studio3DCreationView: View {
         }
     }
 
+    private var commandDraft: CommandDraft {
+        var draft = CommandCatalog.template(id: engine.templateID)?.defaultDraft() ?? CommandDraft()
+        draft.inputPath = sourcePath
+        draft.referenceImagePaths = orderedViews.joined(separator: "\n")
+        draft.outputPath = outputDirectory
+        draft.model = model
+        draft.reconstructionResolution = resolution
+        draft.densityThreshold = densityThreshold
+        draft.foregroundRatio = foregroundRatio
+        draft.alreadyFramed = alreadyFramed
+        draft.noVertexColors = !vertexColors
+        draft.seed = seed
+        draft.trellisTextureSeed = textureSeed
+        draft.maxTokens = maxTokens
+        draft.trellisNoRemesh = !remesh
+        draft.trellisRemeshBand = remesh ? remeshBand : nil
+        draft.trellisSealRadius = remesh ? sealRadius : nil
+        draft.camerasPath = camerasPath
+        draft.dryRun = preflight
+        draft.json = preflight
+        return draft
+    }
+
     private func run() {
         errorMessage = nil
         guard !outputDirectory.isBlank else {
@@ -305,33 +328,10 @@ struct Studio3DCreationView: View {
             return
         }
 
-        guard let template = CommandCatalog.template(id: engine.templateID) else {
-            errorMessage = "The \(engine.rawValue) command is unavailable."
-            return
-        }
-        var draft = template.defaultDraft()
-        draft.inputPath = sourcePath
-        draft.referenceImagePaths = orderedViews.joined(separator: "\n")
-        draft.outputPath = outputDirectory
-        draft.model = model
-        draft.reconstructionResolution = resolution
-        draft.densityThreshold = densityThreshold
-        draft.foregroundRatio = foregroundRatio
-        draft.alreadyFramed = alreadyFramed
-        draft.noVertexColors = !vertexColors
-        draft.seed = seed
-        draft.trellisTextureSeed = textureSeed
-        draft.maxTokens = maxTokens
-        draft.trellisNoRemesh = !remesh
-        draft.trellisRemeshBand = remesh ? remeshBand : nil
-        draft.trellisSealRadius = remesh ? sealRadius : nil
-        draft.camerasPath = camerasPath
-        draft.dryRun = preflight
-        draft.json = preflight
         requestID = StudioSpecialistRunner.submit(
             templateID: engine.templateID,
             mode: .createImage,
-            draft: draft,
+            draft: commandDraft,
             controller: controller,
             library: library
         )

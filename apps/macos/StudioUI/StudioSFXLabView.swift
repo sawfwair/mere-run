@@ -126,13 +126,13 @@ struct StudioSFXLabView: View {
     /// Owned by the shell's task control; the rail mirrors it for the tasks this host offers.
     @Binding var task: StudioSFXTask
     let tasks: [StudioSFXTask]
-    @State private var generateDraft: CommandDraft
-    @State private var videoDraft: CommandDraft
-    @State private var conditionDraft: CommandDraft
-    @State private var encodeDraft: CommandDraft
-    @State private var decodeDraft: CommandDraft
-    @State private var scoreDraft: CommandDraft
-    @State private var requestID: UUID?
+    @StudioStoredValue("SFXLab.generateDraft") private var generateDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("SFXLab.videoDraft") private var videoDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("SFXLab.conditionDraft") private var conditionDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("SFXLab.encodeDraft") private var encodeDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("SFXLab.decodeDraft") private var decodeDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("SFXLab.scoreDraft") private var scoreDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var statusMessage: String?
 
     init(task: Binding<StudioSFXTask>, tasks: [StudioSFXTask], initialDraft: StudioDraft) {
@@ -146,32 +146,32 @@ struct StudioSFXLabView: View {
             ? initialDraft.model
             : generate.model
         generate.outputPath = Self.timestampedOutput(prefix: "sfx", extension: "wav")
-        _generateDraft = State(initialValue: generate)
+        _generateDraft = StudioStoredValue(wrappedValue: generate, "SFXLab.generateDraft")
 
         var video = CommandCatalog.template(id: .sfxVideo)?.defaultDraft() ?? CommandDraft()
         video.prompt = initialDraft.prompt
         video.inputPath = initialDraft.inputPath
         video.outputPath = Self.timestampedOutput(prefix: "foley", extension: "wav")
-        _videoDraft = State(initialValue: video)
+        _videoDraft = StudioStoredValue(wrappedValue: video, "SFXLab.videoDraft")
 
         var condition = CommandCatalog.template(id: .sfxConditionText)?.defaultDraft() ?? CommandDraft()
         condition.prompt = initialDraft.prompt
         condition.outputPath = Self.timestampedOutput(prefix: "conditioning", extension: "safetensors")
-        _conditionDraft = State(initialValue: condition)
+        _conditionDraft = StudioStoredValue(wrappedValue: condition, "SFXLab.conditionDraft")
 
         var encode = CommandCatalog.template(id: .sfxAEEncode)?.defaultDraft() ?? CommandDraft()
         encode.inputPath = initialDraft.inputPath
         encode.outputPath = Self.timestampedOutput(prefix: "latents", extension: "npy")
-        _encodeDraft = State(initialValue: encode)
+        _encodeDraft = StudioStoredValue(wrappedValue: encode, "SFXLab.encodeDraft")
 
         var decode = CommandCatalog.template(id: .sfxAEDecode)?.defaultDraft() ?? CommandDraft()
         decode.outputPath = Self.timestampedOutput(prefix: "decoded", extension: "wav")
-        _decodeDraft = State(initialValue: decode)
+        _decodeDraft = StudioStoredValue(wrappedValue: decode, "SFXLab.decodeDraft")
 
         var score = CommandCatalog.template(id: .sfxClapScore)?.defaultDraft() ?? CommandDraft()
         score.prompt = initialDraft.prompt
         score.inputPath = initialDraft.inputPath
-        _scoreDraft = State(initialValue: score)
+        _scoreDraft = StudioStoredValue(wrappedValue: score, "SFXLab.scoreDraft")
     }
 
     private var activeDraft: CommandDraft {
@@ -191,52 +191,10 @@ struct StudioSFXLabView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            if tasks.count > 1 {
-                taskRail
-                    .frame(width: 175)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-            }
-            configuration
-                .frame(minWidth: 300, idealWidth: 420, maxWidth: 420)
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
-            resultPane
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        StudioAnalysisLayout { configuration } result: { resultPane }
+        .studioTaskCommand(task.templateID, draft: activeDraft)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
-    }
-
-    private var taskRail: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(tasks) { item in
-                Button {
-                    task = item
-                    statusMessage = nil
-                } label: {
-                    Label(item.title, systemImage: item.symbol)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background {
-                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
-                                .fill(task == item ? MereRunTheme.accentSoft : Color.clear)
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-            VStack(alignment: .leading, spacing: 5) {
-                Text("CLI-backed")
-                    .font(.system(size: 10, weight: .bold))
-                Text("Woosh and MMAudio stay authoritative; this lab owns preparation and feedback.")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            .padding(10)
-            .merePanel()
-        }
-        .padding(12)
     }
 
     private var configuration: some View {
@@ -631,13 +589,13 @@ struct StudioSFXLabView: View {
         }
     }
 
-    nonisolated private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
+    private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Music/MereRun/Sound FX", isDirectory: true)
             .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: Date())).\(pathExtension)",
+                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).\(pathExtension)",
                 isDirectory: false
             )
             .path

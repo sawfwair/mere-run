@@ -153,6 +153,29 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     }
 }
 
+extension MereRunCapabilityOption {
+    /// Shared presentation for commands without a bespoke form. Authored metadata always wins.
+    fileprivate func withPresentation(outputFlag: String?) -> Self {
+        let section: String
+        if flag == outputFlag || ["--output", "--json-output", "--mask-output-dir", "--structured-prompt-output"].contains(flag) {
+            section = MereRunCapabilityOptionGroup.output
+        } else if ["--prompt", "--text", "--query", "--system", "--system-prompt", "--negative-prompt", "--lyrics"].contains(flag) {
+            section = MereRunCapabilityOptionGroup.prompt
+        } else if ["--model", "--model-root", "--lora", "--lora-scale", "--adapter"].contains(flag) {
+            section = MereRunCapabilityOptionGroup.modelAndAdapters
+        } else if [.file, .directory].contains(kind) {
+            section = MereRunCapabilityOptionGroup.inputs
+        } else if ["--seed", "--steps", "--cfg", "--temperature", "--top-p", "--top-k", "--max-tokens", "--width", "--height"].contains(flag) {
+            section = MereRunCapabilityOptionGroup.sampling
+        } else {
+            section = MereRunCapabilityOptionGroup.run
+        }
+        return Self(flag: flag, label: label, kind: kind, required: required, repeatable: repeatable,
+            choices: choices, defaultValue: defaultValue, group: group ?? section,
+            tier: tier ?? (required ? .essential : .standard), range: range, dependsOn: dependsOn)
+    }
+}
+
 /// What a successful run leaves behind when the caller passes no destination.
 /// `text` prints its result to stdout, `service` runs until it is stopped, and
 /// `file` and `directory` always write the artifact, at a default path when the
@@ -245,7 +268,7 @@ public struct MereRunCommandCapability: Codable, Equatable, Sendable {
         self.title = title
         self.summary = summary
         self.arguments = arguments
-        self.options = options
+        self.options = options.map { $0.withPresentation(outputFlag: output.flag) }
         self.output = output
     }
 }
@@ -2823,7 +2846,10 @@ public enum MereRunCapabilityCatalog {
         command: ["model", "list"],
         title: "List models",
         summary: "List managed model install state.",
-        options: [],
+        options: [
+            .init(flag: "--measure-sizes", label: "Measure referenced sizes", kind: .boolean),
+            .init(flag: "--json", label: "JSON inventory", kind: .boolean)
+        ],
         output: .init(kind: .text)
     )
 

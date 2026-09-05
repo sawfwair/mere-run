@@ -9,7 +9,7 @@ final class StudioLayoutTests: XCTestCase {
             StudioLayoutPolicy.defaultWindowWidth,
             300 + StudioLayoutPolicy.libraryWidth + StudioLayoutPolicy.minimumCanvasWidth
         )
-        XCTAssertEqual(StudioLayoutPolicy.defaultWindowWidth, 1_280)
+        XCTAssertEqual(StudioLayoutPolicy.defaultWindowWidth, 1_440)
         XCTAssertEqual(StudioLayoutPolicy.defaultWindowHeight, 820)
     }
 

@@ -73,7 +73,7 @@ struct StudioComposer: View {
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(visibleSlots) { slot in
                     Text(slot.caption(in: draft))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(MereRunTheme.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -479,7 +479,7 @@ struct StudioComposer: View {
             ZStack {
                 Circle().fill(MereRunTheme.surfaceRaised)
                 Image(systemName: "stop.fill")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(MereRunTheme.textPrimary)
             }
             .frame(width: Metrics.sendDiameter, height: Metrics.sendDiameter)
@@ -494,7 +494,7 @@ struct StudioComposer: View {
             ZStack {
                 Circle().fill(sendEnabled ? MereRunTheme.accent : MereRunTheme.surfaceRaised)
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.body.weight(.semibold))
                     .foregroundStyle(sendEnabled ? MereRunTheme.onAccent : MereRunTheme.textMuted)
             }
             .frame(width: Metrics.sendDiameter, height: Metrics.sendDiameter)
@@ -539,7 +539,7 @@ struct StudioComposerChipLabel: View {
                     .foregroundStyle(MereRunTheme.accent)
             }
             Text(title)
-                .font(.system(size: 11.5, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(MereRunTheme.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -598,7 +598,7 @@ struct StudioAttachmentSlotView: View {
                         slot.clear(in: &draft)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
+                            .font(.callout)
                             .symbolRenderingMode(.palette)
                             .foregroundStyle(MereRunTheme.surface, MereRunTheme.textPrimary)
                     }

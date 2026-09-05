@@ -252,33 +252,35 @@ struct StudioUtilityLabView: View {
     @Binding var task: StudioUtilityTask
     let tasks: [StudioUtilityTask]
     let showsTaskPicker: Bool
-    @State private var requestID: UUID?
-    @State private var inputText = "semantic search query\nrelated document"
-    @State private var model = ""
-    @State private var maxTokens = 2_048
-    @State private var replacement = "[{label}]"
-    @State private var validationTest = "all"
-    @State private var validationFamily = "zimage"
-    @State private var saveReference = false
-    @State private var compareReference = false
-    @State private var referenceDirectory = ""
-    @State private var datasetRoot = ""
-    @State private var maxDepth = 4
-    @State private var minUsablePairs = 1
-    @State private var trainingOutputRoot = ""
-    @State private var trainingModel = ""
-    @State private var trainingRecipe = ""
-    @State private var excludePreviewImages = false
-    @State private var planPath = ""
-    @State private var planMode = "Preflight"
-    @State private var materializePath = ""
-    @State private var outputPath = ""
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
+    @StudioStoredValue("UtilityLab.inputText") private var inputText = "semantic search query\nrelated document"
+    @StudioStoredValue("UtilityLab.model") private var model = ""
+    @StudioStoredValue("UtilityLab.maxTokens") private var maxTokens = 2_048
+    @StudioStoredValue("UtilityLab.replacement") private var replacement = "[{label}]"
+    @StudioStoredValue("UtilityLab.validationTest") private var validationTest = "all"
+    @StudioStoredValue("UtilityLab.validationFamily") private var validationFamily = "zimage"
+    @StudioStoredValue("UtilityLab.saveReference") private var saveReference = false
+    @StudioStoredValue("UtilityLab.compareReference") private var compareReference = false
+    @StudioStoredValue("UtilityLab.referenceDirectory") private var referenceDirectory = ""
+    @StudioStoredValue("UtilityLab.datasetRoot") private var datasetRoot = ""
+    @StudioStoredValue("UtilityLab.maxDepth") private var maxDepth = 4
+    @StudioStoredValue("UtilityLab.minUsablePairs") private var minUsablePairs = 1
+    @StudioStoredValue("UtilityLab.trainingOutputRoot") private var trainingOutputRoot = ""
+    @StudioStoredValue("UtilityLab.trainingModel") private var trainingModel = ""
+    @StudioStoredValue("UtilityLab.trainingRecipe") private var trainingRecipe = ""
+    @StudioStoredValue("UtilityLab.excludePreviewImages") private var excludePreviewImages = false
+    @StudioStoredValue("UtilityLab.planPath") private var planPath = ""
+    @StudioStoredValue("UtilityLab.planMode") private var planMode = "Preflight"
+    @StudioStoredValue("UtilityLab.materializePath") private var materializePath = ""
+    @StudioStoredValue("UtilityLab.outputPath") private var outputPath = ""
 
     init(task: Binding<StudioUtilityTask>, tasks: [StudioUtilityTask], showsTaskPicker: Bool) {
         _task = task
         self.tasks = tasks
         self.showsTaskPicker = showsTaskPicker
     }
+
+    @StudioStoredValue("UtilityLab.initialized") private var initialized = false
 
     private var item: StudioLibraryItem? {
         guard let requestID else { return nil }
@@ -308,25 +310,24 @@ struct StudioUtilityLabView: View {
                 .padding(16)
             }
 
-            HSplitView {
+            StudioAnalysisLayout {
                 ScrollView {
                     controls
                         .padding(18)
                 }
-                .frame(minWidth: 340, idealWidth: 390, maxWidth: 470)
-
+            } result: {
                 result
                     .padding(18)
-                    .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(MereRunTheme.background)
+        .studioTaskCommand(commandTemplate, draft: commandDraft)
         .onChange(of: task) { _, _ in
-            requestID = nil
-            applyTaskDefaults()
+            if model.isEmpty { applyTaskDefaults() }
         }
         .onAppear {
-            applyTaskDefaults()
+            if model.isEmpty { applyTaskDefaults() }
         }
     }
 
@@ -740,7 +741,7 @@ struct StudioUtilityLabView: View {
         }
     }
 
-    private func run() {
+    private var commandDraft: CommandDraft {
         var draft = CommandDraft()
         switch task {
         case .embeddings:
@@ -749,7 +750,6 @@ struct StudioUtilityLabView: View {
             draft.maxTokens = maxTokens
             draft.force = true
             draft.outputPath = outputPathForUtility(filename: "embeddings.json")
-            requestID = submit(.textEmbed, mode: .chat, draft: draft)
         case .anonymize:
             draft.prompt = inputText
             draft.model = model
@@ -758,7 +758,6 @@ struct StudioUtilityLabView: View {
             draft.all = true
             draft.force = true
             draft.outputPath = outputPathForUtility(filename: "anonymized.json")
-            requestID = submit(.textAnonymize, mode: .chat, draft: draft)
         case .imageValidation:
             draft.backend = validationTest
             draft.variant = validationFamily
@@ -766,7 +765,6 @@ struct StudioUtilityLabView: View {
             draft.force = saveReference
             draft.all = compareReference
             draft.referenceDirectoryPath = referenceDirectory
-            requestID = submit(.imageValidate, mode: .createImage, draft: draft)
         case .datasetDiscovery:
             draft.inputPath = datasetRoot
             draft.maxDepth = maxDepth
@@ -776,13 +774,26 @@ struct StudioUtilityLabView: View {
             draft.trainingRecipe = trainingRecipe
             draft.excludePreviewImages = excludePreviewImages
             draft.json = true
-            requestID = submit(.imageDatasetDiscover, mode: .createImage, draft: draft)
         case .runPlan:
             draft.inputPath = planPath
             draft.preflight = planMode == "Preflight"
             draft.materializePath = planMode == "Materialize" ? materializePath : ""
             draft.json = true
-            requestID = submit(.imageRunPlan, mode: .createImage, draft: draft)
+        }
+        return draft
+    }
+
+    private func run() {
+        requestID = submit(commandTemplate, mode: task == .embeddings || task == .anonymize ? .chat : .createImage, draft: commandDraft)
+    }
+
+    private var commandTemplate: CommandTemplateID {
+        switch task {
+        case .embeddings: .textEmbed
+        case .anonymize: .textAnonymize
+        case .imageValidation: .imageValidate
+        case .datasetDiscovery: .imageDatasetDiscover
+        case .runPlan: .imageRunPlan
         }
     }
 
@@ -797,8 +808,8 @@ struct StudioUtilityLabView: View {
     }
 
     private func applyTaskDefaults() {
-        model = ""
-        maxTokens = 2_048
+        guard !initialized else { return }
+        initialized = true
         switch task {
         case .embeddings:
             inputText = "semantic search query\nrelated document"
@@ -817,8 +828,10 @@ struct StudioUtilityLabView: View {
         }
     }
 
+    @StudioStoredValue("UtilityLab.directory") private var utilityDirectory = StudioSpecialistFiles.timestampedDirectory(component: "utilities")
+
     private func outputPathForUtility(filename: String) -> String {
-        StudioSpecialistFiles.timestampedDirectory(component: "utilities")
+        utilityDirectory
             .appendingPathComponent(filename)
             .path
     }

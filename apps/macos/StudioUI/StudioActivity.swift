@@ -211,7 +211,7 @@ struct StudioActivityPopover: View {
                 .foregroundStyle(MereRunTheme.textPrimary)
             Spacer(minLength: 12)
             Text(rows.isEmpty ? "Nothing running" : StudioActivity.summary(rows))
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(MereRunTheme.textMuted)
         }
         .padding(.horizontal, 14)
@@ -250,10 +250,10 @@ struct StudioActivityPopover: View {
                 .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(MereRunTheme.textPrimary)
                 Text(detail)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(2)
                     .truncationMode(.middle)
@@ -270,13 +270,13 @@ struct StudioActivityPopover: View {
     private var footer: some View {
         HStack(spacing: 8) {
             Text(StudioActivity.versionLine(appVersion: appVersion, cliVersion: cliVersion))
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(MereRunTheme.textMuted)
                 .lineLimit(1)
             Spacer(minLength: 12)
             Button("Open Server", action: onOpenServer)
                 .buttonStyle(.plain)
-                .font(.system(size: 11.5, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(MereRunTheme.accent)
                 .help("Open the Server page")
         }
@@ -289,6 +289,8 @@ struct StudioActivityPopover: View {
 /// One job in the Activity popover. It observes its own `Job`, so a chatty run redraws this row
 /// and nothing else in the shell.
 private struct StudioActivityJobRow: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
     @ObservedObject var job: Job
     let row: StudioActivityRow
     let onCancel: () -> Void
@@ -300,7 +302,7 @@ private struct StudioActivityJobRow: View {
                 .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 3) {
                 Text(row.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -309,7 +311,7 @@ private struct StudioActivityJobRow: View {
                         .frame(height: 4)
                 }
                 detail
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)
@@ -319,7 +321,7 @@ private struct StudioActivityJobRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             Button(action: onCancel) {
                 Image(systemName: row.isRunning ? "stop" : "xmark")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.mereIcon)
@@ -339,7 +341,7 @@ private struct StudioActivityJobRow: View {
             TimelineView(.periodic(from: startedAt, by: 1)) { context in
                 Text(StudioActivity.detail(
                     for: job,
-                    elapsed: context.date.timeIntervalSince(startedAt),
+                    elapsed: (referenceDate ?? context.date).timeIntervalSince(startedAt),
                     isNextInQueue: row.isNextInQueue
                 ))
             }

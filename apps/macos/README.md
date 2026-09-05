@@ -16,7 +16,7 @@ use its typed options; tests prove the match in both directions.
 The Studio is three SwiftPM targets, so the model layer can be built and tested
 without SwiftUI and the views can be rendered without the app's scenes:
 
-- `StudioKit/` — library, no SwiftUI, 20,711 lines: the CLI resolver and
+- `StudioKit/` — library, no SwiftUI: the CLI resolver and
   environment, `ProcessRunner`, `Job`/`JobStore`/lanes/`ArtifactResolver`/progress,
   the command catalog (generated flags, `ArgumentBuilder`, `CommandDraft`), the
   Library store and its receipts, the conversation transcript, the navigation
@@ -24,11 +24,11 @@ without SwiftUI and the views can be rendered without the app's scenes:
   schemas the views render from, readiness, configuration, the serving monitor,
   the CLI installer, diagnostics, and crash reporting. Every one of those is
   unit-testable without hosting a view.
-- `StudioUI/` — library, SwiftUI, 31,112 lines: the shell, `NavigationModel`, the
+- `StudioUI/` — library, SwiftUI: the shell, `NavigationModel`, the
   boards (feed, inspector, Command view, analyze, converse, session, project,
   manage), `ContractForm`, the theme (which owns the bundled Caveat wordmark
   font), the controls, and the result renderers.
-- `MereRunStudio/` — the `mere.run.app` executable, 323 lines across three files:
+- `MereRunStudio/` — the `mere.run.app` executable:
   `MereRunApp`, the app delegate, the menu bar commands, the Settings scene, and
   the Sparkle wiring. Everything else it does, it does by composing the two
   libraries.
@@ -68,8 +68,8 @@ Fifty-four tasks fall into three shapes:
   management pages (Models, Runs, Plugins, Voice ▸ Voices), and the analysis
   forms that have not moved to the Analyze surface yet.
 
-Every task also has a raw command surface: a **Command view** column on the
-prompt tasks, and the **Command Console** window everywhere else. Both are
+Every task has an editable **Command** panel. A separate **Command Console**
+window provides the complete command catalog. Both are
 rendered from the capability contract, so a capability nobody has designed a
 surface for is still reachable the day the contract declares it.
 
@@ -146,7 +146,10 @@ reads the `JobStore` directly — the lanes for which rows exist, each `Job` for
 its own progress — so nothing about the work in flight is mirrored on the
 controller.
 
-The task control sits in a 52pt header at the top of the content column, beside
+The sidebar toggle and task control share a 52pt header with the panel controls.
+The split view does not add a separate toolbar row. Control-Command-S toggles the
+sidebar, and the header background supports window dragging. Native traffic
+lights remain available. The header sits at the top of the content column, beside
 the Library (the window toolbar stays empty so the Library column runs to the
 top of the window): one segmented pill for up to six tasks, or five segments
 plus a "More" menu segment, which today only Vision's ten tasks reach. The
@@ -180,16 +183,14 @@ so both are testable without a view. The view mode, kind, and favorites filter
 persist per window under `studio.libraryView`, `studio.libraryKind`, and
 `studio.libraryFavorites`.
 
-Every prompt task holds its own `StudioDraft`: switching tasks or domains parks
-the one being left and restores the one being entered, so a typed prompt and an
-attachment survive the detour. Across relaunches the scene remembers the prompt,
-the system text, and the attachment of each task under `studio.drafts`
-(`StudioDraftMemory`); settings come back from the task's defaults, which is
-also the baseline the inspector diffs against.
+Each task retains its full draft and selected run through `StudioTaskSessions`.
+Prompt modes preserve model, seed, dimensions, attachments, and sampling values;
+specialist forms retain their typed settings. The versioned JSON store excludes
+launch credentials and preserves unreadable files. `studio.drafts` remains a
+migration fallback for older prompt-only scene state.
 
 Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…; View ▸
-Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C; Command
-Console on the other tasks), and the system sidebar toggle; Go ▸ every domain
+Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C), and the system sidebar toggle; Go ▸ every domain
 (⌘1–⌘9, then ⌥⌘1…) plus the current domain's tasks; Run ▸ Run (⌘↩), Stop (⌘.),
 Open Last Output (⇧⌘O), and Reveal Last Output in Finder (⇧⌘R), acting on the
 current composer; Help ▸ mere.run Guide (⌘?), the mere.run link, Command
@@ -311,17 +312,12 @@ no control can look live and change nothing. That makes it thin where the table
 is thin: Read, Find, Segment, Track, and Code bind between one and five flags,
 and the rest of their options are reached in the Command Console.
 
-The **Command view** (⌥⌘C on a prompt task, or the header's Command toggle)
-is a 520pt column in the inspector's place — the two are never side by side —
-showing the task's raw form from the same draft: every option the capability
-contract declares for the template, under the contract's own groups — Arguments,
-Prompt, Inputs, Output, Model & adapters, Sampling, Run, and Options for a flag
-the contract has yet to describe (`StudioKit/StudioCommandRows.swift`) — with the value the
-argv carries (set rows first) or a switch for boolean flags, then "Will run"
-with the masked command line, Copy, "Open in Terminal" (copies the command and
-brings Terminal forward; the app never scripts another application), and Run.
-Values are read-only: the chips and the inspector edit them. Readiness cards'
-Details button opens it.
+The **Command** panel (⌥⌘C or the header toggle) exposes the current task's
+complete editable contract. It replaces the inspector and uses a 440-point
+column when space permits, otherwise an overlay. The preview, validation, and
+run use the edited arguments, including options absent from the simple controls.
+Prompt controls and their mapped Command fields synchronize. Specialist Run
+buttons retain Command edits while accepting later edits from their own forms.
 
 The **Command Console** window (`Window("Command Console")`,
 `StudioUI/StudioConsoleView.swift`) is the editable raw surface for every capability, in
@@ -342,11 +338,9 @@ produces the same command. Options the contract does not describe go in Extra
 arguments; the Custom template has no capability and keeps the catalog's raw
 argument editor, the one editor the console still writes by hand.
 
-The console opens from the header's Command toggle on non-prompt tasks, ⌥⌘C
-there, Help ▸ Command Console anywhere, a Library row's "Edit command…", and the
-adapter fallbacks for modes whose adapters are typed only in the raw command.
-Opening it from the header carries the composer's draft into the matching
-template; a Library row reopens on the exact argv its run launched
+The console opens from Help ▸ Command Console, a Library row's **Edit command…**,
+and adapter fallbacks. Opening it from a task carries that task's command;
+ a Library row reopens on the exact argv its run launched
 (`StudioLibraryItem.commandArguments`, an additive optional, so the console can
 set options no `CommandDraft` field carries); raising an already-open console
 only brings it forward, so its edits stay. A console run is a normal inference
@@ -354,7 +348,24 @@ job — same queue, progress, artifact resolution and Library row — and while 
 console is key the Run menu drives it while Go and Help keep acting on the
 Studio window.
 
+## Focus, compare, and continue
+
+Click an image or **Focus** on its result card to inspect it in the workspace.
+**Compare** selects another result and links zoom and pan. The settings area
+shows differences between the recorded commands. **Continue with…** opens a
+new draft for editing, reference guidance, video, image understanding, or
+segmentation. The resulting run records its parent; the original stays in Library.
+**Save copy…** copies before replacing a destination and treats saving onto the
+source as a no-op.
+
 ## Jobs, artifacts, and output
+
+`StudioAppSession` attaches `StudioLibraryStore` to job events and owns the
+serving monitor for the lifetime of the app. Views select jobs; they do not own
+completion recording. Cancellation and interrupted sessions have distinct
+Library statuses. Console Stop and the Run menu act on the Console's selected
+job; a chat's Stop acts on that thread's turn.
+
 
 `JobStore` owns every child process the app launches behind the
 `MereRunProcessRunning` seam (`Process()` appears only in
@@ -383,7 +394,7 @@ fallback for the commands that print no receipt and for an older CLI. Roles
 reach the UI on `Artifact.sidecarRole` / `roleLabel` and are persisted on
 `StudioLibraryItem.artifactRoles`, so a result surface labels a sidecar instead
 of guessing from its extension; sidecars found by probing are labelled from the
-same draft fields that located them (`StudioArtifactRole.inferred`).
+recorded draft fields that located them (`StudioArtifactRole.inferred`).
 
 The app appends `--receipt` and `--progress-json` to the launched argv for the
 capabilities the contract lists in `receiptCapabilityIDs` (nine) and
@@ -409,7 +420,7 @@ banner saying why.
 CLI launch into a `JobRequest` for every lane, awaits utility and probe jobs on
 behalf of their callers (readiness results are evaluated against the request
 current at completion), mirrors the foreground inference job into the published
-console fields the Command Console and the re-hosted views still read, and owns
+compatibility fields some management views still read, and owns
 the template selection the console opens on and the persisted settings.
 
 ## Domains
@@ -627,7 +638,7 @@ with the reason it stays CLI-only.
   refactor that changes a command line has to say so.
 
 `StudioUITests/StudioSnapshotTests` renders the shell for visual review without
-driving the live app: every domain at its default task at 1280×820 in light and dark, plus
+driving the live app: every domain at its default task at 1440×820 in light and dark, plus
 the Settings content, and fidelity renders at the 1440×900 mockup size for
 comparing against the design boards — the Command Console on `image generate`,
 the Main board (Image ▸ Generate with a finished generation of two in-test

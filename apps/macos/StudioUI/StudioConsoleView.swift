@@ -30,22 +30,36 @@ package struct StudioConsoleView: View {
     @EnvironmentObject private var navigation: NavigationModel
 
     @State private var draft = StudioConsoleDraft()
+    @State private var requestID: UUID?
+    @StateObject private var jobs = StudioJobMonitor()
+
+    private var job: Job? {
+        _ = jobs.generation
+        return requestID.flatMap(jobs.job(requestID:))
+    }
+
+    private func stop() { if let job { jobs.cancel(job) } }
 
     package var body: some View {
         HSplitView {
             StudioConsoleCatalog()
                 .frame(minWidth: 220, idealWidth: 268, maxWidth: 360)
 
-            StudioConsoleForm(draft: $draft, run: run)
+            StudioConsoleForm(draft: $draft, run: run, stop: stop, canStop: job?.state.isActive == true)
                 .frame(minWidth: 420, idealWidth: 560, maxWidth: .infinity)
                 .layoutPriority(1)
 
-            StudioConsoleLog()
+            Group {
+                if let job { StudioConsoleLog(job: job) }
+                else { ContentUnavailableView("Run output", systemImage: "terminal", description: Text("Your Console run will appear here.")) }
+            }
                 .frame(minWidth: 320, idealWidth: 440, maxWidth: .infinity)
         }
         .background(MereRunTheme.background.ignoresSafeArea())
         .foregroundStyle(MereRunTheme.textPrimary)
         .onAppear {
+            jobs.attach(controller.jobs)
+            library.observe(controller: controller)
             navigation.isConsoleOpen = true
             reseed()
         }
@@ -89,7 +103,8 @@ package struct StudioConsoleView: View {
             mode: template.libraryMode,
             templateID: template.id,
             template: template,
-            draft: commandDraft
+            draft: commandDraft,
+            execution: StudioExecution(templateID: template.id, arguments: arguments)
         )
         let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
             ? .queued
@@ -100,6 +115,7 @@ package struct StudioConsoleView: View {
             status: status,
             arguments: arguments
         )
+        requestID = request.id
         controller.runConsole(
             template: template,
             draft: commandDraft,
@@ -125,9 +141,9 @@ package struct StudioConsoleView: View {
             newChat: {},
             canNewChat: false,
             runComposer: run,
-            canRun: canRun && !controller.isRunning,
-            stop: controller.cancel,
-            canStop: controller.isRunning,
+            canRun: canRun,
+            stop: stop,
+            canStop: job?.state.isActive == true,
             openConsole: {},
             showGuide: { navigation.showGuide = true },
             importReceipt: {}
@@ -147,7 +163,7 @@ private struct StudioConsoleCatalog: View {
             VStack(alignment: .leading, spacing: 4) {
                 StudioWordmark()
                 Text("Every command, from the contract")
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)
             }
             .padding(.horizontal, 18)
@@ -185,7 +201,7 @@ private struct StudioConsoleCatalog: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: template.systemImage)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .frame(width: 16, height: 16)
                     .foregroundStyle(selected ? MereRunTheme.onAccent : MereRunTheme.textMuted)
                 Text(template.title)
@@ -217,6 +233,8 @@ private struct StudioConsoleForm: View {
     @EnvironmentObject private var controller: MereRunController
     @Binding var draft: StudioConsoleDraft
     let run: () -> Void
+    let stop: () -> Void
+    let canStop: Bool
 
     @State private var copied = false
 
@@ -262,15 +280,15 @@ private struct StudioConsoleForm: View {
     private var header: some View {
         HStack(spacing: 10) {
             Image(systemName: template.systemImage)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.body.weight(.semibold))
                 .foregroundStyle(MereRunTheme.accent)
                 .frame(width: 22, height: 22)
             VStack(alignment: .leading, spacing: 1) {
                 Text(template.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(MereRunTheme.textPrimary)
                 Text(template.subtitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)
             }
@@ -354,9 +372,9 @@ private struct StudioConsoleForm: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption.weight(.medium))
                         Text(copied ? "Copied" : "Copy")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption.weight(.medium))
                     }
                     .foregroundStyle(MereRunTheme.textMuted)
                 }
@@ -386,9 +404,9 @@ private struct StudioConsoleForm: View {
 
             HStack(spacing: 8) {
                 Spacer()
-                Button("Stop") { controller.cancel() }
+                Button("Stop", action: stop)
                     .buttonStyle(.mereSecondary)
-                    .disabled(!controller.isRunning)
+                    .disabled(!canStop)
                 Button(controller.isRunning ? "Queue" : "Run", action: run)
                     .buttonStyle(.merePrimary)
                     .disabled(validationMessage != nil)

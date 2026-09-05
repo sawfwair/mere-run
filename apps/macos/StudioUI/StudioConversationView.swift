@@ -2,7 +2,7 @@ import StudioKit
 import SwiftUI
 
 /// The Converse surface: the thread header (title, model, system prompt) over the transcript,
-/// with the readiness state layered the way the media canvas layers it. Chat and Code share
+/// with readiness above the transcript so setup never covers the conversation. Chat and Code share
 /// it — Code is a preset (the `text code` command and its defaults), not a second surface.
 struct StudioConverseView: View {
     let mode: StudioMode
@@ -36,57 +36,45 @@ struct StudioConverseView: View {
     }
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                StudioThreadHeader(
-                    title: item?.displayTitle ?? "New thread",
-                    mode: mode,
-                    model: $model,
-                    systemPrompt: $systemPrompt,
-                    modelInventory: modelInventory,
-                    readiness: readiness,
-                    onShowModels: onShowModels
-                )
-                if needsAttention && hasTurns {
+        VStack(spacing: 0) {
+            StudioThreadHeader(
+                title: item?.displayTitle ?? "New thread",
+                mode: mode,
+                model: $model,
+                systemPrompt: $systemPrompt,
+                modelInventory: modelInventory,
+                readiness: readiness,
+                onShowModels: onShowModels
+            )
+            if needsAttention {
+                if hasTurns || error != nil {
                     readinessNotice
+                } else {
+                    StudioReadinessCard(
+                        readiness: readiness,
+                        pullJob: nil,
+                        onPullModel: onPullModel,
+                        onShowDetails: onShowDetails,
+                        onCancelPull: { _ in }
+                    )
+                    .frame(maxWidth: StudioThreadHeader.maxWidth)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
                 }
-                StudioConversationView(
-                    item: item,
-                    liveText: liveText,
-                    isRunning: isRunning,
-                    mode: mode,
-                    onNewChat: {},
-                    onCopy: onCopy,
-                    onRetry: onRetry,
-                    onEdit: onEdit,
-                    onUseExample: onUseExample,
-                    onBranch: onBranch,
-                    budgetChars: budgetChars
-                )
             }
-
-            // A thread that has not started yet gets the full readiness card; one with turns
-            // keeps its transcript visible and shows the compact notice above it instead.
-            if needsAttention && !hasTurns {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    if error == nil {
-                        StudioReadinessCard(
-                            readiness: readiness,
-                            pullJob: nil,
-                            onPullModel: onPullModel,
-                            onShowDetails: onShowDetails,
-                            onCancelPull: { _ in }
-                        )
-                    } else {
-                        readinessNotice
-                    }
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: StudioThreadHeader.maxWidth)
-                .padding(.horizontal, 24)
-                .transition(.opacity)
-            }
+            StudioConversationView(
+                item: item,
+                liveText: liveText,
+                isRunning: isRunning,
+                mode: mode,
+                onNewChat: {},
+                onCopy: onCopy,
+                onRetry: onRetry,
+                onEdit: onEdit,
+                onUseExample: onUseExample,
+                onBranch: onBranch,
+                budgetChars: budgetChars
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

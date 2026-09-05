@@ -13,8 +13,8 @@ package enum MereRunTheme {
     package static let border = dynamic(light: "D8D2C6", dark: "4E493F")
     package static let textPrimary = dynamic(light: "211C13", dark: "F1EDE3")
     package static let textSecondary = dynamic(light: "5C564A", dark: "C9C1B3")
-    package static let textMuted = dynamic(light: "8A8273", dark: "918A7C")
-    package static let accent = dynamic(light: "9C7A2E", dark: "C9A65D")
+    package static let textMuted = dynamic(light: "716959", dark: "A49B8D")
+    package static let accent = dynamic(light: "86671F", dark: "C9A65D")
     /// A solid bronze wash for selection fills and the user chat bubble — solid (not
     /// accent-at-opacity) so stacked layers never drift in tone.
     package static let accentSoft = dynamic(light: "F0E7D2", dark: "39331F")

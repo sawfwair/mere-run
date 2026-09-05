@@ -12,7 +12,7 @@ enum ModelInventoryVerification: String, Codable, Equatable {
     case notChecked = "not_checked"
 }
 
-struct ModelInventorySnapshot: Equatable {
+struct ModelInventorySnapshot: Equatable, Encodable {
     let rows: [ModelInventoryRow]
     let mode: ModelInventoryMode
     let complete: Bool
@@ -23,7 +23,7 @@ struct ModelInventorySnapshot: Equatable {
     }
 }
 
-struct ModelInventoryRow: Equatable {
+struct ModelInventoryRow: Equatable, Encodable {
     let id: String
     let category: String
     let status: String
@@ -31,6 +31,7 @@ struct ModelInventoryRow: Equatable {
     let manifestPresent: Bool
     let runtimeAvailable: Bool?
     let verification: ModelInventoryVerification
+    var contextWindow: Int? = nil
 
     var isInstalled: Bool {
         status == "installed"
@@ -146,7 +147,8 @@ enum ModelInventory {
                         size: nil,
                         manifestPresent: manifestPresent,
                         runtimeAvailable: true,
-                        verification: .notChecked
+                        verification: .notChecked,
+                        contextWindow: ModelContextWindow.read(at: candidate.rootURL)
                     ),
                     complete: complete
                 )
@@ -265,7 +267,8 @@ enum ModelInventory {
             size: size,
             manifestPresent: manifestPresent,
             runtimeAvailable: status == "installed",
-            verification: .checked
+            verification: .checked,
+            contextWindow: status == "installed" ? measuredRoot.flatMap(ModelContextWindow.read(at:)) : nil
         )
     }
 

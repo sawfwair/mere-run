@@ -93,7 +93,7 @@ package final class NavigationModel: ObservableObject {
 
     /// Whether the Command view column is shown for `task`.
     package func showsCommandColumn(for task: StudioTask) -> Bool {
-        task.isPromptTask && showCommandColumn
+        showCommandColumn
     }
 
     /// Shows or hides the inspector for `task`. Showing it closes the Command view column.
@@ -109,7 +109,6 @@ package final class NavigationModel: ObservableObject {
 
     /// Shows or hides the Command view column; the inspector's memory for the task survives.
     package func toggleCommandColumn(for task: StudioTask) {
-        guard task.isPromptTask else { return }
         showCommandColumn.toggle()
     }
 

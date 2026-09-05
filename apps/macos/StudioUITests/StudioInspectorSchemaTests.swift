@@ -112,7 +112,7 @@ final class StudioInspectorSchemaTests: XCTestCase {
         navigation.toggleInspector(for: .videoSubjects)
         XCTAssertFalse(navigation.showsInspector(for: .videoSubjects), "only prompt tasks have an inspector")
         navigation.toggleCommandColumn(for: .modelsInstalled)
-        XCTAssertFalse(navigation.showsCommandColumn(for: .modelsInstalled))
+        XCTAssertTrue(navigation.showsCommandColumn(for: .modelsInstalled), "specialist tasks expose the same Command panel")
     }
 
     func testInspectorTaskMemoryRoundTripsAsSceneStorageText() {

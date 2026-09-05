@@ -516,6 +516,43 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    func testResultWorkspaceFocusAndComparisonSnapshots() throws {
+        let fidelity = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup)
+        defer { fidelity.tearDown() }
+        let images = fidelity.library.items.flatMap { item in
+            item.allArtifactURLs.filter { StudioOutputFileKind.classify($0) == .image }.map { (item, $0) }
+        }
+        let first = try XCTUnwrap(images.first)
+        let second = try XCTUnwrap(images.dropFirst().first)
+        for width in [768.0, 1440.0] {
+            for appearance in [StudioSnapshotAppearance.light, .dark] {
+                let view = StudioResultWorkspaceView(item: first.0, url: first.1, items: fidelity.library.items,
+                    initialComparison: StudioResultSelection(itemID: second.0.id, url: second.1),
+                    onClose: {}, onVary: { _ in }, onSave: { _ in }, onContinue: { _, _, _ in })
+                try fidelity.write(view, size: CGSize(width: width, height: 820), appearance: appearance,
+                    name: "completion-compare-\(Int(width))-\(appearance)", settle: 2)
+            }
+        }
+        let view = StudioResultWorkspaceView(item: first.0, url: first.1, items: fidelity.library.items,
+            onClose: {}, onVary: { _ in }, onSave: { _ in }, onContinue: { _, _, _ in })
+        try fidelity.write(view, size: Self.fidelitySize, appearance: .dark, name: "completion-focus-dark", settle: 2)
+    }
+
+    func testCompactSpecialistAndCommandSnapshots() throws {
+        for task in [StudioTask.visionFaces, .audioEnhance, .threeDFromImage, .musicAnalyze, .imageDatasets, .voiceVoices] {
+            let navigation = NavigationModel()
+            let view = StudioRootView().environmentObject(fixture.controller)
+                .environmentObject(fixture.library).environmentObject(navigation)
+            try fixture.write(view, size: CGSize(width: 960, height: 760), appearance: .light,
+                name: "completion-compact-\(task.rawValue)", settle: 2, afterAppear: { navigation.open(task: task) })
+        }
+        let navigation = NavigationModel()
+        let view = StudioRootView().environmentObject(fixture.controller)
+            .environmentObject(fixture.library).environmentObject(navigation)
+        try fixture.write(view, size: CGSize(width: 768, height: 760), appearance: .light,
+            name: "completion-compact-command", settle: 2, afterAppear: { navigation.toggleCommandColumn(for: .imageGenerate) })
+    }
+
     private static func snapshotDirectory() -> URL? {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_STUDIO_SNAPSHOT_DIR"],
               !path.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -629,7 +666,7 @@ private final class SnapshotFixture {
         let audioURL = root.appendingPathComponent("narration.wav", isDirectory: false)
         try Self.writeSilentWAV(to: audioURL, seconds: 4)
 
-        let now = Date()
+        let now = StudioSnapshotRenderer.referenceDate
         var rows: [StudioLibraryItem] = []
 
         rows.append(StudioLibraryItem(
@@ -941,7 +978,7 @@ private final class SnapshotFixture {
 
     private static func mockupTime(hour: Int, minute: Int) -> Date {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: StudioSnapshotRenderer.referenceDate)
         return calendar.date(byAdding: DateComponents(hour: hour, minute: minute), to: today) ?? today
     }
 
@@ -970,7 +1007,7 @@ private final class SnapshotFixture {
         }
         live.stderr("Loading image-zimage-nano\n")
         live.stderr("{\"event\":\"progress\",\"stage\":\"denoising\",\"step\":14,\"total_steps\":24}\n")
-        job.markRunning(status: job.status, at: Date().addingTimeInterval(-41))
+        job.markRunning(status: job.status, at: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-41))
 
         var pullDraft = pullTemplate.defaultDraft()
         pullDraft.model = ModelsInventoryScript.pullingModelID
@@ -1070,7 +1107,7 @@ private final class SnapshotFixture {
     /// (usage and last-run duration), a passed quality gate, a Lite benchmark, and a running
     /// composer-initiated pull that the job bar and list report.
     func seedModelsLibrary() throws {
-        let now = Date()
+        let now = StudioSnapshotRenderer.referenceDate
         var rows: [StudioLibraryItem] = []
 
         for (index, seconds) in [3.4, 3.6, 3.1].enumerated() {
@@ -1177,7 +1214,7 @@ private final class SnapshotFixture {
     /// awaiting its reply), yesterday's Code thread, and two older chats.
     private func seedConverseLibrary() {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: StudioSnapshotRenderer.referenceDate)
         func at(daysAgo: Int, hour: Int, minute: Int) -> Date {
             calendar.date(byAdding: DateComponents(day: -daysAgo, hour: hour, minute: minute), to: today) ?? today
         }
@@ -1334,7 +1371,7 @@ private final class SnapshotFixture {
             templateID: .musicRealtime,
             template: template,
             draft: draft,
-            createdAt: Date().addingTimeInterval(-249)
+            createdAt: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-249)
         )
         let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
         library.start(request: request, commandPreview: preview, status: .running)
@@ -1521,7 +1558,7 @@ private final class SnapshotFixture {
             templateID: .videoPrepareMasks,
             template: template,
             draft: draft,
-            createdAt: Date().addingTimeInterval(-95)
+            createdAt: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-95)
         )
         let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
         library.start(request: request, commandPreview: preview, status: .running)
@@ -1533,7 +1570,7 @@ private final class SnapshotFixture {
         live.stderr("Preparing SCAIL-2 masks from \(draft.inputPath)\n")
         live.stderr("Segmenting 3 reference images with vision-segment-sam31\n")
 
-        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: StudioSnapshotRenderer.referenceDate)
         components.hour = 13
         components.minute = 26
         return StudioSubjectsProjectSeed(
@@ -1937,7 +1974,7 @@ private enum ConverseScript {
                 stdout: SnapshotProcessRunner.statusSnapshot(installedModelCount: SnapshotProcessRunner.installedModelCount),
                 exitCode: 0
             ),
-            .init(matches: { $0 == ["model", "list"] }, stdout: ModelsInventoryScript.modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list"] || $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.modelList, exitCode: 0),
             .init(
                 matches: { $0 == ["model", "capabilities", "--all", "--json"] },
                 stdout: ModelsInventoryScript.capabilities,
@@ -2020,7 +2057,7 @@ private enum ModelsInventoryScript {
     /// to the runner's default so the footer keeps the boards' "Ready · 92 models".
     static var readinessResponses: [SnapshotProcessRunner.Response] {
         [
-            .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list"] || $0 == ["model", "list", "--json"] }, stdout: modelList, exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
             version,
         ]
@@ -2051,7 +2088,7 @@ private enum ModelsInventoryScript {
             of: "\n]}", with: "\n\(extraCapabilities)\n]}"
         )
         return [
-            .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
+            .init(matches: { $0 == ["model", "list"] || $0 == ["model", "list", "--json"] }, stdout: list, exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
         ]
     }
@@ -2070,7 +2107,7 @@ private enum ModelsInventoryScript {
                 stdout: SnapshotProcessRunner.statusSnapshot(installedModelCount: installedModelCount),
                 exitCode: 0
             ),
-            .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list"] || $0 == ["model", "list", "--json"] }, stdout: modelList, exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
             .init(matches: { $0 == ["model", "storage", "--json"] }, stdout: storage, exitCode: 0),
             .init(matches: { $0.starts(with: ["model", "info", defaultModelID]) }, stdout: modelInfo, exitCode: 0),
