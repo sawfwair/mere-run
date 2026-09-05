@@ -445,8 +445,9 @@ not part of the everyday inference workflow. Lanes:
   decode.
 - `q36-mtp` — compares supported Qwen-family serial decode against warmed
   adaptive and forced MTP speculative decode.
-- `q38-verification` — measures Flash-Next target-only linear verification at
-  widths from one through 32 and checks greedy output parity.
+- `q38-verification` — measures target-only linear verification and checks
+  greedy output parity. Flash-Next supports widths through 32; Qwen3.8 27B and
+  Ornith 1.5 Q4 support widths through nine.
 - `parakeet-coreml` — measures the resident Parakeet Core ML pipeline by stage.
 - `api-workload` — replays a chat workload against a running API server and
   measures runtime cache counters.

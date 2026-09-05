@@ -153,9 +153,10 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
         }
         MLXRandom.seed(72)
         let expertCount = 7
-        let routeCount = 23
-        for inputSize in [512, 640] {
-            let outputSize = 96
+        for (bits, inputSize, outputSize, routeCount) in [
+            (3, 512, 96, 23), (3, 640, 96, 23),
+            (4, 2_048, 1_024, 72), (4, 512, 2_048, 72), (4, 640, 96, 23),
+        ] {
             let denseWeight = MLXRandom.uniform(
                 -0.2..<0.2,
                 [expertCount, outputSize, inputSize]
@@ -163,7 +164,7 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
             let (weight, scales, optionalBiases) = MLX.quantized(
                 denseWeight,
                 groupSize: 64,
-                bits: 3,
+                bits: bits,
                 mode: .affine
             )
             let biases = try XCTUnwrap(optionalBiases)
@@ -182,7 +183,7 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
                     biases: biases[expert, 0..., 0...],
                     transpose: true,
                     groupSize: 64,
-                    bits: 3,
+                    bits: bits,
                     mode: .affine
                 )
             }, axis: 0)
@@ -193,7 +194,7 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
                 biases: biases,
                 indices: indices,
                 groupSize: 64,
-                bits: 3
+                bits: bits
             ))
             MLX.eval(expected, actual)
 

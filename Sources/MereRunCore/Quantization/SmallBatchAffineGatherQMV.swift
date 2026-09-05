@@ -2,21 +2,17 @@
 import MLX
 import MLXFast
 
-/// Runs independent affine-Q3 gather QMV routes in one Metal launch while
+/// Runs independent affine-Q3/Q4 gather QMV routes in one Metal launch while
 /// retaining MLX's exact one-vector reduction order for every route.
 enum SmallBatchAffineGatherQMV {
-    private static let fastKernel = makeKernel(
-        name: "mere_affine3_g64_gather_qmv_fast_v1",
-        implementation: "qmv_fast_impl"
-    )
-    private static let regularKernel = makeKernel(
-        name: "mere_affine3_g64_gather_qmv_v1",
-        implementation: "qmv_impl"
-    )
+    private static let fastQ3 = makeKernel(bits: 3, implementation: "qmv_fast_impl")
+    private static let regularQ3 = makeKernel(bits: 3, implementation: "qmv_impl")
+    private static let fastQ4 = makeKernel(bits: 4, implementation: "qmv_fast_impl")
+    private static let regularQ4 = makeKernel(bits: 4, implementation: "qmv_impl")
 
-    private static func makeKernel(name: String, implementation: String) -> MLXFast.MLXFastKernel {
+    private static func makeKernel(bits: Int, implementation: String) -> MLXFast.MLXFastKernel {
         MLXFast.metalKernel(
-            name: name,
+            name: "mere_affine\(bits)_g64_gather_\(implementation)_v1",
             inputNames: ["w", "scales", "biases", "x", "indices"],
             outputNames: ["y"],
             source: """
@@ -32,7 +28,7 @@ enum SmallBatchAffineGatherQMV {
                 const device bfloat16_t* route_x = x + route * k;
                 device bfloat16_t* route_y = y + route * n;
                 const uint3 local_tid = uint3(0, threadgroup_position_in_grid.y, 0);
-                \(implementation)<bfloat16_t, 64, 3>(
+                \(implementation)<bfloat16_t, 64, \(bits)>(
                     route_w, route_scales, route_biases, route_x, route_y,
                     x_shape[x_ndim - 1], w_shape[w_ndim - 2],
                     local_tid, simdgroup_index_in_threadgroup,
@@ -53,7 +49,7 @@ enum SmallBatchAffineGatherQMV {
         bits: Int
     ) -> MLXArray? {
         guard Device.defaultDevice().deviceType == .gpu,
-              groupSize == 64, bits == 3,
+              groupSize == 64, bits == 3 || bits == 4,
               x.dtype == .bfloat16,
               weight.dtype == .uint32,
               scales.dtype == .bfloat16,
@@ -78,6 +74,8 @@ enum SmallBatchAffineGatherQMV {
             return nil
         }
 
+        let fastKernel = bits == 3 ? fastQ3 : fastQ4
+        let regularKernel = bits == 3 ? regularQ3 : regularQ4
         let kernel = inputSize.isMultiple(of: 512) ? fastKernel : regularKernel
         return kernel(
             [weight, scales, biases, x, indices],

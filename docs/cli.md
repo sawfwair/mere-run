@@ -184,7 +184,7 @@ Public tree:
     - `mere.run model benchmark gemma4-kv` — Compare Gemma4 default KV cache decode against packed PolarKV.
     - `mere.run model benchmark gemma4-mtp` — Compare Gemma4 serial decode against verified MTP speculative decode.
     - `mere.run model benchmark q36-mtp` — Compare Qwen-family serial decode against adaptive and forced MTP speculative decode.
-    - `mere.run model benchmark q38-verification` — Measure the Flash-Next target-only verification frontier.
+    - `mere.run model benchmark q38-verification` — Measure the Qwen-family target-only verification frontier.
     - `mere.run model benchmark laguna-dflash` — Measure Laguna target-only and DFlash decode in one resident process.
     - `mere.run model benchmark parakeet-coreml` — Benchmark the prepared Parakeet Core ML pipeline in one resident process.
     - `mere.run model benchmark api-workload` — Replay a chat workload against a running API server and measure runtime cache counters.
@@ -2618,8 +2618,9 @@ single-request paths.
 
 ### `mere.run model benchmark q38-verification`
 
-Measure optimized Flash-Next target passes at linear verification widths from
-one through 32. The benchmark first generates an oracle sequence with the same
+Measure Qwen-family target passes at linear verification widths. Flash-Next
+accepts widths from one through 32. Qwen3.8 27B and Ornith 1.5 Q4 accept widths
+from one through nine. The benchmark first generates an oracle sequence with the same
 target. It then checks every verification width against that sequence for exact
 greedy parity.
 

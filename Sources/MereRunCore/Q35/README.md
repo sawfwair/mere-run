@@ -20,9 +20,9 @@ The official Qwen3.8 27B shards embed a dense one-layer MTP head. The loader
 reads only the shards that contain `mtp.*` tensors, maps its dense SwiGLU layout,
 and also discovers a bare `model.safetensors` MTP component under `mtp/`. The
 managed 4-bit lane pairs the MLX Fast reference target with a matching
-4-bit/group-64 proposal head. `MERERUN_Q35_MTP_SPECULATION=1` enables greedy
-speculation from short prompts. It stays opt-in because multi-token target
-verification can choose a different greedy path from serial target decode.
+4-bit/group-64 proposal head. The managed Q4 target enables speculation from
+short prompts. `MERERUN_Q35_MTP_SPECULATION=1` enables the BF16 target's opt-in
+path; that precision still requires separate serial-output qualification.
 Qwen3.6 hybrid MoE keeps the existing adaptive long-context threshold.
 
 Ornith 1.5's official MLX quants omit the MTP tensors advertised by their
@@ -38,12 +38,33 @@ Verified Q4 measurements showed a short-prompt decode win, so managed Ornith
 Greedy Qwen3.8 MTP uses a proposal-only compact vocabulary projection containing
 the first 98,304 tokenizer rows and the official control-token rows. A fused
 Metal reduction maps its argmax back to the full tokenizer without materializing
-the unused vocabulary tail. A request-local MTP cache is primed from up to 4,096
-prompt hidden states and retains only target-confirmed transitions; speculative
-rows execute on a disposable fork. The exact target projection still verifies
+the unused vocabulary tail. Qwen 27B and Ornith 1.5 stream confirmed prompt
+transitions into the MTP cache in aligned 256-token blocks. Prefix checkpoints
+fork the target caches, draft history, pending transitions, and last hidden
+state together. Only semantic boundaries and the final prompt retain snapshots.
+Speculative rows execute on a disposable fork. The exact target projection still verifies
 every emitted token. Per-request acceptance estimates adapt the draft depth and
 can fall back to target-only rounds when proposals stop paying for their repair
-cost. Sampled MTP keeps the full-vocabulary probability path.
+cost. Sampled MTP keeps the full-vocabulary probability path and doesn't prime
+greedy draft history. `MERERUN_Q35_MTP_STREAM_HISTORY=0` restores the earlier
+history strategy for Qwen 27B and Ornith: dense prompts up to 4,096 tokens retain
+hidden history; longer dense prompts and Ornith start without prompt history.
+Set the value to `none` to omit prompt history entirely for benchmark ablation.
+The `draftHistoryTokens` acceleration field reports confirmed prompt
+transitions available before decode, including pending transitions.
+
+Ornith Q4 target verification can gather its expert routes in one Metal launch
+per projection while preserving each route's single-token QMV arithmetic.
+The kernel supports affine Q4/group-64 experts, fused gate/up weights, and
+verification widths two through nine. Router and shared-gate projections keep
+serial reduction order, including the checkpoint's Q8 gates.
+`MERERUN_Q35_EXACT_Q4_EXPERTS=0` selects the previous expert execution path.
+Q6, Q8, BF16, prefill, and other expert geometries retain their existing paths.
+
+Small target-verification attention blocks respect MLX's vector SDPA limit,
+`queryRows * (queryHeads / kvHeads) <= 32`: five rows for Qwen 27B and four
+for Ornith. Blocks that cross a Metal attention-reduction boundary use each
+row's serial KV window. Q/K/V and output projections remain batched.
 
 Qwen3.8 target verification marks its model forward explicitly. On macOS, only
 that marked path may use the fused BF16 GDN prework kernel, and only for batch

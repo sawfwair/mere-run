@@ -149,7 +149,6 @@ public actor Q35Generator: ChatGenerator {
     /// One committed token plus up to seven Qwen3.8 proposal tokens. Wider
     /// target verification is split only at SDPA, preserving one weight pass.
     private static let q38MTPBlockSize = 8
-    private static let mtpPromptHistoryLimit = 4_096
 
     /// Continuous-batching decode samples every row on GPU (the same sampler
     /// the serial pipelined path uses) and reads the whole batch back in one
@@ -655,8 +654,8 @@ public actor Q35Generator: ChatGenerator {
         let tower = visionConfigAndResources.map { Q35VisionTower(config: $0.0) }
         // Load the MTP draft head whenever it ships with the model and isn't
         // explicitly disabled. Whether speculation is actually USED is decided
-        // by the model-specific policy in Self.shouldSpeculate. Dense Qwen3.8
-        // remains opt-in, Qwen4Exp and Ornith use their validated short-context
+        // by the model-specific policy in Self.shouldSpeculate. BF16 Qwen3.8
+        // remains opt-in, Q4 Qwen3.8 and Ornith use their short-context
         // paths, and Qwen3.6 hybrid MoE retains the measured long-context threshold.
         let mtpPolicy = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -852,21 +851,22 @@ public actor Q35Generator: ChatGenerator {
             && request.tools?.isEmpty != false
             && imageURLs.isEmpty
             && Self.shouldSpeculate(
+                modelId: modelId,
+                usesMoE: loadedConfig.textConfig.usesMoE,
                 promptTokenCount: promptTokens.count,
-                maxContextTokens: effectiveContext,
-                defaultMinimumPromptTokens: Self.defaultMTPMinimumPromptTokens(
-                    modelId: modelId,
-                    usesMoE: loadedConfig.textConfig.usesMoE
-                ),
-                enabledByDefault: loadedConfig.textConfig.usesMoE
+                maxContextTokens: effectiveContext
             )
             && mtpModel != nil
-        let retainMTPPromptHistory = mtpSpeculationEligible
-            && generationConfig.temperature == 0
-            && (loadedConfig.textConfig.isQwen4Exp
-                || (!loadedConfig.textConfig.usesMoE
-                    && promptTokens.count <= Self.mtpPromptHistoryLimit))
-        let streamMTPHistory = retainMTPPromptHistory && loadedConfig.textConfig.isQwen4Exp
+        let historyMode = Self.mtpHistoryMode(
+            modelId: modelId,
+            isQwen4Exp: loadedConfig.textConfig.isQwen4Exp,
+            usesMoE: loadedConfig.textConfig.usesMoE,
+            speculationEligible: mtpSpeculationEligible,
+            greedy: generationConfig.temperature == 0,
+            promptTokenCount: promptTokens.count
+        )
+        let retainMTPPromptHistory = historyMode != .none
+        let streamMTPHistory = historyMode == .streaming
         let retainPrefillHidden = prefixKVCacheEnabled || mtpSpeculationEligible
         let effectiveKVCacheMode: RuntimeKVCacheMode
         switch request.kvCacheMode {
@@ -916,7 +916,9 @@ public actor Q35Generator: ChatGenerator {
                 retainHidden: retainPrefillHidden,
                 retainMTPHistory: retainMTPPromptHistory,
                 mtpSession: streamMTPHistory
-                    ? (prefixSeed?.mtpSession ?? Q35MTPDraftSession(historyCache: Q38QSACache())) : nil,
+                    ? (prefixSeed?.mtpSession ?? Q35MTPDraftSession(
+                        historyCache: loadedConfig.textConfig.isQwen4Exp ? Q38QSACache() : KVCacheSimple()
+                    )) : nil,
                 prefillMTPModel: streamMTPHistory ? mtpModel : nil,
                 progressHandler: progressHandler
             )
@@ -1182,14 +1184,10 @@ public actor Q35Generator: ChatGenerator {
         }
         let speculationMTP = !logprobCapture.isEnabled
             && !jsonConstrained && !stopAtCompletedToolCall && Self.shouldSpeculate(
+            modelId: modelId,
+            usesMoE: model.config.textConfig.usesMoE,
             promptTokenCount: promptTokens.count,
-            maxContextTokens: maxContextTokens,
-            defaultMinimumPromptTokens: Self.defaultMTPMinimumPromptTokens(
-                modelId: modelId,
-                usesMoE: model.config.textConfig.usesMoE
-            ),
-            enabledByDefault: model.config.textConfig.usesMoE
-                || modelId == Q35Resources.q38TwentySevenB4BitModelId
+            maxContextTokens: maxContextTokens
         ) && mropeRopeDelta == nil ? mtpModel : nil
         let decodePath = Self.decodePath(
             jsonConstrained: jsonConstrained,
@@ -1317,6 +1315,7 @@ public actor Q35Generator: ChatGenerator {
             promptHidden: prefillMTPHidden,
             historyCache: model.config.textConfig.isQwen4Exp ? Q38QSACache() : KVCacheSimple()
         )
+        let draftHistoryTokens = mtpDraftSession.committedHistoryCount
         let decodeStart = Date()
 
         func emit(_ token: Int) {
@@ -1670,7 +1669,8 @@ public actor Q35Generator: ChatGenerator {
                     draftModel: mtpModel?.diagnosticsID ?? "qwen-mtp",
                     rounds: mtpVerificationPasses,
                     draftedTokens: mtpDraftedTokens,
-                    acceptedDraftTokens: mtpAcceptedTokens
+                    acceptedDraftTokens: mtpAcceptedTokens,
+                    draftHistoryTokens: draftHistoryTokens
                 )
             } ?? ChatAccelerationDiagnostics(
                 route: jsonConstrained ? "json-constrained-serial" : "serial"
@@ -2127,7 +2127,7 @@ public actor Q35Generator: ChatGenerator {
         argMax(logits[0, -1, 0...], axis: -1).asType(.int32)
     }
 
-    private func chunkedPrefill(
+    func chunkedPrefill(
         model: Q35Model,
         promptTokens: [Int],
         cache: [Q35LayerCache?],
@@ -2195,7 +2195,7 @@ public actor Q35Generator: ChatGenerator {
                     mtpHistoryChunks.append(outputMTPHidden)
                 }
                 hidden = lastTokenHidden(outputMTPHidden)
-                let priority: RuntimePrefixCacheEntryPriority? = model.config.textConfig.isQwen4Exp
+                let priority: RuntimePrefixCacheEntryPriority? = mtpSession != nil || model.config.textConfig.isQwen4Exp
                     ? RuntimePrefillCheckpointPlanner.storagePriority(
                         tokenCount: end, total: promptTokens.count,
                         semanticCheckpoints: checkpointTokenCounts
@@ -2347,7 +2347,7 @@ public actor Q35Generator: ChatGenerator {
         )
     }
 
-    private func prefixKVCacheSeed(
+    func prefixKVCacheSeed(
         modelPath: String,
         promptTokens: [Int],
         cacheMode: RuntimeKVCacheMode,

@@ -3,6 +3,23 @@ import XCTest
 @testable import MereRunCore
 
 final class ModelBenchmarkCommandTests: XCTestCase {
+    func testQwenBenchmarkExpectedPolicyMatchesRuntimeAdmission() {
+        for (modelID, moe) in [(Q35Resources.q38TwentySevenB4BitModelId, false),
+                               (Q35Resources.q38TwentySevenBModelId, false),
+                               (Q35Resources.ornith35BMLX4BitModelId, true),
+                               (Q35Resources.q38FlashNext3BitNativePLEModelId, true),
+                               (Q35Resources.q36NanoModelId, true)] {
+            for count in [32, 8_192] {
+                XCTAssertEqual(Q36MTPBenchmarkVariant.adaptive.expectedMTPActive(
+                    modelID: modelID, promptTokens: count, contextSize: 16_384, forcedThreshold: 0
+                ), Q35Generator.shouldSpeculate(
+                    modelId: modelID, usesMoE: moe, promptTokenCount: count,
+                    maxContextTokens: 16_384, environment: [:]
+                ), modelID)
+            }
+        }
+    }
+
     func testModelCommandExposesBenchmarkSubcommand() {
         let commandNames = Set(Model.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("benchmark"))
@@ -549,7 +566,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
 
         XCTAssertEqual(cmd.model, Q35Resources.q38FlashNext3BitNativePLEModelId)
         XCTAssertEqual(cmd.modelRoot, "/tmp/flash-next")
-        XCTAssertEqual(cmd.widths, "1,4,8,16,32")
+        XCTAssertEqual(try cmd.parsedWidths(), [1, 4, 8, 16, 32])
         XCTAssertEqual(cmd.tokens, 128)
         XCTAssertEqual(cmd.trials, 2)
         XCTAssertFalse(cmd.json)
@@ -560,6 +577,21 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertThrowsError(try ModelBenchmarkQ38Verification.parse([
             "--model-root", "/tmp/flash-next",
             "--widths", "4,64",
+        ]))
+    }
+
+    func testQwenAndOrnithVerificationWidthsAreBounded() throws {
+        for modelID in [Q35Resources.q38TwentySevenBModelId, Q35Resources.q38TwentySevenB4BitModelId,
+                        Q35Resources.ornith35BMLX4BitModelId] {
+            let arguments = ["--model", modelID, "--model-root", "/tmp/checkpoint"]
+            let command = try ModelBenchmarkQ38Verification.parse(arguments)
+            XCTAssertEqual(try command.parsedWidths(), [1, 4, 8, 9])
+            XCTAssertThrowsError(try ModelBenchmarkQ38Verification.parse(arguments + ["--widths", "16"]))
+            XCTAssertThrowsError(try ModelBenchmarkQ38Verification.parse(arguments + ["--widths", ""]))
+            XCTAssertThrowsError(try ModelBenchmarkQ38Verification.parse(arguments + ["--widths", "4,"]))
+        }
+        XCTAssertThrowsError(try ModelBenchmarkQ38Verification.parse([
+            "--model", Q35Resources.ornith35BMLX6BitModelId, "--model-root", "/tmp/checkpoint",
         ]))
     }
 

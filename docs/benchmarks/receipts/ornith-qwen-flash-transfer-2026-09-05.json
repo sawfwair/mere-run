@@ -1,0 +1,4480 @@
+{
+  "binarySHA256": "12f78e52317eeb27ec7357d1b3a053e4217ee5f1e7a7676fc8bc7250c5852a8a",
+  "buildCommand": "swift build -c release --product mere.run --disable-index-store",
+  "generationRuns": [
+    {
+      "name": "ornith-code-candidate-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.3655745503984925,
+              "forced": 1.1174552576494725
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.37487687789201923,
+              "forced": 1.1139418228402518
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7084500789642334,
+                "decodeTokensPerSecond": 94.51900257947513,
+                "elapsedSeconds": 2.819272041320801,
+                "endToEndTokensPerSecond": 90.80358200554018,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.011044025421142578,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "disabled",
+                "prefillSeconds": 0.10940802097320557,
+                "prefillTokensPerSecond": 493.5652753761518,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 7680786432,
+                "residentMemoryBeforeBytes": 7680229376,
+                "ttftSeconds": 0.12045800685882568
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5186721991701245,
+                  "acceptedDraftTokens": 125,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 131,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 7.408748984336853,
+                "decodeTokensPerSecond": 34.553741872105576,
+                "elapsedSeconds": 7.520527958869934,
+                "endToEndTokensPerSecond": 34.04016332364884,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018298625946044922,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "adaptive",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "adaptive",
+                "prefillSeconds": 0.11043691635131836,
+                "prefillTokensPerSecond": 488.9669304801751,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 9467068416,
+                "residentMemoryBeforeBytes": 9465069568,
+                "ttftSeconds": 0.11062586307525635
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5186721991701245,
+                  "acceptedDraftTokens": 125,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 131,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.423766016960144,
+                "decodeTokensPerSecond": 105.62075638021854,
+                "elapsedSeconds": 2.53089702129364,
+                "endToEndTokensPerSecond": 101.1499076596757,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003110170364379883,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "forced",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "forced",
+                "prefillSeconds": 0.1057349443435669,
+                "prefillTokensPerSecond": 510.71100793827065,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 9504063488,
+                "residentMemoryBeforeBytes": 9504227328,
+                "ttftSeconds": 0.10605192184448242
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-code-candidate-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 5.122462567660481,
+              "forced": 1.7477263808247259
+            },
+            "endToEndSpeedups": {
+              "adaptive": 4.942226613115939,
+              "forced": 1.7351478812614893
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 12.776661038398743,
+                "decodeTokensPerSecond": 20.036533741532494,
+                "elapsedSeconds": 12.879254937171936,
+                "endToEndTokensPerSecond": 19.876926207985537,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.03540301322937012,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "disabled",
+                "prefillSeconds": 0.10123598575592041,
+                "prefillTokensPerSecond": 533.4071634388368,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 7696744448,
+                "residentMemoryBeforeBytes": 7696154624,
+                "ttftSeconds": 0.13664495944976807
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5186721991701245,
+                  "acceptedDraftTokens": 125,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 131,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.494241952896118,
+                "decodeTokensPerSecond": 102.6363940766664,
+                "elapsedSeconds": 2.605962038040161,
+                "endToEndTokensPerSecond": 98.23627369204782,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00039505958557128906,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "adaptive",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "adaptive",
+                "prefillSeconds": 0.1103290319442749,
+                "prefillTokensPerSecond": 489.4450630843419,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 9466150912,
+                "residentMemoryBeforeBytes": 9465675776,
+                "ttftSeconds": 0.11073005199432373
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5186721991701245,
+                  "acceptedDraftTokens": 125,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 131,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 7.3104469776153564,
+                "decodeTokensPerSecond": 35.01837860036109,
+                "elapsedSeconds": 7.422569036483765,
+                "endToEndTokensPerSecond": 34.489406395777074,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0001939535140991211,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "forced",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "forced",
+                "prefillSeconds": 0.11070394515991211,
+                "prefillTokensPerSecond": 487.78749413127844,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 9505865728,
+                "residentMemoryBeforeBytes": 9504571392,
+                "ttftSeconds": 0.11090385913848877
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-code-candidate-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.4050628970526929,
+              "forced": 1.122715337504085
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.4155540962902704,
+              "forced": 1.1179031083420852
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.740630030632019,
+                "decodeTokensPerSecond": 93.40917859714308,
+                "elapsedSeconds": 2.858048915863037,
+                "endToEndTokensPerSecond": 89.57159500634242,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.010587096214294434,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "disabled",
+                "prefillSeconds": 0.11604499816894531,
+                "prefillTokensPerSecond": 465.3367301655134,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 7679213568,
+                "residentMemoryBeforeBytes": 7678672896,
+                "ttftSeconds": 0.12663805484771729
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5186721991701245,
+                  "acceptedDraftTokens": 125,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 131,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.765936970710754,
+                "decodeTokensPerSecond": 37.83659249387117,
+                "elapsedSeconds": 6.8776819705963135,
+                "endToEndTokensPerSecond": 37.22184321613872,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0001779794692993164,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "adaptive",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "adaptive",
+                "prefillSeconds": 0.11030900478363037,
+                "prefillTokensPerSecond": 489.5339243239505,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 9465937920,
+                "residentMemoryBeforeBytes": 9464987648,
+                "ttftSeconds": 0.11049294471740723
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5186721991701245,
+                  "acceptedDraftTokens": 125,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 131,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.441072940826416,
+                "decodeTokensPerSecond": 104.87191747467085,
+                "elapsedSeconds": 2.556615948677063,
+                "endToEndTokensPerSecond": 100.13236447674858,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003160238265991211,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "forced",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "forced",
+                "prefillSeconds": 0.11412298679351807,
+                "prefillTokensPerSecond": 473.17373578472694,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 10426056704,
+                "residentMemoryBeforeBytes": 10425925632,
+                "ttftSeconds": 0.11444497108459473
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-code-legacy-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.35101943859696694,
+              "forced": 0.40192826141431476
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.3573944657106037,
+              "forced": 0.40916505587191004
+            },
+            "greedyOutputParity": false,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7593090534210205,
+                "decodeTokensPerSecond": 92.77684921977423,
+                "elapsedSeconds": 2.855208992958069,
+                "endToEndTokensPerSecond": 89.66068705701908,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.010691046714782715,
+                "generatedTokens": 256,
+                "loadSeconds": 7.033348083496094e-06,
+                "name": "baseline",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "disabled",
+                "prefillSeconds": 0.09454405307769775,
+                "prefillTokensPerSecond": 571.1623126165532,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 7682539520,
+                "residentMemoryBeforeBytes": 7682031616,
+                "ttftSeconds": 0.10524213314056396
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5020408163265306,
+                  "acceptedDraftTokens": 123,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 245,
+                  "rounds": 133,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 7.860844016075134,
+                "decodeTokensPerSecond": 32.566477527920604,
+                "elapsedSeconds": 7.988956928253174,
+                "endToEndTokensPerSecond": 32.04423334598897,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00023102760314941406,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "adaptive",
+                "outputSHA256": "7fd8fa1d75fe67da2a35743531b8b67d25528da4cb945ee23f903996c0646700",
+                "policy": "adaptive",
+                "prefillSeconds": 0.12676990032196045,
+                "prefillTokensPerSecond": 425.96862396243074,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 9474424832,
+                "residentMemoryBeforeBytes": 9468723200,
+                "ttftSeconds": 0.1270068883895874
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5020408163265306,
+                  "acceptedDraftTokens": 123,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 245,
+                  "rounds": 133,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.8651779890060425,
+                "decodeTokensPerSecond": 37.289637706401884,
+                "elapsedSeconds": 6.978134989738464,
+                "endToEndTokensPerSecond": 36.68602002919905,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018596649169921875,
+                "generatedTokens": 256,
+                "loadSeconds": 7.033348083496094e-06,
+                "name": "forced",
+                "outputSHA256": "7fd8fa1d75fe67da2a35743531b8b67d25528da4cb945ee23f903996c0646700",
+                "policy": "forced",
+                "prefillSeconds": 0.1115649938583374,
+                "prefillTokensPerSecond": 484.02279364231333,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 11149164544,
+                "residentMemoryBeforeBytes": 11148984320,
+                "ttftSeconds": 0.11175799369812012
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-code-legacy-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 4.2938857537182455,
+              "forced": 4.7154250171477345
+            },
+            "endToEndSpeedups": {
+              "adaptive": 4.133851690629663,
+              "forced": 4.545874349499751
+            },
+            "greedyOutputParity": false,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 11.108711957931519,
+                "decodeTokensPerSecond": 23.044975958460995,
+                "elapsedSeconds": 11.215271949768066,
+                "endToEndTokensPerSecond": 22.826018053471643,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.03409993648529053,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "disabled",
+                "prefillSeconds": 0.10525596141815186,
+                "prefillTokensPerSecond": 513.0350744265537,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 7697907712,
+                "residentMemoryBeforeBytes": 7697350656,
+                "ttftSeconds": 0.13936185836791992
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5020408163265306,
+                  "acceptedDraftTokens": 123,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 245,
+                  "rounds": 133,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.587100028991699,
+                "decodeTokensPerSecond": 98.95249396281514,
+                "elapsedSeconds": 2.7130320072174072,
+                "endToEndTokensPerSecond": 94.35937332068696,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00030100345611572266,
+                "generatedTokens": 256,
+                "loadSeconds": 4.887580871582031e-06,
+                "name": "adaptive",
+                "outputSHA256": "7fd8fa1d75fe67da2a35743531b8b67d25528da4cb945ee23f903996c0646700",
+                "policy": "adaptive",
+                "prefillSeconds": 0.12451004981994629,
+                "prefillTokensPerSecond": 433.6999308737671,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 9472131072,
+                "residentMemoryBeforeBytes": 9471918080,
+                "ttftSeconds": 0.1248159408569336
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5020408163265306,
+                  "acceptedDraftTokens": 123,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 245,
+                  "rounds": 133,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.355824112892151,
+                "decodeTokensPerSecond": 108.66685615409507,
+                "elapsedSeconds": 2.4671319723129272,
+                "endToEndTokensPerSecond": 103.76420997049499,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0002970695495605469,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "forced",
+                "outputSHA256": "7fd8fa1d75fe67da2a35743531b8b67d25528da4cb945ee23f903996c0646700",
+                "policy": "forced",
+                "prefillSeconds": 0.10993504524230957,
+                "prefillTokensPerSecond": 491.19914292096524,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 11129061376,
+                "residentMemoryBeforeBytes": 11128946688,
+                "ttftSeconds": 0.11023819446563721
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-code-legacy-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 1.155061125162768,
+              "forced": 0.40207983947630216
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.143004591261092,
+              "forced": 0.41042731557682843
+            },
+            "greedyOutputParity": false,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7744059562683105,
+                "decodeTokensPerSecond": 92.27200490310743,
+                "elapsedSeconds": 2.877640962600708,
+                "endToEndTokensPerSecond": 88.96175837330188,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.010783910751342773,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+                "policy": "disabled",
+                "prefillSeconds": 0.10186707973480225,
+                "prefillTokensPerSecond": 530.102562482227,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 7680933888,
+                "residentMemoryBeforeBytes": 7680344064,
+                "ttftSeconds": 0.11265695095062256
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5020408163265306,
+                  "acceptedDraftTokens": 123,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 245,
+                  "rounds": 133,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.4019559621810913,
+                "decodeTokensPerSecond": 106.57980580440771,
+                "elapsedSeconds": 2.517611026763916,
+                "endToEndTokensPerSecond": 101.68369826734394,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00030493736267089844,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "adaptive",
+                "outputSHA256": "7fd8fa1d75fe67da2a35743531b8b67d25528da4cb945ee23f903996c0646700",
+                "policy": "adaptive",
+                "prefillSeconds": 0.1142280101776123,
+                "prefillTokensPerSecond": 472.73869093960224,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 9471934464,
+                "residentMemoryBeforeBytes": 9472000000,
+                "ttftSeconds": 0.11453890800476074
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5020408163265306,
+                  "acceptedDraftTokens": 123,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 245,
+                  "rounds": 133,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.900136947631836,
+                "decodeTokensPerSecond": 37.100712919598,
+                "elapsedSeconds": 7.0113290548324585,
+                "endToEndTokensPerSecond": 36.51233567814873,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00019097328186035156,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "forced",
+                "outputSHA256": "7fd8fa1d75fe67da2a35743531b8b67d25528da4cb945ee23f903996c0646700",
+                "policy": "forced",
+                "prefillSeconds": 0.10985100269317627,
+                "prefillTokensPerSecond": 491.5749394734872,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 11145510912,
+                "residentMemoryBeforeBytes": 11144986624,
+                "ttftSeconds": 0.11004793643951416
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-math-candidate-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12312.50M  free = 999.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 5.615243600624006,
+              "forced": 1.8534566853127696
+            },
+            "endToEndSpeedups": {
+              "adaptive": 5.395941673765013,
+              "forced": 1.8381245537864457
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 12.195629954338074,
+                "decodeTokensPerSecond": 20.9911255883046,
+                "elapsedSeconds": 12.300043940544128,
+                "endToEndTokensPerSecond": 20.812933777915845,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.03533196449279785,
+                "generatedTokens": 256,
+                "loadSeconds": 8.106231689453125e-06,
+                "name": "baseline",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "disabled",
+                "prefillSeconds": 0.10310995578765869,
+                "prefillTokensPerSecond": 475.2208419224717,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 7681130496,
+                "residentMemoryBeforeBytes": 7680507904,
+                "ttftSeconds": 0.138450026512146
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5975103734439834,
+                  "acceptedDraftTokens": 144,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 111,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.1718790531158447,
+                "decodeTokensPerSecond": 117.87028362962224,
+                "elapsedSeconds": 2.279499053955078,
+                "endToEndTokensPerSecond": 112.3053767255676,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00033402442932128906,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "adaptive",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "adaptive",
+                "prefillSeconds": 0.10630106925964355,
+                "prefillTokensPerSecond": 460.954911754613,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9466839040,
+                "residentMemoryBeforeBytes": 9466331136,
+                "ttftSeconds": 0.10664117336273193
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5975103734439834,
+                  "acceptedDraftTokens": 144,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 111,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.579937934875488,
+                "decodeTokensPerSecond": 38.90614205388311,
+                "elapsedSeconds": 6.691627025604248,
+                "endToEndTokensPerSecond": 38.256764613518406,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018799304962158203,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "forced",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "forced",
+                "prefillSeconds": 0.11029601097106934,
+                "prefillTokensPerSecond": 444.2590404548058,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 11032068096,
+                "residentMemoryBeforeBytes": 11026939904,
+                "ttftSeconds": 0.11048996448516846
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-math-candidate-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.4428460941765974,
+              "forced": 0.424304767219917
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.45310212170945574,
+              "forced": 0.4346396174224847
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7124420404434204,
+                "decodeTokensPerSecond": 94.37989685418312,
+                "elapsedSeconds": 2.824702024459839,
+                "endToEndTokensPerSecond": 90.62902840130695,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.010809063911437988,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "disabled",
+                "prefillSeconds": 0.11093807220458984,
+                "prefillTokensPerSecond": 441.6878626630103,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 7680262144,
+                "residentMemoryBeforeBytes": 7679721472,
+                "ttftSeconds": 0.12175309658050537
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5975103734439834,
+                  "acceptedDraftTokens": 144,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 111,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.125021934509277,
+                "decodeTokensPerSecond": 41.79576869066513,
+                "elapsedSeconds": 6.234139919281006,
+                "endToEndTokensPerSecond": 41.064205057098704,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018894672393798828,
+                "generatedTokens": 256,
+                "loadSeconds": 7.033348083496094e-06,
+                "name": "adaptive",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "adaptive",
+                "prefillSeconds": 0.10782408714294434,
+                "prefillTokensPerSecond": 454.44391228686976,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9472016384,
+                "residentMemoryBeforeBytes": 9471393792,
+                "ttftSeconds": 0.10802006721496582
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5975103734439834,
+                  "acceptedDraftTokens": 144,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 111,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.392673969268799,
+                "decodeTokensPerSecond": 40.045840164953944,
+                "elapsedSeconds": 6.498952031135559,
+                "endToEndTokensPerSecond": 39.39096623171555,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018298625946044922,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "forced",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "forced",
+                "prefillSeconds": 0.10508501529693604,
+                "prefillTokensPerSecond": 466.28912658519346,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9516695552,
+                "residentMemoryBeforeBytes": 9516122112,
+                "ttftSeconds": 0.10527396202087402
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-math-candidate-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.4277224046324748,
+              "forced": 0.4371433606503251
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.437107530322044,
+              "forced": 0.4465963014530266
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7400110960006714,
+                "decodeTokensPerSecond": 93.43027857575409,
+                "elapsedSeconds": 2.8468040227890015,
+                "endToEndTokensPerSecond": 89.92540334729397,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.01070404052734375,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "disabled",
+                "prefillSeconds": 0.10555899143218994,
+                "prefillTokensPerSecond": 464.19541656455783,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 7697743872,
+                "residentMemoryBeforeBytes": 7697235968,
+                "ttftSeconds": 0.11626899242401123
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5975103734439834,
+                  "acceptedDraftTokens": 144,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 111,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.406049966812134,
+                "decodeTokensPerSecond": 39.96222341790353,
+                "elapsedSeconds": 6.512823104858398,
+                "endToEndTokensPerSecond": 39.307070970349336,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0001710653305053711,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "adaptive",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "adaptive",
+                "prefillSeconds": 0.105538010597229,
+                "prefillTokensPerSecond": 464.2876980787673,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9465430016,
+                "residentMemoryBeforeBytes": 9460137984,
+                "ttftSeconds": 0.10571515560150146
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5975103734439834,
+                  "acceptedDraftTokens": 144,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 241,
+                  "rounds": 111,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.26799201965332,
+                "decodeTokensPerSecond": 40.84242596310121,
+                "elapsedSeconds": 6.3744460344314575,
+                "endToEndTokensPerSecond": 40.160352541573104,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0001709461212158203,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "forced",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "forced",
+                "prefillSeconds": 0.10521304607391357,
+                "prefillTokensPerSecond": 465.72171254862104,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9545809920,
+                "residentMemoryBeforeBytes": 9545596928,
+                "ttftSeconds": 0.10539007186889648
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-math-legacy-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12312.50M  free = 999.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 1.1981557602530308,
+              "forced": 1.190890417299581
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.185030280348667,
+              "forced": 1.1788366335708698
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7220230102539062,
+                "decodeTokensPerSecond": 94.04769872835156,
+                "elapsedSeconds": 2.8204479217529297,
+                "endToEndTokensPerSecond": 90.76572484305757,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.010483026504516602,
+                "generatedTokens": 256,
+                "loadSeconds": 7.033348083496094e-06,
+                "name": "baseline",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "disabled",
+                "prefillSeconds": 0.09721803665161133,
+                "prefillTokensPerSecond": 504.02169893222026,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 7697825792,
+                "residentMemoryBeforeBytes": 7697252352,
+                "ttftSeconds": 0.10770809650421143
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5096525096525096,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 259,
+                  "rounds": 123,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.2718440294265747,
+                "decodeTokensPerSecond": 112.68379196991606,
+                "elapsedSeconds": 2.380064010620117,
+                "endToEndTokensPerSecond": 107.56013235681847,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003330707550048828,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "adaptive",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "adaptive",
+                "prefillSeconds": 0.1069260835647583,
+                "prefillTokensPerSecond": 458.26049516088216,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9466331136,
+                "residentMemoryBeforeBytes": 9466036224,
+                "ttftSeconds": 0.10726511478424072
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5096525096525096,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 259,
+                  "rounds": 123,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.285704016685486,
+                "decodeTokensPerSecond": 112.00050318467186,
+                "elapsedSeconds": 2.3925689458847046,
+                "endToEndTokensPerSecond": 106.99796151760985,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003190040588378906,
+                "generatedTokens": 256,
+                "loadSeconds": 5.0067901611328125e-06,
+                "name": "forced",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "forced",
+                "prefillSeconds": 0.10553503036499023,
+                "prefillTokensPerSecond": 464.30080922452703,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 11132043264,
+                "residentMemoryBeforeBytes": 11132010496,
+                "ttftSeconds": 0.10585904121398926
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-math-legacy-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.4116327388213897,
+              "forced": 0.38877328470179406
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.41949788444002967,
+              "forced": 0.39642716346508156
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.693226933479309,
+                "decodeTokensPerSecond": 95.05326001967474,
+                "elapsedSeconds": 2.789462089538574,
+                "endToEndTokensPerSecond": 91.77396637154042,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.010457038879394531,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "disabled",
+                "prefillSeconds": 0.09500002861022949,
+                "prefillTokensPerSecond": 515.7893183489393,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 7682392064,
+                "residentMemoryBeforeBytes": 7681769472,
+                "ttftSeconds": 0.10546302795410156
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5096525096525096,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 259,
+                  "rounds": 123,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.54279088973999,
+                "decodeTokensPerSecond": 39.12703375580041,
+                "elapsedSeconds": 6.649526000022888,
+                "endToEndTokensPerSecond": 38.498984739531636,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00020599365234375,
+                "generatedTokens": 256,
+                "loadSeconds": 7.987022399902344e-06,
+                "name": "adaptive",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "adaptive",
+                "prefillSeconds": 0.10556793212890625,
+                "prefillTokensPerSecond": 464.15610320156105,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9465872384,
+                "residentMemoryBeforeBytes": 9464332288,
+                "ttftSeconds": 0.1057819128036499
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5096525096525096,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 259,
+                  "rounds": 123,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.927500009536743,
+                "decodeTokensPerSecond": 36.954168119462665,
+                "elapsedSeconds": 7.036505937576294,
+                "endToEndTokensPerSecond": 36.38169316860955,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0001709461212158203,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "forced",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "forced",
+                "prefillSeconds": 0.10772705078125,
+                "prefillTokensPerSecond": 454.8532577903683,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9572909056,
+                "residentMemoryBeforeBytes": 9572515840,
+                "ttftSeconds": 0.10790407657623291
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-math-legacy-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.3906421910184325,
+              "forced": 0.3840193208113606
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.39920617526069246,
+              "forced": 0.39253688607371073
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7072160243988037,
+                "decodeTokensPerSecond": 94.56208802430179,
+                "elapsedSeconds": 2.8094669580459595,
+                "endToEndTokensPerSecond": 91.12048791563404,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.010612964630126953,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "disabled",
+                "prefillSeconds": 0.10091602802276611,
+                "prefillTokensPerSecond": 485.55220573035103,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 7696695296,
+                "residentMemoryBeforeBytes": 7696138240,
+                "ttftSeconds": 0.1115349531173706
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5096525096525096,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 259,
+                  "rounds": 123,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.930168032646179,
+                "decodeTokensPerSecond": 36.93994125309113,
+                "elapsedSeconds": 7.037634015083313,
+                "endToEndTokensPerSecond": 36.37586146868841,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018703937530517578,
+                "generatedTokens": 256,
+                "loadSeconds": 7.033348083496094e-06,
+                "name": "adaptive",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "adaptive",
+                "prefillSeconds": 0.10604095458984375,
+                "prefillTokensPerSecond": 462.085617670336,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9471754240,
+                "residentMemoryBeforeBytes": 9466331136,
+                "ttftSeconds": 0.10623502731323242
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.5096525096525096,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 259,
+                  "rounds": 123,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 7.049687027931213,
+                "decodeTokensPerSecond": 36.313668817596465,
+                "elapsedSeconds": 7.157204985618591,
+                "endToEndTokensPerSecond": 35.76815258392018,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00016999244689941406,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "forced",
+                "outputSHA256": "b754509c3e8b857df33b3149639a416f0c2b9800c69f82c20bd0c24dcbb0ab3d",
+                "policy": "forced",
+                "prefillSeconds": 0.10624802112579346,
+                "prefillTokensPerSecond": 461.18506002089146,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 9519300608,
+                "residentMemoryBeforeBytes": 9518694400,
+                "ttftSeconds": 0.10642409324645996
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-prose-candidate-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 3.953848233858407,
+              "forced": 3.9489762155147408
+            },
+            "endToEndSpeedups": {
+              "adaptive": 3.844609128547779,
+              "forced": 3.8347313043789035
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 11.82863700389862,
+                "decodeTokensPerSecond": 21.642392096031397,
+                "elapsedSeconds": 11.934113025665283,
+                "endToEndTokensPerSecond": 21.451112407721556,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.03443801403045654,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "baseline",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "disabled",
+                "prefillSeconds": 0.10393106937408447,
+                "prefillTokensPerSecond": 577.3057119622131,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 7682424832,
+                "residentMemoryBeforeBytes": 7681900544,
+                "ttftSeconds": 0.1383751630783081
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.25892857142857145,
+                  "acceptedDraftTokens": 29,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 112,
+                  "rounds": 69,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.9916770458221436,
+                "decodeTokensPerSecond": 85.57073376536489,
+                "elapsedSeconds": 3.1041160821914673,
+                "endToEndTokensPerSecond": 82.47114258023082,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00032901763916015625,
+                "generatedTokens": 256,
+                "loadSeconds": 5.0067901611328125e-06,
+                "name": "adaptive",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "adaptive",
+                "prefillSeconds": 0.11099302768707275,
+                "prefillTokensPerSecond": 540.5744959869055,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9465643008,
+                "residentMemoryBeforeBytes": 9465413632,
+                "ttftSeconds": 0.11132705211639404
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.25892857142857145,
+                  "acceptedDraftTokens": 29,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 112,
+                  "rounds": 69,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.995368003845215,
+                "decodeTokensPerSecond": 85.4652916340722,
+                "elapsedSeconds": 3.1121119260787964,
+                "endToEndTokensPerSecond": 82.25925226364056,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003139972686767578,
+                "generatedTokens": 256,
+                "loadSeconds": 7.033348083496094e-06,
+                "name": "forced",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "forced",
+                "prefillSeconds": 0.11515200138092041,
+                "prefillTokensPerSecond": 521.0504314338511,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9820585984,
+                "residentMemoryBeforeBytes": 9820454912,
+                "ttftSeconds": 0.11547303199768066
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-prose-candidate-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.9256230014900398,
+              "forced": 0.24324676057211533
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.9231288948697226,
+              "forced": 0.24913714631249123
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7791589498519897,
+                "decodeTokensPerSecond": 92.11419879875307,
+                "elapsedSeconds": 2.879839062690735,
+                "endToEndTokensPerSecond": 88.89385636737985,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.01105797290802002,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "disabled",
+                "prefillSeconds": 0.09917497634887695,
+                "prefillTokensPerSecond": 604.9913214895305,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 7680098304,
+                "residentMemoryBeforeBytes": 7679574016,
+                "ttftSeconds": 0.11023890972137451
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.25892857142857145,
+                  "acceptedDraftTokens": 29,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 112,
+                  "rounds": 69,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 3.0024739503860474,
+                "decodeTokensPerSecond": 85.26302117195203,
+                "elapsedSeconds": 3.1196500062942505,
+                "endToEndTokensPerSecond": 82.06048738912722,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00034499168395996094,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "adaptive",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "adaptive",
+                "prefillSeconds": 0.11558806896209717,
+                "prefillTokensPerSecond": 519.0847164310253,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9462317056,
+                "residentMemoryBeforeBytes": 9461760000,
+                "ttftSeconds": 0.11593914031982422
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.25892857142857145,
+                  "acceptedDraftTokens": 29,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 112,
+                  "rounds": 69,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 11.425266027450562,
+                "decodeTokensPerSecond": 22.40648046049252,
+                "elapsedSeconds": 11.5592520236969,
+                "endToEndTokensPerSecond": 22.146761700081495,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018596649169921875,
+                "generatedTokens": 256,
+                "loadSeconds": 7.033348083496094e-06,
+                "name": "forced",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "forced",
+                "prefillSeconds": 0.1324080228805542,
+                "prefillTokensPerSecond": 453.1447467811391,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9506111488,
+                "residentMemoryBeforeBytes": 9505325056,
+                "ttftSeconds": 0.13260102272033691
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-prose-candidate-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12256.50M  free = 1055.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.9770988008988672,
+              "forced": 4.356224504596384
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.9763927471787984,
+              "forced": 4.227077929929959
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 13.114622950553894,
+                "decodeTokensPerSecond": 19.52019520234761,
+                "elapsedSeconds": 13.218448996543884,
+                "endToEndTokensPerSecond": 19.366871262047017,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.034683942794799805,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "disabled",
+                "prefillSeconds": 0.10237205028533936,
+                "prefillTokensPerSecond": 586.0974732142545,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 7698890752,
+                "residentMemoryBeforeBytes": 7698333696,
+                "ttftSeconds": 0.1370619535446167
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.25892857142857145,
+                  "acceptedDraftTokens": 29,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 112,
+                  "rounds": 69,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 13.422002911567688,
+                "decodeTokensPerSecond": 19.073159325525673,
+                "elapsedSeconds": 13.538045048713684,
+                "endToEndTokensPerSecond": 18.90967263580821,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00017392635345458984,
+                "generatedTokens": 256,
+                "loadSeconds": 7.033348083496094e-06,
+                "name": "adaptive",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "adaptive",
+                "prefillSeconds": 0.11435294151306152,
+                "prefillTokensPerSecond": 524.6913564802942,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9468248064,
+                "residentMemoryBeforeBytes": 9463267328,
+                "ttftSeconds": 0.11453390121459961
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.25892857142857145,
+                  "acceptedDraftTokens": 29,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 112,
+                  "rounds": 69,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 3.0105479955673218,
+                "decodeTokensPerSecond": 85.03435267497144,
+                "elapsedSeconds": 3.127089023590088,
+                "endToEndTokensPerSecond": 81.86527408359372,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0002809762954711914,
+                "generatedTokens": 256,
+                "loadSeconds": 5.0067901611328125e-06,
+                "name": "forced",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "forced",
+                "prefillSeconds": 0.11500906944274902,
+                "prefillTokensPerSecond": 521.6979868693548,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9504718848,
+                "residentMemoryBeforeBytes": 9504522240,
+                "ttftSeconds": 0.11529505252838135
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-prose-legacy-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 3.9171480358306403,
+              "forced": 4.083484956676949
+            },
+            "endToEndSpeedups": {
+              "adaptive": 3.8101952788308053,
+              "forced": 3.9653517310618103
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 12.109267950057983,
+                "decodeTokensPerSecond": 21.14083205160013,
+                "elapsedSeconds": 12.223034024238586,
+                "endToEndTokensPerSecond": 20.944063437305786,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.03406500816345215,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "disabled",
+                "prefillSeconds": 0.1120610237121582,
+                "prefillTokensPerSecond": 535.4225582850019,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 7696629760,
+                "residentMemoryBeforeBytes": 7695990784,
+                "ttftSeconds": 0.1461319923400879
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.24242424242424243,
+                  "acceptedDraftTokens": 24,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 99,
+                  "rounds": 61,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 3.0913480520248413,
+                "decodeTokensPerSecond": 82.81176874675089,
+                "elapsedSeconds": 3.207980990409851,
+                "endToEndTokensPerSecond": 79.8009716283554,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00028395652770996094,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "adaptive",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "adaptive",
+                "prefillSeconds": 0.11508798599243164,
+                "prefillTokensPerSecond": 521.3402553064548,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9467658240,
+                "residentMemoryBeforeBytes": 9467396096,
+                "ttftSeconds": 0.11537802219390869
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.24242424242424243,
+                  "acceptedDraftTokens": 24,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 99,
+                  "rounds": 61,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.96542489528656,
+                "decodeTokensPerSecond": 86.32826965434299,
+                "elapsedSeconds": 3.082458972930908,
+                "endToEndTokensPerSecond": 83.05057820658887,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00028693675994873047,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "forced",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "forced",
+                "prefillSeconds": 0.1155400276184082,
+                "prefillTokensPerSecond": 519.3005509585028,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9517432832,
+                "residentMemoryBeforeBytes": 9517318144,
+                "ttftSeconds": 0.11583292484283447
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-prose-legacy-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.9003600903331431,
+              "forced": 0.1894002308545883
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.9048746410860034,
+              "forced": 0.19621188588410604
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.6957240104675293,
+                "decodeTokensPerSecond": 94.96521120335349,
+                "elapsedSeconds": 2.8157219886779785,
+                "endToEndTokensPerSecond": 90.91806685083837,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.01081395149230957,
+                "generatedTokens": 256,
+                "loadSeconds": 5.9604644775390625e-06,
+                "name": "baseline",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "disabled",
+                "prefillSeconds": 0.11850297451019287,
+                "prefillTokensPerSecond": 506.3164046978347,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 7682080768,
+                "residentMemoryBeforeBytes": 7681507328,
+                "ttftSeconds": 0.12932288646697998
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.24242424242424243,
+                  "acceptedDraftTokens": 24,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 99,
+                  "rounds": 61,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.994050979614258,
+                "decodeTokensPerSecond": 85.50288613755737,
+                "elapsedSeconds": 3.1117260456085205,
+                "endToEndTokensPerSecond": 82.26945310988563,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003110170364379883,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "adaptive",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "adaptive",
+                "prefillSeconds": 0.11600005626678467,
+                "prefillTokensPerSecond": 517.2411284181449,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9468624896,
+                "residentMemoryBeforeBytes": 9468166144,
+                "ttftSeconds": 0.11631715297698975
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.24242424242424243,
+                  "acceptedDraftTokens": 24,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 99,
+                  "rounds": 61,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 14.23294997215271,
+                "decodeTokensPerSecond": 17.986432925069884,
+                "elapsedSeconds": 14.350414991378784,
+                "endToEndTokensPerSecond": 17.839205357740223,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0002110004425048828,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "forced",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "forced",
+                "prefillSeconds": 0.11579298973083496,
+                "prefillTokensPerSecond": 518.1660836245112,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 11069751296,
+                "residentMemoryBeforeBytes": 11069079552,
+                "ttftSeconds": 0.11601006984710693
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ornith-prose-legacy-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12264.50M  free = 1047.50M  (encrypted)"
+        },
+        "model": "text-agent-ornith-35b-mlx-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.9199860783589511,
+              "forced": 0.1903975975868235
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.923301834488073,
+              "forced": 0.19699291178168724
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 2.7329410314559937,
+                "decodeTokensPerSecond": 93.67198086363912,
+                "elapsedSeconds": 2.8503869771957397,
+                "endToEndTokensPerSecond": 89.81236654815805,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.011118054389953613,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "baseline",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "disabled",
+                "prefillSeconds": 0.11595702171325684,
+                "prefillTokensPerSecond": 517.433089549078,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 7696564224,
+                "residentMemoryBeforeBytes": 7696007168,
+                "ttftSeconds": 0.12708115577697754
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.24242424242424243,
+                  "acceptedDraftTokens": 24,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 99,
+                  "rounds": 61,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 2.970633029937744,
+                "decodeTokensPerSecond": 86.17691832685406,
+                "elapsedSeconds": 3.0871670246124268,
+                "endToEndTokensPerSecond": 82.92392279362957,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003540515899658203,
+                "generatedTokens": 256,
+                "loadSeconds": 8.106231689453125e-06,
+                "name": "adaptive",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "adaptive",
+                "prefillSeconds": 0.11495804786682129,
+                "prefillTokensPerSecond": 521.9295309321005,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9464217600,
+                "residentMemoryBeforeBytes": 9464004608,
+                "ttftSeconds": 0.11532020568847656
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.24242424242424243,
+                  "acceptedDraftTokens": 24,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 99,
+                  "rounds": 61,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 14.353863000869751,
+                "decodeTokensPerSecond": 17.834920117635793,
+                "elapsedSeconds": 14.469490051269531,
+                "endToEndTokensPerSecond": 17.692399600325857,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018095970153808594,
+                "generatedTokens": 256,
+                "loadSeconds": 6.079673767089844e-06,
+                "name": "forced",
+                "outputSHA256": "ca3ac87c453ea9cb8fdd5fe572ce7e0e9930e17487f37393e45606052e4db11e",
+                "policy": "forced",
+                "prefillSeconds": 0.11380994319915771,
+                "prefillTokensPerSecond": 527.1947100000315,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 9766109184,
+                "residentMemoryBeforeBytes": 9765470208,
+                "ttftSeconds": 0.11399698257446289
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-code-candidate-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12400.50M  free = 911.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 2.9030160042076787,
+              "forced": 3.2811270596235227
+            },
+            "endToEndSpeedups": {
+              "adaptive": 2.7991884210204083,
+              "forced": 3.1391300298123106
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 18.077759981155396,
+                "decodeTokensPerSecond": 14.161046516098196,
+                "elapsedSeconds": 18.432821035385132,
+                "endToEndTokensPerSecond": 13.888270249494731,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.04148697853088379,
+                "generatedTokens": 256,
+                "loadSeconds": 2.6106834411621094e-05,
+                "name": "baseline",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "disabled",
+                "prefillSeconds": 0.3532770872116089,
+                "prefillTokensPerSecond": 152.85452115283837,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15413968896,
+                "residentMemoryBeforeBytes": 15412051968,
+                "ttftSeconds": 0.3947901725769043
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.7236363636363636,
+                  "acceptedDraftTokens": 199,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 275,
+                  "rounds": 57,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.2272340059280396,
+                "decodeTokensPerSecond": 41.10974467256246,
+                "elapsedSeconds": 6.5850590467453,
+                "endToEndTokensPerSecond": 38.87588527038787,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00033795833587646484,
+                "generatedTokens": 256,
+                "loadSeconds": 2.5033950805664062e-05,
+                "name": "adaptive",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3562580347061157,
+                "prefillTokensPerSecond": 151.57552880048212,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15836594176,
+                "residentMemoryBeforeBytes": 15835267072,
+                "ttftSeconds": 0.35662102699279785
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.7236363636363636,
+                  "acceptedDraftTokens": 199,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 275,
+                  "rounds": 57,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 5.5096189975738525,
+                "decodeTokensPerSecond": 46.4641929165572,
+                "elapsedSeconds": 5.871952056884766,
+                "endToEndTokensPerSecond": 43.59708620233782,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00033104419708251953,
+                "generatedTokens": 256,
+                "loadSeconds": 2.5987625122070312e-05,
+                "name": "forced",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "forced",
+                "prefillSeconds": 0.36047494411468506,
+                "prefillTokensPerSecond": 149.8023673534988,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15896641536,
+                "residentMemoryBeforeBytes": 15896494080,
+                "ttftSeconds": 0.36083197593688965
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-code-candidate-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 1.581783121786767,
+              "forced": 1.612300405027511
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.5163312762455292,
+              "forced": 1.5619736278025702
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 9.246953964233398,
+                "decodeTokensPerSecond": 27.684792310007268,
+                "elapsedSeconds": 9.560258030891418,
+                "endToEndTokensPerSecond": 26.7775199343788,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.03726303577423096,
+                "generatedTokens": 256,
+                "loadSeconds": 2.8967857360839844e-05,
+                "name": "baseline",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "disabled",
+                "prefillSeconds": 0.3116629123687744,
+                "prefillTokensPerSecond": 173.26411920358566,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15415296000,
+                "residentMemoryBeforeBytes": 15412412416,
+                "ttftSeconds": 0.3489549160003662
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.7236363636363636,
+                  "acceptedDraftTokens": 199,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 275,
+                  "rounds": 57,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 5.845905065536499,
+                "decodeTokensPerSecond": 43.79133720614158,
+                "elapsedSeconds": 6.304861068725586,
+                "endToEndTokensPerSecond": 40.603590976786705,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00036406517028808594,
+                "generatedTokens": 256,
+                "loadSeconds": 2.5033950805664062e-05,
+                "name": "adaptive",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "adaptive",
+                "prefillSeconds": 0.45752596855163574,
+                "prefillTokensPerSecond": 118.0260875048137,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15822487552,
+                "residentMemoryBeforeBytes": 15820881920,
+                "ttftSeconds": 0.4579150676727295
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.7236363636363636,
+                  "acceptedDraftTokens": 199,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 275,
+                  "rounds": 57,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 5.735255002975464,
+                "decodeTokensPerSecond": 44.636201854527236,
+                "elapsedSeconds": 6.120627045631409,
+                "endToEndTokensPerSecond": 41.8257799554573,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003879070281982422,
+                "generatedTokens": 256,
+                "loadSeconds": 2.4080276489257812e-05,
+                "name": "forced",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "forced",
+                "prefillSeconds": 0.3838310241699219,
+                "prefillTokensPerSecond": 140.68690803923712,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15896608768,
+                "residentMemoryBeforeBytes": 15896428544,
+                "ttftSeconds": 0.3842430114746094
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-code-candidate-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 3.851069453274331,
+              "forced": 5.110192868540347
+            },
+            "endToEndSpeedups": {
+              "adaptive": 3.7129925379681303,
+              "forced": 4.847728224136603
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 24.1401629447937,
+                "decodeTokensPerSecond": 10.604733720540665,
+                "elapsedSeconds": 24.464763045310974,
+                "endToEndTokensPerSecond": 10.464029409394428,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.06914496421813965,
+                "generatedTokens": 256,
+                "loadSeconds": 2.9087066650390625e-05,
+                "name": "baseline",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "disabled",
+                "prefillSeconds": 0.3227400779724121,
+                "prefillTokensPerSecond": 167.31730480840974,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15397486592,
+                "residentMemoryBeforeBytes": 15394095104,
+                "ttftSeconds": 0.39191412925720215
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.7236363636363636,
+                  "acceptedDraftTokens": 199,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 275,
+                  "rounds": 57,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.268430948257446,
+                "decodeTokensPerSecond": 40.8395660912824,
+                "elapsedSeconds": 6.5889610052108765,
+                "endToEndTokensPerSecond": 38.85286311416057,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018393993377685547,
+                "generatedTokens": 256,
+                "loadSeconds": 1.800060272216797e-05,
+                "name": "adaptive",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3191490173339844,
+                "prefillTokensPerSecond": 169.1999569702258,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15840870400,
+                "residentMemoryBeforeBytes": 15838052352,
+                "ttftSeconds": 0.3193509578704834
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.7236363636363636,
+                  "acceptedDraftTokens": 199,
+                  "draftHistoryTokens": 53,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 275,
+                  "rounds": 57,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 4.723924040794373,
+                "decodeTokensPerSecond": 54.192234631476246,
+                "elapsedSeconds": 5.046644926071167,
+                "endToEndTokensPerSecond": 50.72677070611683,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00032007694244384766,
+                "generatedTokens": 256,
+                "loadSeconds": 2.5987625122070312e-05,
+                "name": "forced",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "forced",
+                "prefillSeconds": 0.3211020231246948,
+                "prefillTokensPerSecond": 168.17084948427737,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15897772032,
+                "residentMemoryBeforeBytes": 15897575424,
+                "ttftSeconds": 0.32144808769226074
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-code-legacy-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12400.50M  free = 911.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12400.50M  free = 911.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 1.9884676048472265,
+              "forced": 1.7642081223861608
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.9211813308522558,
+              "forced": 1.7134590461955626
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 9.60282301902771,
+                "decodeTokensPerSecond": 26.658827252438535,
+                "elapsedSeconds": 9.938467025756836,
+                "endToEndTokensPerSecond": 25.758499709919302,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.040690064430236816,
+                "generatedTokens": 256,
+                "loadSeconds": 2.8967857360839844e-05,
+                "name": "baseline",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "disabled",
+                "prefillSeconds": 0.3339289426803589,
+                "prefillTokensPerSecond": 161.71105016102032,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15413002240,
+                "residentMemoryBeforeBytes": 15410282496,
+                "ttftSeconds": 0.37464797496795654
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.697508896797153,
+                  "acceptedDraftTokens": 196,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 281,
+                  "rounds": 60,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 4.829257965087891,
+                "decodeTokensPerSecond": 53.010214374692424,
+                "elapsedSeconds": 5.173102021217346,
+                "endToEndTokensPerSecond": 49.48674875346021,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0004349946975708008,
+                "generatedTokens": 256,
+                "loadSeconds": 1.895427703857422e-05,
+                "name": "adaptive",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3425220251083374,
+                "prefillTokensPerSecond": 157.65409533276048,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15854125056,
+                "residentMemoryBeforeBytes": 15852470272,
+                "ttftSeconds": 0.3429759740829468
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.697508896797153,
+                  "acceptedDraftTokens": 196,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 281,
+                  "rounds": 60,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 5.443135023117065,
+                "decodeTokensPerSecond": 47.0317195720416,
+                "elapsedSeconds": 5.800236105918884,
+                "endToEndTokensPerSecond": 44.136134344387,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00035500526428222656,
+                "generatedTokens": 256,
+                "loadSeconds": 2.300739288330078e-05,
+                "name": "forced",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "forced",
+                "prefillSeconds": 0.3556499481201172,
+                "prefillTokensPerSecond": 151.83469106471526,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15913074688,
+                "residentMemoryBeforeBytes": 15913041920,
+                "ttftSeconds": 0.3560279607772827
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-code-legacy-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 1.9849740282627173,
+              "forced": 1.6000112725530296
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.923220477692135,
+              "forced": 1.5698879351292672
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 12.246991991996765,
+                "decodeTokensPerSecond": 20.903091972893616,
+                "elapsedSeconds": 12.604265928268433,
+                "endToEndTokensPerSecond": 20.310583849698983,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.037529945373535156,
+                "generatedTokens": 256,
+                "loadSeconds": 2.491474151611328e-05,
+                "name": "baseline",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "disabled",
+                "prefillSeconds": 0.355631947517395,
+                "prefillTokensPerSecond": 151.84237630214227,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15415934976,
+                "residentMemoryBeforeBytes": 15413444608,
+                "ttftSeconds": 0.3931868076324463
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.697508896797153,
+                  "acceptedDraftTokens": 196,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 281,
+                  "rounds": 60,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.169849991798401,
+                "decodeTokensPerSecond": 41.49209467658071,
+                "elapsedSeconds": 6.553729057312012,
+                "endToEndTokensPerSecond": 39.06173077362424,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00035202503204345703,
+                "generatedTokens": 256,
+                "loadSeconds": 2.09808349609375e-05,
+                "name": "adaptive",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3825109004974365,
+                "prefillTokensPerSecond": 141.1724474512378,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15839117312,
+                "residentMemoryBeforeBytes": 15837380608,
+                "ttftSeconds": 0.3828839063644409
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.697508896797153,
+                  "acceptedDraftTokens": 196,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 281,
+                  "rounds": 60,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 7.654316067695618,
+                "decodeTokensPerSecond": 33.44518278784253,
+                "elapsedSeconds": 8.028767943382263,
+                "endToEndTokensPerSecond": 31.885340541073777,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00019800662994384766,
+                "generatedTokens": 256,
+                "loadSeconds": 2.4080276489257812e-05,
+                "name": "forced",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "forced",
+                "prefillSeconds": 0.3729550838470459,
+                "prefillTokensPerSecond": 144.78955332365481,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15899672576,
+                "residentMemoryBeforeBytes": 15897559040,
+                "ttftSeconds": 0.373177170753479
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-code-legacy-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 6.226163782013058,
+              "forced": 6.144760635372468
+            },
+            "endToEndSpeedups": {
+              "adaptive": 5.843891043499557,
+              "forced": 5.772783883252469
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 220,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 25.292769074440002,
+                "decodeTokensPerSecond": 10.121469865421131,
+                "elapsedSeconds": 25.606505036354065,
+                "endToEndTokensPerSecond": 9.997459615693423,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.0686110258102417,
+                "generatedTokens": 256,
+                "loadSeconds": 2.9921531677246094e-05,
+                "name": "baseline",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "disabled",
+                "prefillSeconds": 0.3118239641189575,
+                "prefillTokensPerSecond": 173.17463124610774,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15415279616,
+                "residentMemoryBeforeBytes": 15412674560,
+                "ttftSeconds": 0.38046491146087646
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.697508896797153,
+                  "acceptedDraftTokens": 196,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 281,
+                  "rounds": 60,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 4.062335968017578,
+                "decodeTokensPerSecond": 63.01792909682163,
+                "elapsedSeconds": 4.381756067276001,
+                "endToEndTokensPerSecond": 58.42406470589932,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003368854522705078,
+                "generatedTokens": 256,
+                "loadSeconds": 2.5033950805664062e-05,
+                "name": "adaptive",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3178880214691162,
+                "prefillTokensPerSecond": 169.87113811473472,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15839199232,
+                "residentMemoryBeforeBytes": 15837495296,
+                "ttftSeconds": 0.3182499408721924
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.697508896797153,
+                  "acceptedDraftTokens": 196,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 281,
+                  "rounds": 60,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 4.116152048110962,
+                "decodeTokensPerSecond": 62.194009601148444,
+                "elapsedSeconds": 4.435729026794434,
+                "endToEndTokensPerSecond": 57.71317374294241,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003679990768432617,
+                "generatedTokens": 256,
+                "loadSeconds": 1.800060272216797e-05,
+                "name": "forced",
+                "outputSHA256": "ca2c0ddf75b621ec62d587ff04b6f89f528aafe8d744b0730c298166deb5f461",
+                "policy": "forced",
+                "prefillSeconds": 0.31821000576019287,
+                "prefillTokensPerSecond": 169.69925213695225,
+                "promptTokens": 54,
+                "residentMemoryAfterBytes": 15898345472,
+                "residentMemoryBeforeBytes": 15898198016,
+                "ttftSeconds": 0.3185960054397583
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-math-candidate-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 3.87992417658333,
+              "forced": 3.722443447928944
+            },
+            "endToEndSpeedups": {
+              "adaptive": 3.763302427711713,
+              "forced": 3.610840146597204
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 25.779097080230713,
+                "decodeTokensPerSecond": 9.930526240048936,
+                "elapsedSeconds": 26.197435975074768,
+                "endToEndTokensPerSecond": 9.771948683969228,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.07306301593780518,
+                "generatedTokens": 256,
+                "loadSeconds": 1.990795135498047e-05,
+                "name": "baseline",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "disabled",
+                "prefillSeconds": 0.41697895526885986,
+                "prefillTokensPerSecond": 117.51192567597509,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15398305792,
+                "residentMemoryBeforeBytes": 15395454976,
+                "ttftSeconds": 0.49006187915802
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.706959706959707,
+                  "acceptedDraftTokens": 193,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 273,
+                  "rounds": 63,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.644227027893066,
+                "decodeTokensPerSecond": 38.52968884496102,
+                "elapsedSeconds": 6.961289048194885,
+                "endToEndTokensPerSecond": 36.774798205855674,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00024306774139404297,
+                "generatedTokens": 256,
+                "loadSeconds": 1.895427703857422e-05,
+                "name": "adaptive",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3157099485397339,
+                "prefillTokensPerSecond": 155.20575207288113,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15825223680,
+                "residentMemoryBeforeBytes": 15821602816,
+                "ttftSeconds": 0.3159719705581665
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.706959706959707,
+                  "acceptedDraftTokens": 193,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 273,
+                  "rounds": 63,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.925315976142883,
+                "decodeTokensPerSecond": 36.96582233675661,
+                "elapsedSeconds": 7.255218982696533,
+                "endToEndTokensPerSecond": 35.284944618563806,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00020694732666015625,
+                "generatedTokens": 256,
+                "loadSeconds": 2.002716064453125e-05,
+                "name": "forced",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "forced",
+                "prefillSeconds": 0.3286440372467041,
+                "prefillTokensPerSecond": 149.09748678390608,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15901179904,
+                "residentMemoryBeforeBytes": 15900475392,
+                "ttftSeconds": 0.3288710117340088
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-math-candidate-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 2.0158224378163445,
+              "forced": 1.6027079226370744
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.9462776482164033,
+              "forced": 1.5658951520569322
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 12.735162019729614,
+                "decodeTokensPerSecond": 20.101825136060203,
+                "elapsedSeconds": 13.065245032310486,
+                "endToEndTokensPerSecond": 19.593968530012972,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.03680109977722168,
+                "generatedTokens": 256,
+                "loadSeconds": 2.8014183044433594e-05,
+                "name": "baseline",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "disabled",
+                "prefillSeconds": 0.3284410238265991,
+                "prefillTokensPerSecond": 149.18964576687478,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15414034432,
+                "residentMemoryBeforeBytes": 15411806208,
+                "ttftSeconds": 0.36527013778686523
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.706959706959707,
+                  "acceptedDraftTokens": 193,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 273,
+                  "rounds": 63,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.3176010847091675,
+                "decodeTokensPerSecond": 40.52171015033075,
+                "elapsedSeconds": 6.712939977645874,
+                "endToEndTokensPerSecond": 38.13530298981986,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00033605098724365234,
+                "generatedTokens": 256,
+                "loadSeconds": 2.7060508728027344e-05,
+                "name": "adaptive",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3938819169998169,
+                "prefillTokensPerSecond": 124.40276612145863,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15819390976,
+                "residentMemoryBeforeBytes": 15818997760,
+                "ttftSeconds": 0.3942450284957886
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.706959706959707,
+                  "acceptedDraftTokens": 193,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 273,
+                  "rounds": 63,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 7.946027994155884,
+                "decodeTokensPerSecond": 32.21735440502877,
+                "elapsedSeconds": 8.343626976013184,
+                "endToEndTokensPerSecond": 30.68210033070341,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0002429485321044922,
+                "generatedTokens": 256,
+                "loadSeconds": 2.491474151611328e-05,
+                "name": "forced",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "forced",
+                "prefillSeconds": 0.39615797996520996,
+                "prefillTokensPerSecond": 123.68802972062588,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15896952832,
+                "residentMemoryBeforeBytes": 15894577152,
+                "ttftSeconds": 0.39642584323883057
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-math-candidate-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 6.09058969679162,
+              "forced": 3.54534873646154
+            },
+            "endToEndSpeedups": {
+              "adaptive": 5.712362596219379,
+              "forced": 3.430213009350571
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 24.228657960891724,
+                "decodeTokensPerSecond": 10.565999999389899,
+                "elapsedSeconds": 24.540206909179688,
+                "endToEndTokensPerSecond": 10.431859883962053,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.06888198852539062,
+                "generatedTokens": 256,
+                "loadSeconds": 2.5987625122070312e-05,
+                "name": "baseline",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "disabled",
+                "prefillSeconds": 0.30994296073913574,
+                "prefillTokensPerSecond": 158.09360497540376,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15398715392,
+                "residentMemoryBeforeBytes": 15395930112,
+                "ttftSeconds": 0.37885093688964844
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.706959706959707,
+                  "acceptedDraftTokens": 193,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 273,
+                  "rounds": 63,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 3.9780479669570923,
+                "decodeTokensPerSecond": 64.35317073258439,
+                "elapsedSeconds": 4.295982003211975,
+                "endToEndTokensPerSecond": 59.59056621014627,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003319978713989258,
+                "generatedTokens": 256,
+                "loadSeconds": 2.09808349609375e-05,
+                "name": "adaptive",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "adaptive",
+                "prefillSeconds": 0.31665802001953125,
+                "prefillTokensPerSecond": 154.74106734128418,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15839559680,
+                "residentMemoryBeforeBytes": 15838642176,
+                "ttftSeconds": 0.3170109987258911
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.706959706959707,
+                  "acceptedDraftTokens": 193,
+                  "draftHistoryTokens": 48,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 273,
+                  "rounds": 63,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.8339279890060425,
+                "decodeTokensPerSecond": 37.46015474728961,
+                "elapsedSeconds": 7.15413498878479,
+                "endToEndTokensPerSecond": 35.78350148568897,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0001900196075439453,
+                "generatedTokens": 256,
+                "loadSeconds": 2.5033950805664062e-05,
+                "name": "forced",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "forced",
+                "prefillSeconds": 0.3187079429626465,
+                "prefillTokensPerSecond": 153.74577597440972,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15900737536,
+                "residentMemoryBeforeBytes": 15898771456,
+                "ttftSeconds": 0.3189229965209961
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-math-legacy-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 3.473110936271529,
+              "forced": 2.904165773332814
+            },
+            "endToEndSpeedups": {
+              "adaptive": 3.318197007288329,
+              "forced": 2.8056715843684974
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 25.28382396697998,
+                "decodeTokensPerSecond": 10.125050717578535,
+                "elapsedSeconds": 25.605540990829468,
+                "endToEndTokensPerSecond": 9.997836018840042,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.07081997394561768,
+                "generatedTokens": 256,
+                "loadSeconds": 2.396106719970703e-05,
+                "name": "baseline",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "disabled",
+                "prefillSeconds": 0.31988203525543213,
+                "prefillTokensPerSecond": 153.18146879011988,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15397765120,
+                "residentMemoryBeforeBytes": 15394832384,
+                "ttftSeconds": 0.3907259702682495
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.6631578947368421,
+                  "acceptedDraftTokens": 189,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 285,
+                  "rounds": 67,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 7.27987802028656,
+                "decodeTokensPerSecond": 35.1654243775259,
+                "elapsedSeconds": 7.7167030572891235,
+                "endToEndTokensPerSecond": 33.17478955707449,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00033295154571533203,
+                "generatedTokens": 256,
+                "loadSeconds": 1.800060272216797e-05,
+                "name": "adaptive",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "adaptive",
+                "prefillSeconds": 0.43554794788360596,
+                "prefillTokensPerSecond": 112.50196502612052,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15821701120,
+                "residentMemoryBeforeBytes": 15820357632,
+                "ttftSeconds": 0.43589890003204346
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.6631578947368421,
+                  "acceptedDraftTokens": 189,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 285,
+                  "rounds": 67,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 8.706053972244263,
+                "decodeTokensPerSecond": 29.40482574725043,
+                "elapsedSeconds": 9.126350045204163,
+                "endToEndTokensPerSecond": 28.05064442323537,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00021195411682128906,
+                "generatedTokens": 256,
+                "loadSeconds": 2.7060508728027344e-05,
+                "name": "forced",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "forced",
+                "prefillSeconds": 0.4188739061355591,
+                "prefillTokensPerSecond": 116.98031145473706,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15897444352,
+                "residentMemoryBeforeBytes": 15895363584,
+                "ttftSeconds": 0.4191129207611084
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-math-legacy-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12304.50M  free = 1007.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 5.916744199533701,
+              "forced": 2.978077652318795
+            },
+            "endToEndSpeedups": {
+              "adaptive": 5.572077023471743,
+              "forced": 2.903728575025524
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 24.78603994846344,
+                "decodeTokensPerSecond": 10.328394553236013,
+                "elapsedSeconds": 25.1282399892807,
+                "endToEndTokensPerSecond": 10.18774096829724,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.07028388977050781,
+                "generatedTokens": 256,
+                "loadSeconds": 1.9073486328125e-05,
+                "name": "baseline",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "disabled",
+                "prefillSeconds": 0.3408430814743042,
+                "prefillTokensPerSecond": 143.76116947438777,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15415427072,
+                "residentMemoryBeforeBytes": 15412346880,
+                "ttftSeconds": 0.41114604473114014
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.6631578947368421,
+                  "acceptedDraftTokens": 189,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 285,
+                  "rounds": 67,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 4.189134955406189,
+                "decodeTokensPerSecond": 61.11046856335465,
+                "elapsedSeconds": 4.509672045707703,
+                "endToEndTokensPerSecond": 56.766877370530814,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003019571304321289,
+                "generatedTokens": 256,
+                "loadSeconds": 2.396106719970703e-05,
+                "name": "adaptive",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3191039562225342,
+                "prefillTokensPerSecond": 153.55497493684712,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15839248384,
+                "residentMemoryBeforeBytes": 15837954048,
+                "ttftSeconds": 0.319429874420166
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.6631578947368421,
+                  "acceptedDraftTokens": 189,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 285,
+                  "rounds": 67,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 8.322831988334656,
+                "decodeTokensPerSecond": 30.758761003323333,
+                "elapsedSeconds": 8.653784036636353,
+                "endToEndTokensPerSecond": 29.582434564602895,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00024902820587158203,
+                "generatedTokens": 256,
+                "loadSeconds": 1.800060272216797e-05,
+                "name": "forced",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "forced",
+                "prefillSeconds": 0.3296400308609009,
+                "prefillTokensPerSecond": 148.64699494181477,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15898116096,
+                "residentMemoryBeforeBytes": 15895707648,
+                "ttftSeconds": 0.32990705966949463
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-math-legacy-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 6.264720197456173,
+              "forced": 3.7382942973718776
+            },
+            "endToEndSpeedups": {
+              "adaptive": 5.887199030191438,
+              "forced": 3.616909963427993
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 156,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 26.133888006210327,
+                "decodeTokensPerSecond": 9.795710456062467,
+                "elapsedSeconds": 26.443007946014404,
+                "endToEndTokensPerSecond": 9.681198164847405,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.0698779821395874,
+                "generatedTokens": 256,
+                "loadSeconds": 1.800060272216797e-05,
+                "name": "baseline",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "disabled",
+                "prefillSeconds": 0.30791807174682617,
+                "prefillTokensPerSecond": 159.1332386631999,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15397339136,
+                "residentMemoryBeforeBytes": 15393751040,
+                "ttftSeconds": 0.37781405448913574
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.6631578947368421,
+                  "acceptedDraftTokens": 189,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 285,
+                  "rounds": 67,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 4.171597003936768,
+                "decodeTokensPerSecond": 61.36738514252716,
+                "elapsedSeconds": 4.491611003875732,
+                "endToEndTokensPerSecond": 56.99514044718077,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0002900362014770508,
+                "generatedTokens": 256,
+                "loadSeconds": 2.110004425048828e-05,
+                "name": "adaptive",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "adaptive",
+                "prefillSeconds": 0.31866002082824707,
+                "prefillTokensPerSecond": 153.768897248677,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15821438976,
+                "residentMemoryBeforeBytes": 15820275712,
+                "ttftSeconds": 0.3189711570739746
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.6631578947368421,
+                  "acceptedDraftTokens": 189,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 285,
+                  "rounds": 67,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.9908589124679565,
+                "decodeTokensPerSecond": 36.619248536604395,
+                "elapsedSeconds": 7.3109389543533325,
+                "endToEndTokensPerSecond": 35.01602210035738,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0002079010009765625,
+                "generatedTokens": 256,
+                "loadSeconds": 2.4080276489257812e-05,
+                "name": "forced",
+                "outputSHA256": "e89711cb589e92df06a8ff48eace2ae459591085ced5c2da40b212eec5cd4fd5",
+                "policy": "forced",
+                "prefillSeconds": 0.31873202323913574,
+                "prefillTokensPerSecond": 153.73416044624003,
+                "promptTokens": 49,
+                "residentMemoryAfterBytes": 15897149440,
+                "residentMemoryBeforeBytes": 15895068672,
+                "ttftSeconds": 0.31896400451660156
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-prose-candidate-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 1.1543010166910546,
+              "forced": 1.1422938165020202
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.1496048886088004,
+              "forced": 1.1282624580629341
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 16.280587077140808,
+                "decodeTokensPerSecond": 15.724248688761575,
+                "elapsedSeconds": 16.68879795074463,
+                "endToEndTokensPerSecond": 15.339630856312073,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.037998080253601074,
+                "generatedTokens": 256,
+                "loadSeconds": 2.8967857360839844e-05,
+                "name": "baseline",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "disabled",
+                "prefillSeconds": 0.40587902069091797,
+                "prefillTokensPerSecond": 147.82730060268565,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15398289408,
+                "residentMemoryBeforeBytes": 15395471360,
+                "ttftSeconds": 0.4439060688018799
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.4074074074074074,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 324,
+                  "rounds": 124,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 14.104282021522522,
+                "decodeTokensPerSecond": 18.150516248140466,
+                "elapsedSeconds": 14.516985893249512,
+                "endToEndTokensPerSecond": 17.634514621870757,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00023305416107177734,
+                "generatedTokens": 256,
+                "loadSeconds": 2.7060508728027344e-05,
+                "name": "adaptive",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "adaptive",
+                "prefillSeconds": 0.4109560251235962,
+                "prefillTokensPerSecond": 146.00102281492244,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15839887360,
+                "residentMemoryBeforeBytes": 15837085696,
+                "ttftSeconds": 0.411216139793396
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.4074074074074074,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 324,
+                  "rounds": 124,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 14.252538919448853,
+                "decodeTokensPerSecond": 17.961712046312346,
+                "elapsedSeconds": 14.791592001914978,
+                "endToEndTokensPerSecond": 17.30712961572069,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00027191638946533203,
+                "generatedTokens": 256,
+                "loadSeconds": 2.4080276489257812e-05,
+                "name": "forced",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "forced",
+                "prefillSeconds": 0.5373439788818359,
+                "prefillTokensPerSecond": 111.6603188238092,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15900917760,
+                "residentMemoryBeforeBytes": 15900033024,
+                "ttftSeconds": 0.5376399755477905
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-prose-candidate-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 1.0625551829407616,
+              "forced": 1.28936347979862
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.033945003927546,
+              "forced": 1.274859118032296
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 14.183367013931274,
+                "decodeTokensPerSecond": 18.049310840546543,
+                "elapsedSeconds": 14.564260959625244,
+                "endToEndTokensPerSecond": 17.57727362271784,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.0378720760345459,
+                "generatedTokens": 256,
+                "loadSeconds": 2.002716064453125e-05,
+                "name": "baseline",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "disabled",
+                "prefillSeconds": 0.3786499500274658,
+                "prefillTokensPerSecond": 158.45769950754735,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15414706176,
+                "residentMemoryBeforeBytes": 15412543488,
+                "ttftSeconds": 0.41654205322265625
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.4074074074074074,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 324,
+                  "rounds": 124,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 13.348358035087585,
+                "decodeTokensPerSecond": 19.178388782131602,
+                "elapsedSeconds": 14.086107969284058,
+                "endToEndTokensPerSecond": 18.17393424487655,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003370046615600586,
+                "generatedTokens": 256,
+                "loadSeconds": 2.09808349609375e-05,
+                "name": "adaptive",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "adaptive",
+                "prefillSeconds": 0.7361510992050171,
+                "prefillTokensPerSecond": 81.50500632926459,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15823536128,
+                "residentMemoryBeforeBytes": 15820193792,
+                "ttftSeconds": 0.7365090847015381
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.4074074074074074,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 324,
+                  "rounds": 124,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 11.000285983085632,
+                "decodeTokensPerSecond": 23.272122233334045,
+                "elapsedSeconds": 11.424212098121643,
+                "endToEndTokensPerSecond": 22.408547548070405,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003510713577270508,
+                "generatedTokens": 256,
+                "loadSeconds": 2.205371856689453e-05,
+                "name": "forced",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "forced",
+                "prefillSeconds": 0.4223099946975708,
+                "prefillTokensPerSecond": 142.07572814602185,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15900639232,
+                "residentMemoryBeforeBytes": 15900737536,
+                "ttftSeconds": 0.42268311977386475
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-prose-candidate-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.8258490342973864,
+              "forced": 1.4775025042889174
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.8301098617727903,
+              "forced": 1.4527688568965431
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 9.324108958244324,
+                "decodeTokensPerSecond": 27.455706614587154,
+                "elapsedSeconds": 9.650555968284607,
+                "endToEndTokensPerSecond": 26.526969103263404,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.037011027336120605,
+                "generatedTokens": 256,
+                "loadSeconds": 2.8014183044433594e-05,
+                "name": "baseline",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "disabled",
+                "prefillSeconds": 0.3245609998703003,
+                "prefillTokensPerSecond": 184.86509477101978,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15398027264,
+                "residentMemoryBeforeBytes": 15396192256,
+                "ttftSeconds": 0.36160004138946533
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.4074074074074074,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 324,
+                  "rounds": 124,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 11.29033100605011,
+                "decodeTokensPerSecond": 22.674268793609166,
+                "elapsedSeconds": 11.62563705444336,
+                "endToEndTokensPerSecond": 22.020298655561064,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00021195411682128906,
+                "generatedTokens": 256,
+                "loadSeconds": 2.002716064453125e-05,
+                "name": "adaptive",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "adaptive",
+                "prefillSeconds": 0.33380603790283203,
+                "prefillTokensPerSecond": 179.74510100822522,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15823896576,
+                "residentMemoryBeforeBytes": 15820210176,
+                "ttftSeconds": 0.33403801918029785
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.4074074074074074,
+                  "acceptedDraftTokens": 132,
+                  "draftHistoryTokens": 59,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 324,
+                  "rounds": 124,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 6.3107229471206665,
+                "decodeTokensPerSecond": 40.565875280074316,
+                "elapsedSeconds": 6.642870903015137,
+                "endToEndTokensPerSecond": 38.53755458107789,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00035703182220458984,
+                "generatedTokens": 256,
+                "loadSeconds": 1.990795135498047e-05,
+                "name": "forced",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "forced",
+                "prefillSeconds": 0.33058297634124756,
+                "prefillTokensPerSecond": 181.49754916013705,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15900229632,
+                "residentMemoryBeforeBytes": 15900262400,
+                "ttftSeconds": 0.33095991611480713
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-prose-legacy-0",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12328.50M  free = 983.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 2.1438219999011743,
+              "forced": 2.221708769610183
+            },
+            "endToEndSpeedups": {
+              "adaptive": 2.1252935987072465,
+              "forced": 2.173429975076465
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 25.518627047538757,
+                "decodeTokensPerSecond": 10.031887668685957,
+                "elapsedSeconds": 25.98515510559082,
+                "endToEndTokensPerSecond": 9.851778792920134,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.07265305519104004,
+                "generatedTokens": 256,
+                "loadSeconds": 2.6106834411621094e-05,
+                "name": "baseline",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "disabled",
+                "prefillSeconds": 0.4648500680923462,
+                "prefillTokensPerSecond": 129.0738758977239,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15416672256,
+                "residentMemoryBeforeBytes": 15414607872,
+                "ttftSeconds": 0.5375292301177979
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.38414634146341464,
+                  "acceptedDraftTokens": 126,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 328,
+                  "rounds": 130,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 11.903332948684692,
+                "decodeTokensPerSecond": 21.506581484666256,
+                "elapsedSeconds": 12.226619005203247,
+                "endToEndTokensPerSecond": 20.937922404472964,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0001900196075439453,
+                "generatedTokens": 256,
+                "loadSeconds": 1.800060272216797e-05,
+                "name": "adaptive",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "adaptive",
+                "prefillSeconds": 0.3218569755554199,
+                "prefillTokensPerSecond": 186.41820608815334,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15840870400,
+                "residentMemoryBeforeBytes": 15838724096,
+                "ttftSeconds": 0.32206499576568604
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.38414634146341464,
+                  "acceptedDraftTokens": 126,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 328,
+                  "rounds": 130,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 11.4860360622406,
+                "decodeTokensPerSecond": 22.287932809263847,
+                "elapsedSeconds": 11.955828070640564,
+                "endToEndTokensPerSecond": 21.412151336355254,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0003679990768432617,
+                "generatedTokens": 256,
+                "loadSeconds": 2.5987625122070312e-05,
+                "name": "forced",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "forced",
+                "prefillSeconds": 0.46745896339416504,
+                "prefillTokensPerSecond": 128.35351271124847,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15899508736,
+                "residentMemoryBeforeBytes": 15899475968,
+                "ttftSeconds": 0.46785295009613037
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-prose-legacy-1",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12288.50M  free = 1023.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 1.0684091886030134,
+              "forced": 1.0529120372670857
+            },
+            "endToEndSpeedups": {
+              "adaptive": 1.0625543687400132,
+              "forced": 1.0437723645038623
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 15.07500696182251,
+                "decodeTokensPerSecond": 16.981750034896873,
+                "elapsedSeconds": 15.53210198879242,
+                "endToEndTokensPerSecond": 16.481993241141687,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.03977692127227783,
+                "generatedTokens": 256,
+                "loadSeconds": 3.3974647521972656e-05,
+                "name": "baseline",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "disabled",
+                "prefillSeconds": 0.4547640085220337,
+                "prefillTokensPerSecond": 131.9365624271758,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15398387712,
+                "residentMemoryBeforeBytes": 15396077568,
+                "ttftSeconds": 0.4945749044418335
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.38414634146341464,
+                  "acceptedDraftTokens": 126,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 328,
+                  "rounds": 130,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 14.109769105911255,
+                "decodeTokensPerSecond": 18.143457775843363,
+                "elapsedSeconds": 14.617700934410095,
+                "endToEndTokensPerSecond": 17.513013923918468,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0002390146255493164,
+                "generatedTokens": 256,
+                "loadSeconds": 2.6106834411621094e-05,
+                "name": "adaptive",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "adaptive",
+                "prefillSeconds": 0.5063439607620239,
+                "prefillTokensPerSecond": 118.49652538504223,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15822258176,
+                "residentMemoryBeforeBytes": 15819145216,
+                "ttftSeconds": 0.5066090822219849
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.38414634146341464,
+                  "acceptedDraftTokens": 126,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 328,
+                  "rounds": 130,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 14.317441940307617,
+                "decodeTokensPerSecond": 17.88028902560367,
+                "elapsedSeconds": 14.880736947059631,
+                "endToEndTokensPerSecond": 17.203449057043137,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00030291080474853516,
+                "generatedTokens": 256,
+                "loadSeconds": 2.7060508728027344e-05,
+                "name": "forced",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "forced",
+                "prefillSeconds": 0.561600923538208,
+                "prefillTokensPerSecond": 106.83743114592288,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15899754496,
+                "residentMemoryBeforeBytes": 15898771456,
+                "ttftSeconds": 0.5619308948516846
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "qwen-prose-legacy-2",
+      "report": {
+        "measurementHost": {
+          "competingInferencePIDs": [],
+          "swapAfter": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)",
+          "swapBefore": "vm.swapusage: total = 13312.00M  used = 12272.50M  free = 1039.50M  (encrypted)"
+        },
+        "model": "vision-chat-q38-27b-4bit",
+        "scenarios": [
+          {
+            "contextSize": 8192,
+            "decodeSpeedups": {
+              "adaptive": 0.7764702658231872,
+              "forced": 0.7851990176770206
+            },
+            "endToEndSpeedups": {
+              "adaptive": 0.7784258114220998,
+              "forced": 0.7904354881291229
+            },
+            "greedyOutputParity": true,
+            "promptCharacters": 247,
+            "requestedDecodeTokens": 256,
+            "temperature": 0,
+            "variants": [
+              {
+                "acceleration": {
+                  "route": "final-target-pipelined"
+                },
+                "decodeSeconds": 9.264680981636047,
+                "decodeTokensPerSecond": 27.63182029769071,
+                "elapsedSeconds": 9.582779049873352,
+                "endToEndTokensPerSecond": 26.714588603958614,
+                "expectedMTPActive": false,
+                "firstTokenSeconds": 0.036801934242248535,
+                "generatedTokens": 256,
+                "loadSeconds": 1.895427703857422e-05,
+                "name": "baseline",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "disabled",
+                "prefillSeconds": 0.31640100479125977,
+                "prefillTokensPerSecond": 189.6327732574174,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15398174720,
+                "residentMemoryBeforeBytes": 15395897344,
+                "ttftSeconds": 0.3532218933105469
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.38414634146341464,
+                  "acceptedDraftTokens": 126,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 328,
+                  "rounds": 130,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 11.931791067123413,
+                "decodeTokensPerSecond": 21.455286851726445,
+                "elapsedSeconds": 12.310459017753601,
+                "endToEndTokensPerSecond": 20.795325310844063,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.0002200603485107422,
+                "generatedTokens": 256,
+                "loadSeconds": 2.09808349609375e-05,
+                "name": "adaptive",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "adaptive",
+                "prefillSeconds": 0.37716007232666016,
+                "prefillTokensPerSecond": 159.08364750771844,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15841394688,
+                "residentMemoryBeforeBytes": 15838035968,
+                "ttftSeconds": 0.37740111351013184
+              },
+              {
+                "acceleration": {
+                  "acceptanceRate": 0.38414634146341464,
+                  "acceptedDraftTokens": 126,
+                  "draftHistoryTokens": 0,
+                  "draftModel": "qwen-mtp",
+                  "draftedTokens": 328,
+                  "rounds": 130,
+                  "route": "mtp-speculative"
+                },
+                "decodeSeconds": 11.799149990081787,
+                "decodeTokensPerSecond": 21.696478154374702,
+                "elapsedSeconds": 12.123417019844055,
+                "endToEndTokensPerSecond": 21.11615888333873,
+                "expectedMTPActive": true,
+                "firstTokenSeconds": 0.00018095970153808594,
+                "generatedTokens": 256,
+                "loadSeconds": 1.800060272216797e-05,
+                "name": "forced",
+                "outputSHA256": "f0eee860afeee246903ecb69993c7b7fee39cc16b60c5bf6535276f31f58bcda",
+                "policy": "forced",
+                "prefillSeconds": 0.32285404205322266,
+                "prefillTokensPerSecond": 185.84249284420906,
+                "promptTokens": 60,
+                "residentMemoryAfterBytes": 15898165248,
+                "residentMemoryBeforeBytes": 15897739264,
+                "ttftSeconds": 0.3230530023574829
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "machine": {
+    "chip": "Apple M4 Max",
+    "macOS": "26.5.2",
+    "macOSBuild": "25F84",
+    "memoryGiB": 128
+  },
+  "ornithCodeExpertsOnly": {
+    "model": "text-agent-ornith-35b-mlx-4bit",
+    "scenarios": [
+      {
+        "contextSize": 8192,
+        "decodeSpeedups": {
+          "adaptive": 0.3804708616126236,
+          "forced": 0.3702068269619012
+        },
+        "endToEndSpeedups": {
+          "adaptive": 0.38822280843074974,
+          "forced": 0.37723822603745427
+        },
+        "greedyOutputParity": true,
+        "promptCharacters": 220,
+        "requestedDecodeTokens": 256,
+        "temperature": 0,
+        "variants": [
+          {
+            "acceleration": {
+              "route": "final-target-pipelined"
+            },
+            "decodeSeconds": 2.79019296169281,
+            "decodeTokensPerSecond": 91.7499268024405,
+            "elapsedSeconds": 2.8898160457611084,
+            "endToEndTokensPerSecond": 88.58695361440411,
+            "expectedMTPActive": false,
+            "firstTokenSeconds": 0.010913968086242676,
+            "generatedTokens": 256,
+            "loadSeconds": 6.9141387939453125e-06,
+            "name": "baseline",
+            "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+            "policy": "disabled",
+            "prefillSeconds": 0.09812796115875244,
+            "prefillTokensPerSecond": 550.3018646503643,
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 7681048576,
+            "residentMemoryBeforeBytes": 7680475136,
+            "ttftSeconds": 0.10904884338378906
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.5228215767634855,
+              "acceptedDraftTokens": 126,
+              "draftHistoryTokens": 0,
+              "draftModel": "qwen-mtp",
+              "draftedTokens": 241,
+              "rounds": 129,
+              "route": "mtp-speculative"
+            },
+            "decodeSeconds": 7.333526015281677,
+            "decodeTokensPerSecond": 34.908173703419685,
+            "elapsedSeconds": 7.443704962730408,
+            "endToEndTokensPerSecond": 34.39147592250852,
+            "expectedMTPActive": true,
+            "firstTokenSeconds": 0.00019598007202148438,
+            "generatedTokens": 256,
+            "loadSeconds": 5.9604644775390625e-06,
+            "name": "adaptive",
+            "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+            "policy": "adaptive",
+            "prefillSeconds": 0.10882294178009033,
+            "prefillTokensPerSecond": 496.2188957281024,
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 9466544128,
+            "residentMemoryBeforeBytes": 9460760576,
+            "ttftSeconds": 0.10902488231658936
+          },
+          {
+            "acceleration": {
+              "acceptanceRate": 0.5228215767634855,
+              "acceptedDraftTokens": 126,
+              "draftHistoryTokens": 0,
+              "draftModel": "qwen-mtp",
+              "draftedTokens": 241,
+              "rounds": 129,
+              "route": "mtp-speculative"
+            },
+            "decodeSeconds": 7.536849021911621,
+            "decodeTokensPerSecond": 33.966449275518194,
+            "elapsedSeconds": 7.660453915596008,
+            "endToEndTokensPerSecond": 33.41838523156005,
+            "expectedMTPActive": true,
+            "firstTokenSeconds": 0.00019299983978271484,
+            "generatedTokens": 256,
+            "loadSeconds": 5.9604644775390625e-06,
+            "name": "forced",
+            "outputSHA256": "cd134369dacefc1cc1bc8bceceb5cfb2dc106e35c077361b20e79108d05fabb4",
+            "policy": "forced",
+            "prefillSeconds": 0.12214195728302002,
+            "prefillTokensPerSecond": 442.10852029228937,
+            "promptTokens": 54,
+            "residentMemoryAfterBytes": 11130077184,
+            "residentMemoryBeforeBytes": 11129733120,
+            "ttftSeconds": 0.12234091758728027
+          }
+        ]
+      }
+    ]
+  },
+  "ornithCodeExpertsOnlyEnvironment": {
+    "MERERUN_Q35_EXACT_Q4_EXPERTS": "1",
+    "MERERUN_Q35_MTP_STREAM_HISTORY": "none"
+  },
+  "prompts": {
+    "code": "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose.",
+    "math": "Derive the sum of the first n squares using induction. Explain the base case and inductive step, then check your formula for n=10. Show each algebraic step.",
+    "prose": "Explain how a small community could turn an abandoned railway station into a public library. Discuss the building, accessibility, staffing, the collection, and a realistic opening-day scene. Write approximately 400 words of clear, connected prose."
+  },
+  "protocol": {
+    "armOrder": "Ablation then candidate on trials zero and two; reversed on trial one.",
+    "arms": {
+      "candidate": {
+        "MERERUN_Q35_EXACT_Q4_EXPERTS": "1",
+        "MERERUN_Q35_MTP_STREAM_HISTORY": "1"
+      },
+      "legacy": {
+        "MERERUN_Q35_EXACT_Q4_EXPERTS": "0",
+        "MERERUN_Q35_MTP_STREAM_HISTORY": "none"
+      }
+    },
+    "contextTokens": 8192,
+    "decodeTokens": 256,
+    "note": "Both arms use the candidate binary. Legacy is a component ablation, not an older executable. One contended run was excluded and repeated.",
+    "prefixKVCache": false,
+    "temperature": 0,
+    "topP": 1,
+    "trials": 3,
+    "warmupTokens": 16
+  },
+  "runtimeCommit": "bcf630500de4b0103b2e43d2e11409b3b52af782",
+  "schemaVersion": 1,
+  "validation": {
+    "command": "MERERUN_SWIFT_DISABLE_INDEX_STORE=1 ./scripts/check.sh",
+    "failures": 0,
+    "installedCheckpoints": [
+      "vision-chat-q38-27b-4bit",
+      "text-agent-ornith-35b-mlx-4bit"
+    ],
+    "installedChecks": [
+      "4944-token cold retrieval",
+      "exact prefix replay",
+      "4973-token cached follow-up",
+      "original checkpoint isolation",
+      "256-token code MTP and serial agreement"
+    ],
+    "logs": [
+      {
+        "file": "ornith-qwen-transfer-check-with-code.log",
+        "sha256": "fb28d6677a8a13367e3d783a008149dffa577e4c5577d5912a5c61db43eba00e"
+      },
+      {
+        "file": "ornith-qwen-transfer-qwen-checkpoint-with-code.log",
+        "sha256": "58c7203ac5bb9b3e82026b72a20857654f7a94c1e63b668a6eb042352b081d90"
+      },
+      {
+        "file": "ornith-qwen-transfer-ornith-checkpoint-with-code.log",
+        "sha256": "2f55b834d15d7a3db3838a967ab6ac7e10445b1f07edb12d9b47c73165eba3c7"
+      }
+    ],
+    "swiftTestingCases": 51,
+    "xctestCases": 3890,
+    "xctestSkipped": 309
+  },
+  "verification": {
+    "verifier-ornith": [
+      {
+        "activeMemoryBytes": 21846286092,
+        "cacheMemoryBytes": 146112622,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 128,
+        "verificationSeconds": 1.426062822341919,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 89.75761656123602,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 21847789324,
+        "cacheMemoryBytes": 208682862,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 32,
+        "verificationSeconds": 0.5396181344985962,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 237.20477837338692,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 21849788172,
+        "cacheMemoryBytes": 222034030,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 16,
+        "verificationSeconds": 0.40638411045074463,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 314.9729448280535,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 21846781708,
+        "cacheMemoryBytes": 243301118,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 15,
+        "verificationSeconds": 0.4129129648208618,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 309.99268830304595,
+        "width": 9
+      },
+      {
+        "activeMemoryBytes": 21846787852,
+        "cacheMemoryBytes": 243344126,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 15,
+        "verificationSeconds": 0.3777691125869751,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 338.8313012767292,
+        "width": 9
+      },
+      {
+        "activeMemoryBytes": 21849788172,
+        "cacheMemoryBytes": 240343806,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 16,
+        "verificationSeconds": 0.37378501892089844,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 342.44283082701014,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 21847789324,
+        "cacheMemoryBytes": 242342654,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 32,
+        "verificationSeconds": 0.5388400554656982,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 237.5472994289087,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 21846286092,
+        "cacheMemoryBytes": 243845886,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 128,
+        "verificationSeconds": 1.4279674291610718,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 89.63789886664276,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 21846286092,
+        "cacheMemoryBytes": 243845886,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 128,
+        "verificationSeconds": 1.4190925359725952,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 90.19848724119558,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 21847789324,
+        "cacheMemoryBytes": 242359038,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 32,
+        "verificationSeconds": 0.540734052658081,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 236.71525654948428,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 21849788172,
+        "cacheMemoryBytes": 240360190,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 16,
+        "verificationSeconds": 0.3832550048828125,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 333.981287574153,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 21846787852,
+        "cacheMemoryBytes": 243409662,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 15,
+        "verificationSeconds": 0.3803989887237549,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 336.488802006131,
+        "width": 9
+      }
+    ],
+    "verifier-ornith-previous-experts": [
+      {
+        "activeMemoryBytes": 21846286092,
+        "cacheMemoryBytes": 146112622,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 128,
+        "verificationSeconds": 1.4107073545455933,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 90.7346230155796,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 21847789324,
+        "cacheMemoryBytes": 208265326,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 32,
+        "verificationSeconds": 0.5137730836868286,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 249.1372243198763,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 21849788172,
+        "cacheMemoryBytes": 223128686,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 16,
+        "verificationSeconds": 0.44578492641448975,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 287.1339796738347,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 21846781708,
+        "cacheMemoryBytes": 245777694,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 15,
+        "verificationSeconds": 0.40747690200805664,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 314.12823492377777,
+        "width": 9
+      },
+      {
+        "activeMemoryBytes": 21846787852,
+        "cacheMemoryBytes": 245820702,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 15,
+        "verificationSeconds": 0.364086389541626,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 351.5649133744006,
+        "width": 9
+      },
+      {
+        "activeMemoryBytes": 21849788172,
+        "cacheMemoryBytes": 242820382,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 16,
+        "verificationSeconds": 0.366990327835083,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 348.7830340245922,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 21847789324,
+        "cacheMemoryBytes": 244835614,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 32,
+        "verificationSeconds": 0.5268681049346924,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 242.94505361235744,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 21846286092,
+        "cacheMemoryBytes": 246338846,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 128,
+        "verificationSeconds": 1.4249839782714844,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 89.82557134099494,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 21846286092,
+        "cacheMemoryBytes": 246338846,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 128,
+        "verificationSeconds": 1.4119869470596313,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 90.65239609087851,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 21847789324,
+        "cacheMemoryBytes": 244835614,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 32,
+        "verificationSeconds": 0.512060284614563,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 249.9705676185137,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 21849788172,
+        "cacheMemoryBytes": 242836766,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 16,
+        "verificationSeconds": 0.36865222454071045,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 347.2107083023038,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 21846787852,
+        "cacheMemoryBytes": 245886238,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 15,
+        "verificationSeconds": 0.36385107040405273,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 351.7922864919907,
+        "width": 9
+      }
+    ],
+    "verifier-qwen": [
+      {
+        "activeMemoryBytes": 18515398856,
+        "cacheMemoryBytes": 330644020,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 128,
+        "verificationSeconds": 4.661101937294006,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 27.461317457114045,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 18516928712,
+        "cacheMemoryBytes": 473935044,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 32,
+        "verificationSeconds": 1.596632719039917,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 80.16871912594189,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 18518943944,
+        "cacheMemoryBytes": 499223780,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 16,
+        "verificationSeconds": 1.3579840660095215,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 94.25736516639108,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 18515912904,
+        "cacheMemoryBytes": 516506448,
+        "greedyOutputParity": true,
+        "trial": 0,
+        "verificationPasses": 15,
+        "verificationSeconds": 1.478843092918396,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 86.55414534032866,
+        "width": 9
+      },
+      {
+        "activeMemoryBytes": 18515912904,
+        "cacheMemoryBytes": 516670288,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 15,
+        "verificationSeconds": 1.51375412940979,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 84.55798568153665,
+        "width": 9
+      },
+      {
+        "activeMemoryBytes": 18518943944,
+        "cacheMemoryBytes": 513639248,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 16,
+        "verificationSeconds": 1.4083279371261597,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 90.88792221305883,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 18516928712,
+        "cacheMemoryBytes": 515654480,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 32,
+        "verificationSeconds": 1.6267269849777222,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 78.68560685476854,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 18515398856,
+        "cacheMemoryBytes": 517184336,
+        "greedyOutputParity": true,
+        "trial": 1,
+        "verificationPasses": 128,
+        "verificationSeconds": 5.1328045129776,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 24.937633934113283,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 18515398856,
+        "cacheMemoryBytes": 517184336,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 128,
+        "verificationSeconds": 4.90143096446991,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 26.11482257484845,
+        "width": 1
+      },
+      {
+        "activeMemoryBytes": 18516928712,
+        "cacheMemoryBytes": 515654480,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 32,
+        "verificationSeconds": 1.7973592281341553,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 71.21559118311437,
+        "width": 4
+      },
+      {
+        "activeMemoryBytes": 18518943944,
+        "cacheMemoryBytes": 513639248,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 16,
+        "verificationSeconds": 1.475736141204834,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 86.73637273360877,
+        "width": 8
+      },
+      {
+        "activeMemoryBytes": 18515912904,
+        "cacheMemoryBytes": 516768592,
+        "greedyOutputParity": true,
+        "trial": 2,
+        "verificationPasses": 15,
+        "verificationSeconds": 1.5330761671066284,
+        "verifiedTokens": 128,
+        "verifiedTokensPerSecond": 83.49226395031249,
+        "width": 9
+      }
+    ]
+  },
+  "verificationProtocol": {
+    "note": "Target-only oracle replay; excludes draft cost.",
+    "prompt": "Write a complete Python LRU cache using a dictionary and a doubly linked list.",
+    "tokens": 128,
+    "trials": 3,
+    "widths": [
+      1,
+      4,
+      8,
+      9
+    ]
+  }
+}
