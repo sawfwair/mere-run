@@ -5,39 +5,40 @@ and merged [PR #442](https://github.com/sawfwair/mere-run/pull/442). It tests
 complete generation with the installed Qwen3.8-27B Q4 and Ornith 1.5 Q4
 checkpoints on an Apple M4 Max with 128 GB unified memory.
 
-The implementation is experimental. The workload measurements use the existing
-desktop graphics load, with every repetition retained. Production settings
-remain pending controlled qualification. Target-verification rates
+The scheduling defaults apply to the two managed Q4 models. The workload
+measurements retain every repetition and record the existing desktop load. Target-verification rates
 from the transfer assessment are not generation throughput.
 
-## Changes under qualification
+## Scheduling changes
 
-Each Q35 request can own its compiled activation graphs. Swift inference uses
+Each managed Q4 request owns its compiled activation graphs. Swift inference uses
 task-local MLX streams, while the C++ compilation cache uses the thread's
 default stream in its cache key. Reusing compiled functions across requests
 can retain graphs traced on an earlier request's stream. The request scope
 covers SiLU, SwiGLU, precise gated normalization, and decay preparation.
 
-The Q4 Qwen 27B and Ornith geometries can submit short decoder blocks
+The Q4 Qwen 27B and Ornith geometries submit short decoder blocks
 asynchronously. Final logits are evaluated before target acceptance or cache
 commit. Prefill and unsupported geometries retain blocking boundaries.
 
 When the greedy drafting policy permanently selects zero draft tokens, the
-remaining generation can use the existing pipelined target decoder. The
+remaining generation uses the existing pipelined target decoder. The
 draft-cost estimate is configurable for matched comparisons.
 
-The experiment controls are as follows:
+The controls are as follows. Scheduling defaults are on only for the two
+managed Q4 model IDs. Other model IDs require an explicit `1` override.
 
-| Environment variable | Experimental value | Default |
+| Environment variable | Explicit value | Managed Q4 default |
 | --- | --- | --- |
-| `MERERUN_Q35_SCOPED_COMPILE` | `1` creates request-owned compiled graphs | Off |
-| `MERERUN_Q35_ASYNC_DECODE_BLOCKS` | `1` submits supported short blocks asynchronously | Off |
-| `MERERUN_Q35_MTP_PIPELINED_FALLBACK` | `1` pipelines permanent target fallback | Off |
+| `MERERUN_Q35_SCOPED_COMPILE` | `0` restores shared compiled graphs | On |
+| `MERERUN_Q35_ASYNC_DECODE_BLOCKS` | `0` restores blocking submission | On |
+| `MERERUN_Q35_MTP_PIPELINED_FALLBACK` | `0` restores synchronous target fallback | On |
 | `MERERUN_Q35_MTP_HEAD_COST_RATIO` | Positive finite value up to `5` | `0.18` |
 | `MERERUN_Q35_MTP_PROFILE` | `1` records synchronized phase timings | Off |
 
 Generation block defaults remain eight tokens for Qwen and four for Ornith.
-The cost and block-size sweep must complete before changing these defaults.
+The explored higher draft costs did not establish a consistent gain, so these
+defaults remain unchanged.
 
 ## Measurement contract
 
@@ -67,10 +68,10 @@ graphics activity and explicitly records `measurementMode: desktop-load` and
 receipt. These measurements describe this desktop session and cannot establish
 an isolated hardware ceiling or justify production promotion on their own.
 
-The initial selection uses 256-token warm-up and measured requests, with three
-measured repeats. Final measurements use two 512-token warm-ups and three
-512-token measured requests per variant. Compare reversed variant order to
-check order effects. Synchronized profiling is excluded from TPS conclusions.
+The workstation measurements use one 256-token warm-up and three 256-token
+measured requests per variant. Reversed variant order checks order effects.
+Synchronized profiling is excluded from TPS conclusions. Longer requests and
+exclusive-machine measurements remain separate performance qualification.
 
 ## Validation receipts
 

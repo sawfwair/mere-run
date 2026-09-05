@@ -27,7 +27,7 @@ class ReceiptAdmissionTests(unittest.TestCase):
             output=self.root, model="ornith", tokens=256, temperature=0,
             top_p=1, variants="baseline,adaptive", warmups=1,
             warmup_tokens=256, repetitions=3, block_size=None, profile=False,
-            allow_desktop_load=False,
+            allow_desktop_load=False, build_source_revision="fixture-build-revision",
         )
         self.process = Mock(returncode=0)
         self.process.pid = 123
@@ -55,6 +55,7 @@ class ReceiptAdmissionTests(unittest.TestCase):
             "gpuDeviceUtilizationPercent": gpu,
             "pressureLevel": pressure,
             "swapUsedMiB": 0,
+            "loadAverage": [2.0, 3.0, 4.0],
         }
 
     def launch_fixture(self, _command, **kwargs):
@@ -79,6 +80,20 @@ class ReceiptAdmissionTests(unittest.TestCase):
         self.assertEqual(receipt["before"]["gpuDeviceUtilizationPercent"], 50)
         self.assertEqual(receipt["gpuSamples"][0]["deviceUtilizationPercent"], 90)
         self.assertEqual(len(receipt["collectorSHA256"]), 64)
+        self.assertEqual(receipt["buildSourceRevision"], "fixture-build-revision")
+        self.assertEqual(receipt["gpuSamples"][0]["loadAverage"], [2.0, 3.0, 4.0])
+
+    def test_binary_replacement_during_measurement_cannot_get_a_receipt(self):
+        self.args.allow_desktop_load = True
+
+        def replace_binary(command, **kwargs):
+            self.binary.write_bytes(b"replacement binary")
+            return self.launch_fixture(command, **kwargs)
+
+        self.launch.side_effect = replace_binary
+        with self.assertRaisesRegex(SystemExit, "Binary changed"):
+            self.run_case()
+        self.assertFalse((self.root / "ornith-code.json").exists())
 
     def test_desktop_mode_does_not_bypass_critical_memory_stop(self):
         self.args.allow_desktop_load = True

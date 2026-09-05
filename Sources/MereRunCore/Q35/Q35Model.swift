@@ -277,11 +277,10 @@ final class Q35Transformer: Module {
     private let usesMoE: Bool
     private let hyperConnectionCount: Int
     private let supportsAsynchronousDecodeBlocks: Bool
-    private static let asynchronousDecodeBlocks = ProcessInfo.processInfo.environment[
-        "MERERUN_Q35_ASYNC_DECODE_BLOCKS"
-    ] == "1"
+    private let asynchronousDecodeBlocks: Bool
 
-    init(config: Q35Config) {
+    init(config: Q35Config, asynchronousDecodeBlocks: Bool) {
+        self.asynchronousDecodeBlocks = asynchronousDecodeBlocks
         let text = config.textConfig
         self.isQwen4Exp = text.isQwen4Exp
         self.usesMoE = text.usesMoE
@@ -383,7 +382,7 @@ final class Q35Transformer: Module {
                 // prefill is not submitted as one watchdog-sized lazy graph.
                 // This is also required by full-BF16 Qwen3.5 checkpoints;
                 // Qwen4Exp adds two hyper-connection projections per block.
-                if supportsAsynchronousDecodeBlocks, Self.asynchronousDecodeBlocks,
+                if supportsAsynchronousDecodeBlocks, asynchronousDecodeBlocks,
                    hidden.dim(0) == 1, hidden.dim(1) == 1 || (targetVerify && hidden.dim(1) <= 9) {
                     // Bound graph submission without stalling the host after
                     // every four tiny decode layers. The caller evaluates the
@@ -524,9 +523,12 @@ public final class Q35Model: Module, @unchecked Sendable {
         + compactDraftControlEnd - compactDraftControlStart
     static let compactDraftPaddedCount = 98_336
 
-    public init(config: Q35Config) {
+    public init(
+        config: Q35Config,
+        asynchronousDecodeBlocks: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_ASYNC_DECODE_BLOCKS"] == "1"
+    ) {
         self.config = config
-        self._model.wrappedValue = Q35Transformer(config: config)
+        self._model.wrappedValue = Q35Transformer(config: config, asynchronousDecodeBlocks: asynchronousDecodeBlocks)
         self._lmHead.wrappedValue = config.tieWordEmbeddings
             ? nil
             : Linear(

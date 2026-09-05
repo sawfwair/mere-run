@@ -457,7 +457,9 @@ public actor Q35Generator: ChatGenerator {
     ) async throws -> ChatResponse {
         activeChatRequestCount += 1
         defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await Q35CompiledOperations.withNewDefaultStream {
+        return try await Q35CompiledOperations.withNewDefaultStream(
+            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
+        ) {
             let rootURL = try await resolveModelRoot(modelPath: nil, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -486,7 +488,9 @@ public actor Q35Generator: ChatGenerator {
     ) async throws -> ChatResponse {
         activeChatRequestCount += 1
         defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await Q35CompiledOperations.withNewDefaultStream {
+        return try await Q35CompiledOperations.withNewDefaultStream(
+            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
+        ) {
             let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -512,7 +516,9 @@ public actor Q35Generator: ChatGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Q35CompiledOperations.withNewDefaultStream {
+        try await Q35CompiledOperations.withNewDefaultStream(
+            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
+        ) {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -594,7 +600,10 @@ public actor Q35Generator: ChatGenerator {
         )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family weights"))
-        let q35Model = Q35Model(config: config)
+        let q35Model = Q35Model(
+            config: config,
+            asynchronousDecodeBlocks: Q35RuntimeTuning.isEnabled(.asynchronousDecode, modelID: modelId)
+        )
         let resources = Q35Resources(rootURL: normalizedRoot)
 
         let groupSize = config.quantization?.groupSize ?? 64
@@ -1311,9 +1320,7 @@ public actor Q35Generator: ChatGenerator {
         var usePipelinedFallback = false
         let supportsPipelinedFallback = modelId == Q35Resources.q38TwentySevenB4BitModelId
             || modelId == Q35Resources.ornith35BMLX4BitModelId
-        let pipelinedFallbackEnabled = ProcessInfo.processInfo.environment[
-            "MERERUN_Q35_MTP_PIPELINED_FALLBACK"
-        ] == "1"
+        let pipelinedFallbackEnabled = Q35RuntimeTuning.isEnabled(.pipelinedFallback, modelID: modelId)
         let mtpBlockSize = Self.mtpBlockSize(modelId: modelId)
         var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(
             maxDraftDepth: mtpBlockSize - 1, headStepCostRatio: Q35MTPAdaptivePolicy.configuredCostRatio()

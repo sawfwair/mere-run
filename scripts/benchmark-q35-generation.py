@@ -45,6 +45,7 @@ def snapshot():
         "swapUsedMiB": float(re.search(r"used = ([0-9.]+)M", swap).group(1)),
         "pressureLevel": int(command_text("sysctl", "-n", "kern.memorystatus_vm_pressure_level")),
         "gpuDeviceUtilizationPercent": gpu_utilization(),
+        "loadAverage": list(os.getloadavg()),
     }
 
 
@@ -111,6 +112,9 @@ def run_case(args, root, binary, name, prompt, environment):
         raise SystemExit("GPU is already busy; wait for an idle measurement window.")
     if before["pressureLevel"] != 1:
         raise SystemExit("Memory pressure is elevated; defer this benchmark.")
+    binary_hash = hashlib.sha256(binary.read_bytes()).hexdigest()
+    collector_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    source_head = command_text("git", "-C", str(root), "rev-parse", "HEAD")
     command = [
         str(binary), "model", "benchmark", "q36-mtp", "--model", MODELS[args.model],
         "--prompt", prompt, "--decode-tokens", str(args.tokens), "--context-size", "8192",
@@ -135,6 +139,7 @@ def run_case(args, root, binary, name, prompt, environment):
             gpu_samples.append({
                 "elapsedSeconds": time.time() - started,
                 "deviceUtilizationPercent": state["gpuDeviceUtilizationPercent"],
+                "loadAverage": state["loadAverage"],
             })
             max_pressure = max(max_pressure, state["pressureLevel"])
             rss = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True)
@@ -148,15 +153,17 @@ def run_case(args, root, binary, name, prompt, environment):
     after = snapshot()
     if process.returncode:
         raise SystemExit(f"Benchmark failed ({process.returncode}); see {destination.with_suffix('.stderr')}")
+    if hashlib.sha256(binary.read_bytes()).hexdigest() != binary_hash:
+        raise SystemExit("Binary changed during measurement; retained raw output without a qualified receipt.")
     report = json.loads(destination.with_suffix(".stdout").read_text())
     report["receipt"] = {
         "workload": name, "prompt": prompt, "command": command,
-        "binarySHA256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-        "sourceHead": command_text("git", "-C", str(root), "rev-parse", "HEAD"),
+        "binarySHA256": binary_hash,
+        "sourceHead": source_head, "buildSourceRevision": args.build_source_revision,
         "runtimeOverrides": {key: value for key, value in environment.items() if key.startswith("MERERUN_Q35_")},
         "profiled": args.profile, "startedUnixSeconds": started,
         "measurementMode": "desktop-load" if args.allow_desktop_load else "quiet-window",
-        "collectorSHA256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "collectorSHA256": collector_hash,
         "processSeconds": time.time() - started, "peakResidentBytes": peak_rss,
         "before": before, "after": after, "maxPressureLevel": max_pressure,
         "competingInferencePIDs": sorted(competing),
@@ -174,6 +181,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--source-root", type=Path, help="Checkout used to build the binary.")
+    parser.add_argument("--build-source-revision", help="Exact Git revision recorded when building this binary.")
     parser.add_argument("--model", choices=MODELS, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--workloads", nargs="+", choices=PROMPTS, default=list(PROMPTS))
