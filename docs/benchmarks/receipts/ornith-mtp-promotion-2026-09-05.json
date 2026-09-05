@@ -1,0 +1,518 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-05",
+  "hardware": {
+    "chip": "Apple M4 Max",
+    "unifiedMemoryBytes": 137438953472,
+    "device": "gpu"
+  },
+  "scope": {
+    "managedModelID": "text-agent-ornith-35b-mlx-4bit",
+    "runtime": "mere.run native Qwen",
+    "maxTestedPromptTokens": 34674,
+    "concurrentServingQualified": false,
+    "fullAdvertisedContextQualified": false,
+    "timingUse": "Operational compatibility only; other desktop work active."
+  },
+  "head": {
+    "sourceRepository": "shisa-ai/Ornith-1.5-35B-A3B-MTP-ONLY",
+    "sourceRevision": "2b19b31bfe1659c6b0d9459ec3cbd87e34a322ef",
+    "sourceSHA256": "73c6e839971fff3c6d78dbcb6a15895bbab340a2898e98aa6943070751de712e",
+    "packagedFilename": "mtp/model-mtp.safetensors",
+    "packagedSHA256": "d1b500efb9ed14e3c855ef87a118c1d4a7de27029ed5f27e7e4fae48a1d34028",
+    "packagedBytes": 1689376032,
+    "tensorCount": 785,
+    "conversion": "Split fused expert axes; preserve every BF16 byte and raw-HF zero-centered norm weights.",
+    "conversionReceiptSHA256": "86c2a2113a4fec60d74a2ea6d78b275273e7632f916fba2d3e7c332b851fbe9e"
+  },
+  "source": {
+    "baseCommit": "22452620c4b09f5499df9c1b67f405a464256ba8",
+    "qualificationSourceFileSHA256": {
+      "Sources/MereRunCore/Q35/Q35Generator.swift": "29c7c48eac1ff0dc64cac9c43833a7a26be2d7edaaa0d5d2bc1db9e0ab692b34",
+      "Sources/MereRunCore/Q35/Q35CompiledOperations.swift": "ee3578d813d3ac6e25522a40beeeee4bf1773790b950e974204707bce789e04a",
+      "Sources/MereRunCore/Q35/Q35Sampling.swift": "beef68e88fa9fccf8ab687db8c0617ac6bbdad45a1be1456caab58c4433a47e1",
+      "Sources/MereRunCore/Q35/Q35Resources.swift": "1444554bd3c8e4e005ab91023b1d2e0776bd3a8324e7c21eb93ed84facb6c10c",
+      "Tests/MereRunCoreTests/Q35SamplingTests.swift": "68c064a141d14172b6f5c1821aae561a25de7d8aaaf9e86ea0be985e1cb4fc0d",
+      "Tests/MereRunCoreTests/Q35TransferCheckpointTests.swift": "81f342ded62b56669148481bd18da9864aea06be7b299c37887dc9443fd4ed1a",
+      "Tests/MereRunCoreTests/OrnithVisionCheckpointTests.swift": "50701c499f67a78c58cda84d23715eeb6a6253bc2be4da3b9797266689d99dfa"
+    },
+    "testExecutableSHA256": "68cbc05ad8915625be5ee034b6391235f615e4d0c8e59c08cae71e5c93b61f54"
+  },
+  "qualification": {
+    "tests": 4,
+    "failures": 0,
+    "logSHA256": "2b25428a200bc52261e8f1482e51beda934270cbdae57386d3e2ad9a666087f8",
+    "textRequests": 18,
+    "visionRequests": 1,
+    "samplingSeeds": [
+      7,
+      42,
+      2026
+    ],
+    "samplingConfiguration": {
+      "temperature": 0.7,
+      "topP": 0.9,
+      "topK": 20,
+      "minP": 0.05,
+      "maxTokens": 96
+    },
+    "samplingRouteEqualityExpected": false,
+    "sameSeedWithinRouteReplayPassed": true
+  },
+  "correctedFindings": [
+    {
+      "finding": "Shared lazy MLX random state retained another thread GPU stream; Qwen generation did not apply ChatRequest.seed.",
+      "correction": "Request-local random state after loading, shared by token and MTP acceptance draws."
+    },
+    {
+      "finding": "Initial tool test expected MTP despite an existing route exclusion.",
+      "correction": "Assert target-only routing, exact parsed call, and exact cached tool-result follow-up."
+    }
+  ],
+  "requests": [
+    {
+      "acceleration": {
+        "acceptanceRate": 0.5,
+        "acceptedDraftTokens": 6,
+        "draftHistoryTokens": 34644,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 12,
+        "rounds": 4,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 23120973756,
+      "decodeSeconds": 0.4941279888153076,
+      "label": "cold",
+      "output": "spruce-lantern-7429",
+      "prefillSeconds": 75.27326703071594,
+      "promptTokens": 34645,
+      "tokens": 10,
+      "outputSHA256": "9db62c4ceeda0e7f0918927622b557c815c4e0cb4b40686c3813b8c2d84832db"
+    },
+    {
+      "acceleration": {
+        "acceptanceRate": 0.5,
+        "acceptedDraftTokens": 6,
+        "draftHistoryTokens": 34644,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 12,
+        "rounds": 4,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 23120973756,
+      "decodeSeconds": 0.36071300506591797,
+      "label": "replay",
+      "output": "spruce-lantern-7429",
+      "prefillSeconds": 0.4900670051574707,
+      "promptTokens": 34645,
+      "tokens": 10,
+      "outputSHA256": "9db62c4ceeda0e7f0918927622b557c815c4e0cb4b40686c3813b8c2d84832db"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 23121506240,
+      "decodeSeconds": 0.5227088928222656,
+      "label": "serial",
+      "output": "spruce-lantern-7429",
+      "prefillSeconds": 0.5486600399017334,
+      "promptTokens": 34645,
+      "tokens": 10,
+      "outputSHA256": "9db62c4ceeda0e7f0918927622b557c815c4e0cb4b40686c3813b8c2d84832db"
+    },
+    {
+      "acceleration": {
+        "acceptanceRate": 0.4666666666666667,
+        "acceptedDraftTokens": 7,
+        "draftHistoryTokens": 34673,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 15,
+        "rounds": 5,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 24691445692,
+      "decodeSeconds": 11.613809943199158,
+      "label": "followup",
+      "output": "spruce-lantern-7429",
+      "prefillSeconds": 1.2235360145568848,
+      "promptTokens": 34674,
+      "tokens": 10,
+      "outputSHA256": "9db62c4ceeda0e7f0918927622b557c815c4e0cb4b40686c3813b8c2d84832db"
+    },
+    {
+      "acceleration": {
+        "acceptanceRate": 0.5,
+        "acceptedDraftTokens": 6,
+        "draftHistoryTokens": 34644,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 12,
+        "rounds": 4,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 24691445692,
+      "decodeSeconds": 1.365172028541565,
+      "label": "original-after-followup",
+      "output": "spruce-lantern-7429",
+      "prefillSeconds": 0.5371179580688477,
+      "promptTokens": 34645,
+      "tokens": 10,
+      "outputSHA256": "9db62c4ceeda0e7f0918927622b557c815c4e0cb4b40686c3813b8c2d84832db"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 22060955032,
+      "decodeSeconds": 1.138084053993225,
+      "label": "tool-default",
+      "output": "",
+      "prefillSeconds": 1.8203200101852417,
+      "promptTokens": 279,
+      "tokens": 30,
+      "toolCalls": [
+        {
+          "arguments": {
+            "project": "cobalt-harbor"
+          },
+          "name": "lookup_project"
+        }
+      ],
+      "outputSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 22060438932,
+      "decodeSeconds": 1.2112970352172852,
+      "label": "tool-serial",
+      "output": "",
+      "prefillSeconds": 0.00412297248840332,
+      "promptTokens": 279,
+      "tokens": 30,
+      "toolCalls": [
+        {
+          "arguments": {
+            "project": "cobalt-harbor"
+          },
+          "name": "lookup_project"
+        }
+      ],
+      "outputSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 22249108888,
+      "decodeSeconds": 0.41303205490112305,
+      "label": "tool-followup-default",
+      "output": "spruce-lantern-7429",
+      "prefillSeconds": 0.19774401187896729,
+      "promptTokens": 354,
+      "tokens": 10,
+      "outputSHA256": "9db62c4ceeda0e7f0918927622b557c815c4e0cb4b40686c3813b8c2d84832db"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 22249108888,
+      "decodeSeconds": 0.4516409635543823,
+      "label": "tool-followup-serial",
+      "output": "spruce-lantern-7429",
+      "prefillSeconds": 0.009665966033935547,
+      "promptTokens": 354,
+      "tokens": 10,
+      "outputSHA256": "9db62c4ceeda0e7f0918927622b557c815c4e0cb4b40686c3813b8c2d84832db"
+    },
+    {
+      "acceleration": {
+        "acceptanceRate": 0.625,
+        "acceptedDraftTokens": 30,
+        "draftHistoryTokens": 0,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 48,
+        "rounds": 48,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 22331648404,
+      "decodeSeconds": 3.485366940498352,
+      "label": "sample-7-mtp",
+      "output": "# Turning an Abandoned Railway Station into a Public Library\n\n## Assessment and Planning Phase\n\n**Structure Evaluation**\n- Hire a structural engineer to assess the building's integrity, especially old brick arches, high ceilings, and roof condition\n- Check for hazardous materials common in older buildings (asbestos, lead paint)\n- Document historical features worth preserving\n\n**Community Engagement**\n- Hold public meetings to gather input on desired services\n- Survey residents about book preferences and programming",
+      "prefillSeconds": 0.09214293956756592,
+      "promptTokens": 26,
+      "tokens": 96,
+      "outputSHA256": "d3410d1eb1d9d50ff9f4677e90938b2052fb442b02d5a9cc27474a18b42cfdb2"
+    },
+    {
+      "acceleration": {
+        "acceptanceRate": 0.625,
+        "acceptedDraftTokens": 30,
+        "draftHistoryTokens": 0,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 48,
+        "rounds": 48,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 22331648404,
+      "decodeSeconds": 3.4638760089874268,
+      "label": "sample-7-mtp-replay",
+      "output": "# Turning an Abandoned Railway Station into a Public Library\n\n## Assessment and Planning Phase\n\n**Structure Evaluation**\n- Hire a structural engineer to assess the building's integrity, especially old brick arches, high ceilings, and roof condition\n- Check for hazardous materials common in older buildings (asbestos, lead paint)\n- Document historical features worth preserving\n\n**Community Engagement**\n- Hold public meetings to gather input on desired services\n- Survey residents about book preferences and programming",
+      "prefillSeconds": 0.0008729696273803711,
+      "promptTokens": 26,
+      "tokens": 96,
+      "outputSHA256": "d3410d1eb1d9d50ff9f4677e90938b2052fb442b02d5a9cc27474a18b42cfdb2"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 22331648404,
+      "decodeSeconds": 3.647966980934143,
+      "label": "sample-7-serial",
+      "output": "# Turning an Abandoned Railway Station into a Public Library\n\n## Assessment and Planning Phase\n\n**Structural evaluation**\n- Hire engineers to assess the building's integrity, focusing on the large clear spans that railway stations excel at\n- Check the roof, foundation, and any heritage listing restrictions\n- Test for hazardous materials like asbestos (common in older stations)\n\n**Community engagement**\n- Hold meetings with residents to understand what services they want\n- Survey local groups, schools",
+      "prefillSeconds": 0.0008869171142578125,
+      "promptTokens": 26,
+      "tokens": 96,
+      "outputSHA256": "3b57235f1df229d5e92c049df17b7ad2ba9345d97e0fb8399e8a74ba410c31e2"
+    },
+    {
+      "acceleration": {
+        "acceptanceRate": 0.7291666666666666,
+        "acceptedDraftTokens": 35,
+        "draftHistoryTokens": 0,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 48,
+        "rounds": 48,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 22331648404,
+      "decodeSeconds": 3.2573360204696655,
+      "label": "sample-42-mtp",
+      "output": "# Turning an Abandoned Railway Station into a Public Library\n\nHere's a comprehensive guide on how volunteers could accomplish this transformation:\n\n## 1. Assessment and Planning\n\n**Initial Evaluation:**\n- Conduct a structural survey to identify safety concerns (roof, foundations, load-bearing walls)\n- Document the station's architectural features worth preserving (platforms, ticket halls, clock towers, vaulted ceilings)\n- Assess utilities: water, electricity, heating/cooling, and",
+      "prefillSeconds": 0.0009020566940307617,
+      "promptTokens": 26,
+      "tokens": 96,
+      "outputSHA256": "45bee82a792964473929e170533782d7ae778a6465a43a94841bdf5543e72a8a"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 22331648404,
+      "decodeSeconds": 3.7334139347076416,
+      "label": "sample-42-serial",
+      "output": "# Transforming an Abandoned Railway Station into a Public Library\n\n## Phase 1: Assessment and Planning\n\n**Evaluate the building's condition**\n- Conduct structural surveys to identify what's salvageable\n- Check for hazardous materials (asbestos, lead paint common in older stations)\n- Assess the roof, walls, windows, and foundation\n- Document architectural features worth preserving (high ceilings, original tiling, ironwork, clocks)\n\n**Community engagement**\n-",
+      "prefillSeconds": 0.0008139610290527344,
+      "promptTokens": 26,
+      "tokens": 96,
+      "outputSHA256": "273a1af856e06ac0a09b2df5eb9219d2a384b7b35d04ba9aea0c0092916235d3"
+    },
+    {
+      "acceleration": {
+        "acceptanceRate": 0.625,
+        "acceptedDraftTokens": 30,
+        "draftHistoryTokens": 0,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 48,
+        "rounds": 48,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 22331648404,
+      "decodeSeconds": 3.5033609867095947,
+      "label": "sample-2026-mtp",
+      "output": "# Turning an Abandoned Railway Station into a Public Library\n\nHere's a practical roadmap for how volunteers could accomplish this transformation:\n\n## 1. Assessment and Planning\n\n**Evaluate the building first:**\n- Structure integrity, roof condition, and foundation\n- Electrical, plumbing, and HVAC systems\n- Accessibility compliance (ramps, elevators, restrooms)\n- Historical preservation requirements (many stations are listed buildings)\n\n**Form a core committee** with diverse skills:",
+      "prefillSeconds": 0.000903010368347168,
+      "promptTokens": 26,
+      "tokens": 96,
+      "outputSHA256": "e78e0cf8a02f0892580bdb9352df9bff2e25ed61db5ce87414672b50c5b202ba"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 22331648404,
+      "decodeSeconds": 3.682597041130066,
+      "label": "sample-2026-serial",
+      "output": "# Transforming an Abandoned Railway Station into a Public Library\n\n## Phase 1: Assessment and Planning\n\n**Structural Evaluation**\n- Hire engineers to assess the building's structural integrity\n- Check the roof, foundations, load-bearing walls, and any damage from years of abandonment\n- Identify hazardous materials (asbestos was common in older stations)\n\n**Community Engagement**\n- Hold public meetings to gauge interest and gather input\n- Survey residents about desired services (children",
+      "prefillSeconds": 0.0008219480514526367,
+      "promptTokens": 26,
+      "tokens": 96,
+      "outputSHA256": "1aed8d7caa9d68feef7ee7f671115028b38f56ab84cab4b614d826989312936c"
+    },
+    {
+      "acceleration": {
+        "acceptanceRate": 0.7333333333333333,
+        "acceptedDraftTokens": 11,
+        "draftHistoryTokens": 28,
+        "draftModel": "qwen-mtp",
+        "draftedTokens": 15,
+        "rounds": 5,
+        "route": "mtp-speculative"
+      },
+      "activeMemory": 22202575252,
+      "decodeSeconds": 0.3262810707092285,
+      "label": "thinking-mtp",
+      "output": "17 + 25 = 42\n</think>\n\n42",
+      "prefillSeconds": 0.08607900142669678,
+      "promptTokens": 29,
+      "reasoning": "17 + 25 = 42",
+      "tokens": 15,
+      "outputSHA256": "f7c2ee724aa38b861f60692bd390990cc1fa9646802e4d8eef5c9f7b14911699"
+    },
+    {
+      "acceleration": {
+        "route": "final-target-pipelined"
+      },
+      "activeMemory": 22212705128,
+      "decodeSeconds": 0.6296030282974243,
+      "label": "thinking-serial",
+      "output": "17 + 25 = 42\n</think>\n\n42",
+      "prefillSeconds": 0.00067901611328125,
+      "promptTokens": 29,
+      "reasoning": "17 + 25 = 42",
+      "tokens": 15,
+      "outputSHA256": "f7c2ee724aa38b861f60692bd390990cc1fa9646802e4d8eef5c9f7b14911699"
+    }
+  ],
+  "vision": {
+    "checkpointTensors": 333,
+    "runtimeTensors": 333,
+    "promptTokens": 85,
+    "outputTokens": 31,
+    "elapsedSeconds": 5.127750039100647,
+    "output": "From left to right:\n\n1. **Red circle** – A red circular shape.\n2. **Blue square** – A blue square shape.",
+    "route": "final-target-pipelined",
+    "acceptedDraftTokens": null
+  },
+  "unchangedInstalledFiles": [
+    {
+      "path": "chat_template.jinja",
+      "sha256": "182e77dd83bd8e9ca818b240b82e28f243762cd5dda32e6eef327df7b1cd107e",
+      "bytes": 7536
+    },
+    {
+      "path": "config.json",
+      "sha256": "fc27b922c3506e955271c68120be9079ad8bba7266c8086c02dfbb8c98723bd5",
+      "bytes": 23203
+    },
+    {
+      "path": "generation_config.json",
+      "sha256": "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e",
+      "bytes": 202
+    },
+    {
+      "path": "model-00001-of-00004.safetensors",
+      "sha256": "f0b2b03fb3eecf84096ee5abb213c99e9c3725f9947004a01999dc5cc55ebdd9",
+      "bytes": 5343699466
+    },
+    {
+      "path": "model-00002-of-00004.safetensors",
+      "sha256": "971b1935112c4221616ddab04ead15d50b3c489754e619d74304dc4f64d034dc",
+      "bytes": 5368472837
+    },
+    {
+      "path": "model-00003-of-00004.safetensors",
+      "sha256": "041377369466c48cb486ce2911c3cce638b8702080bb39113a7cf190632f5529",
+      "bytes": 5368324245
+    },
+    {
+      "path": "model-00004-of-00004.safetensors",
+      "sha256": "d1088c7f6e9d705a253d3049bf7308704ccf1f4099cf40678ff077da88f0184b",
+      "bytes": 3428527653
+    },
+    {
+      "path": "model.safetensors.index.json",
+      "sha256": "c118f13c0dcb729e4ca2e3d653ab193067551eb1a6410badb5192eb426104f36",
+      "bytes": 187263
+    },
+    {
+      "path": "tokenizer.json",
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "bytes": 19989325
+    },
+    {
+      "path": "tokenizer_config.json",
+      "sha256": "386ba246ba3dfa4d3a21d8bc8712eba38de558e5ac94c2c90436d8f94d519d5e",
+      "bytes": 1160
+    },
+    {
+      "path": "vision/config.json",
+      "sha256": "af198ccbe6c17dd973da98bbf6c92ce1c3ec7261c2e2fbc4c4f5150018418ea8",
+      "bytes": 3295
+    },
+    {
+      "path": "vision/model-00001-of-00016.safetensors",
+      "sha256": "250b3b09199be0dcd0f96df2a35dabad07e2ba709bb7687ef7490d0f248eb94e",
+      "bytes": 4744232576
+    },
+    {
+      "path": "vision/model.safetensors.index.json",
+      "sha256": "0ad9fbfbb1a7514773ed881d3c9403019bd7ae9ff4c6af3cfc65ca7da784d78f",
+      "bytes": 165731
+    },
+    {
+      "path": "vision/preprocessor_config.json",
+      "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+      "bytes": 390
+    },
+    {
+      "path": "vision/video_preprocessor_config.json",
+      "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+      "bytes": 385
+    }
+  ],
+  "previousHeadComparison": {
+    "path": "ornith-mtp-head-comparison-2026-09-05.json",
+    "sha256": "7505b6706c2da8effd233aafc82a698bb659ae146b441086bf459fd1317f42ba",
+    "requests": 40
+  },
+  "publication": {
+    "repository": "Sawfwair/Ornith-1.5-35B-A3B-MLX-4bit-Vision-MTP",
+    "revision": "19a8ee57cb185cb487fa29ff7175c5e1544ebf1c",
+    "parentRevision": "2323acfa0fd0a01c452c89991558e6bbd86f0f05",
+    "commitURL": "https://huggingface.co/Sawfwair/Ornith-1.5-35B-A3B-MLX-4bit-Vision-MTP/commit/19a8ee57cb185cb487fa29ff7175c5e1544ebf1c",
+    "selectedPayloadBytes": 25963186364,
+    "unchangedFiles": [
+      ".gitattributes",
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model-00001-of-00004.safetensors",
+      "model-00002-of-00004.safetensors",
+      "model-00003-of-00004.safetensors",
+      "model-00004-of-00004.safetensors",
+      "model.safetensors.index.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "vision/config.json",
+      "vision/model-00001-of-00016.safetensors",
+      "vision/model.safetensors.index.json",
+      "vision/preprocessor_config.json",
+      "vision/video_preprocessor_config.json"
+    ],
+    "verified": true
+  },
+  "postQualificationValidation": {
+    "localGate": {
+      "command": "./scripts/check.sh",
+      "exitCode": 0,
+      "xctestCases": 3913,
+      "skipped": 311,
+      "failures": 0,
+      "swiftTestingCases": 51,
+      "logSHA256": "482f0138104c459bb8ba6c6e2daade98c41ebb3f253439ab0f7c3a19733fcc86"
+    },
+    "randomStateRegression": {
+      "device": "gpu",
+      "tests": 1,
+      "failures": 0,
+      "logSHA256": "c3997caecbbde042dcda6f823afae3665b88cd9d6bb190a879828f8389ebbec5",
+      "testFileSHA256": "27ab8a55ebcd33a0ecd35c7ec1e7fe2ba48b1e4c0a4274bf11102c75f15d6ed6",
+      "note": "Restore a stream-neutral global seed when the interference test ends so later fixture tests do not inherit its lazy graph."
+    },
+    "docsBuildPassed": true
+  }
+}

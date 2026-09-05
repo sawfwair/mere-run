@@ -338,11 +338,20 @@ metadata; the MLX conversion repository does not duplicate the license file.
 single packaging snapshot combines the official
 `Ornith-1.5-35B-A3B-MLX-4bit` text target with the
 authoritative base checkpoint's `model-00001-of-00016.safetensors` vision
-shard, vision configuration, processor metadata, and BF16 MTP head. The
-complete snapshot is about 26.7 GiB and records every packaged file in
-`SHA256SUMS`. Image requests
+shard, vision configuration, processor metadata, and
+[Shisa's Ornith-distilled BF16 MTP head](https://huggingface.co/shisa-ai/Ornith-1.5-35B-A3B-MTP-ONLY/tree/2b19b31bfe1659c6b0d9459ec3cbd87e34a322ef).
+The head's 19 fused tensors are packaged as 785 indexed tensors with every BF16
+value preserved. Its Apache-2.0 license, notice, and per-tensor hashes are
+included under `mtp/`; the target and vision components retain their upstream
+MIT declaration. The complete snapshot is about 24.2 GiB and records packaged
+files in `SHA256SUMS`. Image requests
 use target-only decoding because MTP speculation is disabled when image
 embeddings are present; text and code requests retain verified MTP.
+
+The [promotion qualification](benchmarks/ornith-mtp-promotion-2026-09-05.md)
+records the head comparison and compatibility checks. After updating mere.run,
+run `mere.run model pull text-agent-ornith-35b-mlx-4bit --force` to replace an
+older Q4 bundle. Existing complete installs are otherwise preserved.
 
 `vision-chat-ornith-35b` installs the authoritative full BF16 base checkpoint
 at immutable revision `10fbf86fed7ecee4a061f8b499a618f46001cac1`. Unlike

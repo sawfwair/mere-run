@@ -9,9 +9,10 @@ limiting factor on these prompts; they do not establish that the runtime has
 no remaining performance issues.
 
 This is a follow-up to the [complete generation workload report](ornith-qwen-generation-tuning-2026-09-05.md).
-The replacement head remains an experiment. The scheduling defaults in
-[PR #443](https://github.com/sawfwair/mere-run/pull/443) retain the installed
-model weights and head selection.
+The replacement was evaluated as an experiment in this comparison. The
+[subsequent promotion qualification](ornith-mtp-promotion-2026-09-05.md)
+records the compatibility checks and Q4 default update. The scheduling changes
+in [PR #443](https://github.com/sawfwair/mere-run/pull/443) preceded that head update.
 
 ## References and implementation checks
 
@@ -109,4 +110,5 @@ This check covers two short text prompts with greedy, fixed-length generation.
 It does not qualify replacement-head behavior for long contexts, tools,
 multimodal input, sampling, or concurrent serving. Exact output checks establish
 the tested verifier behavior; they do not measure downstream answer quality.
-The replacement needs broader model qualification before becoming a default.
+The subsequent promotion qualification covers those additional request modes;
+concurrent serving remains outside these checkpoint measurements.

@@ -29,9 +29,16 @@ path; that precision still requires separate serial-output qualification.
 Qwen3.6 hybrid MoE keeps the existing adaptive long-context threshold.
 
 Ornith 1.5's official MLX quants omit the MTP tensors advertised by their
-configuration. Managed Q4/Q6/Q8/BF16 pulls therefore install one shared,
-revision-pinned final shard from the authoritative Ornith base checkpoint; the
-runtime reads only its `mtp.*` tensors. Routed-expert gate/up fusion is prepared
+configuration. The managed Q4 bundle contains Shisa's Ornith-distilled BF16 head
+at revision `2b19b31bfe1659c6b0d9459ec3cbd87e34a322ef`, packaged as 785 indexed
+raw-HF tensors in `mtp/model-mtp.safetensors`. The conversion preserves every
+BF16 value and the zero-centered norm convention. The component includes its
+Apache-2.0 license, notice, and per-tensor provenance. Q6/Q8/BF16 pulls retain
+the shared, revision-pinned final shard from the authoritative Ornith base
+checkpoint. Validation reads the MTP index, accepting both compact and legacy
+components while ignoring unrelated target shard entries.
+
+Routed-expert gate/up fusion is prepared
 one decoder layer at a time after target weights load. Each evaluated fused
 stack replaces its two source arrays before the MLX cache is cleared, bounding
 transient preparation memory instead of retaining a model-wide duplicate.
@@ -59,7 +66,11 @@ Speculative rows execute on a disposable fork. The exact target projection still
 every emitted token. Per-request acceptance estimates adapt the draft depth and
 can fall back to target-only rounds when proposals stop paying for their repair
 cost. Sampled MTP keeps the full-vocabulary probability path and doesn't prime
-greedy draft history. `MERERUN_Q35_MTP_STREAM_HISTORY=0` restores the earlier
+greedy draft history. Each generation request owns its random state, initialized
+from the request seed when supplied. Token draws and MTP acceptance draws use
+that state, so cached seeded replays do not extend another thread's lazy GPU
+random graph. The same seed is reproducible within a route; MTP and target-only
+sampling consume different draws and need not produce identical text. `MERERUN_Q35_MTP_STREAM_HISTORY=0` restores the earlier
 history strategy for Qwen 27B and Ornith: dense prompts up to 4,096 tokens retain
 hidden history; longer dense prompts and Ornith start without prompt history.
 Set the value to `none` to omit prompt history entirely for benchmark ablation.

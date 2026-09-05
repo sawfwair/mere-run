@@ -739,6 +739,18 @@ public actor Q35Generator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?,
         maxContextLength: Int
     ) async throws -> ChatResponse {
+        try await Q35Sampling.withRequestState(seed: request.seed) {
+            try await generateWithRequestState(
+                request, progressHandler: progressHandler, maxContextLength: maxContextLength
+            )
+        }
+    }
+
+    private func generateWithRequestState(
+        _ request: ChatRequest,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?,
+        maxContextLength: Int
+    ) async throws -> ChatResponse {
         guard let model,
               let tokenizerAndTemplate,
               let loadedConfig else {
@@ -1610,7 +1622,7 @@ public actor Q35Generator: ChatGenerator {
                     let targetProb = targetProbs[draft].item(Float.self)
                     let acceptProbability = min(1.0, targetProb / draftProb)
 
-                    if Float.random(in: 0..<1) <= acceptProbability {
+                    if Q35Sampling.acceptsDraft(probability: acceptProbability) {
                         mtpAcceptedTokens += 1
                         if eosSet.contains(draft) {
                             break
