@@ -15,6 +15,7 @@ final class Q35TransferCheckpointTests: MereRunCoreTestCase {
         let generator = Q35Generator(modelId: modelID, prefixKVCacheEnabled: true, continuousBatchingEnabled: false)
         do {
             try await qualify(generator, root: root)
+            try await qualifyCode(generator, root: root)
         } catch {
             await generator.unload()
             throw error
@@ -73,6 +74,26 @@ final class Q35TransferCheckpointTests: MereRunCoreTestCase {
     private func request(_ messages: [ChatMessage]) -> ChatRequest {
         ChatRequest(messages: messages, maxTokens: 64, temperature: 0, topP: 1,
                     showThinking: false, maxContextTokens: 16_384)
+    }
+
+    private func qualifyCode(_ generator: Q35Generator, root: String) async throws {
+        let prompt = "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, "
+            + "with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose."
+        var candidateRequest = ChatRequest(
+            messages: [ChatMessage(role: .user, content: prompt)], maxTokens: 256,
+            temperature: 0, topP: 1, showThinking: false, stopOnEOS: false, maxContextTokens: 8_192
+        )
+        let candidate = try await generator.chat(candidateRequest, modelPath: root, progressHandler: nil)
+        trace("code-mtp", candidate)
+        candidateRequest.logprobCapture = .tokens
+        let target = try await generator.chat(candidateRequest, modelPath: root, progressHandler: nil)
+        trace("code-serial", target)
+        XCTAssertEqual(candidate.acceleration?.route, "mtp-speculative")
+        XCTAssertEqual(target.acceleration?.route, "final-target-pipelined")
+        XCTAssertEqual(candidate.tokensGenerated, 256)
+        XCTAssertEqual(candidate.tokensGenerated, target.tokensGenerated)
+        XCTAssertEqual(candidate.response, target.response, "Longer code output must preserve serial router decisions")
+        XCTAssertEqual(candidate.reasoningContent, target.reasoningContent)
     }
 
     private func trace(_ label: String, _ response: ChatResponse) {

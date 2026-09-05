@@ -4,6 +4,7 @@ This work transfers three parts of the Flash-Next implementation to
 Qwen3.8-27B Q4 and Ornith 1.5 Q4: consistent MTP admission, streamed prompt
 history with prefix-cache snapshots, and exact verification through width
 nine. The source baseline is `03d619a7` (abbreviated), dated September 5, 2026.
+The measured runtime commit is `bcf630500de4b0103b2e43d2e11409b3b52af782`.
 
 Both installed Q4 checkpoints pass long-prompt retrieval, exact cache replay,
 follow-up reuse, and agreement with serial greedy decoding. Generation block
@@ -172,16 +173,92 @@ attention fixes. The target-only variant in every run provides the complete
 serial-generation reference. Each variant receives a 16-token warm-up before
 the measured 256-token request, with prefix caching disabled.
 
-Run at least three warmed trials for code, math, and prose, then repeat with
-long prompts and a cached follow-up. Record the checkpoint revision, build,
-prompt, output tokens, load/prefill/decode time, accepted and drafted tokens,
-verification and replacement passes, memory, and swap growth. Run without
-competing GPU jobs. Compare each candidate with the same model and precision.
+Three trials cover code, math, and prose for each arm and model: 36 benchmark
+invocations and 108 measured generations. Arm order reverses on the second
+trial. One run overlapped another model process and was excluded and repeated.
+No competing `mere.run` process was observed in the retained runs. System swap
+usage didn't increase between any retained run's start and end snapshots.
 
-Require exact greedy output and cache rollback agreement. Require a repeatable
-end-to-end improvement, with an initial target of at least 8% and no material
-memory regression. Treat that percentage as an experiment decision threshold.
-Run sampled quality checks separately from deterministic parity checks.
+The production CLI was built with:
 
-Before a runtime PR, run `./scripts/check.sh`. Report installed-checkpoint and
-GPU qualification separately, following the repository's validation boundary.
+```bash
+swift build -c release --product mere.run --disable-index-store
+```
+
+Its SHA-256 is
+`12f78e52317eeb27ec7357d1b3a053e4217ee5f1e7a7676fc8bc7250c5852a8a`.
+The [machine-readable receipt](./receipts/ornith-qwen-flash-transfer-2026-09-05.json)
+contains every retained generation report, exact prompts, environment arms,
+verification trial, and the expert-only control. Its SHA-256 is
+`ec9b302accdc047191c772d39a483a526e4b7500bed96c04bbb9ccead5d2c740`.
+
+## Verification throughput
+
+These are median target-only verified tokens per second over three trials,
+using a 128-token target-generated oracle. Width order reverses on trial two.
+Every candidate row passes greedy parity in all three trials.
+
+| Width | Qwen 27B Q4 | Ornith Q4 |
+| ---: | ---: | ---: |
+| 1 | 26.11 | 89.76 |
+| 4 | 78.69 | 237.20 |
+| 8 | 90.89 | 333.98 |
+| 9 | 84.56 | 336.49 |
+
+Width eight provides 3.48 times Qwen's serial verification capacity and 3.72
+times Ornith's. These ratios exclude drafting, rejection repair, and request
+scheduling. They aren't generation speedups or gains over an older build.
+
+## Complete generation and correctness
+
+All 36 candidate MTP generations match their serial reference, including token
+count and output hash. The ablation fails the Ornith code case in all three
+trials: both its automatic and forced MTP variants produce a different hash.
+Keeping prompt history disabled and enabling only exact expert verification
+restores the serial hash in a separate control. This establishes a correctness
+reason to use the exact expert path at the existing production depth.
+
+The shorter 128-token oracle also passes with the previous expert path. That
+result alone misses the code regression, so the installed-checkpoint test now
+includes the full 256-token LRU case alongside long-prompt cache checks.
+
+Complete generation timing varies substantially, including between variants
+with identical output and draft counts. The ranges below include all six
+candidate MTP measurements per workload: three automatic and three forced.
+
+| Model | Workload | Observed decode tokens per second | Draft acceptance |
+| --- | --- | ---: | ---: |
+| Qwen 27B Q4 | Code | 40.84–54.19 | 72.4% |
+| Qwen 27B Q4 | Math | 32.22–64.35 | 70.7% |
+| Qwen 27B Q4 | Prose | 17.96–40.57 | 40.7% |
+| Ornith Q4 | Code | 34.55–105.62 | 51.9% |
+| Ornith Q4 | Math | 38.91–117.87 | 59.8% |
+| Ornith Q4 | Prose | 19.07–85.57 | 25.9% |
+
+Qwen's unprimed ablation accepts 69.8%, 66.3%, and 38.4% on the same code,
+math, and prose outputs. The increased acceptance is repeatable. The timing
+spread prevents a stable incremental end-to-end speedup claim. In particular,
+these trials don't establish the initial 8% improvement threshold for further
+generation-depth tuning. Sampled quality wasn't requalified by these greedy
+tests.
+
+## Decision
+
+Keep generation blocks at eight for Qwen 27B and four for Ornith. The transfer
+is qualified for consistent draft preparation, reusable prompt history, exact
+expert verification, and the measured verification widths. Use the recorded
+generation ranges when describing this build; don't attribute a blanket
+generation speedup to the transfer. BF16 Qwen remains opt-in, and other
+precisions require their own checkpoint qualification.
+
+## Validation
+
+`./scripts/check.sh` passes: strict lint reports no violations across 1,553
+Swift files; XCTest reports 3,890 cases, 309 skipped, and no failures; Swift
+Testing reports another 51 passing cases. The gate also verifies the build,
+CLI help surfaces, bundled Metal version, documentation contracts, and hygiene.
+
+The GPU fixture groups pass, including the separate unfused expert run. Both
+installed Q4 checkpoints pass the long-prompt, replay, follow-up, isolation,
+and 256-token code checks. `pnpm docs:build` passes. The receipt records hashes
+of the final local-gate and installed-checkpoint logs.
