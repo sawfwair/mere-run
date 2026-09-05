@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitepress'
 import { existsSync } from 'node:fs'
+import { cp } from 'node:fs/promises'
+import { join } from 'node:path'
 import { mereMarkdown } from './theme/mere/markdown'
 
 function resolveBase(): string {
@@ -26,6 +28,13 @@ export default defineConfig({
   base: resolveBase(),
   cleanUrls: true,
   lastUpdated: true,
+  async buildEnd(config) {
+    await cp(
+      join(config.srcDir, 'benchmarks/receipts'),
+      join(config.outDir, 'benchmarks/receipts'),
+      { recursive: true }
+    )
+  },
   srcExclude: [
     'README.md',
     'macos-studio-roadmap.md',
