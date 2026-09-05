@@ -859,6 +859,9 @@ Key options:
   enabled by default even though the reasoning stays hidden. Qwen3.8 and
   Bonsai 27B also default to thinking-enabled generation.
 - `--stream`
+- `--markdown auto|always|never`: present streamed Markdown for a terminal.
+  `auto` is the default and only renders interactive text output; `always`
+  forces structural rendering, and `never` preserves the model's Markdown.
 - `--stats`: includes user-visible `ttft_s`, decode-only `first_token_s`,
   separate LFM2 prefill and decode tokens/sec, and Gemma4 MTP state and
   accept/draft counts when those runtimes are used
@@ -869,6 +872,14 @@ backend, for example native MLX/Metal for MLX models or llama.cpp/GGUF for GGUF
 models. `--quiet` does not change the requested output mode: with `--stream`,
 generated text still arrives incrementally on stdout while diagnostics remain
 suppressed.
+
+Interactive `--stream` output renders headings, lists, quotes, emphasis, and
+fenced code as they arrive. Pipes and redirections receive the exact raw
+Markdown so scripts remain stable, and `json_object` output is never decorated.
+Set `--markdown never` when a terminal should also receive raw Markdown, or
+`--markdown always` to render structure when stdout is redirected. Forced
+non-terminal rendering does not emit ANSI escapes. The `NO_COLOR` environment
+variable disables color while retaining useful typography and structure.
 
 `--lora` accepts a compatible local adapter file or cataloged adapter id.
 Native Gemma 4, Laguna XS 2.1, Inkling-Small, and LFM2.5 A1B adapters produced by
@@ -896,6 +907,7 @@ swift run mere.run text chat --model text-chat-lfm25-2.6b-4bit --prompt "Explain
 swift run mere.run text chat --model text-chat-lfm25-a1b-8bit --prompt "Summarize LFM2 in one paragraph."
 swift run mere.run text chat --model vision-chat-lfm25-3b-8bit --image ./photo.jpg --prompt "Describe this image."
 swift run mere.run text chat --stream --prompt "Write a short welcome message."
+swift run mere.run text chat --stream --markdown never --prompt "Write raw Markdown."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
 ```
 

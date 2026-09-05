@@ -199,6 +199,12 @@ struct TextChat: AsyncParsableCommand {
     @Flag(name: [.customLong("stream")], help: "Stream generated text to stdout as tokens arrive.")
     var stream: Bool = false
 
+    @Option(
+        name: [.customLong("markdown")],
+        help: "Render streamed Markdown in terminals: auto, always, or never."
+    )
+    var markdown: TerminalMarkdownMode = .auto
+
     @Flag(
         name: [.customLong("show-unmasking")],
         help: "Show revision-aware DiffusionGemma canvas drafts on stderr."
@@ -397,7 +403,16 @@ struct TextChat: AsyncParsableCommand {
             showUnmasking: showUnmasking
         )
 
-        let streamingOutput = StreamingChatOutput(enabled: stream)
+        let markdownPresentation = TerminalMarkdownPresentation.resolve(
+            mode: markdown,
+            stdoutIsTTY: CLIStdout.isInteractive(),
+            isTextResponse: responseFormat == .text,
+            environment: ProcessInfo.processInfo.environment
+        )
+        let streamingOutput = StreamingChatOutput(
+            enabled: stream,
+            markdownPresentation: markdownPresentation
+        )
         let progressHandler = TextChatProgressHandler.make(
             quiet: quiet,
             streamingOutput: streamingOutput
@@ -605,6 +620,12 @@ struct TextChat: AsyncParsableCommand {
             CLIStderr.write("[tool-loop] Hit iteration limit (\(maxIterations))\n")
         } else {
             let result = try await chatOnce(request)
+            let wroteStreamedOutput = stream && streamingOutput.hasWritten
+            if wroteStreamedOutput {
+                // Finalize terminal presentation before diagnostics so, for
+                // example, --stats cannot appear inside an open code fence.
+                streamingOutput.finishLine()
+            }
 
             let elapsed = Date().timeIntervalSince(startTime)
             if stats {
@@ -680,9 +701,7 @@ struct TextChat: AsyncParsableCommand {
                 }
             }
 
-            if stream && streamingOutput.hasWritten {
-                streamingOutput.finishLine()
-            } else {
+            if !wroteStreamedOutput {
                 print(cleanResponse(result.response, showThinking: request.showThinking))
             }
         }
@@ -1085,13 +1104,18 @@ final class StreamingChatOutput: @unchecked Sendable {
     private let lock = NSLock()
     private var wroteOutput = false
     private let writer: @Sendable (String) -> Void
+    private let markdownStream: TerminalMarkdownStream?
 
     init(
         enabled: Bool,
+        markdownPresentation: TerminalMarkdownPresentation = .raw,
         writer: @escaping @Sendable (String) -> Void = CLIStdout.write
     ) {
         self.enabled = enabled
         self.writer = writer
+        self.markdownStream = markdownPresentation.rendersMarkdown
+            ? TerminalMarkdownStream(presentation: markdownPresentation, writer: writer)
+            : nil
     }
 
     var hasWritten: Bool {
@@ -1112,7 +1136,11 @@ final class StreamingChatOutput: @unchecked Sendable {
 
         lock.lock()
         defer { lock.unlock() }
-        writer(text)
+        if let markdownStream {
+            markdownStream.append(text)
+        } else {
+            writer(text)
+        }
         wroteOutput = true
         return true
     }
@@ -1120,6 +1148,10 @@ final class StreamingChatOutput: @unchecked Sendable {
     func finishLine() {
         lock.lock()
         defer { lock.unlock() }
-        writer("\n")
+        if let markdownStream {
+            markdownStream.finish()
+        } else {
+            writer("\n")
+        }
     }
 }

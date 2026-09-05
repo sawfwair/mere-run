@@ -554,6 +554,16 @@ public enum MereRunCapabilityCatalog {
             ),
             .init(flag: "--stats", label: "Stats", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .standard),
+            .init(
+                flag: "--markdown",
+                label: "Terminal Markdown",
+                kind: .choice,
+                choices: ["auto", "always", "never"],
+                defaultValue: "auto",
+                group: Group.output,
+                tier: .standard,
+                dependsOn: "--stream"
+            ),
             .init(flag: "--tools", label: "Tools", kind: .string, group: Group.run, tier: .expert),
             .init(flag: "--tool-loop", label: "Tool loop", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--tools"),
             .init(

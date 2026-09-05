@@ -15,6 +15,10 @@ enum CLIStdout {
     static func write(_ text: String) {
         FileHandle.standardOutput.write(Data(text.utf8))
     }
+
+    static func isInteractive() -> Bool {
+        isatty(STDOUT_FILENO) != 0
+    }
 }
 
 enum CLIStdin {
