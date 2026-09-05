@@ -5,8 +5,9 @@ and merged [PR #442](https://github.com/sawfwair/mere-run/pull/442). It tests
 complete generation with the installed Qwen3.8-27B Q4 and Ornith 1.5 Q4
 checkpoints on an Apple M4 Max with 128 GB unified memory.
 
-The implementation is experimental. The final workload table and production
-settings remain pending quiet-window measurements. Target-verification rates
+The implementation is experimental. The workload measurements use the existing
+desktop graphics load, with every repetition retained. Production settings
+remain pending controlled qualification. Target-verification rates
 from the transfer assessment are not generation throughput.
 
 ## Changes under qualification
@@ -60,6 +61,12 @@ affected receipts as diagnostics and repeat them in a separate directory.
 Process polling cannot prove the absence of every possible source of GPU
 contention.
 
+For this workstation observation, `--allow-desktop-load` accepts the existing
+graphics activity and explicitly records `measurementMode: desktop-load` and
+`uncontended: false`. GPU samples and detected competing workers remain in the
+receipt. These measurements describe this desktop session and cannot establish
+an isolated hardware ceiling or justify production promotion on their own.
+
 The initial selection uses 256-token warm-up and measured requests, with three
 measured repeats. Final measurements use two 512-token warm-ups and three
 512-token measured requests per variant. Compare reversed variant order to
@@ -80,5 +87,5 @@ cover request-owned graphs, activation arithmetic in FP32, FP16, and BF16,
 draft-history snapshots, attention boundaries, and verifier parity.
 
 Earlier timing receipts predate the GPU-utilization start check. They remain
-diagnostic evidence and do not establish the final quiet-window TPS table.
+separate diagnostic evidence and do not establish the workload table.
 No final performance promotion is claimed by these correctness checks.

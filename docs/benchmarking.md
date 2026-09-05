@@ -359,6 +359,12 @@ keep unrelated inference and rendering idle throughout the measurement.
 Temperature defaults to zero; use `--temperature 0.7 --top-p 0.9` for a
 separate sampled-generation measurement.
 
+To measure under existing desktop graphics activity, add `--allow-desktop-load`.
+This option retains the observed load and marks every receipt as `desktop-load`
+with `uncontended: false`. Keep the repetition range visible and treat the
+result as a workstation observation. The collector still checks memory pressure
+and refuses to start alongside another inference process.
+
 Set `MERERUN_Q35_MTP_PROFILE=1` only for diagnosis. The optional
 `acceleration.speculationProfile` contains per-round draft, target-forward,
 acceptance, and repair timings, plus serial fallback time. Submission time

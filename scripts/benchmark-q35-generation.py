@@ -104,10 +104,10 @@ def run_case(args, root, binary, name, prompt, environment):
     if others:
         raise SystemExit(f"Another inference process is active: {sorted(others)}. Leave it untouched and retry later.")
     renderers = rendering_processes()
-    if renderers:
+    if renderers and not args.allow_desktop_load:
         raise SystemExit(f"A GPU rendering worker is active: {sorted(renderers)}. Leave it untouched and retry later.")
     before = snapshot()
-    if before["gpuDeviceUtilizationPercent"] > 10:
+    if before["gpuDeviceUtilizationPercent"] > 10 and not args.allow_desktop_load:
         raise SystemExit("GPU is already busy; wait for an idle measurement window.")
     if before["pressureLevel"] != 1:
         raise SystemExit("Memory pressure is elevated; defer this benchmark.")
@@ -124,6 +124,7 @@ def run_case(args, root, binary, name, prompt, environment):
     print(f"start {args.model} {name}", flush=True)
     peak_rss = 0
     competing = set()
+    gpu_samples = []
     max_pressure = before["pressureLevel"]
     with destination.with_suffix(".stdout").open("w") as output, destination.with_suffix(".stderr").open("w") as error:
         process = subprocess.Popen(command, cwd=root, env=environment, stdout=output, stderr=error)
@@ -131,6 +132,10 @@ def run_case(args, root, binary, name, prompt, environment):
             competing.update(inference_processes() - {process.pid})
             renderers.update(rendering_processes())
             state = snapshot()
+            gpu_samples.append({
+                "elapsedSeconds": time.time() - started,
+                "deviceUtilizationPercent": state["gpuDeviceUtilizationPercent"],
+            })
             max_pressure = max(max_pressure, state["pressureLevel"])
             rss = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True)
             if rss.stdout.strip():
@@ -150,15 +155,18 @@ def run_case(args, root, binary, name, prompt, environment):
         "sourceHead": command_text("git", "-C", str(root), "rev-parse", "HEAD"),
         "runtimeOverrides": {key: value for key, value in environment.items() if key.startswith("MERERUN_Q35_")},
         "profiled": args.profile, "startedUnixSeconds": started,
+        "measurementMode": "desktop-load" if args.allow_desktop_load else "quiet-window",
+        "collectorSHA256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "processSeconds": time.time() - started, "peakResidentBytes": peak_rss,
         "before": before, "after": after, "maxPressureLevel": max_pressure,
         "competingInferencePIDs": sorted(competing),
         "knownRenderingWorkerPIDs": sorted(renderers),
-        "uncontended": not competing and not renderers and max_pressure == 1,
+        "gpuSamples": gpu_samples,
+        "uncontended": not args.allow_desktop_load and not competing and not renderers and max_pressure == 1,
     }
     destination.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(f"done {args.model} {name}: {time.time() - started:.1f}s", flush=True)
-    if competing or renderers or max_pressure != 1:
+    if (competing or renderers or max_pressure != 1) and not args.allow_desktop_load:
         raise SystemExit("Retained a contended receipt; exclude it from throughput conclusions and repeat separately.")
 
 
@@ -179,6 +187,10 @@ def main():
     parser.add_argument("--block-size", type=int)
     parser.add_argument("--cost-ratio", type=float)
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument(
+        "--allow-desktop-load", action="store_true",
+        help="Measure with desktop graphics activity; always label receipts as contended observations.",
+    )
     parser.add_argument("--async-blocks", choices=["0", "1"])
     parser.add_argument("--pipelined-fallback", choices=["0", "1"])
     parser.add_argument("--scoped-compile", choices=["0", "1"])
