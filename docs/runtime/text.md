@@ -93,6 +93,11 @@ swift run mere.run text chat \
   --prompt "Summarize diffusion models in one paragraph."
 ```
 
+With `--stream`, interactive terminals render common Markdown incrementally.
+Redirected stdout remains raw for scripts. Use `--markdown never` to keep raw
+Markdown in a terminal or `--markdown always` to force structural rendering;
+JSON response mode is always raw.
+
 `text-chat-gemma4-12b` runs Google's dense Gemma 4 12B-it checkpoint through
 the native Swift Gemma runtime. Managed pulls for `text-chat-gemma4-12b` and
 `vision-chat-gemma4-12b` install the `google/gemma-4-12B-it-assistant`

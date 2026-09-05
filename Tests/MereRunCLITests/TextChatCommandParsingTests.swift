@@ -12,6 +12,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.prompt, "Say hello")
         XCTAssertEqual(cmd.model, TextChat.defaultChatModelId)
         XCTAssertEqual(cmd.responseFormat, .text)
+        XCTAssertEqual(cmd.markdown, .auto)
     }
 
     func testTextChatDefaultModelSelectionForMemoryBands() {
@@ -40,9 +41,11 @@ final class TextChatCommandParsingTests: XCTestCase {
         let cmd = try TextChat.parse([
             "--prompt", "Stream this",
             "--stream",
+            "--markdown", "never",
         ])
 
         XCTAssertTrue(cmd.stream)
+        XCTAssertEqual(cmd.markdown, .never)
     }
 
     func testTextChatParsesDiffusionGemmaModel() throws {

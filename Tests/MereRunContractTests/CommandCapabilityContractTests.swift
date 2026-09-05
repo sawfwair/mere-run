@@ -365,8 +365,12 @@ private let selfLocatingOutputCapabilityIDs: [String: String] = [
 @Test func textChatChoicesComeFromTypedSharedEnums() {
     let chat = MereRunCapabilityCatalog.textChat
     let responseFormat = chat.options.first { $0.flag == "--response-format" }
+    let markdown = chat.options.first { $0.flag == "--markdown" }
 
     #expect(responseFormat?.choices == TextResponseFormat.allCases.map(\.rawValue))
+    #expect(markdown?.choices == ["auto", "always", "never"])
+    #expect(markdown?.defaultValue == "auto")
+    #expect(markdown?.dependsOn == "--stream")
 }
 
 @Test func lagunaControlsAreFirstClassAcrossSharedCommandSurfaces() {

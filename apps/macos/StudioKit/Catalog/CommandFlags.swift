@@ -18,7 +18,8 @@ extension CommandFlags {
         package static let defaultValues = [
             "--max-tokens": "2048",
             "--response-format": "text",
-            "--lora-scale": "1.0"
+            "--lora-scale": "1.0",
+            "--markdown": "auto"
         ]
 
         package static let prompt = "--prompt"
@@ -44,6 +45,7 @@ extension CommandFlags {
         package static let reasoningEffort = "--reasoning-effort"
         package static let stats = "--stats"
         package static let stream = "--stream"
+        package static let markdown = "--markdown"
         package static let tools = "--tools"
         package static let toolLoop = "--tool-loop"
         package static let sandboxDir = "--sandbox-dir"
