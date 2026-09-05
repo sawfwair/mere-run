@@ -3,6 +3,26 @@ import XCTest
 @testable import MereRunCore
 
 final class ModelBenchmarkCommandTests: XCTestCase {
+    func testQwenBenchmarkParsesResidentMeasurementsAndVariantOrder() throws {
+        let command = try ModelBenchmarkQ36MTP.parse([
+            "--repetitions", "3", "--warmups", "2", "--warmup-tokens", "512",
+            "--variants", "forced,baseline",
+        ])
+        XCTAssertEqual(command.repetitions, 3)
+        XCTAssertEqual(command.warmups, 2)
+        XCTAssertEqual(command.warmupTokens, 512)
+        XCTAssertEqual(try command.parsedVariants().map(\.name), ["forced", "baseline"])
+    }
+
+    func testQwenBenchmarkRejectsInvalidResidentControls() {
+        for arguments in [["--repetitions", "0"], ["--warmups", "-1"],
+                          ["--warmup-tokens", "0"], ["--variants", ""],
+                          ["--variants", "baseline,baseline"], ["--variants", "forced,"],
+                          ["--variants", "unknown"]] {
+            XCTAssertThrowsError(try ModelBenchmarkQ36MTP.parse(arguments), arguments.description)
+        }
+    }
+
     func testQwenBenchmarkExpectedPolicyMatchesRuntimeAdmission() {
         for (modelID, moe) in [(Q35Resources.q38TwentySevenB4BitModelId, false),
                                (Q35Resources.q38TwentySevenBModelId, false),

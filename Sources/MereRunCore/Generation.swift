@@ -627,6 +627,8 @@ public struct ChatAccelerationDiagnostics: Codable, Sendable, Hashable {
     public let acceptanceRate: Double?
     /// Target-confirmed prompt transitions available to the drafter before decode.
     public let draftHistoryTokens: Int?
+    /// Present only when synchronized MTP profiling is explicitly enabled.
+    public let speculationProfile: ChatSpeculationProfile?
 
     public init(
         route: String,
@@ -634,7 +636,8 @@ public struct ChatAccelerationDiagnostics: Codable, Sendable, Hashable {
         rounds: Int? = nil,
         draftedTokens: Int? = nil,
         acceptedDraftTokens: Int? = nil,
-        draftHistoryTokens: Int? = nil
+        draftHistoryTokens: Int? = nil,
+        speculationProfile: ChatSpeculationProfile? = nil
     ) {
         self.route = route
         self.draftModel = draftModel
@@ -642,6 +645,7 @@ public struct ChatAccelerationDiagnostics: Codable, Sendable, Hashable {
         self.draftedTokens = draftedTokens
         self.acceptedDraftTokens = acceptedDraftTokens
         self.draftHistoryTokens = draftHistoryTokens
+        self.speculationProfile = speculationProfile
         if let draftedTokens, let acceptedDraftTokens, draftedTokens > 0 {
             self.acceptanceRate = Double(acceptedDraftTokens) / Double(draftedTokens)
         } else {

@@ -11,21 +11,30 @@ struct Q35MTPAdaptivePolicy {
 
     /// Fit for the rollback-only path: a rejected suffix replays linear state
     /// from verification intermediates instead of paying another target pass.
-    private static let headStepCostRatio = 0.18
+    private let headStepCostRatio: Double
 
     private var positionAcceptance: [Double]
 
-    init(maxDraftDepth: Int) {
+    init(maxDraftDepth: Int, headStepCostRatio: Double = 0.18) {
+        self.headStepCostRatio = headStepCostRatio
         positionAcceptance = (0..<max(0, maxDraftDepth)).map { index in
             0.85 * pow(0.98, Double(index))
         }
+    }
+
+    static func configuredCostRatio(environment: [String: String] = ProcessInfo.processInfo.environment) -> Double {
+        guard let raw = environment["MERERUN_Q35_MTP_HEAD_COST_RATIO"],
+              let value = Double(raw), value.isFinite, value > 0, value <= 5 else {
+            return 0.18
+        }
+        return value
     }
 
     func draftDepth(offeredDepth: Int) -> Int {
         let cap = min(max(0, offeredDepth), positionAcceptance.count)
         guard cap > 0 else { return 0 }
 
-        let cost = Self.headStepCostRatio
+        let cost = headStepCostRatio
         var reach = 1.0
         var expectedAccepted = 0.0
         var depth = 0
