@@ -125,6 +125,7 @@ def main():
     parser.add_argument("--block-size", type=int)
     parser.add_argument("--cost-ratio", type=float)
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--async-blocks", choices=["0", "1"])
     args = parser.parse_args()
     root = (args.source_root or Path(__file__).resolve().parents[1]).resolve()
     args.output = args.output.resolve()
@@ -134,6 +135,8 @@ def main():
     for key in list(environment):
         if key.startswith(("MERERUN_Q35_", "MERERUN_Q38_")) or key == "MLX_SDPA_BLOCKS":
             environment.pop(key)
+    if args.async_blocks is not None:
+        environment["MERERUN_Q35_ASYNC_DECODE_BLOCKS"] = args.async_blocks
     if args.profile:
         environment["MERERUN_Q35_MTP_PROFILE"] = "1"
     if args.cost_ratio is not None:

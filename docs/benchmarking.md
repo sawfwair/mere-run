@@ -341,6 +341,26 @@ after the benchmark instead of inferring behavior from prose.
 
 ### KV cache and speculative decode
 
+For repeated Qwen-family measurements, use `q36-mtp --repetitions 3
+--warmups 2 --warmup-tokens 512 --decode-tokens 512`. Each variant keeps its
+model loaded across warm-up and measured requests. `--variants
+baseline,adaptive` selects serial and default generation; reverse their order
+in a separate run to check order effects. Every measured request remains in
+the JSON report. A single-variant run doesn't claim serial-output parity.
+
+`scripts/benchmark-q35-generation.py --help` describes the code, chat, prose,
+math, and summarization receipt collector. It records complete decode and
+request throughput, memory pressure, swap changes, and competing `mere.run`
+processes. Use an optimized binary and keep unrelated inference idle.
+Temperature defaults to zero; use `--temperature 0.7 --top-p 0.9` for a
+separate sampled-generation measurement.
+
+Set `MERERUN_Q35_MTP_PROFILE=1` only for diagnosis. The optional
+`acceleration.speculationProfile` contains per-round draft, target-forward,
+acceptance, and repair timings, plus serial fallback time. Submission time
+can include waits inside a model forward. Profiling adds synchronization and
+must be disabled for throughput conclusions.
+
 The microbenchmark commands are for runtime implementation work:
 
 - `model benchmark gemma4-kv`

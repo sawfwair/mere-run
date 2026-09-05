@@ -276,12 +276,20 @@ final class Q35Transformer: Module {
     private let isQwen4Exp: Bool
     private let usesMoE: Bool
     private let hyperConnectionCount: Int
+    private let supportsAsynchronousDecodeBlocks: Bool
+    private static let asynchronousDecodeBlocks = ProcessInfo.processInfo.environment[
+        "MERERUN_Q35_ASYNC_DECODE_BLOCKS"
+    ] == "1"
 
     init(config: Q35Config) {
         let text = config.textConfig
         self.isQwen4Exp = text.isQwen4Exp
         self.usesMoE = text.usesMoE
         self.hyperConnectionCount = text.hyperConnectionCount
+        self.supportsAsynchronousDecodeBlocks = !text.isQwen4Exp
+            && text.hiddenSize == 2_048 && text.moeIntermediateSize == 512
+            && text.numExperts == 256 && text.numExpertsPerTok == 8
+            && config.quantization?.bits == 4 && config.quantization?.groupSize == 64
         self._embedTokens.wrappedValue = Embedding(
             embeddingCount: text.vocabSize,
             dimensions: text.hiddenSize
@@ -373,7 +381,15 @@ final class Q35Transformer: Module {
                 // prefill is not submitted as one watchdog-sized lazy graph.
                 // This is also required by full-BF16 Qwen3.5 checkpoints;
                 // Qwen4Exp adds two hyper-connection projections per block.
-                MLX.eval(hidden)
+                if supportsAsynchronousDecodeBlocks, Self.asynchronousDecodeBlocks,
+                   hidden.dim(0) == 1, hidden.dim(1) == 1 || (targetVerify && hidden.dim(1) <= 9) {
+                    // Bound graph submission without stalling the host after
+                    // every four tiny decode layers. The caller evaluates the
+                    // final logits before accepting tokens or mutating caches.
+                    MLX.asyncEval(hidden)
+                } else {
+                    MLX.eval(hidden)
+                }
             }
             Q35DebugLayerDump.record(stage: "layer\(index)", hidden)
         }

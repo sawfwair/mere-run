@@ -1,5 +1,8 @@
 import Foundation
 import MLX
+#if canImport(Darwin)
+import Darwin
+#endif
 
 /// Synchronized diagnostic timings. Profiling changes scheduling and is excluded
 /// from normal throughput receipts.
@@ -8,12 +11,17 @@ public struct ChatSpeculationProfile: Codable, Sendable, Hashable {
     public var samplingSeconds: Double = 0
     public var serialSeconds: Double = 0
     public var serialRounds: Int = 0
+    public var taskPriority: UInt8 = Task.currentPriority.rawValue
+    public var thermalState: Int?
 }
 
-/// Wall time spent constructing graphs, waiting for their results, and accepting
-/// or restoring one speculative round. Times include host scheduling delays.
+/// Wall time spent submitting graphs, waiting for their results, and accepting
+/// or restoring one speculative round. Submission can include internal GPU waits.
+/// Times include host scheduling delays.
 public struct ChatSpeculationRoundProfile: Codable, Sendable, Hashable {
     public var draftDepth: Int
+    public var hostCPUNumber: Int?
+    public var hostQoSClass: UInt32?
     public var acceptedDrafts: Int = 0
     public var draftGraphSeconds: Double = 0
     public var draftWaitSeconds: Double = 0
@@ -30,7 +38,12 @@ final class Q35MTPProfile {
     private var repairStart: UInt64?
 
     static func make(environment: [String: String] = ProcessInfo.processInfo.environment) -> Q35MTPProfile? {
-        environment["MERERUN_Q35_MTP_PROFILE"] == "1" ? Q35MTPProfile() : nil
+        guard environment["MERERUN_Q35_MTP_PROFILE"] == "1" else { return nil }
+        let profile = Q35MTPProfile()
+        #if canImport(Darwin)
+        profile.result.thermalState = ProcessInfo.processInfo.thermalState.rawValue
+        #endif
+        return profile
     }
 
     func clock() -> UInt64 { DispatchTime.now().uptimeNanoseconds }
@@ -45,6 +58,11 @@ final class Q35MTPProfile {
 
     func beginRound(depth: Int) {
         current = ChatSpeculationRoundProfile(draftDepth: depth)
+        #if canImport(Darwin)
+        var cpu = 0
+        if pthread_cpu_number_np(&cpu) == 0 { current.hostCPUNumber = cpu }
+        current.hostQoSClass = qos_class_self().rawValue
+        #endif
         repairStart = nil
         phaseStart = clock()
     }
