@@ -139,7 +139,7 @@ class Q35SwitchLinear: Module {
 
     func applyFlatExact(_ x: MLXArray, indices: MLXArray) -> MLXArray? {
         #if os(macOS)
-        guard let scales, let biases else { return nil }
+        guard bias == nil, let scales, let biases else { return nil }
         let resolved = resolvedQuantization(inputDim: x.dim(x.ndim - 1), scales: scales)
         return SmallBatchAffineGatherQMV.matmul(
             x,
@@ -590,11 +590,20 @@ final class Q35FeedForward: Module {
     private let normTopKProb: Bool
     private let usesMoE: Bool
     private let isQwen4Exp: Bool
+    private let usesQ4ExpertVerification: Bool
+    private static let exactQ4Experts: Bool = {
+        let value = ProcessInfo.processInfo.environment["MERERUN_Q35_EXACT_Q4_EXPERTS"]?.lowercased()
+        return value != "0" && value != "false" && value != "off"
+    }()
 
     init(config: Q35Config) {
         let text = config.textConfig
         self.usesMoE = text.usesMoE
         self.isQwen4Exp = text.isQwen4Exp
+        self.usesQ4ExpertVerification = !text.isQwen4Exp
+            && text.hiddenSize == 2_048 && text.moeIntermediateSize == 512
+            && text.numExperts == 256 && text.numExpertsPerTok == 8
+            && config.quantization?.bits == 4 && config.quantization?.groupSize == 64
         self.topK = max(1, text.numExpertsPerTok)
         self.normTopKProb = text.normTopKProb
 
@@ -633,7 +642,10 @@ final class Q35FeedForward: Module {
            let switchMLP,
            let sharedExpert,
            let sharedExpertGate {
-            let routerLogits = isQwen4Exp ? q38SmallBatchProjection(gate, x) : gate(x)
+            let exactQ4 = targetVerify && usesQ4ExpertVerification && Self.exactQ4Experts
+                && x.ndim == 3 && x.dim(0) == 1 && (2...9).contains(x.dim(1))
+            let routerLogits = exactQ4 ? serialProjection(gate, x)
+                : (isQwen4Exp ? q38SmallBatchProjection(gate, x) : gate(x))
             // Flash-Next selects and normalizes experts in FP32. Rounding the
             // softmax to BF16 first can turn distinct probabilities into ties.
             var scores = softmax(
@@ -655,7 +667,9 @@ final class Q35FeedForward: Module {
             // Wide route batches change gather-QMV arithmetic. Keep only the
             // routed expert path serial-equivalent; the exact small-batch
             // router, shared expert, and shared gate remain batched.
-            let switched = usesSerialRoutes
+            let switched = exactQ4
+                ? switchMLP.exactWide(x, indices: indices) ?? switchMLP(x, indices: indices)
+                : usesSerialRoutes
                 ? switchMLP.exactWide(x, indices: indices)
                     ?? switchMLP.serialTokens(x, indices: indices)
                 : switchMLP(x, indices: indices)
@@ -663,7 +677,8 @@ final class Q35FeedForward: Module {
             routed = routed.sum(axis: -2)
 
             let shared = sharedExpert(x)
-            let sharedGate = isQwen4Exp ? q38SmallBatchProjection(sharedExpertGate, x) : sharedExpertGate(x)
+            let sharedGate = exactQ4 ? serialProjection(sharedExpertGate, x)
+                : (isQwen4Exp ? q38SmallBatchProjection(sharedExpertGate, x) : sharedExpertGate(x))
             let gatedShared = MLX.sigmoid(sharedGate) * shared
             return routed + gatedShared
         }
@@ -672,6 +687,12 @@ final class Q35FeedForward: Module {
             return x
         }
         return downProj(q35Swiglu(gateProj(x), upProj(x)))
+    }
+
+    private func serialProjection(_ layer: Linear, _ input: MLXArray) -> MLXArray {
+        MLX.concatenated((0..<input.dim(1)).map { row in
+            layer(input[0..., row..<(row + 1), 0...])
+        }, axis: 1)
     }
 }
 

@@ -33,17 +33,17 @@ struct ModelBenchmark: ParsableCommand {
 struct ModelBenchmarkQ38Verification: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "q38-verification",
-        abstract: "Measure the Flash-Next target-only verification frontier."
+        abstract: "Measure the Qwen-family target-only verification frontier."
     )
 
-    @Option(name: [.long], help: "Flash-Next model id.")
+    @Option(name: [.long], help: "Flash-Next, Qwen3.8 27B, or Ornith 1.5 Q4 model id.")
     var model: String = Q35Resources.q38FlashNext3BitNativePLEModelId
 
-    @Option(name: [.customShort("m"), .long], help: "Installed Flash-Next model root.")
+    @Option(name: [.customShort("m"), .long], help: "Installed model root.")
     var modelRoot: String
 
-    @Option(name: [.long], help: "Comma-separated linear verification widths.")
-    var widths: String = "1,4,8,16,32"
+    @Option(name: [.long], help: "Comma-separated verification widths. Defaults to 1,4,8,16,32 for Flash-Next; 1,4,8,9 for Qwen 27B and Ornith Q4.")
+    var widths: String?
 
     @Option(name: [.long], help: "Target-generated oracle token count.")
     var tokens: Int = 128
@@ -60,9 +60,12 @@ struct ModelBenchmarkQ38Verification: AsyncParsableCommand {
             Q35Resources.q38FlashNext3BitModelId,
             Q35Resources.q38FlashNext3BitNativePLEModelId,
             Q35Resources.q38FlashNext4BitModelId,
+            Q35Resources.q38TwentySevenBModelId,
+            Q35Resources.q38TwentySevenB4BitModelId,
+            Q35Resources.ornith35BMLX4BitModelId,
         ]
         guard supported.contains(model) else {
-            throw ValidationError("--model must select a Flash-Next checkpoint.")
+            throw ValidationError("--model must select Flash-Next, Qwen3.8 27B, or Ornith 1.5 Q4.")
         }
         guard tokens >= 32 else {
             throw ValidationError("--tokens must be at least 32.")
@@ -125,10 +128,15 @@ struct ModelBenchmarkQ38Verification: AsyncParsableCommand {
         await generator.unload()
     }
 
-    private func parsedWidths() throws -> [Int] {
-        try widths.split(separator: ",").map { value in
-            guard let width = Int(value), width > 0, width <= 32 else {
-                throw ValidationError("--widths values must be integers from 1 through 32.")
+    func parsedWidths() throws -> [Int] {
+        let compact = model == Q35Resources.q38TwentySevenBModelId
+            || model == Q35Resources.q38TwentySevenB4BitModelId
+            || model == Q35Resources.ornith35BMLX4BitModelId
+        let maximum = compact ? 9 : 32
+        let raw = widths ?? (compact ? "1,4,8,9" : "1,4,8,16,32")
+        return try raw.split(separator: ",", omittingEmptySubsequences: false).map { value in
+            guard let width = Int(value), width > 0, width <= maximum else {
+                throw ValidationError("--widths values must be integers from 1 through \(maximum) for this model.")
             }
             return width
         }
@@ -438,7 +446,7 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
     }
 }
 
-private struct Q36MTPBenchmarkVariant {
+struct Q36MTPBenchmarkVariant {
     static let adaptiveThreshold = 6_144
 
     let name: String
@@ -481,9 +489,11 @@ private struct Q36MTPBenchmarkVariant {
         case Self.forced.name:
             return contextSize >= forcedThreshold
         default:
-            if modelID == Q35Resources.q38TwentySevenB4BitModelId {
+            if Q35Resources.isOrnith35BModelId(modelID)
+                || (Q35Resources.isQ38ModelId(modelID) && modelID != Q35Resources.q38TwentySevenBModelId) {
                 return true
             }
+            if modelID == Q35Resources.q38TwentySevenBModelId { return false }
             return promptTokens >= Self.adaptiveThreshold && contextSize >= Self.adaptiveThreshold
         }
     }

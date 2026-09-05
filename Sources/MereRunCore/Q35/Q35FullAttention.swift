@@ -48,6 +48,7 @@ final class Q35FullAttention: Module {
     private let rotaryDimensions: Int
     private let rope: RoPE
     private let mropeRotary: Qwen3VLRotaryEmbedding?
+    private let verificationQueryLimit: Int
 
     init(config: Q35Config) {
         let text = config.textConfig
@@ -55,6 +56,9 @@ final class Q35FullAttention: Module {
         self.numKVHeads = text.numKeyValueHeads
         self.headDim = text.headDim
         self.hasOutputGate = text.attnOutputGate
+        // MLX's Metal vector SDPA requires query rows * GQA factor <= 32
+        // and at most eight rows. Qwen 27B allows five; Ornith allows four.
+        self.verificationQueryLimit = min(5, max(1, 32 / (text.numAttentionHeads / text.numKeyValueHeads)))
         self.scale = 1.0 / sqrt(Float(max(1, text.headDim)))
 
         let qOutput = text.numAttentionHeads * text.headDim * (text.attnOutputGate ? 2 : 1)
@@ -161,6 +165,15 @@ final class Q35FullAttention: Module {
 
         let queryCount = q.dim(2)
         let keyCount = k.dim(2)
+        // MLX changes the vector pass count or reduction partitioning at these
+        // KV lengths. A crossing block needs each row's exact serial key count.
+        // These are the union of the current Metal dispatch boundaries across
+        // device families; unnecessary splits on another device are harmless.
+        let crossesReductionBoundary = targetVerify
+            && [1_024, 1_025, 4_096, 8_193, 16_384, 32_769, 65_536, 65_537].contains {
+                keyCount - queryCount + 1 < $0 && keyCount >= $0
+            }
+        let queryTileLimit = crossesReductionBoundary ? 1 : verificationQueryLimit
         let attn: MLXArray
         if let indexer, targetVerify, b == 1, (2...32).contains(queryCount),
            (queryCount <= 9 || Q38WideVerificationPolicy.exactSparseAttention),
@@ -180,29 +193,24 @@ final class Q35FullAttention: Module {
             attn = sparse
         } else if targetVerify,
            b == 1,
-           (6...9).contains(queryCount),
+           (2...9).contains(queryCount),
+           queryCount > queryTileLimit,
            keyCount >= queryCount,
            case .causal = mask {
-            // The fused SDPA vector path changes arithmetic above five query
-            // rows. Preserve the serial greedy trajectory by presenting the
-            // same bottom-right-aligned causal windows as two <=5-row calls.
-            let split = 5
-            let keySplit = keyCount - (queryCount - split)
-            let first = MLXFast.scaledDotProductAttention(
-                queries: q[0..., 0..., 0..<split, 0...],
-                keys: k[0..., 0..., 0..<keySplit, 0...],
-                values: v[0..., 0..., 0..<keySplit, 0...],
-                scale: scale,
-                mask: .causal
-            )
-            let second = MLXFast.scaledDotProductAttention(
-                queries: q[0..., 0..., split..., 0...],
-                keys: k,
-                values: v,
-                scale: scale,
-                mask: .causal
-            )
-            attn = MLX.concatenated([first, second], axis: 2)
+            // Keep every tile on the serial vector kernel with a bottom-right
+            // causal window, while the surrounding projections stay batched.
+            let tiles = stride(from: 0, to: queryCount, by: queryTileLimit).map { start in
+                let end = min(start + queryTileLimit, queryCount)
+                let keyEnd = keyCount - (queryCount - end)
+                return MLXFast.scaledDotProductAttention(
+                    queries: q[0..., 0..., start..<end, 0...],
+                    keys: k[0..., 0..., 0..<keyEnd, 0...],
+                    values: v[0..., 0..., 0..<keyEnd, 0...],
+                    scale: scale,
+                    mask: .causal
+                )
+            }
+            attn = MLX.concatenated(tiles, axis: 2)
         } else {
             attn = MLXFast.scaledDotProductAttention(
                 queries: q,

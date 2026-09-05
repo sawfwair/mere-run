@@ -357,10 +357,16 @@ before timing it. Prefix caching and continuous batching are disabled for this
 comparison so run order does not turn cold compilation into a reported policy
 difference.
 
-The `q38-verification` lane is narrower. It measures target-only linear blocks
+The `q38-verification` lane measures target-only linear blocks
 against target-generated oracle tokens. Use it to find the useful verification
 width before implementing a drafter or tree-aware recurrent kernels. Don't
 treat its rate as end-to-end generation throughput.
+
+The command accepts Flash-Next widths through 32, and Qwen3.8 27B or Ornith
+1.5 Q4 widths through nine. Without `--widths`, the latter models use
+`1,4,8,9`. A successful width measurement doesn't change production MTP depth.
+For history and expert-kernel comparisons, see the
+[Qwen and Ornith transfer assessment](benchmarks/ornith-qwen-flash-transfer-2026-09-05.md).
 
 For the first M4 Max result and the promotion decision, see the
 [Flash-Next verification frontier receipt](benchmarks/flash-next-verification-frontier-2026-09-03.md).
