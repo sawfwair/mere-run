@@ -1308,6 +1308,12 @@ public actor Q35Generator: ChatGenerator {
         var mtpVerificationPasses = 0
         var mtpReplacementPasses = 0
         var mtpNonDraftingRounds = 0
+        var usePipelinedFallback = false
+        let supportsPipelinedFallback = modelId == Q35Resources.q38TwentySevenB4BitModelId
+            || modelId == Q35Resources.ornith35BMLX4BitModelId
+        let pipelinedFallbackEnabled = ProcessInfo.processInfo.environment[
+            "MERERUN_Q35_MTP_PIPELINED_FALLBACK"
+        ] == "1"
         let mtpBlockSize = Self.mtpBlockSize(modelId: modelId)
         var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(
             maxDraftDepth: mtpBlockSize - 1, headStepCostRatio: Q35MTPAdaptivePolicy.configuredCostRatio()
@@ -1551,6 +1557,10 @@ public actor Q35Generator: ChatGenerator {
                     }
 
                     mtpNonDraftingRounds += 1
+                    // Once the policy reaches zero, no more acceptance evidence
+                    // can change it. Finish through the existing pipelined
+                    // target decoder after consuming this emitted token.
+                    usePipelinedFallback = supportsPipelinedFallback && pipelinedFallbackEnabled
                     mtpDraftSession.recordCommittedTransitions(
                         hiddenStates: hidden,
                         nextTokens: [next]
@@ -1653,6 +1663,23 @@ public actor Q35Generator: ChatGenerator {
                 MLX.eval(logits)
             }
             mtpProfile?.recordSerial(since: serialStart)
+            if usePipelinedFallback {
+                if !pendingProgressWhitespace.isEmpty {
+                    progressHandler?(ChatProgress(stage: .generating, message: pendingProgressWhitespace))
+                }
+                let tail = try await decodeTokensPipelined(
+                    model: model, tokenizerAndTemplate: tokenizerAndTemplate,
+                    initialLogits: logits, layerCaches: layerCaches, eosSet: eosSet,
+                    generationConfig: generationConfig, tokenBudget: tokenBudget - generated.count,
+                    mropeRopeDelta: mropeRopeDelta, promptTokens: repetitionHistory,
+                    stopAtCompletedToolCall: false, logprobCapture: logprobCapture,
+                    logprobRegion: logprobRegion, progressHandler: progressHandler
+                )
+                generated.append(contentsOf: tail.generatedTokens)
+                mtpNonDraftingRounds += tail.generatedTokens.count
+                mtpProfile?.recordPipeline(seconds: tail.decodeSeconds, tokens: tail.generatedTokens.count)
+                break
+            }
         }
 
         let decodeSeconds = Date().timeIntervalSince(decodeStart)

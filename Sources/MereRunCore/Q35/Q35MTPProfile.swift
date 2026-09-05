@@ -105,4 +105,9 @@ final class Q35MTPProfile {
         result.serialSeconds += seconds(since: start)
         result.serialRounds += 1
     }
+
+    func recordPipeline(seconds: Double, tokens: Int) {
+        result.serialSeconds += seconds
+        result.serialRounds += tokens
+    }
 }

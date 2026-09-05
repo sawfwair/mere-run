@@ -15,7 +15,7 @@ final class Q35TransferCheckpointTests: MereRunCoreTestCase {
         let generator = Q35Generator(modelId: modelID, prefixKVCacheEnabled: true, continuousBatchingEnabled: false)
         do {
             try await qualify(generator, root: root)
-            try await qualifyCode(generator, root: root)
+            try await qualifyGenerationCases(generator, root: root)
         } catch {
             await generator.unload()
             throw error
@@ -76,23 +76,32 @@ final class Q35TransferCheckpointTests: MereRunCoreTestCase {
                     showThinking: false, maxContextTokens: 16_384)
     }
 
-    private func qualifyCode(_ generator: Q35Generator, root: String) async throws {
-        let prompt = "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, "
+    private func qualifyGenerationCases(_ generator: Q35Generator, root: String) async throws {
+        let codePrompt = "Write a complete Python implementation of an LRU cache using a dictionary and a doubly linked list, "
             + "with get and put operations, type hints, and a short usage example. Return the code directly without introductory prose."
+        let prosePrompt = "Explain how a small community could turn an abandoned railway station into a public library. "
+            + "Discuss the building, accessibility, staffing, the collection, and a realistic opening-day scene. "
+            + "Write approximately 400 words of clear, connected prose."
+        for (name, prompt) in [("code", codePrompt), ("prose", prosePrompt)] {
+            try await qualifyGeneration(generator, root: root, name: name, prompt: prompt)
+        }
+    }
+
+    private func qualifyGeneration(_ generator: Q35Generator, root: String, name: String, prompt: String) async throws {
         var candidateRequest = ChatRequest(
             messages: [ChatMessage(role: .user, content: prompt)], maxTokens: 256,
             temperature: 0, topP: 1, showThinking: false, stopOnEOS: false, maxContextTokens: 8_192
         )
         let candidate = try await generator.chat(candidateRequest, modelPath: root, progressHandler: nil)
-        trace("code-mtp", candidate)
+        trace("\(name)-mtp", candidate)
         candidateRequest.logprobCapture = .tokens
         let target = try await generator.chat(candidateRequest, modelPath: root, progressHandler: nil)
-        trace("code-serial", target)
+        trace("\(name)-serial", target)
         XCTAssertEqual(candidate.acceleration?.route, "mtp-speculative")
         XCTAssertEqual(target.acceleration?.route, "final-target-pipelined")
         XCTAssertEqual(candidate.tokensGenerated, 256)
         XCTAssertEqual(candidate.tokensGenerated, target.tokensGenerated)
-        XCTAssertEqual(candidate.response, target.response, "Longer code output must preserve serial router decisions")
+        XCTAssertEqual(candidate.response, target.response, "Speculation and its fallback must preserve serial output for \(name)")
         XCTAssertEqual(candidate.reasoningContent, target.reasoningContent)
     }
 
