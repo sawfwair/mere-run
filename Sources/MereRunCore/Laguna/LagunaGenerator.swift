@@ -57,6 +57,7 @@ private final class LagunaBatchedDecodeRow: @unchecked Sendable {
     var repetitionHistory: [Int]
     var firstTokenSeconds: Double?
     var pendingProgressWhitespace = ""
+    var progressDecoder = IncrementalTokenTextDecoder()
     var stopped = false
 
     init(
@@ -116,6 +117,7 @@ private final class LagunaDFlashBatchedDecodeRow: @unchecked Sendable {
     var repetitionHistory: [Int]
     var firstTokenSeconds: Double?
     var pendingProgressWhitespace = ""
+    var progressDecoder = IncrementalTokenTextDecoder()
     var stopped = false
 
     init(
@@ -792,6 +794,7 @@ public actor LagunaGenerator: ChatGenerator {
                     ? LagunaDFlashRouting.defaultMinimumAcceptanceRate
                     : nil,
                 decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+                decodeTokens: { tokenizerAndTemplate.decode(tokens: $0) },
                 emitPiece: { _, piece in
                     progressHandler?(ChatProgress(stage: .generating, message: piece))
                 },
@@ -827,6 +830,7 @@ public actor LagunaGenerator: ChatGenerator {
                     model.lastPositionLogits(token, cache: caches)
                 },
                 decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+                decodeTokens: { tokenizerAndTemplate.decode(tokens: $0) },
                 emitPiece: { _, piece in
                     progressHandler?(ChatProgress(stage: .generating, message: piece))
                 },
@@ -1071,7 +1075,9 @@ public actor LagunaGenerator: ChatGenerator {
                 row.firstTokenSeconds = Date().timeIntervalSince(row.decodeStart)
             }
             if let progressHandler = row.progressHandler {
-                let piece = tokenizerAndTemplate.decode(token: token)
+                let piece = row.progressDecoder.append(
+                    decodedText: tokenizerAndTemplate.decode(tokens: row.generatedTokens)
+                )
                 if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     row.pendingProgressWhitespace += piece
                 } else if !piece.isEmpty {
@@ -1604,7 +1610,9 @@ public actor LagunaGenerator: ChatGenerator {
             row.firstTokenSeconds = Date().timeIntervalSince(row.decodeStart)
         }
         guard let progressHandler = row.progressHandler else { return }
-        let piece = tokenizerAndTemplate.decode(token: token)
+        let piece = row.progressDecoder.append(
+            decodedText: tokenizerAndTemplate.decode(tokens: row.generatedTokens)
+        )
         if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             row.pendingProgressWhitespace += piece
         } else if !piece.isEmpty {
