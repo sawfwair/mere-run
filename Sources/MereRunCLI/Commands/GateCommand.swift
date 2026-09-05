@@ -92,26 +92,22 @@ struct Gate: AsyncParsableCommand {
             throw ValidationError("--skip-model is valid only with --all-installed.")
         }
 
+        let installedModelIDs = ModelInventory.snapshot(mode: .verified).installedModelIDs
         let checks: [GateCheck]
         if allInstalled {
-            let installedIDs = Set(
-                ModelInventory.snapshot(mode: .verified).rows
-                    .filter(\.isInstalled)
-                    .map(\.id)
-            )
-            guard !installedIDs.isEmpty else {
+            guard !installedModelIDs.isEmpty else {
                 throw ValidationError("--all-installed found no installed managed models.")
             }
-            let invalidSkips = skippedModelIDs.subtracting(installedIDs)
+            let invalidSkips = skippedModelIDs.subtracting(installedModelIDs)
             guard invalidSkips.isEmpty else {
                 throw ValidationError(
                     "--skip-model IDs are not installed managed models: "
                         + invalidSkips.sorted().joined(separator: ", ")
                 )
             }
-            let installedSpecs = ManagedModelCatalog.allSpecs.filter { installedIDs.contains($0.id) }
+            let installedSpecs = ManagedModelCatalog.allSpecs.filter { installedModelIDs.contains($0.id) }
             let unmapped = installedSpecs.filter {
-                InstalledModelSmokePlans.plan(for: $0, installedIDs: installedIDs) == nil
+                InstalledModelSmokePlans.plan(for: $0, installedIDs: installedModelIDs) == nil
             }
             guard unmapped.isEmpty else {
                 throw ValidationError(
@@ -120,7 +116,7 @@ struct Gate: AsyncParsableCommand {
                 )
             }
             checks = installedSpecs.compactMap {
-                InstalledModelSmokePlans.plan(for: $0, installedIDs: installedIDs)?.check
+                InstalledModelSmokePlans.plan(for: $0, installedIDs: installedModelIDs)?.check
             }
         } else {
             checks = GateChecks.all
@@ -165,7 +161,7 @@ struct Gate: AsyncParsableCommand {
                 ))
                 continue
             }
-            guard check.requiredModels.allSatisfy(GateRunner.modelInstalled) else {
+            guard check.requiredModels.allSatisfy(installedModelIDs.contains) else {
                 results.append(GateResult(
                     id: check.id,
                     status: requireAll ? .failed : .skipped,

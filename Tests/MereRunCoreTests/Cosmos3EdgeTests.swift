@@ -55,6 +55,49 @@ final class Cosmos3EdgeTests: MereRunCoreTestCase {
         XCTAssertEqual(vaeConfig.temporalScaleFactor, 4)
     }
 
+    func testLegacyEdgeModularIndexIsNotDecodedAsDistilledConfiguration() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try TestFileSystem.writeFile(
+            root.appendingPathComponent("modular_model_index.json"),
+            contents: Data(#"{"_class_name":"Cosmos3EdgePipeline"}"#.utf8)
+        )
+
+        XCTAssertNil(try Cosmos3Resources(rootURL: root).loadDistilledConfiguration())
+    }
+
+    func testDecodesMarkedDistilledConfiguration() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try TestFileSystem.writeFile(
+            root.appendingPathComponent("modular_model_index.json"),
+            contents: Data(#"{"is_distilled":true,"distilled_sigmas":[1.0,0.5,0.25]}"#.utf8)
+        )
+
+        let configuration = try XCTUnwrap(
+            Cosmos3Resources(rootURL: root).loadDistilledConfiguration()
+        )
+
+        XCTAssertTrue(configuration.isDistilled)
+        XCTAssertEqual(configuration.sigmas, [1.0, 0.5, 0.25])
+    }
+
+    func testMalformedModularIndexThrowsInvalidConfiguration() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let indexURL = root.appendingPathComponent("modular_model_index.json")
+        try TestFileSystem.writeFile(indexURL, contents: Data("{".utf8))
+
+        XCTAssertThrowsError(
+            try Cosmos3Resources(rootURL: root).loadDistilledConfiguration()
+        ) { error in
+            guard case .invalidConfiguration(let url, _) = error as? Cosmos3ResourcesError else {
+                return XCTFail("Expected invalid Cosmos3 configuration, got \(error)")
+            }
+            XCTAssertEqual(url, indexURL)
+        }
+    }
+
     func testDecodesPublishedReasonerConfiguration() throws {
         let root = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: root) }

@@ -590,28 +590,6 @@ struct GateRunner: Sendable {
         )
     }
 
-    static func modelInstalled(_ id: String) -> Bool {
-        let root = ProcessInfo.processInfo.environment["MERERUN_MODELS_DIR"]
-            .map { URL(fileURLWithPath: $0) }
-            ?? GateBaselineStore.applicationSupport.appendingPathComponent("models", isDirectory: true)
-        return modelInstalled(id, root: root)
-    }
-
-    static func modelInstalled(_ id: String, root: URL) -> Bool {
-        let directURL = root.appendingPathComponent(id, isDirectory: true)
-        if FileManager.default.fileExists(atPath: directURL.path) {
-            return true
-        }
-        guard let spec = ManagedModelCatalog.spec(for: id) else {
-            return false
-        }
-        return spec.resolutionFallbackIDs.contains { fallbackID in
-            FileManager.default.fileExists(
-                atPath: root.appendingPathComponent(fallbackID, isDirectory: true).path
-            )
-        }
-    }
-
     static func hardwareModel() -> String {
         #if canImport(Darwin)
         var size = 0
