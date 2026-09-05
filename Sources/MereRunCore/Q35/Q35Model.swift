@@ -276,12 +276,21 @@ final class Q35Transformer: Module {
     private let isQwen4Exp: Bool
     private let usesMoE: Bool
     private let hyperConnectionCount: Int
+    private let supportsAsynchronousDecodeBlocks: Bool
+    private let asynchronousDecodeBlocks: Bool
 
-    init(config: Q35Config) {
+    init(config: Q35Config, asynchronousDecodeBlocks: Bool) {
+        self.asynchronousDecodeBlocks = asynchronousDecodeBlocks
         let text = config.textConfig
         self.isQwen4Exp = text.isQwen4Exp
         self.usesMoE = text.usesMoE
         self.hyperConnectionCount = text.hyperConnectionCount
+        let ornithGeometry = text.hiddenSize == 2_048 && text.moeIntermediateSize == 512
+            && text.numExperts == 256 && text.numExpertsPerTok == 8
+        let qwen27BGeometry = !text.usesMoE && text.hiddenSize == 5_120
+            && text.intermediateSize == 17_408 && text.numHiddenLayers == 64
+        self.supportsAsynchronousDecodeBlocks = !text.isQwen4Exp && (ornithGeometry || qwen27BGeometry)
+            && config.quantization?.bits == 4 && config.quantization?.groupSize == 64
         self._embedTokens.wrappedValue = Embedding(
             embeddingCount: text.vocabSize,
             dimensions: text.hiddenSize
@@ -373,7 +382,15 @@ final class Q35Transformer: Module {
                 // prefill is not submitted as one watchdog-sized lazy graph.
                 // This is also required by full-BF16 Qwen3.5 checkpoints;
                 // Qwen4Exp adds two hyper-connection projections per block.
-                MLX.eval(hidden)
+                if supportsAsynchronousDecodeBlocks, asynchronousDecodeBlocks,
+                   hidden.dim(0) == 1, hidden.dim(1) == 1 || (targetVerify && hidden.dim(1) <= 9) {
+                    // Bound graph submission without stalling the host after
+                    // every four tiny decode layers. The caller evaluates the
+                    // final logits before accepting tokens or mutating caches.
+                    MLX.asyncEval(hidden)
+                } else {
+                    MLX.eval(hidden)
+                }
             }
             Q35DebugLayerDump.record(stage: "layer\(index)", hidden)
         }
@@ -506,9 +523,12 @@ public final class Q35Model: Module, @unchecked Sendable {
         + compactDraftControlEnd - compactDraftControlStart
     static let compactDraftPaddedCount = 98_336
 
-    public init(config: Q35Config) {
+    public init(
+        config: Q35Config,
+        asynchronousDecodeBlocks: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_ASYNC_DECODE_BLOCKS"] == "1"
+    ) {
         self.config = config
-        self._model.wrappedValue = Q35Transformer(config: config)
+        self._model.wrappedValue = Q35Transformer(config: config, asynchronousDecodeBlocks: asynchronousDecodeBlocks)
         self._lmHead.wrappedValue = config.tieWordEmbeddings
             ? nil
             : Linear(

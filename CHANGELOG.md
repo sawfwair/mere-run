@@ -8,6 +8,11 @@ The format is based on Keep a Changelog.
 
 ### Runtime
 
+- stabilized repeated Qwen3.8 27B Q4 and Ornith 1.5 Q4 requests by keeping
+  compiled activation graphs on each request's MLX stream. These managed
+  targets also use asynchronous short decoder blocks and pipelined target
+  decoding after permanent greedy MTP fallback. Draft-cost and block-size
+  defaults are unchanged, and other models retain their scheduling defaults.
 - fixed Gemma 4 full-attention cache growth for uneven prompt chunks. Growth
   now allocates space for the entire incoming chunk after trimming unused
   capacity, preventing MLX broadcast-shape crashes during prefill.

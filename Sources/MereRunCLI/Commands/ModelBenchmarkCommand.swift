@@ -194,7 +194,37 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
     @Flag(name: [.long], help: "Emit machine-readable JSON.")
     var json: Bool = false
 
+    @Option(name: [.long], help: "Measured requests per loaded variant, after warm-up.")
+    var repetitions: Int = 1
+
+    @Option(name: [.long], help: "Warm-up requests per loaded variant.")
+    var warmups: Int = 1
+
+    @Option(name: [.long], help: "Decode tokens per warm-up request, capped at --decode-tokens.")
+    var warmupTokens: Int = 16
+
+    @Option(name: [.long], help: "Comma-separated variants in execution order: baseline,adaptive,forced.")
+    var variants: String = "baseline,adaptive,forced"
+
+    func parsedVariants() throws -> [Q36MTPBenchmarkVariant] {
+        let available = [Q36MTPBenchmarkVariant.baseline, .adaptive, .forced]
+        let names = variants.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+        guard Set(names).count == names.count else {
+            throw ValidationError("--variants must not contain duplicates.")
+        }
+        return try names.map { name in
+            guard let variant = available.first(where: { $0.name == name }) else {
+                throw ValidationError("--variants must contain baseline, adaptive, or forced.")
+            }
+            return variant
+        }
+    }
+
     func validate() throws {
+        guard repetitions > 0, warmups >= 0, warmupTokens > 0 else {
+            throw ValidationError("--repetitions and --warmup-tokens must be positive; --warmups must be non-negative.")
+        }
+        _ = try parsedVariants()
         if prompt != nil && promptFile != nil {
             throw ValidationError("Specify either --prompt or --prompt-file, not both.")
         }
@@ -269,11 +299,7 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             optionName: "--decode-token-values"
         )
         let temperatures = try parsedTemperatures()
-        let variants = [
-            Q36MTPBenchmarkVariant.baseline,
-            Q36MTPBenchmarkVariant.adaptive,
-            Q36MTPBenchmarkVariant.forced,
-        ]
+        let variants = try parsedVariants()
 
         var scenarios: [Q36MTPBenchmarkScenarioResult] = []
         scenarios.reserveCapacity(promptRepeats.count * decodeTokenCounts.count * temperatures.count)
@@ -290,22 +316,25 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
                         stopOnEOS: false,
                         maxContextTokens: contextSize
                     )
-                    var results: [Q36MTPBenchmarkVariantResult] = []
-                    results.reserveCapacity(variants.count)
+                    var results: [[Q36MTPBenchmarkVariantResult]] = []
                     for variant in variants {
-                        let result = try await runVariant(variant, request: request)
-                        results.append(result)
+                        results.append(try await runVariant(variant, request: request))
                     }
-                    scenarios.append(
-                        Q36MTPBenchmarkScenarioResult(
-                            promptRepeat: self.prompt != nil || self.promptFile != nil ? nil : repeatCount,
-                            promptCharacters: prompt.count,
-                            requestedDecodeTokens: decodeTokenCount,
-                            temperature: temperature,
-                            contextSize: contextSize,
-                            variants: results
+                    for repetition in 0..<repetitions {
+                        scenarios.append(
+                            Q36MTPBenchmarkScenarioResult(
+                                repetition: repetition + 1,
+                                warmups: warmups,
+                                warmupTokens: min(warmupTokens, decodeTokenCount),
+                                promptRepeat: self.prompt != nil || self.promptFile != nil ? nil : repeatCount,
+                                promptCharacters: prompt.count,
+                                requestedDecodeTokens: decodeTokenCount,
+                                temperature: temperature,
+                                contextSize: contextSize,
+                                variants: results.map { $0[repetition] }
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -379,34 +408,38 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
     private func runVariant(
         _ variant: Q36MTPBenchmarkVariant,
         request: ChatRequest
-    ) async throws -> Q36MTPBenchmarkVariantResult {
+    ) async throws -> [Q36MTPBenchmarkVariantResult] {
         let generator = Q35Generator(
             modelId: model,
             prefixKVCacheEnabled: false,
             continuousBatchingEnabled: false
         )
-        let measurement = try await withTemporaryEnvironment(variant.environmentOverrides(self)) {
+        let results = try await withTemporaryEnvironment(variant.environmentOverrides(self)) {
             var warmup = request
-            warmup.maxTokens = min(16, request.maxTokens)
-            _ = try await generator.chat(warmup, modelPath: modelRoot, progressHandler: nil)
-
-            let memoryBefore = ProcessMemorySnapshot.currentResidentBytes()
-            let start = Date()
-            let response = try await generator.chat(
-                request,
-                modelPath: modelRoot,
-                progressHandler: nil
-            )
-            return (
-                response: response,
-                elapsed: Date().timeIntervalSince(start),
-                memoryBefore: memoryBefore,
-                memoryAfter: ProcessMemorySnapshot.currentResidentBytes()
-            )
+            warmup.maxTokens = min(warmupTokens, request.maxTokens)
+            for _ in 0..<warmups {
+                _ = try await generator.chat(warmup, modelPath: modelRoot, progressHandler: nil)
+            }
+            var results: [Q36MTPBenchmarkVariantResult] = []
+            for _ in 0..<repetitions {
+                results.append(try await measureVariant(variant, request: request, generator: generator))
+            }
+            return results
         }
         await generator.unload()
+        return results
+    }
 
-        let response = measurement.response
+    private func measureVariant(
+        _ variant: Q36MTPBenchmarkVariant,
+        request: ChatRequest,
+        generator: Q35Generator
+    ) async throws -> Q36MTPBenchmarkVariantResult {
+        let memoryBefore = ProcessMemorySnapshot.currentResidentBytes()
+        let start = Date()
+        let response = try await generator.chat(request, modelPath: modelRoot, progressHandler: nil)
+        let elapsed = Date().timeIntervalSince(start)
+        let memoryAfter = ProcessMemorySnapshot.currentResidentBytes()
         guard let timing = response.timing else {
             throw ValidationError("\(variant.name) did not return timing data.")
         }
@@ -422,7 +455,7 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             ),
             promptTokens: promptTokens,
             generatedTokens: response.tokensGenerated,
-            elapsedSeconds: measurement.elapsed,
+            elapsedSeconds: elapsed,
             loadSeconds: timing.loadSeconds,
             prefillSeconds: timing.prefillSeconds,
             decodeSeconds: timing.decodeSeconds,
@@ -433,11 +466,11 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             decodeTokensPerSecond: timing.decodeSeconds > 0
                 ? Double(response.tokensGenerated) / timing.decodeSeconds
                 : nil,
-            endToEndTokensPerSecond: measurement.elapsed > 0
-                ? Double(response.tokensGenerated) / measurement.elapsed
+            endToEndTokensPerSecond: elapsed > 0
+                ? Double(response.tokensGenerated) / elapsed
                 : nil,
-            residentMemoryBeforeBytes: measurement.memoryBefore,
-            residentMemoryAfterBytes: measurement.memoryAfter,
+            residentMemoryBeforeBytes: memoryBefore,
+            residentMemoryAfterBytes: memoryAfter,
             acceleration: response.acceleration,
             outputSHA256: FusedBenchmarkHash.sha256(
                 (response.reasoningContent ?? "") + "\u{0}" + response.response
@@ -524,6 +557,9 @@ private struct Q36MTPBenchmarkReport: Encodable {
 }
 
 private struct Q36MTPBenchmarkScenarioResult: Encodable {
+    let repetition: Int
+    let warmups: Int
+    let warmupTokens: Int
     let promptRepeat: Int?
     let promptCharacters: Int
     let requestedDecodeTokens: Int
@@ -540,11 +576,13 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
     }
 
     var greedyOutputParity: Bool? {
-        guard temperature == 0 else { return nil }
+        guard temperature == 0, variants.contains(where: { $0.policy == "disabled" }),
+              variants.contains(where: { $0.policy != "disabled" }) else { return nil }
         return Set(variants.map(\.outputSHA256)).count == 1
     }
 
     enum CodingKeys: String, CodingKey {
+        case repetition, warmups, warmupTokens
         case promptRepeat
         case promptCharacters
         case requestedDecodeTokens
@@ -558,6 +596,9 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(repetition, forKey: .repetition)
+        try container.encode(warmups, forKey: .warmups)
+        try container.encode(warmupTokens, forKey: .warmupTokens)
         try container.encodeIfPresent(promptRepeat, forKey: .promptRepeat)
         try container.encode(promptCharacters, forKey: .promptCharacters)
         try container.encode(requestedDecodeTokens, forKey: .requestedDecodeTokens)
@@ -571,7 +612,7 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
 
     func renderText() -> String {
         var lines = [
-            "scenario: prompt_repeat=\(promptRepeat.map(String.init) ?? "custom") prompt_characters=\(promptCharacters) decode_tokens=\(requestedDecodeTokens) temperature=\(format(temperature)) context_size=\(contextSize)",
+            "scenario: repetition=\(repetition) warmups=\(warmups) warmup_tokens=\(warmupTokens) prompt_repeat=\(promptRepeat.map(String.init) ?? "custom") prompt_characters=\(promptCharacters) decode_tokens=\(requestedDecodeTokens) temperature=\(format(temperature)) context_size=\(contextSize)",
             "speedup decode: \(formatSpeedups(decodeSpeedups))",
             "speedup e2e: \(formatSpeedups(endToEndSpeedups))",
             "greedy output parity: \(greedyOutputParity.map(String.init) ?? "n/a")",

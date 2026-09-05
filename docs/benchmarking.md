@@ -341,6 +341,39 @@ after the benchmark instead of inferring behavior from prose.
 
 ### KV cache and speculative decode
 
+For repeated Qwen-family measurements, use `q36-mtp --repetitions 3
+--warmups 2 --warmup-tokens 512 --decode-tokens 512`. Each variant keeps its
+model loaded across warm-up and measured requests. `--variants
+baseline,adaptive` selects serial and default generation; reverse their order
+in a separate run to check order effects. Every measured request remains in
+the JSON report. A single-variant run doesn't claim serial-output parity.
+
+`scripts/benchmark-q35-generation.py --help` describes the code, chat, prose,
+math, and summarization receipt collector. It records complete decode and
+request throughput, memory pressure, swap changes, and competing `mere.run`
+inference processes. Metadata commands such as `status` and `model list` don't
+count as inference. The collector also checks active HyperFrames GPU workers
+and records the Apple GPU driver's utilization counter. It requires at most
+10 percent device utilization before starting. Use an optimized binary and
+keep unrelated inference and rendering idle throughout the measurement.
+Temperature defaults to zero; use `--temperature 0.7 --top-p 0.9` for a
+separate sampled-generation measurement.
+
+To measure under existing desktop graphics activity, add `--allow-desktop-load`.
+This option retains the observed load and marks every receipt as `desktop-load`
+with `uncontended: false`. Keep the repetition range visible and treat the
+result as a workstation observation. The collector still checks memory pressure
+and refuses to start alongside another inference process.
+
+Set `MERERUN_Q35_MTP_PROFILE=1` only for diagnosis. The optional
+`acceleration.speculationProfile` contains per-round draft, target-forward,
+acceptance, and repair timings, plus serial fallback time. Submission time
+can include waits inside a model forward. Profiling adds synchronization and
+must be disabled for throughput conclusions.
+
+For the experiment controls and qualification status, see the
+[Qwen and Ornith generation tuning report](benchmarks/ornith-qwen-generation-tuning-2026-09-05.md).
+
 The microbenchmark commands are for runtime implementation work:
 
 - `model benchmark gemma4-kv`
@@ -352,10 +385,12 @@ They run real checkpoint paths with fixed prompt and decode lengths so runtime
 changes can be compared consistently. The built-in prompt fixtures are for
 runtime comparison, not model-quality evaluation.
 
-The `q36-mtp` lane warms each fresh baseline, adaptive, and forced generator
-before timing it. Prefix caching and continuous batching are disabled for this
-comparison so run order does not turn cold compilation into a reported policy
-difference.
+The `q36-mtp` lane warms each selected generator before timing it. Prefix
+caching and continuous batching are disabled. Warm-up reduces startup costs;
+it doesn't establish that later requests have stable scheduling. Retain every
+repeat and compare ranges as well as medians. The command ignores EOS to
+measure fixed-length generation, so these fixtures aren't completion-quality
+tests.
 
 The `q38-verification` lane measures target-only linear blocks
 against target-generated oracle tokens. Use it to find the useful verification

@@ -6,6 +6,9 @@ Qwen 3.5/3.6/3.8 dense and hybrid MoE text and vision-language runtime.
 - `Q35TokenizerAndTemplate.swift`: checkpoint-native chat-template rendering,
   image-token expansion, and tokenization.
 - `Q35Model.swift`: native model entry point.
+- `Q35CompiledOperations.swift`: compiled activations and request-stream scopes.
+- `Q35MTPProfile.swift`: optional synchronized speculation diagnostics.
+- `Q35RuntimeTuning.swift`: scheduling defaults for the qualified managed Q4 targets.
 - Attention and MoE files own model math only.
 
 Keep tokenizer/tool template compatibility isolated here; model layers should
@@ -34,6 +37,16 @@ stack replaces its two source arrays before the MLX cache is cleared, bounding
 transient preparation memory instead of retaining a model-wide duplicate.
 Verified Q4 measurements showed a short-prompt decode win, so managed Ornith
 1.5 targets enable MTP from token zero while preserving target verification.
+
+Managed Qwen3.8 27B Q4 and Ornith 1.5 Q4 requests own their compiled
+activation graphs. This prevents reuse of graphs traced on a previous
+request's MLX stream. Supported short decode and verification blocks submit
+asynchronously, and permanent greedy MTP fallback uses the pipelined target
+decoder. Other model IDs keep their existing scheduling defaults. Set
+`MERERUN_Q35_SCOPED_COMPILE=0`, `MERERUN_Q35_ASYNC_DECODE_BLOCKS=0`, or
+`MERERUN_Q35_MTP_PIPELINED_FALLBACK=0` to disable an individual change for
+comparison. The draft-cost default remains 0.18, with generation blocks of
+eight tokens for Qwen and four for Ornith.
 
 Greedy Qwen3.8 MTP uses a proposal-only compact vocabulary projection containing
 the first 98,304 tokenizer rows and the official control-token rows. A fused

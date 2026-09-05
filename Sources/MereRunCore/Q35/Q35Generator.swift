@@ -457,7 +457,9 @@ public actor Q35Generator: ChatGenerator {
     ) async throws -> ChatResponse {
         activeChatRequestCount += 1
         defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await Stream.withNewDefaultStream {
+        return try await Q35CompiledOperations.withNewDefaultStream(
+            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
+        ) {
             let rootURL = try await resolveModelRoot(modelPath: nil, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -486,7 +488,9 @@ public actor Q35Generator: ChatGenerator {
     ) async throws -> ChatResponse {
         activeChatRequestCount += 1
         defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await Stream.withNewDefaultStream {
+        return try await Q35CompiledOperations.withNewDefaultStream(
+            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
+        ) {
             let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -512,7 +516,9 @@ public actor Q35Generator: ChatGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Stream.withNewDefaultStream {
+        try await Q35CompiledOperations.withNewDefaultStream(
+            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
+        ) {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -594,7 +600,10 @@ public actor Q35Generator: ChatGenerator {
         )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family weights"))
-        let q35Model = Q35Model(config: config)
+        let q35Model = Q35Model(
+            config: config,
+            asynchronousDecodeBlocks: Q35RuntimeTuning.isEnabled(.asynchronousDecode, modelID: modelId)
+        )
         let resources = Q35Resources(rootURL: normalizedRoot)
 
         let groupSize = config.quantization?.groupSize ?? 64
@@ -1308,14 +1317,21 @@ public actor Q35Generator: ChatGenerator {
         var mtpVerificationPasses = 0
         var mtpReplacementPasses = 0
         var mtpNonDraftingRounds = 0
+        var usePipelinedFallback = false
+        let supportsPipelinedFallback = modelId == Q35Resources.q38TwentySevenB4BitModelId
+            || modelId == Q35Resources.ornith35BMLX4BitModelId
+        let pipelinedFallbackEnabled = Q35RuntimeTuning.isEnabled(.pipelinedFallback, modelID: modelId)
         let mtpBlockSize = Self.mtpBlockSize(modelId: modelId)
-        var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(maxDraftDepth: mtpBlockSize - 1)
+        var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(
+            maxDraftDepth: mtpBlockSize - 1, headStepCostRatio: Q35MTPAdaptivePolicy.configuredCostRatio()
+        )
         let mtpDraftSession = prefillMTPSession ?? Q35MTPDraftSession(
             promptTokens: promptTokens,
             promptHidden: prefillMTPHidden,
             historyCache: model.config.textConfig.isQwen4Exp ? Q38QSACache() : KVCacheSimple()
         )
         let draftHistoryTokens = mtpDraftSession.committedHistoryCount
+        let mtpProfile = generationConfig.temperature == 0 && mtpModel != nil ? Q35MTPProfile.make() : nil
         let decodeStart = Date()
 
         func emit(_ token: Int) {
@@ -1368,12 +1384,14 @@ public actor Q35Generator: ChatGenerator {
             if model.config.textConfig.isQwen4Exp {
                 clearMLXCacheUnderPressureIfNeeded()
             }
+            let samplingStart = mtpProfile?.clock()
             var next = sampleToken(
                 logits: logits[0, -1, 0...],
                 config: generationConfig,
                 previousTokens: repetitionHistory
             )
 
+            mtpProfile?.recordSampling(since: samplingStart)
             if jsonConstrained {
                 guard let constrained = jsonConstrainedToken(
                     initial: next,
@@ -1411,6 +1429,8 @@ public actor Q35Generator: ChatGenerator {
                     )
                     let draftDepth = mtpAdaptivePolicy.draftDepth(offeredDepth: offeredDepth)
                     if draftDepth > 0 {
+                        mtpProfile?.beginRound(depth: draftDepth)
+                        defer { mtpProfile?.finishRound() }
                         let draftBlock = mtpModel.draftBlock(
                             lastToken: next,
                             hidden: hidden,
@@ -1418,6 +1438,7 @@ public actor Q35Generator: ChatGenerator {
                             session: mtpDraftSession,
                             baseModel: model
                         )
+                        mtpProfile?.finishDraft(tokens: draftBlock.tokenIDs)
                         mtpDraftedTokens += draftBlock.count
 
                         let candidateCaches = forkLayerCaches(layerCaches)
@@ -1432,7 +1453,9 @@ public actor Q35Generator: ChatGenerator {
                             targetVerify: true
                         )
                         let candidateMTPHidden = candidate.mtpHidden ?? candidate.hidden
+                        mtpProfile?.verificationSubmitted()
                         MLX.eval(candidate.logits, candidateMTPHidden, draftBlock.tokenIDs)
+                        mtpProfile?.verificationCompleted()
                         mtpVerificationPasses += 1
                         let draftTokens = draftBlock.tokens
 
@@ -1452,6 +1475,7 @@ public actor Q35Generator: ChatGenerator {
                             accepted += 1
                             verificationHistory.append(draftToken)
                         }
+                        mtpProfile?.accepted(accepted)
                         mtpAdaptivePolicy.record(
                             acceptedDrafts: accepted,
                             drafted: draftTokens.count
@@ -1540,6 +1564,10 @@ public actor Q35Generator: ChatGenerator {
                     }
 
                     mtpNonDraftingRounds += 1
+                    // Once the policy reaches zero, no more acceptance evidence
+                    // can change it. Finish through the existing pipelined
+                    // target decoder after consuming this emitted token.
+                    usePipelinedFallback = supportsPipelinedFallback && pipelinedFallbackEnabled
                     mtpDraftSession.recordCommittedTransitions(
                         hiddenStates: hidden,
                         nextTokens: [next]
@@ -1619,6 +1647,7 @@ public actor Q35Generator: ChatGenerator {
                 }
             }
 
+            let serialStart = mtpProfile?.clock()
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
             let positionIds = decodePositionIds(layerCaches: layerCaches, tokenCount: 1, ropeDelta: mropeRopeDelta)
             if retainHidden {
@@ -1639,6 +1668,24 @@ public actor Q35Generator: ChatGenerator {
                     positionIds: positionIds
                 )
                 MLX.eval(logits)
+            }
+            mtpProfile?.recordSerial(since: serialStart)
+            if usePipelinedFallback {
+                if !pendingProgressWhitespace.isEmpty {
+                    progressHandler?(ChatProgress(stage: .generating, message: pendingProgressWhitespace))
+                }
+                let tail = try await decodeTokensPipelined(
+                    model: model, tokenizerAndTemplate: tokenizerAndTemplate,
+                    initialLogits: logits, layerCaches: layerCaches, eosSet: eosSet,
+                    generationConfig: generationConfig, tokenBudget: tokenBudget - generated.count,
+                    mropeRopeDelta: mropeRopeDelta, promptTokens: repetitionHistory,
+                    stopAtCompletedToolCall: false, logprobCapture: logprobCapture,
+                    logprobRegion: logprobRegion, progressHandler: progressHandler
+                )
+                generated.append(contentsOf: tail.generatedTokens)
+                mtpNonDraftingRounds += tail.generatedTokens.count
+                mtpProfile?.recordPipeline(seconds: tail.decodeSeconds, tokens: tail.generatedTokens.count)
+                break
             }
         }
 
@@ -1670,7 +1717,8 @@ public actor Q35Generator: ChatGenerator {
                     rounds: mtpVerificationPasses,
                     draftedTokens: mtpDraftedTokens,
                     acceptedDraftTokens: mtpAcceptedTokens,
-                    draftHistoryTokens: draftHistoryTokens
+                    draftHistoryTokens: draftHistoryTokens,
+                    speculationProfile: mtpProfile?.result
                 )
             } ?? ChatAccelerationDiagnostics(
                 route: jsonConstrained ? "json-constrained-serial" : "serial"
