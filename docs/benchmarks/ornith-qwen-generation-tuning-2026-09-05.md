@@ -12,6 +12,11 @@ generation. Target-verification rates from that assessment are not generation
 throughput. [PR #443](https://github.com/sawfwair/mere-run/pull/443) contains the
 scheduling changes and the repeated-request benchmark harness.
 
+The subsequent [Ornith upstream head comparison](ornith-mtp-upstream-check-2026-09-05.md)
+identifies weak stock-head acceptance on the code and prose prompts. A separate
+replacement-head experiment improves acceptance while preserving the tested
+outputs. The tables below retain the original installed-head measurements.
+
 ## Final workload results
 
 The tables show median decode tokens per second, with all three repetitions'
