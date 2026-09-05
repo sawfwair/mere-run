@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.51.1 - 2026-09-05
+
+- fixed a `gate --all-installed` issue that rechecked required models only in
+  the primary model store. Release smokes now use one verified inventory for
+  planning and execution, including registered bindings, search roots, and
+  compatible fallback models.
+- fixed a Cosmos3-Edge issue that rejected its legacy
+  `modular_model_index.json` file as an invalid Cosmos3-Super distilled
+  configuration. The runtime decodes distilled scheduler metadata only when
+  the typed `is_distilled` marker is `true`.
+
 ## 0.51.0 - 2026-09-05
 
 This release rebuilds macOS Studio around persistent navigation, task, and

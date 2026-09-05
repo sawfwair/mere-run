@@ -285,6 +285,14 @@ public struct Cosmos3DistilledConfiguration: Decodable, Hashable, Sendable {
     }
 }
 
+private struct Cosmos3DistilledMarker: Decodable {
+    let isDistilled: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case isDistilled = "is_distilled"
+    }
+}
+
 public struct Cosmos3VAEConfiguration: Codable, Hashable, Sendable {
     public let baseDimension: Int
     public let decoderBaseDimension: Int
@@ -563,6 +571,14 @@ public struct Cosmos3Resources: Hashable, Sendable {
 
     public func loadDistilledConfiguration() throws -> Cosmos3DistilledConfiguration? {
         guard FileManager.default.fileExists(atPath: modularModelIndexURL.path) else {
+            return nil
+        }
+        let marker = try Self.loadConfiguration(
+            Cosmos3DistilledMarker.self,
+            from: modularModelIndexURL,
+            validate: { _ in [] }
+        )
+        guard marker.isDistilled == true else {
             return nil
         }
         return try Self.loadConfiguration(

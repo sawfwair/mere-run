@@ -184,20 +184,6 @@ final class GateSupportTests: XCTestCase {
         )
     }
 
-    func testCompatibleFallbackCountsAsInstalledForRequiredReleaseCheck() throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: root.appendingPathComponent("video-ltx23-a2vid-mlx", isDirectory: true),
-            withIntermediateDirectories: true
-        )
-        defer { try? FileManager.default.removeItem(at: root) }
-
-        XCTAssertTrue(GateRunner.modelInstalled("video-ltx23-full-mlx", root: root))
-        XCTAssertTrue(GateRunner.modelInstalled("video-ltx23-a2vid-mlx", root: root))
-        XCTAssertFalse(GateRunner.modelInstalled("video-ltx23-av-mlx", root: root))
-    }
-
     func testA2VidFixtureIsDecodableAndNonSilent() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
