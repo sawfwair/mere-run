@@ -62,7 +62,7 @@ def run_case(args, root, binary, name, prompt, environment):
     command = [
         str(binary), "model", "benchmark", "q36-mtp", "--model", MODELS[args.model],
         "--prompt", prompt, "--decode-tokens", str(args.tokens), "--context-size", "8192",
-        "--temperature", "0", "--top-p", "1", "--json", "--variants", args.variants,
+        "--temperature", str(args.temperature), "--top-p", str(args.top_p), "--json", "--variants", args.variants,
         "--warmups", str(args.warmups), "--warmup-tokens", str(args.warmup_tokens),
         "--repetitions", str(args.repetitions),
     ]
@@ -116,6 +116,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--workloads", nargs="+", choices=PROMPTS, default=list(PROMPTS))
     parser.add_argument("--tokens", type=int, default=512)
+    parser.add_argument("--temperature", type=float, default=0)
+    parser.add_argument("--top-p", type=float, default=1)
     parser.add_argument("--warmups", type=int, default=2)
     parser.add_argument("--warmup-tokens", type=int, default=512)
     parser.add_argument("--repetitions", type=int, default=3)
