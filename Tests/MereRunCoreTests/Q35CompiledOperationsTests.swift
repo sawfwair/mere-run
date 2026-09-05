@@ -1,4 +1,5 @@
 import MLX
+import MLXNN
 import XCTest
 @testable import MereRunCore
 
@@ -22,6 +23,23 @@ final class Q35CompiledOperationsTests: MereRunCoreTestCase {
             XCTAssertFalse(owners.contains { $0 === owner }, "A new request must not reuse an earlier stream's graph owner")
             owners.append(owner)
             if let reference { XCTAssertEqual(values, reference) } else { reference = values }
+        }
+    }
+
+    func testSiluPreservesLibraryArithmeticAcrossPrecisionsAndVerificationWidths() async throws {
+        for dtype in [DType.float32, .float16, .bfloat16] {
+            for width in [1, 4, 8, 9] {
+                await Q35CompiledOperations.withNewDefaultStream(scoped: true) {
+                    let values = (0..<(width * 128)).map { Float($0 % 257 - 128) / 17 }
+                    let input = MLXArray(values).reshaped(1, width, 128).asType(dtype)
+                    let expected = MLXNN.silu(input)
+                    let actual = q35Silu(input)
+                    MLX.eval(expected, actual)
+                    XCTAssertEqual(actual.dtype, expected.dtype)
+                    XCTAssertEqual(actual.asArray(Float.self), expected.asArray(Float.self),
+                                   "SiLU must preserve \(dtype) arithmetic at width \(width)")
+                }
+            }
         }
     }
 

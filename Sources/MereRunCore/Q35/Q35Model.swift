@@ -286,9 +286,11 @@ final class Q35Transformer: Module {
         self.isQwen4Exp = text.isQwen4Exp
         self.usesMoE = text.usesMoE
         self.hyperConnectionCount = text.hyperConnectionCount
-        self.supportsAsynchronousDecodeBlocks = !text.isQwen4Exp
-            && text.hiddenSize == 2_048 && text.moeIntermediateSize == 512
+        let ornithGeometry = text.hiddenSize == 2_048 && text.moeIntermediateSize == 512
             && text.numExperts == 256 && text.numExpertsPerTok == 8
+        let qwen27BGeometry = !text.usesMoE && text.hiddenSize == 5_120
+            && text.intermediateSize == 17_408 && text.numHiddenLayers == 64
+        self.supportsAsynchronousDecodeBlocks = !text.isQwen4Exp && (ornithGeometry || qwen27BGeometry)
             && config.quantization?.bits == 4 && config.quantization?.groupSize == 64
         self._embedTokens.wrappedValue = Embedding(
             embeddingCount: text.vocabSize,

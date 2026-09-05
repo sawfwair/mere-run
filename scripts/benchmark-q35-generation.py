@@ -49,6 +49,22 @@ def inference_processes():
     }
 
 
+def rendering_processes():
+    # HyperFrames can contend for Metal without launching a model process.
+    rows = command_text("ps", "-axo", "pid,pcpu,comm").splitlines()[1:]
+    candidates = [
+        int(fields[0]) for row in rows
+        if len(fields := row.split(None, 2)) == 3
+        and Path(fields[2]).name == "chrome-headless-shell" and float(fields[1]) > 1
+    ]
+    active = set()
+    for pid in candidates:
+        process = subprocess.run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True)
+        if "--type=gpu-process" in process.stdout:
+            active.add(pid)
+    return active
+
+
 def run_case(args, root, binary, name, prompt, environment):
     destination = args.output / f"{args.model}-{name}.json"
     if destination.exists():
@@ -56,6 +72,9 @@ def run_case(args, root, binary, name, prompt, environment):
     others = inference_processes()
     if others:
         raise SystemExit(f"Another inference process is active: {sorted(others)}. Leave it untouched and retry later.")
+    renderers = rendering_processes()
+    if renderers:
+        raise SystemExit(f"A GPU rendering worker is active: {sorted(renderers)}. Leave it untouched and retry later.")
     before = snapshot()
     if before["pressureLevel"] != 1:
         raise SystemExit("Memory pressure is elevated; defer this benchmark.")
@@ -77,6 +96,7 @@ def run_case(args, root, binary, name, prompt, environment):
         process = subprocess.Popen(command, cwd=root, env=environment, stdout=output, stderr=error)
         while process.poll() is None:
             competing.update(inference_processes() - {process.pid})
+            renderers.update(rendering_processes())
             state = snapshot()
             max_pressure = max(max_pressure, state["pressureLevel"])
             rss = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True)
@@ -100,11 +120,12 @@ def run_case(args, root, binary, name, prompt, environment):
         "processSeconds": time.time() - started, "peakResidentBytes": peak_rss,
         "before": before, "after": after, "maxPressureLevel": max_pressure,
         "competingInferencePIDs": sorted(competing),
-        "uncontended": not competing and max_pressure == 1,
+        "knownRenderingWorkerPIDs": sorted(renderers),
+        "uncontended": not competing and not renderers and max_pressure == 1,
     }
     destination.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(f"done {args.model} {name}: {time.time() - started:.1f}s", flush=True)
-    if competing or max_pressure != 1:
+    if competing or renderers or max_pressure != 1:
         raise SystemExit("Retained a contended receipt; exclude it from throughput conclusions and repeat separately.")
 
 

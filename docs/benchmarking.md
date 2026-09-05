@@ -372,10 +372,12 @@ They run real checkpoint paths with fixed prompt and decode lengths so runtime
 changes can be compared consistently. The built-in prompt fixtures are for
 runtime comparison, not model-quality evaluation.
 
-The `q36-mtp` lane warms each fresh baseline, adaptive, and forced generator
-before timing it. Prefix caching and continuous batching are disabled for this
-comparison so run order does not turn cold compilation into a reported policy
-difference.
+The `q36-mtp` lane warms each selected generator before timing it. Prefix
+caching and continuous batching are disabled. Warm-up reduces startup costs;
+it doesn't establish that later requests have stable scheduling. Retain every
+repeat and compare ranges as well as medians. The command ignores EOS to
+measure fixed-length generation, so these fixtures aren't completion-quality
+tests.
 
 The `q38-verification` lane measures target-only linear blocks
 against target-generated oracle tokens. Use it to find the useful verification
