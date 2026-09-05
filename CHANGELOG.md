@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Runtime
+
+- fixed Gemma 4 full-attention cache growth for uneven prompt chunks. Growth
+  now allocates space for the entire incoming chunk after trimming unused
+  capacity, preventing MLX broadcast-shape crashes during prefill.
+
 ### CLI
 
 - added `text train-lora --resume-from` for deterministic global-step
