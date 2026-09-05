@@ -103,48 +103,48 @@ struct StudioVisionLabView: View {
 
     /// Owned by the host so the rail and the shell's task control stay in step.
     @Binding var task: StudioVisionTask
-    @State private var primaryInput = ""
-    @State private var secondaryInput = ""
-    @State private var additionalInputs: [String] = []
-    @State private var inputListPath = ""
+    @StudioStoredValue("VisionLab.primaryInput") private var primaryInput = ""
+    @StudioStoredValue("VisionLab.secondaryInput") private var secondaryInput = ""
+    @StudioStoredValue("VisionLab.additionalInputs") private var additionalInputs: [String] = []
+    @StudioStoredValue("VisionLab.inputListPath") private var inputListPath = ""
     @State private var outputDirectory = StudioSpecialistFiles
         .timestampedDirectory(component: "Vision")
         .path
-    @State private var model = ""
-    @State private var faceThreshold = 0.65
-    @State private var provider = "auto"
-    @State private var maxFaces = 0
-    @State private var includeEmbeddings = false
-    @State private var faceIndex = 0
-    @State private var referenceFaceIndex = 0
-    @State private var candidateFaceIndex = 0
-    @State private var failFast = false
-    @State private var poseBody = true
-    @State private var poseHands = true
-    @State private var poseFace = true
-    @State private var maxHands = 2
-    @State private var minimumConfidence = 0.1
-    @State private var flowAccuracy = "high"
-    @State private var inputSize = 518
-    @State private var maxFrames = 240
-    @State private var resolutionLevel = 9
-    @State private var tokenCount = 0
-    @State private var maxPoints = 0
-    @State private var camerasPath = ""
-    @State private var processResolution = 504
-    @State private var referenceView = "saddle-balanced"
-    @State private var confidencePercentile = 40.0
-    @State private var prompts = "a person"
-    @State private var camera = 0
-    @State private var duration = 10.0
-    @State private var initFrame = 0
-    @State private var seedSearchFrames = 30
-    @State private var trackingThreshold = 0.05
-    @State private var trackingResolution = 1008
-    @State private var showBoxes = true
-    @State private var showLabels = true
-    @State private var dryRun = false
-    @State private var requestID: UUID?
+    @StudioStoredValue("VisionLab.model") private var model = ""
+    @StudioStoredValue("VisionLab.faceThreshold") private var faceThreshold = 0.65
+    @StudioStoredValue("VisionLab.provider") private var provider = "auto"
+    @StudioStoredValue("VisionLab.maxFaces") private var maxFaces = 0
+    @StudioStoredValue("VisionLab.includeEmbeddings") private var includeEmbeddings = false
+    @StudioStoredValue("VisionLab.faceIndex") private var faceIndex = 0
+    @StudioStoredValue("VisionLab.referenceFaceIndex") private var referenceFaceIndex = 0
+    @StudioStoredValue("VisionLab.candidateFaceIndex") private var candidateFaceIndex = 0
+    @StudioStoredValue("VisionLab.failFast") private var failFast = false
+    @StudioStoredValue("VisionLab.poseBody") private var poseBody = true
+    @StudioStoredValue("VisionLab.poseHands") private var poseHands = true
+    @StudioStoredValue("VisionLab.poseFace") private var poseFace = true
+    @StudioStoredValue("VisionLab.maxHands") private var maxHands = 2
+    @StudioStoredValue("VisionLab.minimumConfidence") private var minimumConfidence = 0.1
+    @StudioStoredValue("VisionLab.flowAccuracy") private var flowAccuracy = "high"
+    @StudioStoredValue("VisionLab.inputSize") private var inputSize = 518
+    @StudioStoredValue("VisionLab.maxFrames") private var maxFrames = 240
+    @StudioStoredValue("VisionLab.resolutionLevel") private var resolutionLevel = 9
+    @StudioStoredValue("VisionLab.tokenCount") private var tokenCount = 0
+    @StudioStoredValue("VisionLab.maxPoints") private var maxPoints = 0
+    @StudioStoredValue("VisionLab.camerasPath") private var camerasPath = ""
+    @StudioStoredValue("VisionLab.processResolution") private var processResolution = 504
+    @StudioStoredValue("VisionLab.referenceView") private var referenceView = "saddle-balanced"
+    @StudioStoredValue("VisionLab.confidencePercentile") private var confidencePercentile = 40.0
+    @StudioStoredValue("VisionLab.prompts") private var prompts = "a person"
+    @StudioStoredValue("VisionLab.camera") private var camera = 0
+    @StudioStoredValue("VisionLab.duration") private var duration = 10.0
+    @StudioStoredValue("VisionLab.initFrame") private var initFrame = 0
+    @StudioStoredValue("VisionLab.seedSearchFrames") private var seedSearchFrames = 30
+    @StudioStoredValue("VisionLab.trackingThreshold") private var trackingThreshold = 0.05
+    @StudioStoredValue("VisionLab.trackingResolution") private var trackingResolution = 1008
+    @StudioStoredValue("VisionLab.showBoxes") private var showBoxes = true
+    @StudioStoredValue("VisionLab.showLabels") private var showLabels = true
+    @StudioStoredValue("VisionLab.dryRun") private var dryRun = false
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var errorMessage: String?
 
     private var currentItem: StudioLibraryItem? {
@@ -153,61 +153,28 @@ struct StudioVisionLabView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            taskRail
-                .frame(width: 210)
-            Divider().overlay(MereRunTheme.border.opacity(0.55))
-            configuration
-                .frame(minWidth: 300, idealWidth: 390, maxWidth: 390)
-            Divider().overlay(MereRunTheme.border.opacity(0.55))
-            resultPane
-        }
+        StudioAnalysisLayout { configuration } result: { resultPane }
+        .studioTaskCommand(task.templateID, draft: commandDraft)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: task) { _, newTask in
-            model = CommandCatalog.template(id: newTask.templateID)?.defaultDraft().model ?? ""
             outputDirectory = StudioSpecialistFiles.timestampedDirectory(component: "Vision").path
-            requestID = nil
             errorMessage = nil
         }
         .onAppear {
-            model = CommandCatalog.template(id: task.templateID)?.defaultDraft().model ?? ""
-        }
-    }
-
-    private var taskRail: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(StudioVisionTask.allCases) { candidate in
-                    Button {
-                        task = candidate
-                    } label: {
-                        HStack(spacing: 9) {
-                            Image(systemName: candidate.icon)
-                                .frame(width: 20)
-                            Text(candidate.rawValue)
-                                .lineLimit(1)
-                            Spacer()
-                        }
-                        .font(.system(size: 12.5, weight: task == candidate ? .semibold : .regular))
-                        .foregroundStyle(task == candidate ? MereRunTheme.accent : MereRunTheme.textSecondary)
-                        .padding(.horizontal, 10)
-                        .frame(height: 36)
-                        .background {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(task == candidate ? MereRunTheme.accentSoft : .clear)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(12)
+            if model.isBlank { model = CommandCatalog.template(id: task.templateID)?.defaultDraft().model ?? "" }
         }
     }
 
     private var configuration: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 15) {
+                let variants = StudioVisionTask.allCases.filter { $0.studioTask == task.studioTask }
+                if variants.count > 1 {
+                    Picker("Operation", selection: $task) {
+                        ForEach(variants) { Text($0.rawValue).tag($0) }
+                    }
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(task.rawValue)
                         .font(MereRunTheme.sectionFont)
@@ -548,16 +515,9 @@ struct StudioVisionLabView: View {
         }
     }
 
-    private func run() {
-        errorMessage = nil
-        guard validate() else { return }
-        guard let template = CommandCatalog.template(id: task.templateID) else {
-            errorMessage = "The selected vision command is unavailable."
-            return
-        }
-
+    private var commandDraft: CommandDraft {
         let root = URL(fileURLWithPath: NSString(string: outputDirectory).expandingTildeInPath)
-        var draft = template.defaultDraft()
+        var draft = CommandCatalog.template(id: task.templateID)?.defaultDraft() ?? CommandDraft()
         draft.inputPath = primaryInput
         draft.visionSecondInputPath = secondaryInput
         draft.visionAdditionalInputs = additionalInputs.joined(separator: "\n")
@@ -613,10 +573,22 @@ struct StudioVisionLabView: View {
             draft.visionJSONOutputPath = root.appendingPathComponent("live-tracking.json").path
         }
 
+        return draft
+    }
+
+    private func run() {
+        errorMessage = nil
+        guard validate() else { return }
+        guard CommandCatalog.template(id: task.templateID) != nil else {
+            errorMessage = "The selected vision command is unavailable."
+            return
+        }
+
+
         requestID = StudioSpecialistRunner.submit(
             templateID: task.templateID,
             mode: task == .liveTrack ? .track : .readImage,
-            draft: draft,
+            draft: commandDraft,
             controller: controller,
             library: library
         )

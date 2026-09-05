@@ -4,8 +4,8 @@ import SwiftUI
 
 // MARK: - Plan model (what the user authors)
 
-struct StudioSCAILSubject: Identifiable, Equatable {
-    let id = UUID()
+struct StudioSCAILSubject: Identifiable, Equatable, Codable {
+    var id = UUID()
     var name: String
     var color: String
     var referenceImage = ""
@@ -19,8 +19,8 @@ struct StudioSCAILSubject: Identifiable, Equatable {
     var drivingNegativePoints = ""
 }
 
-struct StudioSCAILCorrection: Identifiable, Equatable {
-    let id = UUID()
+struct StudioSCAILCorrection: Identifiable, Equatable, Codable {
+    var id = UUID()
     var subjectID: String
     var frameIndex = 0
     var box = ""
@@ -274,7 +274,7 @@ struct StudioSCAILQualityReport: Codable, Equatable {
 
 // MARK: - Stages
 
-enum StudioSubjectsStage: Int, CaseIterable, Identifiable {
+enum StudioSubjectsStage: Int, CaseIterable, Identifiable, Codable {
     case plan = 1
     case track
     case animate

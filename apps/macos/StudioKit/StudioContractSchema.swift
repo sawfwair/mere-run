@@ -15,7 +15,7 @@ import MereRunContract
 
 /// What a contract option holds in the Studio draft. `unset` is a draft field the app leaves
 /// empty on purpose, so the CLI's own default applies and no flag is emitted.
-package enum StudioContractValue: Equatable {
+package enum StudioContractValue: Codable, Equatable, Sendable {
     case text(String)
     case integer(Int)
     case number(Double)

@@ -203,10 +203,10 @@ struct StudioMusicToolsView: View {
     @Binding var tool: StudioMusicTool
     /// The tools this host offers; the rail is hidden when there is only one.
     let tools: [StudioMusicTool]
-    @State private var analyzeDraft: CommandDraft
-    @State private var transcribeDraft: CommandDraft
-    @State private var serveDraft: CommandDraft
-    @State private var requestID: UUID?
+    @StudioStoredValue("MusicTools.analyzeDraft") private var analyzeDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("MusicTools.transcribeDraft") private var transcribeDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("MusicTools.serveDraft") private var serveDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var statusMessage: String?
 
     init(tool: Binding<StudioMusicTool>, tools: [StudioMusicTool]) {
@@ -215,16 +215,16 @@ struct StudioMusicToolsView: View {
 
         var analyze = CommandCatalog.template(id: .musicAnalyze)?.defaultDraft() ?? CommandDraft()
         analyze.model = analyze.model.isBlank ? "music-acestep" : analyze.model
-        _analyzeDraft = State(initialValue: analyze)
+        _analyzeDraft = StudioStoredValue(wrappedValue: analyze, "MusicTools.analyzeDraft")
 
         var transcribe = CommandCatalog.template(id: .musicTranscribe)?.defaultDraft() ?? CommandDraft()
         transcribe.model = transcribe.model.isBlank ? "music-muscriptor-medium" : transcribe.model
         transcribe.outputPath = Self.timestampedOutput(prefix: "transcription", extension: "mid")
         transcribe.musicContextOutput = Self.timestampedOutput(prefix: "musical-context", extension: "json")
-        _transcribeDraft = State(initialValue: transcribe)
+        _transcribeDraft = StudioStoredValue(wrappedValue: transcribe, "MusicTools.transcribeDraft")
 
         let serve = CommandCatalog.template(id: .musicServe)?.defaultDraft() ?? CommandDraft()
-        _serveDraft = State(initialValue: serve)
+        _serveDraft = StudioStoredValue(wrappedValue: serve, "MusicTools.serveDraft")
     }
 
     private var activeDraft: CommandDraft {
@@ -241,43 +241,10 @@ struct StudioMusicToolsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            if tools.count > 1 {
-                toolRail
-                    .frame(width: 185)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-            }
-            configuration
-                .frame(minWidth: 300, idealWidth: 430, maxWidth: 430)
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
-            resultPane
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        StudioAnalysisLayout { configuration } result: { resultPane }
+        .studioTaskCommand(tool.templateID, draft: activeDraft)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
-    }
-
-    private var toolRail: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(tools) { item in
-                Button {
-                    tool = item
-                    statusMessage = nil
-                } label: {
-                    Label(item.title, systemImage: item.symbol)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background {
-                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
-                                .fill(tool == item ? MereRunTheme.accentSoft : Color.clear)
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-        }
-        .padding(12)
     }
 
     private var configuration: some View {
@@ -710,13 +677,13 @@ struct StudioMusicToolsView: View {
         }
     }
 
-    nonisolated private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
+    private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Music/MereRun/Tools", isDirectory: true)
             .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: Date())).\(pathExtension)",
+                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).\(pathExtension)",
                 isDirectory: false
             )
             .path

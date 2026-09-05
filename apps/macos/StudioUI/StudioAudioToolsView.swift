@@ -43,19 +43,15 @@ struct StudioAudioToolsView: View {
 
     /// Owned by the shell's task control; Enhance and Separate are toolbar tasks now.
     @Binding var tool: StudioAudioTool
-    @State private var enhanceDraft: CommandDraft
-    @State private var separationDraft: CommandDraft
-    @State private var requestID: UUID?
+    @StudioStoredValue("AudioTools.enhanceDraft") private var enhanceDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("AudioTools.separationDraft") private var separationDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var statusMessage: String?
 
     init(tool: Binding<StudioAudioTool>) {
         _tool = tool
-        _enhanceDraft = State(
-            initialValue: CommandCatalog.template(id: .audioEnhance)?.defaultDraft() ?? CommandDraft()
-        )
-        _separationDraft = State(
-            initialValue: CommandCatalog.template(id: .musicSeparate)?.defaultDraft() ?? CommandDraft()
-        )
+        _enhanceDraft = StudioStoredValue(wrappedValue: CommandCatalog.template(id: .audioEnhance)?.defaultDraft() ?? CommandDraft(), "AudioTools.enhanceDraft")
+        _separationDraft = StudioStoredValue(wrappedValue: CommandCatalog.template(id: .musicSeparate)?.defaultDraft() ?? CommandDraft(), "AudioTools.separationDraft")
     }
 
     private var activeDraft: CommandDraft {
@@ -63,17 +59,11 @@ struct StudioAudioToolsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            controls
-                .frame(minWidth: 300, idealWidth: 440, maxWidth: 440)
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
-            resultPanel
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        StudioAnalysisLayout { controls } result: { resultPanel }
+        .studioTaskCommand(tool.templateID, draft: activeDraft)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: tool) { _, _ in
-            requestID = nil
             statusMessage = nil
         }
     }

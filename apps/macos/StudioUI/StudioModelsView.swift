@@ -52,7 +52,8 @@ enum StudioModelCatalogParser {
                 referencedBytes: row.referencedBytes,
                 reclaimableBytes: row.reclaimableBytes,
                 sharedBytes: row.sharedBytes,
-                externalBytes: row.externalBytes
+                externalBytes: row.externalBytes,
+                contextWindow: row.contextWindow
             )
         }
     }
@@ -192,7 +193,29 @@ struct StudioRuntimeSettings: Codable, Equatable {
 }
 
 enum StudioModelInventoryParser {
+    private struct Document: Decodable {
+        struct Inventory: Decodable { let rows: [Row] }
+        struct Row: Decodable {
+            let id: String
+            let category: String
+            let status: String
+            let size: String?
+            let contextWindow: Int?
+        }
+        let inventory: Inventory
+        let usageTerms: [String]
+    }
+
     static func rows(from output: String) -> [StudioModelInventoryRow] {
+        if output.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") {
+            guard let document = try? JSONDecoder().decode(Document.self, from: Data(output.utf8)) else { return [] }
+            let terms = usageTermsByID(from: document.usageTerms.joined(separator: "\n"))
+            return document.inventory.rows.map {
+                StudioModelInventoryRow(id: $0.id, category: $0.category, status: $0.status,
+                    size: $0.size ?? ($0.status == "installed" ? "not measured" : "—"),
+                    usageTerms: terms[$0.id], contextWindow: $0.contextWindow)
+            }
+        }
         let usageTerms = usageTermsByID(from: output)
         return output
             .components(separatedBy: .newlines)
@@ -267,6 +290,8 @@ private enum ModelsMetrics {
 /// of facts, health, performance, and the adapters that target the model, with a job bar for
 /// pulls, optimizations, and storage clean-ups pinned to the page bottom.
 struct StudioModelsView: View {
+    @Environment(\.studioReferenceDate) private var referenceDate
+
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
     @EnvironmentObject private var navigation: NavigationModel
@@ -714,7 +739,7 @@ struct StudioModelsView: View {
                 StudioModelsKeyValueRow(key: "Publisher", value: publisher, mono: false)
             }
             if let usage {
-                StudioModelsKeyValueRow(key: "Last used", value: StudioModelsPresenter.usageLine(usage), mono: false)
+                StudioModelsKeyValueRow(key: "Last used", value: StudioModelsPresenter.usageLine(usage, now: referenceDate ?? Date()), mono: false)
             }
             if row.isInstalled, let verified = facts?.verifiedLine {
                 StudioModelsKeyValueRow(key: "Verified", value: verified, mono: false)
@@ -1172,7 +1197,7 @@ struct StudioModelsView: View {
     @MainActor
     private func refresh() async {
         isRefreshing = true
-        let result = await controller.utilityCommandResult(args: ["model", "list"])
+        let result = await controller.utilityCommandResult(args: ["model", "list", "--json"])
 
         guard result.exitCode == 0 else {
             isRefreshing = false
@@ -1480,7 +1505,8 @@ struct StudioModelsView: View {
                 referencedBytes: usage.referencedBytes,
                 reclaimableBytes: usage.reclaimableBytes,
                 sharedBytes: usage.sharedBytes,
-                externalBytes: usage.externalBytes
+                externalBytes: usage.externalBytes,
+                contextWindow: row.contextWindow
             )
         }
     }

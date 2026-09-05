@@ -40,6 +40,7 @@ struct StudioLibraryPanel: View {
     @State private var pendingDelete: StudioLibraryDeleteRequest?
     @FocusState private var renameFocused: Bool
     @Environment(\.studioLibrarySeed) private var seed
+    @Environment(\.studioReferenceDate) private var referenceDate
 
     /// The layout the column draws in — the user's, unless a render is staging the other one.
     private var effectiveViewMode: StudioLibraryViewMode {
@@ -78,15 +79,25 @@ struct StudioLibraryPanel: View {
             grouped[day, default: []].append(item)
         }
         return order.map { day in
-            (day: day, title: Self.sectionFormatter.string(from: day), items: grouped[day] ?? [])
+            (day: day, title: sectionTitle(for: day), items: grouped[day] ?? [])
         }
+    }
+
+    private func sectionTitle(for day: Date) -> String {
+        let now = referenceDate ?? Date()
+        let calendar = Calendar.current
+        if calendar.isDate(day, inSameDayAs: now) { return "Today" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(day, inSameDayAs: yesterday) {
+            return "Yesterday"
+        }
+        return Self.sectionFormatter.string(from: day)
     }
 
     private static let sectionFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        formatter.doesRelativeDateFormatting = true
+        formatter.doesRelativeDateFormatting = false
         return formatter
     }()
 
@@ -143,19 +154,32 @@ struct StudioLibraryPanel: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text("Library")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(MereRunTheme.textPrimary)
             Text("\(scopedItems.count)")
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(MereRunTheme.textMuted)
                 .accessibilityLabel("\(scopedItems.count) runs")
             Spacer(minLength: 0)
-            MereSegmentedControl(
-                StudioLibraryScope.allCases,
-                selection: Binding(get: { effectiveScope }, set: { scope = $0 }),
-                accessibilityLabel: "Library scope"
-            ) { scope in
-                scope == .domain ? domain.title : "All"
+            if leadingInset > 0 {
+                Menu {
+                    Picker("Library scope", selection: Binding(get: { effectiveScope }, set: { scope = $0 })) {
+                        Text(domain.title).tag(StudioLibraryScope.domain)
+                        Text("All tasks").tag(StudioLibraryScope.all)
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .accessibilityLabel("Library scope: " + (effectiveScope == .domain ? domain.title : "All tasks"))
+            } else {
+                MereSegmentedControl(
+                    StudioLibraryScope.allCases,
+                    selection: Binding(get: { effectiveScope }, set: { scope = $0 }),
+                    accessibilityLabel: "Library scope"
+                ) { scope in
+                    scope == .domain ? domain.title : "All"
+                }
             }
         }
         .padding(.top, 14)
@@ -180,18 +204,18 @@ struct StudioLibraryPanel: View {
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(MereRunTheme.textMuted)
             TextField("Search", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(MereRunTheme.textPrimary)
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.caption)
                 }
                 .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
                 .accessibilityLabel("Clear search")
@@ -223,7 +247,7 @@ struct StudioLibraryPanel: View {
             Toggle("Favorites only", isOn: $favoritesOnly)
         } label: {
             Image(systemName: isFiltering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -239,7 +263,7 @@ struct StudioLibraryPanel: View {
             viewMode = viewMode == .list ? .grid : .list
         } label: {
             Image(systemName: effectiveViewMode == .list ? StudioLibraryViewMode.grid.systemImage : StudioLibraryViewMode.list.systemImage)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .frame(width: 22, height: 24)
         }
         .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
@@ -375,7 +399,7 @@ struct StudioLibraryPanel: View {
     private var batchBar: some View {
         HStack(spacing: 6) {
             Text("\(batch.count) selected")
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(MereRunTheme.textSecondary)
             Spacer(minLength: 0)
             // Icons, not labels: three words do not fit a 248pt column beside the count.
@@ -407,7 +431,7 @@ struct StudioLibraryPanel: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .frame(width: 26, height: 24)
         }
         .buttonStyle(.mereIcon(tint: tint))
@@ -593,7 +617,7 @@ private struct StudioLibraryRow: View {
                                 .frame(width: 8, height: 8)
                         }
                         Text(meta)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(MereRunTheme.textMuted)
                             .lineLimit(1)
                     }
@@ -604,7 +628,7 @@ private struct StudioLibraryRow: View {
                 if hovering || item.isStarred {
                     Button(action: onToggleFavorite) {
                         Image(systemName: item.isStarred ? "star.fill" : "star")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .frame(width: 20, height: 24)
                     }
                     .buttonStyle(.mereIcon(tint: item.isStarred ? MereRunTheme.yellow : MereRunTheme.textMuted))
@@ -618,7 +642,7 @@ private struct StudioLibraryRow: View {
                         onQuickLook()
                     } label: {
                         Image(systemName: "eye")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .frame(width: 24, height: 24)
                     }
                     .buttonStyle(.mereIcon)
@@ -770,6 +794,8 @@ enum StudioLibraryRowMeta {
             return "Running"
         case .queued:
             return "Queued"
+        case .cancelled: return "Cancelled"
+        case .interrupted: return "Interrupted"
         case .failed:
             return "Failed · \(formatter.string(from: item.createdAt))"
         }
@@ -781,6 +807,7 @@ enum StudioLibraryRowMeta {
         case .running: return MereRunTheme.accent
         case .completed: return nil
         case .failed: return MereRunTheme.red
+        case .cancelled, .interrupted: return MereRunTheme.textSecondary
         }
     }
 }

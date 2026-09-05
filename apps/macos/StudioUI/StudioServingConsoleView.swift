@@ -2,7 +2,7 @@ import AppKit
 import StudioKit
 import SwiftUI
 
-enum StudioServingSection: String, CaseIterable, Identifiable {
+enum StudioServingSection: String, Codable, CaseIterable, Identifiable {
     case overview = "Overview"
     case modelPool = "Model Pool"
     case resources = "Resources"
@@ -28,154 +28,23 @@ enum StudioServingSection: String, CaseIterable, Identifiable {
     }
 }
 
-@MainActor
-final class StudioServingMonitor: ObservableObject {
-    @Published private(set) var runtime: StudioRuntimeSnapshot?
-    @Published private(set) var agentStatus: StudioAgentStatus?
-    @Published private(set) var isReachable = false
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var connectionDetail = "Waiting for runtime"
-    @Published private(set) var agentDetail = "Agent readiness has not been checked"
-    @Published private(set) var lastUpdated: Date?
-    @Published private(set) var activities: [StudioServiceActivity] = []
-
-    private var pollingTask: Task<Void, Never>?
-
-    func start(controller: MereRunController) {
-        stop()
-        pollingTask = Task { @MainActor [weak self, weak controller] in
-            guard let self, let controller else { return }
-            await refreshAgent(controller: controller)
-            var iteration = 0
-            while !Task.isCancelled {
-                await refreshRuntime(controller: controller)
-                if iteration > 0, iteration.isMultiple(of: 8) {
-                    await refreshAgent(controller: controller)
-                }
-                iteration += 1
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-            }
-        }
-    }
-
-    func stop() {
-        pollingTask?.cancel()
-        pollingTask = nil
-    }
-
-    func refreshNow(controller: MereRunController) async {
-        await refreshRuntime(controller: controller)
-        await refreshAgent(controller: controller)
-    }
-
-    func refreshAgent(controller: MereRunController) async {
-        let result = await controller.utilityCommandResult(args: ["agent", "status", "--json"])
-        guard result.exitCode == 0,
-              let data = Self.jsonObjectData(in: result.stdout) else {
-            agentDetail = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "Agent readiness is unavailable"
-                : StudioActivitySanitizer.sanitize(result.stderr)
-            return
-        }
-        do {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            agentStatus = try decoder.decode(StudioAgentStatus.self, from: data)
-            agentDetail = "Readiness checked"
-        } catch {
-            agentDetail = "This CLI does not expose typed agent readiness yet"
-        }
-    }
-
-    func note(
-        _ title: String,
-        detail: String? = nil,
-        level: StudioServiceActivity.Level = .info
-    ) {
-        append([StudioServiceActivity(level: level, title: title, detail: detail)])
-    }
-
-    private func refreshRuntime(controller: MereRunController) async {
-        guard !isRefreshing else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
-
-        var request = URLRequest(url: controller.runtimeURL(path: "/runtime/status"))
-        request.timeoutInterval = 3
-        if let authorization = controller.runtimeAuthorizationHeader {
-            request.setValue(authorization, forHTTPHeaderField: "Authorization")
-        }
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200..<300).contains(code) else {
-                let wasReachable = isReachable
-                isReachable = false
-                connectionDetail = code == 401
-                    ? "Authentication failed — check the API key"
-                    : "Runtime returned HTTP \(code)"
-                if wasReachable {
-                    append([.init(level: .warning, title: "Runtime disconnected", detail: connectionDetail)])
-                }
-                return
-            }
-
-            let decoded = try JSONDecoder().decode(StudioRuntimeSnapshot.self, from: data)
-            let previous = runtime
-            let wasReachable = isReachable
-            runtime = decoded
-            isReachable = true
-            connectionDetail = "Connected"
-            lastUpdated = Date()
-            if wasReachable {
-                append(StudioServiceActivityDiff.events(previous: previous, current: decoded))
-            } else {
-                append(StudioServiceActivityDiff.events(previous: nil, current: decoded))
-            }
-        } catch {
-            let wasReachable = isReachable
-            isReachable = false
-            connectionDetail = "Runtime is not reachable"
-            if wasReachable {
-                append([.init(level: .warning, title: "Runtime disconnected", detail: error.localizedDescription)])
-            }
-        }
-    }
-
-    private func append(_ events: [StudioServiceActivity]) {
-        guard !events.isEmpty else { return }
-        activities.insert(contentsOf: events.reversed(), at: 0)
-        if activities.count > 200 {
-            activities.removeLast(activities.count - 200)
-        }
-    }
-
-    private static func jsonObjectData(in text: String) -> Data? {
-        guard let start = text.firstIndex(of: "{"),
-              let end = text.lastIndex(of: "}"),
-              start <= end else {
-            return nil
-        }
-        return String(text[start...end]).data(using: .utf8)
-    }
-}
 
 struct StudioServingConsoleView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
 
-    @StateObject private var monitor = StudioServingMonitor()
-    @State private var section: StudioServingSection = .overview
-    @State private var draft: CommandDraft
-    @State private var serviceRequestID: UUID?
-    @State private var visionServeDraft = CommandCatalog.template(id: .visionServe)?.defaultDraft()
+    @ObservedObject private var monitor: StudioServingMonitor
+    @StudioStoredValue("ServingConsole.section") private var section: StudioServingSection = .overview
+    @StudioStoredValue("ServingConsole.initializedConnection") private var initializedConnection = false
+    @StudioStoredValue("ServingConsole.draft") private var draft: CommandDraft = CommandDraft()
+    @StudioStoredValue("ServingConsole.serviceRequestID") private var serviceRequestID: UUID? = nil
+    @StudioStoredValue("ServingConsole.visionServeDraft") private var visionServeDraft = CommandCatalog.template(id: .visionServe)?.defaultDraft()
         ?? CommandDraft()
-    @State private var visionServeRequestID: UUID?
+    @StudioStoredValue("ServingConsole.visionServeRequestID") private var visionServeRequestID: UUID? = nil
     @State private var visionServeMessage: String?
-    @State private var agentRequestID: UUID?
-    @State private var selectedAgentModel = ""
-    @State private var agentPrompt = "Help me configure and use mere.run on this machine."
+    @StudioStoredValue("ServingConsole.agentRequestID") private var agentRequestID: UUID? = nil
+    @StudioStoredValue("ServingConsole.selectedAgentModel") private var selectedAgentModel = ""
+    @StudioStoredValue("ServingConsole.agentPrompt") private var agentPrompt = "Help me configure and use mere.run on this machine."
     @State private var selectedPoolID: String?
     @State private var settingsAlias = ""
     @State private var settingsTTL = ""
@@ -188,9 +57,10 @@ struct StudioServingConsoleView: View {
     @State private var operationMessage: String?
     @State private var busyOperation: String?
 
-    init() {
+    init(monitor: StudioServingMonitor) {
+        _monitor = ObservedObject(wrappedValue: monitor)
         let template = CommandCatalog.template(id: .apiServe)
-        _draft = State(initialValue: template?.defaultDraft() ?? CommandDraft())
+        _draft = StudioStoredValue(initialValue: template?.defaultDraft() ?? CommandDraft(), "ServingConsole.draft")
     }
 
     private var ownedServiceID: UUID? {
@@ -229,12 +99,13 @@ struct StudioServingConsoleView: View {
         }
         .background(MereRunTheme.background)
         .task {
-            syncDraftFromController()
+            if !initializedConnection {
+                syncDraftFromController()
+                initializedConnection = true
+            }
             serviceRequestID = controller.runningRequestID(for: .apiServe)
             visionServeRequestID = controller.runningRequestID(for: .visionServe)
-            monitor.start(controller: controller)
         }
-        .onDisappear { monitor.stop() }
         .onChange(of: monitor.agentStatus) { _, status in
             guard selectedAgentModel.isEmpty else { return }
             selectedAgentModel = status?.recommendedModelID
@@ -911,8 +782,7 @@ struct StudioServingConsoleView: View {
                         Button("Apply & reconnect") {
                             applyConnection()
                             monitor.note("Runtime endpoint changed", detail: endpoint)
-                            monitor.start(controller: controller)
-                        }
+                                        }
                         .buttonStyle(.mereSecondary)
                         Spacer()
                         Button("Run preflight") { runPreflight() }
@@ -994,8 +864,7 @@ struct StudioServingConsoleView: View {
                     .buttonStyle(.mereSecondary)
             } else if monitor.isReachable {
                 Button("Reconnect") {
-                    monitor.start(controller: controller)
-                }
+                        }
                 .buttonStyle(.mereSecondary)
             } else {
                 Button("Preflight") { runPreflight() }
@@ -1440,6 +1309,7 @@ struct StudioServingConsoleView: View {
         Label(title, systemImage: systemImage)
             .font(MereRunTheme.sectionFont)
             .foregroundStyle(MereRunTheme.textPrimary)
+        .studioTaskCommand(.apiServe, draft: draft)
     }
 
     private func metricCard(_ title: String, value: String, detail: String) -> some View {

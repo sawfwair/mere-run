@@ -332,15 +332,15 @@ struct StudioTrainingView: View {
 
     /// Fixed per host: Image ▸ Train, Chat ▸ Train, and Music ▸ Train each show one trainer.
     @State private var kind: StudioTrainingKind
-    @State private var imageDraft: CommandDraft
-    @State private var textDraft: CommandDraft
-    @State private var musicDraft: CommandDraft
+    @StudioStoredValue("Training.imageDraft") private var imageDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("Training.textDraft") private var textDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("Training.musicDraft") private var musicDraft: CommandDraft = CommandDraft()
     @State private var datasetSnapshot: StudioTrainingDatasetSnapshot?
     @State private var currentSnapshot: StudioTrainingSnapshot?
-    @State private var requestID: UUID?
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var statusMessage: String?
-    @State private var compareA: UUID?
-    @State private var compareB: UUID?
+    @StudioStoredValue("Training.compareA") private var compareA: UUID? = nil
+    @StudioStoredValue("Training.compareB") private var compareB: UUID? = nil
     @State private var selectedDatasetPreview: String?
 
     private let refreshTimer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
@@ -353,17 +353,17 @@ struct StudioTrainingView: View {
         if image.seed.isBlank { image.seed = "42" }
         image.checkpointInterval = 250
         image.sampleInterval = 250
-        _imageDraft = State(initialValue: image)
+        _imageDraft = StudioStoredValue(wrappedValue: image, "Training.imageDraft")
 
         var text = CommandCatalog.template(id: .textTrainLoRA)?.defaultDraft() ?? CommandDraft()
         text.outputPath = Self.timestampedOutput(prefix: "text-adapter")
         if text.seed.isBlank { text.seed = "42" }
-        _textDraft = State(initialValue: text)
+        _textDraft = StudioStoredValue(wrappedValue: text, "Training.textDraft")
 
         var music = CommandCatalog.template(id: .musicTrainAdapter)?.defaultDraft() ?? CommandDraft()
         music.outputPath = Self.timestampedOutput(prefix: "music-adapter")
         if music.seed.isBlank { music.seed = "42" }
-        _musicDraft = State(initialValue: music)
+        _musicDraft = StudioStoredValue(wrappedValue: music, "Training.musicDraft")
     }
 
     private var activeDraft: CommandDraft {
@@ -389,6 +389,7 @@ struct StudioTrainingView: View {
             dashboard
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .studioTaskCommand(kind.templateID, draft: activeDraft)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onReceive(refreshTimer) { _ in refreshSnapshot() }
@@ -1245,13 +1246,13 @@ struct StudioTrainingView: View {
         }
     }
 
-    nonisolated private static func timestampedOutput(prefix: String) -> String {
+    private static func timestampedOutput(prefix: String) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Documents/MereRun/Training", isDirectory: true)
             .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: Date())).safetensors",
+                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).safetensors",
                 isDirectory: false
             )
             .path

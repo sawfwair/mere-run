@@ -14,6 +14,11 @@ The format is based on Keep a Changelog.
   record the completed global step and recipe fingerprint, and reject model,
   dataset, configuration, layer-inventory, and tensor-shape mismatches. Legacy
   checkpoints require an explicit verified `--resume-step`.
+- added `model list --json` with typed install inventory, usage terms, and
+  declared context windows from installed model configurations. Human table
+  output remains available by default.
+- grouped all command capability options for Studio forms and assigned
+  presentation tiers while preserving authored metadata.
 - reconciled every capability's declared `output` with what the command
   actually writes, and gave the declaration two additive fields: `flag`, the
   option that carries the destination path, and `optional`, true when the
@@ -53,6 +58,23 @@ The format is based on Keep a Changelog.
   music pipeline expose no per-step callback and emit no events.
 
 ### macOS
+
+- combined the sidebar toggle, task switcher, and panel controls in one header,
+  preserving native window controls and adding Control-Command-S for the sidebar.
+- added focused image inspection, linked comparison with changed settings,
+  contextual continuation into another task, and source-run lineage.
+- made task Command panels editable and preserved exact arguments through
+  validation, execution, history, Rerun, and Vary, with fresh replay destinations.
+- moved completion recording and serving monitoring to the app session;
+  retained full task drafts and selected runs across navigation and relaunch,
+  excluding credentials from saved session data.
+- scoped Stop and Console logs to the selected job; restored per-turn model,
+  system instruction, and preset when branching a conversation.
+- added responsive specialist layouts, lazy result feeds, semantic text styles,
+  and stronger secondary-text and selected-control contrast.
+- stopped Analyze from showing stale results after input changes; labeled boxes
+  when mask pixels are unavailable. Saved copies and Subjects tracking runs
+  preserve earlier artifacts.
 
 macOS Studio has been rebuilt around one navigation. Everything the CLI can do
 now lives in a sidebar domain and a task inside it, reached the same way, and

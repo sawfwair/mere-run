@@ -28,6 +28,8 @@ package struct StudioRootView: View {
     /// The unsent prompt, system text, and attachment of every prompt task, as
     /// `StudioDraftMemory` encodes them, so a relaunch resumes mid-sentence.
     @SceneStorage("studio.drafts") private var storedDrafts = ""
+    @State private var detailWidth: CGFloat = 1024
+    @State private var libraryOverlay = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// The status probe never answered within its grace period, so the footer says so.
     @State private var probeTimedOut = false
@@ -98,7 +100,7 @@ package struct StudioRootView: View {
     }
 
     private var showsCommandColumn: Bool {
-        showsPromptWorkspace && navigation.showsCommandColumn(for: destination.task)
+        navigation.showsCommandColumn(for: destination.task)
     }
 
     /// The feed's cards for the current mode: the Library rows plus the jobs still alive.
@@ -254,6 +256,8 @@ package struct StudioRootView: View {
     // independently type-checked expression.
     package var body: some View {
         observedShell
+            .environment(\.studioTaskSessions, controller.taskSessions)
+            .environment(\.studioTaskScope, destination.task.rawValue)
     }
 
     // MARK: - Shell
@@ -267,9 +271,11 @@ package struct StudioRootView: View {
                 runningJobs: runningJobCount,
                 isActivityOpen: $navigation.showActivity
             )
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             detailArea
         }
+        .toolbar(removing: .sidebarToggle)
         .background(MereRunTheme.background.ignoresSafeArea())
         // The controller publishes nil until the status probe answers; a probe that never answers
         // must still resolve, so the footer stops saying "Checking…" after the grace period.
@@ -336,49 +342,77 @@ package struct StudioRootView: View {
     // The detail area runs to the top of the window (the title bar is hidden and nothing sits in
     // the window toolbar): the Library column on the left with its own header, and beside it the
     // content column whose first row is the 52pt domain header. With the sidebar collapsed the
-    // traffic lights and sidebar toggle land over the detail's top-left corner, so whichever
+    // traffic lights land over the detail's top-left corner, so whichever
     // header is first leaves room for them.
+    private var layout: StudioLayoutPolicy.Presentation {
+        StudioLayoutPolicy.presentation(width: detailWidth, library: showsLibraryColumn,
+                                        inspector: showsInspectorColumn, command: showsCommandColumn)
+    }
+
     private var detailArea: some View {
-        HStack(spacing: 0) {
-            if showsLibraryColumn {
-                Group {
-                    // Converse keeps its threads in their own column; they never file into
-                    // the media Library.
-                    if destination.domain == .chat {
-                        threadListColumn
-                    } else {
-                        libraryColumn
-                    }
+        GeometryReader { geometry in
+            let policy = StudioLayoutPolicy.presentation(width: geometry.size.width, library: showsLibraryColumn,
+                                                        inspector: showsInspectorColumn, command: showsCommandColumn)
+            HStack(spacing: 0) {
+                if policy.showsLibrary {
+                    historyColumn.frame(width: StudioLayoutPolicy.libraryWidth)
+                    Divider()
                 }
-                .frame(width: StudioLayoutPolicy.libraryWidth)
-                .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
-
-                Divider()
-                    .overlay(MereRunTheme.border.opacity(0.53))
-            }
-
-            VStack(spacing: 0) {
-                contentHeader
-                banners
-                HStack(spacing: 0) {
-                    domainContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if showsInspectorColumn {
-                        inspectorColumn
-                            .transition(reduceMotion ? .identity : .move(edge: .trailing).combined(with: .opacity))
-                    } else if showsCommandColumn {
-                        commandColumn
-                            .transition(reduceMotion ? .identity : .move(edge: .trailing).combined(with: .opacity))
+                VStack(spacing: 0) {
+                    contentHeader
+                    banners
+                    HStack(spacing: 0) {
+                        domainContent.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        if policy.panelIsInline {
+                            auxiliaryPanel.frame(width: policy.panelWidth)
+                        }
+                    }
+                    .overlay(alignment: .trailing) {
+                        if !policy.panelIsInline && (showsInspectorColumn || showsCommandColumn) {
+                            ZStack(alignment: .trailing) {
+                                Color.black.opacity(0.12).onTapGesture(perform: closeAuxiliaryPanel)
+                                auxiliaryPanel.frame(width: policy.panelWidth)
+                                    .shadow(color: .black.opacity(0.16), radius: 16, x: -6)
+                            }
+                        }
                     }
                 }
             }
+            .overlay(alignment: .leading) {
+                if libraryOverlay && !policy.showsLibrary {
+                    ZStack(alignment: .leading) {
+                        Color.black.opacity(0.12).onTapGesture { libraryOverlay = false }
+                        VStack(spacing: 0) {
+                            Button("Close Library", systemImage: "xmark") { libraryOverlay = false }
+                                .buttonStyle(.plain).padding(12)
+                            historyColumn
+                        }
+                        .frame(width: min(320, geometry.size.width))
+                        .background(MereRunTheme.background)
+                        .shadow(color: .black.opacity(0.16), radius: 16, x: 6)
+                    }
+                }
+            }
+            .onChange(of: geometry.size.width, initial: true) { _, width in detailWidth = width }
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(MereRunTheme.background.ignoresSafeArea())
         .foregroundStyle(MereRunTheme.textPrimary)
     }
 
-    /// Space for the traffic lights and the sidebar toggle while the sidebar is collapsed.
+    @ViewBuilder private var historyColumn: some View {
+        if destination.domain == .chat { threadListColumn } else { libraryColumn }
+    }
+
+    @ViewBuilder private var auxiliaryPanel: some View {
+        if showsInspectorColumn { inspectorColumn } else if showsCommandColumn { commandColumn }
+    }
+
+    private func closeAuxiliaryPanel() {
+        if showsCommandColumn { toggleCommand() } else if showsInspectorColumn { toggleInspector() }
+    }
+
+    /// Space for the traffic lights while the sidebar is collapsed.
     private var windowChromeInset: CGFloat {
         columnVisibility == .detailOnly ? StudioContentHeader.collapsedSidebarInset : 0
     }
@@ -392,6 +426,12 @@ package struct StudioRootView: View {
             )
             .padding(.horizontal, MereRunTheme.Spacing.lg)
             .padding(.top, MereRunTheme.Spacing.sm)
+        }
+
+        if let persistenceError = controller.taskSessions.lastPersistenceError {
+            MereBanner(severity: .warning, text: persistenceError)
+                .padding(.horizontal, MereRunTheme.Spacing.lg)
+                .padding(.top, MereRunTheme.Spacing.sm)
         }
 
         if let outputFallbackNotice {
@@ -462,12 +502,14 @@ package struct StudioRootView: View {
             subtitle: domainSubtitle,
             task: taskBinding,
             showsPanelToggles: destination.task.isPromptTask,
-            isLibraryShown: navigation.showLibrary,
+            isLibraryShown: layout.showsLibrary || libraryOverlay,
             isInspectorShown: navigation.showsInspector(for: destination.task),
-            isCommandShown: destination.task.isPromptTask
-                ? navigation.showsCommandColumn(for: destination.task)
-                : navigation.isConsoleOpen,
-            leadingInset: showsLibraryColumn ? 0 : windowChromeInset,
+            isCommandShown: navigation.showsCommandColumn(for: destination.task),
+            isSidebarShown: columnVisibility != .detailOnly,
+            onToggleSidebar: {
+                columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+            },
+            leadingInset: layout.showsLibrary ? 0 : windowChromeInset,
             onToggleLibrary: toggleLibrary,
             onToggleInspector: toggleInspector,
             onToggleCommand: toggleCommand
@@ -490,20 +532,55 @@ package struct StudioRootView: View {
         )
     }
 
+    private var baseTaskRequest: StudioRunRequest? {
+        if showsPromptWorkspace {
+            return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false)
+        }
+        let key = destination.task.rawValue
+        let chosen = controller.taskSessions.value(for: key + ".commandTemplate", default: Optional<CommandTemplateID>.none)
+        guard let template = chosen.flatMap(CommandCatalog.template(id:)) ?? destination.task.commandTemplates.first else { return nil }
+        let command = controller.taskSessions.value(for: key + ".commandDraft", default: template.defaultDraft())
+        return StudioRunRequest(mode: template.libraryMode, templateID: template.id, template: template, draft: command)
+    }
+
+    private func commandState(for template: CommandTemplate) -> StudioTaskCommandState? {
+        let state = controller.taskSessions.value(for: template.id.studioTask.rawValue + ".commandOverride",
+                                                 default: Optional<StudioTaskCommandState>.none)
+        return state?.templateID == template.id ? state : nil
+    }
+
+    private func commandForm(for request: StudioRunRequest) -> StudioConsoleDraft {
+        let source = request.template.arguments(from: request.draft)
+        return commandState(for: request.template)?.resolved(source: source)
+            ?? StudioConsoleCommand.seed(template: request.template, draft: request.draft)
+    }
+
+    private func resolvedCommand(_ base: StudioRunRequest) -> StudioRunRequest {
+        guard commandState(for: base.template) != nil,
+              let launch = StudioConsoleRun(template: base.template, draft: commandForm(for: base), seed: base.draft) else { return base }
+        return StudioRunRequest(id: base.id, mode: base.mode, templateID: base.templateID,
+                                template: base.template, draft: launch.commandDraft, createdAt: base.createdAt,
+                                conversationID: base.conversationID,
+                                execution: StudioExecution(templateID: base.templateID, arguments: launch.arguments), parentID: base.parentID)
+    }
+
     @ViewBuilder
     private var commandColumn: some View {
-        if let request = try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false) {
-            StudioCommandView(
-                mode: mode,
-                template: request.template,
-                draft: request.draft,
-                displayCommand: controller.commandPreview(
-                    template: request.template, draft: request.draft, masksSecrets: true
-                ),
-                canRun: !readiness.blocksRun && !(mode.isConversational && activeConversationRunning),
-                onRun: runStudioCommand,
-                onClose: toggleCommand
-            )
+        if let request = baseTaskRequest {
+            StudioTaskCommandView(template: request.template, seed: request.draft, form: Binding(
+                get: { commandForm(for: request) },
+                set: { edited in
+                    if showsPromptWorkspace {
+                        edited.applyingChanges(from: commandForm(for: request), to: &draft,
+                                               mode: mode, templateID: request.templateID)
+                    }
+                    let source = baseTaskRequest ?? request
+                    controller.taskSessions.set(StudioTaskCommandState(templateID: request.templateID,
+                        sourceArguments: source.template.arguments(from: source.draft), form: edited),
+                        for: request.templateID.studioTask.rawValue + ".commandOverride")
+                }
+            ), onRun: runStudioCommand, onClose: toggleCommand,
+               canRun: !showsPromptWorkspace || (!readiness.blocksRun && !(mode.isConversational && activeConversationRunning)))
         }
     }
 
@@ -602,7 +679,7 @@ package struct StudioRootView: View {
                 onTrain: openTraining
             )
         case .serverServing:
-            StudioServingConsoleView()
+            StudioServingConsoleView(monitor: controller.servingMonitor)
         case .serverMusic:
             StudioMusicToolsView(tool: .constant(.serve), tools: [.serve])
         case .runsRuns:
@@ -733,13 +810,17 @@ package struct StudioRootView: View {
 
     private var promptWorkspace: some View {
         VStack(spacing: 0) {
-            if mode.isConversational {
+            if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
+                StudioResultWorkspaceView(item: item, url: selection.url, items: library.items,
+                    onClose: { focusedResult = nil }, onVary: varyLibraryItem,
+                    onSave: saveOutput, onContinue: continueResult)
+            } else if mode.isConversational {
                 converseSurface
             } else {
                 canvas
             }
 
-            composer
+            if focusedResult == nil { composer }
 
             if let studioError {
                 MereBanner(severity: .error, text: studioError, onDismiss: { self.studioError = nil })
@@ -750,7 +831,7 @@ package struct StudioRootView: View {
             }
         }
         .animation(reduceMotion ? nil : MereRunTheme.Motion.standard, value: studioError)
-        .frame(minWidth: StudioLayoutPolicy.minimumCanvasWidth)
+        .frame(minWidth: min(StudioLayoutPolicy.minimumCanvasWidth, detailWidth))
         .background {
             ZStack {
                 MereRunTheme.background
@@ -828,6 +909,36 @@ package struct StudioRootView: View {
         }
     }
 
+    private var focusedResult: StudioResultSelection? {
+        get {
+            let selection = controller.taskSessions.value(for: destination.task.rawValue + ".focus", default: Optional<StudioResultSelection>.none)
+            return selection.flatMap { selected in library.items.contains(where: { $0.id == selected.itemID }) ? selected : nil }
+        }
+        nonmutating set { controller.taskSessions.set(newValue, for: destination.task.rawValue + ".focus") }
+    }
+
+    private func focusResult(_ item: StudioLibraryItem, _ url: URL) {
+        guard StudioOutputFileKind.classify(url) == .image else {
+            QuickLookCoordinator.shared.preview(url)
+            return
+        }
+        focusedResult = StudioResultSelection(itemID: item.id, url: url)
+    }
+
+    private func continueResult(_ action: StudioResultContinuation, _ item: StudioLibraryItem, _ url: URL) {
+        guard let targetMode = action.task.mode,
+              let next = action.draft(from: item, url: url, baseline: freshDraft(for: targetMode)) else { return }
+        park(draft, for: mode)
+        draftsByTask[action.task] = next
+        controller.taskSessions.set(next, for: action.task.rawValue + ".draft")
+        controller.taskSessions.set(Optional<StudioTaskCommandState>.none, for: action.task.rawValue + ".commandOverride")
+        controller.taskSessions.set(Optional<StudioResultSelection>.none, for: action.task.rawValue + ".focus")
+        navigation.selectedLibraryID = nil
+        if action.task == destination.task { draft = next }
+        navigation.open(task: action.task)
+        promptFocused = true
+    }
+
     private var analyzeActions: StudioAnalyzeActions {
         StudioAnalyzeActions(
             replaceInput: chooseAttachment,
@@ -851,7 +962,8 @@ package struct StudioRootView: View {
                 if !navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
             },
             useExample: useExamplePrompt,
-            attach: chooseAttachment
+            attach: chooseAttachment,
+            focus: focusResult
         )
     }
 
@@ -965,16 +1077,17 @@ package struct StudioRootView: View {
             showInspector: showInspectorBinding,
             canShowInspector: destination.task.isPromptTask,
             showCommand: showCommandBinding,
-            canShowCommand: destination.task.isPromptTask,
+            canShowCommand: baseTaskRequest != nil,
             open: { navigation.open(destination: $0) },
             openDomain: { navigation.open(domain: $0) },
             newChat: startNewConversation,
             canNewChat: showsPromptWorkspace && mode.isConversational,
             runComposer: runStudioCommand,
-            canRun: showsPromptWorkspace && !readiness.blocksRun
-                && !(mode.isConversational && activeConversationRunning),
+            canRun: showsPromptWorkspace
+                ? !readiness.blocksRun && !(mode.isConversational && activeConversationRunning)
+                : baseTaskRequest != nil,
             stop: stopCurrentRun,
-            canStop: controller.isRunning || (mode.isConversational && activeConversationRunning),
+            canStop: currentTaskJob != nil,
             openConsole: { openConsole() },
             showGuide: { navigation.showGuide = true },
             importReceipt: importReceipt
@@ -997,6 +1110,7 @@ package struct StudioRootView: View {
             jobMonitor.attach(controller.jobs)
             // Restore goes through the model so remembered tasks and the Vision Lab variant learn
             // the persisted destination; the reconciled prompt mode replaces a stale studio.mode.
+            library.observe(controller: controller)
             let restoredMode = navigation.restore(destination: storedDestination, lastPromptMode: lastPromptMode)
             lastPromptMode = restoredMode
             activateMode(restoredMode)
@@ -1036,9 +1150,17 @@ package struct StudioRootView: View {
             refreshReadiness()
         }
         .onChange(of: navigation.selectedLibraryID) { _, id in
+            if showsPromptWorkspace, activatedMode == mode {
+                if let item = library.items.first(where: { $0.id == id }),
+                   item.mode == mode || (mode.isConversational && item.isConversation) {
+                    controller.taskSessions.rememberSelection(id, for: mode)
+                } else if id == nil {
+                    controller.taskSessions.rememberSelection(nil, for: mode)
+                }
+            }
             // A thread selected while Converse is shown (a deep link, or the list) opens in the
             // transcript; a thread of the other preset switches the task control to match.
-            guard mode.isConversational,
+            guard showsPromptWorkspace, activatedMode == mode, mode.isConversational,
                   let id,
                   let item = library.items.first(where: { $0.id == id }),
                   item.isConversation,
@@ -1047,14 +1169,13 @@ package struct StudioRootView: View {
                 navigation.open(task: item.mode.task)
                 return
             }
-            activeConversationID = id
-            applyConversationSettings(from: item, to: &draft)
-            draft.prompt = ""
+            restoreConversation(item)
         }
     }
 
     private var validationObservedShell: some View {
         navigationObservedShell
+        .onChange(of: draft) { _, value in park(value, for: mode) }
         .onChange(of: draft.model) { _, _ in
             studioError = nil
             refreshReadiness()
@@ -1098,20 +1219,6 @@ package struct StudioRootView: View {
             // Conversation turns append the assistant reply to the thread instead of taking the
             // single-shot completion path.
             if let conversationID = result.conversationID {
-                // The turn records what it actually ran with (the job's own command snapshot),
-                // so a thread whose model or system prompt changed mid-way says which turn used what.
-                let job = result.requestID.flatMap { controller.jobs.job(requestID: $0) }
-                let turnDraft = job?.request.draft
-                library.appendAssistant(
-                    conversationID: conversationID,
-                    content: conversationReplyContent(for: result),
-                    exitCode: result.exitCode,
-                    model: turnDraft.map(\.model).flatMap { $0.isBlank ? nil : $0 },
-                    systemPrompt: turnDraft.map(\.secondaryText).flatMap { $0.isBlank ? nil : $0 },
-                    tokensPerSecond: job.flatMap {
-                        ConversationTranscript.decodeTokensPerSecond(in: $0.log.lines.map(\.text))
-                    }
-                )
                 // Only follow selection if this is the thread the user is currently viewing — a
                 // background turn completing must not yank selection away from the foreground.
                 if mode.isConversational, activeConversationID == conversationID {
@@ -1125,15 +1232,6 @@ package struct StudioRootView: View {
             // card that is scrolled out of view announces itself with the "New result" pill.
             let completedLibraryItem = result.requestID != nil
             if let requestID = result.requestID {
-                library.complete(
-                    id: requestID,
-                    exitCode: result.exitCode,
-                    outputURL: result.outputURL,
-                    outputText: result.outputText,
-                    commandPreview: result.commandPreview.maskingAPIKeyValue(),
-                    artifactURLs: result.artifactURLs,
-                    artifactRoles: result.artifactRoles
-                )
                 if result.exitCode == 0, library.items.first(where: { $0.id == requestID })?.mode == mode {
                     newResultID = requestID
                 }
@@ -1154,24 +1252,7 @@ package struct StudioRootView: View {
                 refreshInstalledModels()
             }
         }
-        .onReceive(controller.jobs.events) { event in
-            // Library bookkeeping follows every job, foreground or background: a row turns
-            // "running" when its process launches and learns its output the moment the file
-            // appears, without moving the selection.
-            switch event {
-            case .started(let job):
-                guard let requestID = job.request.requestID,
-                      library.items.contains(where: { $0.id == requestID }) else { return }
-                library.markRunning(id: requestID)
-            case .changed(let job):
-                guard let requestID = job.request.requestID, let url = job.primaryArtifactURL,
-                      let item = library.items.first(where: { $0.id == requestID }),
-                      item.outputURL != url else { return }
-                library.updateOutput(id: requestID, outputURL: url)
-            case .output, .finished:
-                break
-            }
-        }
+
     }
 
     // MARK: - Navigation
@@ -1182,7 +1263,8 @@ package struct StudioRootView: View {
     private func activateMode(_ newMode: StudioMode) {
         // Park the task being left before anything else touches `draft`, so nothing typed here is
         // lost by the switch; the task being entered gets its own draft back.
-        if let leaving = activatedMode, leaving != newMode {
+        let leavingMode = activatedMode
+        if let leaving = leavingMode, leaving != newMode {
             park(draft, for: leaving)
         }
         activatedMode = newMode
@@ -1190,20 +1272,27 @@ package struct StudioRootView: View {
         var nextDraft = seededDrafts[newMode] ?? parked ?? freshDraft(for: newMode)
         let hadParkedDraft = parked != nil
         studioError = nil
-        let preferred = navigation.selectedLibraryID.flatMap { id in
-            library.items.first { $0.id == id && $0.mode == newMode }
-        }
+        let selection = controller.taskSessions.selection(for: newMode, items: library.items,
+                                                          preferredID: navigation.selectedLibraryID)
+        // Chat ↔ Code changes the preset of an open thread. Other task detours restore the
+        // saved selection, so an unsent message returns to its own conversation.
+        let keepsOpenThread = leavingMode?.isConversational == true && newMode.isConversational && activeConversationItem != nil
+            && navigation.selectedLibraryID == activeConversationID && !selection.isExplicit
+        let preferred = keepsOpenThread ? nil : selection.item
         if newMode.isConversational {
             if let preferred, preferred.isConversation {
                 // A thread the user picked: open it and reuse its system/model so follow-ups match.
                 activeConversationID = preferred.id
-                applyConversationSettings(from: preferred, to: &nextDraft)
-            } else if let current = activeConversationItem {
+                navigation.selectedLibraryID = preferred.id
+                if !hadParkedDraft || selection.isExplicit {
+                    applyConversationSettings(from: preferred, to: &nextDraft)
+                }
+            } else if keepsOpenThread, let current = activeConversationItem {
                 // Chat ↔ Code is a preset change, not a thread change: keep the thread open and
                 // apply the preset's defaults (its command, model, and system prompt) to the
                 // next turn.
                 navigation.selectedLibraryID = current.id
-            } else if let recent = StudioThreadListPresenter.threads(in: library.items).first {
+            } else if !selection.hasMemory, let recent = StudioThreadListPresenter.threads(in: library.items).first {
                 // Arriving fresh: open the most recent thread of either preset. One of the other
                 // preset re-enters here through the task control with it selected.
                 activeConversationID = recent.id
@@ -1217,9 +1306,15 @@ package struct StudioRootView: View {
                 activeConversationID = nil
                 navigation.selectedLibraryID = nil
             }
-            // Opening a thread clears the composer, but a half-written message this task was
-            // already holding survives the detour.
-            if !hadParkedDraft { nextDraft.prompt = "" }
+            if let saved = controller.taskSessions.conversationDraft(conversationID: activeConversationID, mode: newMode) {
+                nextDraft = saved
+            } else if !hadParkedDraft || selection.isExplicit || (keepsOpenThread && leavingMode != newMode) {
+                nextDraft = seededDrafts[newMode] ?? freshDraft(for: newMode)
+                if !keepsOpenThread, let item = activeConversationItem {
+                    applyConversationSettings(from: item, to: &nextDraft)
+                }
+                nextDraft.prompt = ""
+            }
         } else {
             activeConversationID = nil
             let selected = preferred ?? library.items.first { $0.mode == newMode }
@@ -1235,16 +1330,20 @@ package struct StudioRootView: View {
             navigation.selectedLibraryID = nil
         }
         pendingAnalyzeHandoff = nil
+        controller.taskSessions.rememberSelection(navigation.selectedLibraryID, for: newMode)
         draft = nextDraft
         park(nextDraft, for: newMode)
         controller.checkReadiness(for: newMode, draft: draft)
         if newMode != .listen { promptFocused = true }
     }
 
-    /// Remembers a task's draft: in full for this launch, and — for the prompt, the system text,
-    /// and the attachment — across relaunches through `@SceneStorage`.
+    /// Persists the full draft; scene storage remains a migration fallback for older versions.
     private func park(_ draft: StudioDraft, for mode: StudioMode) {
         draftsByTask[mode.task] = draft
+        controller.taskSessions.set(draft, for: mode.task.rawValue + ".draft")
+        if mode.isConversational {
+            controller.taskSessions.rememberConversationDraft(draft, conversationID: activeConversationID, mode: mode)
+        }
         storedDrafts = StudioDraftMemory.encode(draftsByTask.mapValues(StudioDraftMemory.entry(for:)))
     }
 
@@ -1252,6 +1351,9 @@ package struct StudioRootView: View {
     /// otherwise the task's defaults with whatever the last session left unsent laid back on top.
     private func parkedDraft(for mode: StudioMode) -> StudioDraft? {
         if let parked = draftsByTask[mode.task] { return parked }
+        if controller.taskSessions.contains(mode.task.rawValue + ".draft") {
+            return controller.taskSessions.value(for: mode.task.rawValue + ".draft", default: freshDraft(for: mode))
+        }
         guard let entry = StudioDraftMemory.decode(storedDrafts)[mode.task] else { return nil }
         var restored = freshDraft(for: mode)
         StudioDraftMemory.apply(entry, to: &restored)
@@ -1262,6 +1364,7 @@ package struct StudioRootView: View {
     /// `activateMode` then keeps the clicked row selected. The feed scrolls to the row's card
     /// and outlines it briefly.
     private func selectLibraryItem(_ item: StudioLibraryItem) {
+        libraryOverlay = false
         navigation.selectedLibraryID = item.id
         highlightCard(item.id)
         guard item.mode != mode || !showsPromptWorkspace else {
@@ -1299,13 +1402,8 @@ package struct StudioRootView: View {
         }
     }
 
-    /// Prompt tasks flip the Command view column; every other task still opens the Console
-    /// window, which stays the raw surface for their templates.
+    /// Every task exposes its current editable command in the same workspace.
     private func toggleCommand() {
-        guard destination.task.isPromptTask else {
-            openConsole()
-            return
-        }
         if reduceMotion {
             navigation.toggleCommandColumn(for: destination.task)
         } else {
@@ -1318,15 +1416,23 @@ package struct StudioRootView: View {
     /// A thread picked in the Converse list. Threads of the other preset switch the task first
     /// (the selection observer then opens the thread); same-preset threads open directly.
     private func openThread(_ thread: StudioLibraryItem) {
+        libraryOverlay = false
         guard thread.id != activeConversationID else { return }
         navigation.selectedLibraryID = thread.id
         guard thread.mode == mode else {
             navigation.open(task: thread.mode.task)
             return
         }
+        restoreConversation(thread)
+    }
+
+    private func restoreConversation(_ thread: StudioLibraryItem) {
+        park(draft, for: mode)
         activeConversationID = thread.id
-        applyConversationSettings(from: thread, to: &draft)
-        draft.prompt = ""
+        var restored = freshDraft(for: mode)
+        applyConversationSettings(from: thread, to: &restored)
+        draft = controller.taskSessions.conversationDraft(conversationID: thread.id, mode: mode) ?? restored
+        controller.taskSessions.rememberSelection(thread.id, for: mode)
         studioError = nil
         promptFocused = true
     }
@@ -1339,6 +1445,7 @@ package struct StudioRootView: View {
     /// only when the user chose that in the confirmation.
     private func deleteLibraryItems(_ ids: Set<UUID>, trashingFiles: Bool) {
         let failures = library.delete(ids: ids, trashingFiles: trashingFiles)
+        controller.taskSessions.forgetConversationDrafts(ids)
         if let first = failures.first {
             studioError = failures.count == 1
                 ? "Could not move \(first.lastPathComponent) to the Trash."
@@ -1349,6 +1456,7 @@ package struct StudioRootView: View {
         }
         if let conversation = activeConversationID, ids.contains(conversation) {
             activeConversationID = nil
+            draft = controller.taskSessions.conversationDraft(conversationID: nil, mode: mode) ?? freshDraft(for: mode)
         }
     }
 
@@ -1423,13 +1531,20 @@ package struct StudioRootView: View {
     /// template for the current mode, so the console deepens the current task. An already-open
     /// console is only raised: its edits and run state are never reset from here.
     private func openConsole(syncingComposer: Bool = true) {
-        if navigation.shouldSyncComposerToConsole(requested: syncingComposer) {
-            controller.syncAdvanced(to: mode, from: draft)
+        if navigation.shouldSyncComposerToConsole(requested: syncingComposer), let request = baseTaskRequest {
+            controller.select(request.template)
+            controller.draft = request.draft
+            controller.consoleSeedArguments = resolvedCommand(request).execution?.arguments
+                ?? request.template.arguments(from: request.draft)
         }
         openWindow(id: StudioConsoleWindow.id)
     }
 
     private func toggleLibrary() {
+        if !layout.showsLibrary && detailWidth < StudioLayoutPolicy.minimumCanvasWidth + StudioLayoutPolicy.libraryWidth + 1 {
+            libraryOverlay.toggle()
+            return
+        }
         if reduceMotion {
             navigation.showLibrary.toggle()
         } else {
@@ -1460,6 +1575,16 @@ package struct StudioRootView: View {
 
     private func runStudioCommand() {
         studioError = nil
+        if !showsPromptWorkspace {
+            guard let base = baseTaskRequest else { return }
+            let request = resolvedCommand(base)
+            let args = request.execution?.arguments ?? request.template.arguments(from: request.draft)
+            library.start(request: request, commandPreview: controller.commandPreview(arguments: args, masksSecrets: true),
+                          status: jobMonitor.hasInferenceCapacity ? .running : .queued)
+            controller.taskSessions.set(Optional(request.id), for: destination.task.rawValue + ".requestID")
+            controller.run(studio: request)
+            return
+        }
 
         if let message = selectedUnavailableCapabilityMessage {
             studioError = message
@@ -1482,9 +1607,10 @@ package struct StudioRootView: View {
         }
 
         do {
-            let request = try prepareDestination(of: StudioCommandAdapter.makeRequest(mode: mode, draft: draft))
-            let preview = controller
-                .commandPreview(template: request.template, draft: request.draft, masksSecrets: true)
+            let request = try prepareDestination(of: resolvedCommand(StudioCommandAdapter.makeRequest(mode: mode, draft: draft)))
+            let preview = controller.commandPreview(
+                arguments: request.execution?.arguments ?? request.template.arguments(from: request.draft), masksSecrets: true
+            )
             let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
             library.start(request: request, commandPreview: preview, status: status)
             navigation.selectedLibraryID = request.id
@@ -1511,17 +1637,16 @@ package struct StudioRootView: View {
             template: request.template,
             draft: prepared.draft,
             createdAt: request.createdAt,
-            conversationID: request.conversationID
+            conversationID: request.conversationID,
+            execution: request.execution?.replacing(request.templateID.capability?.output.flag ?? "--output",
+                                                     with: prepared.draft.outputPath),
+            parentID: request.parentID
         )
     }
 
     /// The composer's Stop: the run of this mode in flight, or the thread's turn.
     private func stopModeRun() {
-        if let job = runningFeedJob {
-            jobMonitor.cancel(job)
-        } else {
-            controller.cancel()
-        }
+        stopCurrentRun()
     }
 
     /// Takes a queued run out of the queue and drops its row; a stale queued row from an earlier
@@ -1622,10 +1747,7 @@ package struct StudioRootView: View {
             suggestedName: url.lastPathComponent
         ) else { return }
         do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: url, to: destination)
+            try StudioFileExport.copy(url, to: destination)
         } catch {
             studioError = "Could not save \(url.lastPathComponent): \(error.localizedDescription)"
         }
@@ -1645,17 +1767,9 @@ package struct StudioRootView: View {
         let model = draft.model.isBlank ? nil : draft.model
         // Vision chat attaches an image to this turn (chat only); persist it so edit/retry resend it.
         let turnImage = (mode == .chat && !draft.inputPath.isBlank) ? draft.inputPath : nil
-        let item = library.appendUser(
-            conversationID: conversationID,
-            mode: mode,
-            model: model,
-            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
-            content: content,
-            imagePath: turnImage
-        )
-
+        let messages = (activeConversationItem?.messages ?? []) + [StudioMessage(role: .user, content: content, imagePath: turnImage)]
         let rendered = ConversationTranscript.render(
-            messages: item.messages ?? [],
+            messages: messages,
             systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
             budgetChars: conversationBudgetChars
         )
@@ -1665,10 +1779,23 @@ package struct StudioRootView: View {
             runDraft.prompt = rendered.prompt
             // `--stats` reports the decode speed on stderr; the turn's meta line shows it.
             runDraft.stats = true
-            let request = try StudioCommandAdapter.makeRequest(
+            let request = try resolvedCommand(StudioCommandAdapter.makeRequest(
                 mode: mode, draft: runDraft, conversationID: conversationID
-            )
+            ))
+            if let message = request.execution?.validationMessage {
+                studioError = message
+                return
+            }
+            // Validate the request before changing history. A malformed draft stays editable.
+            library.appendUser(conversationID: conversationID, mode: mode, model: model,
+                systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt, content: content, imagePath: turnImage)
             controller.run(studio: request)
+            if activeConversationID == nil {
+                var sent = draft
+                sent.prompt = ""
+                sent.inputPath = ""
+                controller.taskSessions.rememberConversationDraft(sent, conversationID: nil, mode: mode)
+            }
             activeConversationID = conversationID
             navigation.selectedLibraryID = conversationID
             draft.prompt = ""
@@ -1681,16 +1808,19 @@ package struct StudioRootView: View {
 
     /// Stops what the composer's Stop circle points at: the streaming turn of the open thread
     /// in Converse, otherwise the foreground run.
+    private var currentTaskJob: Job? {
+        _ = jobMonitor.generation
+        if showsPromptWorkspace, mode.isConversational {
+            guard let conversationID = activeConversationID else { return nil }
+            return controller.jobs.all.first { $0.state.isActive && $0.request.conversationID == conversationID }
+        }
+        let remembered = controller.taskSessions.value(for: destination.task.rawValue + ".requestID", default: Optional<UUID>.none)
+        if let remembered, let job = controller.jobs.job(requestID: remembered), job.state.isActive { return job }
+        return controller.jobs.all.last { $0.state.isActive && $0.request.templateID?.studioTask == destination.task }
+    }
+
     private func stopCurrentRun() {
-        guard mode.isConversational, let conversationID = activeConversationID,
-              controller.runningConversationIDs.contains(conversationID) else {
-            controller.cancel()
-            return
-        }
-        for job in controller.jobs.all
-        where job.request.conversationID == conversationID && job.state.isActive {
-            controller.jobs.cancel(job.id)
-        }
+        if let job = currentTaskJob { controller.jobs.cancel(job.id) }
     }
 
     private func copyToClipboard(_ text: String) {
@@ -1741,33 +1871,12 @@ package struct StudioRootView: View {
 
     /// Submits a Library row's command again as a new row, with `draft` in place of its own.
     private func runLibraryItem(_ item: StudioLibraryItem, draft commandDraft: CommandDraft) {
-        guard let templateID = item.templateID,
-              let template = CommandCatalog.template(id: templateID) else {
+        let variationSeed = commandDraft.seed != item.commandDraft?.seed ? commandDraft.seed : nil
+        guard let request = StudioLibraryReplay.request(for: item, variationSeed: variationSeed) else {
             studioError = "This older Library item does not include a replayable command."
             return
         }
-        // A replay writes its own file: the recorded draft still points at the run that made it,
-        // so Rerun and Vary would otherwise overwrite the picture they came from.
-        var replayDraft = commandDraft
-        if !commandDraft.outputPath.isBlank {
-            replayDraft.outputPath = StudioOutputLocation.namedOutputPath(
-                templateID: templateID,
-                outputKind: template.outputKind,
-                prompt: commandDraft.prompt,
-                seed: commandDraft.seed,
-                fingerprint: "\(templateID.rawValue)\u{1}\(commandDraft.prompt)\u{1}\(commandDraft.model)\u{1}\(item.id)",
-                fallbackStem: template.title,
-                existing: commandDraft.outputPath
-            )
-            StudioVisionResultPaths.rederive(in: &replayDraft, previousOutputPath: commandDraft.outputPath)
-        }
-        let request = prepareDestination(of: StudioRunRequest(
-            mode: item.mode,
-            templateID: templateID,
-            template: template,
-            draft: replayDraft
-        ))
-        let preview = controller.commandPreview(template: template, draft: request.draft, masksSecrets: true)
+        let preview = controller.commandPreview(arguments: request.execution?.arguments ?? [], masksSecrets: true)
         let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
         library.start(request: request, commandPreview: preview, status: status)
         navigation.selectedLibraryID = request.id
@@ -1840,6 +1949,7 @@ package struct StudioRootView: View {
         var nextDraft = StudioDraft()
         nextDraft.reset(for: mode)
         controller.applyRecommendedDefaults(to: &nextDraft, for: mode)
+        if mode.isConversational { nextDraft.prompt = "" }
         return nextDraft
     }
 
@@ -1865,6 +1975,7 @@ package struct StudioRootView: View {
         if let item = library.items.first(where: { $0.id == conversationID }),
            item.messages?.isEmpty ?? true {
             library.delete(id: conversationID)
+            controller.taskSessions.forgetConversationDrafts([conversationID])
             activeConversationID = nil
             navigation.selectedLibraryID = nil
         }
@@ -1882,20 +1993,31 @@ package struct StudioRootView: View {
         guard let branch = library.branch(conversationID: conversationID, at: messageID, inclusive: inclusive) else {
             return
         }
+        park(draft, for: mode)
+        var branchDraft = freshDraft(for: branch.mode)
+        applyConversationSettings(from: branch, to: &branchDraft)
+        if message.role == .user {
+            branchDraft.prompt = message.content
+            if branch.mode == .chat { branchDraft.inputPath = message.imagePath ?? "" }
+        }
+        let branchID: UUID?
         if branch.messages?.isEmpty ?? true {
             // Branching before the first turn is just a new thread carrying that prompt.
             library.delete(id: branch.id)
-            startNewConversation()
+            branchID = nil
         } else {
-            activeConversationID = branch.id
-            navigation.selectedLibraryID = branch.id
-            applyConversationSettings(from: branch, to: &draft)
+            branchID = branch.id
         }
-        if message.role == .user {
-            draft.prompt = message.content
-            if mode == .chat { draft.inputPath = message.imagePath ?? "" }
+        controller.taskSessions.rememberConversationDraft(branchDraft, conversationID: branchID, mode: branch.mode)
+        controller.taskSessions.rememberSelection(branchID, for: branch.mode)
+        navigation.selectedLibraryID = branchID
+        if branch.mode == mode {
+            activeConversationID = branchID
+            draft = branchDraft
         } else {
-            draft.prompt = ""
+            // The branch's recorded preset owns its composer and command, even if the source
+            // thread has switched from Chat to Code since that turn.
+            navigation.open(task: branch.mode.task)
         }
         studioError = nil
         promptFocused = true
@@ -1903,19 +2025,20 @@ package struct StudioRootView: View {
 
     /// Starts a fresh, not-yet-persisted conversation (no library row until the first message).
     private func startNewConversation() {
+        libraryOverlay = false
+        guard activeConversationID != nil else { promptFocused = true; return }
+        park(draft, for: mode)
         activeConversationID = nil
         navigation.selectedLibraryID = nil
+        controller.taskSessions.rememberSelection(nil, for: mode)
         studioError = nil
-        var fresh = StudioDraft()
-        fresh.reset(for: mode)
-        fresh.prompt = ""
-        draft = fresh
+        draft = controller.taskSessions.conversationDraft(conversationID: nil, mode: mode) ?? freshDraft(for: mode)
         promptFocused = true
     }
 
     private func applyConversationSettings(from item: StudioLibraryItem, to draft: inout StudioDraft) {
-        if let systemPrompt = item.systemPrompt { draft.secondaryText = systemPrompt }
-        if let model = item.model, !model.isBlank { draft.model = model }
+        draft.secondaryText = item.systemPrompt ?? ""
+        draft.model = item.model ?? ""
     }
 
     private func conversationReplyContent(for result: MereRunRunResult) -> String {
@@ -1990,7 +2113,7 @@ package struct StudioRootView: View {
     /// Refreshes the composer's model chip from `model list`.
     private func refreshInstalledModels() {
         Task {
-            let result = await controller.utilityCommandResult(args: ["model", "list"])
+            let result = await controller.utilityCommandResult(args: ["model", "list", "--json"])
             guard result.exitCode == 0 else { return }
             let rows = StudioModelInventoryParser.rows(from: result.stdout)
             modelInventory = rows
@@ -2049,12 +2172,4 @@ package struct StudioRootView: View {
 private struct StudioReadinessRefresh: Equatable {
     let mode: StudioMode
     let draft: StudioDraft
-}
-
-private extension String {
-    func maskingAPIKeyValue() -> String {
-        var words = ShellWords.split(self)
-        words = words.maskingSecrets()
-        return words.shellQuoted()
-    }
 }

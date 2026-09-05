@@ -259,6 +259,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     /// memberwise initializer so views outside StudioKit can start from an empty draft.
     package init() {}
 
+    package var parentID: UUID?
     package var prompt = ""
     package var secondaryText = ""
     package var inputPath = ""
@@ -525,6 +526,8 @@ package struct StudioRunRequest: Identifiable, Equatable {
     package let templateID: CommandTemplateID
     package let template: CommandTemplate
     package let draft: CommandDraft
+    package let execution: StudioExecution?
+    package let parentID: UUID?
     package let createdAt: Date
     /// The conversation this run is a turn of, when chat/code. The run's `id` is a per-turn id;
     /// `conversationID` routes completion back to the owning thread.
@@ -537,13 +540,17 @@ package struct StudioRunRequest: Identifiable, Equatable {
         template: CommandTemplate,
         draft: CommandDraft,
         createdAt: Date = Date(),
-        conversationID: UUID? = nil
+        conversationID: UUID? = nil,
+        execution: StudioExecution? = nil,
+        parentID: UUID? = nil
     ) {
         self.id = id
         self.mode = mode
         self.templateID = templateID
         self.template = template
-        self.draft = draft
+        self.draft = execution?.project(onto: draft) ?? draft
+        self.execution = execution
+        self.parentID = parentID
         self.createdAt = createdAt
         self.conversationID = conversationID
     }
@@ -814,7 +821,7 @@ package enum StudioCommandAdapter {
 
         return StudioRunRequest(
             mode: mode, templateID: templateID, template: template, draft: draft,
-            conversationID: conversationID
+            conversationID: conversationID, parentID: studioDraft.parentID
         )
     }
 
@@ -917,6 +924,8 @@ package enum StudioLibraryStatus: String, Codable, Equatable {
     case running
     case completed
     case failed
+    case cancelled
+    case interrupted
 }
 
 package enum StudioMessageRole: String, Codable, Equatable {
@@ -944,6 +953,8 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
     package var systemPrompt: String?
     /// Decode throughput the CLI reported for this assistant turn (`--stats`), when it did.
     package var tokensPerSecond: Double?
+    /// Effective settings at this turn; optional for legacy history.
+    package var preset: StudioMode?
 
     package init(
         id: UUID = UUID(),
@@ -954,7 +965,8 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         imagePath: String? = nil,
         model: String? = nil,
         systemPrompt: String? = nil,
-        tokensPerSecond: Double? = nil
+        tokensPerSecond: Double? = nil,
+        preset: StudioMode? = nil
     ) {
         self.id = id
         self.role = role
@@ -965,6 +977,7 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         self.model = model
         self.systemPrompt = systemPrompt
         self.tokensPerSecond = tokensPerSecond
+        self.preset = preset
     }
 }
 
@@ -1008,6 +1021,9 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
     /// Starred in the Library column. Optional + additive so rows written before favorites
     /// existed decode unchanged (nil reads as not favorite).
     package var isFavorite: Bool? = nil
+    /// The original result from which this request was derived.
+    package var parentID: UUID? = nil
+    package var inputIdentity: StudioInputIdentity? = nil
 
     package var isStarred: Bool { isFavorite == true }
 

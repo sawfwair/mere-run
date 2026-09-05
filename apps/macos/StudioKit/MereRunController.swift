@@ -224,6 +224,8 @@ package struct MereRunUtilityCommandResult: Equatable {
 
 @MainActor
 package final class MereRunController: ObservableObject {
+    package let servingMonitor = StudioServingMonitor()
+    package let taskSessions: StudioTaskSessions
     @Published package var selectedTemplate: CommandTemplate
     @Published package var draft: CommandDraft
     /// The exact `mere.run` arguments the Command Console should open on, when a Library row
@@ -388,8 +390,10 @@ package final class MereRunController: ObservableObject {
         processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner(),
         fileSystem: MereRunFileProbing = FileManager.default,
         cliResolver: @escaping (String) -> MereRunLaunch = { CLIResolver.resolve(customPath: $0) },
-        resolvesCLIOnInit: Bool = true
+        resolvesCLIOnInit: Bool = true,
+        taskSessions: StudioTaskSessions? = nil
     ) {
+        self.taskSessions = taskSessions ?? StudioTaskSessions()
         self.fileSystem = fileSystem
         self.cliResolve = cliResolver
         jobs = JobStore(processRunner: processRunner, fileSystem: fileSystem)
@@ -921,7 +925,8 @@ package final class MereRunController: ObservableObject {
             draft: request.draft,
             requestID: request.id,
             conversationID: request.conversationID,
-            queueNotice: "Queued \(request.mode.title.lowercased()) job."
+            queueNotice: "Queued \(request.mode.title.lowercased()) job.",
+            arguments: request.execution?.arguments
         )
     }
 
@@ -1113,6 +1118,8 @@ package final class MereRunController: ObservableObject {
         arguments: [String]? = nil
     ) -> Bool {
         refreshResolvedCLI()
+        let execution = arguments.map { StudioExecution(templateID: template.id, arguments: $0) }
+        let draft = execution?.project(onto: draft) ?? draft
         let launch = cliResolve(cliPath)
         let args = arguments.map(cliArguments) ?? commandArguments(template: template, draft: draft)
         // The structured-output flags are the app's own transport: the launched process gets
@@ -1134,7 +1141,8 @@ package final class MereRunController: ObservableObject {
                 template: template,
                 draft: draft
             ),
-            displayCommand: launch.displayCommand(for: args)
+            displayCommand: launch.displayCommand(for: args),
+            execution: execution
         )
         let id = jobs.submit(request)
         refreshQueuedRunCount()
@@ -1143,6 +1151,12 @@ package final class MereRunController: ObservableObject {
             append(queueNotice, stream: .system)
         }
         return !job.state.isTerminal
+    }
+
+    package func cancelConversation(_ conversationID: UUID) {
+        for job in jobs.all where job.request.conversationID == conversationID && job.state.isActive {
+            jobs.cancel(job.id)
+        }
     }
 
     package func cancel() {
@@ -1371,7 +1385,7 @@ package final class MereRunController: ObservableObject {
     /// users can leave a multi-minute pull or render running. No-op for non-bundle (dev) launches.
     private func notifyCompletionIfNeeded(success: Bool, summary: String) {
         // NSApp is nil outside a running NSApplication (e.g. unit tests); guard before use.
-        guard Bundle.main.bundleIdentifier != nil, NSApp != nil, !NSApp.isActive else { return }
+        guard Bundle.main.bundleURL.pathExtension == "app", Bundle.main.bundleIdentifier != nil, NSApp != nil, !NSApp.isActive else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
@@ -1577,18 +1591,20 @@ private extension URL {
 
 extension Array where Element == String {
     package func maskingSecrets() -> [String] {
+        let secretFlags: Set<String> = ["--api-key", "--infinity-api-key", "--admin-password", "--hf-token", "hf-token"]
         var masked = self
-        var index = masked.startIndex
-        while index < masked.endIndex {
-            if masked[index] == "--api-key"
-                || masked[index] == "--infinity-api-key"
-                || masked[index] == "hf-token" {
-                let valueIndex = masked.index(after: index)
-                if valueIndex < masked.endIndex {
-                    masked[valueIndex] = "••••••••"
+        var index = 0
+        while index < masked.count {
+            let token = masked[index]
+            let flag = token.split(separator: "=", maxSplits: 1).first.map(String.init) ?? token
+            if secretFlags.contains(flag) {
+                if token.contains("=") { masked[index] = flag + "=••••••••" }
+                else if index + 1 < masked.count {
+                    index += 1
+                    masked[index] = "••••••••"
                 }
             }
-            index = masked.index(after: index)
+            index += 1
         }
         return masked
     }

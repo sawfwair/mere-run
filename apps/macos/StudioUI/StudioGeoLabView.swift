@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The four native geospatial workflows, each backed by a typed shared capability.
-enum StudioGeoTool: String, CaseIterable, Identifiable {
+enum StudioGeoTool: String, CaseIterable, Identifiable, Codable {
     case flood
     case fire
     case tessera
@@ -78,8 +78,8 @@ struct StudioGeoLabView: View {
 
     /// Owned by the shell's task control (Flood · Fire · TESSERA · OlmoEarth).
     @Binding var tool: StudioGeoTool
-    @State private var drafts: [StudioGeoTool: CommandDraft]
-    @State private var requestID: UUID?
+    @StudioStoredValue("GeoLab.drafts") private var drafts: [StudioGeoTool: CommandDraft] = [:]
+    @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var statusMessage: String?
 
     init(tool: Binding<StudioGeoTool>) {
@@ -88,7 +88,7 @@ struct StudioGeoLabView: View {
         for item in StudioGeoTool.allCases {
             seeded[item] = CommandCatalog.template(id: item.templateID)?.defaultDraft() ?? CommandDraft()
         }
-        _drafts = State(initialValue: seeded)
+        _drafts = StudioStoredValue(wrappedValue: seeded, "GeoLab.drafts")
     }
 
     private var draft: CommandDraft {
@@ -107,17 +107,11 @@ struct StudioGeoLabView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            controls
-                .frame(minWidth: 300, idealWidth: 440, maxWidth: 440)
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
-            resultPanel
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        StudioAnalysisLayout { controls } result: { resultPanel }
+        .studioTaskCommand(tool.templateID, draft: draft)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: tool) { _, _ in
-            requestID = nil
             statusMessage = nil
         }
     }

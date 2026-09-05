@@ -59,7 +59,7 @@ package enum StudioFeedCardBuilder {
         case .completed: return .generation
         case .running: return .running
         case .queued: return .queued
-        case .failed: return .failed
+        case .failed, .cancelled, .interrupted: return .failed
         }
     }
 

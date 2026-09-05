@@ -23,9 +23,9 @@ struct StudioSCAILView: View {
     @Environment(\.studioSubjectsProjectSeed) private var seed
 
     // Plan
-    @State private var mode = "animation"
-    @State private var drivingVideo = ""
-    @State private var subjects = [
+    @StudioStoredValue("Subjects.mode") private var mode = "animation"
+    @StudioStoredValue("Subjects.drivingVideo") private var drivingVideo = ""
+    @StudioStoredValue("Subjects.subjects") private var subjects = [
         StudioSCAILSubject(
             name: "subject-1",
             color: "blue",
@@ -33,55 +33,55 @@ struct StudioSCAILView: View {
             drivingPrompt: "person"
         )
     ]
-    @State private var width = 832
-    @State private var height = 480
-    @State private var fps = 24
-    @State private var useTrimRange = false
-    @State private var inSeconds = 0.0
-    @State private var outSeconds = 10.0
-    @State private var maskThreshold = 0.05
-    @State private var maskResolution = 1008
-    @State private var seedSearchFrames = 48
-    @State private var maskModel = "vision-segment-sam31"
+    @StudioStoredValue("Subjects.width") private var width = 832
+    @StudioStoredValue("Subjects.height") private var height = 480
+    @StudioStoredValue("Subjects.fps") private var fps = 24
+    @StudioStoredValue("Subjects.useTrimRange") private var useTrimRange = false
+    @StudioStoredValue("Subjects.inSeconds") private var inSeconds = 0.0
+    @StudioStoredValue("Subjects.outSeconds") private var outSeconds = 10.0
+    @StudioStoredValue("Subjects.maskThreshold") private var maskThreshold = 0.05
+    @StudioStoredValue("Subjects.maskResolution") private var maskResolution = 1008
+    @StudioStoredValue("Subjects.seedSearchFrames") private var seedSearchFrames = 48
+    @StudioStoredValue("Subjects.maskModel") private var maskModel = "vision-segment-sam31"
 
     // Track
-    @State private var previewFrame = 0
-    @State private var corrections: [StudioSCAILCorrection] = []
+    @StudioStoredValue("Subjects.previewFrame") private var previewFrame = 0
+    @StudioStoredValue("Subjects.corrections") private var corrections: [StudioSCAILCorrection] = []
     @State private var preparedManifest: StudioSCAILManifest?
-    @State private var preparedDirectory: URL?
-    @State private var preparedFingerprint = ""
+    @StudioStoredValue("Subjects.preparedDirectory") private var preparedDirectory: URL? = nil
+    @StudioStoredValue("Subjects.preparedFingerprint") private var preparedFingerprint = ""
     @State private var trackingReport: StudioSCAILTrackingReport?
     @State private var qualityReport: StudioSCAILQualityReport?
-    @State private var showsMasks = true
+    @StudioStoredValue("Subjects.showsMasks") private var showsMasks = true
 
     // Animate
-    @State private var prompt = "a cinematic full-body performance with natural motion"
-    @State private var negativePrompt = ""
-    @State private var profile = "fast"
-    @State private var steps = 40
-    @State private var guidance = 5.0
-    @State private var shift = 3.0
-    @State private var sampler = "unipc"
-    @State private var seedValue = "42"
-    @State private var segmentLength = 81
-    @State private var segmentOverlap = 5
-    @State private var tailPolicy = "drop"
-    @State private var carryDrivingAudio = true
-    @State private var model = "video-scail2-14b-mlx"
-    @State private var modelRoot = ""
-    @State private var adapterPath = ""
-    @State private var adapterStrength = 1.0
-    @State private var outputPath = StudioSpecialistFiles.timestampedDirectory(component: "SCAIL")
+    @StudioStoredValue("Subjects.prompt") private var prompt = "a cinematic full-body performance with natural motion"
+    @StudioStoredValue("Subjects.negativePrompt") private var negativePrompt = ""
+    @StudioStoredValue("Subjects.profile") private var profile = "fast"
+    @StudioStoredValue("Subjects.steps") private var steps = 40
+    @StudioStoredValue("Subjects.guidance") private var guidance = 5.0
+    @StudioStoredValue("Subjects.shift") private var shift = 3.0
+    @StudioStoredValue("Subjects.sampler") private var sampler = "unipc"
+    @StudioStoredValue("Subjects.seedValue") private var seedValue = "42"
+    @StudioStoredValue("Subjects.segmentLength") private var segmentLength = 81
+    @StudioStoredValue("Subjects.segmentOverlap") private var segmentOverlap = 5
+    @StudioStoredValue("Subjects.tailPolicy") private var tailPolicy = "drop"
+    @StudioStoredValue("Subjects.carryDrivingAudio") private var carryDrivingAudio = true
+    @StudioStoredValue("Subjects.model") private var model = "video-scail2-14b-mlx"
+    @StudioStoredValue("Subjects.modelRoot") private var modelRoot = ""
+    @StudioStoredValue("Subjects.adapterPath") private var adapterPath = ""
+    @StudioStoredValue("Subjects.adapterStrength") private var adapterStrength = 1.0
+    @StudioStoredValue("Subjects.outputPath") private var outputPath = StudioSpecialistFiles.timestampedDirectory(component: "SCAIL")
         .deletingLastPathComponent()
         .appendingPathComponent("scail-\(UUID().uuidString.prefix(8)).mp4")
         .path
 
     // Jobs and chrome
-    @State private var selectedStage: StudioSubjectsStage?
-    @State private var planSavedAt: Date?
-    @State private var maskRequestID: UUID?
+    @StudioStoredValue("Subjects.selectedStage") private var selectedStage: StudioSubjectsStage? = nil
+    @StudioStoredValue("Subjects.planSavedAt") private var planSavedAt: Date? = nil
+    @StudioStoredValue("Subjects.maskRequestID") private var maskRequestID: UUID? = nil
     @State private var maskJob: StudioSubjectsJobBar.Job?
-    @State private var animateRequestID: UUID?
+    @StudioStoredValue("Subjects.animateRequestID") private var animateRequestID: UUID? = nil
     @State private var animateJob: StudioSubjectsJobBar.Job?
     @State private var notice: Notice?
     @State private var editingSubjectID: UUID?
@@ -230,6 +230,7 @@ struct StudioSCAILView: View {
         }
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        .studioTaskCommand(.videoAnimate, draft: animationDraft)
         .onAppear(perform: applySeed)
         .onReceive(controller.runCompletions) { result in
             guard result.templateID == .videoPrepareMasks, result.requestID == maskRequestID else {
@@ -1031,7 +1032,9 @@ struct StudioSCAILView: View {
     // MARK: - Seed
 
     private func applySeed() {
-        guard !didSeed, let seed else { return }
+        guard !didSeed else { return }
+        if preparedDirectory != nil { loadPreparedManifest() }
+        guard let seed else { return }
         didSeed = true
         mode = seed.mode
         drivingVideo = seed.drivingVideo
@@ -1064,8 +1067,7 @@ struct StudioSCAILView: View {
         }
         let suffix = previewOnly ? "preview-\(previewFrame)" : "tracked"
         let directory = planURL.deletingLastPathComponent()
-            .appendingPathComponent(suffix, isDirectory: true)
-        try? FileManager.default.removeItem(at: directory)
+            .appendingPathComponent(suffix + "-" + UUID().uuidString.prefix(8), isDirectory: true)
         preparedDirectory = directory
 
         var draft = template.defaultDraft()
@@ -1086,33 +1088,23 @@ struct StudioSCAILView: View {
         }
     }
 
-    private func animate(preflight: Bool) {
-        notice = nil
-        guard validateInputs(includeRender: true, preflight: preflight),
-              let manifest = preparedManifest,
-              let first = manifest.subjects.first,
-              let drivingMask = manifest.drivingMaskPath else {
-            notice = Notice(severity: .error, text: "Track the whole clip before animating.")
-            return
-        }
-        guard let template = CommandCatalog.template(id: .videoAnimate) else {
-            notice = Notice(severity: .error, text: "The SCAIL animation command is unavailable.")
-            return
-        }
-
-        var draft = template.defaultDraft()
+    private var animationDraft: CommandDraft {
+        var draft = CommandCatalog.template(id: .videoAnimate)?.defaultDraft() ?? CommandDraft()
         draft.prompt = prompt
         draft.secondaryText = negativePrompt
-        draft.inputPath = resolve(first.preparedReferenceImagePath).path
-        draft.referenceMaskPath = resolve(first.referenceMaskPath).path
-        draft.drivingVideoPath = resolve(manifest.drivingProxyPath ?? manifest.drivingSourcePath).path
-        draft.drivingMaskPath = resolve(drivingMask).path
-        draft.referenceImagePaths = manifest.subjects.dropFirst()
-            .map { resolve($0.preparedReferenceImagePath).path }
-            .joined(separator: "\n")
-        draft.scailAdditionalReferenceMaskPaths = manifest.subjects.dropFirst()
-            .map { resolve($0.referenceMaskPath).path }
-            .joined(separator: "\n")
+        if let manifest = preparedManifest, let first = manifest.subjects.first,
+           let drivingMask = manifest.drivingMaskPath {
+            draft.inputPath = resolve(first.preparedReferenceImagePath).path
+            draft.referenceMaskPath = resolve(first.referenceMaskPath).path
+            draft.drivingVideoPath = resolve(manifest.drivingProxyPath ?? manifest.drivingSourcePath).path
+            draft.drivingMaskPath = resolve(drivingMask).path
+            draft.referenceImagePaths = manifest.subjects.dropFirst()
+                .map { resolve($0.preparedReferenceImagePath).path }
+                .joined(separator: "\n")
+            draft.scailAdditionalReferenceMaskPaths = manifest.subjects.dropFirst()
+                .map { resolve($0.referenceMaskPath).path }
+                .joined(separator: "\n")
+        }
         draft.outputPath = outputPath
         draft.videoTaskMode = mode
         draft.renderProfile = profile
@@ -1132,6 +1124,23 @@ struct StudioSCAILView: View {
         draft.modelRoot = modelRoot
         draft.loraPath = adapterPath
         draft.loraScale = adapterStrength
+        return draft
+    }
+
+    private func animate(preflight: Bool) {
+        notice = nil
+        guard validateInputs(includeRender: true, preflight: preflight),
+              let manifest = preparedManifest, !manifest.subjects.isEmpty,
+              manifest.drivingMaskPath != nil else {
+            notice = Notice(severity: .error, text: "Track the whole clip before animating.")
+            return
+        }
+        guard CommandCatalog.template(id: .videoAnimate) != nil else {
+            notice = Notice(severity: .error, text: "The SCAIL animation command is unavailable.")
+            return
+        }
+
+        var draft = animationDraft
         draft.preflight = preflight
         draft.json = preflight
         animateJob = preflight ? .validate : .animate
