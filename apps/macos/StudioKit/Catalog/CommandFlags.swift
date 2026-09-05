@@ -2597,6 +2597,7 @@ extension CommandFlags {
         package static let command = ["guide"]
 
         package static let list = "--list"
+        package static let listModels = "--list-models"
         package static let model = "--model"
         package static let json = "--json"
         package static let markdown = "--markdown"

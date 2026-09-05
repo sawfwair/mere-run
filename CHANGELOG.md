@@ -159,6 +159,17 @@ nothing opens in a modal window on top of your work.
   extraction, encoder, decoder, alignment, merge, and total duration in one
   optimized resident process.
 
+### Offline guides
+
+- Added original recipes for 139 managed model IDs. Use
+  `mere.run guide --model image-klein-9b` to read a guide or
+  `mere.run guide --list-models` to list the model families.
+- Added model search and variant selection to the Studio guide reader,
+  alongside the command cookbooks. Each guide includes its sources and recipe
+  validation status.
+- Included the CLI guide resource bundle in packaged macOS apps. Reading guides
+  doesn't depend on a development checkout or network connection.
+
 ### Image
 
 - added native Swift/MLX inference and resumable conversion tooling for

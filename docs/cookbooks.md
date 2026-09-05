@@ -1,31 +1,66 @@
 # Cookbooks
 
-Every command carries its own manual. `mere.run guide` is a cookbook reader
-built into the binary, and it works with the network off, such as on a plane or
-in a locked-down lab. It prints
-Markdown by default, emits JSON for agents and tools, and renders the topic
-list as a Markdown table with `--markdown`.
+This page is for mere.run Studio and command-line users. Use the bundled
+cookbooks to prepare prompts, choose inputs, and review command options offline.
+For source research and recipe status, see the
+[provider prompting guide tracker](./provider-prompting-guides.md).
+
+## Read a model guide
+
+The handbook contains original recipes for 139 managed model IDs, organized
+into 59 families. Each guide includes an example, supported controls, variant
+notes, review advice, and sources. Models without a text-prompt interface have
+input-preparation guidance.
+
+To read a model guide in macOS Studio, follow these steps:
+
+1. In **Help**, select **mere.run Guide**.
+2. In **Guide collection**, select **Models**.
+3. In the search field, enter a family name or model ID.
+4. Select the guide.
+5. In **Model**, select a variant.
+
+To read a model guide in a terminal, run the following command:
+
+```bash
+mere.run guide --model image-klein-9b
+```
+
+The guide text, examples, and index are bundled with the CLI and macOS app.
+Reading guides requires neither a network connection nor downloaded model
+weights. Source links require a network connection. Before running inference
+offline, download the checkpoint and the components required by your workflow.
+
+These recipes are editorial drafts. They aren't records of successful
+inference for every checkpoint. Guides distinguish provider material from
+local workflow advice when provider guidance remains unverified.
+
+## Read a command cookbook
+
+The **Commands** collection contains command cookbooks. Each cookbook describes
+required models, options, prompting patterns, examples, and troubleshooting.
+
+To read the image generation cookbook in a terminal, run the following command:
+
+```bash
+mere.run guide image generate
+```
+
+To list the available command topics, run the following command:
 
 ```bash
 mere.run guide --list
-mere.run guide --list --markdown > guides.md
-mere.run guide image generate
-mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
-mere.run guide music generate --model music-acestep
-mere.run guide music generate --model music-magenta-rt2-small
-mere.run guide music transcribe --model music-muscriptor-medium
-mere.run guide sfx generate --model sfx-woosh-dflow
-mere.run guide open-webui
-mere.run guide video generate --json
 ```
 
-Each guide explains what the command does, which model to install, which flags
-change the output, prompting patterns,
-worked examples, iteration tips, troubleshooting, and links into the source.
+To save a Markdown index of command topics, run the following command:
+
+```bash
+mere.run guide --list --markdown > guides.md
+```
 
 ## Available topics
 
-Creative and runtime workflows:
+The following topics cover creative and runtime workflows:
 
 - `image generate`
 - `image train-lora`
@@ -38,6 +73,7 @@ Creative and runtime workflows:
 - `speech transcribe`
 - `speech profile`
 - `vision caption`
+- `vision embed`
 - `vision inspect`
 - `vision ground`
 - `vision segment`
@@ -52,9 +88,11 @@ Creative and runtime workflows:
 - `vision image-to-3d-multiview`
 - `vision depth-video`
 - `vision ocr`
+- `audio enhance`
 - `music analyze`
 - `music generate`
 - `music transcribe`
+- `music separate`
 - `sfx generate`
 - `video generate`
 - `video cosmos3`
@@ -64,7 +102,7 @@ Creative and runtime workflows:
 - `plugin`
 - `status`
 
-Operational workflows:
+The following topics cover operational workflows:
 
 - `model list`
 - `model runtime`
@@ -79,33 +117,29 @@ Operational workflows:
 - `agent onboard`
 - `agent install-pi`
 - `agent start`
+- `agent status`
 
-## Model-focused guides
+## Read a command guide for a model
 
-Some topics support model focus. The CLI validates that the requested model is
-covered by the guide before printing:
+Some command cookbooks include model-specific advice. To read the image
+cookbook for Z-Image nano, run the following command:
 
 ```bash
 mere.run guide image generate --model image-zimage-nano
-mere.run guide text chat --model text-chat-gemma4
-mere.run guide speech transcribe --model speech-asr-parakeet
-mere.run guide music generate --model music-acestep-xl-turbo
-mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
-mere.run guide music transcribe --model music-muscriptor-medium
 ```
 
-If the model does not belong to the topic, the command prints a validation error
-with the supported model IDs.
+The CLI checks whether the guide covers the requested model. If the model
+doesn't belong to the topic, the command reports the supported model IDs.
 
-## Agent usage
+## Read guides from an agent
 
-Agents should keep their own prompt context small:
+This procedure is for developers who configure agent instructions. Retrieve
+only the guide needed for the task to limit the prompt context:
 
-1. Run `mere.run guide --list` to find the topic.
-2. Run `mere.run guide <command path>` before coaching a creative or advanced
-   workflow.
-3. Use `--json` when the agent needs a structured payload with topic metadata
-   and Markdown content.
+1. To find model guides and their exact IDs, run `mere.run guide --list-models --json`.
+2. To retrieve a guide, run `mere.run guide --model image-klein-9b --json`.
+   Replace `image-klein-9b` with an ID from the index.
 
-The guide command is the canonical source for per-command usage advice. Skills
-should route to it instead of duplicating cookbook content.
+The `--json` option returns topic metadata and Markdown content. For a command
+cookbook, use the command path, such as `mere.run guide image generate --json`.
+Configure skills to retrieve bundled guides rather than duplicate their content.

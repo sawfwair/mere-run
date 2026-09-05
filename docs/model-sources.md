@@ -1,5 +1,8 @@
 # Model sources
 
+For provider cookbooks, prompt formats, and research gaps by managed model, see
+the [provider prompting guide tracker](./provider-prompting-guides.md).
+
 Weights reach `mere.run` in three local-first ways:
 
 1. **Managed pulls** — cataloged Hugging Face snapshots installed into the local

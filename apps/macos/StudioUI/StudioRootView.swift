@@ -1027,7 +1027,7 @@ package struct StudioRootView: View {
             .sheet(isPresented: $navigation.showGuide) {
                 StudioHelpSheet()
                     .environmentObject(controller)
-                    .frame(width: 720, height: 560)
+                    .frame(width: 960, height: 680)
             }
             .alert(
                 "Accept third-party model terms",

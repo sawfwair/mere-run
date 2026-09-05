@@ -114,6 +114,16 @@ draw them in StudioUI, one file each side:
 `StudioLibraryPresentation.swift` and `StudioLibraryPanel.swift`. That is what
 makes a surface's rules testable without rendering it.
 
+To open the offline handbook, in **Help**, select **mere.run Guide**. The
+**Models** collection contains original recipes for 139 managed IDs, grouped
+into 59 families. Use the search field to find a family or exact model ID.
+The **Commands** collection contains command cookbooks.
+
+Both collections use the CLI resource bundle. Reading guides requires neither
+model weights nor a network connection. The app packaging script includes the
+bundle with the embedded CLI and the CLI installed by Studio. Each recipe
+records its sources and inference validation status.
+
 The packaged app registers two typed local-launcher routes. The strict
 `mererun://preview?path=…` route accepts one readable absolute artifact path and
 may show Quick Look but must not import or mutate artifacts. The strict
