@@ -5,7 +5,40 @@ import MLXNN
 
 protocol ParakeetDecodingModel: AnyObject {
     var config: ParakeetModelConfig { get }
-    func decode(_ mel: MLXArray) -> [ParakeetAlignedResult]
+    var preferredWindowBatchSize: Int { get }
+    func decode(_ mel: MLXArray) throws -> [ParakeetAlignedResult]
+    func decode(
+        _ mel: MLXArray,
+        timings: inout ParakeetModelTimings
+    ) throws -> [ParakeetAlignedResult]
+    func decodeWindows(
+        _ mels: [MLXArray],
+        timings: inout ParakeetModelTimings
+    ) throws -> [ParakeetAlignedResult]
+}
+
+extension ParakeetDecodingModel {
+    var preferredWindowBatchSize: Int { 1 }
+
+    func decode(
+        _ mel: MLXArray,
+        timings: inout ParakeetModelTimings
+    ) throws -> [ParakeetAlignedResult] {
+        let started = ParakeetMonotonicClock.now()
+        let result = try decode(mel)
+        timings.decoderSeconds += ParakeetMonotonicClock.seconds(since: started)
+        return result
+    }
+
+    func decodeWindows(
+        _ mels: [MLXArray],
+        timings: inout ParakeetModelTimings
+    ) throws -> [ParakeetAlignedResult] {
+        try mels.map { mel in
+            try decode(mel, timings: &timings).first
+                ?? ParakeetAlignedResult(text: "", sentences: [])
+        }
+    }
 }
 
 final class ParakeetRelPositionalEncoding {
@@ -657,15 +690,51 @@ final class ParakeetConvASRDecoder: Module {
 
 class ParakeetBaseModel: Module, ParakeetDecodingModel {
     let config: ParakeetModelConfig
-    @ModuleInfo(key: "encoder") var encoder: ParakeetConformer
+    @ModuleInfo(key: "encoder") var encoder: ParakeetConformer?
+    var externalEncoder: (any ParakeetExternalEncoder)?
 
-    init(config: ParakeetModelConfig) {
+    var preferredWindowBatchSize: Int { 1 }
+
+    init(config: ParakeetModelConfig, includeMLXEncoder: Bool = true) {
         self.config = config
-        self._encoder.wrappedValue = ParakeetConformer(config: config.encoder)
+        self._encoder.wrappedValue = includeMLXEncoder
+            ? ParakeetConformer(config: config.encoder)
+            : nil
     }
 
-    func decode(_ mel: MLXArray) -> [ParakeetAlignedResult] {
+    func decode(_ mel: MLXArray) throws -> [ParakeetAlignedResult] {
         []
+    }
+
+    func decode(
+        _ mel: MLXArray,
+        timings: inout ParakeetModelTimings
+    ) throws -> [ParakeetAlignedResult] {
+        let started = ParakeetMonotonicClock.now()
+        let result = try decode(mel)
+        timings.decoderSeconds += ParakeetMonotonicClock.seconds(since: started)
+        return result
+    }
+
+    func decodeWindows(
+        _ mels: [MLXArray],
+        timings: inout ParakeetModelTimings
+    ) throws -> [ParakeetAlignedResult] {
+        try mels.map { mel in
+            try decode(mel, timings: &timings).first
+                ?? ParakeetAlignedResult(text: "", sentences: [])
+        }
+    }
+
+    func encode(_ mel: MLXArray) throws -> ParakeetEncoderOutput {
+        if let externalEncoder {
+            return try externalEncoder.encode(mel)
+        }
+        guard let encoder else {
+            throw ParakeetError.missingMLXEncoder
+        }
+        let (features, lengths) = encoder(mel)
+        return ParakeetEncoderOutput(features: features, lengths: lengths)
     }
 
     var timePerEncoderStep: TimeInterval {
@@ -688,11 +757,16 @@ class ParakeetBaseModel: Module, ParakeetDecodingModel {
 class ParakeetTDTModel: ParakeetBaseModel {
     @ModuleInfo(key: "decoder") var decoder: ParakeetPredictNetwork
     @ModuleInfo(key: "joint") var joint: ParakeetJointNetwork
+    var externalDecoder: (any ParakeetExternalTDTDecoder)?
 
     let durations: [Int]
     let maxSymbols: Int?
 
-    override init(config: ParakeetModelConfig) {
+    override var preferredWindowBatchSize: Int {
+        externalDecoder?.maximumBatchSize ?? 1
+    }
+
+    override init(config: ParakeetModelConfig, includeMLXEncoder: Bool = true) {
         self.durations = config.tdtDurations ?? [0, 1, 2, 3, 4]
         self.maxSymbols = config.maxSymbols
 
@@ -708,13 +782,32 @@ class ParakeetTDTModel: ParakeetBaseModel {
             numExtraOutputs: max(1, (config.tdtDurations ?? [0, 1]).count)
         ))
 
-        super.init(config: config)
+        super.init(config: config, includeMLXEncoder: includeMLXEncoder)
     }
 
-    override func decode(_ mel: MLXArray) -> [ParakeetAlignedResult] {
+    override func decode(_ mel: MLXArray) throws -> [ParakeetAlignedResult] {
+        var timings = ParakeetModelTimings()
+        return try decode(mel, timings: &timings)
+    }
+
+    override func decode(
+        _ mel: MLXArray,
+        timings: inout ParakeetModelTimings
+    ) throws -> [ParakeetAlignedResult] {
         let batch = normalizeBatch(mel)
-        let (encoded, lengths) = encoder(batch)
+        let encoderStarted = ParakeetMonotonicClock.now()
+        let encoderOutput = try encode(batch)
+        let encoded = encoderOutput.features
+        let lengths = encoderOutput.lengths
         MLX.eval(encoded)
+        timings.encoderSeconds += ParakeetMonotonicClock.seconds(since: encoderStarted)
+
+        if let externalDecoder {
+            let decoderStarted = ParakeetMonotonicClock.now()
+            let result = try externalDecoder.decode(encoded: encoded, lengths: lengths)
+            timings.decoderSeconds += ParakeetMonotonicClock.seconds(since: decoderStarted)
+            return result
+        }
 
         var results: [ParakeetAlignedResult] = []
         results.reserveCapacity(batch.dim(0))
@@ -724,6 +817,7 @@ class ParakeetTDTModel: ParakeetBaseModel {
         let windowSize = ParakeetDecodingEnvironment.windowedDecodeFrames
 
         for b in 0..<batch.dim(0) {
+            let decoderStarted = ParakeetMonotonicClock.now()
             let features = encoded[b..<(b + 1), 0..., 0...]
             let maxLength = min(lengths[b], features.dim(1))
 
@@ -818,10 +912,52 @@ class ParakeetTDTModel: ParakeetBaseModel {
                 }
             }
 
+            timings.decoderSeconds += ParakeetMonotonicClock.seconds(since: decoderStarted)
+            let alignmentStarted = ParakeetMonotonicClock.now()
             let sentences = ParakeetAlignment.tokensToSentences(tokens)
             results.append(ParakeetAlignment.sentencesToResult(sentences))
+            timings.alignmentSeconds += ParakeetMonotonicClock.seconds(since: alignmentStarted)
         }
 
+        return results
+    }
+
+    override func decodeWindows(
+        _ mels: [MLXArray],
+        timings: inout ParakeetModelTimings
+    ) throws -> [ParakeetAlignedResult] {
+        guard let externalDecoder else {
+            return try super.decodeWindows(mels, timings: &timings)
+        }
+        guard !mels.isEmpty else { return [] }
+        guard mels.count <= externalDecoder.maximumBatchSize else {
+            throw ParakeetError.decoderBatchTooLarge(
+                actual: mels.count,
+                maximum: externalDecoder.maximumBatchSize
+            )
+        }
+
+        let encoderStarted = ParakeetMonotonicClock.now()
+        var encodedWindows: [MLXArray] = []
+        var lengths: [Int] = []
+        encodedWindows.reserveCapacity(mels.count)
+        lengths.reserveCapacity(mels.count)
+        for mel in mels {
+            let batch = normalizeBatch(mel)
+            guard batch.dim(0) == 1 else {
+                throw ParakeetCoreMLError.unsupportedInputShape(batch.shape)
+            }
+            let encoderOutput = try encode(batch)
+            encodedWindows.append(encoderOutput.features)
+            lengths.append(encoderOutput.lengths[0])
+        }
+        let encoded = MLX.concatenated(encodedWindows, axis: 0)
+        MLX.eval(encoded)
+        timings.encoderSeconds += ParakeetMonotonicClock.seconds(since: encoderStarted)
+
+        let decoderStarted = ParakeetMonotonicClock.now()
+        let results = try externalDecoder.decode(encoded: encoded, lengths: lengths)
+        timings.decoderSeconds += ParakeetMonotonicClock.seconds(since: decoderStarted)
         return results
     }
 }
@@ -832,7 +968,7 @@ class ParakeetRNNTModel: ParakeetBaseModel {
 
     let maxSymbols: Int?
 
-    override init(config: ParakeetModelConfig) {
+    override init(config: ParakeetModelConfig, includeMLXEncoder: Bool = true) {
         self.maxSymbols = config.maxSymbols
 
         self._decoder.wrappedValue = ParakeetPredictNetwork(config: config.rnntDecoder ?? ParakeetRNNTDecoderConfig(
@@ -847,12 +983,14 @@ class ParakeetRNNTModel: ParakeetBaseModel {
             numExtraOutputs: 0
         ))
 
-        super.init(config: config)
+        super.init(config: config, includeMLXEncoder: includeMLXEncoder)
     }
 
-    override func decode(_ mel: MLXArray) -> [ParakeetAlignedResult] {
+    override func decode(_ mel: MLXArray) throws -> [ParakeetAlignedResult] {
         let batch = normalizeBatch(mel)
-        let (encoded, lengths) = encoder(batch)
+        let encoderOutput = try encode(batch)
+        let encoded = encoderOutput.features
+        let lengths = encoderOutput.lengths
         MLX.eval(encoded)
 
         var results: [ParakeetAlignedResult] = []
@@ -933,18 +1071,20 @@ class ParakeetRNNTModel: ParakeetBaseModel {
 class ParakeetCTCModel: ParakeetBaseModel {
     @ModuleInfo(key: "decoder") var decoder: ParakeetConvASRDecoder
 
-    override init(config: ParakeetModelConfig) {
+    override init(config: ParakeetModelConfig, includeMLXEncoder: Bool = true) {
         self._decoder.wrappedValue = ParakeetConvASRDecoder(config: config.ctcDecoder ?? ParakeetCTCDecoderConfig(
             featIn: config.encoder.modelDim,
             numClasses: max(1, config.vocabulary.count),
             vocabulary: config.vocabulary
         ))
-        super.init(config: config)
+        super.init(config: config, includeMLXEncoder: includeMLXEncoder)
     }
 
-    override func decode(_ mel: MLXArray) -> [ParakeetAlignedResult] {
+    override func decode(_ mel: MLXArray) throws -> [ParakeetAlignedResult] {
         let batch = normalizeBatch(mel)
-        let (encoded, lengths) = encoder(batch)
+        let encoderOutput = try encode(batch)
+        let encoded = encoderOutput.features
+        let lengths = encoderOutput.lengths
         let logits = decoder(encoded)
         MLX.eval(logits)
 
@@ -1025,27 +1165,38 @@ class ParakeetCTCModel: ParakeetBaseModel {
 class ParakeetTDTCTCModel: ParakeetTDTModel {
     @ModuleInfo(key: "ctc_decoder") var ctcDecoder: ParakeetConvASRDecoder
 
-    init(config: ParakeetModelConfig, ctcConfig: ParakeetCTCDecoderConfig?) {
+    init(
+        config: ParakeetModelConfig,
+        ctcConfig: ParakeetCTCDecoderConfig?,
+        includeMLXEncoder: Bool = true
+    ) {
         self._ctcDecoder.wrappedValue = ParakeetConvASRDecoder(config: ctcConfig ?? ParakeetCTCDecoderConfig(
             featIn: config.encoder.modelDim,
             numClasses: max(1, config.vocabulary.count),
             vocabulary: config.vocabulary
         ))
-        super.init(config: config)
+        super.init(config: config, includeMLXEncoder: includeMLXEncoder)
     }
 }
 
 enum ParakeetModelFactory {
-    static func build(config: ParakeetModelConfig) -> any ParakeetDecodingModel {
+    static func build(
+        config: ParakeetModelConfig,
+        includeMLXEncoder: Bool = true
+    ) -> any ParakeetDecodingModel {
         switch config.variant {
         case .tdt:
-            return ParakeetTDTModel(config: config)
+            return ParakeetTDTModel(config: config, includeMLXEncoder: includeMLXEncoder)
         case .tdtCTC:
-            return ParakeetTDTCTCModel(config: config, ctcConfig: config.ctcDecoder)
+            return ParakeetTDTCTCModel(
+                config: config,
+                ctcConfig: config.ctcDecoder,
+                includeMLXEncoder: includeMLXEncoder
+            )
         case .rnnt:
-            return ParakeetRNNTModel(config: config)
+            return ParakeetRNNTModel(config: config, includeMLXEncoder: includeMLXEncoder)
         case .ctc:
-            return ParakeetCTCModel(config: config)
+            return ParakeetCTCModel(config: config, includeMLXEncoder: includeMLXEncoder)
         }
     }
 }

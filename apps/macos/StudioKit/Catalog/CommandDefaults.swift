@@ -251,6 +251,11 @@ package enum CommandDefaults {
         (.modelBenchmarkToolContinuations, [.value(\.json, true)]),
         (.modelBenchmarkGemma4KV, [.value(\.json, true)]),
         (.modelBenchmarkGemma4MTP, [.value(\.json, true)]),
+        (.modelBenchmarkParakeetCoreML, [
+            .value(\.benchmarkWarmupRepetitions, 2),
+            .value(\.benchmarkRepetitions, 5),
+            .value(\.json, true)
+        ]),
         (.modelBenchmarkAPIWorkload, [.value(\.port, 8080), .value(\.json, true)]),
         (.pluginInfo, [.value(\.json, true)]),
         (.runList, [.value(\.json, true)]),

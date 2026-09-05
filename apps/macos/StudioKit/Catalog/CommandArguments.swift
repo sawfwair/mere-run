@@ -124,6 +124,7 @@ package enum CommandArguments {
         case .modelBenchmarkToolContinuations: return modelBenchmarkToolContinuations(draft)
         case .modelBenchmarkGemma4KV: return modelBenchmarkGemma4KV(draft)
         case .modelBenchmarkGemma4MTP: return modelBenchmarkGemma4MTP(draft)
+        case .modelBenchmarkParakeetCoreML: return modelBenchmarkParakeetCoreML(draft)
         case .modelBenchmarkAPIWorkload: return modelBenchmarkAPIWorkload(draft)
         case .pluginInfo: return pluginInfo(draft)
         case .pluginRun: return pluginRun(draft)

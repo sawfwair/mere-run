@@ -21,6 +21,11 @@ enum SpeechBackendOption: String, ExpressibleByArgument {
     }
 }
 
+enum SpeechParakeetProviderOption: String, ExpressibleByArgument {
+    case mlx
+    case coreml
+}
+
 enum SpeechTaskOption: String, ExpressibleByArgument {
     case transcribe
     case translate
@@ -45,6 +50,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
           mere.run speech transcribe audio.wav
           mere.run speech transcribe - --stream --input-format pcm-s16le --sample-rate 16000 --jsonl
           mere.run speech transcribe audio.wav --backend parakeet
+          mere.run speech transcribe audio.wav --backend parakeet --provider coreml --coreml-encoder /path/to/parakeet-coreml
           mere.run speech transcribe audio.wav --task translate --backend auto
           mere.run speech transcribe audio.wav --backend qwen --model speech-asr-qwen3
         """
@@ -61,6 +67,18 @@ struct SpeechTranscribe: AsyncParsableCommand {
 
     @Option(name: [.long], help: "ASR backend: auto, parakeet, or qwen.")
     var backend: SpeechBackendOption = .auto
+
+    @Option(
+        name: [.long],
+        help: "Parakeet encoder provider: mlx or coreml. Core ML requires --backend parakeet."
+    )
+    var provider: SpeechParakeetProviderOption = .mlx
+
+    @Option(
+        name: [.customLong("coreml-encoder")],
+        help: "Mere-built Parakeet Core ML artifact directory (required with --provider coreml)."
+    )
+    var coremlEncoder: String?
 
     @Option(name: [.long], help: "Task: transcribe or translate.")
     var task: SpeechTaskOption = .transcribe
@@ -149,6 +167,22 @@ struct SpeechTranscribe: AsyncParsableCommand {
         if jsonl && !readsStandardInput {
             throw ValidationError("--jsonl is only valid with raw streaming stdin ('-').")
         }
+        if provider == .coreml {
+            guard !stream else {
+                throw ValidationError("--provider coreml is currently limited to non-streaming transcription.")
+            }
+            guard task == .transcribe else {
+                throw ValidationError("--provider coreml supports transcription only.")
+            }
+            guard backend == .parakeet else {
+                throw ValidationError("--provider coreml requires --backend parakeet.")
+            }
+            guard let coremlEncoder, !coremlEncoder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw ValidationError("--provider coreml requires --coreml-encoder <artifact-directory>.")
+            }
+        } else if coremlEncoder != nil {
+            throw ValidationError("--coreml-encoder requires --provider coreml.")
+        }
     }
 
     func run() async throws {
@@ -168,7 +202,9 @@ struct SpeechTranscribe: AsyncParsableCommand {
         }
 
         if !quiet {
-            CLIStderr.write("Task=\(task.rawValue) backend=\(backend.rawValue)\n")
+            CLIStderr.write(
+                "Task=\(task.rawValue) backend=\(backend.rawValue) provider=\(provider.rawValue)\n"
+            )
         }
 
         let progressHandler: (@Sendable (ASRProgress) -> Void)?
@@ -207,6 +243,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
             request: request,
             preferredBackend: backend.backend,
             modelOverride: model,
+            parakeetExecutionProvider: try resolvedParakeetExecutionProvider(),
             progressHandler: progressHandler,
             executor: transcriptionExecutor
         )
@@ -245,6 +282,26 @@ struct SpeechTranscribe: AsyncParsableCommand {
 
     private func emitReceipt(transcriptURL: URL?) throws {
         try RunReceipt.emit(RunReceipt.transcriptOutputs(transcriptURL), enabled: receipt)
+    }
+
+    private func resolvedParakeetExecutionProvider() throws -> ParakeetExecutionProvider {
+        switch provider {
+        case .mlx:
+            return .mlx
+        case .coreml:
+            guard let coremlEncoder else {
+                throw ValidationError("--provider coreml requires --coreml-encoder <artifact-directory>.")
+            }
+            let artifactURL = URL(fileURLWithPath: coremlEncoder).standardizedFileURL
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(
+                atPath: artifactURL.path,
+                isDirectory: &isDirectory
+            ), isDirectory.boolValue else {
+                throw ValidationError("Core ML artifact directory not found: \(artifactURL.path)")
+            }
+            return .coreML(artifactURL: artifactURL)
+        }
     }
 
     private func runStandardInput() async throws {

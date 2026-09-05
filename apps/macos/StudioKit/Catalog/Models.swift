@@ -129,6 +129,14 @@ extension CommandCatalog {
             systemImage: "bolt.badge.clock"
         ),
         CommandTemplate(
+            id: .modelBenchmarkParakeetCoreML,
+            category: .models,
+            title: "Parakeet Core ML benchmark",
+            subtitle: "Resident speech pipeline timings by stage",
+            systemImage: "waveform.badge.magnifyingglass",
+            inputKind: .audio
+        ),
+        CommandTemplate(
             id: .modelBenchmarkAPIWorkload,
             category: .models,
             title: "API workload benchmark",
@@ -385,6 +393,20 @@ extension CommandArguments {
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         if draft.maxTokens > 0 { args.option(F.maxTokens, String(draft.maxTokens)) }
         if draft.dryRun { args.flag(F.dryRun) }
+        if draft.json { args.flag(F.json) }
+        return args.arguments
+    }
+
+    package static func modelBenchmarkParakeetCoreML(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.ModelBenchmarkParakeetCoreml
+        var args = ArgumentBuilder(F.self)
+        args.value(draft.inputPath)
+        args.option(F.artifact, draft.modelRoot)
+        args.option(F.warmups, String(draft.benchmarkWarmupRepetitions))
+        args.option(F.repetitions, String(draft.benchmarkRepetitions))
+        if !draft.language.isBlank, draft.language != "auto" {
+            args.option(F.language, draft.language)
+        }
         if draft.json { args.flag(F.json) }
         return args.arguments
     }

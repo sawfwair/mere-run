@@ -4,12 +4,13 @@
 
 Transcribe or translate speech from a WAV file using native ASR backends. Auto mode prefers Parakeet for transcription and Qwen for translation.
 
-## Required Models
+## Required models
 
-- `speech-asr-parakeet` for fast transcription.
+- `speech-asr-parakeet` for default MLX transcription. The standalone Core ML
+  artifact replaces it when `--provider coreml` is selected.
 - `speech-asr-qwen3` for quality-first transcription and translation.
 
-## Install And Check
+## Install and check
 
 ```bash
 mere.run model pull speech-asr-parakeet
@@ -23,6 +24,10 @@ mere.run speech transcribe --help
 - `--output`, `-o`: optional transcript path.
 - `--model`, `-m`: model id or local model path.
 - `--backend`: `auto`, `parakeet`, or `qwen`.
+- `--provider`: Parakeet encoder provider, `mlx` or `coreml`. The default is
+  `mlx`. Core ML requires explicit `--backend parakeet` selection.
+- `--coreml-encoder`: Mere-built Parakeet Core ML artifact directory.
+  This option is required with `--provider coreml`.
 - `--task`: `transcribe` or `translate`.
 - `--language`: optional language hint.
 - `--max-tokens`: generation cap, default `448`.
@@ -32,10 +37,15 @@ mere.run speech transcribe --help
 - `--timestamps`, `--no-timestamps`: include alignment lines when available.
 - `--quiet`, `-q`: suppress progress.
 
-## Usage Patterns
+## Usage patterns
 
 - Start with `--backend auto`.
 - Use `--backend parakeet` for normal transcription where speed matters.
+- Use `--provider coreml` with a verified Mere-built hybrid artifact. It uses
+  Core ML for the encoder and TDT decoder, so the full managed MLX checkpoint
+  is not required. Non-streaming files are processed in 15-second windows with
+  two seconds of overlap. The decoder processes as many as 16 windows in
+  parallel, and matching aligned tokens are reconciled at each boundary.
 - Live transcription follows the same policy: `auto` selects Parakeet for
   transcription and Qwen for translation.
 - Use `--task translate --backend auto` for translation.
@@ -45,6 +55,13 @@ mere.run speech transcribe --help
 
 ```bash
 mere.run speech transcribe ./meeting.wav --backend auto --output ./meeting.txt
+```
+
+```bash
+mere.run speech transcribe ./short.wav \
+  --backend parakeet \
+  --provider coreml \
+  --coreml-encoder /path/to/parakeet-coreml
 ```
 
 ```bash
@@ -63,7 +80,7 @@ mere.run speech transcribe ./spanish.wav \
   --model speech-asr-qwen3
 ```
 
-## Iteration Tips
+## Iteration tips
 
 - Clean or normalize audio before changing model settings.
 - Disable timestamps when you only need prose.
@@ -75,9 +92,14 @@ mere.run speech transcribe ./spanish.wav \
   than five seconds queued.
 - Bad transcript on noisy audio: preprocess audio or try the other backend.
 - Translation with Parakeet requested: use Qwen or `--backend auto`.
+- Core ML is requested for streaming: remove `--provider coreml`; the first
+  Core ML milestone supports file transcription only.
+- Unexpected text near a Core ML window boundary: compare the same file with
+  `--provider mlx` and retain both outputs as qualification evidence.
 
 ## Sources
 
-- https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift
-- https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3
-- https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit
+- [Speech transcribe implementation](https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift)
+- [MLX Parakeet checkpoint](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3)
+- [NVIDIA Parakeet source checkpoint](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
+- [Qwen3-ASR checkpoint](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit)

@@ -65,6 +65,7 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
     case toolContinuations
     case gemma4KV
     case gemma4MTP
+    case parakeetCoreML
     case q36MTP
     case lagunaDFlash
     case apiWorkload
@@ -82,6 +83,7 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
         case .toolContinuations: "Tool continuations"
         case .gemma4KV: "Gemma4 KV cache"
         case .gemma4MTP: "Gemma4 MTP"
+        case .parakeetCoreML: "Parakeet Core ML"
         case .q36MTP: "Qwen3.6 MTP"
         case .lagunaDFlash: "Laguna DFlash"
         case .apiWorkload: "API workload"
@@ -107,6 +109,8 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
             return "Gemma4 default KV cache decode against packed PolarKV."
         case .gemma4MTP:
             return "Gemma4 serial decode against verified MTP speculative decode."
+        case .parakeetCoreML:
+            return "Resident Parakeet Core ML speech timings with transcript consistency."
         case .q36MTP:
             return "Qwen-family serial decode against adaptive and forced MTP speculative decode."
         case .lagunaDFlash:
@@ -128,6 +132,7 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
         case .toolContinuations: .modelBenchmarkToolContinuations
         case .gemma4KV: .modelBenchmarkGemma4KV
         case .gemma4MTP: .modelBenchmarkGemma4MTP
+        case .parakeetCoreML: .modelBenchmarkParakeetCoreML
         case .q36MTP: .modelBenchmark
         case .lagunaDFlash: .modelBenchmarkLagunaDFlash
         case .apiWorkload: .modelBenchmarkAPIWorkload
@@ -496,6 +501,18 @@ struct StudioModelHealthView: View {
                 Toggle("Verify existing hashes", isOn: $benchmarkDraft.benchmarkFixtureCheck)
                     .help("Exit unsuccessfully when a stored fixture hash does not match")
             }
+            if benchmark == .parakeetCoreML {
+                StudioPathField(
+                    label: "Audio file",
+                    placeholder: "Audio to benchmark",
+                    path: $benchmarkDraft.inputPath
+                )
+                StudioPathField(
+                    label: "Core ML artifact",
+                    placeholder: "Parakeet Core ML artifact directory",
+                    path: $benchmarkDraft.modelRoot
+                )
+            }
 
             if benchmark.acceptsDryRun {
                 Toggle("Plan only (dry run)", isOn: $benchmarkDryRun)
@@ -512,6 +529,8 @@ struct StudioModelHealthView: View {
                 .disabled(
                     benchmarkItem?.status == .running
                         || (benchmark == .fusedFixture && benchmarkDraft.inputPath.isBlank)
+                        || (benchmark == .parakeetCoreML
+                            && (benchmarkDraft.inputPath.isBlank || benchmarkDraft.modelRoot.isBlank))
                 )
 
                 if let item = benchmarkItem, item.status == .completed {
@@ -549,6 +568,10 @@ struct StudioModelHealthView: View {
         if benchmark == .fusedFixture {
             draft.inputPath = benchmarkDraft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
             draft.benchmarkFixtureCheck = benchmarkDraft.benchmarkFixtureCheck
+        }
+        if benchmark == .parakeetCoreML {
+            draft.inputPath = benchmarkDraft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft.modelRoot = benchmarkDraft.modelRoot.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         benchmarkRequestID = StudioSpecialistRunner.submit(
             templateID: benchmark.templateID,

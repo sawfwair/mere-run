@@ -7,6 +7,11 @@ public enum ParakeetVariant: String, Sendable, Hashable {
     case ctc
 }
 
+public enum ParakeetPackaging: String, Sendable, Hashable {
+    case completeMLX = "complete-mlx"
+    case coreMLHybrid = "coreml-hybrid-v1"
+}
+
 public struct ParakeetPreprocessorConfig: Sendable, Hashable {
     public let sampleRate: Int
     public let normalize: String
@@ -84,6 +89,7 @@ public struct ParakeetJointConfig: Sendable, Hashable {
 }
 
 public struct ParakeetModelConfig: Sendable, Hashable {
+    public let packaging: ParakeetPackaging
     public let variant: ParakeetVariant
     public let target: String
     public let preprocessor: ParakeetPreprocessorConfig
@@ -107,6 +113,16 @@ public struct ParakeetModelConfig: Sendable, Hashable {
         let data = try Data(contentsOf: url)
         let decoder = JSONDecoder()
         let raw = try decoder.decode(RawConfig.self, from: data)
+
+        let packaging: ParakeetPackaging
+        if let format = raw.mere?.format {
+            guard let parsed = ParakeetPackaging(rawValue: format) else {
+                throw ParakeetConfigError.unsupportedPackaging(format)
+            }
+            packaging = parsed
+        } else {
+            packaging = .completeMLX
+        }
 
         let variant = ParakeetModelConfig.detectVariant(
             target: raw.target,
@@ -201,6 +217,7 @@ public struct ParakeetModelConfig: Sendable, Hashable {
         )
 
         return ParakeetModelConfig(
+            packaging: packaging,
             variant: variant,
             target: raw.target,
             preprocessor: preprocessor,
@@ -255,6 +272,7 @@ public struct ParakeetModelConfig: Sendable, Hashable {
 }
 
 private struct RawConfig: Codable {
+    let mere: RawMerePackaging?
     let target: String
     let modelDefaults: RawModelDefaults?
     let preprocessor: RawPreprocessor
@@ -267,6 +285,7 @@ private struct RawConfig: Codable {
     let quantizationConfig: RawQuantization?
 
     enum CodingKeys: String, CodingKey {
+        case mere
         case target
         case modelDefaults = "model_defaults"
         case preprocessor
@@ -277,6 +296,21 @@ private struct RawConfig: Codable {
         case decoding
         case quantization
         case quantizationConfig = "quantization_config"
+    }
+}
+
+private struct RawMerePackaging: Codable {
+    let format: String
+}
+
+public enum ParakeetConfigError: LocalizedError {
+    case unsupportedPackaging(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unsupportedPackaging(let format):
+            return "Unsupported Parakeet package format: \(format)."
+        }
     }
 }
 

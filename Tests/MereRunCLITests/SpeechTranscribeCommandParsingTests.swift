@@ -10,6 +10,8 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.audio, "/tmp/input.wav")
         XCTAssertNil(cmd.model)
         XCTAssertEqual(cmd.backend, .auto)
+        XCTAssertEqual(cmd.provider, .mlx)
+        XCTAssertNil(cmd.coremlEncoder)
         XCTAssertEqual(cmd.task, .transcribe)
         XCTAssertEqual(cmd.maxTokens, 448)
         XCTAssertFalse(cmd.stream)
@@ -51,6 +53,36 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.stream)
         XCTAssertEqual(cmd.streamChunkMs, 120)
         XCTAssertEqual(cmd.streamDecodeMs, 640)
+    }
+
+    func testSpeechTranscribeParsesExplicitCoreMLParakeetProvider() throws {
+        let cmd = try SpeechTranscribe.parse([
+            "/tmp/input.wav",
+            "--backend", "parakeet",
+            "--provider", "coreml",
+            "--coreml-encoder", "/tmp/parakeet-coreml",
+        ])
+
+        XCTAssertEqual(cmd.backend, .parakeet)
+        XCTAssertEqual(cmd.provider, .coreml)
+        XCTAssertEqual(cmd.coremlEncoder, "/tmp/parakeet-coreml")
+    }
+
+    func testSpeechTranscribeRejectsIncompleteCoreMLProviderContract() {
+        XCTAssertThrowsError(try SpeechTranscribe.parse([
+            "/tmp/input.wav", "--backend", "parakeet", "--provider", "coreml",
+        ]))
+        XCTAssertThrowsError(try SpeechTranscribe.parse([
+            "/tmp/input.wav", "--provider", "coreml",
+            "--coreml-encoder", "/tmp/parakeet-coreml",
+        ]))
+        XCTAssertThrowsError(try SpeechTranscribe.parse([
+            "/tmp/input.wav", "--coreml-encoder", "/tmp/parakeet-coreml",
+        ]))
+        XCTAssertThrowsError(try SpeechTranscribe.parse([
+            "/tmp/input.wav", "--stream", "--backend", "parakeet", "--provider", "coreml",
+            "--coreml-encoder", "/tmp/parakeet-coreml",
+        ]))
     }
 
     func testSpeechTranscribeParsesRawPCMStandardInput() throws {
