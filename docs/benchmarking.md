@@ -365,13 +365,17 @@ with `uncontended: false`. Keep the repetition range visible and treat the
 result as a workstation observation. The collector still checks memory pressure
 and refuses to start alongside another inference process.
 
+Record the binary's build commit with `--build-source-revision`. The receipt
+distinguishes that revision from the checkout's current head, captures CPU load
+averages, and rejects a binary replaced during measurement.
+
 Set `MERERUN_Q35_MTP_PROFILE=1` only for diagnosis. The optional
 `acceleration.speculationProfile` contains per-round draft, target-forward,
 acceptance, and repair timings, plus serial fallback time. Submission time
 can include waits inside a model forward. Profiling adds synchronization and
 must be disabled for throughput conclusions.
 
-For the experiment controls and qualification status, see the
+For the scheduling defaults, controls, and measured workload results, see the
 [Qwen and Ornith generation tuning report](benchmarks/ornith-qwen-generation-tuning-2026-09-05.md).
 
 The microbenchmark commands are for runtime implementation work:
