@@ -3,11 +3,6 @@ import MLX
 import MLXFast
 import MLXNN
 
-private let q35PreciseSwigluCompiled = compile(shapeless: true) { hiddenStates, gate, x in
-    let gate = MLXNN.silu(gate.asType(.float32))
-    return (gate * x.asType(.float32)).asType(hiddenStates.dtype)
-}
-
 final class Q35RMSNormGated: Module {
     @ModuleInfo(key: "weight") var weight: MLXArray
     private let eps: Float
@@ -29,7 +24,7 @@ final class Q35RMSNormGated: Module {
             return (normalized.asType(.float32) * MLX.sigmoid(gate.asType(.float32)))
                 .asType(hiddenStates.dtype)
         }
-        return q35PreciseSwigluCompiled(hiddenStates, gate, normalized)
+        return Q35CompiledOperations.current.preciseSwiglu(hiddenStates, gate, normalized)
     }
 }
 
@@ -279,16 +274,9 @@ func q35FusedPortableQuantizedLinear(_ lhs: Linear, _ rhs: Linear) -> PortableQu
     )
 }
 
-private let q35ComputeGCompiled = compile(shapeless: true) { aLog, a, dtBias in
-    // Keep head width dynamic in the shapeless graph when models change.
-    let dt = softplus(a.asType(.float32) + dtBias.asType(.float32).expandedDimensions(axes: [0, 1]))
-    let decayBase = MLX.exp(aLog.asType(.float32)).expandedDimensions(axes: [0, 1])
-    return MLX.exp(-decayBase * dt)
-}
-
 @inline(__always)
 private func q35ComputeG(aLog: MLXArray, a: MLXArray, dtBias: MLXArray) -> MLXArray {
-    q35ComputeGCompiled(aLog, a, dtBias)
+    Q35CompiledOperations.current.computeG(aLog, a, dtBias)
 }
 
 #if os(macOS)

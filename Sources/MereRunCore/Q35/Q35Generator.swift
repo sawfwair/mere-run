@@ -457,7 +457,7 @@ public actor Q35Generator: ChatGenerator {
     ) async throws -> ChatResponse {
         activeChatRequestCount += 1
         defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await Stream.withNewDefaultStream {
+        return try await Q35CompiledOperations.withNewDefaultStream {
             let rootURL = try await resolveModelRoot(modelPath: nil, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -486,7 +486,7 @@ public actor Q35Generator: ChatGenerator {
     ) async throws -> ChatResponse {
         activeChatRequestCount += 1
         defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await Stream.withNewDefaultStream {
+        return try await Q35CompiledOperations.withNewDefaultStream {
             let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -512,7 +512,7 @@ public actor Q35Generator: ChatGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Stream.withNewDefaultStream {
+        try await Q35CompiledOperations.withNewDefaultStream {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler

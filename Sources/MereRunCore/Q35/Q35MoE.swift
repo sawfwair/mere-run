@@ -4,13 +4,9 @@ import MLXFast
 import MLXNN
 import MLXRandom
 
-private let q35SwigluCompiled = compile(shapeless: true) { gate, up in
-    MLXNN.silu(gate) * up
-}
-
 @inline(__always)
 private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
-    q35SwigluCompiled(gate, up)
+    Q35CompiledOperations.current.swiglu(gate, up)
 }
 
 /// MLX `gatherMM` currently accepts dense float32 expert banks only. Preserve
