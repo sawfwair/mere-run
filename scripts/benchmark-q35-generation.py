@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import plistlib
 from pathlib import Path
 import re
 import subprocess
@@ -32,21 +33,51 @@ def command_text(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
+def gpu_utilization():
+    devices = plistlib.loads(subprocess.check_output(["ioreg", "-r", "-c", "AGXAccelerator", "-a"]))
+    return max(device["PerformanceStatistics"]["Device Utilization %"] for device in devices)
+
+
 def snapshot():
     swap = command_text("sysctl", "-n", "vm.swapusage")
     return {
         "swap": swap,
         "swapUsedMiB": float(re.search(r"used = ([0-9.]+)M", swap).group(1)),
         "pressureLevel": int(command_text("sysctl", "-n", "kern.memorystatus_vm_pressure_level")),
+        "gpuDeviceUtilizationPercent": gpu_utilization(),
     }
+
+
+def is_metadata_command(arguments):
+    if arguments and arguments[-1] in {"--help", "-h", "--version"}:
+        return True
+    if arguments[:1] == ["--models-root"]:
+        arguments = arguments[2:]
+    elif arguments and arguments[0].startswith("--models-root="):
+        arguments = arguments[1:]
+    if arguments[:1] and arguments[0] in {"status", "catalog", "guide"}:
+        return True
+    if arguments[:1] == ["model"]:
+        return len(arguments) > 1 and arguments[1] in {"list", "location", "info", "capabilities"}
+    return False
 
 
 def inference_processes():
     rows = command_text("ps", "-axo", "pid,comm").splitlines()[1:]
-    return {
-        int(fields[0]) for row in rows
-        if len(fields := row.split(None, 1)) == 2 and Path(fields[1]).name == "mere.run"
-    }
+    active = set()
+    for row in rows:
+        fields = row.split(None, 1)
+        if len(fields) != 2 or Path(fields[1]).name != "mere.run":
+            continue
+        pid, executable = int(fields[0]), fields[1]
+        result = subprocess.run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True)
+        command = result.stdout.strip()
+        if not command:
+            continue
+        arguments = command[len(executable):].split() if command.startswith(executable) else []
+        if not is_metadata_command(arguments):
+            active.add(pid)
+    return active
 
 
 def rendering_processes():
@@ -76,6 +107,8 @@ def run_case(args, root, binary, name, prompt, environment):
     if renderers:
         raise SystemExit(f"A GPU rendering worker is active: {sorted(renderers)}. Leave it untouched and retry later.")
     before = snapshot()
+    if before["gpuDeviceUtilizationPercent"] > 10:
+        raise SystemExit("GPU is already busy; wait for an idle measurement window.")
     if before["pressureLevel"] != 1:
         raise SystemExit("Memory pressure is elevated; defer this benchmark.")
     command = [

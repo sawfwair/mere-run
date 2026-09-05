@@ -6,6 +6,8 @@ Qwen 3.5/3.6/3.8 dense and hybrid MoE text and vision-language runtime.
 - `Q35TokenizerAndTemplate.swift`: checkpoint-native chat-template rendering,
   image-token expansion, and tokenization.
 - `Q35Model.swift`: native model entry point.
+- `Q35CompiledOperations.swift`: compiled activations and request-stream scopes.
+- `Q35MTPProfile.swift`: optional synchronized speculation diagnostics.
 - Attention and MoE files own model math only.
 
 Keep tokenizer/tool template compatibility isolated here; model layers should

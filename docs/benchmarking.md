@@ -351,7 +351,11 @@ the JSON report. A single-variant run doesn't claim serial-output parity.
 `scripts/benchmark-q35-generation.py --help` describes the code, chat, prose,
 math, and summarization receipt collector. It records complete decode and
 request throughput, memory pressure, swap changes, and competing `mere.run`
-processes. Use an optimized binary and keep unrelated inference idle.
+inference processes. Metadata commands such as `status` and `model list` don't
+count as inference. The collector also checks active HyperFrames GPU workers
+and records the Apple GPU driver's utilization counter. It requires at most
+10 percent device utilization before starting. Use an optimized binary and
+keep unrelated inference and rendering idle throughout the measurement.
 Temperature defaults to zero; use `--temperature 0.7 --top-p 0.9` for a
 separate sampled-generation measurement.
 
@@ -360,6 +364,9 @@ Set `MERERUN_Q35_MTP_PROFILE=1` only for diagnosis. The optional
 acceptance, and repair timings, plus serial fallback time. Submission time
 can include waits inside a model forward. Profiling adds synchronization and
 must be disabled for throughput conclusions.
+
+For the experiment controls and qualification status, see the
+[Qwen and Ornith generation tuning report](benchmarks/ornith-qwen-generation-tuning-2026-09-05.md).
 
 The microbenchmark commands are for runtime implementation work:
 
