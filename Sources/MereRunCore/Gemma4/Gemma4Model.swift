@@ -217,8 +217,9 @@ final class Gemma4FullKVCache: Gemma4AttentionCache {
             let heads = keys.dim(1)
             let keyDim = keys.dim(3)
             let valueDim = values.dim(3)
-            let missing = max(0, newOffset - (self.keys?.dim(2) ?? 0))
-            let steps = max(1, (missing + Self.allocationStep - 1) / Self.allocationStep)
+            // Growth retains only the valid prefix below, discarding spare
+            // capacity. Allocate enough new rows for the entire incoming chunk.
+            let steps = max(1, (keys.dim(2) + Self.allocationStep - 1) / Self.allocationStep)
             let growth = steps * Self.allocationStep
             let newKeys = MLXArray.zeros([batch, heads, growth, keyDim], dtype: keys.dtype)
             let newValues = MLXArray.zeros([batch, heads, growth, valueDim], dtype: values.dtype)
