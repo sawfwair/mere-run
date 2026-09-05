@@ -3445,6 +3445,7 @@ public enum MereRunCapabilityCatalog {
         ],
         options: [
             .init(flag: "--list", label: "List topics", kind: .boolean),
+            .init(flag: "--list-models", label: "List model guides", kind: .boolean),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--json", label: "JSON", kind: .boolean),
             .init(flag: "--markdown", label: "Markdown index", kind: .boolean)

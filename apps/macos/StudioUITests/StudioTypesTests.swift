@@ -37,6 +37,8 @@ final class StudioTypesTests: XCTestCase {
     func testAppUtilityCommandsAreBackedByTheSharedCLIContract() throws {
         let fixtures: [(String, [String])] = [
             ("guide", ["guide", "--list", "--json"]),
+            ("guide", ["guide", "--list-models", "--json"]),
+            ("guide", ["guide", "--model", "image-klein-9b", "--json"]),
             ("guide", ["guide", "music", "generate", "--json"]),
             (
                 "config.set",

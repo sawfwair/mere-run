@@ -68,6 +68,7 @@ export default defineConfig({
           { text: 'Configuration', link: '/configuration' },
           { text: 'Quality gate', link: '/gate' },
           { text: 'Model sources', link: '/model-sources' },
+          { text: 'Provider prompting guides', link: '/provider-prompting-guides' },
           { text: 'Companion plugins', link: '/plugins' },
           { text: 'Raycast example', link: '/raycast' }
         ]

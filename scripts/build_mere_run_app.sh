@@ -149,6 +149,24 @@ mkdir -p "$macos" "$resources" "$frameworks" "$cli_payload"
 cp "$executable" "${macos}/mere.run.app"
 cp "$cli_executable" "${cli_payload}/mere.run"
 
+# Command cookbooks and model handbooks must travel with the embedded CLI. Without
+# this bundle, SwiftPM can silently fall back to the developer's build directory.
+guide_bundle="${build_dir}/MereRun_MereRunCLI.bundle"
+if [[ ! -f "${guide_bundle}/model-guides.json" ]]; then
+  echo "Offline model handbook is missing from ${guide_bundle}" >&2
+  exit 66
+fi
+# SwiftPM emits a flat directory without Info.plist. Give the packaged resource
+# bundle a macOS layout so codesign can seal it and Bundle.module can find it.
+packaged_guide_bundle="${cli_payload}/MereRun_MereRunCLI.bundle"
+mkdir -p "${packaged_guide_bundle}/Contents/Resources"
+cp -R "${guide_bundle}/." "${packaged_guide_bundle}/Contents/Resources/"
+guide_info="${packaged_guide_bundle}/Contents/Info.plist"
+plutil -create xml1 "$guide_info"
+plutil -insert CFBundleIdentifier -string "run.mere.MereRunCLIResources" "$guide_info"
+plutil -insert CFBundlePackageType -string "BNDL" "$guide_info"
+plutil -insert CFBundleVersion -string "$app_build" "$guide_info"
+
 # Sparkle is a versioned framework with symlinked helpers and XPC services.
 # `ditto` preserves that layout; flattening or dereferencing it breaks both
 # dyld lookup and its nested code signatures.

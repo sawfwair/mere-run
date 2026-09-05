@@ -1950,6 +1950,33 @@ package struct StudioGuideTopic: Identifiable, Equatable {
     package let id: String
     package let title: String
     package let commandPath: [String]
+    package var models: [String] = []
+    package var category: String = ""
+
+    package var isModelGuide: Bool { commandPath.isEmpty }
+
+    package func matches(_ query: String) -> Bool {
+        let words = query.split(whereSeparator: \.isWhitespace)
+        let searchable = ([title, category] + models + commandPath).joined(separator: " ")
+        return words.allSatisfy { searchable.localizedCaseInsensitiveContains(String($0)) }
+    }
+
+    package static func parseModels(listJSON: String) -> [StudioGuideTopic] {
+        guard let data = jsonArrayData(in: listJSON) else { return [] }
+        struct Item: Decodable {
+            let topic: String
+            let title: String
+            let category: String
+            let models: [String]
+        }
+        guard let items = try? JSONDecoder().decode([Item].self, from: data) else { return [] }
+        return items.map {
+            StudioGuideTopic(
+                id: $0.topic, title: $0.title, commandPath: [], models: $0.models,
+                category: $0.category
+            )
+        }
+    }
 
     package static func parse(listJSON: String) -> [StudioGuideTopic] {
         guard let data = jsonArrayData(in: listJSON) else { return [] }

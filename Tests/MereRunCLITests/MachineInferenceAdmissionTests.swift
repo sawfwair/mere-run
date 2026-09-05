@@ -413,6 +413,16 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         )
     }
 
+    func testOfflineGuidesNeverReserveInferenceMemory() {
+        for model in ["text-agent-ornith-35b-mlx", "text-chat-deepseek-v4-flash"] {
+            for path in [[], ["text", "chat"]] {
+                XCTAssertNil(CLIInferenceAdmissionClassifier.request(
+                    arguments: ["mere.run", "guide"] + path + ["--model", model, "--json"]
+                ))
+            }
+        }
+    }
+
     func testAPIServerKeepsInternalConcurrencyInsideWeightedReservation() {
         XCTAssertEqual(
             CLIInferenceAdmissionClassifier.apiServerRequest(engine: .textChatGemma4),

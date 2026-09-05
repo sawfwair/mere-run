@@ -1,0 +1,613 @@
+[
+  {
+    "topic": "handbook-flux2-klein",
+    "title": "FLUX.2 Klein (Black Forest Labs)",
+    "category": "Image",
+    "models": [
+      "image-klein-nano",
+      "image-klein-max",
+      "image-klein-9b",
+      "image-klein-base",
+      "image-klein-base-9b"
+    ],
+    "resourceName": "handbook-flux2-klein.md"
+  },
+  {
+    "topic": "handbook-flux2-dev",
+    "title": "FLUX.2 dev (Black Forest Labs)",
+    "category": "Image",
+    "models": [
+      "image-flux2-dev"
+    ],
+    "resourceName": "handbook-flux2-dev.md"
+  },
+  {
+    "topic": "handbook-flux1-dev",
+    "title": "FLUX.1 dev (Black Forest Labs)",
+    "category": "Image",
+    "models": [
+      "image-flux1-dev"
+    ],
+    "resourceName": "handbook-flux1-dev.md"
+  },
+  {
+    "topic": "handbook-klein-components",
+    "title": "Klein shared components",
+    "category": "Image",
+    "models": [
+      "image-klein-shared"
+    ],
+    "resourceName": "handbook-klein-components.md"
+  },
+  {
+    "topic": "handbook-bonsai-image",
+    "title": "Bonsai image (PrismML)",
+    "category": "Image",
+    "models": [
+      "image-bonsai-binary",
+      "image-bonsai-ternary"
+    ],
+    "resourceName": "handbook-bonsai-image.md"
+  },
+  {
+    "topic": "handbook-z-image",
+    "title": "Z-Image (Tongyi-MAI)",
+    "category": "Image",
+    "models": [
+      "image-zimage-nano",
+      "image-zimage-max",
+      "image-zimage-base"
+    ],
+    "resourceName": "handbook-z-image.md"
+  },
+  {
+    "topic": "handbook-hidream-o1",
+    "title": "HiDream O1 (HiDream-ai)",
+    "category": "Image",
+    "models": [
+      "image-hidream-o1",
+      "image-hidream-o1-dev"
+    ],
+    "resourceName": "handbook-hidream-o1.md"
+  },
+  {
+    "topic": "handbook-sensenova-u15",
+    "title": "SenseNova U1.5 (SenseNova)",
+    "category": "Image",
+    "models": [
+      "image-sensenova-u1-5-8b-mot"
+    ],
+    "resourceName": "handbook-sensenova-u15.md"
+  },
+  {
+    "topic": "handbook-krea2",
+    "title": "Krea 2 (Krea)",
+    "category": "Image",
+    "models": [
+      "image-krea2-raw",
+      "image-krea2-turbo"
+    ],
+    "resourceName": "handbook-krea2.md"
+  },
+  {
+    "topic": "handbook-qwen-image-edit",
+    "title": "Qwen Image Edit 2511 (Qwen)",
+    "category": "Image",
+    "models": [
+      "image-qwen-edit-2511",
+      "image-qwen-edit-2511-lightning"
+    ],
+    "resourceName": "handbook-qwen-image-edit.md"
+  },
+  {
+    "topic": "handbook-ideogram4",
+    "title": "Ideogram 4 (Ideogram)",
+    "category": "Image",
+    "models": [
+      "image-ideogram4-sdnq-uint4"
+    ],
+    "resourceName": "handbook-ideogram4.md"
+  },
+  {
+    "topic": "handbook-mebot-psi",
+    "title": "MeBot and Psi",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-mebot",
+      "text-chat-psi-agent"
+    ],
+    "resourceName": "handbook-mebot-psi.md"
+  },
+  {
+    "topic": "handbook-gemma4",
+    "title": "Gemma 4 (Google)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-gemma4",
+      "text-chat-gemma4-turbo",
+      "text-chat-gemma4-12b",
+      "text-chat-gemma4-12b-4bit",
+      "vision-chat-gemma4-12b",
+      "text-chat-gemma4-nano",
+      "text-chat-gemma4-max"
+    ],
+    "resourceName": "handbook-gemma4.md"
+  },
+  {
+    "topic": "handbook-diffusiongemma",
+    "title": "DiffusionGemma (Google)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-diffusiongemma-26b-optiq-4bit"
+    ],
+    "resourceName": "handbook-diffusiongemma.md"
+  },
+  {
+    "topic": "handbook-laguna",
+    "title": "Laguna 2.1 (poolside)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-laguna-s-2-1",
+      "text-chat-laguna-xs-2-1"
+    ],
+    "resourceName": "handbook-laguna.md"
+  },
+  {
+    "topic": "handbook-inkling",
+    "title": "Inkling Small (Thinking Machines)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-inkling-small"
+    ],
+    "resourceName": "handbook-inkling.md"
+  },
+  {
+    "topic": "handbook-muse-glimmer",
+    "title": "Muse Glimmer (Meta)",
+    "category": "Text and multimodal",
+    "models": [
+      "vision-chat-muse-glimmer-30b"
+    ],
+    "resourceName": "handbook-muse-glimmer.md"
+  },
+  {
+    "topic": "handbook-nemotron-lightning",
+    "title": "Nemotron 3.5 Lightning (NVIDIA)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-nemotron-35-lightning"
+    ],
+    "resourceName": "handbook-nemotron-lightning.md"
+  },
+  {
+    "topic": "handbook-nemotron-omni",
+    "title": "Nemotron 3 Nano Omni (NVIDIA)",
+    "category": "Text and multimodal",
+    "models": [
+      "omni-chat-nemotron3-nano-30b-a3b-bf16"
+    ],
+    "resourceName": "handbook-nemotron-omni.md"
+  },
+  {
+    "topic": "handbook-qwen-chat",
+    "title": "Qwen 3.5, 3.6, and 3.8 (Qwen)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-q36-nano",
+      "vision-chat-q38-27b",
+      "vision-chat-q38-27b-4bit",
+      "vision-chat-q38-flash-next-mixed",
+      "vision-chat-q38-flash-next-3bit",
+      "vision-chat-q38-flash-next-3bit-native-ple",
+      "vision-chat-q38-flash-next-4bit",
+      "text-agent-qwen35-9b",
+      "text-chat-q36-nano-gguf"
+    ],
+    "resourceName": "handbook-qwen-chat.md"
+  },
+  {
+    "topic": "handbook-bonsai-text",
+    "title": "Bonsai text (PrismML)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-bonsai-27b-1bit",
+      "text-chat-bonsai-27b-2bit"
+    ],
+    "resourceName": "handbook-bonsai-text.md"
+  },
+  {
+    "topic": "handbook-ornith15",
+    "title": "Ornith 1.5 (Ornith)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-agent-ornith-35b-mlx-4bit",
+      "text-agent-ornith-35b-mlx-6bit",
+      "text-agent-ornith-35b-mlx-8bit",
+      "text-agent-ornith-35b-mlx",
+      "vision-chat-ornith-35b"
+    ],
+    "resourceName": "handbook-ornith15.md"
+  },
+  {
+    "topic": "handbook-ornith10",
+    "title": "Ornith 1.0",
+    "category": "Text and multimodal",
+    "models": [
+      "text-agent-ornith-9b",
+      "text-agent-ornith-35b"
+    ],
+    "resourceName": "handbook-ornith10.md"
+  },
+  {
+    "topic": "handbook-north-mini",
+    "title": "North Mini Code",
+    "category": "Text and multimodal",
+    "models": [
+      "text-code-north-mini"
+    ],
+    "resourceName": "handbook-north-mini.md"
+  },
+  {
+    "topic": "handbook-deepseek-v4",
+    "title": "DeepSeek V4 Flash (DeepSeek)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-agent-deepseek-v4-flash"
+    ],
+    "resourceName": "handbook-deepseek-v4.md"
+  },
+  {
+    "topic": "handbook-lfm25-text",
+    "title": "LFM2.5 text (Liquid AI)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-chat-lfm25-a1b-8bit",
+      "text-chat-lfm25-a1b-bf16",
+      "text-chat-lfm25-1.2b-bf16",
+      "text-chat-lfm25-1.2b-qad-4bit",
+      "text-chat-lfm25-2.6b-4bit",
+      "text-chat-lfm25-2.6b-qad-4bit",
+      "text-chat-lfm25-2.6b-bf16"
+    ],
+    "resourceName": "handbook-lfm25-text.md"
+  },
+  {
+    "topic": "handbook-lfm25-vision",
+    "title": "LFM2.5 vision (Liquid AI)",
+    "category": "Text and multimodal",
+    "models": [
+      "vision-chat-lfm25-3b-8bit"
+    ],
+    "resourceName": "handbook-lfm25-vision.md"
+  },
+  {
+    "topic": "handbook-qwen3-code",
+    "title": "Qwen3 code (Qwen)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-code-qwen3"
+    ],
+    "resourceName": "handbook-qwen3-code.md"
+  },
+  {
+    "topic": "handbook-qwen3-embedding",
+    "title": "Qwen3 text embeddings (Qwen)",
+    "category": "Text and multimodal",
+    "models": [
+      "text-embed-qwen3-0.6b"
+    ],
+    "resourceName": "handbook-qwen3-embedding.md"
+  },
+  {
+    "topic": "handbook-qwen3-vl-embedding",
+    "title": "Qwen3 VL embeddings (Qwen)",
+    "category": "Text and multimodal",
+    "models": [
+      "vision-embed-qwen3-vl-2b"
+    ],
+    "resourceName": "handbook-qwen3-vl-embedding.md"
+  },
+  {
+    "topic": "handbook-privacy-filter",
+    "title": "Privacy Filter",
+    "category": "Text and multimodal",
+    "models": [
+      "text-anonymize-privacy-filter"
+    ],
+    "resourceName": "handbook-privacy-filter.md"
+  },
+  {
+    "topic": "handbook-qwen3-tts",
+    "title": "Qwen3 TTS (Qwen)",
+    "category": "Speech",
+    "models": [
+      "speech-tts-qwen3-nano",
+      "speech-tts-qwen3-customvoice"
+    ],
+    "resourceName": "handbook-qwen3-tts.md"
+  },
+  {
+    "topic": "handbook-qwen3-asr",
+    "title": "Qwen3 ASR (Qwen)",
+    "category": "Speech",
+    "models": [
+      "speech-asr-qwen3"
+    ],
+    "resourceName": "handbook-qwen3-asr.md"
+  },
+  {
+    "topic": "handbook-parakeet-sortformer",
+    "title": "Parakeet and Sortformer (NVIDIA)",
+    "category": "Speech",
+    "models": [
+      "speech-asr-parakeet",
+      "speech-diarization-sortformer"
+    ],
+    "resourceName": "handbook-parakeet-sortformer.md"
+  },
+  {
+    "topic": "handbook-infinity-parser",
+    "title": "Infinity Parser2 Pro (infly)",
+    "category": "Vision and reconstruction",
+    "models": [
+      "vision-ocr-infinity-pro",
+      "vision-ocr-infinity-pro-int8"
+    ],
+    "resourceName": "handbook-infinity-parser.md"
+  },
+  {
+    "topic": "handbook-lighton-ocr",
+    "title": "LightOnOCR 2 (LightOn)",
+    "category": "Vision and reconstruction",
+    "models": [
+      "vision-ocr-lighton"
+    ],
+    "resourceName": "handbook-lighton-ocr.md"
+  },
+  {
+    "topic": "handbook-sam31",
+    "title": "SAM 3.1 (Meta)",
+    "category": "Vision and reconstruction",
+    "models": [
+      "vision-segment-sam31"
+    ],
+    "resourceName": "handbook-sam31.md"
+  },
+  {
+    "topic": "handbook-falcon-perception",
+    "title": "Falcon Perception (TII)",
+    "category": "Vision and reconstruction",
+    "models": [
+      "vision-ground-falcon-perception"
+    ],
+    "resourceName": "handbook-falcon-perception.md"
+  },
+  {
+    "topic": "handbook-terramind",
+    "title": "TerraMind fire and flood",
+    "category": "Vision and reconstruction",
+    "models": [
+      "vision-flood-terramind-base",
+      "vision-fire-terramind-base"
+    ],
+    "resourceName": "handbook-terramind.md"
+  },
+  {
+    "topic": "handbook-geo-embeddings",
+    "title": "TESSERA and OlmoEarth embeddings",
+    "category": "Vision and reconstruction",
+    "models": [
+      "vision-embed-tessera-v2-nano",
+      "vision-embed-tessera-v2-small",
+      "vision-embed-tessera-v2-medium",
+      "vision-embed-tessera-v2-large",
+      "vision-embed-tessera-v2-teacher",
+      "vision-embed-olmoearth-v12-nano",
+      "vision-embed-olmoearth-v12-tiny",
+      "vision-embed-olmoearth-v12-small",
+      "vision-embed-olmoearth-v12-base"
+    ],
+    "resourceName": "handbook-geo-embeddings.md"
+  },
+  {
+    "topic": "handbook-buffalo-l",
+    "title": "InsightFace Buffalo-L",
+    "category": "Vision and reconstruction",
+    "models": [
+      "vision-face-buffalo-l"
+    ],
+    "resourceName": "handbook-buffalo-l.md"
+  },
+  {
+    "topic": "handbook-depth-geometry",
+    "title": "MoGe2, Video Depth Anything, and DA3",
+    "category": "Vision and reconstruction",
+    "models": [
+      "vision-geometry-moge2-small",
+      "vision-depth-vda-small",
+      "vision-depth-vda-small-metric",
+      "vision-geometry-da3-small"
+    ],
+    "resourceName": "handbook-depth-geometry.md"
+  },
+  {
+    "topic": "handbook-reconstruction3d",
+    "title": "TripoSR, InstantMesh, and TRELLIS.2",
+    "category": "Vision and reconstruction",
+    "models": [
+      "image-3d-triposr",
+      "image-3d-instantmesh-base",
+      "image-3d-trellis2-4b"
+    ],
+    "resourceName": "handbook-reconstruction3d.md"
+  },
+  {
+    "topic": "handbook-ace-step",
+    "title": "ACE-Step 1.5 (ACE-Step)",
+    "category": "Music and audio",
+    "models": [
+      "music-acestep",
+      "music-acestep-xl-base",
+      "music-acestep-xl-sft",
+      "music-acestep-xl-turbo",
+      "music-acestep-xl-turbo-lm4b",
+      "music-acestep-lm-1.7b",
+      "music-acestep-lm-4b"
+    ],
+    "resourceName": "handbook-ace-step.md"
+  },
+  {
+    "topic": "handbook-minimax-music3",
+    "title": "MiniMax Music3 (MiniMax)",
+    "category": "Music and audio",
+    "models": [
+      "music-minimax-music3"
+    ],
+    "resourceName": "handbook-minimax-music3.md"
+  },
+  {
+    "topic": "handbook-magenta-rt2",
+    "title": "Magenta RealTime 2 (Google)",
+    "category": "Music and audio",
+    "models": [
+      "music-magenta-rt2-small",
+      "music-magenta-rt2-base"
+    ],
+    "resourceName": "handbook-magenta-rt2.md"
+  },
+  {
+    "topic": "handbook-muscriptor",
+    "title": "Muscriptor",
+    "category": "Music and audio",
+    "models": [
+      "music-muscriptor-small",
+      "music-muscriptor-medium",
+      "music-muscriptor-large"
+    ],
+    "resourceName": "handbook-muscriptor.md"
+  },
+  {
+    "topic": "handbook-roformer",
+    "title": "RoFormer separation and cleanup",
+    "category": "Music and audio",
+    "models": [
+      "music-separate-bs-roformer-viperx-1297",
+      "music-separate-bs-roformer-4stem",
+      "music-separate-mel-roformer-dereverb",
+      "music-separate-mel-roformer-denoise"
+    ],
+    "resourceName": "handbook-roformer.md"
+  },
+  {
+    "topic": "handbook-audio-enhance",
+    "title": "AP-BWE and UniverSR",
+    "category": "Music and audio",
+    "models": [
+      "audio-enhance-ap-bwe-16kto48k",
+      "audio-enhance-universr-audio"
+    ],
+    "resourceName": "handbook-audio-enhance.md"
+  },
+  {
+    "topic": "handbook-woosh",
+    "title": "Woosh generators (Sony AI)",
+    "category": "Music and audio",
+    "models": [
+      "sfx-woosh-dflow",
+      "sfx-woosh-flow",
+      "sfx-woosh-vflow-8s",
+      "sfx-woosh-dvflow-8s"
+    ],
+    "resourceName": "handbook-woosh.md"
+  },
+  {
+    "topic": "handbook-woosh-components",
+    "title": "Woosh auxiliary models",
+    "category": "Music and audio",
+    "models": [
+      "sfx-woosh-clap",
+      "sfx-woosh-synchformer"
+    ],
+    "resourceName": "handbook-woosh-components.md"
+  },
+  {
+    "topic": "handbook-mmaudio",
+    "title": "MMAudio",
+    "category": "Music and audio",
+    "models": [
+      "sfx-mmaudio-large-44k-v2"
+    ],
+    "resourceName": "handbook-mmaudio.md"
+  },
+  {
+    "topic": "handbook-ltx",
+    "title": "LTX 2, 2.3, and 2.5 (Lightricks)",
+    "category": "Video",
+    "models": [
+      "video-ltx-av",
+      "video-ltx23-av-mlx",
+      "video-ltx23-full-mlx",
+      "video-ltx23-a2vid-mlx",
+      "video-ltx25-distilled-bf16",
+      "video-ltx25-full-bf16"
+    ],
+    "resourceName": "handbook-ltx.md"
+  },
+  {
+    "topic": "handbook-wan22",
+    "title": "Wan 2.2 (Wan)",
+    "category": "Video",
+    "models": [
+      "video-wan22-ti2v-5b-mlx"
+    ],
+    "resourceName": "handbook-wan22.md"
+  },
+  {
+    "topic": "handbook-minimax-h3",
+    "title": "MiniMax H3 FL2VA and FastH3 (MiniMax)",
+    "category": "Video",
+    "models": [
+      "video-minimax-h3-fl2va-mlx",
+      "video-minimax-h3-fl2va-bf16-mlx",
+      "video-minimax-h3-fl2va-8bit-mlx",
+      "video-minimax-h3-fasth3-vsa-datafree-mlx"
+    ],
+    "resourceName": "handbook-minimax-h3.md"
+  },
+  {
+    "topic": "handbook-minimax-h3-ref",
+    "title": "MiniMax H3 Ref2VA (MiniMax)",
+    "category": "Video",
+    "models": [
+      "video-minimax-h3-ref2va-mlx"
+    ],
+    "resourceName": "handbook-minimax-h3-ref.md"
+  },
+  {
+    "topic": "handbook-cosmos3",
+    "title": "Cosmos3 Edge (NVIDIA)",
+    "category": "Video",
+    "models": [
+      "video-cosmos3-edge-mlx"
+    ],
+    "resourceName": "handbook-cosmos3.md"
+  },
+  {
+    "topic": "handbook-scail2",
+    "title": "SCAIL-2 (Z.ai)",
+    "category": "Video",
+    "models": [
+      "video-scail2-14b-mlx"
+    ],
+    "resourceName": "handbook-scail2.md"
+  },
+  {
+    "topic": "handbook-dreamx",
+    "title": "DreamX World (GD-ML)",
+    "category": "Video",
+    "models": [
+      "video-dreamx-world-5b-ar-mlx"
+    ],
+    "resourceName": "handbook-dreamx.md"
+  }
+]

@@ -11,6 +11,8 @@ struct GuideCommand: ParsableCommand {
 
         Examples:
           mere.run guide --list
+          mere.run guide --list-models
+          mere.run guide --model image-klein-max
           mere.run guide --list --markdown > guides.md
           mere.run guide music generate
           mere.run guide image generate --model image-zimage-nano
@@ -21,19 +23,31 @@ struct GuideCommand: ParsableCommand {
     @Flag(name: [.long], help: "List available guide topics.")
     var list: Bool = false
 
-    @Option(name: [.long], help: "Focus the guide on a supported managed model id.")
+    @Flag(name: [.long], help: "List offline model handbook families and their managed model IDs.")
+    var listModels: Bool = false
+
+    @Option(name: [.long], help: "Focus the guide on a supported managed model ID.")
     var model: String?
 
     @Flag(name: [.long], help: "Emit JSON instead of Markdown.")
     var json: Bool = false
 
-    @Flag(name: [.long], help: "Render the topic list as a Markdown table (redirect to a .md file).")
+    @Flag(name: [.long], help: "Render the topic list as a Markdown table (redirect to a Markdown file).")
     var markdown: Bool = false
 
     @Argument(help: "Command path to read, for example: music generate.")
     var commandPath: [String] = []
 
     func run() throws {
+        if listModels {
+            print(try ModelGuideRegistry.renderList(json: json, markdown: markdown))
+            return
+        }
+        if !list, commandPath.isEmpty, let model {
+            let guide = try ModelGuideRegistry.guide(for: model)
+            print(try Self.render(entry: guide.entry, model: model, json: json))
+            return
+        }
         if list || commandPath.isEmpty {
             if markdown {
                 print(try Self.renderListMarkdown())
@@ -727,6 +741,10 @@ enum GuideRegistry {
             && normalizedModel == "music-minimax-music3"
             ? "music-generate-minimax-music3.md"
             : topic.resourceName
+        return try resourceContent(named: resourceName)
+    }
+
+    static func resourceContent(named resourceName: String) throws -> String {
         let resource = resourceName as NSString
         let baseName = resource.deletingPathExtension
         let fileExtension = resource.pathExtension

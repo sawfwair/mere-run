@@ -739,9 +739,16 @@ package final class MereRunController: ObservableObject {
         return StudioGuideTopic.parse(listJSON: result.stdout)
     }
 
+    package func loadModelGuideTopics() async -> [StudioGuideTopic] {
+        let result = await utilityCommandResult(args: ["guide", "--list-models", "--json"])
+        guard result.exitCode == 0 else { return [] }
+        return StudioGuideTopic.parseModels(listJSON: result.stdout)
+    }
+
     /// Markdown content for one guide topic (`guide <command-path> --json`).
-    package func loadGuideContent(commandPath: [String]) async -> String {
-        let result = await utilityCommandResult(args: ["guide"] + commandPath + ["--json"])
+    package func loadGuideContent(commandPath: [String], model: String? = nil) async -> String {
+        let modelArguments = model.map { ["--model", $0] } ?? []
+        let result = await utilityCommandResult(args: ["guide"] + commandPath + modelArguments + ["--json"])
         guard result.exitCode == 0 else {
             return result.stderr.isBlank ? "No guide is available for this topic." : result.stderr
         }
