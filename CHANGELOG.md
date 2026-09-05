@@ -6,8 +6,25 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.51.0 - 2026-09-05
+
+This release rebuilds macOS Studio around persistent navigation, task, and
+result workflows. It adds native FLUX.1, FLUX.2, and Cosmos3-Super image
+generation, a Core ML provider for Parakeet transcription, resumable text LoRA
+training, and offline guides for every managed model. It also hardens Qwen and
+Ornith generation and expands the CLI's machine-readable contracts, progress,
+and result receipts.
+
 ### Runtime
 
+- fit Qwen-family vision inputs to the requested context by reserving text and
+  generation tokens before image encoding. Oversized images are downsampled,
+  and inputs that cannot fit are rejected instead of truncating image-token
+  spans.
+- fixed exact gathered Q4 expert execution for Qwen and Ornith, including
+  Ornith's Q8 router gates. MTP prompt history is preserved in prefix-cache
+  snapshots, and `model benchmark q38-verification` supports both managed Q4
+  targets.
 - fixed sampled Qwen-family requests retaining random state from another
   thread's GPU stream. Each request now owns its random state and applies its
   seed to both token sampling and MTP acceptance draws.
@@ -191,6 +208,9 @@ nothing opens in a modal window on top of your work.
 
 ### Image
 
+- deduplicated Qwen Image Edit input and reference paths while preserving their
+  first-seen order, so repeating the input with `--ref-image` doesn't apply the
+  same conditioning image twice.
 - added native Swift/MLX inference and resumable conversion tooling for
   NVIDIA Cosmos3-Super Text2Image 4-Step. The Q4 artifact pins the source
   revision, preserves the BF16 VAE and small projections, removes unused sound
@@ -214,6 +234,52 @@ nothing opens in a modal window on top of your work.
   checksum-pinned `flux2-dev-turbo-8step` adapter. Selecting the managed Turbo
   adapter applies its published eight-step sigma schedule and guidance default,
   so it can run alongside a local FLUX.2-dev style or subject LoRA.
+
+### Release quality
+
+- added exact Flash-Next verifier coverage for Q4 projection, QSA, PLE, and
+  routed-MoE paths through widths 4, 8, 16, and 32. The production MTP default
+  remains width 4.
+- published Qwen and Ornith generation qualification reports with complete
+  repetition ranges, serial and MTP comparisons, model and build provenance,
+  and downloadable receipts. These reports separate shared-workstation
+  observations from causal performance claims.
+
+### Included pull requests
+
+- exact release range: [#403](https://github.com/sawfwair/mere-run/pull/403),
+  [#404](https://github.com/sawfwair/mere-run/pull/404),
+  [#405](https://github.com/sawfwair/mere-run/pull/405),
+  [#406](https://github.com/sawfwair/mere-run/pull/406),
+  [#409](https://github.com/sawfwair/mere-run/pull/409),
+  [#408](https://github.com/sawfwair/mere-run/pull/408),
+  [#407](https://github.com/sawfwair/mere-run/pull/407),
+  [#416](https://github.com/sawfwair/mere-run/pull/416),
+  [#410](https://github.com/sawfwair/mere-run/pull/410),
+  [#418](https://github.com/sawfwair/mere-run/pull/418),
+  [#425](https://github.com/sawfwair/mere-run/pull/425),
+  [#426](https://github.com/sawfwair/mere-run/pull/426),
+  [#424](https://github.com/sawfwair/mere-run/pull/424),
+  [#427](https://github.com/sawfwair/mere-run/pull/427),
+  [#428](https://github.com/sawfwair/mere-run/pull/428),
+  [#429](https://github.com/sawfwair/mere-run/pull/429),
+  [#431](https://github.com/sawfwair/mere-run/pull/431),
+  [#432](https://github.com/sawfwair/mere-run/pull/432),
+  [#430](https://github.com/sawfwair/mere-run/pull/430),
+  [#434](https://github.com/sawfwair/mere-run/pull/434),
+  [#433](https://github.com/sawfwair/mere-run/pull/433),
+  [#421](https://github.com/sawfwair/mere-run/pull/421),
+  [#435](https://github.com/sawfwair/mere-run/pull/435),
+  [#437](https://github.com/sawfwair/mere-run/pull/437),
+  [#438](https://github.com/sawfwair/mere-run/pull/438),
+  [#436](https://github.com/sawfwair/mere-run/pull/436),
+  [#439](https://github.com/sawfwair/mere-run/pull/439),
+  [#440](https://github.com/sawfwair/mere-run/pull/440),
+  [#441](https://github.com/sawfwair/mere-run/pull/441),
+  [#442](https://github.com/sawfwair/mere-run/pull/442),
+  [#443](https://github.com/sawfwair/mere-run/pull/443),
+  [#444](https://github.com/sawfwair/mere-run/pull/444), and
+  [#445](https://github.com/sawfwair/mere-run/pull/445).
 
 ## 0.50.0 - 2026-09-01
 
