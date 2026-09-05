@@ -8,12 +8,12 @@ import CoreML
 
 struct ParakeetCoreMLManifest: Decodable, Sendable {
     static let filename = "parakeet-coreml.json"
-    static let supportedSchemaVersions = Set([1, 2, 3])
+    static let supportedSchemaVersions = Set([1, 2, 3, 4])
     static let sourceRepository = "nvidia/parakeet-tdt-0.6b-v3"
     static let sourceRevision = "541d1f99c6b0c3cd0b11a95167540bb8edefd82b"
     static let sourceLicense = "CC-BY-4.0"
     static let converter = "convert_parakeet_coreml.py"
-    static let currentConverterVersion = 3
+    static let currentConverterVersion = 4
     static let torchVersion = "2.7.0"
     static let transformersVersion = "5.16.1"
     static let coreMLToolsVersion = "9.0"
@@ -59,6 +59,10 @@ struct ParakeetCoreMLManifest: Decodable, Sendable {
     }
 
     struct CoreMLDecoder: Decodable, Sendable {
+        enum DecisionEncoding: String, Decodable, Sendable {
+            case base128Float16 = "base128-float16"
+        }
+
         let compiledModelDirectory: String
         let embeddingFile: String
         let encoderInputName: String
@@ -74,6 +78,9 @@ struct ParakeetCoreMLManifest: Decodable, Sendable {
         let hiddenSize: Int
         let layers: Int
         let vocabularySize: Int
+        var decisionEncoding: DecisionEncoding?
+
+        var usesANESelection: Bool { decisionEncoding == .base128Float16 }
     }
 
     let schemaVersion: Int
@@ -182,6 +189,8 @@ struct ParakeetCoreMLManifest: Decodable, Sendable {
             expectedConverterVersion = 1
         case 2:
             expectedConverterVersion = 2
+        case 3:
+            expectedConverterVersion = 3
         default:
             expectedConverterVersion = Self.currentConverterVersion
         }
@@ -229,7 +238,7 @@ struct ParakeetCoreMLManifest: Decodable, Sendable {
         } else if decoder != nil {
             throw ParakeetCoreMLError.incompatibleManifest
         }
-        if schemaVersion == 3 {
+        if schemaVersion >= 3 {
             guard let coreMLDecoder,
                   coreMLDecoder.compiledModelDirectory == Self.compiledDecoderModelDirectory,
                   coreMLDecoder.embeddingFile == "embedding.f16",
@@ -246,6 +255,7 @@ struct ParakeetCoreMLManifest: Decodable, Sendable {
                   coreMLDecoder.hiddenSize == 640,
                   coreMLDecoder.layers == 2,
                   coreMLDecoder.vocabularySize == config.vocabulary.count,
+                  coreMLDecoder.usesANESelection == (schemaVersion == 4),
                   artifactNames.contains(coreMLDecoder.embeddingFile),
                   artifactNames.contains(where: {
                       $0.hasPrefix(coreMLDecoder.compiledModelDirectory + "/")
@@ -423,7 +433,7 @@ final class ParakeetCoreMLEncoder: ParakeetExternalEncoder {
 
         let attentionMask = try MLMultiArray(
             shape: [1, NSNumber(value: manifest.encoder.inputFrames)],
-            dataType: .int32
+            dataType: manifest.schemaVersion >= 4 ? .float16 : .int32
         )
         try Self.writeAttentionMask(frameCount: frameCount, to: attentionMask)
 
@@ -487,6 +497,13 @@ final class ParakeetCoreMLEncoder: ParakeetExternalEncoder {
         to destination: MLMultiArray
     ) throws {
         let offsets = try storageOffsets(destination)
+        if destination.dataType == .float16 {
+            let pointer = destination.dataPointer.assumingMemoryBound(to: UInt16.self)
+            for (index, offset) in offsets.enumerated() {
+                pointer[offset] = Float16(index < frameCount ? 1 : 0).bitPattern
+            }
+            return
+        }
         let pointer = destination.dataPointer.assumingMemoryBound(to: Int32.self)
         for offset in offsets {
             pointer[offset] = 0
@@ -520,6 +537,9 @@ final class ParakeetCoreMLEncoder: ParakeetExternalEncoder {
     private static func readIntegers(_ array: MLMultiArray) throws -> [Int] {
         let offsets = try storageOffsets(array)
         switch array.dataType {
+        case .float16:
+            let pointer = array.dataPointer.assumingMemoryBound(to: UInt16.self)
+            return offsets.map { Int(Float16(bitPattern: pointer[$0])) }
         case .int32:
             let pointer = array.dataPointer.assumingMemoryBound(to: Int32.self)
             return offsets.map { Int(pointer[$0]) }

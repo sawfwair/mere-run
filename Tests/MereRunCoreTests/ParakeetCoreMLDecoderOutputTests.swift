@@ -44,6 +44,37 @@ final class ParakeetCoreMLDecoderOutputTests: XCTestCase {
         }
     }
 
+    func testReadsExactBase128DecisionsWithNoncontiguousStrides() throws {
+        var aneManifest = manifest
+        aneManifest.decisionEncoding = .base128Float16
+        let tokens = try stridedArray(shape: [2, 2, 2], strides: [20, 6, 2], type: .float16)
+        let durations = try stridedArray(shape: [2, 2], strides: [8, 2], type: .float16)
+        // These IDs are not all exactly representable as a single Float16.
+        let expected = [[2_049, 4_095], [8_191, 8_192]]
+        for lane in 0..<2 {
+            for frame in 0..<2 {
+                let token = expected[lane][frame]
+                tokens[[lane, frame, 0].map(NSNumber.init)] = NSNumber(value: token / 128)
+                tokens[[lane, frame, 1].map(NSNumber.init)] = NSNumber(value: token % 128)
+                durations[[lane, frame].map(NSNumber.init)] = NSNumber(value: lane + frame)
+            }
+        }
+        let state = try MLMultiArray(shape: [2, 2, 2], dataType: .float16)
+        let prediction = try MLDictionaryFeatureProvider(dictionary: [
+            "token": MLFeatureValue(multiArray: tokens),
+            "duration": MLFeatureValue(multiArray: durations),
+            "next_hidden": MLFeatureValue(multiArray: state),
+            "next_cell": MLFeatureValue(multiArray: state),
+        ])
+        let output = try ParakeetCoreMLDecoderOutput(prediction: prediction, manifest: aneManifest)
+        for lane in 0..<2 {
+            for frame in 0..<2 {
+                XCTAssertEqual(output.token(lane: lane, frame: frame), expected[lane][frame])
+                XCTAssertEqual(output.duration(lane: lane, frame: frame), lane + frame)
+            }
+        }
+    }
+
     func testRejectsUnexpectedOutputShape() throws {
         let tokens = try MLMultiArray(shape: [1], dataType: .int32)
         let prediction = try MLDictionaryFeatureProvider(dictionary: ["token": MLFeatureValue(multiArray: tokens)])

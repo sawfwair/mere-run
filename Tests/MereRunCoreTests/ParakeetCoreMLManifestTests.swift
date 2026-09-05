@@ -119,6 +119,30 @@ final class ParakeetCoreMLManifestTests: XCTestCase {
         XCTAssertEqual(loaded.manifest.coreMLDecoder?.windowFrames, 8)
     }
 
+    func testLoadsANEGraphArtifactWithExactDecisionEncoding() throws {
+        let fixture = try makeHybridFixture(includeCoreMLDecoder: true, aneGraphs: true)
+        let loaded = try ParakeetCoreMLManifest.load(
+            artifactURL: fixture.root, config: makeConfig(packaging: .coreMLHybrid)
+        )
+        XCTAssertEqual(loaded.manifest.schemaVersion, 4)
+        XCTAssertEqual(loaded.manifest.coreMLDecoder?.decisionEncoding, .base128Float16)
+    }
+
+    func testRejectsANEGraphArtifactWithoutDecisionEncoding() throws {
+        let fixture = try makeHybridFixture(includeCoreMLDecoder: true, aneGraphs: true)
+        let url = fixture.root.appendingPathComponent(ParakeetCoreMLManifest.filename)
+        let contents = try String(contentsOf: url, encoding: .utf8)
+            .replacingOccurrences(of: "\"decisionEncoding\": \"base128-float16\",", with: "")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try ParakeetCoreMLManifest.load(
+            artifactURL: fixture.root, config: makeConfig(packaging: .coreMLHybrid)
+        )) { error in
+            guard case ParakeetCoreMLError.incompatibleManifest = error else {
+                return XCTFail("Expected incompatible manifest, found \(error)")
+            }
+        }
+    }
+
     private func makeFixture(
         sourceRevision: String = ParakeetCoreMLManifest.sourceRevision,
         artifactFilename: String = "encoder.mlmodelc/model.mil",
@@ -188,7 +212,8 @@ final class ParakeetCoreMLManifestTests: XCTestCase {
     }
 
     private func makeHybridFixture(
-        includeCoreMLDecoder: Bool = false
+        includeCoreMLDecoder: Bool = false,
+        aneGraphs: Bool = false
     ) throws -> (root: URL, directory: URL) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             "parakeet-coreml-hybrid-manifest-\(UUID().uuidString)",
@@ -221,11 +246,13 @@ final class ParakeetCoreMLManifestTests: XCTestCase {
                 """
             )
         }
-        let schemaVersion = includeCoreMLDecoder ? 3 : 2
-        let converterVersion = includeCoreMLDecoder ? 3 : 2
+        let schemaVersion = aneGraphs ? 4 : (includeCoreMLDecoder ? 3 : 2)
+        let converterVersion = schemaVersion
+        let decisionEncoding = aneGraphs ? "\"decisionEncoding\": \"base128-float16\"," : ""
         let coreMLDecoder = includeCoreMLDecoder
             ? """
               ,"coreMLDecoder": {
+                \(decisionEncoding)
                 "compiledModelDirectory": "decoder.mlmodelc",
                 "embeddingFile": "embedding.f16",
                 "encoderInputName": "encoder_window",

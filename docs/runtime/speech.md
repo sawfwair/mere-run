@@ -122,6 +122,12 @@ runtime verifies that closure before loading the model. The package uses Mere's
 own runtime integration and does not require a third-party inference SDK,
 telemetry, or an opaque model download.
 
+Schema-v4 packages use floating-point mask construction in the encoder and
+grouped token selection in the decoder. These equivalent graphs remove the
+integer and boolean operations that caused CPU fallback in schema-v3 packages.
+Token IDs use two exact base-128 FP16 digits because a single FP16 value cannot
+represent every vocabulary index. The runtime also accepts older packages.
+
 This provider is limited to non-streaming files. Each Core ML encoder call has
 batch size 1 and a maximum 15-second input. Longer files use windows of up to
 15 seconds. The next window starts in a nearby quiet interval when one is
@@ -133,9 +139,19 @@ boundary. Mere's native Swift/Accelerate feature extractor remains in the path,
 but the standalone artifact no longer requires `speech-asr-parakeet` or its
 complete 2.3 GiB weight file.
 
-Core ML is configured for CPU and Neural Engine execution. That preference
-doesn't prove that every operation runs on the Neural Engine or that the path
-is faster or more accurate. Treat performance, placement, boundary merging,
+Core ML is configured for CPU and Neural Engine execution. Check the compiled
+graphs on the target Mac with the placement audit:
+
+```bash
+uv run --script scripts/model-conversion/inspect_parakeet_coreml.py \
+  /path/to/parakeet-coreml --require-ane --output placement.json
+```
+
+The audit fails if either graph has a nonconstant operation assigned to another
+device or an unknown placement. Its compute plan reports anticipated placement;
+an Instruments Core ML trace establishes hardware execution. Audio I/O,
+feature extraction, decoder orchestration, and transcript merging remain host
+work. Treat performance, placement, boundary merging,
 and transcript parity as unqualified until you measure them on the target Mac.
 The conversion needs at least 10 GiB of free working space and the exact Xcode
 version printed by `--plan`.

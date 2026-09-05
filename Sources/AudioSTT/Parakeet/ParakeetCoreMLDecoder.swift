@@ -84,12 +84,13 @@ final class ParakeetCoreMLDecoder: ParakeetExternalTDTDecoder {
         let nextHidden = try stateArray()
         let nextCell = try stateArray()
         let tokenOutput = try MLMultiArray(
-            shape: [NSNumber(value: manifest.lanes), NSNumber(value: manifest.windowFrames)],
-            dataType: .int32
+            shape: ([manifest.lanes, manifest.windowFrames] + (manifest.usesANESelection ? [2] : []))
+                .map(NSNumber.init),
+            dataType: manifest.usesANESelection ? .float16 : .int32
         )
         let durationOutput = try MLMultiArray(
             shape: [NSNumber(value: manifest.lanes), NSNumber(value: manifest.windowFrames)],
-            dataType: .int32
+            dataType: manifest.usesANESelection ? .float16 : .int32
         )
 
         let inputs = DecoderFeatureProvider(

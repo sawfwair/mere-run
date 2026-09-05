@@ -37,8 +37,8 @@ from typing import Any
 SOURCE_REPOSITORY = "nvidia/parakeet-tdt-0.6b-v3"
 SOURCE_REVISION = "541d1f99c6b0c3cd0b11a95167540bb8edefd82b"
 SOURCE_LICENSE = "CC-BY-4.0"
-CONVERTER_VERSION = 3
-SCHEMA_VERSION = 3
+CONVERTER_VERSION = 4
+SCHEMA_VERSION = 4
 INPUT_FRAMES = 1_501
 INPUT_FEATURES = 128
 OUTPUT_FEATURES = 1_024
@@ -245,22 +245,7 @@ def compile_encoder(source: Path, staging: Path) -> dict[str, float]:
     import torch
     from transformers import ParakeetEncoder
 
-    class EncoderWrapper(torch.nn.Module):
-        def __init__(self, encoder: torch.nn.Module):
-            super().__init__()
-            self.encoder = encoder
-
-        def forward(
-            self,
-            input_features: torch.Tensor,
-            attention_mask: torch.Tensor,
-        ) -> tuple[torch.Tensor, torch.Tensor]:
-            result = self.encoder(
-                input_features=input_features,
-                attention_mask=attention_mask.to(torch.bool),
-                output_attention_mask=True,
-            )
-            return result.last_hidden_state, result.attention_mask.to(torch.int32)
+    from parakeet_coreml_graphs import ParakeetANEEncoder
 
     encoder = ParakeetEncoder.from_pretrained(
         source,
@@ -268,17 +253,26 @@ def compile_encoder(source: Path, staging: Path) -> dict[str, float]:
         local_files_only=True,
         attn_implementation="eager",
     ).eval()
-    wrapper = EncoderWrapper(encoder).eval()
+    wrapper = ParakeetANEEncoder(encoder).eval()
     example_features = torch.linspace(
         -1.0,
         1.0,
         steps=INPUT_FRAMES * INPUT_FEATURES,
         dtype=torch.float32,
     ).reshape(1, INPUT_FRAMES, INPUT_FEATURES)
-    example_mask = torch.ones((1, INPUT_FRAMES), dtype=torch.int32)
+    example_mask = torch.ones((1, INPUT_FRAMES), dtype=torch.float32)
 
     with torch.inference_mode():
+        reference = encoder(
+            input_features=example_features,
+            attention_mask=example_mask.bool(),
+            output_attention_mask=True,
+        )
         eager_features, eager_mask = wrapper(example_features, example_mask)
+        if not torch.equal(reference.last_hidden_state, eager_features) or not torch.equal(
+            reference.attention_mask, eager_mask.int()
+        ):
+            raise ValueError("ANE encoder wrapper changed the pinned reference output")
         traced = torch.jit.trace(
             wrapper,
             (example_features, example_mask),
@@ -307,12 +301,12 @@ def compile_encoder(source: Path, staging: Path) -> dict[str, float]:
             ct.TensorType(
                 name="attention_mask",
                 shape=(1, INPUT_FRAMES),
-                dtype=np.int32,
+                dtype=np.float16,
             ),
         ],
         outputs=[
             ct.TensorType(name="encoded_features", dtype=np.float16),
-            ct.TensorType(name="encoded_attention_mask", dtype=np.int32),
+            ct.TensorType(name="encoded_attention_mask", dtype=np.float16),
         ],
         minimum_deployment_target=ct.target.iOS18,
         compute_precision=ct.precision.FLOAT16,
@@ -350,6 +344,8 @@ def compile_decoder(
     import numpy as np
     import torch
     from safetensors import safe_open
+
+    from parakeet_coreml_graphs import first_index_digits
 
     class DecoderWindow(torch.nn.Module):
         def __init__(self) -> None:
@@ -415,11 +411,11 @@ def compile_decoder(
             pred_projection = self.pred(hidden1).unsqueeze(1)
             enc_projection = self.enc(encoder_window)
             logits = self.head(torch.relu(enc_projection + pred_projection))
-            token = torch.argmax(logits[:, :, : VOCABULARY_SIZE + 1], dim=-1)
-            duration = torch.argmax(logits[:, :, VOCABULARY_SIZE + 1 :], dim=-1)
+            token = first_index_digits(logits[:, :, : VOCABULARY_SIZE + 1])
+            duration = first_index_digits(logits[:, :, VOCABULARY_SIZE + 1 :])[..., 1]
             return (
-                token.to(torch.int32),
-                duration.to(torch.int32),
+                token.to(torch.float16),
+                duration.to(torch.float16),
                 next_hidden.to(torch.float16),
                 next_cell.to(torch.float16),
             )
@@ -535,8 +531,8 @@ def compile_decoder(
             ),
         ],
         outputs=[
-            ct.TensorType(name="token", dtype=np.int32),
-            ct.TensorType(name="duration", dtype=np.int32),
+            ct.TensorType(name="token", dtype=np.float16),
+            ct.TensorType(name="duration", dtype=np.float16),
             ct.TensorType(name="next_hidden", dtype=np.float16),
             ct.TensorType(name="next_cell", dtype=np.float16),
         ],
@@ -815,6 +811,7 @@ def build_manifest(
             "embeddingInputName": "token_embedding",
             "hiddenInputName": "hidden_state",
             "cellInputName": "cell_state",
+            "decisionEncoding": "base128-float16",
             "tokenOutputName": "token",
             "durationOutputName": "duration",
             "hiddenOutputName": "next_hidden",
@@ -870,6 +867,7 @@ def plan() -> dict[str, Any]:
             "weightsFile": DECODER_WEIGHTS_FILE,
             "coreMLModelDirectory": COMPILED_DECODER_MODEL_DIRECTORY,
             "embeddingFile": DECODER_EMBEDDING_FILE,
+            "decisionEncoding": "base128-float16",
             "lanes": DECODER_LANES,
             "windowFrames": DECODER_WINDOW_FRAMES,
         },

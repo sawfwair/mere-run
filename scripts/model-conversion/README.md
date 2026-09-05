@@ -25,13 +25,32 @@ uv run --script scripts/model-conversion/convert_parakeet_coreml.py \
   --output /path/to/parakeet-coreml
 ```
 
-The result is a standalone runtime root. The schema-v3 package contains Core ML
+The result is a standalone runtime root. The schema-v4 package contains Core ML
 encoder and decoder models, the decoder embedding table, and a 13-tensor MLX
 fallback. It doesn't duplicate the full MLX encoder. Use it through `speech
 transcribe --backend parakeet --provider coreml --coreml-encoder PATH`. The
 runtime divides longer files into overlapping 15-second windows. It encodes
 each window separately, applies the mel filterbank with Accelerate, and decodes
 as many as 16 windows in parallel.
+
+`parakeet_coreml_graphs.py` expresses encoder masks with floating-point
+operations and replaces integer argmax with grouped first-maximum selection.
+The decoder returns token IDs as two exact base-128 FP16 digits. This preserves
+the first-index tie rule and avoids rounding vocabulary IDs above 2,048.
+Both graph rewrites retain the pinned weights; they do not train the model.
+
+Audit the device assignment on the target Mac before qualifying ANE execution:
+
+```bash
+uv run --script scripts/model-conversion/inspect_parakeet_coreml.py \
+  /path/to/parakeet-coreml --require-ane --output placement.json
+```
+
+The check requires every nonconstant operation in both models to prefer the
+ANE. Unknown placements fail the check. The receipt records model-manifest
+identity, hardware, OS, and per-operation assignment. Estimated cost weights
+are compiler estimates, not measured utilization. Capture an Instruments Core
+ML trace of the native CLI workload to establish actual hardware execution.
 
 To measure the resident Release path, run the following command:
 

@@ -11,8 +11,10 @@ struct ParakeetCoreMLDecoderOutput {
     init(prediction: any MLFeatureProvider, manifest: ParakeetCoreMLManifest.CoreMLDecoder) throws {
         let decisions = [manifest.lanes, manifest.windowFrames]
         let state = [manifest.layers, manifest.lanes, manifest.hiddenSize]
-        tokens = try Self.array(manifest.tokenOutputName, in: prediction, shape: decisions, type: .int32)
-        durations = try Self.array(manifest.durationOutputName, in: prediction, shape: decisions, type: .int32)
+        let tokenShape = decisions + (manifest.usesANESelection ? [2] : [])
+        let decisionType: MLMultiArrayDataType = manifest.usesANESelection ? .float16 : .int32
+        tokens = try Self.array(manifest.tokenOutputName, in: prediction, shape: tokenShape, type: decisionType)
+        durations = try Self.array(manifest.durationOutputName, in: prediction, shape: decisions, type: decisionType)
         hidden = try Self.array(manifest.hiddenOutputName, in: prediction, shape: state, type: .float16)
         cell = try Self.array(manifest.cellOutputName, in: prediction, shape: state, type: .float16)
     }
@@ -48,6 +50,15 @@ struct ParakeetCoreMLDecoderOutput {
 
     private static func decision(_ array: MLMultiArray, lane: Int, frame: Int) -> Int {
         let offset = lane * array.strides[0].intValue + frame * array.strides[1].intValue
+        if array.dataType == .float16 {
+            let pointer = array.dataPointer.assumingMemoryBound(to: UInt16.self)
+            let first = Int(Float16(bitPattern: pointer[offset]))
+            if array.shape.count == 3 {
+                let second = Int(Float16(bitPattern: pointer[offset + array.strides[2].intValue]))
+                return first * 128 + second
+            }
+            return first
+        }
         return Int(array.dataPointer.assumingMemoryBound(to: Int32.self)[offset])
     }
 
