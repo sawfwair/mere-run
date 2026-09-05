@@ -13,12 +13,16 @@ final class Q35CompiledOperations: @unchecked Sendable {
     static var current: Q35CompiledOperations { scoped ?? shared }
 
     let stream = StreamOrDevice.default.stream
+    let silu = compile(shapeless: true) { input in
+        input * MLX.sigmoid(input)
+    }
     let swiglu = compile(shapeless: true) { gate, up in
-        MLXNN.silu(gate) * up
+        (gate * MLX.sigmoid(gate)) * up
     }
     let preciseSwiglu = compile(shapeless: true) { hiddenStates, gate, normalized in
-        let gate = MLXNN.silu(gate.asType(.float32))
-        return (gate * normalized.asType(.float32)).asType(hiddenStates.dtype)
+        let gate = gate.asType(.float32)
+        let activated = gate * MLX.sigmoid(gate)
+        return (activated * normalized.asType(.float32)).asType(hiddenStates.dtype)
     }
     let computeG = compile(shapeless: true) { aLog, activation, dtBias in
         let delta = softplus(activation.asType(.float32) + dtBias.asType(.float32).expandedDimensions(axes: [0, 1]))
@@ -36,4 +40,9 @@ final class Q35CompiledOperations: @unchecked Sendable {
             return try await $scoped.withValue(Q35CompiledOperations(), operation: operation)
         }
     }
+}
+
+@inline(__always)
+func q35Silu(_ input: MLXArray) -> MLXArray {
+    Q35CompiledOperations.current.silu(input)
 }

@@ -5,7 +5,7 @@ import MLXNN
 
 @inline(__always)
 private func q35MTPSwiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
-    MLXNN.silu(gate) * up
+    q35Silu(gate) * up
 }
 
 private final class Q35MTPPositionCache: KVCache {

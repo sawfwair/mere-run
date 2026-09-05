@@ -71,7 +71,7 @@ final class Q35MTPProfile {
         current.draftGraphSeconds = seconds(since: phaseStart)
         phaseStart = clock()
         MLX.eval(tokens)
-        Stream.gpu.synchronize()
+        StreamOrDevice.default.stream.synchronize()
         current.draftWaitSeconds = seconds(since: phaseStart)
         phaseStart = clock()
     }
@@ -82,7 +82,7 @@ final class Q35MTPProfile {
     }
 
     func verificationCompleted() {
-        Stream.gpu.synchronize()
+        StreamOrDevice.default.stream.synchronize()
         current.verificationWaitSeconds = seconds(since: phaseStart)
         phaseStart = clock()
     }
@@ -94,14 +94,14 @@ final class Q35MTPProfile {
     }
 
     func finishRound() {
-        Stream.gpu.synchronize()
+        StreamOrDevice.default.stream.synchronize()
         if let repairStart { current.repairSeconds = seconds(since: repairStart) }
         result.rounds.append(current)
     }
 
     func recordSerial(since start: UInt64?) {
         guard let start else { return }
-        Stream.gpu.synchronize()
+        StreamOrDevice.default.stream.synchronize()
         result.serialSeconds += seconds(since: start)
         result.serialRounds += 1
     }

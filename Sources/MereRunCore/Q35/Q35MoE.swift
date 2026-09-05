@@ -334,7 +334,7 @@ final class Q35SwitchGLU: Module {
         if let fused = resolvedFusedGateUp(),
            let fusedOutput = exactFusedGateUp(flatInput, fused: fused, indices: flatIndices) {
             let parts = split(fusedOutput, indices: [fused.intermediate], axis: -1)
-            activated = MLXNN.silu(parts[0]) * parts[1]
+            activated = q35Silu(parts[0]) * parts[1]
         } else if let gate = gateProj.applyFlatExact(flatInput, indices: flatIndices),
                   let up = upProj.applyFlatExact(flatInput, indices: flatIndices) {
             activated = q35Swiglu(gate, up)
@@ -500,7 +500,7 @@ final class Q35SwitchGLU: Module {
         }
 
         let parts = split(output, indices: [fused.intermediate], axis: -1)
-        return MLXNN.silu(parts[0]) * parts[1]
+        return q35Silu(parts[0]) * parts[1]
     }
 
     private func exactFusedGateUp(

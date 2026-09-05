@@ -30,7 +30,7 @@ final class Q35RMSNormGated: Module {
 
 @inline(__always)
 private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
-    MLXNN.silu(gate) * up
+    q35Silu(gate) * up
 }
 
 private func q35RmsNormNoWeight(
@@ -69,7 +69,7 @@ func q35GDNPreworkOps(
     let keep = convWeight.dim(1) - 1
     let convInput = MLX.concatenated([convState, qkv], axis: 1)
     let nextState = convInput[0..., (convInput.dim(1) - keep)..., 0...]
-    let convOut = MLXNN.silu(
+    let convOut = q35Silu(
         MLX.conv1d(convInput, convWeight, groups: convDim)
     )
     let keyDim = numKeyHeads * keyHeadDim

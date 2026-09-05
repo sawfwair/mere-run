@@ -93,7 +93,7 @@ final class Q38GatedResidual: Module {
         injectionWeights: MLXArray
     ) {
         let normalized = norm(hyperInput)
-        var inputWeights = MLXNN.silu(
+        var inputWeights = q35Silu(
             q38SmallBatchProjection(inputMixDown, normalized)
                 / MLXArray(Float(streamCount)).asType(normalized.dtype)
         )
@@ -116,7 +116,7 @@ final class Q38GatedResidual: Module {
 
     func combine(_ hyperInput: MLXArray) -> MLXArray {
         let normalized = norm(hyperInput)
-        var inputWeights = MLXNN.silu(
+        var inputWeights = q35Silu(
             q38SmallBatchProjection(inputMixDown, normalized)
                 / MLXArray(Float(streamCount)).asType(normalized.dtype)
         )
@@ -563,6 +563,6 @@ final class Q38PLELayer: Module {
             (convolutionInput.dim(1) - convolutionStateLength)...,
             0...
         ]
-        return MLXNN.silu(convolution(convolutionInput))
+        return q35Silu(convolution(convolutionInput))
     }
 }
