@@ -2,6 +2,10 @@ import AudioCodecs
 import Foundation
 import MLX
 
+#if canImport(Accelerate)
+import Accelerate
+#endif
+
 public final class ParakeetAudioPreprocessor {
     public enum PreprocessorError: LocalizedError {
         case invalidFFTSize(Int)
@@ -20,8 +24,8 @@ public final class ParakeetAudioPreprocessor {
     public let config: ParakeetPreprocessorConfig
 
     private let fftPlan: RealFFTPlan
-    private let window: [Float]
-    private let melFilters: [[Float]]
+    private let fftWindow: [Float]
+    private let melFilterMatrix: [Float]
 
     public init(config: ParakeetPreprocessorConfig) throws {
         self.config = config
@@ -36,13 +40,18 @@ public final class ParakeetAudioPreprocessor {
             throw PreprocessorError.fftSetupFailed(nFFT: config.nFFT)
         }
 
-        self.window = Self.makeWindow(name: config.window, count: config.winLength)
-        self.melFilters = Self.createMelFilterbank(
+        let window = Self.makeWindow(name: config.window, count: config.winLength)
+        var fftWindow = [Float](repeating: 0, count: config.nFFT)
+        for index in 0..<min(config.winLength, config.nFFT) {
+            fftWindow[index] = window[index]
+        }
+        self.fftWindow = fftWindow
+        self.melFilterMatrix = Self.createMelFilterbank(
             nMels: config.features,
             nFFT: config.nFFT,
             sampleRate: config.sampleRate,
             normalize: config.normalize
-        )
+        ).flatMap { $0 }
     }
 
     public func logMelSpectrogram(from audio: [Float]) -> MLXArray {
@@ -50,50 +59,45 @@ public final class ParakeetAudioPreprocessor {
         let padded = reflectCenterPad(preprocessed, padding: config.nFFT / 2)
         let frames = max(1, 1 + (padded.count - config.nFFT) / max(1, config.hopLength))
 
-        var mel = [[Float]](
-            repeating: [Float](repeating: 0, count: frames),
-            count: config.features
-        )
-
         var frameBuffer = [Float](repeating: 0, count: config.nFFT)
-        var fftWindow = [Float](repeating: 0, count: config.nFFT)
-        let copyCount = min(config.winLength, config.nFFT)
-        if copyCount > 0 {
-            for i in 0..<copyCount {
-                fftWindow[i] = window[i]
-            }
-        }
-        var magnitudes = [Float](repeating: 0, count: config.nFFT / 2 + 1)
+        let frequencyCount = config.nFFT / 2 + 1
+        var transposedSpectra = [Float](repeating: 0, count: frequencyCount * frames)
 
         for frameIndex in 0..<frames {
             let start = frameIndex * config.hopLength
-            frameBuffer = [Float](repeating: 0, count: config.nFFT)
-
-            if config.nFFT > 0 {
-                for i in 0..<config.nFFT {
-                    let idx = start + i
-                    guard idx < padded.count else { break }
-                    frameBuffer[i] = padded[idx] * fftWindow[i]
+            let availableSamples = min(config.nFFT, max(0, padded.count - start))
+            for index in 0..<availableSamples {
+                frameBuffer[index] = padded[start + index] * fftWindow[index]
+            }
+            if availableSamples < config.nFFT {
+                for index in availableSamples..<config.nFFT {
+                    frameBuffer[index] = 0
                 }
             }
 
-            magnitudes = fftPlan.powerSpectrum(frameBuffer)
-
-            for melIndex in 0..<config.features {
-                var energy: Float = 0
-                for freq in 0..<melFilters[melIndex].count {
-                    energy += melFilters[melIndex][freq] * magnitudes[freq]
-                }
-                mel[melIndex][frameIndex] = logf(max(energy, 0) + 1e-5)
+            let magnitudes = fftPlan.powerSpectrum(frameBuffer)
+            for frequency in 0..<frequencyCount {
+                transposedSpectra[frequency * frames + frameIndex] = magnitudes[frequency]
             }
         }
 
-        normalize(&mel)
+        var mel = [Float](repeating: 0, count: config.features * frames)
+        multiplyFilterbank(
+            melFilterMatrix,
+            by: transposedSpectra,
+            frequencyCount: frequencyCount,
+            frameCount: frames,
+            result: &mel
+        )
+        for index in mel.indices {
+            mel[index] = logf(max(mel[index], 0) + 1e-5)
+        }
+        normalize(&mel, frameCount: frames)
 
         var flat = [Float](repeating: 0, count: frames * config.features)
         for t in 0..<frames {
             for f in 0..<config.features {
-                flat[t * config.features + f] = mel[f][t]
+                flat[t * config.features + f] = mel[f * frames + t]
             }
         }
 
@@ -138,38 +142,66 @@ public final class ParakeetAudioPreprocessor {
         return prefix + audio + suffix
     }
 
-    private func normalize(_ mel: inout [[Float]]) {
-        guard !mel.isEmpty, !mel[0].isEmpty else { return }
+    private func multiplyFilterbank(
+        _ filters: [Float],
+        by spectra: [Float],
+        frequencyCount: Int,
+        frameCount: Int,
+        result: inout [Float]
+    ) {
+        #if canImport(Accelerate)
+        vDSP_mmul(
+            filters, 1,
+            spectra, 1,
+            &result, 1,
+            vDSP_Length(config.features),
+            vDSP_Length(frameCount),
+            vDSP_Length(frequencyCount)
+        )
+        #else
+        for feature in 0..<config.features {
+            for frame in 0..<frameCount {
+                var energy: Float = 0
+                for frequency in 0..<frequencyCount {
+                    energy += filters[feature * frequencyCount + frequency]
+                        * spectra[frequency * frameCount + frame]
+                }
+                result[feature * frameCount + frame] = energy
+            }
+        }
+        #endif
+    }
+
+    private func normalize(_ mel: inout [Float], frameCount: Int) {
+        guard !mel.isEmpty, frameCount > 0 else { return }
 
         if config.normalize == "per_feature" {
-            for i in mel.indices {
-                let values = mel[i]
-                let mean = values.reduce(0, +) / Float(values.count)
-                let variance = values.reduce(0) { partial, value in
-                    let diff = value - mean
-                    return partial + diff * diff
-                } / Float(values.count)
+            for feature in 0..<config.features {
+                let start = feature * frameCount
+                let end = start + frameCount
+                let mean = mel[start..<end].reduce(0, +) / Float(frameCount)
+                let variance = mel[start..<end].reduce(0) { partial, value in
+                    let difference = value - mean
+                    return partial + difference * difference
+                } / Float(frameCount)
                 let std = sqrt(max(variance, 0)) + 1e-5
 
-                for j in mel[i].indices {
-                    mel[i][j] = (mel[i][j] - mean) / std
+                for index in start..<end {
+                    mel[index] = (mel[index] - mean) / std
                 }
             }
             return
         }
 
-        let allValues = mel.flatMap { $0 }
-        let mean = allValues.reduce(0, +) / Float(allValues.count)
-        let variance = allValues.reduce(0) { partial, value in
-            let diff = value - mean
-            return partial + diff * diff
-        } / Float(allValues.count)
+        let mean = mel.reduce(0, +) / Float(mel.count)
+        let variance = mel.reduce(0) { partial, value in
+            let difference = value - mean
+            return partial + difference * difference
+        } / Float(mel.count)
         let std = sqrt(max(variance, 0)) + 1e-5
 
-        for i in mel.indices {
-            for j in mel[i].indices {
-                mel[i][j] = (mel[i][j] - mean) / std
-            }
+        for index in mel.indices {
+            mel[index] = (mel[index] - mean) / std
         }
     }
 

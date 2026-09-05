@@ -54,7 +54,8 @@ extension CommandTemplateID {
         case .modelRepairManifests, .modelOptimize, .modelGarbageCollect, .qualityGate: return .modelsHealth
         case .modelBenchmark, .modelBenchmarkLagunaDFlash, .modelBenchmarkChat, .modelBenchmarkCode,
              .modelBenchmarkFused, .modelBenchmarkFusedFixture, .modelBenchmarkVLM, .modelBenchmarkToolCalls,
-             .modelBenchmarkToolContinuations, .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP, .modelBenchmarkAPIWorkload: return .modelsBenchmarks
+             .modelBenchmarkToolContinuations, .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP,
+             .modelBenchmarkParakeetCoreML, .modelBenchmarkAPIWorkload: return .modelsBenchmarks
         case .adapterList, .adapterPull: return .modelsAdapters
         case .apiServe, .visionServe, .openWebui, .worldServe,
              .statusSnapshot, .agentOnboard, .agentStatus, .agentInstallPi,

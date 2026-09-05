@@ -84,6 +84,36 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("laguna-dflash"))
     }
 
+    func testBenchmarkCommandExposesParakeetCoreMLSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map {
+            $0.configuration.commandName
+        })
+        XCTAssertTrue(commandNames.contains("parakeet-coreml"))
+    }
+
+    func testParakeetCoreMLBenchmarkParsesResidentDefaults() throws {
+        let command = try ModelBenchmarkParakeetCoreML.parse([
+            "/tmp/audio.wav",
+            "--artifact", "/tmp/parakeet-coreml",
+        ])
+
+        XCTAssertEqual(command.audio, "/tmp/audio.wav")
+        XCTAssertEqual(command.artifact, "/tmp/parakeet-coreml")
+        XCTAssertEqual(command.warmups, 2)
+        XCTAssertEqual(command.repetitions, 5)
+        XCTAssertNil(command.language)
+        XCTAssertFalse(command.json)
+    }
+
+    func testParakeetCoreMLBenchmarkRejectsInvalidRepetitions() {
+        XCTAssertThrowsError(try ModelBenchmarkParakeetCoreML.parse([
+            "/tmp/audio.wav", "--artifact", "/tmp/parakeet-coreml", "--warmups", "-1",
+        ]))
+        XCTAssertThrowsError(try ModelBenchmarkParakeetCoreML.parse([
+            "/tmp/audio.wav", "--artifact", "/tmp/parakeet-coreml", "--repetitions", "0",
+        ]))
+    }
+
     func testLagunaDFlashBenchmarkParsesDefaults() throws {
         let command = try ModelBenchmarkLagunaDFlash.parse([
             "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",

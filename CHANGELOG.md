@@ -150,6 +150,21 @@ nothing opens in a modal window on top of your work.
   ArgumentParser definitions. Studio's contract test now builds argv from
   maximal drafts and proves it reaches every flag the app can emit.
 
+### Speech
+
+- added a typed, opt-in Core ML provider for Parakeet file
+  transcription and Mere-owned conversion tooling that pins the exact NVIDIA
+  source revision, conversion environment, static input contract, and complete
+  artifact closure. Schema v3 compiles the TDT decoder for the Neural Engine,
+  preserves the 13 required tensors as a 69 MiB MLX fallback, and batches as
+  many as 16 long-file windows per decoder call. The standalone package doesn't
+  require the complete 2.3 GiB MLX checkpoint. MLX remains the default. The
+  Core ML path is limited to non-streaming files and uses Mere's native
+  Swift/Accelerate feature extractor.
+- added `model benchmark parakeet-coreml`, which measures model load, feature
+  extraction, encoder, decoder, alignment, merge, and total duration in one
+  optimized resident process.
+
 ### Image
 
 - added native Swift/MLX inference and resumable conversion tooling for

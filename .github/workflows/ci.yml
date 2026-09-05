@@ -543,7 +543,26 @@ jobs:
           persist-credentials: false
       - name: Install Linux check dependencies
         if: env.RUN_GATE == 'true'
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
+          # The Swift container does not inherit the host runner's Ubuntu mirrors.
+          # Match runner-images' failover instead of relying on the global HTTP archive.
+          printf '%s\tpriority:%s\n' \
+            'http://azure.archive.ubuntu.com/ubuntu/' 1 \
+            'https://archive.ubuntu.com/ubuntu/' 2 \
+            'https://security.ubuntu.com/ubuntu/' 3 \
+            > /etc/apt/apt-mirrors.txt
+          sed -Ei \
+            's#http://(archive|security)\.ubuntu\.com/ubuntu/?#mirror+file:/etc/apt/apt-mirrors.txt#g' \
+            /etc/apt/sources.list
+          printf '%s\n' \
+            'Acquire::Retries "2";' \
+            'Acquire::http::Timeout "30";' \
+            'Acquire::https::Timeout "30";' \
+            'APT::Update::Error-Mode "any";' \
+            > /etc/apt/apt.conf.d/80mere-ci
           apt-get update
           apt-get install -y --no-install-recommends \
             build-essential \

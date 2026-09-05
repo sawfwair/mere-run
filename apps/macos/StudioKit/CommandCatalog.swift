@@ -141,6 +141,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case modelBenchmarkToolContinuations
     case modelBenchmarkGemma4KV
     case modelBenchmarkGemma4MTP
+    case modelBenchmarkParakeetCoreML
     case modelBenchmarkAPIWorkload
     case pluginInfo
     case pluginRun
@@ -267,6 +268,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .modelBenchmarkToolContinuations: return "model.benchmark.tool-continuations"
         case .modelBenchmarkGemma4KV: return "model.benchmark.gemma4-kv"
         case .modelBenchmarkGemma4MTP: return "model.benchmark.gemma4-mtp"
+        case .modelBenchmarkParakeetCoreML: return "model.benchmark.parakeet-coreml"
         case .modelBenchmarkAPIWorkload: return "model.benchmark.api-workload"
         case .pluginInfo: return "plugin.info"
         case .pluginRun: return "plugin.run"
@@ -1266,6 +1268,13 @@ package struct CommandTemplate: Identifiable, Equatable {
             if draft.secondaryText.isBlank {
                 return "Laguna DFlash model path is required."
             }
+        case .modelBenchmarkParakeetCoreML:
+            if draft.inputPath.isBlank {
+                return "An audio file is required."
+            }
+            if draft.modelRoot.isBlank {
+                return "A Parakeet Core ML artifact directory is required."
+            }
         case .imageTrainLoRA:
             if draft.inputPath.isBlank && draft.syntheticSamples <= 0 {
                 return "A dataset directory is required unless synthetic samples are enabled."
@@ -1556,7 +1565,7 @@ extension CommandTemplate {
              .modelBenchmarkToolCalls,
              .modelBenchmarkToolContinuations,
              .modelBenchmarkGemma4KV,
-             .modelBenchmarkGemma4MTP,
+             .modelBenchmarkGemma4MTP, .modelBenchmarkParakeetCoreML,
              .modelBenchmarkAPIWorkload,
              .pluginList,
              .pluginInstall,

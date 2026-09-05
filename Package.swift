@@ -454,7 +454,10 @@ targets.append(contentsOf: [
       "Qwen3ASR/README.md",
       "Sortformer/README.md"
     ],
-    swiftSettings: commonSwiftSettings
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: isLinuxPackage ? [] : [
+      .linkedFramework("CoreML", .when(platforms: [.macOS, .iOS]))
+    ]
   ),
   .target(
     name: "AudioTTS",

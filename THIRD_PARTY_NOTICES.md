@@ -301,6 +301,25 @@ SOFTWARE.
 
 ## Source-derived runtime implementations
 
+### NVIDIA Parakeet TDT 0.6B v3 Core ML/MLX package
+
+- purpose: optional Mere conversion of the Parakeet FastConformer encoder for
+  execution through Apple's Core ML framework and compact MLX TDT decoder;
+  no model weights are vendored in this repository
+- official model: [`nvidia/parakeet-tdt-0.6b-v3`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3),
+  revision `541d1f99c6b0c3cd0b11a95167540bb8edefd82b`
+- checkpoint and converted-weight license: Creative Commons Attribution 4.0
+  International (CC BY 4.0)
+- conversion tool and Swift provider: Mere code under this repository's MIT
+  License
+
+The converter verifies the official checkpoint byte count and SHA-256 before
+export and writes the source revision, tool versions, and a complete compiled
+artifact hash closure into the output. A converted artifact remains an
+adaptation of NVIDIA's weights: redistribution must preserve attribution and
+the CC BY 4.0 license notice. See the
+[official license text](https://creativecommons.org/licenses/by/4.0/legalcode).
+
 ### mlx-serve
 
 Flash-Next disk-backed PLE lookup and incremental QSA key caching are adapted

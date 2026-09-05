@@ -957,6 +957,22 @@ denoising, and decode PNG output through the Flux2-style VAE. Text-to-image
 `image generate` is wired; image-to-image, reference inputs, and LoRA are still
 unsupported for this family.
 
+## Locally converted Parakeet Core ML/MLX package
+
+The optional Parakeet Core ML/MLX package is a locally built artifact, not a
+managed model ID. `scripts/model-conversion/convert_parakeet_coreml.py` pins
+the official `nvidia/parakeet-tdt-0.6b-v3` source at revision
+`541d1f99c6b0c3cd0b11a95167540bb8edefd82b` and verifies the source checkpoint
+before conversion. The converted weights remain licensed under CC BY 4.0.
+
+The schema-v3 artifact contains compiled Core ML encoder and decoder models, a
+decoder embedding table, a compact 13-tensor MLX fallback checkpoint, generated
+runtime configuration and vocabulary, and the pinned upstream tokenizer. It
+replaces `speech-asr-parakeet` for this provider path. Pass its directory
+explicitly with `speech transcribe --backend parakeet --provider coreml
+--coreml-encoder PATH`. Schema-v2 packages use the compact MLX decoder. Legacy
+schema-v1 encoder-only artifacts use a separate MLX checkpoint.
+
 ## Hugging Face cache
 
 Hub snapshots use the shared cache location managed by the runtime. Override it
