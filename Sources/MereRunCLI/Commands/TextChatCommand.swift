@@ -193,7 +193,7 @@ struct TextChat: AsyncParsableCommand {
     @Flag(name: [.customLong("stats")], help: "Print generation timing and tokens/sec.")
     var stats: Bool = false
 
-    @Option(name: [.customLong("seed")], help: "Deterministic DiffusionGemma canvas seed.")
+    @Option(name: [.customLong("seed")], help: "Seed for Qwen-family sampling and DiffusionGemma canvas generation.")
     var seed: UInt64?
 
     @Flag(name: [.customLong("stream")], help: "Stream generated text to stdout as tokens arrive.")

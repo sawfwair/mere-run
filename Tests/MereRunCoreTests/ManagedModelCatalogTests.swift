@@ -899,6 +899,11 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.ornith35BMLX4BitBundleRepoId)
         XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.ornith35BMLX4BitBundleRevision)
         XCTAssertEqual(spec.hubFallback?.patterns, Q35Resources.ornith35BMLX4BitBundleSnapshotPatterns)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("mtp/model-mtp.safetensors") == true)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("mtp/LICENSE") == true)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("mtp/NOTICE") == true)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("mtp/PROVENANCE.json") == true)
+        XCTAssertFalse(spec.hubFallback?.patterns.contains("mtp/model-00016-of-00016.safetensors") == true)
         XCTAssertTrue(spec.mountedHubFallbacks.isEmpty)
         XCTAssertTrue(spec.companionModelIDs.isEmpty)
         XCTAssertEqual(spec.estimatedDownloadBytes, Q35Resources.ornith35BMLX4BitBundleEstimatedDownloadBytes)
@@ -1042,7 +1047,6 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
         let expectedMTP = [
             "\(Q35Resources.ornith35BMTPComponentPath)/model.safetensors.index.json",
-            "\(Q35Resources.ornith35BMTPComponentPath)/\(Q35Resources.ornith35BMTPShardFilename)",
         ]
         XCTAssertEqual(missing, Set(expectedVision + expectedMTP))
 
@@ -1053,7 +1057,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             ),
             (
                 Q35Resources.ornith35BMTPComponentPath,
-                ["model.safetensors.index.json", Q35Resources.ornith35BMTPShardFilename]
+                [Q35Resources.ornith35BMLX4BitMTPShardFilename]
             ),
         ] {
             let componentRoot = root.appendingPathComponent(directory, isDirectory: true)
@@ -1062,7 +1066,34 @@ final class ManagedModelCatalogTests: XCTestCase {
                 try Data().write(to: componentRoot.appendingPathComponent(filename))
             }
         }
+        let mtpRoot = root.appendingPathComponent(Q35Resources.ornith35BMTPComponentPath)
+        try JSONEncoder().encode(HFSafetensorsIndex(metadata: nil, weightMap: [
+            "mtp.norm.weight": Q35Resources.ornith35BMLX4BitMTPShardFilename,
+        ])).write(to: mtpRoot.appendingPathComponent("model.safetensors.index.json"))
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+
+    func testOrnithMTPValidationUsesOnlyIndexedMTPShards() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let resources = Q35Resources(rootURL: root)
+        for filename in [Q35Resources.ornith35BMTPShardFilename, Q35Resources.ornith35BMLX4BitMTPShardFilename] {
+            let index = HFSafetensorsIndex(metadata: nil, weightMap: [
+                "mtp.norm.weight": filename,
+                "model.language_model.norm.weight": "unused-target.safetensors",
+            ])
+            try JSONEncoder().encode(index).write(to: resources.modelIndexURL)
+            let shard = root.appendingPathComponent(filename)
+            XCTAssertEqual(resources.validateOrnith35BMTPCompanion(), [shard])
+            try Data().write(to: shard)
+            XCTAssertTrue(resources.validateOrnith35BMTPCompanion().isEmpty)
+            try FileManager.default.removeItem(at: shard)
+        }
+        for invalid in ["{}", "not json", "{\"weight_map\":{}}",
+                        "{\"weight_map\":{\"model.norm.weight\":\"target.safetensors\"}}"] {
+            try Data(invalid.utf8).write(to: resources.modelIndexURL)
+            XCTAssertEqual(resources.validateOrnith35BMTPCompanion(), [resources.modelIndexURL])
+        }
     }
 
     func testQ38TwentySevenB4BitValidationRequiresMountedComponents() throws {
@@ -1248,9 +1279,9 @@ final class ManagedModelCatalogTests: XCTestCase {
             isDirectory: true
         )
         try FileManager.default.createDirectory(at: companionRoot, withIntermediateDirectories: true)
-        try Data("{}".utf8).write(
-            to: companionRoot.appendingPathComponent("model.safetensors.index.json")
-        )
+        try JSONEncoder().encode(HFSafetensorsIndex(metadata: nil, weightMap: [
+            "mtp.norm.weight": Q35Resources.ornith35BMTPShardFilename,
+        ])).write(to: companionRoot.appendingPathComponent("model.safetensors.index.json"))
         try Data([0]).write(
             to: companionRoot.appendingPathComponent(Q35Resources.ornith35BMTPShardFilename)
         )

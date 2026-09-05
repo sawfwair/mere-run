@@ -169,8 +169,8 @@ public struct Q35Resources: Sendable, Hashable {
     public static let ornith35BMLX4BitUpstreamRevision = "19504d912fa8fc7622bf6b1de3db5d5d890b1f02"
     public static let ornith35BMLX4BitEstimatedDownloadBytes: Int64 = 19_530_936_278
     public static let ornith35BMLX4BitBundleRepoId = "Sawfwair/Ornith-1.5-35B-A3B-MLX-4bit-Vision-MTP"
-    public static let ornith35BMLX4BitBundleRevision = "2323acfa0fd0a01c452c89991558e6bbd86f0f05"
-    public static let ornith35BMLX4BitBundleEstimatedDownloadBytes: Int64 = 28_652_830_929
+    public static let ornith35BMLX4BitBundleRevision = "19a8ee57cb185cb487fa29ff7175c5e1544ebf1c"
+    public static let ornith35BMLX4BitBundleEstimatedDownloadBytes: Int64 = 25_963_186_364
     public static let ornith35BMLX6BitUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX-6bit"
     public static let ornith35BMLX6BitUpstreamRevision = "585b7867b0517980293ece857b26d64e84491352"
     public static let ornith35BMLX6BitEstimatedDownloadBytes: Int64 = 28_190_535_198
@@ -199,13 +199,22 @@ public struct Q35Resources: Sendable, Hashable {
         ornith35BMTPShardFilename,
     ]
     public static let ornith35BMTPEstimatedDownloadBytes: Int64 = 4_379_189_705
+    public static let ornith35BMLX4BitMTPShardFilename = "model-mtp.safetensors"
+    public static let ornith35BMLX4BitMTPSnapshotPatterns = [
+        "README.md",
+        "LICENSE",
+        "NOTICE",
+        "PROVENANCE.json",
+        "model.safetensors.index.json",
+        ornith35BMLX4BitMTPShardFilename,
+    ]
     public static let ornith35BMLX4BitBundleSnapshotPatterns = snapshotPatterns + [
         "generation_config.json",
         "README.md",
         "mererun_model.json",
         "SHA256SUMS",
     ] + ornith35BVisionComponentSnapshotPatterns.map { "\(ornith35BVisionComponentPath)/\($0)" }
-        + ornith35BMTPSnapshotPatterns.map { "\(ornith35BMTPComponentPath)/\($0)" }
+        + ornith35BMLX4BitMTPSnapshotPatterns.map { "\(ornith35BMTPComponentPath)/\($0)" }
     public static let ornith35BMLXContextLength = 262_144
     public static let infinityParser2ProUpstreamRepoId = "infly/Infinity-Parser2-Pro"
     public static let infinityParser2ProUpstreamRevision = "1d070df7db5acca0ffa75596229070a047704f89"
@@ -510,10 +519,7 @@ public struct Q35Resources: Sendable, Hashable {
             Self.ornith35BMTPComponentPath,
             isDirectory: true
         )
-        return [
-            componentRoot.appendingPathComponent("model.safetensors.index.json", isDirectory: false),
-            componentRoot.appendingPathComponent(Self.ornith35BMTPShardFilename, isDirectory: false),
-        ].filter { !fileManager.fileExists(atPath: $0.path) }
+        return Q35Resources(rootURL: componentRoot).validateOrnith35BMTPCompanion(fileManager: fileManager)
     }
 
     public func validateQ38VisionComponent(fileManager: FileManager = .default) -> [URL] {
@@ -524,10 +530,17 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public func validateOrnith35BMTPCompanion(fileManager: FileManager = .default) -> [URL] {
-        [
-            modelIndexURL,
-            rootURL.appendingPathComponent(Self.ornith35BMTPShardFilename, isDirectory: false),
-        ].filter { !fileManager.fileExists(atPath: $0.path) }
+        let index: HFSafetensorsIndex
+        do {
+            index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: Data(contentsOf: modelIndexURL))
+        } catch {
+            return [modelIndexURL]
+        }
+        // Legacy indexes also describe target shards that are not part of the MTP component.
+        let shards = Set(index.weightMap.filter { $0.key.hasPrefix("mtp.") }.values).sorted()
+        guard !shards.isEmpty else { return [modelIndexURL] }
+        return shards.map { rootURL.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     public static func normalizedRootURL(_ rootURL: URL, fileManager: FileManager = .default) -> URL {

@@ -8,6 +8,14 @@ The format is based on Keep a Changelog.
 
 ### Runtime
 
+- fixed sampled Qwen-family requests retaining random state from another
+  thread's GPU stream. Each request now owns its random state and applies its
+  seed to both token sampling and MTP acceptance draws.
+- upgraded the managed Ornith 1.5 Q4 bundle to Shisa's Ornith-distilled BF16
+  MTP head, with higher measured draft acceptance and a 1.69 GB head component
+  replacing the 4.38 GB shard. The target and vision weights are unchanged.
+  Existing compact and legacy MTP indexes remain supported. Update an installed
+  Q4 bundle with `mere.run model pull text-agent-ornith-35b-mlx-4bit --force`.
 - stabilized repeated Qwen3.8 27B Q4 and Ornith 1.5 Q4 requests by keeping
   compiled activation graphs on each request's MLX stream. These managed
   targets also use asynchronous short decoder blocks and pipelined target
