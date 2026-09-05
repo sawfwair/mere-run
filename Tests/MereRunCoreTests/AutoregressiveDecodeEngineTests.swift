@@ -160,6 +160,26 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
         XCTAssertEqual(pieces, [" \nhello", "world"])
     }
 
+    func testCumulativeDecodeBuffersIncompleteUTF8Scalars() throws {
+        var pieces: [String] = []
+        let cumulativeText: [[Int]: String] = [
+            [3]: "can\u{FFFD}",
+            [3, 7]: "can\u{FFFD}\u{FFFD}",
+            [3, 7, 2]: "can‑",
+            [3, 7, 2, 9]: "can‑do",
+        ]
+        _ = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 8),
+            stepForward: scriptedModel([7, 2, 9, eos]),
+            decodeToken: { _ in "\u{FFFD}" },
+            decodeTokens: { cumulativeText[$0] ?? "" },
+            emitPiece: { _, piece in pieces.append(piece) }
+        )
+
+        XCTAssertEqual(pieces.joined(), "can‑do")
+        XCTAssertFalse(pieces.joined().contains("\u{FFFD}"))
+    }
+
     func testSummaryLogprobsMeasureEveryEmittedToken() throws {
         let result = try AutoregressiveDecodeEngine.decode(
             request(firstToken: 3, budget: 8, logprobCapture: .summary),

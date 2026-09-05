@@ -109,6 +109,7 @@ enum LagunaDFlashDecoder {
         adaptiveAcceptanceEvaluationRounds: Int =
             LagunaDFlashRouting.defaultAcceptanceEvaluationRounds,
         decodeToken: ((Int) -> String)? = nil,
+        decodeTokens: (([Int]) -> String)? = nil,
         emitPiece: ((Int, String) -> Void)? = nil,
         checkCancellation: (() throws -> Void)? = nil
     ) throws -> LagunaDFlashDecodeResult {
@@ -136,6 +137,7 @@ enum LagunaDFlashDecoder {
         var repetitionHistory = historySeedTokens
         var firstTokenSeconds: Double?
         var pendingProgressWhitespace = ""
+        var progressDecoder = IncrementalTokenTextDecoder()
         var rounds = 0
         var draftedTokens = 0
         var acceptedDraftTokens = 0
@@ -153,8 +155,10 @@ enum LagunaDFlashDecoder {
             if firstTokenSeconds == nil {
                 firstTokenSeconds = Date().timeIntervalSince(startedAt)
             }
-            guard let decodeToken, let emitPiece else { return }
-            let piece = decodeToken(token)
+            guard let emitPiece else { return }
+            let piece = decodeTokens.map {
+                progressDecoder.append(decodedText: $0(generatedTokens))
+            } ?? decodeToken?(token) ?? ""
             if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 pendingProgressWhitespace += piece
             } else if !piece.isEmpty {

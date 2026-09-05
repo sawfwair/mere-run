@@ -131,6 +131,7 @@ public enum AutoregressiveDecodeEngine {
         _ request: AutoregressiveDecodeRequest,
         stepForward: (MLXArray) throws -> MLXArray,
         decodeToken: ((Int) -> String)? = nil,
+        decodeTokens: (([Int]) -> String)? = nil,
         emitPiece: ((Int, String) -> Void)? = nil,
         shouldContinue: ((Int, String) -> Bool)? = nil,
         checkCancellation: (() throws -> Void)? = nil
@@ -159,6 +160,7 @@ public enum AutoregressiveDecodeEngine {
             config: samplingConfig
         )
         var pendingProgressWhitespace = ""
+        var progressDecoder = IncrementalTokenTextDecoder()
 
         func capturedDiagnostics() -> ChatLogprobDiagnostics? {
             guard request.logprobCapture.isEnabled else { return nil }
@@ -192,8 +194,8 @@ public enum AutoregressiveDecodeEngine {
             if firstTokenSeconds == nil {
                 firstTokenSeconds = Date().timeIntervalSince(start)
             }
-            let piece = decodeToken?(token) ?? ""
-            let region = regionTracker.classify(piece)
+            let tokenPiece = decodeToken?(token) ?? ""
+            let region = regionTracker.classify(tokenPiece)
             if request.logprobCapture.isEnabled {
                 let captureStart = CFAbsoluteTimeGetCurrent()
                 var measurement = tokenLogprobMeasurement(
@@ -205,7 +207,7 @@ public enum AutoregressiveDecodeEngine {
                 )
                 measurement.region = region
                 if request.logprobCapture.includesTokens, region != .reasoning {
-                    measurement.token = piece
+                    measurement.token = tokenPiece
                     if !measurement.topLogprobs.isEmpty, let decodeToken {
                         for index in measurement.topLogprobs.indices {
                             measurement.topLogprobs[index].token = decodeToken(
@@ -218,15 +220,18 @@ public enum AutoregressiveDecodeEngine {
                 logprobCaptureSeconds += CFAbsoluteTimeGetCurrent() - captureStart
             }
             diagnosticHistory.append(token)
-            if let emitPiece, !piece.isEmpty {
-                if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    pendingProgressWhitespace += piece
+            let progressPiece = decodeTokens.map {
+                progressDecoder.append(decodedText: $0(generated))
+            } ?? tokenPiece
+            if let emitPiece, !progressPiece.isEmpty {
+                if progressPiece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    pendingProgressWhitespace += progressPiece
                 } else {
-                    emitPiece(token, pendingProgressWhitespace + piece)
+                    emitPiece(token, pendingProgressWhitespace + progressPiece)
                     pendingProgressWhitespace = ""
                 }
             }
-            return shouldContinue?(token, piece) ?? true
+            return shouldContinue?(token, tokenPiece) ?? true
         }
 
         var buildSeconds = 0.0
