@@ -62,6 +62,12 @@ final class ManagedModelCatalogTests: XCTestCase {
     }
 
     func testCatalogProfilesOwnHarnessSpecificCapabilities() throws {
+        for modelID in [LagunaResources.modelID, LagunaResources.xsModelID] {
+            let laguna = try XCTUnwrap(ManagedModelCatalog.apiProfile(for: modelID))
+            XCTAssertEqual(laguna.thinkingLevels, [.high])
+            XCTAssertTrue(laguna.toolCall)
+        }
+
         let ornith = try XCTUnwrap(
             ManagedModelCatalog.apiProfile(for: Q35Resources.ornith9BModelId)
         )

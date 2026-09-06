@@ -228,6 +228,7 @@ public extension ManagedModelAPIProfile {
             servingEngine: .textChatLaguna,
             contextWindow: contextWindow,
             maximumOutputTokens: 4_096,
+            thinkingLevels: [.high],
             toolCall: true,
             supportsStopSequences: true,
             supportsLogprobs: true

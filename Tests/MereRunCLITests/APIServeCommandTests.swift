@@ -2863,6 +2863,48 @@ final class APIServeCommandTests: XCTestCase {
         )
     }
 
+    func testBufferedToolDeltaPreservesReasoningOnTheWire() throws {
+        let result = ChatResponse(
+            response: "<think>Inspect the source.</think>",
+            tokensGenerated: 12,
+            reasoningContent: "Inspect the source."
+        )
+        let toolCall = OpenAIChatToolCall(
+            id: "call_read",
+            function: OpenAIChatToolCallFunction(name: "read", arguments: #"{"path":"main.swift"}"#)
+        )
+        let encoded = try JSONEncoder().encode(
+            CodeGenServer.openAIBufferedDelta(for: result, toolCalls: [toolCall])
+        )
+        let delta = try JSONDecoder().decode(OpenAIChatDelta.self, from: encoded)
+        XCTAssertEqual(delta.role, "assistant")
+        XCTAssertNil(delta.content)
+        XCTAssertEqual(delta.reasoning_content, "Inspect the source.")
+        XCTAssertEqual(delta.tool_calls?.first?.id, "call_read")
+        XCTAssertEqual(delta.tool_calls?.first?.function?.name, "read")
+    }
+
+    func testBufferedAnswerSeparatesReasoningFromVisibleContent() {
+        for response in ["<think>Check units.</think>42", "Check units.</think>42"] {
+            let result = ChatResponse(
+                response: response,
+                tokensGenerated: 12,
+                reasoningContent: "Check units."
+            )
+            let delta = CodeGenServer.openAIBufferedDelta(for: result, toolCalls: [])
+            XCTAssertEqual(delta.content, "42")
+            XCTAssertEqual(delta.reasoning_content, "Check units.")
+            XCTAssertNil(delta.tool_calls)
+            XCTAssertEqual(CodeGenServer.openAIMessageContent(for: result, hasToolCalls: false), "42")
+        }
+        let reasoningOnly = ChatResponse(
+            response: "<think>Still checking",
+            tokensGenerated: 12,
+            reasoningContent: "Still checking"
+        )
+        XCTAssertEqual(CodeGenServer.openAIBufferedDelta(for: reasoningOnly, toolCalls: []).content, "")
+    }
+
     func testChatRequestRejectsUnsupportedHighImpactFields() {
         let request = OpenAIChatRequest(
             model: "mererun-test-model",
@@ -3282,6 +3324,22 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.topK, LagunaResources.recommendedTopK)
         XCTAssertEqual(chatRequest.minP, LagunaResources.recommendedMinP)
         XCTAssertFalse(chatRequest.requiresJSON)
+        XCTAssertTrue(chatRequest.showThinking)
+    }
+
+    func testLagunaXSAPIEnablesReasoning() throws {
+        let request = OpenAIChatRequest(
+            model: LagunaResources.xsModelID,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")]
+        )
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: LagunaResources.defaultContextLength,
+            capabilities: RuntimeServingEngine.textChatLaguna.openAICompatibility,
+            servedModelID: LagunaResources.xsModelID
+        )
+        XCTAssertTrue(chatRequest.showThinking)
     }
 
     func testChatRequestExplicitSamplingSkipsRecommendedTopK() throws {

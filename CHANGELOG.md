@@ -9,6 +9,9 @@ The format is based on Keep a Changelog.
 - Refresh the bundled DwarfStar runtime to upstream `b6af0adf8ca9`, including
   session snapshot and native tool handling fixes. Preserve the DeepSeek V4
   Flash 0731 Q2 imatrix model pin and bundle the Iris decoder license.
+- Laguna API requests now enable reasoning by default. Buffered streaming tool
+  replies preserve `reasoning_content`, and buffered answers keep reasoning
+  separate from visible message content.
 
 - Image generation and text chat preflights now report insufficient memory,
   disk headroom, and critical memory pressure as structured blockers alongside

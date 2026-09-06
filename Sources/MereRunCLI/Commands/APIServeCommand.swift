@@ -5876,10 +5876,7 @@ actor CodeGenServer {
                         choices: [
                             OpenAIChatChoice(
                                 index: 0,
-                                delta: OpenAIChatDelta(
-                                    role: "assistant",
-                                    tool_calls: toolCalls.enumerated().map(OpenAIChatToolCallDelta.init(indexAndToolCall:))
-                                ),
+                                delta: Self.openAIBufferedDelta(for: result, toolCalls: toolCalls),
                                 finish_reason: nil
                             )
                         ]
@@ -5897,10 +5894,7 @@ actor CodeGenServer {
                         choices: [
                             OpenAIChatChoice(
                                 index: 0,
-                                delta: OpenAIChatDelta(
-                                    content: result.response,
-                                    reasoning_content: result.reasoningContent
-                                ),
+                                delta: Self.openAIBufferedDelta(for: result, toolCalls: []),
                                 finish_reason: nil
                             )
                         ]
@@ -6032,7 +6026,23 @@ actor CodeGenServer {
         for result: ChatResponse,
         hasToolCalls: Bool
     ) -> String {
-        hasToolCalls ? "" : result.response
+        guard !hasToolCalls else { return "" }
+        guard result.reasoningContent != nil else { return result.response }
+        return ChatReasoningMarkup.splitThinkBlocks(in: result.response).visibleContent
+    }
+
+    nonisolated static func openAIBufferedDelta(
+        for result: ChatResponse,
+        toolCalls: [OpenAIChatToolCall]
+    ) -> OpenAIChatDelta {
+        OpenAIChatDelta(
+            role: toolCalls.isEmpty ? nil : "assistant",
+            content: toolCalls.isEmpty ? openAIMessageContent(for: result, hasToolCalls: false) : nil,
+            reasoning_content: result.reasoningContent,
+            tool_calls: toolCalls.isEmpty
+                ? nil
+                : toolCalls.enumerated().map(OpenAIChatToolCallDelta.init(indexAndToolCall:))
+        )
     }
 
     /// Generators that don't report a prompt token count fall back to zero

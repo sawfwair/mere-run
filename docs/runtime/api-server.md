@@ -54,6 +54,11 @@ lifecycle. API keys still cross the process boundary only through
 - `POST /v1/audio/speech`
 - `POST /v1/audio/transcriptions`
 
+Laguna chat requests enable reasoning by default. Chat responses return reasoning
+in `reasoning_content`, including buffered streaming tool-call replies. Clients
+that preserve reasoning across tool turns should send that field back on the
+assistant message alongside its `tool_calls`.
+
 ## What it is for
 
 Use the server for repeated requests so the model stays loaded. It supports:
