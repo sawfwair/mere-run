@@ -1,166 +1,162 @@
 ---
 name: use-mere-run
-description: Help a newcomer use the public `mere.run` CLI without needing to know the repo internals. Use when the user wants to install or launch `mere.run`, understand what commands exist, choose and pull a model, run a first image/text/speech/vision/music/video workflow, configure model storage, serve the local API, or troubleshoot beginner CLI errors such as command-not-found, missing models, unsupported hardware, disk/cache location, or API key requirements.
+description: Operate the public mere.run CLI for local AI, model setup, media generation and analysis, workflow graphs, or API serving. Use for choosing supported models, running workflows, and troubleshooting an installed CLI. Source-code development belongs to the mere-run skill.
 ---
 
 # Use mere.run
 
-## Overview
+Help the user get an output from the public `mere.run` CLI. Start with their
+requested result and discover the matching commands on their machine.
 
-Help the user get useful output from the public local-first `mere.run` CLI. Optimize for a person who does not know the command tree, model IDs, or where models live.
+## Identify the executable
 
-## Operating Stance
-
-- Start with the user's desired result: image, chat, code, speech, transcription, image/video understanding, segmentation/tracking, music, video, model management, API serving, or general setup.
-- Prefer doing a tiny diagnostic command over explaining abstractly. Use `--help`, `model capabilities`, and `model list` to discover the local truth.
-- If the user has an installed binary, use `mere.run ...`. If they are in a source checkout or the binary is missing, use `swift run mere.run ...`.
-- Do not assume a model is installed. Check `mere.run model list` or pull the needed model first.
-- Keep commands copy-pasteable and minimal. Add advanced flags only when the user asked for them or the error points there.
-- Explain stderr/progress as normal diagnostic output; preserve stdout when the user needs machine-readable results.
-- When the user asks for a good creative or advanced result, not just a command, run `mere.run guide <command path>` or read the matching `Sources/MereRunCLI/Guides/*.md` resource first. Use the guide to translate their vague request into concrete prompt ingredients, model pulls, flags, and an iteration plan.
-
-## First Five Minutes
-
-Run these in order, adapting `mere.run` to `swift run mere.run` inside a checkout:
+Use the installed binary for operator tasks:
 
 ```bash
+mere.run --version
 mere.run --help
+```
+
+In a source checkout, use `swift run mere.run` when the user wants to run that
+checkout. Do not silently substitute an installed release for changed source.
+If the binary is missing outside a checkout, use the installation instructions
+on the [mere.run releases page](https://mere.run/releases). Do not assume a
+Swift toolchain or source repository is available to an end user.
+
+Examples in this skill are starting points. The selected binary's `--help`
+owns accepted flags and defaults. If a discovery command is unavailable, use
+that version's help and explain the version gap.
+
+## Discover a workflow and its models
+
+Run the discovery commands relevant to the task:
+
+```bash
+mere.run catalog --json
+mere.run model capabilities --recommended --json
+mere.run model list --json
 mere.run guide --list
-mere.run model capabilities
-mere.run model list
+mere.run guide --list-models --json
 ```
 
-If the user wants guided setup instead of picking commands manually:
+`catalog` describes command capabilities. `model capabilities` describes
+hardware support; `model list` describes installation status. A supported model
+is not necessarily installed or suitable for the user's quality and latency
+requirements. Use `model capabilities --all --json` for models outside the
+recommended set and read the reported restrictions.
+
+Load the command cookbook for workflow controls and the model handbook for
+provider-specific prompting, input requirements, and validation limits:
 
 ```bash
-mere.run setup
+mere.run catalog image.generate --json
+mere.run image generate --help
+mere.run guide image generate
+mere.run guide --model image-zimage-nano
 ```
 
-When helping from a source checkout:
+Use `guide --model` without a command path to select a model handbook. Command
+cookbooks can cover several models; a guide example is not evidence that a
+particular checkpoint was tested on this machine.
 
-```bash
-swift run mere.run --help
-swift run mere.run guide --list
-swift run mere.run model capabilities
-swift run mere.run setup
-```
+## Route tasks to the right command family
 
-## Choose The Command
+Discover subcommands with `mere.run <group> --help`; this table is a starting
+map, not a complete command list.
 
-Use `model capabilities` as the recommendation source before large downloads. Common public pullable IDs include:
+| Desired result | Command families to inspect |
+| --- | --- |
+| Chat, code, embeddings, anonymization, or text training | `text` |
+| Image generation, editing, training, or 3D reconstruction | `image` |
+| Speech, transcription, diarization, or voice profiles | `speech` |
+| Captioning, OCR, grounding, tracking, faces, pose, depth, or geometry | `vision` |
+| Earth-observation inference | `geo` |
+| Audio enhancement, music, or sound effects | `audio`, `music`, `sfx` |
+| Video generation, animation, editing, or world sessions | `video`, `world` |
+| Repeatable pipelines, remote execution, or saved results | `graph`, `executor`, `relay`, `run` |
+| Evaluation packs and reproducible comparisons | `eval` |
+| Model storage, adapters, configuration, or health | `model`, `adapter`, `config`, `status` |
+| Local API or a companion interface | `api`, `open-webui` |
+| Companion plugins or guided setup | `plugin`, `setup`, `agent` |
 
-- Image: `image-klein-base`, `image-klein-max`, `image-zimage-max`
-- Text chat: `text-chat-gemma4`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-q36-nano`
-- Code/agent: `text-code-qwen3`, `text-agent-qwen35-9b`
-- Embeddings: `text-embed-qwen3-0.6b`
-- Speech: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`, `speech-asr-qwen3`, `speech-asr-parakeet`
-- Vision: `vision-ocr-lighton`, `vision-segment-sam31`, `vision-ground-falcon-perception`
-- Music: `music-acestep`
-- Video: `video-ltx23-av-mlx`
+For graph tasks, start with `graph catalog`, `graph validate`, and `graph
+preflight` help. Inspect the selected executor and authentication before
+submitting work. A graph that validates has not executed successfully.
 
-Avoid local-path-only IDs for first-time users unless they already have the model files.
+## Select a model explicitly
 
-## Common Workflows
+Check support and available storage before a large download. Pull only the
+model needed for the task, then pass that same ID to the inference command.
+Do not rely on a default to select the model you just downloaded. Some commands
+accept only local paths; inspect their help before passing a managed ID.
 
-Pull and inspect:
-
-```bash
-mere.run model capabilities
-mere.run model pull text-chat-gemma4
-mere.run model info text-chat-gemma4
-```
-
-Chat:
-
-```bash
-mere.run text chat --stream --prompt "Explain local inference in one paragraph."
-```
+The following examples generate files or start a server when run. Adapt the
+model choice using the machine's capability report and the user's request.
 
 Generate an image:
 
 ```bash
-mere.run model pull image-klein-max
-mere.run image generate --prompt "a ceramic mug in soft morning light" --output ./mug.png
+mere.run model pull image-zimage-nano
+mere.run image generate --model image-zimage-nano \
+    --prompt "a ceramic mug in soft morning light" --output ./mug.png
 ```
 
-Speech:
+Chat with an explicit model:
+
+```bash
+mere.run model pull text-chat-gemma4-12b-4bit
+mere.run text chat --model text-chat-gemma4-12b-4bit \
+    --prompt "Explain local inference in one paragraph." --stream
+```
+
+Generate speech:
 
 ```bash
 mere.run model pull speech-tts-qwen3-nano
-mere.run speech synthesize "Hello from mere.run" --output ./hello.wav
+mere.run speech synthesize "Hello from mere.run" \
+    --model speech-tts-qwen3-nano --output ./hello.wav
 ```
 
-Vision:
-
-```bash
-mere.run vision inspect ./image.png "Describe this image."
-mere.run model pull vision-segment-sam31
-mere.run vision segment ./photo.jpg --prompt "a person" --output ./mask.png
-```
-
-Local API:
+Serve a selected local chat model:
 
 ```bash
 mere.run model pull text-chat-gemma4
-mere.run api serve --engine text-chat-gemma4
+mere.run api serve --engine text-chat-gemma4 --model text-chat-gemma4
 ```
 
-For non-loopback API serving, require an explicit key:
+For API work, inspect `api serve --help` for supported engines, endpoints, and
+preflight options. Model IDs and engine names are different contracts. Keep
+loopback binding unless the user requests network access. Non-loopback binds
+require `--api-key` or `MERERUN_API_KEY`; do not use a sample key as a credential.
 
-```bash
-export MERERUN_API_KEY=change-me
-mere.run api serve --host 0.0.0.0 --api-key "$MERERUN_API_KEY"
-```
+For music and video, read the selected model's handbook before choosing steps,
+frame counts, reference inputs, or output modes. These controls differ across
+families. For speech transcription, inspect backend and execution-provider
+options instead of assuming one runtime fits every audio file.
 
-## Command Cookbooks
+## Storage and troubleshooting
 
-The CLI ships offline cookbooks. Load the relevant guide before coaching creative, model-specific, or advanced workflows:
+The default model store is
+`~/Library/Application Support/MereRun/models`. Use `--models-root` or
+`MERERUN_MODELS_DIR` to select another store. `MERERUN_HUB_CACHE` controls the
+Hugging Face download cache; changing the model store does not move that cache.
+Inspect `model storage --help` before planning a move or cleanup.
 
-```bash
-mere.run guide --list
-mere.run guide image generate
-mere.run guide music generate --model music-acestep
-mere.run guide video generate --json
-```
+- Missing command or option: record the executable path and version, then read
+  its help. Do not guess flags from another release.
+- Missing model: inspect `model list` and `model info` before pulling the
+  selected ID or supplying a command-supported local model path.
+- Unsupported hardware or memory pressure: inspect `model capabilities --all`
+  and choose a supported model. A forced pull does not establish runtime support.
+- Download failure: check free space, model-store and cache locations, and any
+  model access requirements reported by the CLI.
+- Weak output: use the cookbook and handbook to adjust the prompt and relevant
+  model controls. Keep the seed fixed when comparing one change.
+- API failure: use `status`, server diagnostics, and the requested engine's
+  compatibility information. A healthy server does not prove every endpoint
+  or model works.
 
-Inside a source checkout, use:
-
-```bash
-swift run mere.run guide <command path>
-```
-
-If the binary cannot run yet, read the corresponding resource under `Sources/MereRunCLI/Guides/`. The guide command is canonical for per-command purpose, required models, install/check commands, parameters, prompting patterns, examples, iteration tips, troubleshooting, and source links.
-
-## Model Storage
-
-Default model store:
-
-```text
-~/Library/Application Support/MereRun/models
-```
-
-Use an external disk for a session:
-
-```bash
-export MERERUN_MODELS_DIR=/Volumes/Models/mere.run
-mere.run model list
-```
-
-Move the Hugging Face snapshot cache when downloads are large:
-
-```bash
-export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
-mere.run model pull image-zimage-max
-```
-
-## Troubleshooting
-
-- `mere.run: command not found`: check `which mere.run`; from a repo checkout use `swift run mere.run ...`.
-- Model missing or "not found": run `mere.run model list`, then `mere.run model pull <id>`, or pass a local model path with the command-specific `--model` or `--model-root`.
-- Pull blocked by hardware support: run `mere.run model capabilities --all`, choose a smaller recommended model, or use `--allow-unsupported` only when the user explicitly accepts the risk.
-- Download or disk-space problems: set `MERERUN_MODELS_DIR` and optionally `MERERUN_HUB_CACHE` to a larger disk, then retry the pull.
-- API works locally but not remotely: non-loopback binds require `--api-key` or `MERERUN_API_KEY`.
-- A creative command produces weak results: load `mere.run guide <command path>` and iterate prompt, seed, model, and command-specific controls from the guide.
-- A command is unfamiliar: run `mere.run <group> --help` and then `mere.run <group> <command> --help`.
-
-When the user is stuck, ask for the exact command they ran, the first error line, and the output of `mere.run model list`.
+Use `--json` where the command supports it and keep stderr diagnostics separate
+from machine-readable stdout. After generation, inspect the resulting artifact
+and report what was actually verified. Use `run inspect` for durable workflow
+reports; successful parsing or preflight alone is not successful inference.

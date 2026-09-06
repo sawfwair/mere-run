@@ -1,4 +1,4 @@
 interface:
   display_name: "Use mere.run"
-  short_description: "Help newcomers run the mere.run CLI"
-  default_prompt: "Use $use-mere-run to help me run a first local mere.run workflow."
+  short_description: "Discover and run local mere.run workflows"
+  default_prompt: "Use $use-mere-run to choose a supported model and run my workflow using the installed CLI and its offline guides."

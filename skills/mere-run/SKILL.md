@@ -1,99 +1,119 @@
 ---
 name: mere-run
-description: Develop, inspect, test, or modify the public `mere.run` Swift CLI in this OSS repository. Use when Codex needs to run source-checkout commands such as `swift run mere.run`, inspect the modality-first command tree as code, change CLI parsing, model resolution, local API behavior, or command output, update CLI docs/tests, validate with `./scripts/check.sh`, or distinguish the public `mere.run` inference CLI from the separate root `mere` portfolio command plane. For helping an end user operate the CLI without editing this repo, use the `use-mere-run` skill instead.
+description: Develop and validate the public mere.run CLI, runtime libraries, and Studio clients in the OSS source repository. Use for command parsing, model integration, workflow contracts, app integration, tests, or CLI documentation. For operating an installed CLI without source changes, use use-mere-run.
 ---
 
-# mere.run CLI
+# Develop mere.run
 
-## Overview
+Work from the public `mere.run` source checkout. The separate root `mere`
+portfolio CLI is outside this skill's scope. For operator help without code
+changes, use the `use-mere-run` skill when available.
 
-Use this skill for developing the public OSS `mere.run` CLI built by the Swift package in this repo. Keep it separate from the root `mere` portfolio CLI; this repo's command is `swift run mere.run ...` during development and `mere.run ...` only when testing an installed binary. For newcomer/operator help, use the companion `use-mere-run` skill.
+## Establish the source and runtime
 
-## First Moves
+Read `AGENTS.md`, `Package.swift`, `CODEBASE.md`, and the closest module README.
+Use `docs/repository-tour.md` and `docs/architecture.md` to find runtime owners.
+Inspect Git status before editing and preserve unrelated work.
 
-- Work from the repo root.
-- Read `AGENTS.md` for the repo contract when it is not already loaded.
-- For code changes, read `Package.swift`, `CODEBASE.md`, `Sources/MereRunCLI/MereRunCLI.swift`, the closest command file under `Sources/MereRunCLI/Commands/`, and the closest tests under `Tests/MereRunCLITests/` or `Tests/MereRunCoreTests/`.
-- For CLI usage or command discovery, start with `swift run mere.run --help`, then inspect the relevant subcommand help.
-- Treat `README.md`, `docs/cli.md`, `docs/model-sources.md`, and the managed model registry as the canonical public surface.
-
-## Command Surface
-
-Prefer the source checkout command while developing:
+Use the source CLI when testing changes:
 
 ```bash
+swift run mere.run --version
 swift run mere.run --help
-swift run mere.run guide --list
-swift run mere.run model capabilities
-swift run mere.run model list
+swift run mere.run catalog --json
 ```
 
-Keep the public command tree modality-first:
+An installed `mere.run` can differ from the checkout. Record which executable
+and version produced each result; installed-binary success does not validate
+source changes. Use command help for parsing and the catalog for structured
+capabilities, options, and output contracts. The catalog is not a replacement
+for the full command tree.
 
-- `image generate`, `image validate`
-- `guide`, `guide --list`, `guide <command path>`, `guide <command path> --model <model-id>`, `guide <command path> --json`
-- `text chat`, `text code`, `text embed`, `text anonymize`
-- `speech synthesize`, `speech transcribe`, `speech profile`
-- `vision caption`, `vision inspect`, `vision ground`, `vision segment`, `vision track`, `vision track-live`, `vision ocr`
-- `music generate`
-- `video generate`, `video export-latents`
-- `model list`, `model capabilities`, `model info`, `model pull`, `model remove`, `model repair-manifests`
-- `api serve`
-- `setup`
-- `agent onboard`, `agent install-pi`, `agent start`
+## Find the contract that owns the change
 
-Use managed model IDs from `docs/cli.md`, `docs/model-sources.md`, or `Sources/MereRunCore/ManagedModelCatalog.swift`; avoid guessing retired or private identifiers.
+| Change | Start here |
+| --- | --- |
+| Commands, flags, stdout, and diagnostics | `Sources/MereRunCLI/MereRunCLI.swift`, `Sources/MereRunCLI/Commands/`, `Sources/MereRunCLI/Support/` |
+| Capability metadata shared with Studio | `Sources/MereRunContract/`, `Tests/MereRunCLITests/CapabilityCatalogTests.swift` |
+| Model IDs, availability, and storage | `Sources/MereRunCore/ManagedModelCatalog.swift`, `ManagedModelSupport.swift`, `ModelResolver.swift` |
+| Prompting and model-specific workflows | `Sources/MereRunCLI/Guides/`, `GuideCommand.swift` and `ModelGuideRegistry.swift` under `Sources/MereRunCLI/Commands/` |
+| Graphs, executors, relay, and durable runs | Relevant CLI command, `Sources/MereRunRelayKit/`, `docs/workflows.md` |
+| Evaluation packs and results | `Sources/MereRunEvaluation/`, `docs/evaluation-packs.md` |
+| macOS Studio | `apps/macos/StudioKit/`, `apps/macos/StudioUI/`, `apps/macos/StudioKitTests/` |
+| iOS Studio | `apps/ios/`, `Sources/MereRunRelayKit/`, `docs/ios-studio.md` |
 
-## Runtime State
+Discover command additions from `--help` instead of maintaining a second
+command inventory in this skill. This also covers plugins, adapters, world
+sessions, geospatial inference, audio, and model optimization.
 
-Use the default model store unless isolation matters:
-
-```text
-~/Library/Application Support/MereRun/models
-```
-
-For isolated tests or reproductions, pass a model root explicitly:
+For a model or command change, inspect its cookbook and handbook:
 
 ```bash
-swift run mere.run --models-root /tmp/mererun-models model list
+swift run mere.run guide --list
+swift run mere.run guide --list-models --json
+swift run mere.run catalog image.generate --json
+swift run mere.run guide image generate
+swift run mere.run guide --model image-zimage-nano
 ```
 
-Respect the related environment overrides: `MERERUN_MODELS_DIR`, `MERERUN_HUB_CACHE`, and `MERERUN_MODEL_CACHE_HOME`.
+Handbooks explain provider guidance and validation limits. They do not prove
+that a checkpoint has passed local inference. Resolve canonical model IDs from
+the managed catalog; do not infer support from a runtime type name or alias.
 
-## Implementation Rules
+## Implement at the owning boundary
 
-- Keep stdout machine-readable and stderr diagnostic/progress-oriented in CLI implementations.
-- Use typed decoding at config and tokenizer boundaries. Keep dynamic compatibility shims narrow and close to the ingestion point.
-- Update the closest CLI or core test when changing command parsing, model resolution, compatibility behavior, API behavior, or output shape.
-- Update `README.md`, `docs/`, or `CHANGELOG.md` when changing public CLI behavior, setup, model guidance, or security-sensitive defaults.
-- Preserve the public OSS boundary: no hosted-service, billing, app-store, or private-deployment surfaces.
-- Leave `vendor/` unchanged unless explicitly required; update `THIRD_PARTY_NOTICES.md` in the same change if vendor artifacts change.
-- Preserve API safety defaults. `api serve` may bind loopback without auth; non-loopback hosts require `--api-key` or `MERERUN_API_KEY`.
-- Preserve tool-loop safety. `text chat` tool execution requires interactive approval unless the user opts into supported auto-approval behavior.
+- Keep runtime behavior in the owning library. Studio consumes CLI and shared
+  contracts; it must not become a second runtime implementation.
+- Use typed decoding at configuration and tokenizer boundaries. Keep stdout
+  consistent with the command's declared output; send diagnostics to stderr.
+- Update the closest CLI or core tests when changing parsing, model resolution,
+  compatibility, API behavior, or output shape.
+- When command paths or abstracts change, run
+  `./scripts/update-docs-command-reference.sh`. When capabilities change,
+  update the shared catalog and its parity tests.
+- Keep managed model entries, support metadata, and model handbooks aligned.
+  Use `ModelGuideTests` to check handbook coverage.
+- Preserve loopback API defaults and required authentication for non-loopback
+  binds. Preserve the supported tool-execution approval behavior.
+- Follow the repository's OSS boundary and vendor rules. Public macOS and iOS
+  clients are in scope; private deployment and store distribution machinery
+  belong elsewhere.
 
-## Validation
+## Validate the change
 
-Use the repo gate before treating a change as ready:
+Use focused tests while iterating. Before opening a PR, run the repository gate:
 
 ```bash
 ./scripts/check.sh
 ```
 
-That gate runs SwiftLint strict mode, build, tests, CLI `--help` smoke coverage, and hygiene scans for legacy names, old model IDs, retired command vocabulary, and debug prints. If the hygiene scan fails, inspect the rejected pattern and use current docs, tests, or the managed model registry for the canonical replacement.
+The gate owns lint, build, tests, CLI help checks, and hygiene checks. Never
+remove a rejected pattern from a hygiene check to make the change pass.
+Consult the managed catalog, docs, and tests for the supported replacement.
 
-Use narrower checks while iterating:
-
-```bash
-swift build
-swift test
-swift run mere.run --help
-```
-
-Add runtime smoke only when the task needs it and the machine has the needed assets:
+Use runtime smoke when relevant and the machine has the required assets:
 
 ```bash
 MERERUN_RUN_E2E=core ./scripts/check.sh
 MERERUN_RUN_E2E=installed ./scripts/check.sh
 ```
 
-When real checkpoint assets, GPU-only behavior, or non-loopback network validation is required, run the local gate first and call out the remaining validation gap explicitly.
+Follow `AGENTS.md` for asset, GPU, and network validation limits. Report parsing,
+local tests, real inference, hosted checks, and deployment as separate evidence.
+
+## Maintain the distributed skills
+
+`skills/mere-run/` owns this developer skill. `skills/use-mere-run/` owns the
+operator skill copied into the macOS app by `scripts/build_mere_run_app.sh`.
+Installed skills are copies and can drift from the repository.
+
+When updating skills, keep examples explicit about model selection. Run:
+
+```bash
+swift test --filter SkillContractTests
+```
+
+This test reads the skill examples, parses their commands, resolves catalog and
+handbook references, and checks that pull/run recipes select the same model.
+It does not download models or run inference. Update installed copies at their
+actual discovered locations when requested; preserve unrelated local files.
