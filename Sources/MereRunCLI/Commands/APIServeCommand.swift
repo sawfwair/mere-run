@@ -5810,8 +5810,10 @@ actor CodeGenServer {
 
         // Create async stream for SSE
         let (stream, continuation) = AsyncStream<ByteBuffer>.makeStream()
+        let heartbeatTask = Self.startStreamingKeepalive(continuation: continuation)
 
         let generationTask = Task {
+            defer { heartbeatTask.cancel() }
             do {
                 let streamedContent = StreamingContentTracker()
                 let shouldBufferForToolCalls = request.tools?.isEmpty == false
@@ -5968,6 +5970,7 @@ actor CodeGenServer {
             }
         }
         continuation.onTermination = { termination in
+            heartbeatTask.cancel()
             if case .cancelled = termination {
                 admissionLease.observeClientDisconnect()
                 generationTask.cancel()
@@ -5983,6 +5986,27 @@ actor CodeGenServer {
             ],
             body: .init(asyncSequence: stream)
         )
+    }
+
+    nonisolated static func startStreamingKeepalive(
+        continuation: AsyncStream<ByteBuffer>.Continuation,
+        interval: Duration = .seconds(15)
+    ) -> Task<Void, Never> {
+        Task {
+            do {
+                while !Task.isCancelled {
+                    try await Task.sleep(for: interval)
+                    guard !Task.isCancelled else { return }
+                    // SSE comments keep buffered tool responses alive without
+                    // exposing unfinished tool arguments or reasoning as text.
+                    if case .terminated = continuation.yield(ByteBuffer(string: ": keep-alive\n\n")) {
+                        return
+                    }
+                }
+            } catch {
+                // Cancellation ends the keepalive loop.
+            }
+        }
     }
 
     private nonisolated func openAIToolCalls(

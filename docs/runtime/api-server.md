@@ -60,6 +60,9 @@ that preserve reasoning across tool turns should send that field back on the
 assistant message alongside its `tool_calls`.
 Qwen, Ornith, Laguna, Gemma 4, and Muse use their native templates to render
 `tool_calls`; the API keeps assistant `content` separate from those calls.
+Streaming responses send SSE keepalive comments during long generations, including
+buffered tool calls. Clients should ignore comment frames and wait for response
+data and the final usage chunk.
 
 ## What it is for
 

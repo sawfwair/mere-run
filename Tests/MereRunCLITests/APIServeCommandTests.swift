@@ -3135,6 +3135,35 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(chatRequest.showThinking)
     }
 
+    func testBufferedStreamingKeepaliveEmitsOnlySSEComments() async throws {
+        let (stream, continuation) = AsyncStream<ByteBuffer>.makeStream()
+        let heartbeat = CodeGenServer.startStreamingKeepalive(
+            continuation: continuation,
+            interval: .milliseconds(5)
+        )
+        defer { heartbeat.cancel() }
+        var iterator = stream.makeAsyncIterator()
+        let first = await iterator.next()
+        let buffer = try XCTUnwrap(first)
+        XCTAssertEqual(String(buffer: buffer), ": keep-alive\n\n")
+        continuation.finish()
+        await heartbeat.value
+    }
+
+    func testStreamingKeepaliveCancellationDoesNotLeaveAPendingWriter() async {
+        let (stream, continuation) = AsyncStream<ByteBuffer>.makeStream()
+        let heartbeat = CodeGenServer.startStreamingKeepalive(
+            continuation: continuation,
+            interval: .seconds(60)
+        )
+        heartbeat.cancel()
+        await heartbeat.value
+        continuation.finish()
+        var iterator = stream.makeAsyncIterator()
+        let next = await iterator.next()
+        XCTAssertNil(next)
+    }
+
     func testStreamingUsageOptionHonorsCapabilities() throws {
         let request = OpenAIChatRequest(
             model: "mererun-test-model",
