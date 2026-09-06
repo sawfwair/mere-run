@@ -413,6 +413,21 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         )
     }
 
+    func testImageAndChatPreflightsDoNotReserveInferenceResources() {
+        let requests = [
+            ["image", "generate", "--model", "image-zimage-nano", "--prompt", "test"],
+            ["text", "chat", "--model", "text-chat-gemma4-12b-4bit", "--prompt", "test"],
+            ["text", "chat", "--model", "text-chat-deepseek-v4-flash", "--prompt", "test"],
+        ]
+        for request in requests {
+            let arguments = ["mere.run", "--models-root", "/tmp/preflight-models"] + request
+            XCTAssertNotNil(CLIInferenceAdmissionClassifier.request(arguments: arguments))
+            XCTAssertNil(CLIInferenceAdmissionClassifier.request(
+                arguments: arguments + ["--preflight", "--json"]
+            ), request.joined(separator: " "))
+        }
+    }
+
     func testOfflineGuidesNeverReserveInferenceMemory() {
         for model in ["text-agent-ornith-35b-mlx", "text-chat-deepseek-v4-flash"] {
             for path in [[], ["text", "chat"]] {

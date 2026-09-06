@@ -154,8 +154,17 @@ final class SkillContractTests: XCTestCase {
                 arguments[host + 1] = "0.0.0.0"
             }
             let output = try runCLI(arguments, in: root)
-            let report = try JSONDecoder().decode(Report.self, from: output.stdout)
-            XCTAssertEqual(output.exit, expectedExit, String(decoding: output.stderr, as: UTF8.self))
+            let context = "Command: \(arguments.joined(separator: " "))\n"
+                + "Exit: \(output.exit)\nStderr: \(String(decoding: output.stderr, as: UTF8.self))\n"
+                + "Stdout: \(String(decoding: output.stdout, as: UTF8.self))"
+            XCTAssertEqual(output.exit, expectedExit, context)
+            let report: Report
+            do {
+                report = try JSONDecoder().decode(Report.self, from: output.stdout)
+            } catch {
+                XCTFail("Preflight did not emit its JSON report: \(error)\n\(context)")
+                continue
+            }
             XCTAssertEqual(report.status, "blocked")
             XCTAssertTrue(report.diagnostics.contains { $0.id == diagnostic && $0.severity == "blocker" })
         }
@@ -229,6 +238,12 @@ final class SkillContractTests: XCTestCase {
         guard !process.isRunning else {
             process.terminate()
             throw ValidationError("Skill command exceeded 30 seconds: \(arguments.joined(separator: " "))")
+        }
+        guard process.terminationReason == .exit else {
+            throw ValidationError(
+                "Skill command terminated by signal \(process.terminationStatus): \(arguments.joined(separator: " "))\n"
+                    + String(decoding: try Data(contentsOf: errorURL), as: UTF8.self)
+            )
         }
         return (process.terminationStatus, try Data(contentsOf: outputURL), try Data(contentsOf: errorURL))
     }

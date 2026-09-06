@@ -24,6 +24,12 @@ Capture stdout and stderr separately and retain the exit code. A blocked check
 can print valid JSON and then exit nonzero; do not discard its stdout because a
 shell command failed. Syntax errors can instead produce only stderr.
 
+Image generation and text chat preflights report current machine memory and
+disk headroom as blockers without reserving inference capacity. These are
+point-in-time checks: execution checks resources again. Older CLI versions can
+reject these requests through the execution gate before printing a report;
+retain stderr when stdout contains no JSON.
+
 For the shared envelope, inspect:
 
 - `schema_version`, `command`, and `mode` to identify the contract.

@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Image generation and text chat preflights now report insufficient memory,
+  disk headroom, and critical memory pressure as structured blockers alongside
+  other request diagnostics. They no longer reserve inference permits or exit
+  through the execution admission gate before producing their report.
+
 ## 0.51.1 - 2026-09-05
 
 - fixed a `gate --all-installed` issue that rechecked required models only in

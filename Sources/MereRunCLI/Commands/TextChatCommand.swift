@@ -735,7 +735,29 @@ struct TextChat: AsyncParsableCommand {
     }
 
     private func emitPreflight(modelID: String, installedModelPath: String?) throws {
-        var diagnostics: [PreflightDiagnostic] = []
+        let report = makePreflightReport(
+            modelID: modelID,
+            installedModelPath: installedModelPath,
+            resourceDiagnostics: MachineInferencePreflight.diagnostics(
+                arguments: ["mere.run", "text", "chat", "--model", modelID]
+            )
+        )
+        if json {
+            print(try StructuredRunOutput.encode(report))
+        } else {
+            print(report.summary)
+            for diagnostic in report.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
+        }
+    }
+
+    func makePreflightReport(
+        modelID: String,
+        installedModelPath: String?,
+        resourceDiagnostics: [PreflightDiagnostic] = []
+    ) -> TextChatPreflightReport {
+        var diagnostics = resourceDiagnostics
         if modelID.isEmpty || ManagedModelCatalog.spec(for: modelID) == nil {
             diagnostics.append(.init(
                 id: "text_chat_model_unknown",
@@ -778,7 +800,7 @@ struct TextChat: AsyncParsableCommand {
                 ))
             }
         }
-        let report = TextChatPreflightReport(
+        return TextChatPreflightReport(
             schemaVersion: 1,
             status: StructuredRunOutput.status(for: diagnostics),
             model: modelID,
@@ -786,11 +808,6 @@ struct TextChat: AsyncParsableCommand {
             modelPath: installedModelPath,
             diagnostics: diagnostics
         )
-        if json {
-            print(try StructuredRunOutput.encode(report))
-        } else {
-            print(report.summary)
-        }
     }
 
     static func formatGemma4MTPStats(_ stats: Gemma4MTPStats) -> String {
@@ -1043,7 +1060,7 @@ struct TextChat: AsyncParsableCommand {
     }
 }
 
-private struct TextChatPreflightReport: Codable, Equatable {
+struct TextChatPreflightReport: Codable, Equatable {
     let schemaVersion: Int
     let status: StructuredRunStatus
     let model: String

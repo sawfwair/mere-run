@@ -710,6 +710,28 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(startGeneration.disabledReason, "Resolve hard blockers first.")
     }
 
+    func testImageGenerationResourceBlockerDisablesAnOtherwiseReadyRequest() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-zimage", family: .zimage, to: model)
+        let command = try ImageGenerate.parse(["--prompt", "test", "--model", model.path])
+        let resources = MachineInferencePreflight.diagnostics(
+            arguments: ["mere.run", "image", "generate", "--model", model.path],
+            host: MachineInferenceHostSnapshot(
+                physicalMemoryBytes: 8_589_934_592, availableMemoryBytes: 4_294_967_296,
+                memoryPressure: .nominal, availableDiskBytes: 100_000_000_000
+            )
+        )
+        let envelope = command.makePreflightEnvelope(
+            outputURL: temp.appendingPathComponent("render.png"), resourceDiagnostics: resources
+        )
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.result.model.installed)
+        XCTAssertEqual(envelope.diagnostics.map(\.id), ["machine_insufficient_memory"])
+        XCTAssertFalse(try XCTUnwrap(envelope.actions.first { $0.id == "start-generation" }).enabled)
+    }
+
     func testImageGenerationPreflightBlocksUnsupportedModelFamily() throws {
         let temp = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
