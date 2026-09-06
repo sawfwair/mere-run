@@ -579,6 +579,7 @@ enum APIEngine: String, ExpressibleByArgument {
 struct APIEngineCapabilities: Equatable, Sendable {
     var supportsRawProxy: Bool = false
     var supportsTools: Bool = false
+    var usesNativeToolHistory: Bool = false
     var supportsToolChoice: Bool = false
     var supportsDeveloperRole: Bool = true
     var supportsStructuredOutputs: Bool = false
@@ -599,6 +600,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
         APIEngineCapabilities(
             supportsRawProxy: profile.supportsRawProxy,
             supportsTools: profile.toolCall,
+            usesNativeToolHistory: [.textChatQ36, .textChatLaguna, .textChatGemma4, .textChatMuseGlimmer]
+                .contains(profile.servingEngine),
             supportsToolChoice: profile.supportsToolChoice,
             supportsDeveloperRole: profile.compatibility.supportsDeveloperRole,
             supportsStructuredOutputs: profile.structuredOutput,
@@ -2706,7 +2709,7 @@ enum APIServerContract {
         let imageURL = try firstImageURL(from: msg, capabilities: capabilities)
         let audioURL = try firstAudioURL(from: msg, capabilities: capabilities)
         let videoURL = try firstVideoURL(from: msg, capabilities: capabilities)
-        let content = renderMessageContent(msg)
+        let content = capabilities.usesNativeToolHistory ? msg.content : renderMessageContent(msg)
         let toolCalls = try chatMessageToolCalls(from: msg)
         return ChatMessage(
             role: role,

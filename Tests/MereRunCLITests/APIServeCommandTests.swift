@@ -2357,6 +2357,7 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertEqual(chatRequest.messages[0].reasoningContent, "I should write the file.")
+        XCTAssertEqual(chatRequest.messages[0].content, "Working...")
         XCTAssertEqual(
             chatRequest.messages[0].toolCalls,
             [
@@ -2372,6 +2373,32 @@ final class APIServeCommandTests: XCTestCase {
         )
         XCTAssertEqual(chatRequest.messages[1].name, "write_file")
         XCTAssertEqual(chatRequest.messages[1].toolCallID, "call_123")
+    }
+
+    func testNativeToolHistoryDoesNotInjectAnotherModelsMarkup() throws {
+        for engine: RuntimeServingEngine in [.textChatQ36, .textChatLaguna, .textChatGemma4, .textChatMuseGlimmer] {
+            let request = OpenAIChatRequest(
+                model: "mererun-test-model",
+                messages: [OpenAIChatMessage(
+                    role: "assistant",
+                    reasoning_content: "Read the task.",
+                    tool_calls: [OpenAIChatToolCall(
+                        id: "call_read",
+                        function: OpenAIChatToolCallFunction(name: "read", arguments: #"{"path":"TASK.md"}"#)
+                    )]
+                )]
+            )
+            let mapped = try APIServerContract.chatRequest(
+                from: request,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: engine.openAICompatibility
+            )
+            XCTAssertEqual(mapped.messages[0].content, "", engine.rawValue)
+            XCTAssertEqual(mapped.messages[0].reasoningContent, "Read the task.")
+            XCTAssertEqual(mapped.messages[0].toolCalls?.first?.name, "read")
+            XCTAssertEqual(mapped.messages[0].toolCalls?.first?.arguments, ["path": .string("TASK.md")])
+        }
     }
 
     func testChatRequestRejectsInvalidToolCallArguments() {

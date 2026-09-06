@@ -12,6 +12,9 @@ The format is based on Keep a Changelog.
 - Laguna API requests now enable reasoning by default. Buffered streaming tool
   replies preserve `reasoning_content`, and buffered answers keep reasoning
   separate from visible message content.
+- Qwen, Ornith, Laguna, Gemma 4, and Muse API conversations now pass assistant
+  tool history to their native templates without injecting duplicate tool markup
+  into message content.
 
 - Image generation and text chat preflights now report insufficient memory,
   disk headroom, and critical memory pressure as structured blockers alongside

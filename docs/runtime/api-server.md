@@ -58,6 +58,8 @@ Laguna chat requests enable reasoning by default. Chat responses return reasonin
 in `reasoning_content`, including buffered streaming tool-call replies. Clients
 that preserve reasoning across tool turns should send that field back on the
 assistant message alongside its `tool_calls`.
+Qwen, Ornith, Laguna, Gemma 4, and Muse use their native templates to render
+`tool_calls`; the API keeps assistant `content` separate from those calls.
 
 ## What it is for
 
