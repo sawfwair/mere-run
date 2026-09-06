@@ -443,7 +443,7 @@ struct MachineInferenceCoordinator: Sendable {
         return lhs.id.uuidString < rhs.id.uuidString
     }
 
-    private static func currentHostSnapshot() -> MachineInferenceHostSnapshot {
+    static func currentHostSnapshot() -> MachineInferenceHostSnapshot {
         let memory = RuntimeMemorySample.current()
         let disk = availableDiskBytes(
             at: MereRunModelPaths.applicationSupportBase.deletingLastPathComponent()
@@ -575,6 +575,11 @@ enum CLIInferenceAdmissionClassifier {
         let subcommand = commandTokens.dropFirst().first
         let nestedSubcommand = commandTokens.dropFirst(2).first
         let label = [topLevel, subcommand].compactMap { $0 }.joined(separator: " ")
+        // These preflights report resource blockers without reserving inference
+        // permits. Other preflight implementations retain their existing gate.
+        if tokens.contains("--preflight"), ["image generate", "text chat"].contains(label) {
+            return nil
+        }
 
         // These orchestration commands either acquire a workload-specific
         // lease internally or spawn a child process that does. Classifying

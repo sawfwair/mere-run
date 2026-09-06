@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import MereRunCore
+import MereRunRelayKit
 
 // MARK: - Image Generate Command
 
@@ -587,7 +588,8 @@ struct ImageGenerate: AsyncParsableCommand {
     func makePreflightEnvelope(
         outputURL: URL,
         fileManager: FileManager = .default,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        resourceDiagnostics: [PreflightDiagnostic] = []
     ) -> ImageGenerationPreflightEnvelope {
         let input = ImageGenerationPreflightInput(
             prompt: prompt,
@@ -626,11 +628,16 @@ struct ImageGenerate: AsyncParsableCommand {
             input: input,
             fileManager: fileManager,
             now: now
-        ).envelope()
+        ).envelope(resourceDiagnostics: resourceDiagnostics)
     }
 
     private func runPreflight(outputURL: URL) throws {
-        let envelope = makePreflightEnvelope(outputURL: outputURL)
+        let envelope = makePreflightEnvelope(
+            outputURL: outputURL,
+            resourceDiagnostics: MachineInferencePreflight.diagnostics(
+                arguments: generationActionArguments(outputURL: outputURL)
+            )
+        )
         if json {
             print(try StructuredRunOutput.encode(envelope))
         } else {

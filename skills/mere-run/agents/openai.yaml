@@ -1,4 +1,4 @@
 interface:
   display_name: "mere.run CLI"
-  short_description: "Operate the public mere.run CLI safely"
-  default_prompt: "Use $mere-run to inspect the public CLI command tree and run the right validation."
+  short_description: "Develop the mere.run CLI and Studio clients"
+  default_prompt: "Use $mere-run to inspect the owning source contract, implement my change, and validate it."

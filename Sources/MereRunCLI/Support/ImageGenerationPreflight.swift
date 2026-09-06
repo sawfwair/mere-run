@@ -286,8 +286,8 @@ struct ImageGenerationPreflightAnalyzer {
         self.now = now
     }
 
-    func envelope() -> ImageGenerationPreflightEnvelope {
-        var diagnostics: [PreflightDiagnostic] = []
+    func envelope(resourceDiagnostics: [PreflightDiagnostic] = []) -> ImageGenerationPreflightEnvelope {
+        var diagnostics = resourceDiagnostics
         let createdAt = now()
         validatePrompt(diagnostics: &diagnostics)
         validateSampling(diagnostics: &diagnostics)
