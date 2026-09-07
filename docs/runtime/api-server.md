@@ -528,6 +528,18 @@ supported fields into `ChatRequest` or return an OpenAI-style
 `metadata`, `user`, and `service_tier` are accepted as request context but do
 not change local generation.
 
+For function tools, supply `parameters` as a JSON Schema object. Native prompts
+retain the complete schema, including nested properties, array items, enums,
+references, and constraints such as `additionalProperties`. If you omit
+`parameters` or set it to `null`, the API supplies an empty object schema.
+Other non-object values return `invalid_request_error`. Schema preservation
+does not add full JSON Schema validation of generated arguments; check arguments
+before executing a tool.
+
+Checkpoint templates that use `loop.previtem` and `loop.nextitem` retain the
+role boundaries around individual and consecutive tool results. You do not
+need to edit the installed chat template.
+
 For non-streaming chat responses, native runtimes split `<think>...</think>`
 blocks out of `message.content` and expose them as OpenAI-compatible
 `message.reasoning_content` when present. Tool-capable streaming requests buffer

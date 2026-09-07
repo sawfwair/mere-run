@@ -6,7 +6,7 @@ Qwen 3.5/3.6/3.8 dense and hybrid MoE text and vision-language runtime.
 - `Q35TokenizerAndTemplate.swift`: checkpoint-native chat-template rendering,
   image-token expansion, and tokenization.
 - `Q35Model.swift`: native model entry point.
-- `Q35CompiledOperations.swift`: compiled activations and request-stream scopes.
+- `Q35CompiledOperations.swift`: compiled activations and request stream scopes.
 - `Q35MTPProfile.swift`: optional synchronized speculation diagnostics.
 - `Q35RuntimeTuning.swift`: scheduling defaults for the qualified managed Q4 targets.
 - Attention and MoE files own model math only.
@@ -47,7 +47,12 @@ Verified Q4 measurements showed a short-prompt decode win, so managed Ornith
 
 Managed Qwen3.8 27B Q4 and Ornith 1.5 Q4 requests own their compiled
 activation graphs. This prevents reuse of graphs traced on a previous
-request's MLX stream. Supported short decode and verification blocks submit
+request's MLX stream. The generator leases CPU and GPU stream contexts for
+active requests, then synchronizes and reuses them after completion or failure.
+Overlapping requests use separate contexts. MLX retains backend streams until
+process exit, so allocating streams per request accumulates command queues in
+long-running API sessions. Graph owners remain separate for each request even
+when the stream context is reused. Supported short decode and verification blocks submit
 asynchronously, and permanent greedy MTP fallback uses the pipelined target
 decoder. Other model IDs keep their existing scheduling defaults. Set
 `MERERUN_Q35_SCOPED_COMPILE=0`, `MERERUN_Q35_ASYNC_DECODE_BLOCKS=0`, or
@@ -204,12 +209,14 @@ not every intermediate prefill chunk. The four-entry retention bound remains
 in force. The full prompt's hidden history is no longer retained or re-primed
 on every eligible request.
 
-Flash-Next also reclaims reusable MLX buffers when they reach 4 GiB at a
-prefill chunk boundary, decode round, or new request (including exact prefix
-replay, which skips prefill). Growing QSA shapes otherwise accumulate differently
-sized temporary buffers until the much larger device-wide limit. This does
+Qwen-family generators reclaim reusable MLX buffers when they reach 4 GiB at a
+prefill chunk boundary, decode round, or request boundary (including exact prefix
+replay, which skips prefill). Growing prompt and QSA shapes otherwise accumulate
+differently sized temporary buffers until the much larger device-wide limit. This does
 not evict model tensors, target/draft KV history, or prefix-cache entries, and
 does not change the process-wide MLX allocation limits.
+Set `MERERUN_Q35_DEBUG_MEMORY=1` to record process-wide live allocations, reusable
+buffers, and configured MLX limits on stderr when a request completes or fails.
 
 `Q38FlashNextCheckpointTests` provides explicit installed-model gates for 32k, 64k, and 128k
 retrieval, exact prompt replay, a cached follow-up turn, and MTP agreement with

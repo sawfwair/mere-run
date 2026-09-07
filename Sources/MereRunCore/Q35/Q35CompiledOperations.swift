@@ -40,6 +40,18 @@ final class Q35CompiledOperations: @unchecked Sendable {
             return try await $scoped.withValue(Q35CompiledOperations(), operation: operation)
         }
     }
+
+    static func withDefaultStream<Result>(
+        _ context: MLX.Stream.Context,
+        scoped enabled: Bool,
+        isolation _: isolated (any Actor)? = #isolation,
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        try await Stream.withDefaultStream(context) {
+            guard enabled else { return try await operation() }
+            return try await $scoped.withValue(Q35CompiledOperations(), operation: operation)
+        }
+    }
 }
 
 @inline(__always)
