@@ -6,6 +6,8 @@ enum BuiltinTools {
         let sandboxDir: URL
         let allowShellExec: Bool
         let allowAbsolutePaths: Bool
+        var shellTimeout: TimeInterval = 300
+        var shellOutputLimitBytes: Int = 256 * 1024
     }
 
     static let writeFile = ToolDefinition(
@@ -90,21 +92,22 @@ enum BuiltinTools {
         process.arguments = ["-c", command]
         process.currentDirectoryURL = policy.sandboxDir
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        let status = process.terminationStatus
-
-        if status == 0 {
+        let result = try BoundedProcessRunner.run(
+            process,
+            timeout: policy.shellTimeout,
+            outputLimitBytes: policy.shellOutputLimitBytes,
+            combineOutput: true
+        )
+        let output = result.stdout.text
+        switch result.completion {
+        case .cancelled:
+            throw CancellationError()
+        case .timedOut:
+            return "Timed out after \(policy.shellTimeout) seconds.\n\(output)"
+        case .exited where result.status == 0:
             return output.isEmpty ? "(no output)" : output
-        } else {
-            return "Exit code \(status)\n\(output)"
+        case .exited:
+            return "Exit code \(result.status)\n\(output)"
         }
     }
 

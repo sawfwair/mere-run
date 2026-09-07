@@ -527,6 +527,12 @@ targets absolute paths outside the sandbox with `--allow-absolute-tool-paths`.
 `--auto-approve-tools` skips confirmation for `write_file` only; `shell_exec`
 always requires interactive approval even when that flag is set.
 
+Each approved shell call has a five-minute deadline. The tool drains stdout and
+stderr while the command runs and retains the first 256 KiB of their combined
+output. If output exceeds that limit, the result includes `[output truncated]`.
+Reaching the capture limit does not stop the command. A timeout or task
+cancellation terminates the owned process group.
+
 ```bash
 swift run mere.run text chat \
   --model text-chat-gemma4-12b-4bit \

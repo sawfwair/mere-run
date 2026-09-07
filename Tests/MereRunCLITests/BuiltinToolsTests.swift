@@ -112,6 +112,29 @@ final class BuiltinToolsTests: XCTestCase {
         )
     }
 
+    func testAllowedShellExecDrainsLargeOutputAndReportsTruncation() throws {
+        let policy = BuiltinTools.ToolExecutionPolicy(
+            sandboxDir: try makeSandbox(), allowShellExec: true, allowAbsolutePaths: false,
+            shellTimeout: 5, shellOutputLimitBytes: 128
+        )
+        let result = try BuiltinTools.execute(
+            ToolCall(name: "shell_exec", arguments: ["command": "head -c 1048576 /dev/zero"]),
+            policy: policy
+        )
+        XCTAssertEqual(result, String(repeating: "\0", count: 128) + "\n[output truncated]")
+    }
+
+    func testAllowedShellExecReportsTimeout() throws {
+        let policy = BuiltinTools.ToolExecutionPolicy(
+            sandboxDir: try makeSandbox(), allowShellExec: true, allowAbsolutePaths: false,
+            shellTimeout: 0.1
+        )
+        let result = try BuiltinTools.execute(
+            ToolCall(name: "shell_exec", arguments: ["command": "sleep 30"]), policy: policy
+        )
+        XCTAssertTrue(result.hasPrefix("Timed out after 0.1 seconds."))
+    }
+
     private func makeSandbox() throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
