@@ -21,6 +21,11 @@ file, and then use the table to open the family entry point.
 
 ## Image families
 
+Read the [shared image operation](./internals/image-generation-operation.md)
+before following a family implementation. CLI, API, and preflight adapters use
+`ImageGenerationPlan` for resolution and validation, and execution passes the
+resolved request to `ImageGenerationOperation`.
+
 Klein image generation:
 
 - CLI: `Sources/MereRunCLI/Commands/ImageGenerateCommand.swift`

@@ -670,6 +670,14 @@ Qwen3 embedding model has a fixed vector size and returns float vectors.
 - local extensions: `strength`, `seed`, `negative_prompt`, `steps` (1 through
   100), and `guidance_scale`
 
+Image endpoints use the Core image operation for validation and execution. The
+v1 API retains its existing Klein defaults: four steps and guidance 1 when you
+omit them, with input images passed as image-to-image conditioning. The CLI uses
+the Klein manifest defaults and promotes its input image to a reference. Set
+`steps` and `guidance_scale` explicitly when comparing text-to-image results
+across the two entry points. Legacy Qwen edit installations without manifest
+defaults use 20 steps and guidance 4.
+
 Masks are accepted for client compatibility. Native edit models use
 whole-image conditioning rather than strict masked inpainting.
 

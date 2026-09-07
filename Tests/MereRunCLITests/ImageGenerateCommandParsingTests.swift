@@ -354,7 +354,7 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let model = temp.appendingPathComponent("model", isDirectory: true)
-        try writeManifest(id: "local-zimage", family: .zimage, to: model)
+        try writeManifest(id: "local-klein", family: .klein, to: model)
 
         let input = temp.appendingPathComponent("input.png")
         let reference = temp.appendingPathComponent("reference.png")
@@ -385,14 +385,14 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(envelope.status, .ok)
         XCTAssertEqual(envelope.command, ["image", "generate"])
         XCTAssertEqual(envelope.result.model.kind, "local_path")
-        XCTAssertEqual(envelope.result.model.family, "zimage")
+        XCTAssertEqual(envelope.result.model.family, "klein")
         XCTAssertEqual(envelope.result.output.path, output.path)
         XCTAssertEqual(envelope.result.inputs.inputImage?.path, input.path)
         XCTAssertEqual(envelope.result.inputs.referenceImages.first?.path, reference.path)
         XCTAssertEqual(envelope.result.lora?.path, lora.path)
         XCTAssertEqual(envelope.result.lora?.scale, 0.8)
         XCTAssertEqual(envelope.result.plan.effectiveSteps, 6)
-        XCTAssertEqual(envelope.result.plan.inputMode, "image_to_image_with_references")
+        XCTAssertEqual(envelope.result.plan.inputMode, "reference_image")
         XCTAssertEqual(envelope.result.runPlan.kind, ImageGenerationRunPlan.kind)
         XCTAssertEqual(envelope.result.runPlan.command, ["image", "generate"])
         XCTAssertEqual(envelope.result.runPlan.arguments.prompt, "turn this into a matte catalog image")
@@ -418,7 +418,7 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ImageGenerationPreflightEnvelope.self, from: Data(encoded.utf8))
         XCTAssertEqual(decoded.status, .ok)
-        XCTAssertEqual(decoded.result.model.family, "zimage")
+        XCTAssertEqual(decoded.result.model.family, "klein")
         XCTAssertFalse(decoded.result.structuredPrompt.backend.contains("default device"))
 
         let encodedPlan = try StructuredRunOutput.encode(envelope.result.runPlan)

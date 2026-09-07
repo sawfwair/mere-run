@@ -5270,144 +5270,38 @@ actor CodeGenServer {
     }
 
     private func generateImage(_ plan: APIServerContract.ImageGenerationPlan) async throws -> URL {
+        let modelID: String
+        let modelRoot: URL
+        let manifest: MereRunModelManifest
+        let qwenEdit = plan.inputImage != nil && QwenImageEditRepository.canonicalModelId(for: plan.modelID) != nil
+        if qwenEdit {
+            guard let canonicalID = QwenImageEditRepository.canonicalModelId(for: plan.modelID),
+                  let root = QwenImageEditRepository.resolveInstalledModelRoot(modelSpec: canonicalID) else {
+                throw APIRequestValidationError.invalidField(
+                    "model", "\(plan.modelID) is not installed; pull it before serving image edits"
+                )
+            }
+            modelID = canonicalID
+            modelRoot = root
+            // Older managed Qwen edit installs did not require a manifest.
+            manifest = try MereRunModelManifest.loadIfPresent(from: root)
+                ?? MereRunModelManifest(id: canonicalID, engine: .qwenImageEdit, family: .qwen)
+        } else {
+            let resolved = try resolveImageModel(plan.modelID)
+            modelID = resolved.modelID
+            modelRoot = resolved.rootURL
+            manifest = resolved.manifest
+        }
+        let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
+        let operation = try plan.operationPlan(
+            modelRoot: modelRoot, outputURL: outputURL, manifest: manifest, qwenEditDefaults: qwenEdit
+        )
         try MLXBundleSupport.ensureAvailable(quiet: true)
-        if plan.inputImage != nil,
-           QwenImageEditRepository.canonicalModelId(for: plan.modelID) != nil {
-            return try await generateQwenImageEdit(plan)
-        }
-        let resolved = try resolveImageModel(plan.modelID)
-        let effectiveSteps = plan.steps
-            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .senseNova
-                    || resolved.manifest.family == .krea || resolved.manifest.family == .ideogram
-                    || resolved.manifest.family == .flux1)
-                ? (resolved.manifest.defaults?.steps ?? 4)
-                : 4)
-        let effectiveCFG = plan.guidanceScale
-            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .senseNova
-                    || resolved.manifest.family == .krea || resolved.manifest.family == .ideogram
-                    || resolved.manifest.family == .flux1)
-                ? (resolved.manifest.defaults?.cfg ?? 1.0)
-                : 1.0)
-        let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
-        let request = GenerationRequest(
-            prompt: plan.prompt,
-            negativePrompt: plan.negativePrompt,
-            referenceImages: plan.additionalInputImages,
-            width: plan.width,
-            height: plan.height,
-            steps: effectiveSteps,
-            guidanceScale: effectiveCFG,
-            seed: plan.seed,
-            outputURL: outputURL,
-            model: resolved.rootURL.path,
-            maxSequenceLength: 512,
-            lora: nil,
-            enhancePrompt: false,
-            inputImage: plan.inputImage,
-            strength: plan.strength ?? 0.75,
-            keepOriginalAspect: false,
-            useBetaSigmas: false,
-            sigmaShift: resolved.manifest.defaults?.sigmaShift.map { Float($0) }
-        )
-
-        switch resolved.manifest.family {
-        case .flux1:
-            _ = try await sidecarPool.generateImage(
-                kind: .flux1,
-                modelID: resolved.modelID,
-                modelPath: resolved.rootURL.path,
-                request: request
-            )
-        case .klein:
-            _ = try await sidecarPool.generateImage(
-                kind: .flux2Klein,
-                modelID: resolved.modelID,
-                modelPath: resolved.rootURL.path,
-                request: request
-            )
-        case .zimage:
-            _ = try await sidecarPool.generateImage(
-                kind: .zImageTurbo,
-                modelID: resolved.modelID,
-                modelPath: resolved.rootURL.path,
-                request: request
-            )
-        case .hidream:
-            _ = try await sidecarPool.generateImage(
-                kind: .hiDreamO1,
-                modelID: resolved.modelID,
-                modelPath: resolved.rootURL.path,
-                request: request
-            )
-        case .senseNova:
-            _ = try await sidecarPool.generateImage(
-                kind: .senseNovaU15,
-                modelID: resolved.modelID,
-                modelPath: resolved.rootURL.path,
-                request: request
-            )
-        case .krea:
-            _ = try await sidecarPool.generateImage(
-                kind: .krea2,
-                modelID: resolved.modelID,
-                modelPath: resolved.rootURL.path,
-                request: request
-            )
-        case .ideogram:
-            _ = try await sidecarPool.generateImage(
-                kind: .ideogram4,
-                modelID: resolved.modelID,
-                modelPath: resolved.rootURL.path,
-                request: request
-            )
-        case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .tessera, .olmoEarth,
-             .face, .geometry, .depth, .threeD,
-             .tts, .asr, .embed, .code, .ocr, .audio, .music, .sfx, .video, .psi, .privacy, .deepseek,
-             .inkling, .muse, .nemotron, nil:
-            throw APIRequestValidationError.invalidField(
-                "model",
-                "model \(resolved.modelID) is not an image generation model"
-            )
-        }
-        return outputURL
-    }
-
-    private func generateQwenImageEdit(_ plan: APIServerContract.ImageGenerationPlan) async throws -> URL {
-        guard let canonicalModelID = QwenImageEditRepository.canonicalModelId(for: plan.modelID),
-              let modelRoot = QwenImageEditRepository.resolveInstalledModelRoot(
-                modelSpec: canonicalModelID
-              ) else {
-            throw APIRequestValidationError.invalidField(
-                "model",
-                "\(plan.modelID) is not installed; pull it before serving image edits"
-            )
-        }
-        let manifest = try MereRunModelManifest.loadIfPresent(from: modelRoot)
-        let defaultSteps = manifest?.defaults?.steps ?? 20
-        let defaultCFG = manifest?.defaults?.cfg ?? 4
-        let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
-        let request = GenerationRequest(
-            prompt: plan.prompt,
-            negativePrompt: plan.negativePrompt,
-            referenceImages: plan.additionalInputImages,
-            width: plan.width,
-            height: plan.height,
-            steps: plan.steps ?? defaultSteps,
-            guidanceScale: plan.guidanceScale ?? defaultCFG,
-            seed: plan.seed,
-            outputURL: outputURL,
-            model: modelRoot.path,
-            maxSequenceLength: 512,
-            inputImage: plan.inputImage,
-            strength: plan.strength ?? 0.75
-        )
-        _ = try await sidecarPool.generateImage(
-            kind: .qwenImageEdit,
-            modelID: canonicalModelID,
-            modelPath: modelRoot.path,
-            request: request
-        )
-        return outputURL
+        let pool = sidecarPool
+        let outcome = try await ImageGenerationOperation.execute(operation, executor: { kind, request, _ in
+            try await pool.generateImage(kind: kind, modelID: modelID, modelPath: modelRoot.path, request: request)
+        })
+        return outcome.result.outputURL
     }
 
     private func synthesizeSpeech(_ plan: APIServerContract.SpeechPlan) async throws -> URL {
@@ -5469,21 +5363,14 @@ actor CodeGenServer {
     private func resolveImageModel(
         _ requestedModel: String
     ) throws -> (modelID: String, rootURL: URL, manifest: MereRunModelManifest) {
-        let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let asPath = URL(fileURLWithPath: normalized).standardizedFileURL
-        if FileManager.default.fileExists(atPath: asPath.path) {
-            let manifest = try MereRunModelManifest.loadRequired(from: asPath)
-            return (manifest.id, asPath, manifest)
+        let selection = ImageGenerationModelSelection(requestedModel.trimmingCharacters(in: .whitespacesAndNewlines))
+        if case .unknown = selection {
+            throw APIRequestValidationError.invalidField("model", "use a mere.run image model id or a local model path")
         }
-        guard let modelID = ModelResolver.ModelID(rawValue: normalized) else {
-            throw APIRequestValidationError.invalidField(
-                "model",
-                "use a mere.run image model id or a local model path"
-            )
-        }
-        let resolution = try ModelResolver().resolve(modelID)
-        let manifest = try MereRunModelManifest.loadRequired(from: resolution.rootURL)
-        return (modelID.rawValue, resolution.rootURL, manifest)
+        let root = try selection.resolveRoot()
+        let manifest = try MereRunModelManifest.loadRequired(from: root)
+        if case .managed(let id) = selection { return (id.rawValue, root, manifest) }
+        return (manifest.id, root, manifest)
     }
 
     private func resolveSpeechModel(
@@ -6198,6 +6085,12 @@ actor CodeGenServer {
                 status: .serviceUnavailable,
                 message: error.localizedDescription,
                 type: "memory_pressure_error"
+            )
+        case let error as ImageGenerationIssue:
+            return makeErrorResponse(
+                status: .badRequest,
+                message: error.localizedDescription,
+                type: "invalid_request_error"
             )
         case let error as APIRequestValidationError:
             return makeErrorResponse(

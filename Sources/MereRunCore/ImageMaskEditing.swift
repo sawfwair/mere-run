@@ -1,14 +1,20 @@
-import ArgumentParser
 import Foundation
 import MediaIO
 
-struct ImageOutpaintInsets: Codable, Equatable {
-    let top: Int
-    let right: Int
-    let bottom: Int
-    let left: Int
+public struct ImageOutpaintInsets: Codable, Hashable, Sendable {
+    public let top: Int
+    public let right: Int
+    public let bottom: Int
+    public let left: Int
 
-    static func parse(_ value: String) throws -> Self {
+    public init(top: Int, right: Int, bottom: Int, left: Int) {
+        self.top = top
+        self.right = right
+        self.bottom = bottom
+        self.left = left
+    }
+
+    public static func parse(_ value: String) throws -> Self {
         let parts = value
             .split(separator: ",", omittingEmptySubsequences: false)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -18,15 +24,15 @@ struct ImageOutpaintInsets: Codable, Equatable {
               let bottom = Int(parts[2]),
               let left = Int(parts[3]),
               [top, right, bottom, left].allSatisfy({ $0 >= 0 }) else {
-            throw ValidationError("--outpaint must be top,right,bottom,left using nonnegative pixel values.")
+            throw ImageGenerationIssue("image_edit_invalid", "--outpaint must be top,right,bottom,left using nonnegative pixel values.")
         }
-        guard top + right + bottom + left > 0 else {
-            throw ValidationError("--outpaint must expand at least one edge.")
+        guard [top, right, bottom, left].contains(where: { $0 > 0 }) else {
+            throw ImageGenerationIssue("image_edit_invalid", "--outpaint must expand at least one edge.")
         }
         return Self(top: top, right: right, bottom: bottom, left: left)
     }
 
-    var description: String {
+    public var description: String {
         "\(top),\(right),\(bottom),\(left)"
     }
 }
@@ -51,14 +57,14 @@ struct ImageEditPreparation {
         fileManager: FileManager = .default
     ) throws -> Self {
         guard featherPixels >= 0 else {
-            throw ValidationError("--mask-feather must be >= 0")
+            throw ImageGenerationIssue("image_edit_invalid", "--mask-feather must be >= 0")
         }
         let source = try MediaImageIO.decode(inputURL)
         let insets = outpaint ?? ImageOutpaintInsets(top: 0, right: 0, bottom: 0, left: 0)
         let availableWidth = width - insets.left - insets.right
         let availableHeight = height - insets.top - insets.bottom
         guard availableWidth > 0, availableHeight > 0 else {
-            throw ValidationError("--outpaint padding must leave a positive source region inside --width/--height.")
+            throw ImageGenerationIssue("image_edit_invalid", "--outpaint padding must leave a positive source region inside --width/--height.")
         }
 
         // The padding contract is exact: each requested edge remains the specified number of
@@ -114,7 +120,12 @@ struct ImageEditPreparation {
             .appendingPathComponent("mererun-image-edit-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
         let generationInputURL = temporaryDirectory.appendingPathComponent("conditioning.png")
-        try MediaImageIO.writePNG(baseImage, to: generationInputURL)
+        do {
+            try MediaImageIO.writePNG(baseImage, to: generationInputURL)
+        } catch {
+            try? fileManager.removeItem(at: temporaryDirectory)
+            throw error
+        }
 
         return Self(
             generationInputURL: generationInputURL,

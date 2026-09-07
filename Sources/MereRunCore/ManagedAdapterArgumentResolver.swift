@@ -1,8 +1,7 @@
 import Foundation
-import MereRunCore
 
-enum ManagedAdapterArgumentResolver {
-    static func resolve(
+public enum ManagedAdapterArgumentResolver {
+    public static func resolve(
         _ reference: String?,
         baseModelID: String,
         adaptersRoot: URL = MereRunModelPaths.adaptersDir,
