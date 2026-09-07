@@ -19,7 +19,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENDOR_DIR="${ROOT_DIR}/vendor/ds4"
-DS4_COMMIT="${DS4_COMMIT:-4893e0c40fba03dbc85555faeb035799aa04e0b6}"
+DS4_COMMIT="${DS4_COMMIT:-b6af0adf8ca97c89145c9f9c15be70c9fd6c4507}"
 DS4_URL="${DS4_URL:-https://github.com/antirez/ds4.git}"
 DS4_LOCAL_SOURCE="${DS4_LOCAL_SOURCE:-}"
 DS4_CODESIGN_IDENTITY="${DS4_CODESIGN_IDENTITY:-}"
@@ -80,6 +80,8 @@ cp "${source_dir}/ds4" "${VENDOR_DIR}/ds4"
 cp "${source_dir}/ds4-server" "${VENDOR_DIR}/ds4-server"
 cp "${source_dir}/ds4-bench" "${VENDOR_DIR}/ds4-bench"
 cp "${source_dir}/LICENSE" "${VENDOR_DIR}/LICENSE"
+# Iris image decoders are compiled into each binary. Preserve their MIT notice.
+cp "${source_dir}/third_party/iris/LICENSE" "${VENDOR_DIR}/IRIS-LICENSE"
 chmod +x "${VENDOR_DIR}/ds4" "${VENDOR_DIR}/ds4-server" "${VENDOR_DIR}/ds4-bench"
 
 if [[ -n "$DS4_CODESIGN_IDENTITY" ]]; then
@@ -125,9 +127,13 @@ Binaries:
 - \`ds4-server\`  OpenAI-compatible HTTP server (spawned by MereRunCore)
 - \`ds4-bench\`  frontier throughput benchmark
 
-The 86 GB GGUF model is **not** vendored. mere.run lazy-downloads it from
+The DeepSeek V4 Flash 0731 Q2 imatrix GGUF (86.72 GB / 80.76 GiB) is **not**
+vendored. mere.run lazy-downloads it from
 \`antirez/deepseek-v4-gguf\` on Hugging Face the first time the premier agent
 tier is used on a 96 GB+ Apple Silicon Mac.
+
+The binaries include Iris image decoders. Their MIT notice is in
+\`IRIS-LICENSE\`. Model support exposed by mere.run remains DeepSeek V4 Flash.
 EOF
 
 echo "[ds4] vendored binaries:"

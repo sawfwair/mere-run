@@ -47,6 +47,7 @@ final class DS4VendorContractTests: XCTestCase {
             "ds4-server",
             "ds4-bench",
             "LICENSE",
+            "IRIS-LICENSE",
             "metal/dense.metal",
             "metal/dsv4_kv.metal",
             "metal/moe.metal",

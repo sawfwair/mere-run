@@ -117,7 +117,7 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
         var command = MereRunCLI()
         command.modelsRoot = root.path
 
-        try command.validate()
+        try command.validate(arguments: ["mere.run", "--models-root", root.path, "model", "list"])
 
         XCTAssertEqual(
             MereRunModelPaths.modelsDir.standardizedFileURL.path,
