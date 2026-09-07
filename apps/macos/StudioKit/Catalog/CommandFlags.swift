@@ -22,6 +22,10 @@ extension CommandFlags {
             "--markdown": "auto"
         ]
 
+        package static let audio = "--audio"
+        package static let video = "--video"
+        package static let seed = "--seed"
+        package static let showUnmasking = "--show-unmasking"
         package static let prompt = "--prompt"
         package static let image = "--image"
         package static let system = "--system"
@@ -123,6 +127,8 @@ extension CommandFlags {
     package enum TextTrainLoRA: CommandFlagNamespace {
         package static let command = ["text", "train-lora"]
 
+        package static let resumeFrom = "--resume-from"
+        package static let resumeStep = "--resume-step"
         package static let data = "--data"
         package static let output = "--output"
         package static let model = "--model"
@@ -161,6 +167,7 @@ extension CommandFlags {
             "--lora-scale": "1.0"
         ]
 
+        package static let sigmas = "--sigmas"
         package static let prompt = "--prompt"
         package static let negativePrompt = "--negative-prompt"
         package static let cfg = "--cfg"
@@ -804,6 +811,8 @@ extension CommandFlags {
     package enum MusicGenerate: CommandFlagNamespace {
         package static let command = ["music", "generate"]
         package static let defaultValues = [
+            "--composer-model": "text-chat-gemma4-12b-4bit",
+            "--lyrics-preflight": "warn",
             "--export-format": "pcm24",
             "--normalize": "peak",
             "--target-peak-db": "-1.0",
@@ -846,6 +855,26 @@ extension CommandFlags {
             "--prefill-duration": "1.64"
         ]
 
+        package static let compose = "--compose"
+        package static let composerModel = "--composer-model"
+        package static let composerModelRoot = "--composer-model-root"
+        package static let requireComposerInstalled = "--require-composer-installed"
+        package static let compositionOutput = "--composition-output"
+        package static let lyricsPreflight = "--lyrics-preflight"
+        package static let minimumDuration = "--minimum-duration"
+        package static let minFrames = "--min-frames"
+        package static let maxFrames = "--max-frames"
+        package static let sampleRate = "--sample-rate"
+        package static let memoryMode = "--memory-mode"
+        package static let performanceMode = "--performance-mode"
+        package static let samplingTier = "--sampling-tier"
+        package static let flowStrategy = "--flow-strategy"
+        package static let flowSolver = "--flow-solver"
+        package static let arCfgFrames = "--ar-cfg-frames"
+        package static let flowCfgEnd = "--flow-cfg-end"
+        package static let seedStrategy = "--seed-strategy"
+        package static let profileOutput = "--profile-output"
+        package static let noLMCaptionRewrite = "--no-lm-caption-rewrite"
         package static let lyrics = "--lyrics"
         package static let lyricsFile = "--lyrics-file"
         package static let instrumental = "--instrumental"
@@ -1018,6 +1047,7 @@ extension CommandFlags {
     package enum MusicRealtime: CommandFlagNamespace {
         package static let command = ["music", "realtime"]
 
+        package static let play = "--play"
         package static let model = "--model"
         package static let duration = "--duration"
         package static let output = "--output"
@@ -1080,6 +1110,8 @@ extension CommandFlags {
     package enum MusicServe: CommandFlagNamespace {
         package static let command = ["music", "serve"]
 
+        package static let memoryMode = "--memory-mode"
+        package static let performanceMode = "--performance-mode"
         package static let host = "--host"
         package static let port = "--port"
         package static let model = "--model"
@@ -1103,6 +1135,10 @@ extension CommandFlags {
     package enum VideoGenerate: CommandFlagNamespace {
         package static let command = ["video", "generate"]
         package static let defaultValues = [
+            "--ltx-transformer-execution": "eager",
+            "--ltx-guidance-projection-cache": "disabled",
+            "--h3-adapter-strength": "1.0",
+            "--h3-window-overlap": "18",
             "--spatial-overlap": "256",
             "--h3-weight-mode": "auto",
             "--h3-acceleration": "quality",
@@ -1132,6 +1168,19 @@ extension CommandFlags {
             "--temporal-upsample-rounds": "0"
         ]
 
+        package static let variant = "--variant"
+        package static let ltxTransformerExecution = "--ltx-transformer-execution"
+        package static let ltxGuidanceProjectionCache = "--ltx-guidance-projection-cache"
+        package static let ltxTeacache = "--ltx-teacache"
+        package static let ltxTeacacheThreshold = "--ltx-teacache-threshold"
+        package static let ltxTeacacheCalibrationOutput = "--ltx-teacache-calibration-output"
+        package static let h3RenderWidth = "--h3-render-width"
+        package static let h3RenderHeight = "--h3-render-height"
+        package static let h3Adapter = "--h3-adapter"
+        package static let h3AdapterStrength = "--h3-adapter-strength"
+        package static let h3Frame = "--h3-frame"
+        package static let h3WindowFrames = "--h3-window-frames"
+        package static let h3WindowOverlap = "--h3-window-overlap"
         package static let output = "--output"
         package static let model = "--model"
         package static let quality = "--quality"
@@ -1406,7 +1455,18 @@ extension CommandFlags {
     /// `mere.run video session` — Resident LTX session
     package enum VideoSession: CommandFlagNamespace {
         package static let command = ["video", "session"]
+        package static let defaultValues = [
+            "--ltx-transformer-execution": "eager",
+            "--ltx-guidance-projection-cache": "disabled",
+            "--prompt-cache-capacity": "8"
+        ]
 
+        package static let videoDecoder = "--video-decoder"
+        package static let ltxTransformerExecution = "--ltx-transformer-execution"
+        package static let ltxGuidanceProjectionCache = "--ltx-guidance-projection-cache"
+        package static let ltxTeacache = "--ltx-teacache"
+        package static let ltxTeacacheThreshold = "--ltx-teacache-threshold"
+        package static let promptCacheCapacity = "--prompt-cache-capacity"
         package static let model = "--model"
         package static let modelRoot = "--model-root"
         package static let quiet = "--quiet"
@@ -1431,6 +1491,7 @@ extension CommandFlags {
     package enum AdapterPull: CommandFlagNamespace {
         package static let command = ["adapter", "pull"]
 
+        package static let acceptLicense = "--accept-license"
         package static let force = "--force"
         package static let quiet = "--quiet"
     }
@@ -1565,7 +1626,24 @@ extension CommandFlags {
     /// `mere.run world serve` — World session
     package enum WorldServe: CommandFlagNamespace {
         package static let command = ["world", "serve"]
+        package static let defaultValues = [
+            "--scene-memory-strength": "0.08",
+            "--scene-memory-max-frames": "96",
+            "--scene-memory-minimum-gap": "3",
+            "--scene-memory-max-yaw": "2.0",
+            "--scene-memory-max-translation": "0.1",
+            "--scene-memory-exact-yaw": "0.01",
+            "--scene-memory-exact-translation": "0.001"
+        ]
 
+        package static let disableSceneMemory = "--disable-scene-memory"
+        package static let sceneMemoryStrength = "--scene-memory-strength"
+        package static let sceneMemoryMaxFrames = "--scene-memory-max-frames"
+        package static let sceneMemoryMinimumGap = "--scene-memory-minimum-gap"
+        package static let sceneMemoryMaxYaw = "--scene-memory-max-yaw"
+        package static let sceneMemoryMaxTranslation = "--scene-memory-max-translation"
+        package static let sceneMemoryExactYaw = "--scene-memory-exact-yaw"
+        package static let sceneMemoryExactTranslation = "--scene-memory-exact-translation"
         package static let host = "--host"
         package static let port = "--port"
         package static let apiKey = "--api-key"
@@ -1618,6 +1696,9 @@ extension CommandFlags {
     package enum Gate: CommandFlagNamespace {
         package static let command = ["gate"]
 
+        package static let requireAll = "--require-all"
+        package static let allInstalled = "--all-installed"
+        package static let skipModel = "--skip-model"
         package static let suite = "--suite"
         package static let updateBaselines = "--update-baselines"
         package static let strictPerf = "--strict-perf"
@@ -1807,6 +1888,9 @@ extension CommandFlags {
     package enum AgentStart: CommandFlagNamespace {
         package static let command = ["agent", "start"]
 
+        package static let piArgument = "--pi-argument"
+        package static let workingDirectory = "--working-directory"
+        package static let inline = "--inline"
         package static let host = "--host"
         package static let port = "--port"
         package static let piPath = "--pi-path"
@@ -1851,6 +1935,7 @@ extension CommandFlags {
     package enum ModelPull: CommandFlagNamespace {
         package static let command = ["model", "pull"]
 
+        package static let cacheDir = "--cache-dir"
         package static let all = "--all"
         package static let force = "--force"
         package static let quiet = "--quiet"
@@ -1893,6 +1978,8 @@ extension CommandFlags {
     package enum ModelRepairManifests: CommandFlagNamespace {
         package static let command = ["model", "repair-manifests"]
 
+        package static let acceptModelLicense = "--accept-model-license"
+        package static let model = "--model"
         package static let dryRun = "--dry-run"
         package static let json = "--json"
     }
@@ -1905,6 +1992,7 @@ extension CommandFlags {
     package enum ModelOptimize: CommandFlagNamespace {
         package static let command = ["model", "optimize"]
 
+        package static let textEncoderOnly = "--text-encoder-only"
         package static let force = "--force"
         package static let output = "--output"
         package static let json = "--json"
@@ -1917,7 +2005,17 @@ extension CommandFlags {
     /// `mere.run model benchmark q36-mtp` — Qwen-family MTP benchmark
     package enum ModelBenchmarkQ36MTP: CommandFlagNamespace {
         package static let command = ["model", "benchmark", "q36-mtp"]
+        package static let defaultValues = [
+            "--repetitions": "1",
+            "--warmups": "1",
+            "--warmup-tokens": "16",
+            "--variants": "baseline,adaptive,forced"
+        ]
 
+        package static let repetitions = "--repetitions"
+        package static let warmups = "--warmups"
+        package static let warmupTokens = "--warmup-tokens"
+        package static let variants = "--variants"
         package static let model = "--model"
         package static let modelRoot = "--model-root"
         package static let prompt = "--prompt"
@@ -2267,6 +2365,7 @@ extension CommandFlags {
             "--stream-decode-ms": "2000"
         ]
 
+        package static let timestamps = "--timestamps"
         package static let output = "--output"
         package static let model = "--model"
         package static let backend = "--backend"
@@ -2489,6 +2588,9 @@ extension CommandFlags {
     package enum PluginInstall: CommandFlagNamespace {
         package static let command = ["plugin", "install"]
 
+        package static let source = "--source"
+        package static let bundleManifest = "--bundle-manifest"
+        package static let bundleArchive = "--bundle-archive"
         package static let catalogURL = "--catalog-url"
         package static let channel = "--channel"
         package static let yes = "--yes"
@@ -2571,6 +2673,8 @@ extension CommandFlags {
     package enum APIServe: CommandFlagNamespace {
         package static let command = ["api", "serve"]
 
+        package static let warmup = "--warmup"
+        package static let noWarmup = "--no-warmup"
         package static let port = "--port"
         package static let host = "--host"
         package static let model = "--model"

@@ -402,7 +402,9 @@ private let selfLocatingOutputCapabilityIDs: [String: String] = [
 
     #expect(quality?.choices == LTXVideoQuality.allCases.map(\.rawValue))
     #expect(outputMode?.choices == LTXVideoOutputMode.allCases.map(\.rawValue))
-    #expect(!generate.options.contains { $0.flag == "--variant" })
+    let compatibilityVariant = generate.options.first { $0.flag == "--variant" }
+    #expect(compatibilityVariant?.choices == ["unified-av", "distilled"])
+    #expect(compatibilityVariant?.tier == .expert)
     #expect(generate.options.first { $0.flag == "--h3-weight-mode" }?.choices == [
         "auto", "quantized", "resident-bf16"
     ])
@@ -417,4 +419,14 @@ private let selfLocatingOutputCapabilityIDs: [String: String] = [
     #expect(MereRunCapabilityCatalog.textTrainLoRA.options.contains { $0.flag == "--reasoning-effort" })
     #expect(MereRunCapabilityCatalog.evaluationRun.command == ["eval", "run"])
     #expect(MereRunCapabilityCatalog.evaluationRun.options.contains { $0.flag == "--adapter" })
+}
+
+@Test func capabilityPositionalsDecodeEarlierV1Documents() throws {
+    let legacy = Data(#"{"name":"texts","label":"Texts","kind":"string","required":true}"#.utf8)
+    let argument = try JSONDecoder().decode(MereRunCapabilityArgument.self, from: legacy)
+    #expect(!argument.repeatable)
+    let repeating = try #require(MereRunCapabilityCatalog.command(id: "text.embed")?.arguments.first)
+    #expect(repeating.repeatable)
+    let encoded = try JSONEncoder().encode(repeating)
+    #expect(try JSONDecoder().decode(MereRunCapabilityArgument.self, from: encoded) == repeating)
 }
