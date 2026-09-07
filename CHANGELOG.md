@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Refresh the bundled DwarfStar runtime to upstream `b6af0adf8ca9`, including
+  session snapshot and native tool handling fixes. Preserve the DeepSeek V4
+  Flash 0731 Q2 imatrix model pin and bundle the Iris decoder license.
+
 - Image generation and text chat preflights now report insufficient memory,
   disk headroom, and critical memory pressure as structured blockers alongside
   other request diagnostics. They no longer reserve inference permits or exit
