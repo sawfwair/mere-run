@@ -811,7 +811,6 @@ extension CommandFlags {
     package enum MusicGenerate: CommandFlagNamespace {
         package static let command = ["music", "generate"]
         package static let defaultValues = [
-            "--composer-model": "text-chat-gemma4-12b-4bit",
             "--lyrics-preflight": "warn",
             "--export-format": "pcm24",
             "--normalize": "peak",

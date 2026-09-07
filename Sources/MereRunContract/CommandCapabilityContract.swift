@@ -1566,7 +1566,9 @@ public enum MereRunCapabilityCatalog {
                 flag: "--compose", label: "Compose with a chat model", kind: .boolean, group: Group.prompt, tier: .expert
             ),
             .init(
-                flag: "--composer-model", label: "Composer model", kind: .string, defaultValue: "text-chat-gemma4-12b-4bit",
+                // Defaults to the hardware-aware chat model the CLI picks for the
+                // current machine, so the catalog advertises no fixed value.
+                flag: "--composer-model", label: "Composer model", kind: .string,
                 group: Group.modelAndAdapters, tier: .expert
             ),
             .init(
