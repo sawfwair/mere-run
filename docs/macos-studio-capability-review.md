@@ -36,7 +36,8 @@ reading.
 | Guard | Where | What it proves |
 |---|---|---|
 | `everyPublicCLICommandIsCatalogedOrExplicitlyExempt` | `Tests/MereRunCLITests/CapabilityCatalogTests.swift` | Every public CLI leaf command is either in the contract or in `contractExemptCommandIDs` with the reason it stays CLI-only. It also rejects a stale exemption, so the list cannot rot. |
-| `capabilityFlagsMatchArgumentParserHelp` | same file | Every flag the contract declares is one the command's ArgumentParser help accepts. |
+| `capabilityOptionsMatchArgumentParser` | same file | Every displayed option group of a cataloged command is represented. Aliases, Boolean inversions, cardinality, advertised defaults, and enum choices agree with parser metadata. |
+| `capabilityPositionalsMatchArgumentParser` | same file | Positional order, names, cardinality, and requirements match, with explicit compatibility exceptions. |
 | `testEverySharedCLICapabilityHasAnAppOwnedSurface` | `apps/macos/StudioUITests/StudioTypesTests.swift` | Set equality between the app's capability IDs and the contract's, in both directions. |
 | `testEveryCommandTemplateMapsToADomain` | `apps/macos/StudioUITests/NavigationModelTests.swift` | Every command template files into exactly one domain, and every domain owns at least one command. |
 | `CommandContractGuardTests` | `apps/macos/StudioKitTests` | Every flag the app can emit, from a sweep of maximal drafts, is one the contract declares, under the subcommand path the contract names. |
@@ -53,14 +54,15 @@ task assertion safe.
 
 ## Exemptions
 
-Thirty-one leaf commands stay CLI-only, each named in `contractExemptCommandIDs`
+Thirty-two leaf commands stay CLI-only, each named in `contractExemptCommandIDs`
 with its reason: the twelve `executor` commands and `relay serve` (the Relay
 console owns node identity, placement, scheduling, and fleet telemetry), the
 fourteen `graph` commands (Graph Studio owns workflow authoring and execution,
 and the worker verbs are a machine-to-machine protocol), the three
 `vision image-to-3d` aliases (surfaced through the 3D domain as
 `image reconstruct-3d`), and `catalog` (it emits the contract that the shells
-compile against).
+compile against), plus the research-only `model benchmark q38-verification`
+command.
 
 ---
 

@@ -113,6 +113,11 @@ swift run mere.run image generate \
   --json
 ```
 
+Preflight and execution share model-dependent defaults, sigma schedules, LoRA
+compatibility, and input validation. Preflight reads local metadata and files;
+it does not prepare an edit canvas, load weights, or download models. Execution
+rechecks input and adapter availability before entering the runtime.
+
 The JSON report uses the shared structured-run envelope and includes
 diagnostics plus declarative actions such as `start-generation`, `pull-model`,
 and `open-output-directory`. It also includes `result.run_plan`, a normalized

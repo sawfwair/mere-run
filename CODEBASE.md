@@ -26,6 +26,7 @@ GUI shell.
 - `Sources/MereRunRelayKit/`: portable relay client, executor profiles/auth, and workflow wire types shared by the CLI and app shells
 - `apps/ios/`: the iOS Studio app, a relay client over `MereRunRelayKit` (see `docs/ios-studio.md`)
 - `Sources/MereRunCore/`: model paths, manifests, source config, shared runtime helpers, and modality runtime implementations
+- `Sources/MereRunCore/ImageGeneration*.swift`: shared image options, model selection, validation, execution, and typed outcomes
 - `Sources/MereRunCore/LTX/`: native video generation and MP4 output
 - `Sources/MereRunCore/Cosmos3/`: native Cosmos3-Edge omnimodal generation,
   reasoner, learned action, and persistent world runtime

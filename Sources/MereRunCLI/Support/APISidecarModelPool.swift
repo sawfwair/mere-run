@@ -530,16 +530,7 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
     }
 }
 
-enum APISidecarImageKind: String, Hashable, Sendable {
-    case flux1
-    case flux2Klein
-    case zImageTurbo
-    case hiDreamO1
-    case senseNovaU15
-    case krea2
-    case ideogram4
-    case qwenImageEdit
-}
+typealias APISidecarImageKind = ImageGenerationBackend
 
 private struct APISidecarImageKey: Hashable, Sendable {
     let kind: APISidecarImageKind

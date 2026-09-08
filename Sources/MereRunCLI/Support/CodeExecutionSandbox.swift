@@ -126,37 +126,21 @@ enum CodeExecutionSandbox {
             process.arguments = Array(invocation.dropFirst())
         }
 
-        let stdout = LimitedOutputPipe(limitBytes: outputLimitBytes)
-        let stderr = LimitedOutputPipe(limitBytes: outputLimitBytes)
-        process.standardOutput = stdout.pipe
-        process.standardError = stderr.pipe
-
-        let start = Date()
-        try process.run()
-        var timedOut = false
-        while process.isRunning {
-            if Date().timeIntervalSince(start) > timeout {
-                timedOut = true
-                terminate(process)
-                break
-            }
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-        process.waitUntilExit()
-        let seconds = Date().timeIntervalSince(start)
-        let stdoutCapture = stdout.finish()
-        let stderrCapture = stderr.finish()
+        let result = try BoundedProcessRunner.run(
+            process, timeout: timeout, outputLimitBytes: outputLimitBytes
+        )
+        if result.completion == .cancelled { throw CancellationError() }
 
         return CodeExecutionSandboxResult(
             backend: backend,
-            passed: !timedOut && process.terminationStatus == 0,
-            seconds: seconds,
-            timedOut: timedOut,
-            status: process.terminationStatus,
-            stdout: stdoutCapture.text,
-            stderr: stderrCapture.text,
-            stdoutTruncated: stdoutCapture.truncated,
-            stderrTruncated: stderrCapture.truncated
+            passed: result.completion == .exited && result.status == 0,
+            seconds: result.seconds,
+            timedOut: result.completion == .timedOut,
+            status: result.status,
+            stdout: result.stdout.text,
+            stderr: result.stderr.text,
+            stdoutTruncated: result.stdout.truncated,
+            stderrTruncated: result.stderr.truncated
         )
     }
 
@@ -284,69 +268,4 @@ enum CodeExecutionSandbox {
             && FileManager.default.isExecutableFile(atPath: path)
     }
 
-    private static func terminate(_ process: Process) {
-        process.terminate()
-        Thread.sleep(forTimeInterval: 0.2)
-        guard process.isRunning else {
-            return
-        }
-        #if os(macOS) || os(Linux)
-        kill(pid_t(process.processIdentifier), SIGKILL)
-        #else
-        process.terminate()
-        #endif
-    }
-}
-
-private final class LimitedOutputPipe: @unchecked Sendable {
-    struct Capture {
-        let text: String
-        let truncated: Bool
-    }
-
-    let pipe = Pipe()
-
-    private let limitBytes: Int
-    private let lock = NSLock()
-    private var data = Data()
-    private var truncated = false
-
-    init(limitBytes: Int) {
-        self.limitBytes = limitBytes
-        let handler: @Sendable (FileHandle) -> Void = { [weak self] handle in
-            let chunk = handle.availableData
-            guard !chunk.isEmpty else {
-                return
-            }
-            self?.append(chunk)
-        }
-        pipe.fileHandleForReading.readabilityHandler = handler
-    }
-
-    func finish() -> Capture {
-        pipe.fileHandleForReading.readabilityHandler = nil
-        append(pipe.fileHandleForReading.readDataToEndOfFile())
-        let text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
-        return Capture(
-            text: truncated ? text + "\n[output truncated]" : text,
-            truncated: truncated
-        )
-    }
-
-    private func append(_ chunk: Data) {
-        guard !chunk.isEmpty else {
-            return
-        }
-        lock.lock()
-        defer {
-            lock.unlock()
-        }
-        let remaining = max(0, limitBytes - data.count)
-        if remaining > 0 {
-            data.append(chunk.prefix(remaining))
-        }
-        if chunk.count > remaining {
-            truncated = true
-        }
-    }
 }

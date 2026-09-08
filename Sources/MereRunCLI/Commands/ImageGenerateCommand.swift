@@ -162,171 +162,31 @@ struct ImageGenerate: AsyncParsableCommand {
     }
 
     func run() async throws {
-        try validateStaticOptions()
-        let kreaConditioningRebalance = try Self.resolveKreaConditioningRebalance(
-            multiplier: kreaConditioningMultiplier,
-            layerWeights: kreaConditioningLayerWeights
-        )
-        let explicitSigmas = try Self.parseSigmaList(sigmaList)
-        let parsedLoRAs = try Self.parseLoRAArguments(
-            loraArguments,
-            defaultScale: loraScale
-        )
-
         let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-image", defaultExtension: "png")
-
+        var options = try operationOptions(outputURL: outputURL)
+        if let issue = ImageGenerationPlan.issues(options).first { throw ValidationError(issue.message) }
         if preflight {
             try runPreflight(outputURL: outputURL)
             return
         }
 
+        let modelRoot = try resolveModelRoot()
+        let manifest = try MereRunModelManifest.loadRequired(from: modelRoot)
+        let initialPlan = try ImageGenerationPlan.resolve(options, modelRoot: modelRoot, manifest: manifest)
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
-
-        try FileManager.default.createDirectory(
-            at: outputURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-
-        let inputURL: URL?
-        if let input {
-            let url = URL(fileURLWithPath: input).standardizedFileURL
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                throw ValidationError("Input image not found: \(url.path)")
-            }
-            inputURL = url
-        } else {
-            inputURL = nil
-        }
-        let maskURL: URL?
-        if let mask {
-            let url = URL(fileURLWithPath: mask).standardizedFileURL
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                throw ValidationError("Mask image not found: \(url.path)")
-            }
-            maskURL = url
-        } else {
-            maskURL = nil
-        }
-        let outpaintInsets = try outpaint.map(ImageOutpaintInsets.parse)
-        let editPreparation: ImageEditPreparation?
-        if maskURL != nil || outpaintInsets != nil {
-            guard let inputURL else {
-                throw ValidationError("--mask and --outpaint require --input.")
-            }
-            editPreparation = try ImageEditPreparation.make(
-                inputURL: inputURL,
-                maskURL: maskURL,
-                outpaint: outpaintInsets,
-                width: width,
-                height: height,
-                featherPixels: maskFeather
-            )
-        } else {
-            editPreparation = nil
-        }
-        defer { editPreparation?.cleanup() }
-        let effectiveInputURL = editPreparation?.generationInputURL ?? inputURL
-
-        let referenceImageURLs = try referenceImages.map { path in
-            let url = URL(fileURLWithPath: path).standardizedFileURL
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                throw ValidationError("Reference image not found: \(url.path)")
-            }
-            return url
-        }
-
-        let resolvedModel: String?
-        let resolver = ModelResolver()
-
-        if let model {
-            let url = URL(fileURLWithPath: model).standardizedFileURL
-            if FileManager.default.fileExists(atPath: url.path) {
-                resolvedModel = url.path
-            } else if let id = ModelResolver.ModelID(rawValue: model) {
-                do {
-                    resolvedModel = try resolver.resolve(id).rootURL.path
-                } catch {
-                    throw ValidationError(
-                        "Model \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))` or point --model at a local path."
-                    )
-                }
-            } else {
-                throw ValidationError(
-                    "Model path not found: \(model). Pass a local model path or a known model id."
-                )
-            }
-        } else {
-            do {
-                resolvedModel = try resolver.resolve(Self.defaultManagedModelID).rootURL.path
-            } catch {
-                let modelID = Self.defaultManagedModelID.rawValue
-                throw ValidationError(
-                    "Image model \(modelID) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: modelID))` or point --model at a local path."
-                )
-            }
-        }
-
-        let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: resolvedModel!))
-        if parsedLoRAs.count > 1, manifest.family != .klein, manifest.family != .flux1 {
-            throw ValidationError("Stacked image LoRAs are supported only for FLUX.1 and FLUX.2 models.")
-        }
-        if explicitSigmas != nil, manifest.family != .klein {
-            throw ValidationError("--sigmas is supported only for FLUX.2 models.")
-        }
-        let loraConfigs = try Self.resolveLoRAs(
-            parsedLoRAs,
-            baseModelID: manifest.id
-        )
-        let usesTurboRecipe = parsedLoRAs.contains {
-            ManagedAdapterCatalog.spec(for: $0.reference)?.id
-                == ManagedAdapterCatalog.flux2DevTurboEightStepID
-        }
-        let effectiveSigmas = explicitSigmas
-            ?? (usesTurboRecipe ? Flux2DevTurboRecipe.sigmas : nil)
-        if kreaBaseQuantizationBits != nil, manifest.family != .krea {
-            throw ValidationError("--krea-base-quantization-bits is only supported for Krea 2 generation")
-        }
-        let conditioning = Self.resolveConditioningInputs(
-            family: manifest.family,
-            inputImage: effectiveInputURL,
-            referenceImages: referenceImageURLs,
-            strength: strength
-        )
-        let usesManifestImageDefaults = manifest.engine == .qwenImageEdit
-            || manifest.family == .hidream || manifest.family == .senseNova
-            || manifest.family == .krea || manifest.family == .ideogram
-            || manifest.family == .klein || manifest.family == .flux1
-        let effectiveSteps = steps
-            ?? effectiveSigmas?.count
-            ?? (usesManifestImageDefaults
-                ? (manifest.defaults?.steps ?? 4)
-                : 4)
-        if let effectiveSigmas, effectiveSigmas.count != effectiveSteps {
-            throw ValidationError(
-                "--steps must equal the number of non-terminal --sigmas values "
-                    + "(\(effectiveSigmas.count))."
-            )
-        }
-        let effectiveCFG = cfgScale
-            ?? (usesTurboRecipe ? Flux2DevTurboRecipe.guidanceScale : nil)
-            ?? (usesManifestImageDefaults
-                ? (manifest.defaults?.cfg ?? 1.0)
-                : 1.0)
-        let effectiveSigmaShift = sigmaShift.map { Float($0) }
-            ?? manifest.defaults?.sigmaShift.map { Float($0) }
 
         let runEventLogger = try makeRunEventLoggerIfNeeded(
             outputURL: outputURL,
-            modelRoot: URL(fileURLWithPath: resolvedModel!),
+            modelRoot: modelRoot,
             modelManifest: manifest,
-            effectiveSteps: effectiveSteps,
-            effectiveCFGScale: effectiveCFG,
-            effectiveSigmaShift: effectiveSigmaShift,
-            effectiveSigmas: effectiveSigmas,
+            effectiveSteps: initialPlan.request.steps,
+            effectiveCFGScale: initialPlan.request.guidanceScale,
+            effectiveSigmaShift: initialPlan.request.sigmaShift,
+            effectiveSigmas: initialPlan.request.sigmas,
             inputMode: Self.inputMode(
                 family: manifest.family,
-                inputImage: inputURL,
-                referenceImages: referenceImageURLs
+                inputImage: options.inputImage,
+                referenceImages: options.referenceImages
             )
         )
 
@@ -370,31 +230,9 @@ struct ImageGenerate: AsyncParsableCommand {
                 }
             }
 
-            let request = GenerationRequest(
-                prompt: effectivePrompt,
-                negativePrompt: negativePrompt,
-                referenceImages: conditioning.referenceImages,
-                referenceStrength: conditioning.referenceStrength,
-                width: width,
-                height: height,
-                steps: effectiveSteps,
-                guidanceScale: effectiveCFG,
-                seed: seed,
-                outputURL: outputURL,
-                model: resolvedModel,
-                maxSequenceLength: effectiveMaxSequenceLength,
-                lora: loraConfigs.first,
-                loras: loraConfigs,
-                enhancePrompt: false,
-                inputImage: conditioning.inputImage,
-                strength: conditioning.strength,
-                keepOriginalAspect: keepOriginalAspect,
-                useBetaSigmas: false,
-                sigmaShift: effectiveSigmaShift,
-                sigmas: effectiveSigmas,
-                kreaConditioningRebalance: kreaConditioningRebalance,
-                kreaBaseQuantizationBits: kreaBaseQuantizationBits
-            )
+            options.prompt = effectivePrompt
+            options.maxSequenceLength = effectiveMaxSequenceLength
+            let plan = try ImageGenerationPlan.resolve(options, modelRoot: modelRoot, manifest: manifest)
 
             let progressHandler: (@Sendable (GenerationProgress) -> Void)?
             if progressJson {
@@ -408,49 +246,14 @@ struct ImageGenerate: AsyncParsableCommand {
                 CLIStderr.write("[runtime] image backend: \(NativeMLXRuntime.backendDescription)\n")
             }
 
-            let result: GenerationResult
-            switch manifest.family {
-            case .flux1:
-                let generator = Flux1Generator()
-                result = try await generator.generate(request, progressHandler: progressHandler)
-            case .klein:
-                let generator = Flux2KleinGenerator()
-                result = try await generator.generate(request, progressHandler: progressHandler)
-            case .zimage:
-                let generator = ZImageTurboGenerator()
-                result = try await generator.generate(request, progressHandler: progressHandler)
-            case .hidream:
-                let generator = HiDreamO1Generator()
-                defer { generator.unload() }
-                result = try await generator.generate(request, progressHandler: progressHandler)
-            case .senseNova:
-                let generator = SenseNovaU15Generator()
-                defer { generator.unload() }
-                result = try await generator.generate(request, progressHandler: progressHandler)
-            case .krea:
-                let generator = Krea2Generator()
-                defer { generator.unload() }
-                result = try await generator.generate(request, progressHandler: progressHandler)
-            case .ideogram:
-                let generator = Ideogram4Generator()
-                defer { generator.unload() }
-                result = try await generator.generate(request, progressHandler: progressHandler)
-            case .qwen where manifest.engine == .qwenImageEdit:
-                let generator = QwenImageEditGenerator()
-                result = try await generator.generate(request, progressHandler: progressHandler)
-            case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .tessera, .olmoEarth,
-                 .face, .geometry, .depth, .threeD,
-                 .tts, .asr, .embed, .code, .ocr, .audio, .music, .sfx, .video, .psi, .privacy, .deepseek,
-                 .inkling, .muse, .nemotron, nil:
-                throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")
-            }
-            try editPreparation?.finish(generatedURL: result.outputURL)
+            let outcome = try await ImageGenerationOperation.execute(plan, progressHandler: progressHandler)
+            let result = outcome.result
 
             try runEventLogger?.record(
                 type: "run_finished",
                 stage: "finished",
-                step: effectiveSteps,
-                totalSteps: effectiveSteps,
+                step: plan.request.steps,
+                totalSteps: plan.request.steps,
                 fraction: 1,
                 path: result.outputURL.path
             )
@@ -474,115 +277,53 @@ struct ImageGenerate: AsyncParsableCommand {
         }
     }
 
-    private func validateStaticOptions() throws {
-        if let steps, steps <= 0 {
-            throw ValidationError("--steps must be >= 1")
-        }
-        guard width > 0, height > 0 else {
-            throw ValidationError("--width/--height must be > 0")
-        }
-        if let strength, !(0.0...1.0).contains(strength) {
-            throw ValidationError("--strength must be between 0.0 and 1.0")
-        }
-        if (mask != nil || outpaint != nil), input == nil {
-            throw ValidationError("--mask and --outpaint require --input")
-        }
-        if maskFeather < 0 {
-            throw ValidationError("--mask-feather must be >= 0")
-        }
-        if let outpaint {
-            _ = try ImageOutpaintInsets.parse(outpaint)
-        }
-        if let kreaBaseQuantizationBits, kreaBaseQuantizationBits != 4, kreaBaseQuantizationBits != 8 {
-            throw ValidationError("--krea-base-quantization-bits must be 4 or 8")
-        }
-        guard loraScale.isFinite else {
-            throw ValidationError("--lora-scale must be finite")
-        }
-        if sigmaList != nil, sigmaShift != nil {
-            throw ValidationError("--sigmas cannot be combined with --sigma-shift")
+    private func resolveModelRoot() throws -> URL {
+        let selection = ImageGenerationModelSelection(model ?? Self.defaultManagedModelID.rawValue)
+        switch selection {
+        case .local(let url): return url
+        case .managed(let id):
+            do { return try selection.resolveRoot() } catch {
+                let prefix = model == nil ? "Image model" : "Model"
+                throw ValidationError(
+                    "\(prefix) \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))` or point --model at a local path."
+                )
+            }
+        case .unknown(let selector):
+            throw ValidationError("Model path not found: \(selector). Pass a local model path or a known model id.")
         }
     }
 
-    struct LoRAArgument: Equatable {
-        let raw: String
-        let reference: String
-        let scale: Double
+    func operationOptions(outputURL: URL) throws -> ImageGenerationOptions {
+        func url(_ path: String) -> URL { URL(fileURLWithPath: path).standardizedFileURL }
+        return try ImageGenerationOptions(
+            prompt: prompt, negativePrompt: negativePrompt, outputURL: outputURL,
+            width: width, height: height, steps: steps, guidanceScale: cfgScale, seed: seed,
+            inputImage: input.map(url), referenceImages: referenceImages.map(url), strength: strength,
+            keepOriginalAspect: keepOriginalAspect, maxSequenceLength: maxSequenceLength,
+            loras: Self.parseLoRAArguments(loraArguments, defaultScale: loraScale),
+            sigmaShift: sigmaShift.map(Float.init), sigmas: Self.parseSigmaList(sigmaList),
+            kreaConditioningRebalance: Self.resolveKreaConditioningRebalance(
+                multiplier: kreaConditioningMultiplier, layerWeights: kreaConditioningLayerWeights
+            ),
+            kreaBaseQuantizationBits: kreaBaseQuantizationBits,
+            mask: mask.map(url), outpaint: outpaint.map(ImageOutpaintInsets.parse), maskFeather: maskFeather
+        )
     }
 
-    static func parseLoRAArguments(
-        _ arguments: [String],
-        defaultScale: Double
-    ) throws -> [LoRAArgument] {
-        guard defaultScale.isFinite else {
-            throw ValidationError("--lora-scale must be finite")
-        }
-        return try arguments.map { raw in
-            let separator = raw.lastIndex(of: "=")
-            let reference: String
-            let scale: Double
-            if let separator {
-                reference = String(raw[..<separator])
-                let rawScale = String(raw[raw.index(after: separator)...])
-                guard let parsed = Double(rawScale), parsed.isFinite else {
-                    throw ValidationError("--lora scale must be finite (got \(rawScale)).")
-                }
-                scale = parsed
-            } else {
-                reference = raw
-                scale = defaultScale
-            }
-            guard !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw ValidationError("--lora must be PATH_OR_ID[=SCALE].")
-            }
-            return LoRAArgument(raw: raw, reference: reference, scale: scale)
-        }
+    typealias LoRAArgument = ImageLoRAReference
+
+    static func parseLoRAArguments(_ arguments: [String], defaultScale: Double) throws -> [LoRAArgument] {
+        try ImageLoRAReference.parse(arguments, defaultScale: defaultScale)
     }
 
     static func resolveLoRAs(
-        _ arguments: [LoRAArgument],
-        baseModelID: String,
-        fileManager: FileManager = .default
+        _ arguments: [LoRAArgument], baseModelID: String, fileManager: FileManager = .default
     ) throws -> [LoRA] {
-        var resolvedPaths = Set<String>()
-        return try arguments.map { argument in
-            let resolved = try ManagedAdapterArgumentResolver.resolve(
-                argument.reference,
-                baseModelID: baseModelID,
-                fileManager: fileManager
-            ) ?? argument.reference
-            let url = URL(fileURLWithPath: resolved).standardizedFileURL
-            guard fileManager.fileExists(atPath: url.path) else {
-                throw ValidationError("LoRA file not found: \(url.path)")
-            }
-            guard resolvedPaths.insert(url.path).inserted else {
-                throw ValidationError("Duplicate LoRA adapter: \(url.path)")
-            }
-            return .local(path: url.path, scale: argument.scale)
-        }
+        try ImageGenerationPlan.resolveLoRAs(arguments, baseModelID: baseModelID, fileManager: fileManager)
     }
 
     static func parseSigmaList(_ raw: String?) throws -> [Float]? {
-        guard let raw else { return nil }
-        var values = try raw.split(separator: ",", omittingEmptySubsequences: false).map { item in
-            let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let value = Float(trimmed), value.isFinite else {
-                throw ValidationError("--sigmas must contain finite comma-separated values.")
-            }
-            return value
-        }
-        if values.last == 0 {
-            values.removeLast()
-        }
-        guard !values.isEmpty else {
-            throw ValidationError("--sigmas must include at least one non-terminal value.")
-        }
-        do {
-            try Flux2EulerScheduler.validateCustomSigmas(values, expectedSteps: values.count)
-        } catch {
-            throw ValidationError(error.localizedDescription)
-        }
-        return values
+        try ImageGenerationSampling.parseSigmas(raw)
     }
 
     func makePreflightEnvelope(
@@ -592,6 +333,7 @@ struct ImageGenerate: AsyncParsableCommand {
         resourceDiagnostics: [PreflightDiagnostic] = []
     ) -> ImageGenerationPreflightEnvelope {
         let input = ImageGenerationPreflightInput(
+            operationOptions: Result { try operationOptions(outputURL: outputURL) },
             prompt: prompt,
             negativePrompt: negativePrompt,
             outputURL: outputURL,
@@ -860,62 +602,16 @@ struct ImageGenerate: AsyncParsableCommand {
         }
     }
 
-    struct ConditioningInputs: Equatable {
-        var inputImage: URL?
-        var referenceImages: [URL]
-        var strength: Double
-        var referenceStrength: Double
-    }
+    typealias ConditioningInputs = ImageGenerationConditioning
 
     static func resolveConditioningInputs(
-        family: MereRunModelManifest.Family?,
-        inputImage: URL?,
-        referenceImages: [URL],
-        strength: Double?
+        family: MereRunModelManifest.Family?, inputImage: URL?, referenceImages: [URL], strength: Double?
     ) -> ConditioningInputs {
-        let explicitStrength = strength
-        let defaultInputStrength = 0.75
-
-        guard family == .klein else {
-            return ConditioningInputs(
-                inputImage: inputImage,
-                referenceImages: referenceImages,
-                strength: explicitStrength ?? defaultInputStrength,
-                referenceStrength: 0.0
-            )
-        }
-
-        var resolvedReferences = referenceImages
-        if let inputImage {
-            resolvedReferences.insert(inputImage, at: 0)
-        }
-
-        return ConditioningInputs(
-            inputImage: nil,
-            referenceImages: resolvedReferences,
-            strength: explicitStrength ?? defaultInputStrength,
-            referenceStrength: explicitStrength ?? (inputImage == nil ? 0.0 : defaultInputStrength)
-        )
+        ImageGenerationConditioning.resolve(family: family, inputImage: inputImage, referenceImages: referenceImages, strength: strength)
     }
 
-    static func inputMode(
-        family: MereRunModelManifest.Family?,
-        inputImage: URL?,
-        referenceImages: [URL]
-    ) -> String {
-        let hasInput = inputImage != nil
-        let hasReferences = !referenceImages.isEmpty
-        guard hasInput || hasReferences else { return "text_to_image" }
-        if family == .klein {
-            return "reference_image"
-        }
-        if hasInput && hasReferences {
-            return "image_to_image_with_references"
-        }
-        if hasInput {
-            return "image_to_image"
-        }
-        return "reference_image"
+    static func inputMode(family: MereRunModelManifest.Family?, inputImage: URL?, referenceImages: [URL]) -> String {
+        ImageGenerationConditioning.inputMode(family: family, inputImage: inputImage, referenceImages: referenceImages)
     }
 
     static func resolveKreaConditioningRebalance(

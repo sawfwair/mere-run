@@ -24,6 +24,22 @@ The format is based on Keep a Changelog.
 - Update the chat-template interpreter to preserve adjacent tool-result groups
   in official templates that use `loop.previtem` and `loop.nextitem`.
 
+- Fix approved shell tools hanging on large output. Shell execution now drains
+  output while running, retains up to 256 KiB, and stops the owned process group
+  on cancellation or after five minutes. Code benchmark sandboxes use the same
+  bounded process runner.
+- Reconcile the capability catalog with every displayed CLI option group,
+  including aliases, Boolean inversions, array values, positional arguments,
+  static defaults, and enum choices. Catalog v1 adds backward-compatible
+  positional `repeatable` metadata. Parity tests discover commands from the
+  parser instead of a manual fixture list.
+- Share image model selection, sampling, validation, adapter resolution, input
+  preparation, and execution through Core. CLI preflight uses the same rules;
+  unsupported combinations fail before loading weights, including reference
+  images and LoRA adapters that a selected backend previously ignored. Typed
+  Swift events distinguish success, failure, and cancellation and report the actual seed.
+  Existing CLI output formats and API v1 defaults remain compatible.
+
 - Refresh the bundled DwarfStar runtime to upstream `b6af0adf8ca9`, including
   session snapshot and native tool handling fixes. Preserve the DeepSeek V4
   Flash 0731 Q2 imatrix model pin and bundle the Iris decoder license.
