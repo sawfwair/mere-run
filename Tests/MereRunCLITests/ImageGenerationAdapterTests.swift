@@ -41,6 +41,37 @@ final class ImageGenerationAdapterTests: XCTestCase {
         }
     }
 
+    func testRecordedAPIRequestsRetainEffectiveSettingsForEveryBackend() async throws {
+        let root = try temporaryDirectory()
+        let input = root.appendingPathComponent("upload.png")
+        try Data("fixture".utf8).write(to: input)
+        let families: [(MereRunModelManifest.Family, MereRunModelManifest.Engine)] = [
+            (.flux1, .flux1), (.klein, .flux2Klein), (.zimage, .zimageTurbo), (.hidream, .hidreamO1),
+            (.senseNova, .senseNovaU15), (.krea, .krea2), (.ideogram, .ideogram4), (.qwen, .qwenImageEdit)
+        ]
+        for (index, pair) in families.enumerated() {
+            let manifest = MereRunModelManifest(id: "fixture", engine: pair.1, family: pair.0, defaults: .init(steps: 28, cfg: 4))
+            let plan = try apiPlan(input: pair.0 == .qwen ? input : nil).operationPlan(
+                modelRoot: root, outputURL: root.appendingPathComponent("output-\(index).png"), manifest: manifest
+            )
+            let session = try ImageRunSession(directory: root.appendingPathComponent("run-\(index)"), requested: plan.options, modelSelector: "fixture")
+            _ = try await ImageGenerationOperation.execute(plan, recording: session, executor: { _, request, _ in
+                XCTAssertEqual(request.steps, plan.request.steps)
+                XCTAssertEqual(request.guidanceScale, plan.request.guidanceScale)
+                XCTAssertEqual(request.seed, 42)
+                try Data("fixture output".utf8).write(to: request.outputURL)
+                return GenerationResult(outputURL: request.outputURL, seed: 42)
+            })
+            let record = try ImageRunRecord.inspect(at: session.directory)
+            XCTAssertEqual(record.state, .succeeded)
+            XCTAssertNil(record.requested.steps)
+            XCTAssertNil(record.requested.guidanceScale)
+            XCTAssertEqual(record.effective?.steps, plan.request.steps)
+            XCTAssertEqual(record.effective?.guidanceScale, plan.request.guidanceScale)
+            XCTAssertEqual(record.policy, plan.policy)
+        }
+    }
+
     func testAPIV1KleinCompatibilityIsExplicit() throws {
         let root = try temporaryDirectory()
         let input = root.appendingPathComponent("input.png")

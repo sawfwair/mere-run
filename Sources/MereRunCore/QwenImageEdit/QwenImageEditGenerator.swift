@@ -163,7 +163,7 @@ public actor QwenImageEditGenerator: ImageGenerator {
         try ensureTransformerLoaded(model: &model, progressHandler: progressHandler)
         loaded = model
 
-        let seed = request.seed ?? UInt64.random(in: 0..<UInt64.max)
+        let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .qwenImageEdit)
         let noise = QwenImageEditLatentCreator.createNoise(
             batchSize: 1,
             height: inferenceConfig.height,

@@ -21,6 +21,53 @@ Dev, FLUX.2 Dev and Klein, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image Edit
 | `mere.run image reconstruct-3d-trellis2` | Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2. |
 | `mere.run image reconstruct-3d-multiview` | Reconstruct a colored mesh from four or six supplied views with native InstantMesh. |
 
+## Record and retry an image run
+
+To keep the settings, inputs, and result of an image operation, pass a new
+`--run-dir` path:
+
+```bash
+mere.run image generate --model image-zimage-nano \
+  --prompt "A brass camera on a wooden desk" \
+  --output ./camera.png --run-dir ./runs/camera
+mere.run run inspect ./runs/camera --json
+mere.run run list --root ./runs --json
+mere.run run retry ./runs/camera --json
+```
+
+The directory must not exist. If you place the output inside it, use `output.png`.
+Write structured-prompt sidecars outside the directory. Recording is optional;
+preflight does not create a record. Existing output paths, receipts, progress streams, and run-plan files
+keep their formats. A saved preflight plan retains an explicit `--run-dir`.
+
+`image-run.json` uses schema version 1. It separates your requested settings
+from resolved settings, including model defaults, expanded prompts, adapter
+paths, and the seed chosen before inference. It stores the model manifest,
+source revisions when available, the backend, and SHA-256 fingerprints of
+retained inputs and outputs. Missing source provenance remains unknown.
+Manifest fingerprints do not certify the contents of every model weight file.
+
+The states are `preparing`, `running`, `succeeded`, `failed`, `cancelled`, and
+`interrupted`. Inspection marks an unfinished record as interrupted when its
+process no longer holds the run lock. Process termination, including a forced
+stop or reboot, can therefore be distinguished from an observed cancellation.
+Argument parsing and static option errors occur before a run is created.
+
+Retry starts generation from the recorded resolved settings and seed in a new
+sibling directory. It prints that directory, or the new record with `--json`.
+It retains the parent ID and preserves the original record and output. It
+checks the installed model manifest, copied image inputs, and local adapter
+fingerprints before starting. If these changed, start a new image command.
+A run that stopped before resolving its settings must also be started with the
+original command. Retry does not resume denoising or expand a prompt again;
+identical pixels across runtime versions or hardware are not guaranteed.
+
+Run directories contain prompts and copies of input images, masks, and outputs.
+They are created with access restricted to your account and retained until you
+remove them. Keep the directory in its original location for inspection and
+retry: schema version 1 stores absolute paths. Adapter and model files remain
+in their installed locations.
+
 ## macOS Studio
 
 **Image ▸ Generate** covers text-to-image, image-to-image, and multi-reference

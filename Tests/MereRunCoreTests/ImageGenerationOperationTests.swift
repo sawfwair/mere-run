@@ -124,6 +124,28 @@ final class ImageGenerationOperationTests: XCTestCase {
         XCTAssertEqual(image.rgba8, [255, 0, 0, 255, 0, 0, 255, 255])
     }
 
+    func testRecordedMaskSurvivesOriginalInputCleanupAndRetry() async throws {
+        let plan = try maskedPlan()
+        let directory = plan.modelRoot.appendingPathComponent("run")
+        let session = try ImageRunSession(directory: directory, requested: plan.options, modelSelector: "fixture")
+        let executor: ImageGenerationOperation.Executor = { _, request, _ in
+            try MediaImageIO.writePNG(
+                try MediaImage(width: 2, height: 1, rgba8: [0, 0, 255, 255, 0, 0, 255, 255]), to: request.outputURL
+            )
+            return GenerationResult(outputURL: request.outputURL, seed: try XCTUnwrap(request.seed))
+        }
+        _ = try await ImageGenerationOperation.execute(plan, recording: session, executor: executor)
+        try FileManager.default.removeItem(at: XCTUnwrap(plan.options.inputImage))
+        try FileManager.default.removeItem(at: XCTUnwrap(plan.options.mask))
+        let retry = try ImageRunSession.retryPlan(at: directory)
+        _ = try await ImageGenerationOperation.execute(retry.plan, recording: retry.session, executor: executor)
+        let record = try ImageRunRecord.inspect(at: retry.session.directory)
+        let output = try XCTUnwrap(record.artifacts.first?.url)
+        XCTAssertEqual(try MediaImageIO.decode(output).rgba8, [255, 0, 0, 255, 0, 0, 255, 255])
+        XCTAssertNotNil(record.resolvedOptions?.mask)
+        XCTAssertEqual(record.resolvedOptions?.maskFeather, 0)
+    }
+
     func testExecutionWithoutObserversDoesNotEnableRuntimeProgress() async throws {
         let root = try temporaryDirectory()
         let plan = try ImageGenerationPlan.resolve(

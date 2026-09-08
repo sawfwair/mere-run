@@ -82,7 +82,7 @@ public final class SenseNovaU15Generator: ImageGenerator {
         }
         progressHandler?(GenerationProgress(stage: .encodingText, stepIndex: 1, totalSteps: 1))
 
-        let seed = request.seed ?? deterministicSeed(request.prompt)
+        let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .senseNovaU15)
         let result = denoise(
             model: loaded.model,
             config: loaded.config,
@@ -373,10 +373,6 @@ public final class SenseNovaU15Generator: ImageGenerator {
             searched: [MereRunModelPaths.modelDir(SenseNovaU15Resources.modelID)],
             upstreamRepoId: SenseNovaU15Resources.repository
         )
-    }
-
-    private func deterministicSeed(_ prompt: String) -> UInt64 {
-        prompt.utf8.reduce(UInt64(0xcbf2_9ce4_8422_2325)) { ($0 ^ UInt64($1)) &* 0x100_0000_01b3 }
     }
 
     private func clearMemory() {

@@ -150,7 +150,7 @@ Public tree:
   - `mere.run run watch` — Watch the worker event stream for an SSH or relay graph job.
   - `mere.run run fetch` — Fetch a remote graph run into the standard local run-directory format.
   - `mere.run run cancel` — Cancel a graph run.
-  - `mere.run run retry` — Retry an immutable relay graph job.
+  - `mere.run run retry` — Retry a recorded local image run or an immutable relay graph job.
 - [`mere.run eval`](/evaluation-packs) — Run reproducible evaluations from external, content-addressed packs.
   - `mere.run eval pack` — Inspect external evaluation packs without running models.
     - `mere.run eval pack validate` — Validate and hash an external evaluation pack.
@@ -498,6 +498,7 @@ Key options:
   load the text encoder, transformer, and VAE sequentially to reduce peak memory
 - `--preflight`: inspect the generation request without loading the model or writing an image
 - `--json`: with `--preflight`, emit a structured JSON report
+- `--run-dir`: create a new [image run directory](/runtime/image#record-and-retry-an-image-run) with settings, input snapshots, and output
 - `--quiet`
 - `--progress-json`: stream progress to stderr as JSON lines instead of
   human-readable text, one object per event, e.g.
@@ -762,6 +763,14 @@ top-level report also includes an
 `inspect-selected` action for UI pickers. Legacy/plugin run folders are listed
 as warning-level entries when their `run.json` can be identified but is not a
 native mere.run training manifest.
+
+### `mere.run run retry`
+
+Retry a recorded image run with `mere.run run retry ./runs/camera`. The command
+creates a sibling directory and prints its path. Add `--json` to print the new
+record. See [image run recording and retry](/runtime/image#record-and-retry-an-image-run)
+for input checks and replay limits. A `relay://` reference retains its existing
+immutable graph retry behavior.
 
 ### `mere.run run inspect`
 

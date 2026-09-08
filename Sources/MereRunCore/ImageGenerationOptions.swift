@@ -1,7 +1,7 @@
 import Foundation
 
 /// User-supplied image settings before model defaults and adapter recipes are applied.
-public struct ImageGenerationOptions: Sendable, Hashable {
+public struct ImageGenerationOptions: Codable, Sendable, Hashable {
     public var prompt: String
     public var negativePrompt: String?
     public var outputURL: URL
@@ -71,7 +71,7 @@ public struct ImageGenerationOptions: Sendable, Hashable {
     }
 }
 
-public struct ImageLoRAReference: Sendable, Hashable {
+public struct ImageLoRAReference: Codable, Sendable, Hashable {
     public let raw: String
     public let reference: String
     public let scale: Double
@@ -110,7 +110,7 @@ public struct ImageLoRAReference: Sendable, Hashable {
 }
 
 /// Stable diagnostic identifiers let transports present errors without parsing prose.
-public struct ImageGenerationIssue: LocalizedError, Equatable, Sendable {
+public struct ImageGenerationIssue: Codable, LocalizedError, Equatable, Sendable {
     public let code: String
     public let message: String
     public var errorDescription: String? { message }
@@ -141,7 +141,7 @@ public enum ImageGenerationBackend: String, CaseIterable, Codable, Sendable {
 }
 
 /// Compatibility choices belong to the caller, while their implementation has one owner.
-public struct ImageGenerationPolicy: Sendable, Hashable {
+public struct ImageGenerationPolicy: Codable, Sendable, Hashable {
     public var kleinUsesManifestDefaults: Bool
     public var kleinInputAsReference: Bool
     public var fallbackSteps: Int

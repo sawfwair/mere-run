@@ -730,6 +730,7 @@ public enum MereRunCapabilityCatalog {
         title: "Generate and edit images",
         summary: "Generate, transform, or personalize images with references, structured prompts, and LoRAs.",
         options: [
+            .init(flag: "--run-dir", label: "Run directory", kind: .directory, group: Group.output, tier: .expert),
             .init(
                 flag: "--sigmas", label: "Sigma schedule", kind: .string, group: Group.sampling, tier: .expert
             ),
@@ -2762,10 +2763,10 @@ public enum MereRunCapabilityCatalog {
     public static let runRetry = MereRunCommandCapability(
         id: "run.retry",
         command: ["run", "retry"],
-        title: "Retry Relay run",
-        summary: "Retry one immutable Relay graph job with the same bundle.",
+        title: "Retry run",
+        summary: "Retry a recorded local image run or an immutable Relay graph job.",
         arguments: [
-            .init(name: "reference", label: "Relay run reference", kind: .string, required: true)
+            .init(name: "reference", label: "Run reference", kind: .string, required: true)
         ],
         options: [
             .init(flag: "--json", label: "JSON", kind: .boolean)
@@ -3703,6 +3704,7 @@ public enum MereRunCapabilityCatalog {
         title: "API server",
         summary: "Serve installed models through OpenAI-compatible local APIs.",
         options: [
+            .init(flag: "--image-run-records", label: "Image run records", kind: .directory, group: Group.output, tier: .expert),
             .init(
                 flag: "--warmup", label: "Warm model before serving", kind: .boolean, group: Group.run, tier: .expert
             ),

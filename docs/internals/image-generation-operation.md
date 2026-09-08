@@ -12,6 +12,7 @@ checkpoint loading.
 | `ImageGenerationModelSelection` | Classify local paths and managed IDs; resolve installed model roots without downloading. |
 | `ImageGenerationPlan` | Validate options and files, resolve adapters and effective sampling, and build `GenerationRequest`. |
 | `ImageGenerationOperation` | Prepare edit inputs, invoke an executor, restore protected pixels, clean up temporary files, and report a typed outcome. |
+| `ImageRunSession` | Own an optional versioned record, process lease, input snapshots, and verified output copy. |
 | CLI adapter | Parse arguments, expand structured prompts, present progress and installation guidance, and emit existing receipts and run-plan events. |
 | API adapter | Decode HTTP requests, choose API v1 compatibility settings, and provide the resident-pool executor. |
 | Runtime | Check checkpoint integrity, load weights, run inference, and write the generated image. |
@@ -51,9 +52,20 @@ files are removed.
 
 These Swift events do not change a CLI wire format. Existing `--receipt`,
 `--progress-json`, preflight JSON, run-plan files, and API response shapes retain
-their compatibility behavior. A durable protocol for failure and interruption
-records is a separate migration; an uncatchable process termination cannot emit
-a terminal Swift event.
+their compatibility behavior. Optional `ImageRunSession` recording writes
+`image-run.json` atomically. Its held, non-inherited file lock distinguishes
+active work from abandoned records after termination or reboot. Inspection can
+persist an interrupted state without relying on process IDs or timestamps.
+An uncatchable process termination cannot emit a terminal Swift event.
+
+Recording snapshots input images and masks, fingerprints local adapters, and
+saves resolved options and the seed before calling the executor. Successful
+runs retain a fingerprinted output copy. Retry verifies inputs and the installed
+manifest, preserves the API compatibility policy, and starts a new sibling run
+with a parent ID. It uses the same machine admission class as image generation.
+It does not re-expand structured prompts or resume runtime state. See
+[Record and retry an image run](../runtime/image.md#record-and-retry-an-image-run)
+for retention and replay limits.
 
 ## Validation
 
@@ -63,6 +75,11 @@ cleanup, and input changes between planning and execution. It injects an
 executor and needs no model weights. `ImageGenerationAdapterTests` compares
 explicit CLI and API requests across all supported image backends, checks API
 compatibility policies, and compares preflight with execution validation.
+
+`ImageRunRecordTests` checks atomic state snapshots, active and abandoned leases,
+process termination, input retention, retry validation, and terminal outcomes.
+`ImageRunCommandTests` checks opt-in flags, observational preflight, run-plan
+round trips, local inspection, legacy JSON compatibility, and admission classes.
 
 These tests establish orchestration behavior. Checkpoint, numerical, GPU-memory,
 and platform acceptance still use the existing family tests and runtime gates.
