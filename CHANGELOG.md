@@ -6,6 +6,24 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Accept explicit `top_k` in supported native chat APIs and preserve model
+  sampling defaults independently when clients override temperature or min-p.
+- Add presence, frequency, and repetition penalty controls to Qwen-family API
+  generation, including Ornith. Apply penalties consistently in serial,
+  streaming, and batched sampling; use target-only decode for active penalties.
+
+- Reuse Qwen-family CPU and GPU streams across completed requests. This bounds
+  stream allocation by overlapping requests instead of accumulating command
+  queues throughout a long-running API session.
+- Reclaim reusable Qwen-family MLX buffers at 4 GiB during generation and at
+  request boundaries. Growing agent conversations no longer retain disposable
+  buffers until the device-wide memory limit approaches total system RAM.
+- Preserve complete function parameter schemas in native API prompts, including
+  nested properties, array items, enums, and constraints. Reject non-null, non-object
+  parameter schemas instead of replacing them with an empty schema.
+- Update the chat-template interpreter to preserve adjacent tool-result groups
+  in official templates that use `loop.previtem` and `loop.nextitem`.
+
 - Add opt-in durable image records with `image generate --run-dir` and
   `api serve --image-run-records`. Records separate requested and effective
   settings, retain input and output fingerprints, and distinguish terminal
@@ -31,6 +49,14 @@ The format is based on Keep a Changelog.
 - Refresh the bundled DwarfStar runtime to upstream `b6af0adf8ca9`, including
   session snapshot and native tool handling fixes. Preserve the DeepSeek V4
   Flash 0731 Q2 imatrix model pin and bundle the Iris decoder license.
+- Laguna API requests now enable reasoning by default. Buffered streaming tool
+  replies preserve `reasoning_content`, and buffered answers keep reasoning
+  separate from visible message content.
+- Qwen, Ornith, Laguna, Gemma 4, and Muse API conversations now pass assistant
+  tool history to their native templates without injecting duplicate tool markup
+  into message content.
+- Streaming chat responses now send SSE keepalive comments while generation is
+  buffered, preventing clients from timing out during long tool-call responses.
 
 - Image generation and text chat preflights now report insufficient memory,
   disk headroom, and critical memory pressure as structured blockers alongside

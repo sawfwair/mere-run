@@ -228,6 +228,7 @@ public extension ManagedModelAPIProfile {
             servingEngine: .textChatLaguna,
             contextWindow: contextWindow,
             maximumOutputTokens: 4_096,
+            thinkingLevels: [.high],
             toolCall: true,
             supportsStopSequences: true,
             supportsLogprobs: true
@@ -246,6 +247,7 @@ public extension ManagedModelAPIProfile {
             thinkingLevels: fixedReasoning ? [.high] : [],
             toolCall: true,
             structuredOutput: true,
+            supportsPenalties: true,
             supportsLogprobs: true
         )
     }
@@ -271,6 +273,7 @@ public extension ManagedModelAPIProfile {
             compatibility: ManagedModelOpenAICompatibilityProfile(
                 supportsReasoningEffort: true
             ),
+            supportsPenalties: true,
             supportsLogprobs: true
         )
     }

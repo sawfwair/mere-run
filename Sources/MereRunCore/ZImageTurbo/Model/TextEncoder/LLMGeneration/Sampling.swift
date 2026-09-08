@@ -13,6 +13,22 @@ public struct GenerationConfig: Sendable {
     public var minP: Float
     public var repetitionPenalty: Float?
     public var repetitionContextSize: Int
+    public var presencePenalty: Float
+    public var frequencyPenalty: Float
+    /// Prompt tokens excluded from presence and frequency penalties.
+    public var penaltyPromptTokenCount: Int
+
+    var penaltyHistorySize: Int {
+        presencePenalty != 0 || frequencyPenalty != 0 ? Int.max : repetitionContextSize
+    }
+
+    var hasActivePenalties: Bool {
+        (repetitionPenalty != nil && repetitionPenalty != 1) || presencePenalty != 0 || frequencyPenalty != 0
+    }
+
+    var needsPenaltyHistory: Bool {
+        repetitionPenalty != nil || presencePenalty != 0 || frequencyPenalty != 0
+    }
     /// Token ids that must never be sampled. Applied as a -inf logit mask.
     public var bannedTokens: [Int]
     /// Per-request top-p candidate limit. Nil uses the process policy; zero
@@ -27,6 +43,9 @@ public struct GenerationConfig: Sendable {
         minP: Float = 0,
         repetitionPenalty: Float? = 1.05,
         repetitionContextSize: Int = 20,
+        presencePenalty: Float = 0,
+        frequencyPenalty: Float = 0,
+        penaltyPromptTokenCount: Int = 0,
         bannedTokens: [Int] = [],
         topPPrefilter: Int? = nil
     ) {
@@ -37,6 +56,9 @@ public struct GenerationConfig: Sendable {
         self.minP = minP
         self.repetitionPenalty = repetitionPenalty
         self.repetitionContextSize = repetitionContextSize
+        self.presencePenalty = presencePenalty
+        self.frequencyPenalty = frequencyPenalty
+        self.penaltyPromptTokenCount = penaltyPromptTokenCount
         self.bannedTokens = bannedTokens
         self.topPPrefilter = topPPrefilter
     }
@@ -72,12 +94,12 @@ public func repetitionHistoryArray(
     promptTokens: [Int],
     config: GenerationConfig
 ) -> MLXArray? {
-    guard config.repetitionPenalty != nil,
-          config.repetitionContextSize > 0,
+    guard config.needsPenaltyHistory,
+          config.penaltyHistorySize > 0,
           !promptTokens.isEmpty else {
         return nil
     }
-    return MLXArray(promptTokens.suffix(config.repetitionContextSize).map { Int32($0) })
+    return MLXArray(promptTokens.suffix(config.penaltyHistorySize).map { Int32($0) })
 }
 
 /// Appends a still-on-GPU token to the repetition window, trimming to
@@ -87,7 +109,7 @@ public func appendingRepetitionHistory(
     token: MLXArray,
     config: GenerationConfig
 ) -> MLXArray? {
-    guard config.repetitionPenalty != nil, config.repetitionContextSize > 0 else {
+    guard config.needsPenaltyHistory, config.penaltyHistorySize > 0 else {
         return nil
     }
 
@@ -97,7 +119,7 @@ public func appendingRepetitionHistory(
     }
 
     let combined = concatenated([history, nextToken], axis: 0)
-    let overflow = combined.dim(0) - config.repetitionContextSize
+    let overflow = combined.dim(0) - config.penaltyHistorySize
     guard overflow > 0 else {
         return combined
     }
@@ -151,15 +173,7 @@ public func sampledTokenArray(
         logits = logits + banMask
     }
 
-    if let penalty = config.repetitionPenalty,
-       let previousTokenIndices,
-       previousTokenIndices.dim(0) > 0 {
-        logits = applyRepetitionPenalty(
-            logits: logits,
-            tokenIndices: previousTokenIndices,
-            penalty: penalty
-        )
-    }
+    logits = applyingSamplingPenalties(logits, config: config, history: previousTokenIndices)
 
     if config.temperature == 0 {
         return argMax(logits, axis: -1).asType(.int32)
@@ -239,9 +253,7 @@ public func greedySampleTokenArray(
     config: GenerationConfig,
     previousTokens: [Int]
 ) -> MLXArray {
-    let contextTokens = previousTokens.isEmpty || config.repetitionPenalty == nil
-        ? nil
-        : MLXArray(previousTokens.suffix(config.repetitionContextSize).map { Int32($0) })
+    let contextTokens = repetitionHistoryArray(promptTokens: previousTokens, config: config)
     return greedySampleTokenArray(
         logits: logits,
         config: config,
@@ -258,15 +270,7 @@ public func greedySampleTokenArray(
 
     logits = applyTokenBan(logits: logits, tokens: config.bannedTokens)
 
-    if let penalty = config.repetitionPenalty,
-       let previousTokenIndices,
-       previousTokenIndices.dim(0) > 0 {
-        logits = applyRepetitionPenalty(
-            logits: logits,
-            tokenIndices: previousTokenIndices,
-            penalty: penalty
-        )
-    }
+    logits = applyingSamplingPenalties(logits, config: config, history: previousTokenIndices)
 
     return argMax(logits, axis: -1).asType(.int32)
 }
@@ -390,10 +394,10 @@ public func sampleToken(
 
     logits = applyTokenBan(logits: logits, tokens: config.bannedTokens)
 
-    if let penalty = config.repetitionPenalty, !previousTokens.isEmpty {
-        let contextTokens = Array(previousTokens.suffix(config.repetitionContextSize))
-        logits = applyRepetitionPenalty(logits: logits, tokens: contextTokens, penalty: penalty)
-    }
+    logits = applyingSamplingPenalties(
+        logits, config: config,
+        history: repetitionHistoryArray(promptTokens: previousTokens, config: config)
+    )
 
     if config.temperature == 0 {
         return argMaxSample(logits: logits)
@@ -454,10 +458,10 @@ public func samplingProbabilities(
 
     logits = applyTokenBan(logits: logits, tokens: config.bannedTokens)
 
-    if let penalty = config.repetitionPenalty, !previousTokens.isEmpty {
-        let contextTokens = Array(previousTokens.suffix(config.repetitionContextSize))
-        logits = applyRepetitionPenalty(logits: logits, tokens: contextTokens, penalty: penalty)
-    }
+    logits = applyingSamplingPenalties(
+        logits, config: config,
+        history: repetitionHistoryArray(promptTokens: previousTokens, config: config)
+    )
 
     if logits.dtype == .bfloat16 {
         logits = logits.asType(.float32)

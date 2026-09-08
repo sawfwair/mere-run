@@ -3,6 +3,30 @@ import XCTest
 @testable import MereRunCore
 
 final class Q35SamplingTests: MereRunCoreTestCase {
+    func testRequestControlsReachSamplerWithoutEnablingNeutralPenalties() {
+        var request = ChatRequest(
+            messages: [], temperature: 0.6, topP: 0.95, topK: 20, minP: 0,
+            presencePenalty: 0, frequencyPenalty: 0, repetitionPenalty: 1
+        )
+        let coding = Q35Sampling.generationConfig(for: request, promptTokenCount: 128)
+        XCTAssertEqual(coding.temperature, 0.6)
+        XCTAssertEqual(coding.topP, 0.95)
+        XCTAssertEqual(coding.topK, 20)
+        XCTAssertEqual(coding.minP, 0)
+        XCTAssertFalse(coding.hasActivePenalties)
+        XCTAssertNil(coding.repetitionPenalty)
+        request.presencePenalty = 1.5
+        request.frequencyPenalty = 0.25
+        request.repetitionPenalty = 1.1
+        let general = Q35Sampling.generationConfig(for: request, promptTokenCount: 128)
+        XCTAssertTrue(general.hasActivePenalties)
+        XCTAssertEqual(general.presencePenalty, 1.5)
+        XCTAssertEqual(general.frequencyPenalty, 0.25)
+        XCTAssertEqual(general.repetitionPenalty, 1.1)
+        XCTAssertEqual(general.penaltyPromptTokenCount, 128)
+        XCTAssertEqual(general.repetitionContextSize, Int.max)
+    }
+
     func testRequestSeedsReplayAcrossStreamsAndInterveningRandomWork() async {
         defer { MLXRandom.seed(0) }
         let first = await samples(seed: 7)

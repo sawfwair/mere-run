@@ -2357,6 +2357,7 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertEqual(chatRequest.messages[0].reasoningContent, "I should write the file.")
+        XCTAssertEqual(chatRequest.messages[0].content, "Working...")
         XCTAssertEqual(
             chatRequest.messages[0].toolCalls,
             [
@@ -2372,6 +2373,32 @@ final class APIServeCommandTests: XCTestCase {
         )
         XCTAssertEqual(chatRequest.messages[1].name, "write_file")
         XCTAssertEqual(chatRequest.messages[1].toolCallID, "call_123")
+    }
+
+    func testNativeToolHistoryDoesNotInjectAnotherModelsMarkup() throws {
+        for engine: RuntimeServingEngine in [.textChatQ36, .textChatLaguna, .textChatGemma4, .textChatMuseGlimmer] {
+            let request = OpenAIChatRequest(
+                model: "mererun-test-model",
+                messages: [OpenAIChatMessage(
+                    role: "assistant",
+                    reasoning_content: "Read the task.",
+                    tool_calls: [OpenAIChatToolCall(
+                        id: "call_read",
+                        function: OpenAIChatToolCallFunction(name: "read", arguments: #"{"path":"TASK.md"}"#)
+                    )]
+                )]
+            )
+            let mapped = try APIServerContract.chatRequest(
+                from: request,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: engine.openAICompatibility
+            )
+            XCTAssertEqual(mapped.messages[0].content, "", engine.rawValue)
+            XCTAssertEqual(mapped.messages[0].reasoningContent, "Read the task.")
+            XCTAssertEqual(mapped.messages[0].toolCalls?.first?.name, "read")
+            XCTAssertEqual(mapped.messages[0].toolCalls?.first?.arguments, ["path": .string("TASK.md")])
+        }
     }
 
     func testChatRequestRejectsInvalidToolCallArguments() {
@@ -2863,6 +2890,48 @@ final class APIServeCommandTests: XCTestCase {
         )
     }
 
+    func testBufferedToolDeltaPreservesReasoningOnTheWire() throws {
+        let result = ChatResponse(
+            response: "<think>Inspect the source.</think>",
+            tokensGenerated: 12,
+            reasoningContent: "Inspect the source."
+        )
+        let toolCall = OpenAIChatToolCall(
+            id: "call_read",
+            function: OpenAIChatToolCallFunction(name: "read", arguments: #"{"path":"main.swift"}"#)
+        )
+        let encoded = try JSONEncoder().encode(
+            CodeGenServer.openAIBufferedDelta(for: result, toolCalls: [toolCall])
+        )
+        let delta = try JSONDecoder().decode(OpenAIChatDelta.self, from: encoded)
+        XCTAssertEqual(delta.role, "assistant")
+        XCTAssertNil(delta.content)
+        XCTAssertEqual(delta.reasoning_content, "Inspect the source.")
+        XCTAssertEqual(delta.tool_calls?.first?.id, "call_read")
+        XCTAssertEqual(delta.tool_calls?.first?.function?.name, "read")
+    }
+
+    func testBufferedAnswerSeparatesReasoningFromVisibleContent() {
+        for response in ["<think>Check units.</think>42", "Check units.</think>42"] {
+            let result = ChatResponse(
+                response: response,
+                tokensGenerated: 12,
+                reasoningContent: "Check units."
+            )
+            let delta = CodeGenServer.openAIBufferedDelta(for: result, toolCalls: [])
+            XCTAssertEqual(delta.content, "42")
+            XCTAssertEqual(delta.reasoning_content, "Check units.")
+            XCTAssertNil(delta.tool_calls)
+            XCTAssertEqual(CodeGenServer.openAIMessageContent(for: result, hasToolCalls: false), "42")
+        }
+        let reasoningOnly = ChatResponse(
+            response: "<think>Still checking",
+            tokensGenerated: 12,
+            reasoningContent: "Still checking"
+        )
+        XCTAssertEqual(CodeGenServer.openAIBufferedDelta(for: reasoningOnly, toolCalls: []).content, "")
+    }
+
     func testChatRequestRejectsUnsupportedHighImpactFields() {
         let request = OpenAIChatRequest(
             model: "mererun-test-model",
@@ -3064,6 +3133,35 @@ final class APIServeCommandTests: XCTestCase {
 
         XCTAssertEqual(chatRequest.reasoningEffort, 1)
         XCTAssertTrue(chatRequest.showThinking)
+    }
+
+    func testBufferedStreamingKeepaliveEmitsOnlySSEComments() async throws {
+        let (stream, continuation) = AsyncStream<ByteBuffer>.makeStream()
+        let heartbeat = CodeGenServer.startStreamingKeepalive(
+            continuation: continuation,
+            interval: .milliseconds(5)
+        )
+        defer { heartbeat.cancel() }
+        var iterator = stream.makeAsyncIterator()
+        let first = await iterator.next()
+        let buffer = try XCTUnwrap(first)
+        XCTAssertEqual(String(buffer: buffer), ": keep-alive\n\n")
+        continuation.finish()
+        await heartbeat.value
+    }
+
+    func testStreamingKeepaliveCancellationDoesNotLeaveAPendingWriter() async {
+        let (stream, continuation) = AsyncStream<ByteBuffer>.makeStream()
+        let heartbeat = CodeGenServer.startStreamingKeepalive(
+            continuation: continuation,
+            interval: .seconds(60)
+        )
+        heartbeat.cancel()
+        await heartbeat.value
+        continuation.finish()
+        var iterator = stream.makeAsyncIterator()
+        let next = await iterator.next()
+        XCTAssertNil(next)
     }
 
     func testStreamingUsageOptionHonorsCapabilities() throws {
@@ -3282,9 +3380,25 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.topK, LagunaResources.recommendedTopK)
         XCTAssertEqual(chatRequest.minP, LagunaResources.recommendedMinP)
         XCTAssertFalse(chatRequest.requiresJSON)
+        XCTAssertTrue(chatRequest.showThinking)
     }
 
-    func testChatRequestExplicitSamplingSkipsRecommendedTopK() throws {
+    func testLagunaXSAPIEnablesReasoning() throws {
+        let request = OpenAIChatRequest(
+            model: LagunaResources.xsModelID,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")]
+        )
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: LagunaResources.defaultContextLength,
+            capabilities: RuntimeServingEngine.textChatLaguna.openAICompatibility,
+            servedModelID: LagunaResources.xsModelID
+        )
+        XCTAssertTrue(chatRequest.showThinking)
+    }
+
+    func testChatRequestExplicitTemperaturePreservesRecommendedTopK() throws {
         var request = OpenAIChatRequest(
             model: Q35Resources.ornith35BMLXModelId,
             messages: [OpenAIChatMessage(role: "user", content: "hello")]
@@ -3299,7 +3413,7 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertTrue(chatRequest.showThinking)
-        XCTAssertNil(chatRequest.topK)
+        XCTAssertEqual(chatRequest.topK, 20)
         XCTAssertEqual(chatRequest.temperature, 0.2)
     }
 
@@ -3318,7 +3432,7 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertEqual(chatRequest.minP, 0.05)
-        XCTAssertNil(chatRequest.topK)
+        XCTAssertEqual(chatRequest.topK, 20)
     }
 
     func testChatRequestKeepsNoThinkDefaultForNonOrnithLanes() throws {

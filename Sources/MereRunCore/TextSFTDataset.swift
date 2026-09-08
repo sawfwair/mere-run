@@ -372,7 +372,13 @@ public enum TextSFTDataset {
 
     fileprivate static func canonicalTools(_ tools: [ToolDefinition]?) -> [ToolDefinition]? {
         tools?.map { tool in
-            ToolDefinition(
+            if var schema = tool.parameterSchema {
+                if schema["required"] != nil {
+                    schema["required"] = .array(tool.required.sorted().map(OpenAIJSONValue.string))
+                }
+                return ToolDefinition(name: tool.name, description: tool.description, parameterSchema: schema)
+            }
+            return ToolDefinition(
                 name: tool.name,
                 description: tool.description,
                 parameters: tool.parameters,

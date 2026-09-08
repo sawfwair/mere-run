@@ -143,7 +143,7 @@ public actor Q35Generator: ChatGenerator {
     private static let contendedPrefillChunkSize = 512
     private static let q38LowPrefillHeadroomBytes = UInt64(16) * 1_024 * 1_024 * 1_024
     private static let minimumReclaimableCacheBytes = 256 * 1_024 * 1_024
-    private static let flashNextReusableCacheBytes = 4 * 1_024 * 1_024 * 1_024
+    private static let maximumReusableCacheBytes = 4 * 1_024 * 1_024 * 1_024
     private static let prefixKVCacheMaxEntries = 4
     private static let defaultMTPBlockSize = 4
     /// One committed token plus up to seven Qwen3.8 proposal tokens. Wider
@@ -286,6 +286,7 @@ public actor Q35Generator: ChatGenerator {
     private var activeDecodeRows: [Q35BatchedDecodeRow] = []
     private var decodeLoopRunning = false
     private var activeChatRequestCount = 0
+    private var availableStreamContexts: [MLX.Stream.Context] = []
     private var batchedDecodeSteps = 0
     private var samePositionBatchedSteps = 0
     private var variablePositionBatchedSteps = 0
@@ -356,18 +357,17 @@ public actor Q35Generator: ChatGenerator {
     static func shouldClearMLXCache(
         activeMemory: Int,
         cacheMemory: Int,
-        memoryLimit: Int,
-        isFlashNext: Bool = false
+        memoryLimit: Int
     ) -> Bool {
         guard activeMemory >= 0,
               cacheMemory >= minimumReclaimableCacheBytes,
               memoryLimit > 0 else {
             return false
         }
-        // Growing QSA shapes leave buffers that later chunks cannot reuse.
+        // Growing prompts leave buffers that later chunks cannot reuse.
         // The device-wide limit does not reserve headroom for other processes;
         // reclaim disposable buffers without evicting live prefix/KV state.
-        if isFlashNext, cacheMemory >= flashNextReusableCacheBytes {
+        if cacheMemory >= maximumReusableCacheBytes {
             return true
         }
         let total = activeMemory.addingReportingOverflow(cacheMemory)
@@ -380,8 +380,7 @@ public actor Q35Generator: ChatGenerator {
         if Self.shouldClearMLXCache(
             activeMemory: snapshot.activeMemory,
             cacheMemory: snapshot.cacheMemory,
-            memoryLimit: Memory.memoryLimit,
-            isFlashNext: loadedConfig?.textConfig.isQwen4Exp == true
+            memoryLimit: Memory.memoryLimit
         ) {
             Memory.clearCache()
         }
@@ -451,15 +450,34 @@ public actor Q35Generator: ChatGenerator {
         return min(configuredMaximum, contextMaximum)
     }
 
+    /// Lease a context until the request ends. Actor reentrancy can admit another
+    /// request while this one is suspended, so active requests need distinct
+    /// contexts. Completed requests reuse them instead of accumulating MLX
+    /// backend streams, which live until process exit.
+    func withRequestStream<Result>(
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        let context = availableStreamContexts.popLast() ?? MLX.Stream.Context()
+        defer {
+            context.synchronize()
+            clearMLXCacheUnderPressureIfNeeded()
+            Q35MemoryTrace.record(modelID: modelId)
+            availableStreamContexts.append(context)
+        }
+        return try await Q35CompiledOperations.withDefaultStream(
+            context,
+            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId),
+            operation
+        )
+    }
+
     public func chat(
         _ request: ChatRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
         activeChatRequestCount += 1
         defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await Q35CompiledOperations.withNewDefaultStream(
-            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
-        ) {
+        return try await withRequestStream {
             let rootURL = try await resolveModelRoot(modelPath: nil, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -488,9 +506,7 @@ public actor Q35Generator: ChatGenerator {
     ) async throws -> ChatResponse {
         activeChatRequestCount += 1
         defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
-        return try await Q35CompiledOperations.withNewDefaultStream(
-            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
-        ) {
+        return try await withRequestStream {
             let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -516,9 +532,7 @@ public actor Q35Generator: ChatGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Q35CompiledOperations.withNewDefaultStream(
-            scoped: Q35RuntimeTuning.isEnabled(.scopedCompilation, modelID: modelId)
-        ) {
+        try await withRequestStream {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -758,9 +772,7 @@ public actor Q35Generator: ChatGenerator {
         }
         // An exact prefix-cache hit skips the prefill loop entirely. Reclaim
         // disposable buffers from the previous request before forking its KV.
-        if loadedConfig.textConfig.isQwen4Exp {
-            clearMLXCacheUnderPressureIfNeeded()
-        }
+        clearMLXCacheUnderPressureIfNeeded()
 
         let messages = request.messages
         let jsonConstrained = request.requiresJSON
@@ -858,16 +870,9 @@ public actor Q35Generator: ChatGenerator {
                     + [tokenizerAndTemplate.eosTokenId].compactMap { $0 }
             )
             : Set<Int>()
-        let generationConfig = GenerationConfig(
-            maxTokens: request.maxTokens,
-            temperature: Float(request.temperature),
-            topK: request.topK ?? 0,
-            topP: Float(request.topP),
-            minP: Float(request.minP),
-            repetitionPenalty: nil,
-            repetitionContextSize: 64
-        )
+        let generationConfig = Q35Sampling.generationConfig(for: request, promptTokenCount: promptTokens.count)
         let mtpSpeculationEligible = !request.logprobCapture.isEnabled
+            && !generationConfig.hasActivePenalties
             && !jsonConstrained
             && request.tools?.isEmpty != false
             && imageURLs.isEmpty
@@ -1204,6 +1209,7 @@ public actor Q35Generator: ChatGenerator {
             return Q35BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
         let speculationMTP = !logprobCapture.isEnabled
+            && !generationConfig.hasActivePenalties
             && !jsonConstrained && !stopAtCompletedToolCall && Self.shouldSpeculate(
             modelId: modelId,
             usesMoE: model.config.textConfig.usesMoE,
@@ -1407,7 +1413,10 @@ public actor Q35Generator: ChatGenerator {
             if jsonConstrained {
                 guard let constrained = jsonConstrainedToken(
                     initial: next,
-                    logits: logits[0, -1, 0...],
+                    logits: applyingSamplingPenalties(
+                        logits[0, -1, 0...], config: generationConfig,
+                        history: repetitionHistoryArray(promptTokens: repetitionHistory, config: generationConfig)
+                    ),
                     config: generationConfig,
                     eosSet: eosSet,
                     grammar: &jsonGrammar,
