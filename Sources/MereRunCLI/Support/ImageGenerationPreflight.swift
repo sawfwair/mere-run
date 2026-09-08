@@ -35,6 +35,7 @@ struct ImageGenerationPreflightInput {
     let kreaBaseQuantizationBits: Int?
     let generationArgv: [String]
     let cwd: String
+    var runDirectory: String? = nil
 }
 
 struct ImageGenerationPreflightRequest: Codable, Equatable {
@@ -289,6 +290,21 @@ struct ImageGenerationPreflightAnalyzer {
 
     func envelope(resourceDiagnostics: [PreflightDiagnostic] = []) -> ImageGenerationPreflightEnvelope {
         var diagnostics = resourceDiagnostics
+        if let directory = input.runDirectory, fileManager.fileExists(atPath: directory) {
+            diagnostics.append(PreflightDiagnostic(
+                id: "image_run_directory_exists", severity: .blocker, title: "Run directory already exists",
+                message: "Choose a new --run-dir path. Image recording preserves existing directories.",
+                locations: [.init(kind: "directory", path: directory)]
+            ))
+        }
+        if let directory = input.runDirectory {
+            do {
+                try ImageRunSession.validateOutput(input.outputURL, in: URL(fileURLWithPath: directory))
+            } catch {
+                diagnostics.append(PreflightDiagnostic(id: "image_run_output_conflict", severity: .blocker,
+                                                      title: "Output conflicts with run files", message: error.localizedDescription))
+            }
+        }
         let createdAt = now()
         let (model, manifest) = modelSummary(diagnostics: &diagnostics)
         let output = outputSummary(
@@ -802,7 +818,8 @@ struct ImageGenerationPreflightAnalyzer {
                 kreaConditioningMultiplier: input.kreaConditioningMultiplier,
                 kreaConditioningLayerWeights: input.kreaConditioningLayerWeights,
                 kreaBaseQuantizationBits: input.kreaBaseQuantizationBits,
-                quiet: input.generationArgv.contains("--quiet")
+                quiet: input.generationArgv.contains("--quiet"),
+                runDirectory: input.runDirectory
             ),
             resolved: resolved
         )

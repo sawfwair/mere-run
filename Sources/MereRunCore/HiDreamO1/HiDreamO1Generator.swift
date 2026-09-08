@@ -140,7 +140,7 @@ public final class HiDreamO1Generator: ImageGenerator {
             HiDreamO1Denoiser.Conditioning(sample: $0, visionConditions: visionConditions)
         }
 
-        let seed = request.seed ?? deterministicSeed(prompt: request.prompt)
+        let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .hiDreamO1)
         let image: MLXArray
         if references.isEmpty {
             let patches = try HiDreamO1Denoiser.runTextOnly(
@@ -252,15 +252,6 @@ public final class HiDreamO1Generator: ImageGenerator {
         if !FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-    }
-
-    private func deterministicSeed(prompt: String) -> UInt64 {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in prompt.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 0x0000_0100_0000_01b3
-        }
-        return hash
     }
 
     private func resizedReferenceSizes(

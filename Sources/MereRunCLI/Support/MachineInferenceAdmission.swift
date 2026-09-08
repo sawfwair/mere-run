@@ -651,6 +651,10 @@ enum CLIInferenceAdmissionClassifier {
         }
     }
 
+    static func imageGenerationRequest(modelID: String) -> MachineInferenceRequest {
+        MachineInferenceRequest(label: "image generate", resourceClass: isLargeModel(modelID) ? .large : .standard)
+    }
+
     static func apiServerRequest(engine: APIEngine, modelID: String? = nil) -> MachineInferenceRequest {
         let resourceClass: MachineInferenceClass = engine == .textChatDeepseekV4Flash || isLargeModel(modelID)
             ? .large

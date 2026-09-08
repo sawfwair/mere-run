@@ -13,6 +13,9 @@ import MediaIO
 import MereRunCore
 
 struct APIServe: AsyncParsableCommand {
+    @Option(name: [.customLong("image-run-records")], help: "Keep durable image run directories under this root.")
+    var imageRunRecords: String?
+
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
 
     static let configuration = CommandConfiguration(
@@ -249,6 +252,7 @@ struct APIServe: AsyncParsableCommand {
             contextSize: contextSize,
             gemma4KVCacheQuantization: gemma4KVCacheQuantization,
             memoryPressurePolicy: memoryPressurePolicy,
+            imageRunRecords: imageRunRecords.map { URL(fileURLWithPath: $0).standardizedFileURL },
             warmupDefaultModel: warmup
         )
         try await server.run(host: host, port: port)
@@ -3925,6 +3929,7 @@ actor CodeGenServer {
     private let pool: RuntimeModelPool
     private let sidecarPool: APISidecarModelPool
     private let artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler
+    private let imageRunRecords: URL?
     private var processTelemetrySampler = RuntimeProcessTelemetrySampler()
 
     init(
@@ -3939,8 +3944,10 @@ actor CodeGenServer {
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
         memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
         artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler = APIArtifactDirectoryCleanupScheduler(),
+        imageRunRecords: URL? = nil,
         warmupDefaultModel: Bool = true
     ) async throws {
+        self.imageRunRecords = imageRunRecords
         self.apiKey = apiKey
         self.contextSize = contextSize
         self.fallbackLoraPath = fallbackLoraPath
@@ -5332,9 +5339,20 @@ actor CodeGenServer {
         let operation = try plan.operationPlan(
             modelRoot: modelRoot, outputURL: outputURL, manifest: manifest, qwenEditDefaults: qwenEdit
         )
-        try MLXBundleSupport.ensureAvailable(quiet: true)
+        let recording = try imageRunRecords.map { root in
+            var requested = operation.options
+            requested.mask = plan.maskImage
+            return try ImageRunSession(directory: root.appendingPathComponent("image-\(UUID().uuidString.lowercased())"),
+                                requested: requested, modelSelector: plan.modelID)
+        }
+        do {
+            try MLXBundleSupport.ensureAvailable(quiet: true)
+        } catch {
+            try recording?.fail(error)
+            throw error
+        }
         let pool = sidecarPool
-        let outcome = try await ImageGenerationOperation.execute(operation, executor: { kind, request, _ in
+        let outcome = try await ImageGenerationOperation.execute(operation, recording: recording, executor: { kind, request, _ in
             try await pool.generateImage(kind: kind, modelID: modelID, modelPath: modelRoot.path, request: request)
         })
         return outcome.result.outputURL

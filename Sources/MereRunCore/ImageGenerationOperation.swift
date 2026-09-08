@@ -28,10 +28,12 @@ public enum ImageGenerationOperation {
     public static func execute(
         _ plan: ImageGenerationPlan,
         id: UUID = UUID(),
+        recording: ImageRunSession? = nil,
         progressHandler: (@Sendable (GenerationProgress) -> Void)? = nil,
         eventHandler: (@Sendable (ImageGenerationEvent) -> Void)? = nil,
         executor: Executor = generate
     ) async throws -> ImageGenerationOutcome {
+        let id = recording?.id ?? id
         eventHandler?(.started(id))
         let progress: (@Sendable (GenerationProgress) -> Void)?
         if progressHandler != nil || eventHandler != nil {
@@ -43,13 +45,17 @@ public enum ImageGenerationOperation {
             progress = nil
         }
         do {
-            let outcome = try await perform(plan, id: id, progressHandler: progress, executor: executor)
+            let effectivePlan = try recording?.prepare(plan) ?? plan
+            let outcome = try await perform(effectivePlan, id: id, progressHandler: progress, executor: executor)
+            try recording?.succeed(outcome)
             eventHandler?(.succeeded(outcome))
             return outcome
         } catch is CancellationError {
+            try recording?.fail(CancellationError())
             eventHandler?(.cancelled(id))
             throw CancellationError()
         } catch {
+            try recording?.fail(error)
             let issue = error as? ImageGenerationIssue
                 ?? ImageGenerationIssue("generation_failed", error.localizedDescription)
             eventHandler?(.failed(id, issue))

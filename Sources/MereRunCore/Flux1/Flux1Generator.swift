@@ -92,7 +92,7 @@ public actor Flux1Generator: ImageGenerator {
         try await applyAdapters(request.loras, to: transformer, progressHandler: progressHandler)
         progressHandler?(GenerationProgress(stage: .loadingTransformer, stepIndex: 3, totalSteps: 3))
 
-        let seed = request.seed ?? deterministicSeed(prompt: request.prompt)
+        let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .flux1)
         let resolution = Flux1SampleBuilder.alignedResolution(width: request.width, height: request.height)
         let latentHeight = resolution.height / Flux1SampleBuilder.vaeCompression
         let latentWidth = resolution.width / Flux1SampleBuilder.vaeCompression
@@ -327,15 +327,6 @@ public actor Flux1Generator: ImageGenerator {
             return try ModelResolver().resolve(modelID).rootURL
         }
         throw Flux1Error.modelNotFound(spec)
-    }
-
-    private func deterministicSeed(prompt: String) -> UInt64 {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in prompt.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 0x0000_0100_0000_01b3
-        }
-        return hash
     }
 
     private static func adapterScale(_ adapter: LoRA) -> Float {

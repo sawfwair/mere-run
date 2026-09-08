@@ -1,11 +1,11 @@
 import Foundation
 
-public enum LoRA: Sendable, Hashable {
+public enum LoRA: Codable, Sendable, Hashable {
     case local(path: String, scale: Double)
     case remote(reference: String, scale: Double)
 }
 
-public struct Krea2ConditioningRebalance: Sendable, Hashable {
+public struct Krea2ConditioningRebalance: Codable, Sendable, Hashable {
     public var multiplier: Float
     public var layerWeights: [Float]
 
@@ -15,7 +15,7 @@ public struct Krea2ConditioningRebalance: Sendable, Hashable {
     }
 }
 
-public struct GenerationRequest: Sendable, Hashable {
+public struct GenerationRequest: Codable, Sendable, Hashable {
     public var prompt: String
     public var negativePrompt: String?
     /// Reference images for model families that support edit or personalization modes.

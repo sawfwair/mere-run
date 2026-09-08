@@ -97,7 +97,7 @@ extension Flux2KleinGenerator {
         }()
 
         // 2. Prepare latent dimensions
-        let seed = request.seed ?? UInt64.random(in: 0..<UInt64.max)
+        let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .flux2Klein)
         let vaeScaleFactor = vae.configuration.vaeScaleFactor
         let latentHeight = request.height / vaeScaleFactor
         let latentWidth = request.width / vaeScaleFactor

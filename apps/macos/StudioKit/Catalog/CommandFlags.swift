@@ -167,6 +167,7 @@ extension CommandFlags {
             "--lora-scale": "1.0"
         ]
 
+        package static let runDir = "--run-dir"
         package static let sigmas = "--sigmas"
         package static let prompt = "--prompt"
         package static let negativePrompt = "--negative-prompt"
@@ -1563,7 +1564,7 @@ extension CommandFlags {
 // MARK: - run retry
 
 extension CommandFlags {
-    /// `mere.run run retry` — Retry Relay run
+    /// `mere.run run retry` — Retry run
     package enum RunRetry: CommandFlagNamespace {
         package static let command = ["run", "retry"]
 
@@ -2672,6 +2673,7 @@ extension CommandFlags {
     package enum APIServe: CommandFlagNamespace {
         package static let command = ["api", "serve"]
 
+        package static let imageRunRecords = "--image-run-records"
         package static let warmup = "--warmup"
         package static let noWarmup = "--no-warmup"
         package static let port = "--port"

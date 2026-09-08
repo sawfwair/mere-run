@@ -24,6 +24,12 @@ The format is based on Keep a Changelog.
 - Update the chat-template interpreter to preserve adjacent tool-result groups
   in official templates that use `loop.previtem` and `loop.nextitem`.
 
+- Add opt-in durable image records with `image generate --run-dir` and
+  `api serve --image-run-records`. Records separate requested and effective
+  settings, retain input and output fingerprints, and distinguish terminal
+  outcomes from process interruption. Use `run list`, `run inspect`, and
+  `run retry` to inspect records and start a new run from resolved settings.
+
 - Fix approved shell tools hanging on large output. Shell execution now drains
   output while running, retains up to 256 KiB, and stops the owned process group
   on cancellation or after five minutes. Code benchmark sandboxes use the same
