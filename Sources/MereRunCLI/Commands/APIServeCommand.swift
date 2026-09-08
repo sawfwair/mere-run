@@ -583,6 +583,7 @@ enum APIEngine: String, ExpressibleByArgument {
 struct APIEngineCapabilities: Equatable, Sendable {
     var supportsRawProxy: Bool = false
     var supportsTools: Bool = false
+    var usesNativeToolHistory: Bool = false
     var supportsToolChoice: Bool = false
     var supportsDeveloperRole: Bool = true
     var supportsStructuredOutputs: Bool = false
@@ -596,6 +597,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
     var supportsStopSequences: Bool = false
     var supportsSeed: Bool = false
     var supportsPenalties: Bool = false
+    var supportsTopK: Bool = false
+    var supportsRepetitionPenalty: Bool = false
     var supportsLogprobs: Bool = false
     var supportsProviderThinkingControls: Bool = false
 
@@ -603,6 +606,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
         APIEngineCapabilities(
             supportsRawProxy: profile.supportsRawProxy,
             supportsTools: profile.toolCall,
+            usesNativeToolHistory: [.textChatQ36, .textChatLaguna, .textChatGemma4, .textChatMuseGlimmer]
+                .contains(profile.servingEngine),
             supportsToolChoice: profile.supportsToolChoice,
             supportsDeveloperRole: profile.compatibility.supportsDeveloperRole,
             supportsStructuredOutputs: profile.structuredOutput,
@@ -616,6 +621,10 @@ struct APIEngineCapabilities: Equatable, Sendable {
             supportsStopSequences: profile.supportsStopSequences,
             supportsSeed: profile.supportsSeed,
             supportsPenalties: profile.supportsPenalties,
+            supportsTopK: [.textChatQ35, .textChatQ36, .textChatLaguna, .textChatLFM2,
+                          .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni,
+                          .textChatDiffusionGemma].contains(profile.servingEngine),
+            supportsRepetitionPenalty: [.textChatQ35, .textChatQ36].contains(profile.servingEngine),
             supportsLogprobs: profile.supportsLogprobs,
             supportsProviderThinkingControls: profile.supportsProviderThinkingControls
         )
@@ -2586,16 +2595,12 @@ enum APIServerContract {
             lora = nil
         }
 
-        // R1-style lanes degenerate without reasoning; their published top_k
-        // applies only when the client did not set explicit sampling.
+        // Resolve each omitted sampling field independently.
         let laneModelID = servedModelID ?? ""
         let resolvedAPIProfile = apiProfile
             ?? servedModelID.flatMap { ManagedModelCatalog.apiProfile(for: $0) }
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: laneModelID)
         let isLaguna = LagunaResources.handles(modelSpec: laneModelID)
-        let usesExplicitSampling = openaiRequest.temperature != nil
-            || openaiRequest.top_p != nil
-            || openaiRequest.min_p != nil
         let reasoningEffort = try reasoningEffort(
             from: openaiRequest.reasoning_effort,
             capabilities: capabilities,
@@ -2637,12 +2642,14 @@ enum APIServerContract {
                 ? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
                     ?? topP
                 : topP,
-            topK: isLaguna
-                ? LagunaResources.recommendedTopK
-                : (usesExplicitSampling ? nil : recommendedSampling?.topK),
+            topK: openaiRequest.top_k
+                ?? (isLaguna ? LagunaResources.recommendedTopK : recommendedSampling?.topK),
             minP: openaiRequest.min_p == nil && isLaguna
                 ? LagunaResources.recommendedMinP
                 : minP,
+            presencePenalty: openaiRequest.presence_penalty ?? 0,
+            frequencyPenalty: openaiRequest.frequency_penalty ?? 0,
+            repetitionPenalty: openaiRequest.repetition_penalty ?? 1,
             seed: openaiRequest.seed.map(UInt64.init),
             reasoningEffort: reasoningEffort,
             showThinking: requiresJSON
@@ -2710,7 +2717,7 @@ enum APIServerContract {
         let imageURL = try firstImageURL(from: msg, capabilities: capabilities)
         let audioURL = try firstAudioURL(from: msg, capabilities: capabilities)
         let videoURL = try firstVideoURL(from: msg, capabilities: capabilities)
-        let content = renderMessageContent(msg)
+        let content = capabilities.usesNativeToolHistory ? msg.content : renderMessageContent(msg)
         let toolCalls = try chatMessageToolCalls(from: msg)
         return ChatMessage(
             role: role,
@@ -2868,6 +2875,7 @@ enum APIServerContract {
         if let seed = request.seed, seed < 0 {
             throw APIRequestValidationError.invalidField("seed", "must be an unsigned integer")
         }
+        try validateSamplingControls(request, capabilities: capabilities)
         if let penalty = request.presence_penalty, penalty != 0, !capabilities.supportsPenalties {
             throw APIRequestValidationError.invalidField("presence_penalty", "presence penalties are not supported by this engine")
         }
@@ -3013,22 +3021,20 @@ enum APIServerContract {
             throw APIRequestValidationError.invalidField("tools", "only function tools are supported")
         }
 
-        let schema = function.parameters?.objectValue ?? [:]
-        let properties = schema["properties"]?.objectValue ?? [:]
-        var converted: [String: ToolParameterProperty] = [:]
-        for (name, rawProperty) in properties {
-            guard let property = rawProperty.objectValue else { continue }
-            let type = property["type"]?.stringValue ?? "string"
-            let description = property["description"]?.stringValue ?? ""
-            converted[name] = ToolParameterProperty(type: type, description: description)
+        let schema: [String: OpenAIJSONValue]
+        if let parameters = function.parameters, parameters != .null {
+            guard let object = parameters.objectValue else {
+                throw APIRequestValidationError.invalidField("tools", "function parameters must be a JSON object")
+            }
+            schema = object
+        } else {
+            schema = ["type": .string("object"), "properties": .object([:]), "required": .array([])]
         }
-        let required = schema["required"]?.arrayValue?.compactMap(\.stringValue) ?? []
 
         return ToolDefinition(
             name: function.name,
             description: function.description ?? "",
-            parameters: converted,
-            required: required
+            parameterSchema: schema
         )
     }
 
@@ -3182,6 +3188,36 @@ enum APIServerContract {
             )
         }
         return value
+    }
+
+    private static func validateSamplingControls(
+        _ request: OpenAIChatRequest,
+        capabilities: APIEngineCapabilities
+    ) throws {
+        if let topK = request.top_k {
+            guard topK >= 0 else {
+                throw APIRequestValidationError.invalidField("top_k", "must be zero or greater")
+            }
+            if topK != 0, !capabilities.supportsTopK {
+                throw APIRequestValidationError.invalidField("top_k", "top-k sampling is not supported by this engine")
+            }
+        }
+        for (field, value) in [("presence_penalty", request.presence_penalty),
+                               ("frequency_penalty", request.frequency_penalty)] {
+            if let value, !value.isFinite || !(-2...2).contains(value) {
+                throw APIRequestValidationError.invalidField(field, "must be between -2 and 2")
+            }
+        }
+        if let penalty = request.repetition_penalty {
+            guard penalty.isFinite, Float(penalty).isFinite, Float(penalty) > 0 else {
+                throw APIRequestValidationError.invalidField("repetition_penalty", "must be a finite positive sampler value")
+            }
+            if penalty != 1, !capabilities.supportsRepetitionPenalty {
+                throw APIRequestValidationError.invalidField(
+                    "repetition_penalty", "repetition penalties are not supported by this engine"
+                )
+            }
+        }
     }
 
     private static func validateTemperature(_ rawValue: Double?) throws -> Double {
@@ -5712,8 +5748,10 @@ actor CodeGenServer {
 
         // Create async stream for SSE
         let (stream, continuation) = AsyncStream<ByteBuffer>.makeStream()
+        let heartbeatTask = Self.startStreamingKeepalive(continuation: continuation)
 
         let generationTask = Task {
+            defer { heartbeatTask.cancel() }
             do {
                 let streamedContent = StreamingContentTracker()
                 let shouldBufferForToolCalls = request.tools?.isEmpty == false
@@ -5781,10 +5819,7 @@ actor CodeGenServer {
                         choices: [
                             OpenAIChatChoice(
                                 index: 0,
-                                delta: OpenAIChatDelta(
-                                    role: "assistant",
-                                    tool_calls: toolCalls.enumerated().map(OpenAIChatToolCallDelta.init(indexAndToolCall:))
-                                ),
+                                delta: Self.openAIBufferedDelta(for: result, toolCalls: toolCalls),
                                 finish_reason: nil
                             )
                         ]
@@ -5802,10 +5837,7 @@ actor CodeGenServer {
                         choices: [
                             OpenAIChatChoice(
                                 index: 0,
-                                delta: OpenAIChatDelta(
-                                    content: result.response,
-                                    reasoning_content: result.reasoningContent
-                                ),
+                                delta: Self.openAIBufferedDelta(for: result, toolCalls: []),
                                 finish_reason: nil
                             )
                         ]
@@ -5876,6 +5908,7 @@ actor CodeGenServer {
             }
         }
         continuation.onTermination = { termination in
+            heartbeatTask.cancel()
             if case .cancelled = termination {
                 admissionLease.observeClientDisconnect()
                 generationTask.cancel()
@@ -5891,6 +5924,27 @@ actor CodeGenServer {
             ],
             body: .init(asyncSequence: stream)
         )
+    }
+
+    nonisolated static func startStreamingKeepalive(
+        continuation: AsyncStream<ByteBuffer>.Continuation,
+        interval: Duration = .seconds(15)
+    ) -> Task<Void, Never> {
+        Task {
+            do {
+                while !Task.isCancelled {
+                    try await Task.sleep(for: interval)
+                    guard !Task.isCancelled else { return }
+                    // SSE comments keep buffered tool responses alive without
+                    // exposing unfinished tool arguments or reasoning as text.
+                    if case .terminated = continuation.yield(ByteBuffer(string: ": keep-alive\n\n")) {
+                        return
+                    }
+                }
+            } catch {
+                // Cancellation ends the keepalive loop.
+            }
+        }
     }
 
     private nonisolated func openAIToolCalls(
@@ -5937,7 +5991,23 @@ actor CodeGenServer {
         for result: ChatResponse,
         hasToolCalls: Bool
     ) -> String {
-        hasToolCalls ? "" : result.response
+        guard !hasToolCalls else { return "" }
+        guard result.reasoningContent != nil else { return result.response }
+        return ChatReasoningMarkup.splitThinkBlocks(in: result.response).visibleContent
+    }
+
+    nonisolated static func openAIBufferedDelta(
+        for result: ChatResponse,
+        toolCalls: [OpenAIChatToolCall]
+    ) -> OpenAIChatDelta {
+        OpenAIChatDelta(
+            role: toolCalls.isEmpty ? nil : "assistant",
+            content: toolCalls.isEmpty ? openAIMessageContent(for: result, hasToolCalls: false) : nil,
+            reasoning_content: result.reasoningContent,
+            tool_calls: toolCalls.isEmpty
+                ? nil
+                : toolCalls.enumerated().map(OpenAIChatToolCallDelta.init(indexAndToolCall:))
+        )
     }
 
     /// Generators that don't report a prompt token count fall back to zero

@@ -86,6 +86,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
     public var messages: [OpenAIChatMessage]
     public var temperature: Double?
     public var top_p: Double?
+    public var top_k: Int?
     public var min_p: Double?
     public var max_tokens: Int?
     public var max_completion_tokens: Int?
@@ -94,6 +95,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
     public var seed: Int?
     public var presence_penalty: Double?
     public var frequency_penalty: Double?
+    public var repetition_penalty: Double?
     public var logprobs: Bool?
     public var top_logprobs: Int?
     public var reasoning_effort: String?
@@ -121,6 +123,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         case messages
         case temperature
         case top_p
+        case top_k
         case min_p
         case max_tokens
         case max_completion_tokens
@@ -129,6 +132,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         case seed
         case presence_penalty
         case frequency_penalty
+        case repetition_penalty
         case logprobs
         case top_logprobs
         case reasoning_effort
@@ -156,6 +160,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         messages: [OpenAIChatMessage],
         temperature: Double? = nil,
         top_p: Double? = nil,
+        top_k: Int? = nil,
         min_p: Double? = nil,
         max_tokens: Int? = nil,
         max_completion_tokens: Int? = nil,
@@ -164,6 +169,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         seed: Int? = nil,
         presence_penalty: Double? = nil,
         frequency_penalty: Double? = nil,
+        repetition_penalty: Double? = nil,
         logprobs: Bool? = nil,
         top_logprobs: Int? = nil,
         reasoning_effort: String? = nil,
@@ -189,6 +195,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         self.messages = messages
         self.temperature = temperature
         self.top_p = top_p
+        self.top_k = top_k
         self.min_p = min_p
         self.max_tokens = max_tokens
         self.max_completion_tokens = max_completion_tokens
@@ -197,6 +204,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         self.seed = seed
         self.presence_penalty = presence_penalty
         self.frequency_penalty = frequency_penalty
+        self.repetition_penalty = repetition_penalty
         self.logprobs = logprobs
         self.top_logprobs = top_logprobs
         self.reasoning_effort = reasoning_effort
@@ -226,6 +234,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         messages = try container.decode([OpenAIChatMessage].self, forKey: .messages)
         temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
         top_p = try container.decodeIfPresent(Double.self, forKey: .top_p)
+        top_k = try container.decodeIfPresent(Int.self, forKey: .top_k)
         min_p = try container.decodeIfPresent(Double.self, forKey: .min_p)
         max_tokens = try container.decodeIfPresent(Int.self, forKey: .max_tokens)
         max_completion_tokens = try container.decodeIfPresent(Int.self, forKey: .max_completion_tokens)
@@ -234,6 +243,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         seed = try container.decodeIfPresent(Int.self, forKey: .seed)
         presence_penalty = try container.decodeIfPresent(Double.self, forKey: .presence_penalty)
         frequency_penalty = try container.decodeIfPresent(Double.self, forKey: .frequency_penalty)
+        repetition_penalty = try container.decodeIfPresent(Double.self, forKey: .repetition_penalty)
         logprobs = try container.decodeIfPresent(Bool.self, forKey: .logprobs)
         top_logprobs = try container.decodeIfPresent(Int.self, forKey: .top_logprobs)
         reasoning_effort = try container.decodeIfPresent(String.self, forKey: .reasoning_effort)
@@ -270,6 +280,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         try container.encode(messages, forKey: .messages)
         try container.encodeIfPresent(temperature, forKey: .temperature)
         try container.encodeIfPresent(top_p, forKey: .top_p)
+        try container.encodeIfPresent(top_k, forKey: .top_k)
         try container.encodeIfPresent(min_p, forKey: .min_p)
         try container.encodeIfPresent(max_tokens, forKey: .max_tokens)
         try container.encodeIfPresent(max_completion_tokens, forKey: .max_completion_tokens)
@@ -278,6 +289,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         try container.encodeIfPresent(seed, forKey: .seed)
         try container.encodeIfPresent(presence_penalty, forKey: .presence_penalty)
         try container.encodeIfPresent(frequency_penalty, forKey: .frequency_penalty)
+        try container.encodeIfPresent(repetition_penalty, forKey: .repetition_penalty)
         try container.encodeIfPresent(logprobs, forKey: .logprobs)
         try container.encodeIfPresent(top_logprobs, forKey: .top_logprobs)
         try container.encodeIfPresent(reasoning_effort, forKey: .reasoning_effort)

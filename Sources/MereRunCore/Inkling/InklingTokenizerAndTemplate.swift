@@ -172,24 +172,13 @@ public final class InklingTokenizerAndTemplate: @unchecked Sendable {
 private struct InklingToolDeclaration: Encodable {
     let description: String
     let name: String
-    let parameters: InklingToolParameters
+    let parameters: [String: OpenAIJSONValue]
     let type = "function"
 
     init(_ definition: ToolDefinition) {
         description = definition.description
         name = definition.name
-        parameters = InklingToolParameters(definition)
-    }
-}
-
-private struct InklingToolParameters: Encodable {
-    let properties: [String: ToolParameterProperty]
-    let required: [String]
-    let type = "object"
-
-    init(_ definition: ToolDefinition) {
-        properties = definition.parameters
-        required = definition.required
+        parameters = definition.parametersJSONSchema
     }
 }
 

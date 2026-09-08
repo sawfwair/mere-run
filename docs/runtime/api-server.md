@@ -77,6 +77,16 @@ lifecycle. API keys still cross the process boundary only through
 - `POST /v1/audio/speech`
 - `POST /v1/audio/transcriptions`
 
+Laguna chat requests enable reasoning by default. Chat responses return reasoning
+in `reasoning_content`, including buffered streaming tool-call replies. Clients
+that preserve reasoning across tool turns should send that field back on the
+assistant message alongside its `tool_calls`.
+Qwen, Ornith, Laguna, Gemma 4, and Muse use their native templates to render
+`tool_calls`; the API keeps assistant `content` separate from those calls.
+Streaming responses send SSE keepalive comments during long generations, including
+buffered tool calls. Clients should ignore comment frames and wait for response
+data and the final usage chunk.
+
 ## What it is for
 
 Use the server for repeated requests so the model stays loaded. It supports:
@@ -467,11 +477,51 @@ swift run mere.run api serve \
   form and text posts are rejected before the request body is processed.
 - Chat requests are validated before generation; `max_tokens`,
   `max_completion_tokens`, `temperature`, `top_p`, and the supported `min_p`
-  extension must stay within bounded ranges.
+  extension must stay within bounded ranges. `top_k` accepts nonnegative
+  integers on engines that support top-k sampling; `0` disables the cutoff.
 - LoRA adapters are configured at server startup with `--lora`; request bodies
   cannot select local LoRA paths.
 - Streaming and JSON error paths are sanitized so the local server does not
   reflect raw internal runtime details back to clients.
+
+## Ornith sampling controls
+
+To use Ornith's precise coding profile, include these fields in your
+`/v1/chat/completions` request:
+
+```json
+{
+  "model": "text-agent-ornith-35b-mlx-4bit",
+  "messages": [{ "role": "user", "content": "Write a Python function that sorts dates." }],
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "repetition_penalty": 1.0
+}
+```
+
+The [Ornith sampling guide](https://github.com/ornith-ai/Ornith-1#quickstart)
+also provides a general-task profile with temperature `1.0` and
+`presence_penalty: 1.5`. The other fields in this example stay the same.
+These settings configure sampling; they do not establish agent task quality.
+
+The Qwen-family runtime, including Ornith, supports these penalties:
+
+- `presence_penalty`: subtracts the value once from each token's logit if the
+  token has appeared in the generated response. Accepts `-2` through `2`.
+- `frequency_penalty`: subtracts the value multiplied by the token's occurrence
+  count in the generated response. Accepts `-2` through `2`.
+- `repetition_penalty`: divides positive logits and multiplies negative logits
+  for tokens in the prompt or generated response. Accepts finite positive
+  values representable by the sampler; `1.0` disables it.
+
+Presence and frequency penalties exclude the prompt and default to `0`.
+Repetition penalties default to `1.0`. Penalties apply before sampling filters
+and reset for each request. Requests with active penalties use target-only
+decode, including streaming and batched requests. Other native engines reject
+active penalty controls they do not support.
 
 ## Runtime control endpoints
 
@@ -540,6 +590,18 @@ supported fields into `ChatRequest` or return an OpenAI-style
 `invalid_request_error` before generation. Metadata-style fields such as
 `metadata`, `user`, and `service_tier` are accepted as request context but do
 not change local generation.
+
+For function tools, supply `parameters` as a JSON Schema object. Native prompts
+retain the complete schema, including nested properties, array items, enums,
+references, and constraints such as `additionalProperties`. If you omit
+`parameters` or set it to `null`, the API supplies an empty object schema.
+Other non-object values return `invalid_request_error`. Schema preservation
+does not add full JSON Schema validation of generated arguments; check arguments
+before executing a tool.
+
+Checkpoint templates that use `loop.previtem` and `loop.nextitem` retain the
+role boundaries around individual and consecutive tool results. You do not
+need to edit the installed chat template.
 
 For non-streaming chat responses, native runtimes split `<think>...</think>`
 blocks out of `message.content` and expose them as OpenAI-compatible
@@ -614,8 +676,9 @@ Engine compatibility:
 - The Ornith lanes serve with thinking-enabled generation by default (the
   models degenerate without it); the reasoning arrives in the response's
   `reasoning_content` field while `content` carries only the visible answer.
-  When a request sets no explicit `temperature`/`top_p`/`min_p`, these lanes
-  also apply the model's published top-k of 20.
+  Each omitted sampling field retains its model default independently. Ornith
+  uses temperature `1.0`, top-p `0.95`, and top-k `20`; setting `temperature`
+  or `min_p` does not remove the top-k cutoff. Set `top_k: 0` to disable it.
 - `text-chat-lfm25-a1b-8bit`: uses the LFM2 serving engine with the
   LiquidAI LFM2.5 8B-A1B MLX 8-bit weights, accepts function tools, and rejects
   image content parts.

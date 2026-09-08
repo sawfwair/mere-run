@@ -1,7 +1,7 @@
 # mlx-swift fork policy and compiled-call overhead
 
 `mere.run` pins the public `sawfwair/mlx-swift` fork at
-`7558b9cff75746e3ce25802aecbdc498b240af7f`. It contains upstream
+`001d1aa3e5655d7efc073fb9632f952f57cdf528`. It contains upstream
 `mlx-swift` through `97cf19efeaa4e929415e75982e999adb34f62c0d`. The embedded
 `sawfwair/mlx` revision is
 `11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef`, which contains the exact
@@ -17,6 +17,14 @@ cache bridging. The obsolete unaligned
 fast dispatch; the fork instead tests matching host/kernel alignment directly.
 Changes stay scoped to their bit width, group size, quantization mode, and
 backend so stock 2-bit and wider models keep their existing paths.
+
+The pin exposes `Stream.Context` and `Stream.withDefaultStream` for reusable
+task-local CPU and GPU streams. MLX retains backend streams until process exit.
+Long-running servers can lease a context to each active operation, synchronize
+it when the operation ends, and reuse it for a later operation. Callers must
+serialize graph construction and evaluation on each context; overlapping
+operations need distinct contexts. Existing `withNewDefaultStream` calls retain
+their allocation behavior.
 
 The pin also lets an MLXFast custom Metal kernel explicitly request
 the core quantized helper headers. The source marker

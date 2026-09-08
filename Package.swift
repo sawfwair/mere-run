@@ -278,6 +278,7 @@ var mereRunCoreTestDependencies: [Target.Dependency] = [
   "AudioCodecs",
   "AudioSTT",
   "AudioTTS",
+  .product(name: "Jinja", package: "swift-jinja"),
   .product(name: "Crypto", package: "swift-crypto")
 ]
 if hasMediaIOTarget {
@@ -625,13 +626,15 @@ if !isLinuxPackage {
 var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
   .package(
     url: "https://github.com/sawfwair/mlx-swift",
-    revision: "7558b9cff75746e3ce25802aecbdc498b240af7f"
+    revision: "001d1aa3e5655d7efc073fb9632f952f57cdf528"
   )
 ]) + [
   .package(
     url: "https://github.com/huggingface/swift-transformers",
     from: "1.3.0"
   ),
+  // Checkpoint templates use neighboring loop items and Python-compatible JSON.
+  .package(url: "https://github.com/huggingface/swift-jinja.git", from: "2.5.0"),
   .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"4.4.0"),
   .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.4.0"),
   .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0")

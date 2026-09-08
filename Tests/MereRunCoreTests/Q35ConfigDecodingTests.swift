@@ -1557,23 +1557,23 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         ))
     }
 
-    func testFlashNextBoundsReusableBuffersBelowDeviceLimit() {
+    func testQ35BoundsReusableBuffersBelowDeviceLimit() {
         let gib = 1_024 * 1_024 * 1_024
         XCTAssertFalse(Q35Generator.shouldClearMLXCache(
             activeMemory: 71 * gib, cacheMemory: 4 * gib - 1,
-            memoryLimit: 121 * gib, isFlashNext: true
+            memoryLimit: 121 * gib
         ))
         XCTAssertTrue(Q35Generator.shouldClearMLXCache(
             activeMemory: 71 * gib, cacheMemory: 4 * gib,
-            memoryLimit: 121 * gib, isFlashNext: true
+            memoryLimit: 121 * gib
         ))
         XCTAssertTrue(Q35Generator.shouldClearMLXCache(
             activeMemory: 71 * gib, cacheMemory: 8 * gib,
-            memoryLimit: 121 * gib, isFlashNext: true
+            memoryLimit: 121 * gib
         ))
-        XCTAssertFalse(Q35Generator.shouldClearMLXCache(
-            activeMemory: 71 * gib, cacheMemory: 8 * gib,
-            memoryLimit: 121 * gib, isFlashNext: false
+        XCTAssertTrue(Q35Generator.shouldClearMLXCache(
+            activeMemory: 23 * gib, cacheMemory: 8 * gib,
+            memoryLimit: 121 * gib
         ))
     }
 
