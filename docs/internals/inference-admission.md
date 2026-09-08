@@ -50,10 +50,10 @@ capacity checks retain FIFO ordering across actor suspension.
 Core's `ChatProgress` into that type. The existing status field names remain
 compatible.
 
-`RuntimeModelPool` and `APISidecarModelPool` own loaded models, model leases,
-pinning, TTL, eviction, readiness, batching, and KV caches. They supply pressure
-samples to request admission. The admission library does not load checkpoints
-or change those runtime policies.
+`MereRunResidency` owns [model generations, leases, and eviction mechanics](./runtime-residency.md).
+`RuntimeModelPool` and `APISidecarModelPool` supply runtime factories, settings,
+and pressure samples. Their runtime owners retain batching and KV caches.
+The admission library does not load checkpoints.
 
 ## Validation
 

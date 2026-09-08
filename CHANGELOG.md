@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add `MereRunResidency` for shared cold preparation, concurrent model leases,
+  exclusive media slots, and TTL/LRU eviction. Active leases and generation
+  checks protect warm runtimes from stale unload decisions.
+- Separate API command parsing, protocol contracts, HTTP serving, and runtime
+  service composition. Model maintenance and non-streaming media requests use
+  scoped admission; streaming producers retain explicit leases.
+- Share file transcription plans, validation, execution, and typed outcomes
+  between CLI and API adapters. `AudioCore` builds without C++ interoperability
+  or inference dependencies; native executors unload temporary generators.
+- When transcription policy switches from Parakeet to Qwen, select a compatible
+  built-in model. Reject incompatible explicit local paths and nonpositive
+  transcription token limits before loading. Remove API audio uploads after
+  processing.
+
 - Extract machine-wide reservations, request admission, and memory-pressure
   policy into the dependency-free `MereRunAdmission` library. Servers retain
   one machine reservation while their request queues manage local concurrency.

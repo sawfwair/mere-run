@@ -133,6 +133,7 @@ var products: [Product] = [
   .library(name: "MereRunEvaluation", targets: ["MereRunEvaluation"]),
   .library(name: "MereRunRelayKit", targets: ["MereRunRelayKit"]),
   .library(name: "MereRunAdmission", targets: ["MereRunAdmission"]),
+  .library(name: "MereRunResidency", targets: ["MereRunResidency"]),
   .library(name: "MereRunModelKit", targets: ["MereRunModelKit"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
   .library(name: "AudioCore", targets: ["AudioCore"]),
@@ -299,6 +300,7 @@ audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
 var mereRunCLIDependencies: [Target.Dependency] = [
   "MereRunAdmission",
+  "MereRunResidency",
   "MereRunContract",
   "MereRunEvaluation",
   "MereRunRelayKit",
@@ -343,6 +345,12 @@ targets.append(contentsOf: [
     exclude: [
       "README.md"
     ]
+  ),
+  .target(
+    name: "MereRunResidency",
+    dependencies: ["MereRunAdmission"],
+    path: "Sources/MereRunResidency",
+    exclude: ["README.md"]
   ),
   .target(
     name: "MereRunAdmission",
@@ -449,8 +457,7 @@ targets.append(contentsOf: [
     path: "Sources/AudioCore",
     exclude: [
       "README.md"
-    ],
-    swiftSettings: commonSwiftSettings
+    ]
   ),
   .target(
     name: "AudioCodecs",
@@ -517,6 +524,16 @@ targets.append(contentsOf: [
     name: "MereRunRelayKitTests",
     dependencies: ["MereRunRelayKit"],
     path: "Tests/MereRunRelayKitTests"
+  ),
+  .testTarget(
+    name: "AudioCoreTests",
+    dependencies: ["AudioCore"],
+    path: "Tests/AudioCoreTests"
+  ),
+  .testTarget(
+    name: "MereRunResidencyTests",
+    dependencies: ["MereRunResidency"],
+    path: "Tests/MereRunResidencyTests"
   ),
   .testTarget(
     name: "MereRunAdmissionTests",

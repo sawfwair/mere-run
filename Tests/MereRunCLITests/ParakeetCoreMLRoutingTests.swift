@@ -8,7 +8,7 @@ import XCTest
 final class ParakeetCoreMLRoutingTests: XCTestCase {
     func testCoreMLTranscriptionWithoutLanguageHintUsesParakeet() async throws {
         let result = try await CLIASRRouting.transcribe(
-            request: ASRRequest(audioURL: URL(fileURLWithPath: "/tmp/audio.wav")),
+            request: ASRRequest(audioURL: try audioFixture()),
             preferredBackend: .parakeet,
             parakeetExecutionProvider: .coreML(artifactURL: URL(fileURLWithPath: "/tmp/coreml")),
             executor: CoreMLRoutingProbe()
@@ -19,7 +19,7 @@ final class ParakeetCoreMLRoutingTests: XCTestCase {
 
     func testDefaultProviderRetainsQwenLanguageFallback() async throws {
         let result = try await CLIASRRouting.transcribe(
-            request: ASRRequest(audioURL: URL(fileURLWithPath: "/tmp/audio.wav"), language: "zz"),
+            request: ASRRequest(audioURL: try audioFixture(), language: "zz"),
             preferredBackend: .parakeet,
             executor: CoreMLRoutingProbe()
         )
@@ -30,7 +30,7 @@ final class ParakeetCoreMLRoutingTests: XCTestCase {
         let executor = CoreMLRoutingProbe()
         do {
             _ = try await CLIASRRouting.transcribe(
-                request: ASRRequest(audioURL: URL(fileURLWithPath: "/tmp/audio.wav"), language: "zz"),
+                request: ASRRequest(audioURL: try audioFixture(), language: "zz"),
                 preferredBackend: .parakeet,
                 parakeetExecutionProvider: .coreML(artifactURL: URL(fileURLWithPath: "/tmp/coreml")),
                 executor: executor
@@ -41,6 +41,15 @@ final class ParakeetCoreMLRoutingTests: XCTestCase {
         }
         let calls = await executor.calls
         XCTAssertEqual(calls, 0)
+    }
+
+    private func audioFixture() throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let audio = root.appendingPathComponent("audio.wav")
+        try Data().write(to: audio)
+        return audio
     }
 }
 

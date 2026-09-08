@@ -111,9 +111,10 @@ DeepSeek V4 Flash servers run with exclusive machine admission.
 
 `MereRunAdmission` owns machine reservations and the in-process request queue.
 The server holds its machine lease for its lifetime; request slots operate
-inside that reservation. Loaded-model leases, batching, caches, pinning, and
-eviction remain in the runtime pools. See
-[Inference admission](../internals/inference-admission.md) for lifecycle details.
+inside that reservation. The runtime adapters use
+[shared residency services](../internals/runtime-residency.md) for model leases
+and eviction. Their model implementations retain batching and KV caches. See
+[Inference admission](../internals/inference-admission.md) for reservation details.
 
 ## Runtime entrypoints
 
@@ -123,7 +124,9 @@ eviction remain in the runtime pools. See
 
 ### Supporting stack
 
-- `Sources/MereRunCLI/Support/`
+- `Sources/MereRunCLI/Support/APIServer.swift`: routing, authentication, and streaming transport
+- `Sources/MereRunCLI/Support/APIServerContract.swift`: request and response contracts
+- `Sources/MereRunCLI/Support/RuntimeServingServices.swift`: runtime composition and request scopes
 - `Hummingbird` package dependency declared in `Package.swift`
 
 ## Example

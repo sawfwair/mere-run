@@ -134,6 +134,10 @@ Key subdirectories:
 Audio-oriented shared types and common utilities used by both speech synthesis
 and transcription.
 
+`AudioCore/SpeechTranscriptionOperation.swift` owns file transcription plans,
+validation, events, and outcomes. `AudioSTT/SpeechTranscriptionResolver.swift`
+resolves native backend and model inputs for CLI and API adapters.
+
 ### `Sources/AudioCodecs`
 
 Audio conversion and low-level codec support used by speech runtimes and some

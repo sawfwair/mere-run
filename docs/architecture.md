@@ -12,6 +12,7 @@ For the broader documentation set, start at the
 - CLI entry point: `Sources/MereRunCLI/MereRunCLI.swift`
 - Shared CLI helpers: `Sources/MereRunCLI/Support`
 - [Inference admission](./internals/inference-admission.md): `Sources/MereRunAdmission`
+- [Runtime residency](./internals/runtime-residency.md): `Sources/MereRunResidency`
 - Model paths and manifests:
   - `Sources/MereRunModelKit/MereRunModelPaths.swift`
   - `Sources/MereRunModelKit/MereRunModelManifest.swift`
@@ -114,6 +115,8 @@ Speech tokenizer internals:
 
 Speech transcription:
 
+- [Shared operation](./internals/speech-transcription-operation.md): `Sources/AudioCore/SpeechTranscriptionOperation.swift`
+- Model resolution: `Sources/AudioSTT/SpeechTranscriptionResolver.swift`
 - CLI: `Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift`
 - Runtime roots:
   - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
