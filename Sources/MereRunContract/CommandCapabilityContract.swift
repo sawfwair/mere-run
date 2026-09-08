@@ -49,12 +49,27 @@ public struct MereRunCapabilityArgument: Codable, Equatable, Sendable {
     public let label: String
     public let kind: MereRunCapabilityValueKind
     public let required: Bool
+    public let repeatable: Bool
 
-    public init(name: String, label: String, kind: MereRunCapabilityValueKind, required: Bool) {
+    public init(name: String, label: String, kind: MereRunCapabilityValueKind, required: Bool, repeatable: Bool = false) {
         self.name = name
         self.label = label
         self.kind = kind
         self.required = required
+        self.repeatable = repeatable
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, label, kind, required, repeatable
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        label = try container.decode(String.self, forKey: .label)
+        kind = try container.decode(MereRunCapabilityValueKind.self, forKey: .kind)
+        required = try container.decode(Bool.self, forKey: .required)
+        repeatable = try container.decodeIfPresent(Bool.self, forKey: .repeatable) ?? false
     }
 }
 
@@ -484,6 +499,18 @@ public enum MereRunCapabilityCatalog {
         title: "Chat",
         summary: "Run local chat, vision, JSON, LoRA, reasoning, and tool workflows.",
         options: [
+            .init(
+                flag: "--audio", label: "Audio", kind: .file, group: Group.inputs, tier: .expert
+            ),
+            .init(
+                flag: "--video", label: "Video", kind: .file, group: Group.inputs, tier: .expert
+            ),
+            .init(
+                flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--show-unmasking", label: "Show canvas drafts", kind: .boolean, group: Group.run, tier: .expert
+            ),
             .init(flag: "--prompt", label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard),
             .init(flag: "--system", label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
@@ -632,7 +659,7 @@ public enum MereRunCapabilityCatalog {
         title: "Embeddings",
         summary: "Generate native Qwen3 text embeddings.",
         arguments: [
-            .init(name: "texts", label: "Texts", kind: .string, required: true)
+            .init(name: "texts", label: "Texts", kind: .string, required: true, repeatable: true)
         ],
         options: [
             .init(flag: "--model", label: "Model", kind: .string),
@@ -649,7 +676,7 @@ public enum MereRunCapabilityCatalog {
         title: "Anonymize",
         summary: "Detect and redact PII with the native OpenAI Privacy Filter.",
         arguments: [
-            .init(name: "texts", label: "Texts", kind: .string, required: false)
+            .init(name: "texts", label: "Texts", kind: .string, required: false, repeatable: true)
         ],
         options: [
             .init(flag: "--model", label: "Model", kind: .string),
@@ -668,6 +695,12 @@ public enum MereRunCapabilityCatalog {
         title: "Train text LoRA",
         summary: "Train a native text LoRA from OpenAI-style chat SFT JSONL.",
         options: [
+            .init(
+                flag: "--resume-from", label: "Resume checkpoint", kind: .file, group: Group.inputs, tier: .expert
+            ),
+            .init(
+                flag: "--resume-step", label: "Resume step", kind: .integer, group: Group.run, tier: .expert
+            ),
             .init(flag: "--data", label: "Dataset", kind: .file, required: true),
             .init(flag: "--output", label: "Output", kind: .file, required: true),
             .init(flag: "--model", label: "Base model", kind: .string),
@@ -697,6 +730,9 @@ public enum MereRunCapabilityCatalog {
         title: "Generate and edit images",
         summary: "Generate, transform, or personalize images with references, structured prompts, and LoRAs.",
         options: [
+            .init(
+                flag: "--sigmas", label: "Sigma schedule", kind: .string, group: Group.sampling, tier: .expert
+            ),
             .init(flag: "--prompt", label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard),
             .init(
@@ -766,7 +802,7 @@ public enum MereRunCapabilityCatalog {
                 flag: "--structured-prompt-output", label: "Structured prompt output", kind: .file,
                 group: Group.prompt, tier: .expert, dependsOn: "--structured-prompt"
             ),
-            .init(flag: "--lora", label: "LoRA", kind: .file, group: Group.modelAndAdapters, tier: .standard),
+            .init(flag: "--lora", label: "LoRA", kind: .file, repeatable: true, group: Group.modelAndAdapters, tier: .standard),
             .init(
                 flag: "--lora-scale", label: "LoRA scale", kind: .number,
                 defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
@@ -1017,7 +1053,8 @@ public enum MereRunCapabilityCatalog {
         command: ["vision", "inspect"],
         title: "Inspect image",
         summary: "Describe or answer questions about an image with a local VLM.",
-        arguments: [.init(name: "image", label: "Image", kind: .file, required: true)],
+        arguments: [.init(name: "image", label: "Image", kind: .file, required: true),
+            .init(name: "prompt-words", label: "Prompt words", kind: .string, required: false, repeatable: true)],
         options: [
             .init(flag: "--prompt", label: "Prompt", kind: .string, group: Group.prompt, tier: .essential),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
@@ -1063,7 +1100,7 @@ public enum MereRunCapabilityCatalog {
         command: ["vision", "caption"],
         title: "Caption images",
         summary: "Generate training-friendly captions for one or more images.",
-        arguments: [.init(name: "images", label: "Images", kind: .file, required: true)],
+        arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
         options: [
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(flag: "--output-dir", label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
@@ -1092,7 +1129,7 @@ public enum MereRunCapabilityCatalog {
         command: ["vision", "ocr"],
         title: "OCR",
         summary: "Extract text with native LightOn/Infinity or external GLM/Infinity runtimes.",
-        arguments: [.init(name: "images", label: "Images", kind: .file, required: true)],
+        arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
         options: [
             .init(
                 flag: "--backend", label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity"],
@@ -1334,7 +1371,7 @@ public enum MereRunCapabilityCatalog {
         command: ["vision", "face", "batch"],
         title: "Batch faces",
         summary: "Analyze many images in one warm face session.",
-        arguments: [.init(name: "images", label: "Images", kind: .file, required: false)],
+        arguments: [.init(name: "images", label: "Images", kind: .file, required: false, repeatable: true)],
         options: [
             .init(flag: "--input-list", label: "Input list", kind: .file),
             .init(flag: "--model", label: "Model", kind: .string),
@@ -1432,7 +1469,7 @@ public enum MereRunCapabilityCatalog {
         command: ["vision", "geometry-multiview"],
         title: "Multi-view geometry",
         summary: "Solve relative geometry, confidence, and cameras from ordered views.",
-        arguments: [.init(name: "images", label: "Images", kind: .file, required: true)],
+        arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
         options: [
             .init(flag: "--output", label: "Output directory", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
@@ -1499,7 +1536,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--prompt-enhancer-model", label: "Prompt enhancer", kind: .string),
             .init(flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory),
             .init(flag: "--duration", label: "Duration", kind: .number),
-            .init(flag: "--auto-duration", label: "Auto duration range", kind: .string),
+            .init(flag: "--auto-duration", label: "Auto duration range", kind: .string, repeatable: true),
             .init(flag: "--num-frames", label: "Video-clock frames", kind: .integer),
             .init(flag: "--fps", label: "Video-clock rate", kind: .integer),
             .init(flag: "--steps", label: "Denoising steps", kind: .integer),
@@ -1525,6 +1562,82 @@ public enum MereRunCapabilityCatalog {
             .init(name: "caption", label: "Music prompt", kind: .string, required: true)
         ],
         options: [
+            .init(
+                flag: "--compose", label: "Compose with a chat model", kind: .boolean, group: Group.prompt, tier: .expert
+            ),
+            .init(
+                // Defaults to the hardware-aware chat model the CLI picks for the
+                // current machine, so the catalog advertises no fixed value.
+                flag: "--composer-model", label: "Composer model", kind: .string,
+                group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--composer-model-root", label: "Composer model root", kind: .directory,
+                group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--require-composer-installed", label: "Require installed composer", kind: .boolean,
+                group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--composition-output", label: "Composition output", kind: .file, group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--lyrics-preflight", label: "Lyric duration checks", kind: .choice,
+                choices: ["off", "warn", "strict"], defaultValue: "warn", group: Group.prompt, tier: .expert
+            ),
+            .init(
+                flag: "--minimum-duration", label: "Minimum duration", kind: .number, group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--min-frames", label: "Minimum acoustic frames", kind: .integer, group: Group.sampling,
+                tier: .expert
+            ),
+            .init(
+                flag: "--max-frames", label: "Maximum acoustic frames", kind: .integer, group: Group.sampling,
+                tier: .expert
+            ),
+            .init(
+                flag: "--sample-rate", label: "Sample rate", kind: .integer, group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--memory-mode", label: "Memory mode", kind: .choice, choices: ["staged", "resident"],
+                group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--performance-mode", label: "Performance mode", kind: .choice,
+                choices: ["reference", "optimized", "q8", "q4", "q8-lm", "q4-lm"], group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--sampling-tier", label: "Sampling tier", kind: .choice, choices: ["quality", "fast", "draft"],
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--flow-strategy", label: "Flow strategy", kind: .choice, choices: ["sequential", "overlap-average"],
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--flow-solver", label: "Flow solver", kind: .choice, choices: ["euler", "ab2"],
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--ar-cfg-frames", label: "Autoregressive CFG frames", kind: .integer, group: Group.sampling,
+                tier: .expert
+            ),
+            .init(
+                flag: "--flow-cfg-end", label: "Flow CFG cutoff", kind: .number, group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--seed-strategy", label: "Seed strategy", kind: .choice, choices: ["legacy", "stage-separated-v1"],
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--profile-output", label: "Profile output", kind: .file, group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--no-lm-caption-rewrite", label: "Preserve input caption", kind: .boolean, group: Group.prompt,
+                tier: .expert
+            ),
             .init(flag: "--lyrics", label: "Lyrics", kind: .string, group: Group.prompt, tier: .standard),
             .init(flag: "--lyrics-file", label: "Lyrics file", kind: .file, group: Group.prompt, tier: .expert),
             .init(flag: "--instrumental", label: "Instrumental", kind: .boolean, group: Group.prompt, tier: .standard),
@@ -1887,6 +2000,7 @@ public enum MereRunCapabilityCatalog {
             .init(name: "prompt", label: "Prompt", kind: .string, required: false)
         ],
         options: [
+            .init(flag: "--play", label: "Play audio", kind: .boolean),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--duration", label: "Duration", kind: .number),
             .init(flag: "--output", label: "Output", kind: .file),
@@ -1925,7 +2039,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--dataset", label: "Dataset", kind: .file, required: true),
             .init(flag: "--output", label: "Output", kind: .file, required: true),
-            .init(flag: "--kind", label: "Adapter kind", kind: .choice, choices: ["lora", "lokr"]),
+            .init(flag: "--kind", label: "Adapter kind", kind: .choice, choices: ["auto", "lora", "lokr"]),
             .init(flag: "--rank", label: "Rank", kind: .integer),
             .init(flag: "--alpha", label: "Alpha", kind: .number),
             .init(flag: "--factor", label: "LoKr factor", kind: .integer),
@@ -1949,6 +2063,14 @@ public enum MereRunCapabilityCatalog {
         title: "Serve resident music",
         summary: "Keep ACE-Step, its language model, and adapter stack warm behind a local API.",
         options: [
+            .init(
+                flag: "--memory-mode", label: "Memory mode", kind: .choice, choices: ["staged", "resident"],
+                group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--performance-mode", label: "Performance mode", kind: .choice,
+                choices: ["reference", "optimized", "q8", "q4", "q8-lm", "q4-lm"], group: Group.run, tier: .expert
+            ),
             .init(flag: "--host", label: "Host", kind: .string),
             .init(flag: "--port", label: "Port", kind: .integer),
             .init(flag: "--model", label: "Model", kind: .string),
@@ -1975,6 +2097,53 @@ public enum MereRunCapabilityCatalog {
             .init(name: "prompt", label: "Prompt", kind: .string, required: true)
         ],
         options: [
+            .init(
+                flag: "--variant", label: "Compatibility variant", kind: .choice, choices: ["unified-av", "distilled"],
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-transformer-execution", label: "LTX transformer execution", kind: .choice,
+                choices: ["eager", "compiled"], defaultValue: "eager", group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-guidance-projection-cache", label: "LTX guidance projection cache", kind: .choice,
+                choices: ["automatic", "disabled", "enabled"], defaultValue: "disabled", group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-teacache", label: "Enable LTX TeaCache", kind: .boolean, group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-teacache-threshold", label: "LTX TeaCache threshold", kind: .number, group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--ltx-teacache-calibration-output", label: "LTX TeaCache calibration output", kind: .file,
+                group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--h3-render-width", label: "H3 render width", kind: .integer, group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--h3-render-height", label: "H3 render height", kind: .integer, group: Group.output, tier: .expert
+            ),
+            .init(
+                flag: "--h3-adapter", label: "H3 adapter", kind: .string, group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--h3-adapter-strength", label: "H3 adapter strength", kind: .number, defaultValue: "1.0",
+                group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--h3-frame", label: "H3 timed frame", kind: .string, repeatable: true, group: Group.inputs,
+                tier: .expert
+            ),
+            .init(
+                flag: "--h3-window-frames", label: "H3 window frames", kind: .integer, group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--h3-window-overlap", label: "H3 window overlap", kind: .integer, defaultValue: "18",
+                group: Group.sampling, tier: .expert
+            ),
             .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
@@ -1992,7 +2161,7 @@ public enum MereRunCapabilityCatalog {
                 group: Group.output, tier: .essential
             ),
             .init(flag: "--model-root", label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
-            .init(flag: "--auto-duration", label: "Auto duration range", kind: .string, group: Group.sampling, tier: .expert),
+            .init(flag: "--auto-duration", label: "Auto duration range", kind: .string, repeatable: true, group: Group.sampling, tier: .expert),
             .init(
                 flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["diffusion", "convolutional"],
                 group: Group.run, tier: .expert
@@ -2110,7 +2279,7 @@ public enum MereRunCapabilityCatalog {
                 defaultValue: "standard", group: Group.sampling, tier: .expert
             ),
             .init(
-                flag: "--ltx-pipeline", label: "LTX pipeline", kind: .choice, choices: ["two-stage", "dev-one-stage"],
+                flag: "--ltx-pipeline", label: "LTX pipeline", kind: .choice, choices: ["two-stage", "keyframe-interpolation", "dev-one-stage"],
                 defaultValue: "two-stage", group: Group.sampling, tier: .expert
             ),
             .init(
@@ -2118,8 +2287,8 @@ public enum MereRunCapabilityCatalog {
                 choices: ["euler", "res2s", "euler-ancestral", "cfg-plus-plus", "gradient-estimating-euler"],
                 group: Group.sampling, tier: .expert
             ),
-            .init(flag: "--ltx-sigmas", label: "Stage one sigmas", kind: .string, group: Group.sampling, tier: .expert),
-            .init(flag: "--ltx-stage-2-sigmas", label: "Stage two sigmas", kind: .string, group: Group.sampling, tier: .expert),
+            .init(flag: "--ltx-sigmas", label: "Stage one sigmas", kind: .string, repeatable: true, group: Group.sampling, tier: .expert),
+            .init(flag: "--ltx-stage-2-sigmas", label: "Stage two sigmas", kind: .string, repeatable: true, group: Group.sampling, tier: .expert),
             .init(
                 flag: "--distilled-lora-strength-stage-1", label: "Stage one distilled strength", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.05)
@@ -2265,7 +2434,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--prompt-enhancer-model", label: "Prompt enhancer", kind: .string),
             .init(flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory),
             .init(flag: "--steps", label: "Denoising steps", kind: .integer),
-            .init(flag: "--sigmas", label: "Sigma schedule", kind: .string),
+            .init(flag: "--sigmas", label: "Sigma schedule", kind: .string, repeatable: true),
             .init(flag: "--lora", label: "LTX LoRA", kind: .string, repeatable: true),
             .init(flag: "--video-cfg-guidance-scale", label: "Video CFG", kind: .number),
             .init(flag: "--video-stg-scale", label: "Video STG", kind: .number),
@@ -2309,8 +2478,8 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--height", label: "Height", kind: .integer),
             .init(flag: "--seed", label: "Seed", kind: .integer),
             .init(flag: "--image-conditioning", label: "Timed image guide", kind: .string, repeatable: true),
-            .init(flag: "--stage-1-sigmas", label: "Stage one sigmas", kind: .string),
-            .init(flag: "--stage-2-sigmas", label: "Stage two sigmas", kind: .string),
+            .init(flag: "--stage-1-sigmas", label: "Stage one sigmas", kind: .string, repeatable: true),
+            .init(flag: "--stage-2-sigmas", label: "Stage two sigmas", kind: .string, repeatable: true),
             .init(flag: "--enhance-prompt", label: "Enhance prompt", kind: .boolean),
             .init(flag: "--prompt-enhancer-model", label: "Prompt enhancer", kind: .string),
             .init(flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory),
@@ -2335,7 +2504,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--driving-mask", label: "Driving mask", kind: .file, required: true),
             .init(flag: "--additional-reference", label: "Additional reference", kind: .file, repeatable: true),
             .init(flag: "--additional-reference-mask", label: "Additional reference mask", kind: .file, repeatable: true),
-            .init(flag: "--output", label: "Output", kind: .file, required: true),
+            .init(flag: "--output", label: "Output", kind: .file),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
             .init(flag: "--mode", label: "Mode", kind: .choice, choices: ["animation", "replacement"]),
@@ -2395,7 +2564,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--schedule", label: "Schedule", kind: .choice, choices: ["nvidia", "published-karras"]),
             .init(flag: "--seed", label: "Seed", kind: .integer),
             .init(flag: "--fps", label: "Frames per second", kind: .integer),
-            .init(flag: "--condition-latent-frame", label: "Conditioned frames", kind: .string),
+            .init(flag: "--condition-latent-frame", label: "Conditioned frames", kind: .string, repeatable: true),
             .init(flag: "--keep-video-tail", label: "Keep video tail", kind: .boolean),
             .init(flag: "--action-domain", label: "Action domain", kind: .string),
             .init(flag: "--action-file", label: "Action file", kind: .file),
@@ -2455,6 +2624,29 @@ public enum MereRunCapabilityCatalog {
         title: "Resident LTX session",
         summary: "Keep an LTX 2.3 runtime resident for JSONL generation requests.",
         options: [
+            .init(
+                flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["convolutional", "diffusion"],
+                group: Group.modelAndAdapters, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-transformer-execution", label: "LTX transformer execution", kind: .choice,
+                choices: ["eager", "compiled"], defaultValue: "eager", group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-guidance-projection-cache", label: "LTX guidance projection cache", kind: .choice,
+                choices: ["automatic", "disabled", "enabled"], defaultValue: "disabled", group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-teacache", label: "Enable LTX TeaCache", kind: .boolean, group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--ltx-teacache-threshold", label: "LTX TeaCache threshold", kind: .number, group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--prompt-cache-capacity", label: "Prompt cache capacity", kind: .integer, defaultValue: "8",
+                group: Group.run, tier: .expert
+            ),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
@@ -2482,6 +2674,9 @@ public enum MereRunCapabilityCatalog {
             .init(name: "target", label: "Adapter id", kind: .string, required: true)
         ],
         options: [
+            .init(
+                flag: "--accept-license", label: "Accept adapter terms", kind: .boolean, group: Group.run, tier: .expert
+            ),
             .init(flag: "--force", label: "Replace install", kind: .boolean),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
@@ -2584,6 +2779,38 @@ public enum MereRunCapabilityCatalog {
         title: "World session",
         summary: "Serve one warm DreamX or Cosmos3 conditioned-video world session.",
         options: [
+            .init(
+                flag: "--disable-scene-memory", label: "Disable scene memory", kind: .boolean, group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--scene-memory-strength", label: "Scene memory strength", kind: .number, defaultValue: "0.08",
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--scene-memory-max-frames", label: "Scene memory frame limit", kind: .integer, defaultValue: "96",
+                group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--scene-memory-minimum-gap", label: "Scene memory minimum gap", kind: .integer, defaultValue: "3",
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--scene-memory-max-yaw", label: "Scene memory maximum yaw", kind: .number, defaultValue: "2.0",
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--scene-memory-max-translation", label: "Scene memory maximum translation", kind: .number,
+                defaultValue: "0.1", group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--scene-memory-exact-yaw", label: "Scene restore yaw tolerance", kind: .number, defaultValue: "0.01",
+                group: Group.sampling, tier: .expert
+            ),
+            .init(
+                flag: "--scene-memory-exact-translation", label: "Scene restore translation tolerance", kind: .number,
+                defaultValue: "0.001", group: Group.sampling, tier: .expert
+            ),
             .init(flag: "--host", label: "Host", kind: .string),
             .init(flag: "--port", label: "Port", kind: .integer),
             .init(flag: "--api-key", label: "API key", kind: .string),
@@ -2617,6 +2844,16 @@ public enum MereRunCapabilityCatalog {
         title: "Quality gate",
         summary: "Run installed-model correctness, determinism, and performance checks.",
         options: [
+            .init(
+                flag: "--require-all", label: "Require selected models", kind: .boolean, group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--all-installed", label: "Check all installed models", kind: .boolean, group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--skip-model", label: "Quarantined models", kind: .string, group: Group.run, tier: .expert
+            ),
             .init(flag: "--suite", label: "Suites", kind: .string),
             .init(flag: "--update-baselines", label: "Update baselines", kind: .boolean),
             .init(flag: "--strict-perf", label: "Strict performance", kind: .boolean),
@@ -2649,7 +2886,7 @@ public enum MereRunCapabilityCatalog {
             .init(name: "pack", label: "Evaluation pack", kind: .directory, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model slot binding", kind: .string, required: true, repeatable: true),
+            .init(flag: "--model", label: "Model slot binding", kind: .string, repeatable: true),
             .init(flag: "--adapter", label: "Adapter slot binding", kind: .string, repeatable: true),
             .init(flag: "--trials", label: "Trials", kind: .integer),
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
@@ -2755,9 +2992,18 @@ public enum MereRunCapabilityCatalog {
                 label: "Engine",
                 kind: .choice,
                 choices: [
-                    "text-code", "text-chat-klein", "text-chat-gemma4", "text-chat-q36",
-                    "text-chat-q35", "text-chat-laguna", "text-chat-lfm2",
-                    "text-chat-deepseek-v4-flash"
+                    "text-code",
+                    "text-chat-klein",
+                    "text-chat-gemma4",
+                    "text-chat-diffusiongemma",
+                    "text-chat-laguna",
+                    "text-chat-q36",
+                    "text-chat-q35",
+                    "text-chat-lfm2",
+                    "text-chat-deepseek-v4-flash",
+                    "text-chat-muse-glimmer",
+                    "text-chat-nemotron-h",
+                    "text-chat-nemotron-omni"
                 ]
             ),
             .init(flag: "--clear-engine", label: "Clear engine", kind: .boolean),
@@ -2839,6 +3085,16 @@ public enum MereRunCapabilityCatalog {
         title: "Start setup agent",
         summary: "Start a guided Pi session against the local API.",
         options: [
+            .init(
+                flag: "--pi-argument", label: "Pi argument", kind: .string, repeatable: true, group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--working-directory", label: "Working directory", kind: .directory, group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--inline", label: "Run in active terminal", kind: .boolean, group: Group.run, tier: .expert
+            ),
             .init(flag: "--host", label: "API host", kind: .string),
             .init(flag: "--port", label: "API port", kind: .integer),
             .init(flag: "--pi-path", label: "Pi executable", kind: .file),
@@ -2886,6 +3142,9 @@ public enum MereRunCapabilityCatalog {
             .init(name: "target", label: "Model", kind: .string, required: false)
         ],
         options: [
+            .init(
+                flag: "--cache-dir", label: "Download cache", kind: .directory, group: Group.output, tier: .expert
+            ),
             .init(flag: "--all", label: "All models", kind: .boolean),
             .init(flag: "--force", label: "Force download", kind: .boolean),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean),
@@ -2934,6 +3193,13 @@ public enum MereRunCapabilityCatalog {
         title: "Repair manifests",
         summary: "Restore missing manifests for known local models.",
         options: [
+            .init(
+                flag: "--accept-model-license", label: "Accept model terms", kind: .boolean, group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .expert
+            ),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
@@ -2949,6 +3215,10 @@ public enum MereRunCapabilityCatalog {
             .init(name: "target", label: "Model or local root", kind: .string, required: true)
         ],
         options: [
+            .init(
+                flag: "--text-encoder-only", label: "Optimize text encoder only", kind: .boolean, group: Group.run,
+                tier: .expert
+            ),
             .init(flag: "--force", label: "Replace cache", kind: .boolean),
             .init(flag: "--output", label: "Standalone checkpoint", kind: .directory),
             .init(flag: "--json", label: "JSON", kind: .boolean)
@@ -2962,6 +3232,22 @@ public enum MereRunCapabilityCatalog {
         title: "Qwen-family MTP benchmark",
         summary: "Run prompt, decode-length, and temperature matrices for Qwen-family MTP.",
         options: [
+            .init(
+                flag: "--repetitions", label: "Repetitions", kind: .integer, defaultValue: "1", group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--warmups", label: "Warmup requests", kind: .integer, defaultValue: "1", group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--warmup-tokens", label: "Warmup tokens", kind: .integer, defaultValue: "16", group: Group.run,
+                tier: .expert
+            ),
+            .init(
+                flag: "--variants", label: "Variants", kind: .string, defaultValue: "baseline,adaptive,forced",
+                group: Group.run, tier: .expert
+            ),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
             .init(flag: "--prompt", label: "Prompt", kind: .string),
@@ -3091,6 +3377,7 @@ public enum MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
+            .init(flag: "--timestamps", label: "Include timestamps", kind: .boolean),
             .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
             .init(
@@ -3335,6 +3622,16 @@ public enum MereRunCapabilityCatalog {
         summary: "Plan or execute an official plugin installation.",
         arguments: [.init(name: "id", label: "Plugin id", kind: .string, required: true)],
         options: [
+            .init(
+                flag: "--source", label: "Install from source", kind: .boolean, group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--bundle-manifest", label: "Signed bundle manifest", kind: .string, group: Group.inputs,
+                tier: .expert
+            ),
+            .init(
+                flag: "--bundle-archive", label: "Signed bundle archive", kind: .file, group: Group.inputs, tier: .expert
+            ),
             .init(flag: "--catalog-url", label: "Catalog", kind: .string),
             .init(flag: "--channel", label: "Channel", kind: .string),
             .init(flag: "--yes", label: "Execute", kind: .boolean),
@@ -3406,6 +3703,12 @@ public enum MereRunCapabilityCatalog {
         title: "API server",
         summary: "Serve installed models through OpenAI-compatible local APIs.",
         options: [
+            .init(
+                flag: "--warmup", label: "Warm model before serving", kind: .boolean, group: Group.run, tier: .expert
+            ),
+            .init(
+                flag: "--no-warmup", label: "Skip model warmup", kind: .boolean, group: Group.run, tier: .expert
+            ),
             .init(flag: "--port", label: "Port", kind: .integer),
             .init(flag: "--host", label: "Host", kind: .string),
             .init(flag: "--model", label: "Model", kind: .string),
@@ -3441,7 +3744,7 @@ public enum MereRunCapabilityCatalog {
         title: "Offline guides",
         summary: "List or read CLI-owned offline workflow guides.",
         arguments: [
-            .init(name: "command-path", label: "Command path", kind: .string, required: false)
+            .init(name: "command-path", label: "Command path", kind: .string, required: false, repeatable: true)
         ],
         options: [
             .init(flag: "--list", label: "List topics", kind: .boolean),
@@ -3940,7 +4243,8 @@ public enum MereRunCapabilityCatalog {
         title: "Run plugin",
         summary: "Run an installed plugin without changing PATH.",
         arguments: [
-            .init(name: "entrypoint", label: "Entrypoint", kind: .string, required: true)
+            .init(name: "entrypoint", label: "Entrypoint", kind: .string, required: true),
+            .init(name: "arguments", label: "Plugin arguments", kind: .string, required: false, repeatable: true)
         ],
         options: [],
         output: .init(kind: .text)

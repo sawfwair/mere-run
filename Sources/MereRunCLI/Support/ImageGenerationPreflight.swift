@@ -3,6 +3,7 @@ import MereRunRelayKit
 import MereRunCore
 
 struct ImageGenerationPreflightInput {
+    let operationOptions: Result<ImageGenerationOptions, Error>
     let prompt: String
     let negativePrompt: String?
     let outputURL: URL
@@ -289,9 +290,7 @@ struct ImageGenerationPreflightAnalyzer {
     func envelope(resourceDiagnostics: [PreflightDiagnostic] = []) -> ImageGenerationPreflightEnvelope {
         var diagnostics = resourceDiagnostics
         let createdAt = now()
-        validatePrompt(diagnostics: &diagnostics)
-        validateSampling(diagnostics: &diagnostics)
-        let model = modelSummary(diagnostics: &diagnostics)
+        let (model, manifest) = modelSummary(diagnostics: &diagnostics)
         let output = outputSummary(
             for: input.outputURL,
             expectedExtension: "png",
@@ -302,8 +301,9 @@ struct ImageGenerationPreflightAnalyzer {
         )
         let inputs = inputSummary(diagnostics: &diagnostics)
         let loras = loraSummaries(model: model, diagnostics: &diagnostics)
+        let options = resolvedOperationOptions(modelPath: model.path, manifest: manifest, diagnostics: &diagnostics)
         let structuredPrompt = structuredPromptSummary(diagnostics: &diagnostics)
-        let plan = planSummary(model: model)
+        let plan = planSummary(model: model, manifest: manifest, options: options)
         let runPlan = runPlan(resolved: plan, createdAt: createdAt)
         let status = StructuredRunOutput.status(for: diagnostics)
         let actions = actions(status: status, model: model, output: output, inputs: inputs, loras: loras)
@@ -371,63 +371,47 @@ struct ImageGenerationPreflightAnalyzer {
         input.model ?? ImageGenerate.defaultManagedModelID.rawValue
     }
 
-    private func validatePrompt(diagnostics: inout [PreflightDiagnostic]) {
-        if input.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "prompt_empty",
-                    severity: .blocker,
-                    title: "Prompt is empty",
-                    message: "--prompt must include non-whitespace text."
-                )
-            )
-        }
-    }
-
-    private func validateSampling(diagnostics: inout [PreflightDiagnostic]) {
-        if input.sigmaList != nil, input.sigmaShift != nil {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "sigma_options_conflict",
-                    severity: .blocker,
-                    title: "Sigma options conflict",
-                    message: "--sigmas cannot be combined with --sigma-shift."
-                )
-            )
+    private func resolvedOperationOptions(
+        modelPath: String?, manifest: MereRunModelManifest?, diagnostics: inout [PreflightDiagnostic]
+    ) -> ImageGenerationOptions? {
+        func record(_ error: Error) {
+            let issue = error as? ImageGenerationIssue
+                ?? ImageGenerationIssue("image_options_invalid", error.localizedDescription)
+            let alreadyReported = diagnostics.contains { diagnostic in
+                diagnostic.id == issue.code
+                    || (issue.code.hasPrefix("lora_") && diagnostic.id == "lora_argument_invalid")
+            }
+            guard !alreadyReported else { return }
+            diagnostics.append(.init(id: issue.code, severity: .blocker, title: "Image request is invalid", message: issue.message))
         }
         do {
-            _ = try ImageGenerate.parseSigmaList(input.sigmaList)
+            let options = try input.operationOptions.get()
+            for issue in ImageGenerationPlan.issues(options, manifest: manifest) { record(issue) }
+            if let manifest, !diagnostics.contains(where: { $0.severity == .blocker }) {
+                // The same observational resolver execution uses: no weights,
+                // output directory, edit canvas, or model download is created.
+                if let modelPath {
+                    let root = URL(fileURLWithPath: modelPath)
+                    do {
+                        _ = try ImageGenerationPlan.resolve(options, modelRoot: root, manifest: manifest, fileManager: fileManager)
+                    } catch { record(error) }
+                }
+            }
+            return options
         } catch {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "sigma_schedule_invalid",
-                    severity: .blocker,
-                    title: "Sigma schedule is invalid",
-                    message: error.localizedDescription
-                )
-            )
-        }
-        if let sigmas = resolvedSigmas(),
-           let steps = input.steps,
-           steps != sigmas.count {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "sigma_step_count_mismatch",
-                    severity: .blocker,
-                    title: "Sigma count doesn't match the step count",
-                    message: "--steps must equal the number of non-terminal --sigmas values."
-                )
-            )
+            record(error)
+            return nil
         }
     }
 
     private func modelSummary(
         diagnostics: inout [PreflightDiagnostic]
-    ) -> ImageGenerationModelPreflightSummary {
+    ) -> (ImageGenerationModelPreflightSummary, MereRunModelManifest?) {
         let requested = requestedModel
-        let localURL = URL(fileURLWithPath: requested).standardizedFileURL
-        var isDirectory: ObjCBool = false
-        if fileManager.fileExists(atPath: localURL.path, isDirectory: &isDirectory) {
+        let selection = ImageGenerationModelSelection(requested, fileManager: fileManager)
+        if case .local(let localURL) = selection {
+            var isDirectory: ObjCBool = false
+            _ = fileManager.fileExists(atPath: localURL.path, isDirectory: &isDirectory)
             guard isDirectory.boolValue else {
                 diagnostics.append(
                     PreflightDiagnostic(
@@ -438,24 +422,24 @@ struct ImageGenerationPreflightAnalyzer {
                         locations: [.init(kind: "file", path: localURL.path)]
                     )
                 )
-                return modelResult(requested: requested, kind: "local_path", installed: false, path: localURL.path)
+                return (modelResult(requested: requested, kind: "local_path", installed: false, path: localURL.path), nil)
             }
             let manifest = loadManifest(at: localURL, diagnostics: &diagnostics)
-            return modelResult(
+            return (modelResult(
                 requested: requested,
                 kind: "local_path",
                 installed: manifest != nil,
                 path: localURL.path,
                 id: manifest?.id,
                 family: manifest?.family?.rawValue
-            )
+            ), manifest)
         }
 
-        if let modelID = ModelResolver.ModelID(rawValue: requested) {
+        if case .managed(let modelID) = selection {
             let spec = ManagedModelCatalog.spec(for: modelID.rawValue)
             if let resolution = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) {
                 let manifest = loadManifest(at: resolution.rootURL, diagnostics: &diagnostics)
-                return modelResult(
+                return (modelResult(
                     requested: requested,
                     kind: "managed_model",
                     installed: manifest != nil,
@@ -464,7 +448,7 @@ struct ImageGenerationPreflightAnalyzer {
                     family: manifest?.family?.rawValue,
                     upstreamRepoID: spec?.upstreamRepoId,
                     estimatedDownloadBytes: spec?.estimatedDownloadBytes
-                )
+                ), manifest)
             }
 
             diagnostics.append(
@@ -476,13 +460,13 @@ struct ImageGenerationPreflightAnalyzer {
                     suggestedActionIDs: ["pull-model"]
                 )
             )
-            return modelResult(
+            return (modelResult(
                 requested: requested,
                 kind: "managed_model",
                 installed: false,
                 upstreamRepoID: spec?.upstreamRepoId,
                 estimatedDownloadBytes: spec?.estimatedDownloadBytes
-            )
+            ), nil)
         }
 
         diagnostics.append(
@@ -493,7 +477,7 @@ struct ImageGenerationPreflightAnalyzer {
                 message: "Model path not found and not a known model id: \(requested)."
             )
         )
-        return modelResult(requested: requested, kind: "unknown", installed: false)
+        return (modelResult(requested: requested, kind: "unknown", installed: false), nil)
     }
 
     private func outputSummary(
@@ -630,19 +614,6 @@ struct ImageGenerationPreflightAnalyzer {
             return []
         }
 
-        if parsed.count > 1,
-           model.family != MereRunModelManifest.Family.klein.rawValue,
-           model.family != MereRunModelManifest.Family.flux1.rawValue {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "lora_stack_model_unsupported",
-                    severity: .blocker,
-                    title: "Model doesn't support stacked LoRAs",
-                    message: "Stacked image LoRAs require a FLUX.1 or FLUX.2 model."
-                )
-            )
-        }
-
         let baseModelID = model.id ?? model.requested
         return parsed.enumerated().map { index, argument in
             let resolved: String
@@ -762,13 +733,11 @@ struct ImageGenerationPreflightAnalyzer {
     }
 
     private func planSummary(
-        model: ImageGenerationModelPreflightSummary
+        model: ImageGenerationModelPreflightSummary,
+        manifest: MereRunModelManifest?,
+        options: ImageGenerationOptions?
     ) -> ImageGenerationPlanPreflightSummary {
-        let family = model.family.flatMap(MereRunModelManifest.Family.init(rawValue:))
-        let effectiveSteps = effectiveSteps(for: family, modelPath: model.path)
-        let effectiveCFG = effectiveCFGScale(for: family, modelPath: model.path)
-        let effectiveSigma = input.sigmaShift ?? manifestDefaultSigmaShift(modelPath: model.path)
-        let effectiveSigmas = resolvedSigmas()
+        let sampling = options.map { ImageGenerationSampling.resolve($0, manifest: manifest) }
         let effectiveMaxSequenceLength = input.structuredPrompt
             ? max(input.maxSequenceLength, StructuredImagePromptAdapter.recommendedImagePromptTokens)
             : input.maxSequenceLength
@@ -778,16 +747,20 @@ struct ImageGenerationPreflightAnalyzer {
             width: input.width,
             height: input.height,
             requestedSteps: input.steps,
-            effectiveSteps: effectiveSteps,
+            effectiveSteps: sampling?.steps,
             requestedCFGScale: input.cfgScale,
-            effectiveCFGScale: effectiveCFG,
+            effectiveCFGScale: sampling?.guidanceScale,
             requestedSigmaShift: input.sigmaShift,
-            effectiveSigmaShift: effectiveSigma,
+            effectiveSigmaShift: sampling?.sigmaShift.map(Double.init),
             requestedSigmas: input.sigmaList,
-            effectiveSigmas: effectiveSigmas,
+            effectiveSigmas: sampling?.sigmas,
             maxSequenceLength: input.maxSequenceLength,
             effectiveMaxSequenceLength: effectiveMaxSequenceLength,
-            inputMode: inputMode(family: family)
+            inputMode: ImageGenerationConditioning.inputMode(
+                family: manifest?.family,
+                inputImage: input.input.map { URL(fileURLWithPath: $0) },
+                referenceImages: input.referenceImages.map { URL(fileURLWithPath: $0) }
+            )
         )
     }
 
@@ -1006,7 +979,7 @@ struct ImageGenerationPreflightAnalyzer {
     ) -> MereRunModelManifest? {
         do {
             let manifest = try MereRunModelManifest.loadRequired(from: modelRoot, fileManager: fileManager)
-            if !Self.supportsImageGeneration(manifest) {
+            if (try? ImageGenerationBackend(manifest: manifest)) == nil {
                 let family = manifest.family?.rawValue ?? "unknown"
                 diagnostics.append(
                     PreflightDiagnostic(
@@ -1033,88 +1006,4 @@ struct ImageGenerationPreflightAnalyzer {
         }
     }
 
-    private func effectiveSteps(for family: MereRunModelManifest.Family?, modelPath: String?) -> Int? {
-        if let steps = input.steps { return steps }
-        if let sigmas = resolvedSigmas() { return sigmas.count }
-        guard let family else { return nil }
-        if Self.familyUsesManifestDefaults(family) {
-            return manifestDefaults(modelPath: modelPath)?.steps ?? 4
-        }
-        return 4
-    }
-
-    private func effectiveCFGScale(for family: MereRunModelManifest.Family?, modelPath: String?) -> Double? {
-        if let cfgScale = input.cfgScale { return cfgScale }
-        if usesTurboRecipe { return Flux2DevTurboRecipe.guidanceScale }
-        guard let family else { return nil }
-        if Self.familyUsesManifestDefaults(family) {
-            return manifestDefaults(modelPath: modelPath)?.cfg ?? 1.0
-        }
-        return 1.0
-    }
-
-    private func manifestDefaultSigmaShift(modelPath: String?) -> Double? {
-        guard let modelPath else { return nil }
-        return manifestDefaults(modelPath: modelPath)?.sigmaShift
-    }
-
-    private var usesTurboRecipe: Bool {
-        (try? ImageGenerate.parseLoRAArguments(input.loras, defaultScale: input.loraScale))?
-            .contains {
-                ManagedAdapterCatalog.spec(for: $0.reference)?.id
-                    == ManagedAdapterCatalog.flux2DevTurboEightStepID
-            } == true
-    }
-
-    private func resolvedSigmas() -> [Float]? {
-        if let parsed = try? ImageGenerate.parseSigmaList(input.sigmaList) {
-            return parsed
-        }
-        return usesTurboRecipe ? Flux2DevTurboRecipe.sigmas : nil
-    }
-
-    private func manifestDefaults(modelPath: String?) -> MereRunModelManifest.Defaults? {
-        guard let modelPath else { return nil }
-        return try? MereRunModelManifest
-            .loadRequired(from: URL(fileURLWithPath: modelPath), fileManager: fileManager)
-            .defaults
-    }
-
-    private func inputMode(family: MereRunModelManifest.Family?) -> String {
-        let hasInput = input.input != nil
-        let hasReferences = !input.referenceImages.isEmpty
-        guard hasInput || hasReferences else { return "text_to_image" }
-        if family == .klein || family == .senseNova {
-            return "reference_image"
-        }
-        if hasInput && hasReferences {
-            return "image_to_image_with_references"
-        }
-        if hasInput {
-            return "image_to_image"
-        }
-        return "reference_image"
-    }
-
-    private static func familyUsesManifestDefaults(_ family: MereRunModelManifest.Family) -> Bool {
-        family == .hidream || family == .krea || family == .qwen || family == .ideogram
-            || family == .senseNova || family == .klein || family == .flux1
-    }
-
-    private static func supportsImageGeneration(_ manifest: MereRunModelManifest) -> Bool {
-        if manifest.family == .qwen {
-            return manifest.engine == .qwenImageEdit
-        }
-        return supportedImageFamilies.contains(manifest.family)
-    }
-
-    private static let supportedImageFamilies: Set<MereRunModelManifest.Family?> = [
-        .flux1,
-        .klein,
-        .zimage,
-        .hidream,
-        .krea,
-        .ideogram,
-        .senseNova,
-    ]
 }

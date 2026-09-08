@@ -7,7 +7,13 @@ Shared helpers for the public command surface.
 - `TerminalMarkdownPresentation.swift` and `TerminalMarkdownStream.swift`:
   safe, append-only Markdown presentation for interactive token streams while
   preserving raw piped output.
-- `BuiltinTools.swift`: local tool execution guardrails.
+- `BuiltinTools.swift`: local tool authorization and execution policy.
+- `BoundedProcessRunner.swift`: concurrent output drainage, bounded capture,
+  monotonic deadlines, and cancellation cleanup for approved shell tools and
+  code benchmark sandboxes.
+- `APIImageGeneration.swift`: API v1 compatibility settings for the Core image
+  operation. `ImageGenerationPreflight.swift` presents the same Core resolver's
+  diagnostics as an observational report.
 - `MachineInferenceAdmission.swift`: crash-safe weighted admission shared by
   heavyweight CLI and API-server processes on one machine.
 
