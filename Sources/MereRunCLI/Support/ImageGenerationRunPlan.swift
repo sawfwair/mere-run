@@ -96,6 +96,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
     let kreaConditioningLayerWeights: String?
     let kreaBaseQuantizationBits: Int?
     let quiet: Bool
+    var runDirectory: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case prompt
@@ -126,6 +127,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
         case kreaConditioningLayerWeights = "krea_conditioning_layer_weights"
         case kreaBaseQuantizationBits = "krea_base_quantization_bits"
         case quiet
+        case runDirectory = "run_directory"
     }
 
     func executableArgv() -> [String] {
@@ -168,7 +170,8 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
             kreaConditioningMultiplier: kreaConditioningMultiplier,
             kreaConditioningLayerWeights: kreaConditioningLayerWeights,
             kreaBaseQuantizationBits: kreaBaseQuantizationBits,
-            quiet: quiet
+            quiet: quiet,
+            runDirectory: runDirectory
         )
     }
 
@@ -207,6 +210,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
         appendOption("--krea-conditioning-layer-weights", kreaConditioningLayerWeights, to: &args)
         appendOption("--krea-base-quantization-bits", kreaBaseQuantizationBits, to: &args)
         appendBoolFlag("--quiet", when: quiet, to: &args)
+        appendOption("--run-dir", runDirectory, to: &args)
         return args
     }
 

@@ -90,7 +90,7 @@ public actor ZImageTurboGenerator: ImageGenerator, ChatGenerator {
         var model = try await loadModelIfNeeded(modelSpec: modelSpec, progressHandler: progressHandler)
         model = try await applyTransformerLoRAIfNeeded(request.lora, model: model, progressHandler: progressHandler)
         let outputURL = request.outputURL
-        let seed = request.seed ?? UInt64.random(in: 0..<UInt64.max)
+        let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .zImageTurbo)
 
         do {
             do {

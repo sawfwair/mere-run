@@ -48,7 +48,7 @@ public actor Flux2KleinGeneratoriOS: ImageGenerator {
         _ request: GenerationRequest,
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws -> GenerationResult {
-        let seed = request.seed ?? UInt64.random(in: 0..<UInt64.max)
+        let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .flux2Klein)
         let modelSpec = request.model ?? ModelResolver.ModelID.kleinNano.rawValue
         let modelPath = try resolveModelPath(from: modelSpec)
 
@@ -95,7 +95,7 @@ public actor Flux2KleinGeneratoriOS: ImageGenerator {
         let textEncoderQuantization = try ModelWeightsLoader.QuantizationParams.fromManifest(textEncoderComponent.sourceManifest)
 
         // 1. Prepare latent dimensions
-        let seed = request.seed ?? UInt64.random(in: 0..<UInt64.max)
+        let seed = ImageGenerationSeed.resolve(request.seed, prompt: request.prompt, backend: .flux2Klein)
         let vaeScaleFactor = 8  // Standard for FLUX VAE
         let latentHeight = request.height / vaeScaleFactor
         let latentWidth = request.width / vaeScaleFactor

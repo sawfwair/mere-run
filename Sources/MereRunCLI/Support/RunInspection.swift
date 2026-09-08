@@ -16,10 +16,12 @@ struct RunInspectionResult: Codable, Equatable {
     let runDirectory: RunDirectoryInspectionSummary?
     let report: StructuredReportInspectionSummary?
     let plan: RunPlanInspectionSummary?
+    var imageRun: ImageRunRecord? = nil
 
     enum CodingKeys: String, CodingKey {
         case kind
         case path
+        case imageRun = "image_run"
         case runDirectory = "run_directory"
         case report
         case plan
@@ -362,6 +364,26 @@ struct RunInspectionAnalyzer {
                 )
             )
             return RunInspectionResult(kind: "missing", path: targetURL.path, runDirectory: nil, report: nil, plan: nil)
+        }
+        let imageURL = ImageRunRecord.recordURL(at: targetURL)
+        if fileManager.fileExists(atPath: imageURL.path) {
+            do {
+                let record = try ImageRunRecord.inspect(at: imageURL)
+                for artifact in record.artifacts where !fileManager.fileExists(atPath: artifact.url.path) {
+                    diagnostics.append(PreflightDiagnostic(
+                        id: "image_run_artifact_missing", severity: .warning, title: "Recorded output missing",
+                        message: "The image run completed, but its retained output was removed.",
+                        locations: [.init(kind: "file", path: artifact.url.path)]
+                    ))
+                }
+                return RunInspectionResult(kind: "image_run", path: targetURL.path, runDirectory: nil, report: nil, plan: nil, imageRun: record)
+            } catch {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "image_run_unreadable", severity: .blocker, title: "Image run unreadable",
+                    message: error.localizedDescription, locations: [.init(kind: "file", path: imageURL.path)]
+                ))
+                return RunInspectionResult(kind: "image_run", path: targetURL.path, runDirectory: nil, report: nil, plan: nil)
+            }
         }
         if isDirectory.boolValue {
             return RunInspectionResult(
@@ -845,6 +867,13 @@ struct RunInspectionAnalyzer {
 
     private func actions(for result: RunInspectionResult, cwd: String) -> [DeclarativeAction] {
         var actions: [DeclarativeAction] = []
+        if let image = result.imageRun {
+            actions.append(DeclarativeAction(
+                id: "retry-image-run", label: "Retry image run", kind: .command, style: .primary,
+                enabled: image.state.isTerminal && image.resolvedOptions != nil,
+                command: DeclarativeCommand(argv: ["mere.run", "run", "retry", result.path], cwd: cwd, commandPath: ["run", "retry"])
+            ))
+        }
         if result.kind == "run_directory" {
             actions.append(
                 DeclarativeAction(
@@ -879,6 +908,9 @@ struct RunInspectionAnalyzer {
         result: RunInspectionResult,
         diagnostics: [PreflightDiagnostic]
     ) -> String {
+        if let image = result.imageRun {
+            return "Image run \(image.id.uuidString.lowercased()): \(image.state.rawValue), \(image.artifacts.count) artifact(s)."
+        }
         switch status {
         case .ok:
             return "Inspected \(result.kind) at \(result.path)."
@@ -1098,18 +1130,18 @@ struct RunListAnalyzer {
             fileManager: fileManager,
             now: now
         ).envelope()
-        guard ["run_directory", "report_file", "plan_file"].contains(envelope.result.kind) else {
+        guard ["run_directory", "report_file", "plan_file", "image_run"].contains(envelope.result.kind) else {
             return nil
         }
         let relativePath = Self.relativePath(for: url, root: root)
         let runDirectory = envelope.result.runDirectory
         let report = envelope.result.report
         let plan = envelope.result.plan
-        let manifestCreatedAt = runDirectory?.manifest?.createdAt
+        let manifestCreatedAt = envelope.result.imageRun?.createdAt ?? runDirectory?.manifest?.createdAt
         let legacyCreatedAt = runDirectory?.legacyManifest?.createdAt
         let reportCreatedAt = report?.createdAt
         let planCreatedAt = plan?.createdAt
-        let eventCreatedAt = runDirectory?.events.latest?.createdAt
+        let eventCreatedAt = envelope.result.imageRun?.updatedAt ?? runDirectory?.events.latest?.createdAt
         let legacyUpdatedAt = runDirectory?.legacyManifest?.updatedAt
         let createdAt = manifestCreatedAt ??
             legacyCreatedAt ??
@@ -1128,23 +1160,23 @@ struct RunListAnalyzer {
             relativePath: relativePath,
             depth: depth,
             status: envelope.status,
-            state: runDirectory?.status ?? report?.status.rawValue,
+            state: envelope.result.imageRun?.state.rawValue ?? runDirectory?.status ?? report?.status.rawValue,
             createdAt: createdAt,
             updatedAt: updatedAt,
             summary: envelope.summary,
-            command: report?.command ?? plan?.command,
-            format: runDirectory?.manifest?.format ?? plan?.kind,
+            command: envelope.result.imageRun == nil ? report?.command ?? plan?.command : ["image", "generate"],
+            format: envelope.result.imageRun == nil ? runDirectory?.manifest?.format ?? plan?.kind : "image.generate",
             eventCount: runDirectory?.events.count,
-            artifactCount: runDirectory?.artifacts.count,
+            artifactCount: envelope.result.imageRun?.artifacts.count ?? runDirectory?.artifacts.count,
             diagnosticCount: envelope.diagnostics.count,
             blockerCount: envelope.diagnostics.filter { $0.severity == .blocker }.count,
-            actions: entryActions(path: url.path, kind: envelope.result.kind)
+            actions: entryActions(path: url.path, kind: envelope.result.kind) + envelope.actions.filter { $0.id == "retry-image-run" }
         )
     }
 
     private func isRunDirectoryCandidate(_ url: URL, contents: [URL]) -> Bool {
         let names = Set(contents.map(\.lastPathComponent))
-        if names.contains(LoRATrainingRunManifest.filename) {
+        if names.contains(ImageRunRecord.filename) || names.contains(LoRATrainingRunManifest.filename) {
             return true
         }
         let hasPlan = names.contains("plan.json")
@@ -1214,7 +1246,7 @@ struct RunListAnalyzer {
                 )
             ),
         ]
-        if kind == "run_directory" {
+        if kind == "run_directory" || (kind == "image_run" && URL(fileURLWithPath: path).lastPathComponent != ImageRunRecord.filename) {
             actions.append(
                 DeclarativeAction(
                     id: "open",

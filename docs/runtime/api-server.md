@@ -14,6 +14,29 @@ machine.
 | `mere.run model runtime set` | Update typed API runtime settings for a managed model. |
 | `mere.run status` | Show local server, loaded model, and installed model status. |
 
+## Keep image run records
+
+To retain accepted image operations for local inspection and retry, start the
+server with `--image-run-records`:
+
+```bash
+mere.run api serve --image-run-records ./runs/api-images
+mere.run run list --root ./runs/api-images --json
+```
+
+Each resolved image operation creates its own directory. The shared image
+operation records success, failure, and cancellation, copies uploaded edit
+inputs before request cleanup, and retains the output. Image requests rejected
+before their operation plan is resolved do not create records. API response
+shapes, authentication, request admission, and API v1 image defaults are unchanged.
+The image endpoints still treat accepted mask uploads as whole-image edits;
+recording does not enable strict masking.
+
+Recording is off by default. Enabling it retains prompts and uploaded images
+on the server until you remove the run directories. It does not record API keys
+or HTTP headers. Use the local [`run inspect` and `run retry` commands](image.md#record-and-retry-an-image-run)
+to inspect or retry a record; there is no HTTP run-history endpoint.
+
 ## macOS Server domain
 
 MereRun Studio exposes this control plane as the **Server** domain in its

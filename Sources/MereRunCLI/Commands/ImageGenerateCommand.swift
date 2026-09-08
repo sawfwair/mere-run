@@ -157,19 +157,43 @@ struct ImageGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
     var receipt: Bool = false
 
+    @Option(name: [.customLong("run-dir")], help: "Create a new durable image run directory with settings, inputs, and output.")
+    var runDirectory: String?
+
     func validate() throws {
         try RunReceipt.validate(receipt: receipt, preflight: preflight)
+        if let runDirectory, let structuredPromptOutput {
+            let root = URL(fileURLWithPath: runDirectory).standardizedFileURL.resolvingSymlinksInPath().path
+            let target = URL(fileURLWithPath: structuredPromptOutput).standardizedFileURL.resolvingSymlinksInPath().path
+            if target == root || target.hasPrefix(root + "/") {
+                throw ValidationError("Write --structured-prompt-output outside --run-dir. The expanded prompt is included in the run record.")
+            }
+        }
     }
 
     func run() async throws {
         let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-image", defaultExtension: "png")
-        var options = try operationOptions(outputURL: outputURL)
+        let options = try operationOptions(outputURL: outputURL)
         if let issue = ImageGenerationPlan.issues(options).first { throw ValidationError(issue.message) }
         if preflight {
             try runPreflight(outputURL: outputURL)
             return
         }
 
+        let recording = try runDirectory.map {
+            try ImageRunSession(directory: URL(fileURLWithPath: $0), requested: options,
+                                modelSelector: model ?? Self.defaultManagedModelID.rawValue)
+        }
+        do {
+            try await generate(options: options, outputURL: outputURL, recording: recording)
+        } catch {
+            try recording?.fail(error)
+            throw error
+        }
+    }
+
+    private func generate(options suppliedOptions: ImageGenerationOptions, outputURL: URL, recording: ImageRunSession?) async throws {
+        var options = suppliedOptions
         let modelRoot = try resolveModelRoot()
         let manifest = try MereRunModelManifest.loadRequired(from: modelRoot)
         let initialPlan = try ImageGenerationPlan.resolve(options, modelRoot: modelRoot, manifest: manifest)
@@ -246,7 +270,7 @@ struct ImageGenerate: AsyncParsableCommand {
                 CLIStderr.write("[runtime] image backend: \(NativeMLXRuntime.backendDescription)\n")
             }
 
-            let outcome = try await ImageGenerationOperation.execute(plan, progressHandler: progressHandler)
+            let outcome = try await ImageGenerationOperation.execute(plan, recording: recording, progressHandler: progressHandler)
             let result = outcome.result
 
             try runEventLogger?.record(
@@ -364,7 +388,8 @@ struct ImageGenerate: AsyncParsableCommand {
             kreaConditioningLayerWeights: kreaConditioningLayerWeights,
             kreaBaseQuantizationBits: kreaBaseQuantizationBits,
             generationArgv: generationActionArguments(outputURL: outputURL),
-            cwd: fileManager.currentDirectoryPath
+            cwd: fileManager.currentDirectoryPath,
+            runDirectory: runDirectory
         )
         return ImageGenerationPreflightAnalyzer(
             input: input,
@@ -395,6 +420,7 @@ struct ImageGenerate: AsyncParsableCommand {
 
     private func generationActionArguments(outputURL: URL) -> [String] {
         var args = ["mere.run", "image", "generate", "--prompt", prompt, "--output", outputURL.path]
+        if let runDirectory { args += ["--run-dir", runDirectory] }
         args += ["--width", String(width), "--height", String(height)]
         if let negativePrompt {
             args += ["--negative-prompt", negativePrompt]

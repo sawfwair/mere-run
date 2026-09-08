@@ -1,5 +1,6 @@
 import ArgumentParser
 import MereRunRelayKit
+import MereRunCore
 import Foundation
 #if canImport(Darwin)
 import Darwin
@@ -139,7 +140,13 @@ struct RunInspect: AsyncParsableCommand {
             print(try StructuredRunOutput.encode(envelope))
         } else {
             print(envelope.summary)
-            if let runDirectory = envelope.result.runDirectory {
+            if let image = envelope.result.imageRun {
+                print("Status: \(image.state.rawValue)")
+                print("Model: \(image.modelManifest?.id ?? image.modelSelector)")
+                if let seed = image.effective?.seed { print("Seed: \(seed)") }
+                for artifact in image.artifacts { print("Output: \(artifact.url.path)") }
+                if let issue = image.issue { stderr("[\(issue.code)] \(issue.message)") }
+            } else if let runDirectory = envelope.result.runDirectory {
                 print("Status: \(runDirectory.status)")
                 if let manifest = runDirectory.manifest {
                     print("Format: \(manifest.format)")
@@ -280,11 +287,30 @@ struct RunCancel: AsyncParsableCommand {
 }
 
 struct RunRetry: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "retry", abstract: "Retry an immutable relay graph job.")
-    @Argument(help: "relay:// job reference.") var reference: String
+    static let configuration = CommandConfiguration(commandName: "retry", abstract: "Retry a recorded local image run or an immutable relay graph job.")
+    @Argument(help: "Local image run directory, image-run.json path, or relay:// job reference.") var reference: String
     @Flag(name: [.customLong("json")], help: "Emit the retry job as JSON.") var json = false
 
     func run() async throws {
+        if !reference.hasPrefix("relay://") && !reference.hasPrefix("ssh://") {
+            let retry = try ImageRunSession.retryPlan(at: URL(fileURLWithPath: reference))
+            do {
+                let lease = try await MachineInferenceCoordinator.shared.acquire(
+                    CLIInferenceAdmissionClassifier.imageGenerationRequest(modelID: retry.plan.manifest.id)
+                ) { snapshot in
+                    CLIStderr.write("Image retry queued by machine admission (\(snapshot.activePermits)/\(snapshot.capacityPermits) permits active).\n")
+                }
+                defer { lease.release() }
+                try MLXBundleSupport.ensureAvailable(quiet: true)
+                _ = try await ImageGenerationOperation.execute(retry.plan, recording: retry.session)
+            } catch {
+                try retry.session.fail(error)
+                throw error
+            }
+            let record = try ImageRunRecord.inspect(at: retry.session.directory)
+            if json { print(try StructuredRunOutput.encode(record)) } else { print(retry.session.directory.path) }
+            return
+        }
         let job = try await WorkflowRemoteJobController.retry(mapRelayErrors { try WorkflowRemoteReference(reference) })
         if json { print(try StructuredRunOutput.encode(job)) } else { print("[\(job.state.rawValue)] \(job.jobReference)") }
     }
