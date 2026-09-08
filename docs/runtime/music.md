@@ -539,3 +539,33 @@ tokens, matching upstream's high-level Python `.mlxfn` generator more closely.
   an unsupported-runtime error for Magenta.
 - Model resolution and storage follow the same canonical public rules as the
   rest of the repository.
+
+### MiniMax speech WAV export
+
+`music serve --model music-minimax-music3` keeps the selected model loaded.
+Its `/health` response lists `export_formats` (`pcm16`, `pcm24`, `float32`).
+The `/v1/audio/speech` request accepts `export_format`, `normalization`
+(`none` or `peak`), `target_peak_db`, `fade_in_ms`, `fade_out_ms`, and `dither`.
+Omitting them retains the existing unnormalized PCM16 speech response.
+
+For the same WAV export settings as `music generate`, request:
+
+```json
+{
+  "instructions": "Warm jazz piano and soft drums",
+  "input": "[Instrumental]",
+  "response_format": "wav",
+  "sample_rate": 44100,
+  "export_format": "pcm24",
+  "normalization": "peak",
+  "target_peak_db": -1,
+  "fade_in_ms": 5,
+  "fade_out_ms": 20,
+  "dither": true
+}
+```
+
+Export settings are applied to the generated waveform before WAV encoding;
+24-bit output is not obtained by padding a 16-bit response. Invalid formats,
+positive or nonfinite peak targets, and negative or nonfinite fades are rejected
+before generation begins.

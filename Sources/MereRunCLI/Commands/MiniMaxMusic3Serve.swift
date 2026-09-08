@@ -25,6 +25,12 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
     var numInferenceSteps: Int?
     var guidanceScale: Float?
     var sampleRate: Int?
+    var exportFormat: ACEStepAudioFormat?
+    var normalization: ACEStepNormalizationMode?
+    var targetPeakDB: Float?
+    var fadeInMilliseconds: Float?
+    var fadeOutMilliseconds: Float?
+    var dither: Bool?
 
     enum CodingKeys: String, CodingKey {
         case model
@@ -47,6 +53,35 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
         case numInferenceSteps = "num_inference_steps"
         case guidanceScale = "guidance_scale"
         case sampleRate = "sample_rate"
+        case exportFormat = "export_format"
+        case normalization
+        case targetPeakDB = "target_peak_db"
+        case fadeInMilliseconds = "fade_in_ms"
+        case fadeOutMilliseconds = "fade_out_ms"
+        case dither
+    }
+}
+
+extension MiniMaxMusic3SpeechRequest {
+    // Preserve the speech API's original PCM16 defaults unless requested.
+    func exportOptions() throws -> ACEStepAudioExportOptions {
+        let peak = targetPeakDB ?? 0
+        let fadeIn = fadeInMilliseconds ?? 0
+        let fadeOut = fadeOutMilliseconds ?? 0
+        guard peak.isFinite, peak <= 0 else {
+            throw ValidationError("target_peak_db must be finite and at most 0.")
+        }
+        guard fadeIn.isFinite, fadeOut.isFinite, fadeIn >= 0, fadeOut >= 0 else {
+            throw ValidationError("fade_in_ms and fade_out_ms must be finite and nonnegative.")
+        }
+        return .init(
+            format: exportFormat ?? .pcm16,
+            normalization: normalization ?? .none,
+            targetPeakDB: peak,
+            fadeInMilliseconds: fadeIn,
+            fadeOutMilliseconds: fadeOut,
+            dither: dither ?? false
+        )
     }
 }
 
@@ -60,6 +95,7 @@ private struct MiniMaxMusic3HealthResponse: Codable {
     var depthDecoderPrecision: MiniMaxMusic3WeightPrecision
     var nativeSampleRate: Int
     var speechSampleRate: Int
+    var exportFormats: [ACEStepAudioFormat] = ACEStepAudioFormat.allCases
 
     enum CodingKeys: String, CodingKey {
         case status
@@ -71,6 +107,7 @@ private struct MiniMaxMusic3HealthResponse: Codable {
         case depthDecoderPrecision = "depth_decoder_precision"
         case nativeSampleRate = "native_sample_rate"
         case speechSampleRate = "speech_sample_rate"
+        case exportFormats = "export_formats"
     }
 }
 
@@ -94,6 +131,7 @@ private actor MiniMaxMusic3ServerSession {
         modelID: String
     ) throws -> Data {
         let options = try Self.options(from: request, modelID: modelID)
+        let export = try request.exportOptions()
         let result = try pipeline.generate(options: options.generation)
         let waveform = try ACEStepWAVWriter.resample(
             result.waveform.transposed(0, 2, 1),
@@ -103,14 +141,7 @@ private actor MiniMaxMusic3ServerSession {
         return try ACEStepWAVWriter.wavData(
             waveform,
             sampleRate: options.sampleRate,
-            options: .init(
-                format: .pcm16,
-                normalization: .none,
-                targetPeakDB: 0,
-                fadeInMilliseconds: 0,
-                fadeOutMilliseconds: 0,
-                dither: false
-            )
+            options: export
         )
     }
 

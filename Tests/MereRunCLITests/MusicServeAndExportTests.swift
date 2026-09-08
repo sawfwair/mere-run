@@ -6,6 +6,59 @@ import XCTest
 @testable import MereRunCore
 
 final class MusicServeAndExportTests: XCTestCase {
+    func testMiniMaxSpeechExportPreservesDefaultsAndNativePCM24() throws {
+        let legacy = try JSONDecoder().decode(
+            MiniMaxMusic3SpeechRequest.self,
+            from: Data(#"{"input":"[Instrumental]","instructions":"piano"}"#.utf8)
+        )
+        let defaults = try legacy.exportOptions()
+        XCTAssertEqual(defaults.format, .pcm16)
+        XCTAssertEqual(defaults.normalization, .none)
+        XCTAssertFalse(defaults.dither)
+
+        let request = try JSONDecoder().decode(
+            MiniMaxMusic3SpeechRequest.self,
+            from: Data(
+                #"""
+                {"input":"[Instrumental]","instructions":"piano",
+                 "export_format":"pcm24","normalization":"peak","target_peak_db":-1,
+                 "fade_in_ms":5,"fade_out_ms":20,"dither":true}
+                """#.utf8
+            )
+        )
+        let options = try request.exportOptions()
+        XCTAssertEqual(options.format, .pcm24)
+        XCTAssertEqual(options.normalization, .peak)
+        XCTAssertEqual(options.targetPeakDB, -1)
+        XCTAssertEqual(options.fadeInMilliseconds, 5)
+        XCTAssertEqual(options.fadeOutMilliseconds, 20)
+        XCTAssertTrue(options.dither)
+        let audio = MLXArray([Float(0.25), Float(-0.25), Float(0.5), Float(-0.5)], [1, 2, 2])
+        let wav = try ACEStepWAVWriter.wavData(audio, sampleRate: 44_100, options: options)
+        XCTAssertEqual(readUInt16(wav, offset: 34), 24)
+        XCTAssertEqual(wav.count, 44 + 4 * 3)
+    }
+
+    func testMiniMaxSpeechRejectsInvalidExportOptions() throws {
+        for field in [#""export_format":"mp3""#, #""normalization":"unknown""#] {
+            let json = "{\"input\":\"x\",\"instructions\":\"x\",\(field)}"
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(MiniMaxMusic3SpeechRequest.self, from: Data(json.utf8))
+            )
+        }
+        var request = try JSONDecoder().decode(
+            MiniMaxMusic3SpeechRequest.self,
+            from: Data(#"{"input":"x","instructions":"x","target_peak_db":1}"#.utf8)
+        )
+        XCTAssertThrowsError(try request.exportOptions())
+        request.targetPeakDB = 0
+        request.fadeInMilliseconds = -1
+        XCTAssertThrowsError(try request.exportOptions())
+        request.fadeInMilliseconds = 0
+        request.fadeOutMilliseconds = .infinity
+        XCTAssertThrowsError(try request.exportOptions())
+    }
+
     func testMusicCommandExposesResidentServe() {
         let names = Set(Music.configuration.subcommands.map {
             $0.configuration.commandName
