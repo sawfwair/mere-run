@@ -1,14 +1,10 @@
 # mere.run codebase map
 
-`mere.run` is a Swift package, command-line interface (CLI), and optional macOS
-graphical user interface (GUI) for local-first inference on Apple Silicon. Use
-this map to find the module that owns your change. The repository exposes the
-public `mere.run` executable and a thin `mere.run.app` SwiftUI wrapper that runs
-the CLI. `MereRunCore` owns runtime code. `MereRunModelKit` owns model
-metadata and installed lookup without inference dependencies. `AudioCore` and `AudioCodecs` own
-shared audio primitives. `AudioSTT` and `AudioTTS` own speech runtimes.
-`MereRunCLI` owns the modality-first command surface, and `MereRunApp` owns the
-GUI shell.
+`mere.run` is a Swift package, CLI, and optional macOS GUI for local inference
+on Apple Silicon. This map identifies source owners. `mere.run.app` runs the
+CLI. `MereRunCore` owns inference; `MereRunModelKit` owns metadata and installed
+lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
+`AudioTTS` own speech runtimes. `MereRunCLI` owns command presentation.
 
 ## Read this first
 
