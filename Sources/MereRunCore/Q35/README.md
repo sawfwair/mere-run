@@ -339,3 +339,10 @@ encoder diagnostics without loading the language model. Set
 `MERERUN_TEST_Q38_VISION_ORACLE_DTYPE=fp32` optionally upcasts the encoder
 for a precision diagnostic; the default export uses the runtime's BF16 weights.
 The export refuses to overwrite existing evidence; it is not an OCR-quality gate.
+
+Qwen-family API requests expose temperature, top-p, top-k, min-p, and penalty
+controls through `ChatRequest`. Presence and frequency penalties count only
+newly generated tokens; repetition penalties cover the prompt and output.
+`SamplingPenalties.swift` applies them before filtering in the shared sampler.
+Active penalties disable MTP so draft verification cannot bypass the history
+transform. Neutral defaults preserve the accelerated path.

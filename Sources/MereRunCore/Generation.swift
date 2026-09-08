@@ -500,6 +500,11 @@ public struct ChatRequest: Sendable, Hashable {
     public var topK: Int?
     /// Min-p sampling cutoff relative to the most likely token; zero disables it.
     public var minP: Double
+    /// Additive penalties over tokens generated in this response. Zero disables them.
+    public var presencePenalty: Double
+    public var frequencyPenalty: Double
+    /// Sign-aware penalty over prompt and generated tokens. One disables it.
+    public var repetitionPenalty: Double
     /// Optional deterministic seed for runtimes with an explicit random canvas or sampler.
     public var seed: UInt64?
     /// Model-specific reasoning budget. Inkling-Small accepts values from 0 through 0.99.
@@ -532,6 +537,9 @@ public struct ChatRequest: Sendable, Hashable {
         topP: Double = 0.9,
         topK: Int? = nil,
         minP: Double = 0,
+        presencePenalty: Double = 0,
+        frequencyPenalty: Double = 0,
+        repetitionPenalty: Double = 1,
         seed: UInt64? = nil,
         reasoningEffort: Double? = nil,
         showThinking: Bool = true,
@@ -555,6 +563,9 @@ public struct ChatRequest: Sendable, Hashable {
         self.topP = topP
         self.topK = topK
         self.minP = minP
+        self.presencePenalty = presencePenalty
+        self.frequencyPenalty = frequencyPenalty
+        self.repetitionPenalty = repetitionPenalty
         self.seed = seed
         self.reasoningEffort = reasoningEffort
         self.showThinking = showThinking

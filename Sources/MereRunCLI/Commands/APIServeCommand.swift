@@ -593,6 +593,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
     var supportsStopSequences: Bool = false
     var supportsSeed: Bool = false
     var supportsPenalties: Bool = false
+    var supportsTopK: Bool = false
+    var supportsRepetitionPenalty: Bool = false
     var supportsLogprobs: Bool = false
     var supportsProviderThinkingControls: Bool = false
 
@@ -615,6 +617,10 @@ struct APIEngineCapabilities: Equatable, Sendable {
             supportsStopSequences: profile.supportsStopSequences,
             supportsSeed: profile.supportsSeed,
             supportsPenalties: profile.supportsPenalties,
+            supportsTopK: [.textChatQ35, .textChatQ36, .textChatLaguna, .textChatLFM2,
+                          .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni,
+                          .textChatDiffusionGemma].contains(profile.servingEngine),
+            supportsRepetitionPenalty: [.textChatQ35, .textChatQ36].contains(profile.servingEngine),
             supportsLogprobs: profile.supportsLogprobs,
             supportsProviderThinkingControls: profile.supportsProviderThinkingControls
         )
@@ -2585,16 +2591,12 @@ enum APIServerContract {
             lora = nil
         }
 
-        // R1-style lanes degenerate without reasoning; their published top_k
-        // applies only when the client did not set explicit sampling.
+        // Resolve each omitted sampling field independently.
         let laneModelID = servedModelID ?? ""
         let resolvedAPIProfile = apiProfile
             ?? servedModelID.flatMap { ManagedModelCatalog.apiProfile(for: $0) }
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: laneModelID)
         let isLaguna = LagunaResources.handles(modelSpec: laneModelID)
-        let usesExplicitSampling = openaiRequest.temperature != nil
-            || openaiRequest.top_p != nil
-            || openaiRequest.min_p != nil
         let reasoningEffort = try reasoningEffort(
             from: openaiRequest.reasoning_effort,
             capabilities: capabilities,
@@ -2636,12 +2638,14 @@ enum APIServerContract {
                 ? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
                     ?? topP
                 : topP,
-            topK: isLaguna
-                ? LagunaResources.recommendedTopK
-                : (usesExplicitSampling ? nil : recommendedSampling?.topK),
+            topK: openaiRequest.top_k
+                ?? (isLaguna ? LagunaResources.recommendedTopK : recommendedSampling?.topK),
             minP: openaiRequest.min_p == nil && isLaguna
                 ? LagunaResources.recommendedMinP
                 : minP,
+            presencePenalty: openaiRequest.presence_penalty ?? 0,
+            frequencyPenalty: openaiRequest.frequency_penalty ?? 0,
+            repetitionPenalty: openaiRequest.repetition_penalty ?? 1,
             seed: openaiRequest.seed.map(UInt64.init),
             reasoningEffort: reasoningEffort,
             showThinking: requiresJSON
@@ -2867,6 +2871,7 @@ enum APIServerContract {
         if let seed = request.seed, seed < 0 {
             throw APIRequestValidationError.invalidField("seed", "must be an unsigned integer")
         }
+        try validateSamplingControls(request, capabilities: capabilities)
         if let penalty = request.presence_penalty, penalty != 0, !capabilities.supportsPenalties {
             throw APIRequestValidationError.invalidField("presence_penalty", "presence penalties are not supported by this engine")
         }
@@ -3179,6 +3184,36 @@ enum APIServerContract {
             )
         }
         return value
+    }
+
+    private static func validateSamplingControls(
+        _ request: OpenAIChatRequest,
+        capabilities: APIEngineCapabilities
+    ) throws {
+        if let topK = request.top_k {
+            guard topK >= 0 else {
+                throw APIRequestValidationError.invalidField("top_k", "must be zero or greater")
+            }
+            if topK != 0, !capabilities.supportsTopK {
+                throw APIRequestValidationError.invalidField("top_k", "top-k sampling is not supported by this engine")
+            }
+        }
+        for (field, value) in [("presence_penalty", request.presence_penalty),
+                               ("frequency_penalty", request.frequency_penalty)] {
+            if let value, !value.isFinite || !(-2...2).contains(value) {
+                throw APIRequestValidationError.invalidField(field, "must be between -2 and 2")
+            }
+        }
+        if let penalty = request.repetition_penalty {
+            guard penalty.isFinite, Float(penalty).isFinite, Float(penalty) > 0 else {
+                throw APIRequestValidationError.invalidField("repetition_penalty", "must be a finite positive sampler value")
+            }
+            if penalty != 1, !capabilities.supportsRepetitionPenalty {
+                throw APIRequestValidationError.invalidField(
+                    "repetition_penalty", "repetition penalties are not supported by this engine"
+                )
+            }
+        }
     }
 
     private static func validateTemperature(_ rawValue: Double?) throws -> Double {

@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Accept explicit `top_k` in supported native chat APIs and preserve model
+  sampling defaults independently when clients override temperature or min-p.
+- Add presence, frequency, and repetition penalty controls to Qwen-family API
+  generation, including Ornith. Apply penalties consistently in serial,
+  streaming, and batched sampling; use target-only decode for active penalties.
+
 - Reuse Qwen-family CPU and GPU streams across completed requests. This bounds
   stream allocation by overlapping requests instead of accumulating command
   queues throughout a long-running API session.

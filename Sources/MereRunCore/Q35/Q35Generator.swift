@@ -870,16 +870,9 @@ public actor Q35Generator: ChatGenerator {
                     + [tokenizerAndTemplate.eosTokenId].compactMap { $0 }
             )
             : Set<Int>()
-        let generationConfig = GenerationConfig(
-            maxTokens: request.maxTokens,
-            temperature: Float(request.temperature),
-            topK: request.topK ?? 0,
-            topP: Float(request.topP),
-            minP: Float(request.minP),
-            repetitionPenalty: nil,
-            repetitionContextSize: 64
-        )
+        let generationConfig = Q35Sampling.generationConfig(for: request, promptTokenCount: promptTokens.count)
         let mtpSpeculationEligible = !request.logprobCapture.isEnabled
+            && !generationConfig.hasActivePenalties
             && !jsonConstrained
             && request.tools?.isEmpty != false
             && imageURLs.isEmpty
@@ -1216,6 +1209,7 @@ public actor Q35Generator: ChatGenerator {
             return Q35BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
         let speculationMTP = !logprobCapture.isEnabled
+            && !generationConfig.hasActivePenalties
             && !jsonConstrained && !stopAtCompletedToolCall && Self.shouldSpeculate(
             modelId: modelId,
             usesMoE: model.config.textConfig.usesMoE,
@@ -1419,7 +1413,10 @@ public actor Q35Generator: ChatGenerator {
             if jsonConstrained {
                 guard let constrained = jsonConstrainedToken(
                     initial: next,
-                    logits: logits[0, -1, 0...],
+                    logits: applyingSamplingPenalties(
+                        logits[0, -1, 0...], config: generationConfig,
+                        history: repetitionHistoryArray(promptTokens: repetitionHistory, config: generationConfig)
+                    ),
                     config: generationConfig,
                     eosSet: eosSet,
                     grammar: &jsonGrammar,

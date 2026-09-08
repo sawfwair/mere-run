@@ -3398,7 +3398,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(chatRequest.showThinking)
     }
 
-    func testChatRequestExplicitSamplingSkipsRecommendedTopK() throws {
+    func testChatRequestExplicitTemperaturePreservesRecommendedTopK() throws {
         var request = OpenAIChatRequest(
             model: Q35Resources.ornith35BMLXModelId,
             messages: [OpenAIChatMessage(role: "user", content: "hello")]
@@ -3413,7 +3413,7 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertTrue(chatRequest.showThinking)
-        XCTAssertNil(chatRequest.topK)
+        XCTAssertEqual(chatRequest.topK, 20)
         XCTAssertEqual(chatRequest.temperature, 0.2)
     }
 
@@ -3432,7 +3432,7 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertEqual(chatRequest.minP, 0.05)
-        XCTAssertNil(chatRequest.topK)
+        XCTAssertEqual(chatRequest.topK, 20)
     }
 
     func testChatRequestKeepsNoThinkDefaultForNonOrnithLanes() throws {

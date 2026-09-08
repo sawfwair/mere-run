@@ -1,6 +1,21 @@
 import MLX
 
 enum Q35Sampling {
+    static func generationConfig(for request: ChatRequest, promptTokenCount: Int) -> GenerationConfig {
+        GenerationConfig(
+            maxTokens: request.maxTokens,
+            temperature: Float(request.temperature),
+            topK: request.topK ?? 0,
+            topP: Float(request.topP),
+            minP: Float(request.minP),
+            repetitionPenalty: request.repetitionPenalty == 1 ? nil : Float(request.repetitionPenalty),
+            repetitionContextSize: Int.max,
+            presencePenalty: Float(request.presencePenalty),
+            frequencyPenalty: Float(request.frequencyPenalty),
+            penaltyPromptTokenCount: promptTokenCount
+        )
+    }
+
     static func acceptsDraft(probability: Float) -> Bool {
         MLXRandom.uniform().item(Float.self) < probability
     }
