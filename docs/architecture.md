@@ -95,6 +95,10 @@ Shared text encoder stack used by image models:
 
 ## Speech stack
 
+Read [Speech runtime boundaries](./internals/speech-runtime-boundaries.md) for
+the dependency map. Qwen ASR model layers and Sortformer build independently
+of `MereRunCore`; `AudioSTT` retains their compatibility exports.
+
 Speech synthesis command path:
 
 - CLI: `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
@@ -121,12 +125,16 @@ Speech transcription:
 - Runtime roots:
   - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
   - `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
+- Loading and execution: the adjacent `+Loading.swift`, `+Generation.swift`,
+  and `+Decoding.swift` files
+- Qwen model layers: `Sources/AudioQwen3ASRModel`
+- Shared cache protocol and implementations: `Sources/MereRunKVCache`
 
 Speaker diarization:
 
 - CLI: `Sources/MereRunCLI/Commands/SpeechDiarizeCommand.swift`
-- Runtime root: `Sources/AudioSTT/Sortformer/SortformerDiarizer.swift`
-- Model and feature stack: `Sources/AudioSTT/Sortformer/SortformerModel.swift`
+- Runtime root: `Sources/AudioSortformer/SortformerDiarizer.swift`
+- Model and feature stack: `Sources/AudioSortformer/SortformerModel.swift`
 
 ## OCR and vision
 

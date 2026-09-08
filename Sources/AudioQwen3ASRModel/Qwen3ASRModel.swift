@@ -2,7 +2,7 @@ import Foundation
 import MLX
 import MLXNN
 import MLXFast
-import MereRunCore
+import MereRunKVCache
 
 // MARK: - Qwen3 ASR Full Model
 
@@ -172,7 +172,7 @@ private func applyMultimodalRoPE(
 /// Qwen3-ASR model for speech recognition
 /// Structure: audio_tower (encoder) + model (Qwen3 decoder) + lm_head
 public final class Qwen3ASRThinker: Module {
-    let config: Qwen3ASRModelConfig
+    package let config: Qwen3ASRModelConfig
 
     @ModuleInfo(key: "audio_tower") var audioTower: Qwen3ASRAudioTower
     @ModuleInfo(key: "model") var model: Qwen3ASRDecoderModel

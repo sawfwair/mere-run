@@ -1,10 +1,16 @@
-# Qwen3 ASR Module
+# Qwen3 ASR execution
 
-This directory contains the Qwen3 speech-to-text path.
+This directory owns Qwen3 speech-to-text loading and execution. Model layers
+and typed configuration live in `AudioQwen3ASRModel` and are re-exported by
+`AudioSTT`.
 
-- `Qwen3ASRConfigs.swift`: config ingestion and typed model settings
 - `Qwen3ASRTokenizer.swift`: tokenizer loading and compatibility
-- `Qwen3ASRGenerator.swift`: user-facing transcription path
-- `Model/`: encoder and decoder model definitions
+- `Qwen3ASRGenerator.swift`: actor state and public transcription lifecycle
+- `Qwen3ASRGenerator+Loading.swift`: resolution, checkpoint loading, and weight mapping
+- `Qwen3ASRGenerator+Generation.swift`: features, prompts, and pipelined decoding
+- `Qwen3ASRStreamingSession.swift`: streaming cadence, backpressure, and terminal events
+- `Qwen3ASRLiveSession.swift`: live session adapter
 
-When editing here, keep the config and tokenizer boundary typed. If a model-format quirk forces compatibility logic, isolate it in the boundary file and cover it with a focused test.
+Keep tokenizer and checkpoint compatibility typed and covered by focused tests.
+Preserve the pipelined decode toggle and token-readback schedule when editing
+generation. Streaming producers own their work until finish or cancellation.

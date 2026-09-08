@@ -275,9 +275,9 @@ Tokenizer internals:
 
 ### Diarization runtime
 
-- `Sources/AudioSTT/Sortformer/SortformerDiarizer.swift`
-- `Sources/AudioSTT/Sortformer/SortformerModel.swift`
-- `Sources/AudioSTT/Sortformer/SortformerFeatures.swift`
+- `Sources/AudioSortformer/SortformerDiarizer.swift`
+- `Sources/AudioSortformer/SortformerModel.swift`
+- `Sources/AudioSortformer/SortformerFeatures.swift`
 
 ## How speech synthesis flows
 

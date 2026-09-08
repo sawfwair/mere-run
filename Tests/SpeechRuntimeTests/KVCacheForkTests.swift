@@ -1,7 +1,8 @@
+import MereRunMLXTestSupport
 import Foundation
 import MLX
 import XCTest
-@testable import MereRunCore
+import MereRunKVCache
 
 /// `KVCacheSimple.update` writes new tokens with subscript assignment, which
 /// rebinds the same `MLXArray` wrapper in place. A fork that shares the
@@ -20,6 +21,35 @@ final class KVCacheForkTests: XCTestCase {
             MLXArray.full([1, 2, tokens, 4], values: MLXArray(value)),
             MLXArray.full([1, 2, tokens, 4], values: MLXArray(value))
         )
+    }
+
+    func testRaggedBatchMatchesIndependentRowsAfterSplit() throws {
+        let rows = [KVCacheSimple(step: 4), KVCacheSimple(step: 4)]
+        for (index, count) in [2, 4].enumerated() {
+            let initial = makeKV(Float(index + 1), tokens: count)
+            _ = rows[index].update(keys: initial.0, values: initial.1)
+        }
+        let batch = try XCTUnwrap(rows[0].batched(with: rows))
+        XCTAssertEqual(batch.rowOffsets, [2, 4])
+        guard case .array(let mask) = batch.makeMask(n: 1) else {
+            return XCTFail("Ragged rows require a mask for their different valid lengths")
+        }
+        XCTAssertEqual(mask.shape, [2, 1, 1, 5])
+        XCTAssertEqual(mask.asArray(Float.self), [0, 0, 0, -1e9, -1e9, 0, 0, 0, 0, 0])
+
+        let next = MLXArray.full([2, 2, 1, 4], values: MLXArray(Float(7)))
+        _ = batch.update(keys: next, values: next)
+        let split = try XCTUnwrap(batch.unbatchedRows(count: 2))
+        XCTAssertEqual(split.map(\.offset), [3, 5])
+        for (index, independent) in rows.enumerated() {
+            let nextRow = makeKV(7, tokens: 1)
+            _ = independent.update(keys: nextRow.0, values: nextRow.1)
+            let marker = makeKV(9, tokens: 1)
+            let expected = independent.update(keys: marker.0, values: marker.1)
+            let actual = split[index].update(keys: marker.0, values: marker.1)
+            XCTAssertEqual(actual.0.asArray(Float.self), expected.0.asArray(Float.self))
+            XCTAssertEqual(actual.1.asArray(Float.self), expected.1.asArray(Float.self))
+        }
     }
 
     func testForkIsIsolatedFromLaterParentWrites() throws {

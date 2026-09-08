@@ -4,6 +4,7 @@ import MLXNN
 import MLXRandom
 import XCTest
 @testable import AudioSTT
+@testable import AudioQwen3ASRModel
 @testable import AudioTTS
 @testable import MereRunCore
 

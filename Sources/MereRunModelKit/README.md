@@ -10,6 +10,10 @@ usage-term acknowledgement, and explicit fallback selection. Callers supply an
 `InstalledModelDescriptor` from their catalog and a required runtime validator.
 A directory's metadata alone never establishes that its checkpoint is runnable.
 
+`FileManager+SymlinkTraversal.swift` supplies directory traversal for registered
+model-store paths. It resolves the requested root while preserving the caller's
+control over nested symlinks.
+
 `MereRunCore.ModelResolver` delegates lookup here and supplies existing catalog
 facts and family validators. Core re-exports these types for source compatibility.
 Runtime-dependent manifest templates, catalog assembly, downloads, and tensor

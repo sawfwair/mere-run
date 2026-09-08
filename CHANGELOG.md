@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Extract Qwen ASR model layers, Sortformer diarization, and shared KV caches
+  into libraries that build without `MereRunCore`. Existing `AudioSTT` and
+  `MereRunCore` imports retain compatibility exports.
+- Separate Qwen and Parakeet generator loading, decoding, and streaming files.
+  Add isolated numerical, cache, and checkpoint-loading tests with shared MLX
+  test setup.
+
 - Add `MereRunResidency` for shared cold preparation, concurrent model leases,
   exclusive media slots, and TTL/LRU eviction. Active leases and generation
   checks protect warm runtimes from stale unload decisions.

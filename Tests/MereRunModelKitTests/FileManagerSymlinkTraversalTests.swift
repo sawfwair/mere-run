@@ -1,5 +1,5 @@
 import Foundation
-@testable import MereRunCore
+@testable import MereRunModelKit
 import XCTest
 
 final class FileManagerSymlinkTraversalTests: XCTestCase {

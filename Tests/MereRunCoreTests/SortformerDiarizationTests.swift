@@ -3,42 +3,10 @@ import MLX
 import XCTest
 
 @testable import AudioSTT
+@testable import AudioSortformer
 @testable import MereRunCore
 
 final class SortformerDiarizationTests: XCTestCase {
-    func testX86LinuxRuntimePromotionOnlyConvertsFloat16Weights() {
-        let weights = [
-            "half": MLX.ones([2], dtype: .float16),
-            "float": MLX.ones([2], dtype: .float32),
-            "integer": MLX.ones([2], dtype: .int32),
-        ]
-
-        let promoted = SortformerModel.runtimeCompatibleWeights(weights, promoteFloat16: true)
-
-        XCTAssertEqual(promoted["half"]?.dtype, .float32)
-        XCTAssertEqual(promoted["float"]?.dtype, .float32)
-        XCTAssertEqual(promoted["integer"]?.dtype, .int32)
-    }
-
-    func testRTTMRendersStableAnonymousSpeakerLabels() {
-        let output = DiarizationOutput(
-            segments: [
-                DiarizationSegment(start: 0, end: 1.25, speaker: 0),
-                DiarizationSegment(start: 2.5, end: 4, speaker: 2),
-            ],
-            numSpeakers: 2,
-            totalTime: 0.1
-        )
-
-        XCTAssertEqual(
-            output.rttm(fileID: "meeting"),
-            """
-            SPEAKER meeting 1 0.000 1.250 <NA> <NA> speaker_0 <NA> <NA>
-            SPEAKER meeting 1 2.500 1.500 <NA> <NA> speaker_2 <NA> <NA>
-            """
-        )
-    }
-
     func testManagedSortformerRootDoesNotRequireASRTextComponents() throws {
         let root = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: root) }

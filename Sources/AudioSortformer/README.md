@@ -1,10 +1,14 @@
-# Sortformer Speaker Diarization
+# Sortformer speaker diarization
 
-This directory owns the native MLX offline speaker-diarization runtime.
+This library owns the native MLX offline speaker-diarization runtime. It depends
+on MLX and `MereRunModelKit`, without `MereRunCore`, speech tokenizers, or audio
+file decoding. `AudioSTT` re-exports its public types for existing callers.
 
 - `SortformerConfig.swift`: typed checkpoint configuration.
 - `SortformerDSP.swift` and `SortformerFeatures.swift`: MLX STFT and NeMo-compatible filterbank features.
-- `SortformerModel.swift`: FastConformer, Transformer, checkpoint loading, inference, and segment post-processing.
+- `SortformerModel.swift`: FastConformer and Transformer model layers.
+- `SortformerModel+Loading.swift`: weight sanitization and checkpoint loading.
+- `SortformerModel+Inference.swift`: inference and segment post-processing.
 - `SortformerDiarizer.swift`: array-based public entrypoint used by the CLI.
 - `DiarizationOutput.swift`: backend-neutral segment and RTTM output types.
 

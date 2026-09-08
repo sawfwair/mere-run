@@ -1,6 +1,6 @@
 import Foundation
 
-enum MLXTestSupport {
+public enum MLXTestSupport {
     /// Ensure MLX can locate its Metal library when running under `swift test`.
     ///
     /// In SwiftPM builds the metallib is emitted under:
@@ -8,7 +8,7 @@ enum MLXTestSupport {
     ///
     /// But the MLX runtime first looks for a colocated `mlx.metallib` next to the
     /// running test binary. We satisfy that by symlinking (or copying) it there.
-    static func ensureMetalLibraryAvailable() {
+    public static func ensureMetalLibraryAvailable() {
         let fm = FileManager.default
         let debugEnabled: Bool = {
             let raw = (ProcessInfo.processInfo.environment["MERERUN_TEST_DEBUG_MLX"] ?? "").lowercased()
