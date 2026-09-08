@@ -80,11 +80,6 @@ enum RuntimeSidecarKind: String, Codable, Equatable, Sendable {
     case embedding
 }
 
-enum RuntimeSidecarEvictionReason: String, Codable, Equatable, Sendable {
-    case ttl
-    case memoryPressure = "memory_pressure"
-}
-
 struct RuntimeSidecarResidentSnapshot: Codable, Equatable, Sendable {
     let kind: RuntimeSidecarKind
     let modelID: String?
@@ -557,14 +552,7 @@ enum RuntimeModelPoolError: LocalizedError, Equatable {
 }
 
 actor RuntimeModelPool {
-    private struct ModelPreparation {
-        let token: UUID
-        let task: Task<RuntimeLoadedModel, Error>
-        var waiterIDs: Set<UUID> = []
-    }
-
     private struct MutableState {
-        var activeRequests = 0
         var lastAccess: Date?
         var lastError: String?
         var completedRequests = 0
@@ -594,7 +582,7 @@ actor RuntimeModelPool {
         }
     }
 
-    private struct ResolvedModel {
+    private struct ResolvedModel: Sendable {
         let id: String
         let category: String
         let engine: RuntimeServingEngine
@@ -609,11 +597,6 @@ actor RuntimeModelPool {
         var openAICompatibility: APIEngineCapabilities {
             .catalog(apiProfile)
         }
-    }
-
-    private struct RuntimeLRUEvictionCandidate {
-        let id: String
-        let lastAccess: Date
     }
 
     private let defaultModelID: String
@@ -633,14 +616,9 @@ actor RuntimeModelPool {
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
     private let ensureMLXAvailable: @Sendable () throws -> Void
     private let prepareLoadedModel: @Sendable (RuntimeLoadedModel) async throws -> Void
-    private let unloadLoadedModel: @Sendable (RuntimeLoadedModel) async -> Void
     private let clearMLXCache: @Sendable () -> Void
 
-    private var loadedModels: [String: RuntimeLoadedModel] = [:]
-    private var loadedModelTokens: [String: UUID] = [:]
-    private var modelPreparations: [String: ModelPreparation] = [:]
-    private var preparationCleanupTasks: [UUID: Task<Void, Never>] = [:]
-    private var preparingModelIDs: Set<String> = []
+    private let residency: ResidentRuntimeCache<String, RuntimeLoadedModel>
     private var states: [String: MutableState] = [:]
 
     init(
@@ -693,60 +671,62 @@ actor RuntimeModelPool {
         self.memoryPressurePolicy = memoryPressurePolicy
         self.ensureMLXAvailable = ensureMLXAvailable
         self.prepareLoadedModel = prepareLoadedModel
-        self.unloadLoadedModel = unloadLoadedModel
+        self.residency = ResidentRuntimeCache(currentDate: currentDate, unload: unloadLoadedModel)
         self.clearMLXCache = clearMLXCache
     }
 
     func preloadDefault(warmup: Bool = false) async throws {
         let resolved = try resolveModel(defaultModelID)
         let loadStart = currentDate()
-        let loaded = try await ensureLoaded(resolved)
-        let loadSeconds = currentDate().timeIntervalSince(loadStart)
-        var startupTiming = RuntimeModelStartupTiming(
-            loadSeconds: loadSeconds,
-            warmupSeconds: nil,
-            warmupPrefillSeconds: nil,
-            warmupDecodeSeconds: nil,
-            warmupTimeToFirstTokenSeconds: nil,
-            graphCompilationAccounting: nil,
-            completedAt: currentDate()
-        )
-        if warmup, Self.shouldWarmDefaultModel(modelID: resolved.id, engine: resolved.engine) {
-            let isQwen4Exp = Self.isQwen4ExpWarmupModel(resolved.id)
-            let isDiffusionGemma = resolved.engine == .textChatDiffusionGemma
-            let warmupStart = currentDate()
-            let response = try await loaded.chat(
-                ChatRequest(
-                    messages: [ChatMessage(
-                        role: .user,
-                        content: isQwen4Exp
-                            ? "Reply with the numbers 1 through 8 separated by spaces and nothing else."
-                            : "Reply with ready."
-                    )],
-                    maxTokens: isQwen4Exp ? 8 : 1,
-                    temperature: 0,
-                    topP: 1,
-                    seed: isDiffusionGemma ? 0 : nil,
-                    showThinking: false
-                ),
-                progressHandler: nil
-            )
-            let timing = response.timing
-            startupTiming = RuntimeModelStartupTiming(
+        let lease = try await acquireResident(resolved)
+        try await withResidentRuntimeLease(using: lease) { loaded in
+            let loadSeconds = currentDate().timeIntervalSince(loadStart)
+            var startupTiming = RuntimeModelStartupTiming(
                 loadSeconds: loadSeconds,
-                warmupSeconds: currentDate().timeIntervalSince(warmupStart),
-                warmupPrefillSeconds: timing?.prefillSeconds,
-                warmupDecodeSeconds: timing?.decodeSeconds,
-                warmupTimeToFirstTokenSeconds: timing.map(Self.timeToFirstToken),
-                graphCompilationAccounting: isQwen4Exp || isDiffusionGemma
-                    ? "included_in_warmup_prefill_and_decode"
-                    : "included_in_warmup_prefill",
+                warmupSeconds: nil,
+                warmupPrefillSeconds: nil,
+                warmupDecodeSeconds: nil,
+                warmupTimeToFirstTokenSeconds: nil,
+                graphCompilationAccounting: nil,
                 completedAt: currentDate()
             )
+            if warmup, Self.shouldWarmDefaultModel(modelID: resolved.id, engine: resolved.engine) {
+                let isQwen4Exp = Self.isQwen4ExpWarmupModel(resolved.id)
+                let isDiffusionGemma = resolved.engine == .textChatDiffusionGemma
+                let warmupStart = currentDate()
+                let response = try await loaded.chat(
+                    ChatRequest(
+                        messages: [ChatMessage(
+                            role: .user,
+                            content: isQwen4Exp
+                                ? "Reply with the numbers 1 through 8 separated by spaces and nothing else."
+                                : "Reply with ready."
+                        )],
+                        maxTokens: isQwen4Exp ? 8 : 1,
+                        temperature: 0,
+                        topP: 1,
+                        seed: isDiffusionGemma ? 0 : nil,
+                        showThinking: false
+                    ),
+                    progressHandler: nil
+                )
+                let timing = response.timing
+                startupTiming = RuntimeModelStartupTiming(
+                    loadSeconds: loadSeconds,
+                    warmupSeconds: currentDate().timeIntervalSince(warmupStart),
+                    warmupPrefillSeconds: timing?.prefillSeconds,
+                    warmupDecodeSeconds: timing?.decodeSeconds,
+                    warmupTimeToFirstTokenSeconds: timing.map(Self.timeToFirstToken),
+                    graphCompilationAccounting: isQwen4Exp || isDiffusionGemma
+                        ? "included_in_warmup_prefill_and_decode"
+                        : "included_in_warmup_prefill",
+                    completedAt: currentDate()
+                )
+            }
+            var state = state(for: resolved.id)
+            state.startupTiming = startupTiming
+            states[resolved.id] = state
         }
-        var state = state(for: resolved.id)
-        state.startupTiming = startupTiming
-        states[resolved.id] = state
     }
 
     static func shouldWarmDefaultModel(
@@ -825,19 +805,20 @@ actor RuntimeModelPool {
         let settings = (try? settingsStore.load())?.models ?? [:]
         let installed = installedServableCatalogIDs()
         var ids = Set<String>(installed)
-        ids.formUnion(loadedModels.keys)
+        let residents = await residency.snapshots()
+        ids.formUnion(residents.keys)
         ids.formUnion(states.keys)
         ids.insert(defaultModelID)
         ids.formUnion(settings.keys)
         var prefixStats: [String: PrefixKVCacheStats] = [:]
         var batchingStats: [String: RuntimeDecodeBatchingStats] = [:]
         var mtpStats: [String: Gemma4MTPStats] = [:]
-        let currentLoadedModels = loadedModels
-        for (id, loaded) in currentLoadedModels {
+        for (id, resident) in residents {
+            let loaded = resident.value
             // Generator actors can spend tens of seconds inside one evaluated
             // prefill chunk. Keep the control plane responsive while a model
             // is active; its cached counters return on the next idle status poll.
-            guard state(for: id).activeRequests == 0 else { continue }
+            guard resident.activeRequests == 0 else { continue }
             if let stats = await loaded.prefixKVCacheStats() {
                 prefixStats[id] = stats
             }
@@ -851,6 +832,7 @@ actor RuntimeModelPool {
         let snapshots: [RuntimeModelPoolEntrySnapshot] = ids.sorted().compactMap { id in
             snapshot(
                 for: id,
+                resident: residents[id],
                 settings: settings,
                 prefixKVCache: prefixStats[id],
                 continuousBatching: batchingStats[id],
@@ -906,28 +888,21 @@ actor RuntimeModelPool {
     func loadModel(idOrAlias: String) async throws -> RuntimeModelPoolEntrySnapshot {
         let resolved = try resolveModel(idOrAlias)
         await evictIdleModels(excluding: [resolved.id])
-        _ = try await ensureLoaded(resolved)
+        let lease = try await acquireResident(resolved)
+        await lease.release()
         touch(id: resolved.id, error: nil)
-        return try snapshot(idOrAlias: resolved.id)
+        return try await snapshot(idOrAlias: resolved.id)
     }
 
     func unloadModel(idOrAlias: String) async throws -> RuntimeModelPoolEntrySnapshot {
         let resolved = try resolveModel(idOrAlias)
-        let state = state(for: resolved.id)
-        guard state.activeRequests == 0 else {
-            throw RuntimeModelPoolError.unloadConflict(resolved.id, activeRequests: state.activeRequests)
-        }
-        if let preparation = modelPreparations[resolved.id] {
-            await invalidatePreparation(
-                preparation,
-                modelID: resolved.id,
-                error: nil
-            )
-        } else if let loaded = removeLoadedModel(for: resolved.id) {
-            await unloadLoadedModel(loaded)
+        do {
+            try await residency.unload(key: resolved.id)
+        } catch ResidentRuntimeError.activeLeases(let count) {
+            throw RuntimeModelPoolError.unloadConflict(resolved.id, activeRequests: count)
         }
         touch(id: resolved.id, error: nil)
-        return try snapshot(idOrAlias: resolved.id)
+        return try await snapshot(idOrAlias: resolved.id)
     }
 
     func settings(idOrAlias: String) async throws -> RuntimeModelSettings {
@@ -1026,12 +1001,12 @@ actor RuntimeModelPool {
             effectiveRequest,
             capabilities: capabilities
         )
-        let loaded = try await ensureLoaded(resolved)
+        let residentLease = try await acquireResident(resolved)
         retainLease(id: resolved.id)
         let lease = RuntimeModelLease(
             modelID: resolved.id,
             engine: resolved.engine,
-            loaded: loaded,
+            residentLease: residentLease,
             pool: self
         )
         return RuntimeChatPlan(
@@ -1045,7 +1020,6 @@ actor RuntimeModelPool {
 
     fileprivate func releaseLease(modelID: String) {
         var state = state(for: modelID)
-        state.activeRequests = max(0, state.activeRequests - 1)
         state.lastAccess = currentDate()
         states[modelID] = state
     }
@@ -1094,26 +1068,19 @@ actor RuntimeModelPool {
     ) async -> [String] {
         let referenceDate = now ?? currentDate()
         let settings = (try? settingsStore.load())?.models ?? [:]
-        let loadedEntries = loadedModels
+        let residents = await residency.snapshots()
+        let expired = RuntimeEvictionPlanner.expired(
+            evictionCandidates(residents: residents, settings: settings),
+            now: referenceDate, excluding: excludedIDs
+        )
         var evicted: [String] = []
-
-        for (id, loaded) in loadedEntries {
-            let state = state(for: id)
-            guard loadedModels[id] != nil,
-                  !preparingModelIDs.contains(id),
-                  !excludedIDs.contains(id),
-                  let modelSettings = settings[id],
-                  !modelSettings.pinned,
-                  let ttlSeconds = modelSettings.ttlSeconds,
-                  let lastAccess = state.lastAccess,
-                  state.activeRequests == 0,
-                  referenceDate.timeIntervalSince(lastAccess) >= Double(ttlSeconds) else {
-                continue
+        for id in expired {
+            guard let resident = residents[id] else { continue }
+            if await residency.evictIfIdle(
+                key: id, generation: resident.generation, accessGeneration: resident.accessGeneration
+            ) {
+                evicted.append(id)
             }
-
-            _ = removeLoadedModel(for: id)
-            await unloadLoadedModel(loaded)
-            evicted.append(id)
         }
 
         return evicted.sorted()
@@ -1133,281 +1100,72 @@ actor RuntimeModelPool {
                 pressure = memoryPressurePolicy.pressure(for: memorySample)
             }
         }
-        let evictionLimit: Int?
-        switch pressure {
-        case .disabled, .unknown, .nominal:
-            return []
-        case .elevated:
-            evictionLimit = 1
-        case .critical:
-            evictionLimit = nil
-        }
-
         let settings = (try? settingsStore.load())?.models ?? [:]
-        let candidates = loadedModels.compactMap { id, _ -> RuntimeLRUEvictionCandidate? in
-            let state = state(for: id)
-            let modelSettings = settings[id] ?? RuntimeModelSettings()
-            guard !excludedIDs.contains(id),
-                  id != defaultModelID,
-                  !preparingModelIDs.contains(id),
-                  state.activeRequests == 0,
-                  !modelSettings.pinned else {
-                return nil
-            }
-            return RuntimeLRUEvictionCandidate(
-                id: id,
-                lastAccess: state.lastAccess ?? .distantPast
-            )
-        }
-        .sorted {
-            if $0.lastAccess == $1.lastAccess {
-                return $0.id < $1.id
-            }
-            return $0.lastAccess < $1.lastAccess
-        }
-
+        let residents = await residency.snapshots()
+        let candidates = RuntimeEvictionPlanner.memoryPressure(
+            evictionCandidates(residents: residents, settings: settings),
+            pressure: pressure, excluding: excludedIDs.union([defaultModelID])
+        )
         var evicted: [String] = []
-        for candidate in candidates {
-            guard evictionLimit.map({ evicted.count < $0 }) ?? true else {
-                break
+        for id in candidates {
+            guard let resident = residents[id] else { continue }
+            if await residency.evictIfIdle(
+                key: id, generation: resident.generation, accessGeneration: resident.accessGeneration
+            ) {
+                evicted.append(id)
             }
-            guard let loaded = removeLoadedModel(for: candidate.id) else {
-                continue
-            }
-            await unloadLoadedModel(loaded)
-            evicted.append(candidate.id)
         }
-
         return evicted.sorted()
     }
 
-    private func evictOldestIdleUnpinnedModel(
-        excluding excludedIDs: Set<String>
-    ) async -> String? {
+    private func evictOldestIdleUnpinnedModel(excluding excludedIDs: Set<String>) async -> String? {
         let settings = (try? settingsStore.load())?.models ?? [:]
-        let candidate = loadedModels.keys.compactMap { id -> RuntimeLRUEvictionCandidate? in
-            let state = state(for: id)
-            let modelSettings = settings[id] ?? RuntimeModelSettings()
-            guard !excludedIDs.contains(id),
-                  !preparingModelIDs.contains(id),
-                  state.activeRequests == 0,
-                  !modelSettings.pinned else {
-                return nil
-            }
-            return RuntimeLRUEvictionCandidate(
-                id: id,
-                lastAccess: state.lastAccess ?? .distantPast
-            )
-        }
-        .sorted {
-            if $0.lastAccess == $1.lastAccess {
-                return $0.id < $1.id
-            }
-            return $0.lastAccess < $1.lastAccess
-        }
-        .first
-
-        guard let candidate,
-              let loaded = removeLoadedModel(for: candidate.id) else {
-            return nil
-        }
-        await unloadLoadedModel(loaded)
-        return candidate.id
-    }
-
-    private func ensureLoaded(_ resolved: ResolvedModel) async throws -> RuntimeLoadedModel {
-        if let loaded = loadedModels[resolved.id], !preparingModelIDs.contains(resolved.id) {
-            return loaded
-        }
-        if let preparation = modelPreparations[resolved.id] {
-            return try await awaitPreparation(preparation, modelID: resolved.id)
-        }
-
-        try ensureMLXAvailable()
-        let loaded = makeLoadedModel(for: resolved)
-        let token = UUID()
-        loadedModels[resolved.id] = loaded
-        loadedModelTokens[resolved.id] = token
-        preparingModelIDs.insert(resolved.id)
-        let prepareLoadedModel = self.prepareLoadedModel
-        let task = Task<RuntimeLoadedModel, Error> {
-            try await prepareLoadedModel(loaded)
-            return loaded
-        }
-        let preparation = ModelPreparation(token: token, task: task)
-        modelPreparations[resolved.id] = preparation
-        return try await awaitPreparation(preparation, modelID: resolved.id)
-    }
-
-    private func awaitPreparation(
-        _ preparation: ModelPreparation,
-        modelID: String
-    ) async throws -> RuntimeLoadedModel {
-        let waiterID = UUID()
-        guard var currentPreparation = modelPreparations[modelID],
-              currentPreparation.token == preparation.token else {
-            return try await finalizedLoadedModel(
-                modelID: modelID,
-                token: preparation.token
-            )
-        }
-        currentPreparation.waiterIDs.insert(waiterID)
-        modelPreparations[modelID] = currentPreparation
-
-        return try await withTaskCancellationHandler {
-            do {
-                _ = try await preparation.task.value
-                try Task.checkCancellation()
-                return try await finalizedLoadedModel(
-                    modelID: modelID,
-                    token: preparation.token
-                )
-            } catch {
-                if Task.isCancelled {
-                    await cancelPreparationWaiter(
-                        modelID: modelID,
-                        token: preparation.token,
-                        waiterID: waiterID
-                    )
-                } else {
-                    await failPreparation(
-                        preparation,
-                        modelID: modelID,
-                        error: error
-                    )
-                }
-                throw error
-            }
-        } onCancel: {
-            Task {
-                await self.cancelPreparationWaiter(
-                    modelID: modelID,
-                    token: preparation.token,
-                    waiterID: waiterID
-                )
-            }
-        }
-    }
-
-    private func finalizedLoadedModel(
-        modelID: String,
-        token: UUID
-    ) async throws -> RuntimeLoadedModel {
-        if let cleanup = preparationCleanupTasks[token] {
-            await cleanup.value
-            preparationCleanupTasks.removeValue(forKey: token)
-            throw CancellationError()
-        }
-
-        if let preparation = modelPreparations[modelID], preparation.token == token {
-            guard loadedModelTokens[modelID] == token,
-                  let loaded = loadedModels[modelID] else {
-                await invalidatePreparation(
-                    preparation,
-                    modelID: modelID,
-                    error: CancellationError().localizedDescription
-                )
-                throw CancellationError()
-            }
-            modelPreparations.removeValue(forKey: modelID)
-            preparingModelIDs.remove(modelID)
-            touch(id: modelID, error: nil)
-            return loaded
-        }
-
-        // A different waiter may already have finalized this generation. An
-        // unload followed by a reload has a different token and must never be
-        // returned to a stale waiter from the prior generation.
-        if loadedModelTokens[modelID] == token,
-           !preparingModelIDs.contains(modelID),
-           let loaded = loadedModels[modelID] {
-            return loaded
-        }
-        throw CancellationError()
-    }
-
-    private func cancelPreparationWaiter(
-        modelID: String,
-        token: UUID,
-        waiterID: UUID
-    ) async {
-        guard var preparation = modelPreparations[modelID],
-              preparation.token == token,
-              preparation.waiterIDs.remove(waiterID) != nil else {
-            await awaitPreparationCleanup(token: token)
-            return
-        }
-        guard preparation.waiterIDs.isEmpty else {
-            modelPreparations[modelID] = preparation
-            return
-        }
-        await invalidatePreparation(preparation, modelID: modelID, error: nil)
-    }
-
-    private func failPreparation(
-        _ preparation: ModelPreparation,
-        modelID: String,
-        error: Error
-    ) async {
-        await invalidatePreparation(
-            preparation,
-            modelID: modelID,
-            error: error.localizedDescription
+        let residents = await residency.snapshots()
+        let candidates = RuntimeEvictionPlanner.memoryPressure(
+            evictionCandidates(residents: residents, settings: settings),
+            pressure: .elevated, excluding: excludedIDs
         )
+        guard let id = candidates.first, let resident = residents[id],
+              await residency.evictIfIdle(
+                key: id, generation: resident.generation, accessGeneration: resident.accessGeneration
+              ) else { return nil }
+        return id
     }
 
-    private func invalidatePreparation(
-        _ preparation: ModelPreparation,
-        modelID: String,
-        error: String?
-    ) async {
-        if modelPreparations[modelID]?.token == preparation.token {
-            modelPreparations.removeValue(forKey: modelID)
-            preparingModelIDs.remove(modelID)
-            preparation.task.cancel()
-            if let error {
-                touch(id: modelID, error: error)
-            }
-            if let loaded = removeLoadedModel(for: modelID, matching: preparation.token) {
-                let unloadLoadedModel = self.unloadLoadedModel
-                let preparationTask = preparation.task
-                preparationCleanupTasks[preparation.token] = Task {
-                    // Generator actors are reentrant across model resolution
-                    // and loading awaits. Let cancellation settle preparation
-                    // before unloading so a resumed prepare cannot repopulate
-                    // the old generation after cleanup.
-                    _ = await preparationTask.result
-                    await unloadLoadedModel(loaded)
-                }
-            }
+    private func evictionCandidates(
+        residents: [String: ResidentRuntimeSnapshot<RuntimeLoadedModel>],
+        settings: [String: RuntimeModelSettings]
+    ) -> [RuntimeEvictionCandidate<String>] {
+        residents.map { id, resident in
+            let policy = settings[id] ?? RuntimeModelSettings()
+            return RuntimeEvictionCandidate(
+                key: id, sortKey: id, loaded: true, ready: resident.ready,
+                lastAccess: resident.lastAccess, activeRequests: resident.activeRequests,
+                queuedRequests: resident.waitingRequests, pinned: policy.pinned, ttlSeconds: policy.ttlSeconds
+            )
         }
-        await awaitPreparationCleanup(token: preparation.token)
     }
 
-    private func awaitPreparationCleanup(token: UUID) async {
-        guard let cleanup = preparationCleanupTasks[token] else {
-            return
+    private func acquireResident(_ resolved: ResolvedModel) async throws -> ResidentRuntimeLease<String, RuntimeLoadedModel> {
+        let ensureAvailable = ensureMLXAvailable
+        do {
+            let lease = try await residency.acquire(
+                for: resolved.id,
+                make: {
+                    try ensureAvailable()
+                    return self.makeLoadedModel(for: resolved)
+                },
+                prepare: prepareLoadedModel
+            )
+            touch(id: resolved.id, error: nil)
+            return lease
+        } catch {
+            if !(error is CancellationError) { touch(id: resolved.id, error: error.localizedDescription) }
+            throw error
         }
-        await cleanup.value
-        preparationCleanupTasks.removeValue(forKey: token)
     }
 
-    private func removeLoadedModel(for modelID: String) -> RuntimeLoadedModel? {
-        loadedModelTokens.removeValue(forKey: modelID)
-        return loadedModels.removeValue(forKey: modelID)
-    }
-
-    private func removeLoadedModel(
-        for modelID: String,
-        matching token: UUID
-    ) -> RuntimeLoadedModel? {
-        guard loadedModelTokens[modelID] == token else {
-            return nil
-        }
-        return removeLoadedModel(for: modelID)
-    }
-
-    private func makeLoadedModel(for resolved: ResolvedModel) -> RuntimeLoadedModel {
+    private nonisolated func makeLoadedModel(for resolved: ResolvedModel) -> RuntimeLoadedModel {
         switch resolved.engine {
         case .textCode:
             return .textCode(
@@ -1614,10 +1372,11 @@ actor RuntimeModelPool {
         }
     }
 
-    private func snapshot(idOrAlias: String) throws -> RuntimeModelPoolEntrySnapshot {
+    private func snapshot(idOrAlias: String) async throws -> RuntimeModelPoolEntrySnapshot {
         let resolved = try resolveModel(idOrAlias, requireInstalled: false)
         let settings = try settingsStore.load().models
-        guard let snapshot = snapshot(for: resolved.id, settings: settings) else {
+        let residents = await residency.snapshots()
+        guard let snapshot = snapshot(for: resolved.id, resident: residents[resolved.id], settings: settings) else {
             throw RuntimeModelPoolError.unknownModel(idOrAlias)
         }
         return snapshot
@@ -1625,6 +1384,7 @@ actor RuntimeModelPool {
 
     private func snapshot(
         for id: String,
+        resident: ResidentRuntimeSnapshot<RuntimeLoadedModel>?,
         settings: [String: RuntimeModelSettings],
         prefixKVCache: PrefixKVCacheStats? = nil,
         continuousBatching: RuntimeDecodeBatchingStats? = nil,
@@ -1650,9 +1410,9 @@ actor RuntimeModelPool {
             category: spec?.category.rawValue ?? category(for: engine),
             engine: engine,
             installPath: installPath,
-            loaded: loadedModels[id] != nil,
-            activeRequests: state.activeRequests,
-            lastAccess: state.lastAccess,
+            loaded: resident != nil,
+            activeRequests: resident?.activeRequests ?? 0,
+            lastAccess: resident?.lastAccess ?? state.lastAccess,
             lastError: state.lastError,
             pinned: modelSettings.pinned,
             alias: modelSettings.alias,
@@ -1669,7 +1429,7 @@ actor RuntimeModelPool {
             mtp: mtp,
             benchmarkStats: state.benchmarkStats
         )
-        snapshot.ready = loadedModels[id] != nil && !preparingModelIDs.contains(id)
+        snapshot.ready = resident?.ready ?? false
         snapshot.startupTiming = state.startupTiming
         return snapshot
     }
@@ -1705,7 +1465,6 @@ actor RuntimeModelPool {
 
     private func retainLease(id: String) {
         var state = state(for: id)
-        state.activeRequests += 1
         state.lastAccess = currentDate()
         states[id] = state
     }
@@ -1736,12 +1495,12 @@ actor RuntimeModelPool {
         id: String,
         lastAccess: Date,
         activeRequests: Int = 0
-    ) {
-        loadedModels[id] = .textCode(CodeGenGenerator(modelId: id), modelPath: nil)
-        loadedModelTokens[id] = UUID()
-        preparingModelIDs.remove(id)
+    ) async {
+        await residency.seedForTesting(
+            key: id, value: .textCode(CodeGenGenerator(modelId: id), modelPath: nil),
+            lastAccess: lastAccess, activeRequests: activeRequests
+        )
         var state = state(for: id)
-        state.activeRequests = activeRequests
         state.lastAccess = lastAccess
         states[id] = state
     }
@@ -1749,8 +1508,8 @@ actor RuntimeModelPool {
     func seedLoadedLFM2ForTesting(
         id: String,
         continuousBatchingEnabled: Bool
-    ) {
-        loadedModels[id] = .textChatLFM2(
+    ) async {
+        let loaded = RuntimeLoadedModel.textChatLFM2(
             LFM2Generator(
                 modelId: id,
                 prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled,
@@ -1758,8 +1517,7 @@ actor RuntimeModelPool {
             ),
             modelPath: nil
         )
-        loadedModelTokens[id] = UUID()
-        preparingModelIDs.remove(id)
+        await residency.seedForTesting(key: id, value: loaded, lastAccess: currentDate())
         var state = state(for: id)
         state.lastAccess = currentDate()
         states[id] = state
@@ -1771,7 +1529,8 @@ final class RuntimeModelLease: @unchecked Sendable {
     let modelID: String
     let engine: RuntimeServingEngine
 
-    private let loaded: RuntimeLoadedModel
+    private let residentLease: ResidentRuntimeLease<String, RuntimeLoadedModel>
+    private var loaded: RuntimeLoadedModel { residentLease.value }
     private let pool: RuntimeModelPool
     private let lock = NSLock()
     private var released = false
@@ -1779,12 +1538,12 @@ final class RuntimeModelLease: @unchecked Sendable {
     init(
         modelID: String,
         engine: RuntimeServingEngine,
-        loaded: RuntimeLoadedModel,
+        residentLease: ResidentRuntimeLease<String, RuntimeLoadedModel>,
         pool: RuntimeModelPool
     ) {
         self.modelID = modelID
         self.engine = engine
-        self.loaded = loaded
+        self.residentLease = residentLease
         self.pool = pool
     }
 
@@ -1792,7 +1551,9 @@ final class RuntimeModelLease: @unchecked Sendable {
         guard markReleased() else { return }
         let pool = pool
         let modelID = modelID
+        let residentLease = residentLease
         Task {
+            await residentLease.release()
             await pool.releaseLease(modelID: modelID)
         }
     }
@@ -1821,6 +1582,7 @@ final class RuntimeModelLease: @unchecked Sendable {
 
     func release() async {
         guard markReleased() else { return }
+        await residentLease.release()
         await pool.releaseLease(modelID: modelID)
     }
 

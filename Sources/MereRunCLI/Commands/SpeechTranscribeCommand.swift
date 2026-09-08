@@ -129,6 +129,9 @@ struct SpeechTranscribe: AsyncParsableCommand {
     private var transcriptionExecutor: (any CLIASRTranscriptionExecutor)? { Self.transcriptionExecutorOverride }
 
     func validate() throws {
+        guard maxTokens > 0 else {
+            throw ValidationError("--max-tokens must be positive.")
+        }
         let readsStandardInput = audio == "-"
         if receipt && readsStandardInput {
             throw ValidationError("--receipt is not available for raw streaming stdin ('-'); use --jsonl.")

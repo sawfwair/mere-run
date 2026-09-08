@@ -32,8 +32,13 @@ speech, vision, music, SFX, and video.
 
 [Inference admission](./inference-admission.md) separates a server's machine
 reservation from its request queue. `MereRunAdmission` owns these coordinators
-and their leases. Runtime pools retain loaded-model, cache, and eviction
-ownership.
+and their leases. [Runtime residency](./runtime-residency.md) owns model
+generations, model leases, and eviction mechanics. Runtime adapters retain
+model construction, cache, and batching policy.
+
+The [shared transcription operation](./speech-transcription-operation.md)
+extends the typed operation boundary to file transcription and translation.
+CLI and API adapters resolve equivalent inputs through the same service.
 
 ## CLI design conventions
 
