@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add the `MereRunModelKit` library for model metadata, storage locations, artifact
+  verification, and installed lookup without inference dependencies. Existing
+  Core imports and model-resolution APIs remain source-compatible; Core supplies
+  catalog facts and runtime validation.
+
 - Add opt-in durable image records with `image generate --run-dir` and
   `api serve --image-run-records`. Records separate requested and effective
   settings, retain input and output fingerprints, and distinguish terminal

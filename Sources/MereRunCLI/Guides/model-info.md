@@ -60,4 +60,4 @@ mere.run model info ~/Models/custom-zimage --json
 ## Sources
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/ModelInfoCommand.swift
-- https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCore/MereRunModelManifest.swift
+- https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunModelKit/MereRunModelManifest.swift

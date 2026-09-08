@@ -12,8 +12,8 @@ For the broader documentation set, start at the
 - CLI entry point: `Sources/MereRunCLI/MereRunCLI.swift`
 - Shared CLI helpers: `Sources/MereRunCLI/Support`
 - Model paths and manifests:
-  - `Sources/MereRunCore/MereRunModelPaths.swift`
-  - `Sources/MereRunCore/MereRunModelManifest.swift`
+  - `Sources/MereRunModelKit/MereRunModelPaths.swift`
+  - `Sources/MereRunModelKit/MereRunModelManifest.swift`
   - `Sources/MereRunCore/ModelResolver.swift`
 
 If you want to understand what a command does end to end, start at the command

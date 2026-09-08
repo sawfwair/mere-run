@@ -50,4 +50,4 @@ MERERUN_MODELS_DIR=/Volumes/Models/mere.run mere.run model repair-manifests
 ## Sources
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/ModelRepairManifestsCommand.swift
-- https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCore/MereRunModelManifest.swift
+- https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCore/MereRunModelManifest+Templates.swift

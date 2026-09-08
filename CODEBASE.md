@@ -4,7 +4,8 @@
 graphical user interface (GUI) for local-first inference on Apple Silicon. Use
 this map to find the module that owns your change. The repository exposes the
 public `mere.run` executable and a thin `mere.run.app` SwiftUI wrapper that runs
-the CLI. `MereRunCore` owns runtime code. `AudioCore` and `AudioCodecs` own
+the CLI. `MereRunCore` owns runtime code. `MereRunModelKit` owns model
+metadata and installed lookup without inference dependencies. `AudioCore` and `AudioCodecs` own
 shared audio primitives. `AudioSTT` and `AudioTTS` own speech runtimes.
 `MereRunCLI` owns the modality-first command surface, and `MereRunApp` owns the
 GUI shell.
@@ -25,7 +26,8 @@ GUI shell.
 - `Sources/MereRunEvaluation/`: runtime-neutral external evaluation-pack schema, validation, and content hashing
 - `Sources/MereRunRelayKit/`: portable relay client, executor profiles/auth, and workflow wire types shared by the CLI and app shells
 - `apps/ios/`: the iOS Studio app, a relay client over `MereRunRelayKit` (see `docs/ios-studio.md`)
-- `Sources/MereRunCore/`: model paths, manifests, source config, shared runtime helpers, and modality runtime implementations
+- `Sources/MereRunModelKit/`: model identities, manifests, storage paths, registered locations, artifact pins, and installed lookup
+- `Sources/MereRunCore/`: catalog assembly, runtime manifest templates, downloads, shared runtime helpers, and modality runtime implementations
 - `Sources/MereRunCore/ImageGeneration*.swift`: shared image options, model selection, validation, execution, and typed outcomes
 - `Sources/MereRunCore/LTX/`: native video generation and MP4 output
 - `Sources/MereRunCore/Cosmos3/`: native Cosmos3-Edge omnimodal generation,
