@@ -123,11 +123,35 @@ addressable for repair and inspection but are not standalone chat models.
 The public runtime resolves these IDs directly. Documentation and examples must use
 the canonical names shown by `mere.run model list`.
 
-## Runtime entrypoints
+## Library ownership
 
-- `Sources/MereRunCore/MereRunModelPaths.swift`
-- `Sources/MereRunCore/MereRunModelManifest.swift`
+Use `MereRunModelKit` for canonical identities, manifest IO and provenance,
+configured storage paths, registered locations, artifact verification, and
+installed-only resolution. Its only package dependency is Crypto; it does not
+compile the inference runtimes.
+
+`InstalledModelResolver` accepts catalog descriptors and a required runtime
+validator. It checks location policy and manifest identity before calling that
+validator. Core supplies the catalog facts, fallback IDs, and family validators
+through the existing `ModelResolver` API. Core also retains downloads, manifest
+templates, and checkpoint loading.
+
+To build the metadata library and its test module independently, run:
+
+```bash
+swift build --target MereRunModelKitTests
+```
+
+This command compiles the test module; run `swift test` to execute the package
+tests. SwiftPM still resolves the package dependencies before a target build.
+
+## Runtime entry points
+
+- `Sources/MereRunModelKit/MereRunModelPaths.swift`
+- `Sources/MereRunModelKit/MereRunModelManifest.swift`
+- `Sources/MereRunModelKit/InstalledModelResolver.swift`
 - `Sources/MereRunCore/ModelResolver.swift`
+- `Sources/MereRunCore/MereRunModelManifest+Templates.swift`
 
 ## Command responsibilities
 

@@ -20,9 +20,10 @@ the deep model code.
 
 Almost every command eventually passes through the same model-resolution layer:
 
-- `MereRunModelPaths.swift`
-- `MereRunModelManifest.swift`
-- `ModelResolver.swift`
+- `MereRunModelKit/MereRunModelPaths.swift`: configured storage paths
+- `MereRunModelKit/MereRunModelManifest.swift`: metadata and provenance
+- `MereRunModelKit/InstalledModelResolver.swift`: location policy and lookup
+- `MereRunCore/ModelResolver.swift`: catalog and runtime-validation adapter
 
 That shared path is what keeps the command surface coherent across image, text,
 speech, vision, music, SFX, and video.

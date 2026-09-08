@@ -20,18 +20,23 @@ mere-run/
 
 ## SwiftPM products
 
-`Package.swift` defines seven public products:
+`Package.swift` defines these public products:
 
+- `MereRunContract`
+- `MereRunEvaluation`
+- `MereRunRelayKit`
+- `MereRunModelKit`
 - `MereRunCore`
 - `AudioCore`
 - `AudioCodecs`
 - `AudioSTT`
 - `AudioTTS`
+- `MediaIO` (when its source target is available)
 - `mere.run` (the executable product backed by the `MereRunCLI` target)
 - `mere.run.app` (the optional SwiftUI studio backed by the `MereRunApp` target)
 
-Those map cleanly to the main runtime families exposed by the CLI and the
-optional macOS studio.
+The library products provide shared contracts, model management, and runtime
+families. The app executable is included on Apple platforms.
 
 The Linux compatibility boundary is the headless `mere.run` CLI and reusable
 library code. `mere.run.app`, SwiftUI views, app bundling, installer behavior,
@@ -80,9 +85,17 @@ on-device runtime paths from the root package. Maintainer-only provisioning,
 archive export, and App Store Connect upload automation live outside this
 public repository.
 
+### `Sources/MereRunModelKit`
+
+Model identities, manifests, configured paths, registered locations, artifact
+pins, and installed lookup. This library depends on Foundation and Crypto.
+Callers supply catalog descriptors and runtime validation for installed lookup.
+
 ### `Sources/MereRunCore`
 
-The shared inference and model-management library.
+The shared inference library. Core owns catalog assembly, runtime-dependent
+manifest templates, downloads, and family validation. It re-exports ModelKit
+types and delegates installed lookup through the existing `ModelResolver` API.
 
 Key subdirectories:
 

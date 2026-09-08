@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add the `MereRunModelKit` library for model metadata, storage locations, artifact
+  verification, and installed lookup without inference dependencies. Existing
+  Core imports and model-resolution APIs remain source-compatible; Core supplies
+  catalog facts and runtime validation.
+
 - Accept explicit `top_k` in supported native chat APIs and preserve model
   sampling defaults independently when clients override temperature or min-p.
 - Add presence, frequency, and repetition penalty controls to Qwen-family API

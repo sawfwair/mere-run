@@ -132,6 +132,7 @@ var products: [Product] = [
   .library(name: "MereRunContract", targets: ["MereRunContract"]),
   .library(name: "MereRunEvaluation", targets: ["MereRunEvaluation"]),
   .library(name: "MereRunRelayKit", targets: ["MereRunRelayKit"]),
+  .library(name: "MereRunModelKit", targets: ["MereRunModelKit"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
   .library(name: "AudioCore", targets: ["AudioCore"]),
   .library(name: "AudioCodecs", targets: ["AudioCodecs"]),
@@ -150,6 +151,7 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFFT"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunCoreDependencies.append("MereRunModelKit")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
@@ -341,6 +343,12 @@ targets.append(contentsOf: [
     ]
   ),
   .target(
+    name: "MereRunModelKit",
+    dependencies: [.product(name: "Crypto", package: "swift-crypto")],
+    path: "Sources/MereRunModelKit",
+    exclude: ["README.md"]
+  ),
+  .target(
     name: "MereRunCore",
     dependencies: mereRunCoreDependencies,
     path: "Sources/MereRunCore",
@@ -501,6 +509,11 @@ targets.append(contentsOf: [
     name: "MereRunRelayKitTests",
     dependencies: ["MereRunRelayKit"],
     path: "Tests/MereRunRelayKitTests"
+  ),
+  .testTarget(
+    name: "MereRunModelKitTests",
+    dependencies: ["MereRunModelKit"],
+    path: "Tests/MereRunModelKitTests"
   ),
   .testTarget(
     name: "MereRunCoreTests",
