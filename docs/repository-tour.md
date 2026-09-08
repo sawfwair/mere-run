@@ -25,6 +25,7 @@ mere-run/
 - `MereRunContract`
 - `MereRunEvaluation`
 - `MereRunRelayKit`
+- `MereRunAdmission`
 - `MereRunModelKit`
 - `MereRunCore`
 - `AudioCore`
@@ -84,6 +85,13 @@ simulator release gate. It consumes the portable relay client and selected
 on-device runtime paths from the root package. Maintainer-only provisioning,
 archive export, and App Store Connect upload automation live outside this
 public repository.
+
+### `Sources/MereRunAdmission`
+
+Machine reservations, request queues, memory-pressure policy, and admission
+leases without inference, HTTP, or parser dependencies. See
+[Inference admission](./internals/inference-admission.md) for ownership and
+streaming-lifetime rules.
 
 ### `Sources/MereRunModelKit`
 

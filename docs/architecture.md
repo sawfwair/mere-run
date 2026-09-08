@@ -11,6 +11,7 @@ For the broader documentation set, start at the
 
 - CLI entry point: `Sources/MereRunCLI/MereRunCLI.swift`
 - Shared CLI helpers: `Sources/MereRunCLI/Support`
+- [Inference admission](./internals/inference-admission.md): `Sources/MereRunAdmission`
 - Model paths and manifests:
   - `Sources/MereRunModelKit/MereRunModelPaths.swift`
   - `Sources/MereRunModelKit/MereRunModelManifest.swift`

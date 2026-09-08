@@ -109,6 +109,12 @@ blindly loading incompatible working sets while allowing measured concurrency
 inside the resident pool. Standard servers consume two RAM-scaled permits;
 DeepSeek V4 Flash servers run with exclusive machine admission.
 
+`MereRunAdmission` owns machine reservations and the in-process request queue.
+The server holds its machine lease for its lifetime; request slots operate
+inside that reservation. Loaded-model leases, batching, caches, pinning, and
+eviction remain in the runtime pools. See
+[Inference admission](../internals/inference-admission.md) for lifecycle details.
+
 ## Runtime entrypoints
 
 ### CLI

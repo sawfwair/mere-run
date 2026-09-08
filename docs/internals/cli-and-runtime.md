@@ -28,6 +28,13 @@ Almost every command eventually passes through the same model-resolution layer:
 That shared path is what keeps the command surface coherent across image, text,
 speech, vision, music, SFX, and video.
 
+## Resource ownership
+
+[Inference admission](./inference-admission.md) separates a server's machine
+reservation from its request queue. `MereRunAdmission` owns these coordinators
+and their leases. Runtime pools retain loaded-model, cache, and eviction
+ownership.
+
 ## CLI design conventions
 
 The public surface follows three rules:

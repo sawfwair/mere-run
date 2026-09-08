@@ -132,6 +132,7 @@ var products: [Product] = [
   .library(name: "MereRunContract", targets: ["MereRunContract"]),
   .library(name: "MereRunEvaluation", targets: ["MereRunEvaluation"]),
   .library(name: "MereRunRelayKit", targets: ["MereRunRelayKit"]),
+  .library(name: "MereRunAdmission", targets: ["MereRunAdmission"]),
   .library(name: "MereRunModelKit", targets: ["MereRunModelKit"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
   .library(name: "AudioCore", targets: ["AudioCore"]),
@@ -297,6 +298,7 @@ audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXNN"))
 audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
 var mereRunCLIDependencies: [Target.Dependency] = [
+  "MereRunAdmission",
   "MereRunContract",
   "MereRunEvaluation",
   "MereRunRelayKit",
@@ -341,6 +343,12 @@ targets.append(contentsOf: [
     exclude: [
       "README.md"
     ]
+  ),
+  .target(
+    name: "MereRunAdmission",
+    dependencies: [],
+    path: "Sources/MereRunAdmission",
+    exclude: ["README.md"]
   ),
   .target(
     name: "MereRunModelKit",
@@ -509,6 +517,11 @@ targets.append(contentsOf: [
     name: "MereRunRelayKitTests",
     dependencies: ["MereRunRelayKit"],
     path: "Tests/MereRunRelayKitTests"
+  ),
+  .testTarget(
+    name: "MereRunAdmissionTests",
+    dependencies: ["MereRunAdmission"],
+    path: "Tests/MereRunAdmissionTests"
   ),
   .testTarget(
     name: "MereRunModelKitTests",

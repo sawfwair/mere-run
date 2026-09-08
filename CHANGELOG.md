@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Extract machine-wide reservations, request admission, and memory-pressure
+  policy into the dependency-free `MereRunAdmission` library. Servers retain
+  one machine reservation while their request queues manage local concurrency.
+- Reject requests cancelled before admission or during pressure sampling before
+  they take a request slot. Scoped operations release admission on every outcome
+  and count cancellation separately from completion.
+
 - Add the `MereRunModelKit` library for model metadata, storage locations, artifact
   verification, and installed lookup without inference dependencies. Existing
   Core imports and model-resolution APIs remain source-compatible; Core supplies

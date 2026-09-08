@@ -14,8 +14,11 @@ Shared helpers for the public command surface.
 - `APIImageGeneration.swift`: API v1 compatibility settings for the Core image
   operation. `ImageGenerationPreflight.swift` presents the same Core resolver's
   diagnostics as an observational report.
-- `MachineInferenceAdmission.swift`: crash-safe weighted admission shared by
-  heavyweight CLI and API-server processes on one machine.
+- `MachineInferenceAdmission.swift`: CLI workload classification, the shared
+  state-directory adapter, and process bootstrap over `MereRunAdmission`.
+- `AdmissionExports.swift`: Core progress adapters for admission telemetry.
+- `RuntimeModelPool.swift` and `APISidecarModelPool.swift`: loaded-model
+  ownership, model leases, batching, caches, and eviction.
 
 Keep stdout machine-readable when a command can be scripted; diagnostics and
 progress belong on stderr.

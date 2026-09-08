@@ -230,32 +230,34 @@ struct APIServe: AsyncParsableCommand {
         let resolvedLoraPath = try resolveLoraPath(modelPath: resolvedModelPath)
         let gemma4KVCacheQuantization = try resolveGemma4KVCacheQuantization()
         let memoryPressurePolicy = try resolveMemoryPressurePolicy()
-        let machineAdmissionLease = try await MachineInferenceCoordinator.shared.acquire(
-            CLIInferenceAdmissionClassifier.apiServerRequest(engine: engine, modelID: defaultModelID)
-        ) { snapshot in
-            CLIStderr.write(
-                "API server queued by machine admission "
-                    + "(\(snapshot.activePermits)/\(snapshot.capacityPermits) permits active, "
-                    + "\(snapshot.queued.count) queued).\n"
+        try await withMachineInferenceAdmission(
+            using: .shared,
+            request: CLIInferenceAdmissionClassifier.apiServerRequest(engine: engine, modelID: defaultModelID),
+            onWait: { snapshot in
+                CLIStderr.write(
+                    "API server queued by machine admission "
+                        + "(\(snapshot.activePermits)/\(snapshot.capacityPermits) permits active, "
+                        + "\(snapshot.queued.count) queued).\n"
+                )
+            }
+        ) {
+            CLIStderr.write("\(PiAgentIntegration.serverAdmissionMarker)\n")
+            let server = try await CodeGenServer(
+                defaultModelID: defaultModelID,
+                modelPath: resolvedModelPath,
+                fallbackLoraPath: resolvedLoraPath,
+                apiKey: resolvedAPIKey,
+                rateLimitPerMinute: rateLimitPerMinute,
+                maxActiveRequests: maxActiveRequests,
+                engine: engine,
+                contextSize: contextSize,
+                gemma4KVCacheQuantization: gemma4KVCacheQuantization,
+                memoryPressurePolicy: memoryPressurePolicy,
+                imageRunRecords: imageRunRecords.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                warmupDefaultModel: warmup
             )
+            try await server.run(host: host, port: port)
         }
-        defer { machineAdmissionLease.release() }
-        CLIStderr.write("\(PiAgentIntegration.serverAdmissionMarker)\n")
-        let server = try await CodeGenServer(
-            defaultModelID: defaultModelID,
-            modelPath: resolvedModelPath,
-            fallbackLoraPath: resolvedLoraPath,
-            apiKey: resolvedAPIKey,
-            rateLimitPerMinute: rateLimitPerMinute,
-            maxActiveRequests: maxActiveRequests,
-            engine: engine,
-            contextSize: contextSize,
-            gemma4KVCacheQuantization: gemma4KVCacheQuantization,
-            memoryPressurePolicy: memoryPressurePolicy,
-            imageRunRecords: imageRunRecords.map { URL(fileURLWithPath: $0).standardizedFileURL },
-            warmupDefaultModel: warmup
-        )
-        try await server.run(host: host, port: port)
     }
 
     func defaultRuntimeModelID(modelPath: String?) -> String {
@@ -3906,15 +3908,7 @@ func withVFXRequestAdmission<T: Sendable>(
     isolation _: isolated (any Actor)? = #isolation,
     operation: () async throws -> T
 ) async throws -> T {
-    let lease = try await admission.acquire()
-    do {
-        let result = try await operation()
-        await lease.release()
-        return result
-    } catch {
-        await lease.release()
-        throw error
-    }
+    try await withRuntimeRequestAdmission(using: admission, operation: operation)
 }
 
 // MARK: - Server Implementation
