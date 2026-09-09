@@ -49,6 +49,7 @@ required_module_readmes=(
   Sources/MereRunKVCache/README.md
   Sources/MereRunTensor/README.md
   Sources/MereRunImageModels/README.md
+  Sources/MereRunDecode/README.md
   Sources/AudioSTT/Qwen3ASR/README.md
   Sources/AudioTTS/Qwen3TTS/README.md
   apps/macos/README.md

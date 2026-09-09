@@ -1,5 +1,6 @@
 import XCTest
-@testable import MereRunCore
+import MereRunMLXTestSupport
+@testable import MereRunDecode
 
 final class IncrementalTokenTextDecoderTests: XCTestCase {
     func testBuffersTrailingReplacementScalarsUntilSequenceResolves() {

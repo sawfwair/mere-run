@@ -21,6 +21,14 @@ For the broader documentation set, start at the
 If you want to understand what a command does end to end, start at the command
 file, and then use the table to open the family entry point.
 
+## Shared autoregressive decoding
+
+Read [shared decode boundaries](./internals/decode-runtime-boundaries.md) before
+changing a family decoder. `Sources/MereRunDecode` owns sampling, pipelined
+loops, streaming, and logprob capture. `Sources/MereRunKVCache` owns attention
+cache implementations, including optional affine quantization. Model runtimes
+supply forward callbacks and own prompt preparation and resource cleanup.
+
 ## Image families
 
 Read the [shared image operation](./internals/image-generation-operation.md)

@@ -4,10 +4,11 @@
 /// U+FFFD when a single token or partial sequence is decoded. The replacement
 /// disappears once the remaining byte tokens arrive, so streaming must wait
 /// for a stable cumulative prefix before exposing it.
-struct IncrementalTokenTextDecoder {
+package struct IncrementalTokenTextDecoder {
+    package init() {}
     private var emittedUTF8: [UInt8] = []
 
-    mutating func append(decodedText: String) -> String {
+    package mutating func append(decodedText: String) -> String {
         var stableText = decodedText
         while stableText.last == "\u{FFFD}" {
             stableText.removeLast()

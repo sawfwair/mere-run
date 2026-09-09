@@ -1,7 +1,8 @@
 import Foundation
 import MLX
 import XCTest
-@testable import MereRunCore
+import MereRunMLXTestSupport
+@testable import MereRunDecode
 
 /// Contract tests for the shared pipelined decode loop, driven by a scripted
 /// fake model: one-hot logits make greedy sampling deterministic, so the
