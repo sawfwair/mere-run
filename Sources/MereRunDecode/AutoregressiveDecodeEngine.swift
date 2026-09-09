@@ -131,7 +131,7 @@ public enum AutoregressiveDecodeEngine {
             let tokenPiece = decodeToken?(token) ?? ""
             let region = regionTracker.classify(tokenPiece)
             if request.logprobCapture.isEnabled {
-                let captureStart = CFAbsoluteTimeGetCurrent()
+                let captureStart = Date().timeIntervalSinceReferenceDate
                 var measurement = tokenLogprobMeasurement(
                     logits: sample.logits,
                     selectedToken: token,
@@ -151,7 +151,7 @@ public enum AutoregressiveDecodeEngine {
                     }
                 }
                 measuredTokens.append(measurement)
-                logprobCaptureSeconds += CFAbsoluteTimeGetCurrent() - captureStart
+                logprobCaptureSeconds += Date().timeIntervalSinceReferenceDate - captureStart
             }
             diagnosticHistory.append(token)
             let progressPiece = decodeTokens.map {
@@ -182,10 +182,10 @@ public enum AutoregressiveDecodeEngine {
             // iterations can queue the next dependent forward before the host
             // confirms the preceding token.
             if generated.isEmpty, let first = pending {
-                let waitStart = CFAbsoluteTimeGetCurrent()
+                let waitStart = Date().timeIntervalSinceReferenceDate
                 pending = nil
                 let confirmed = confirm(first)
-                waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                waitSeconds += Date().timeIntervalSinceReferenceDate - waitStart
                 guard confirmed else {
                     return result(buildSeconds: buildSeconds, waitSeconds: waitSeconds)
                 }
@@ -197,7 +197,7 @@ public enum AutoregressiveDecodeEngine {
             let hasPending = pending != nil
             let isFinalSample = (!hasPending && generated.count == request.tokenBudget - 1)
                 || (hasPending && generated.count == request.tokenBudget - 2)
-            let buildStart = CFAbsoluteTimeGetCurrent()
+            let buildStart = Date().timeIntervalSinceReferenceDate
             let sampleLogits = logits[0, -1, 0...]
             let tokenArray = sampledTokenArray(
                 logits: sampleLogits,
@@ -209,20 +209,20 @@ public enum AutoregressiveDecodeEngine {
 
             if isFinalSample {
                 asyncEval(tokenArray)
-                buildSeconds += CFAbsoluteTimeGetCurrent() - buildStart
+                buildSeconds += Date().timeIntervalSinceReferenceDate - buildStart
                 if let previous = pending {
-                    let waitStart = CFAbsoluteTimeGetCurrent()
+                    let waitStart = Date().timeIntervalSinceReferenceDate
                     pending = nil
                     let confirmed = confirm(previous)
-                    waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                    waitSeconds += Date().timeIntervalSinceReferenceDate - waitStart
                     guard confirmed else {
                         return result(buildSeconds: buildSeconds, waitSeconds: waitSeconds)
                     }
                 }
                 if generated.count < request.tokenBudget {
-                    let waitStart = CFAbsoluteTimeGetCurrent()
+                    let waitStart = Date().timeIntervalSinceReferenceDate
                     _ = confirm(sample)
-                    waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                    waitSeconds += Date().timeIntervalSinceReferenceDate - waitStart
                 }
                 break
             }
@@ -234,13 +234,13 @@ public enum AutoregressiveDecodeEngine {
             )
             logits = try stepForward(tokenArray.asType(.int32).reshaped(1, 1))
             asyncEval([logits, tokenArray])
-            let buildEnd = CFAbsoluteTimeGetCurrent()
+            let buildEnd = Date().timeIntervalSinceReferenceDate
             buildSeconds += buildEnd - buildStart
 
             if let previous = pending {
                 pending = nil
                 let confirmed = confirm(previous)
-                waitSeconds += CFAbsoluteTimeGetCurrent() - buildEnd
+                waitSeconds += Date().timeIntervalSinceReferenceDate - buildEnd
                 guard confirmed else {
                     return result(buildSeconds: buildSeconds, waitSeconds: waitSeconds)
                 }
@@ -297,9 +297,9 @@ public enum AutoregressiveDecodeEngine {
 
         while true {
             if let tokenArray = pending {
-                let waitStart = CFAbsoluteTimeGetCurrent()
+                let waitStart = Date().timeIntervalSinceReferenceDate
                 let token = tokenArray.item(Int.self)
-                waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
+                waitSeconds += Date().timeIntervalSinceReferenceDate - waitStart
                 pending = nil
 
                 didSampleToken?(token)
@@ -320,7 +320,7 @@ public enum AutoregressiveDecodeEngine {
                 }
             }
 
-            let buildStart = CFAbsoluteTimeGetCurrent()
+            let buildStart = Date().timeIntervalSinceReferenceDate
             let rawLogits = logits[0, -1, 0...]
             let nextLogits = processLogits?(rawLogits, stateTokens) ?? rawLogits
             let tokenArray = sampledTokenArray(
@@ -336,7 +336,7 @@ public enum AutoregressiveDecodeEngine {
             )
             logits = stepForward(tokenArray.asType(.int32).reshaped(1, 1))
             asyncEval([logits, tokenArray])
-            buildSeconds += CFAbsoluteTimeGetCurrent() - buildStart
+            buildSeconds += Date().timeIntervalSinceReferenceDate - buildStart
             pending = tokenArray
         }
     }
