@@ -159,7 +159,7 @@ final class Gemma4DecodeFusedKernelsTests: MereRunCoreTestCase {
             return QuantizedLinear(weight: weight, bias: nil, groupSize: 64, bits: 4)
         }
 
-        guard let fused = Gemma4FusedQuantizedProjection.fuse(projections) else {
+        guard let fused = FusedQuantizedProjection.fuse(projections) else {
             XCTFail("expected fusion to succeed for uniform QuantizedLinear projections")
             return
         }
@@ -175,7 +175,7 @@ final class Gemma4DecodeFusedKernelsTests: MereRunCoreTestCase {
             projections[2],
         ]
         XCTAssertFalse(fused.matches(adapted))
-        XCTAssertNil(Gemma4FusedQuantizedProjection.fuse(adapted))
+        XCTAssertNil(FusedQuantizedProjection.fuse(adapted))
 
         let x = MLXRandom.normal([2, 1, input]).asType(.float16)
         let fusedParts = fused.callSplit(x)

@@ -8,6 +8,7 @@ import MLXNN
 import UniformTypeIdentifiers
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q38FlashNextVisionCheckpointTests: MereRunCoreTestCase {
     func testVisionRotaryCoefficientsRetainFloat32Precision() {

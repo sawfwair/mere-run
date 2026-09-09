@@ -6,7 +6,8 @@ Core re-exports those types for existing callers.
 Shared full-attention caches live in `MereRunKVCache`. Tensor loading, Qwen
 encoder layers, and FLUX.2/ZImage models live in `MereRunTensor`,
 `MereRunTextEncoder`, and `MereRunImageModels`. Core re-exports these libraries and `MereRunDecode`, which owns shared token
-sampling, decoding, streaming, and logprob diagnostics.
+sampling, decoding, streaming, and logprob diagnostics. Native Qwen model layers
+live in `MereRunQwenModel`; Core retains Qwen resource loading and generation.
 
 - `Generation.swift`: image and chat request/response contracts.
 - `ImageGenerationOptions.swift` and `ImageGenerationPlan.swift`: typed image

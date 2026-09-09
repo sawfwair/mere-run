@@ -4,6 +4,7 @@ import MLX
 import MLXNN
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Exports only the installed vision tower, never the language model. The
 /// exact preprocessed pixels allow an independent backend to inspect errors.

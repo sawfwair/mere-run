@@ -1,6 +1,7 @@
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q35RequestStreamTests: MereRunCoreTestCase {
     func testSequentialRequestsReuseStreamsAfterExecutorHops() async {

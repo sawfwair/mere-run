@@ -2,6 +2,7 @@ import MLX
 import MLXNN
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 @testable import MereRunTensor
 
 final class PortableQuantizedMatmulTests: MereRunCoreTestCase {

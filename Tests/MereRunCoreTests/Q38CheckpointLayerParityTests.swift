@@ -4,6 +4,7 @@ import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Loads one decoder block at a time, never the full checkpoint or PLE table.
 /// Learned weights complement the synthetic fixtures when rare rounding

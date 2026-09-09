@@ -4,6 +4,7 @@ import CryptoKit
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q38QuantizationCheckpointTests: MereRunCoreTestCase {
     func testInstalledCandidateManifest() async throws {

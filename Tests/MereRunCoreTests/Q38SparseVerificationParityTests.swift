@@ -4,6 +4,7 @@ import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q38SparseVerificationParityTests: MereRunCoreTestCase {
     func testFlashNextBF16ReadoutMatchesSerialRows() throws {

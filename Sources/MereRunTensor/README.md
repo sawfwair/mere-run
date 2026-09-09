@@ -8,6 +8,9 @@ Checkpoint loading, quantized modules, and shared tensor kernels.
 - `DenseLayer.swift`, `PortableQuantizedMatmul.swift`, and
   `ResidualQuantizedLinear.swift` own shared projection and embedding modules.
 - `SmallBatchAffineQMV.swift` and `DynamicSparseAttention.swift` own tensor kernels.
+- `SafetensorsStreamingLoader.swift` reads typed headers and selected arrays.
+- `FusedQuantizedProjection.swift` and `SmallBatchAffineGatherQMV.swift` share
+  quantized projection fusion and expert-route kernels across model families.
 - `MLXCheckpoint.swift` owns gradient recomputation.
 
 This library depends on MLX and ModelKit. It does not resolve or download models.

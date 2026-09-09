@@ -2,6 +2,7 @@ import Foundation
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Opt-in: loads the installed 73 GB mixed checkpoint. Never part of the
 /// fixture-only gate, and never downloads assets or starts a resident server.

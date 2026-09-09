@@ -28,6 +28,7 @@ mere-run/
 - `MereRunAdmission`
 - `MereRunResidency`
 - `MereRunModelKit`
+- `MereRunQwenModel`
 - `MereRunDecode`
 - `MereRunCore`
 - `MereRunTensor`
@@ -116,6 +117,13 @@ Callers supply catalog descriptors and runtime validation for installed lookup.
 `Sources/MereRunImageModels` owns FLUX.2 and ZImage transformer layers and the
 shared VAE. Core re-exports these libraries and owns generation orchestration.
 See [Image runtime boundaries](./internals/image-runtime-boundaries.md).
+
+### `Sources/MereRunQwenModel`
+
+Qwen-family configurations, dense and hybrid attention, expert routing, vision
+layers, and MTP draft state. Core retains loading, prompts, prefill scheduling,
+target verification, and request output. See
+[Qwen runtime boundaries](./internals/qwen-runtime-boundaries.md).
 
 ### `Sources/MereRunDecode`
 

@@ -37,7 +37,7 @@ custom_rules:
   raw_dynamic_json_boundary:
     name: "Raw Dynamic JSON Boundary"
     included:
-      - Sources/MereRunCore/SafetensorsStreamingLoader.swift
+      - Sources/MereRunTensor/SafetensorsStreamingLoader.swift
       - Sources/MereRunCore/Flux2Klein/Flux2KleinGeneratoriOS+ModelLoading.swift
       - Sources/MereRunCore/LoRA/MFluxCheckpointCompatArtifacts.swift
       - Sources/MereRunCore/LoRA/MFluxResumeIteratorCompat.swift

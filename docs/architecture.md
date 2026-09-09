@@ -29,6 +29,13 @@ loops, streaming, and logprob capture. `Sources/MereRunKVCache` owns attention
 cache implementations, including optional affine quantization. Model runtimes
 supply forward callbacks and own prompt preparation and resource cleanup.
 
+## Qwen text and vision-language models
+
+Read [Qwen runtime boundaries](./internals/qwen-runtime-boundaries.md) for the
+model library and generator stages. Start at `Sources/MereRunCore/Q35/Q35Generator.swift`
+for requests, then follow loading, prefill, and decode extensions. Model math
+lives in `Sources/MereRunQwenModel`.
+
 ## Image families
 
 Read the [shared image operation](./internals/image-generation-operation.md)

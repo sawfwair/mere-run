@@ -2,6 +2,7 @@ import Foundation
 import MLX
 import XCTest
 @_spi(Benchmark) @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Opt-in full-checkpoint measurements. Use an optimized test build and a
 /// separate process per MTP setting; no logprob capture or prefix reuse.

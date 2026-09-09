@@ -1,6 +1,7 @@
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Fixed-code affine least squares with a diagonal input-second-moment metric.
 /// This is not a full AWQ/GPTQ/DWQ implementation and does not recover BF16 weights.

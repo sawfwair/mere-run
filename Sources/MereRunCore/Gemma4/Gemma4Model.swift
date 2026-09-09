@@ -597,7 +597,7 @@ final class Gemma4MLP: Module {
     @ModuleInfo(key: "down_proj") var downProj: Linear
     @ModuleInfo(key: "up_proj") var upProj: Linear
 
-    private var fusedGateUp: Gemma4FusedQuantizedProjection?
+    private var fusedGateUp: FusedQuantizedProjection?
     private var fusedGateUpAttempted = false
 
     init(config: Gemma4TextConfig, layerIndex: Int, forceKVShared: Bool = false) {
@@ -620,7 +620,7 @@ final class Gemma4MLP: Module {
         return downProj(geluApproximate(gateProj(x)) * upProj(x))
     }
 
-    func resolvedFusedGateUp() -> Gemma4FusedQuantizedProjection? {
+    func resolvedFusedGateUp() -> FusedQuantizedProjection? {
         guard Gemma4FusedProjectionPolicy.enabled else { return nil }
         let sources: [Linear?] = [gateProj, upProj]
         if let fused = fusedGateUp {
@@ -630,7 +630,7 @@ final class Gemma4MLP: Module {
         }
         if !fusedGateUpAttempted {
             fusedGateUpAttempted = true
-            fusedGateUp = Gemma4FusedQuantizedProjection.fuse(sources)
+            fusedGateUp = FusedQuantizedProjection.fuse(sources)
         }
         return fusedGateUp
     }
@@ -849,7 +849,7 @@ final class Gemma4Attention: Module {
     private let rmsNormEps: Float
     private let isKVSharedLayer: Bool
     private let useKeyEqualsValue: Bool
-    private var fusedQKV: Gemma4FusedQuantizedProjection?
+    private var fusedQKV: FusedQuantizedProjection?
     private var fusedQKVAttempted = false
     private var compiledQKVSegment: Gemma4CompiledSegment?
     private var compiledQKVAttempted = false
@@ -1025,7 +1025,7 @@ final class Gemma4Attention: Module {
         return oProj(reshaped)
     }
 
-    private func resolvedFusedQKV() -> Gemma4FusedQuantizedProjection? {
+    private func resolvedFusedQKV() -> FusedQuantizedProjection? {
         guard Gemma4FusedProjectionPolicy.enabled else { return nil }
         let sources: [Linear?] = useKeyEqualsValue ? [qProj, kProj] : [qProj, kProj, vProj]
         if let fused = fusedQKV {
@@ -1037,7 +1037,7 @@ final class Gemma4Attention: Module {
         }
         if !fusedQKVAttempted {
             fusedQKVAttempted = true
-            fusedQKV = Gemma4FusedQuantizedProjection.fuse(sources)
+            fusedQKV = FusedQuantizedProjection.fuse(sources)
         }
         return fusedQKV
     }

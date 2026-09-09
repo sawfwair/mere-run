@@ -17,14 +17,15 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 
 ## Key modules
 
-- `Sources/MereRunCLI/Commands/`: one file per public command family or large subcommand cluster
-- `apps/macos/`: macOS Studio sources, tests, assets, command templates, and CLI process launching
+- `Sources/MereRunCLI/Commands/`: public command families
+- `apps/macos/`: macOS Studio sources, tests, assets, templates, and CLI launching
 - `Sources/MereRunEvaluation/`: runtime-neutral external evaluation-pack schema, validation, and content hashing
 - `Sources/MereRunRelayKit/`: portable relay client, executor profiles/auth, and workflow wire types shared by the CLI and app shells
 - `apps/ios/`: the iOS Studio app, a relay client over `MereRunRelayKit` (see `docs/ios-studio.md`)
 - `Sources/MereRunAdmission/` and `Sources/MereRunResidency/`: reservations, queues, model generations, leases, and eviction
 - `Sources/MereRunModelKit/`: model identities, manifests, storage paths, registered locations, artifact pins, and installed lookup
 - `Sources/MereRunCore/`: catalog assembly, downloads, and runtime orchestration
+- `Sources/MereRunQwenModel/`: Qwen configurations, layers, caches, and draft state
 - `Sources/MereRunDecode/`: shared sampling, pipelined token decoding, streaming, and logprob diagnostics
 - `Sources/MereRunTensor/`, `Sources/MereRunTextEncoder/`, and `Sources/MereRunImageModels/`: checkpoint loading, tensor kernels, and image model layers
 - `Sources/MereRunCore/ImageGeneration*.swift` and `Sources/AudioCore/SpeechTranscriptionOperation.swift`: shared operation plans, validation, execution, and outcomes
