@@ -1,5 +1,5 @@
 {
-  "originHash" : "9ad37f612071abb2f5da8abd376d1b15d549697b97800a310061f9c4fc0ea30e",
+  "originHash" : "e8b7492b24df23a1c39671d8b93201d2dcf6b6a345c03a8e8daa0cb038e72b72",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -34,15 +34,6 @@
       "location" : "https://github.com/sawfwair/mlx-swift",
       "state" : {
         "revision" : "001d1aa3e5655d7efc073fb9632f952f57cdf528"
-      }
-    },
-    {
-      "identity" : "sparkle",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sparkle-project/Sparkle",
-      "state" : {
-        "revision" : "79bc9e872948e47877e76f194cb0c8e0412b0b90",
-        "version" : "2.9.5"
       }
     },
     {
@@ -122,8 +113,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
       "state" : {
-        "revision" : "bb4ba815dab96d4edc1e0b86d7b9acf9ff973a84",
-        "version" : "4.3.1"
+        "revision" : "da9d28d69ebe3894b18376c8f2395c2f37b8448f",
+        "version" : "4.5.2"
       }
     },
     {
@@ -241,15 +232,6 @@
       "state" : {
         "revision" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
         "version" : "1.1.1"
-      }
-    },
-    {
-      "identity" : "swift-onnxruntime",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/readdle/swift-onnxruntime.git",
-      "state" : {
-        "revision" : "f5c95540cc857b797c0d61cc62e398ad8688e5de",
-        "version" : "1.20.1"
       }
     },
     {
