@@ -28,6 +28,7 @@ mere-run/
 - `MereRunAdmission`
 - `MereRunResidency`
 - `MereRunModelKit`
+- `MereRunDecode`
 - `MereRunCore`
 - `MereRunTensor`
 - `MereRunTextEncoder`
@@ -115,6 +116,14 @@ Callers supply catalog descriptors and runtime validation for installed lookup.
 `Sources/MereRunImageModels` owns FLUX.2 and ZImage transformer layers and the
 shared VAE. Core re-exports these libraries and owns generation orchestration.
 See [Image runtime boundaries](./internals/image-runtime-boundaries.md).
+
+### `Sources/MereRunDecode`
+
+`Sources/MereRunDecode` owns shared autoregressive token sampling, streaming,
+and logprob diagnostics. It depends only on MLX and MLXRandom. Core retains
+model loading, tokenizer adapters, resource cleanup, and family orchestration.
+See [shared decode boundaries](./internals/decode-runtime-boundaries.md) for
+callback contracts and validation.
 
 ### `Sources/MereRunCore`
 

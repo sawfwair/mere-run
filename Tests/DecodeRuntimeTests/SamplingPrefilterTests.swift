@@ -2,9 +2,10 @@ import Foundation
 import XCTest
 import MLX
 import MLXRandom
-@testable import MereRunCore
+import MereRunMLXTestSupport
+@testable import MereRunDecode
 
-final class SamplingPrefilterTests: MereRunCoreTestCase {
+final class SamplingPrefilterTests: MLXTestCase {
     /// The prefiltered top-p sampler must only ever emit tokens from the true
     /// top-p nucleus. Build a vocabulary-sized logit vector whose entire
     /// nucleus is a handful of known indices and check many draws.

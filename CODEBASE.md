@@ -25,6 +25,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunAdmission/` and `Sources/MereRunResidency/`: reservations, queues, model generations, leases, and eviction
 - `Sources/MereRunModelKit/`: model identities, manifests, storage paths, registered locations, artifact pins, and installed lookup
 - `Sources/MereRunCore/`: catalog assembly, downloads, and runtime orchestration
+- `Sources/MereRunDecode/`: shared sampling, pipelined token decoding, streaming, and logprob diagnostics
 - `Sources/MereRunTensor/`, `Sources/MereRunTextEncoder/`, and `Sources/MereRunImageModels/`: checkpoint loading, tensor kernels, and image model layers
 - `Sources/MereRunCore/ImageGeneration*.swift` and `Sources/AudioCore/SpeechTranscriptionOperation.swift`: shared operation plans, validation, execution, and outcomes
 - `Sources/MereRunCore/LTX/`: native video generation and MP4 output

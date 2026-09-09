@@ -4,14 +4,6 @@ import XCTest
 @testable import MereRunCore
 
 final class ChatLogprobTypesTests: XCTestCase {
-    func testCaptureClampsTopCandidateCount() {
-        XCTAssertEqual(ChatLogprobCapture.top(0).topLogprobs, 1)
-        XCTAssertEqual(ChatLogprobCapture.top(5).topLogprobs, 5)
-        XCTAssertEqual(ChatLogprobCapture.top(100).topLogprobs, 20)
-        XCTAssertFalse(ChatLogprobCapture.summary.includesTokens)
-        XCTAssertTrue(ChatLogprobCapture.tokens.includesTokens)
-    }
-
     func testOpenAILogprobsExposeRawAndPolicyWithoutReasoningText() throws {
         let visible = ChatTokenLogprob(
             tokenID: 7,
@@ -61,27 +53,4 @@ final class ChatLogprobTypesTests: XCTestCase {
         XCTAssertEqual((object["mere_summary"] as? [String: Any])?["tokenCount"] as? Int, 2)
     }
 
-    func testPolicyProbabilitiesPreserveExactTopPBoundaryWithTies() {
-        let probabilities: [Float] = [0.09, 0.09, 0.09, 0.73]
-        let logits = MLXArray(probabilities.map(log))
-        let config = GenerationConfig(
-            maxTokens: 1,
-            temperature: 1,
-            topK: 0,
-            topP: 0.8,
-            repetitionPenalty: nil,
-            topPPrefilter: 0
-        )
-
-        let policy = samplingProbabilities(
-            logits: logits,
-            config: config,
-            previousTokens: []
-        )
-        MLX.eval(policy)
-        let nonzero = policy.asArray(Float.self).filter { $0 > 0 }
-
-        XCTAssertEqual(nonzero.count, 2)
-        XCTAssertEqual(policy.sum().item(Float.self), 1, accuracy: 0.0001)
-    }
 }

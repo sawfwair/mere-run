@@ -2,7 +2,7 @@ import MLX
 
 /// Applies repetition to the configured history window, then additive penalties
 /// to generated tokens only. The caller's logits remain unchanged.
-func applyingSamplingPenalties(
+package func applyingSamplingPenalties(
     _ logits: MLXArray,
     config: GenerationConfig,
     history: MLXArray?

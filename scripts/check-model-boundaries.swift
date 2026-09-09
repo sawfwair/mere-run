@@ -87,7 +87,9 @@ func checkBoundary(_ manifest: PackageManifest) -> [String] {
             )
         }
     }
-    let imageBoundaries: [String: Set<String>] = [
+    let runtimeBoundaries: [String: Set<String>] = [
+        "MereRunDecode": [],
+        "DecodeRuntimeTests": ["MereRunDecode", "MereRunKVCache", "MereRunMLXTestSupport"],
         "MereRunTensor": ["MereRunModelKit"],
         "MereRunTextEncoder": ["MereRunKVCache"],
         "MereRunImageModels": ["MereRunTensor", "MereRunModelKit"],
@@ -96,14 +98,16 @@ func checkBoundary(_ manifest: PackageManifest) -> [String] {
             "MereRunKVCache", "MereRunImageModels", "MereRunMLXTestSupport"
         ]
     ]
-    for (root, allowedDependencies) in imageBoundaries.sorted(by: { $0.key < $1.key }) {
+    for (root, allowedDependencies) in runtimeBoundaries.sorted(by: { $0.key < $1.key }) {
         guard targets[root] != nil else {
-            failures.append("Missing image boundary target: \(root)")
+            failures.append("Missing runtime boundary target: \(root)")
             continue
         }
         let closure = dependencyClosure([root], targets: targets)
         let unexpectedLocal = closure.local.subtracting(allowedDependencies.union([root]))
-        let unexpectedProducts = closure.products.subtracting(allowedProducts)
+        let runtimeProducts: Set<String> = root == "MereRunDecode"
+            ? ["MLX", "MLXRandom"] : allowedProducts
+        let unexpectedProducts = closure.products.subtracting(runtimeProducts)
         if !unexpectedLocal.isEmpty || !unexpectedProducts.isEmpty {
             failures.append(
                 "\(root) has unexpected dependencies: "

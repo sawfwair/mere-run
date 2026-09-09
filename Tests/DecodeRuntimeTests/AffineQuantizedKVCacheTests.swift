@@ -1,9 +1,10 @@
 import MLX
 import MLXRandom
 import XCTest
-@testable import MereRunCore
+import MereRunMLXTestSupport
+@testable import MereRunKVCache
 
-final class AffineQuantizedKVCacheTests: MereRunCoreTestCase {
+final class AffineQuantizedKVCacheTests: MLXTestCase {
     func testFourBitCacheShrinksResidentStateAndReportsItsWidth() {
         MLXRandom.seed(7000)
         let cache = AffineQuantizedKVCache(groupSize: 64, bits: 4, step: 4)

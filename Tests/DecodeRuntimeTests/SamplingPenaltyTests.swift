@@ -1,8 +1,9 @@
 import MLX
 import XCTest
-@testable import MereRunCore
+import MereRunMLXTestSupport
+@testable import MereRunDecode
 
-final class SamplingPenaltyTests: MereRunCoreTestCase {
+final class SamplingPenaltyTests: MLXTestCase {
     func testPresenceCountsOnceAndFrequencyCountsOccurrencesExcludingPrompt() {
         let logits = MLXArray([Float(5), 4, 3, 2])
         let config = GenerationConfig(

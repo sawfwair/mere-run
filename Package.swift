@@ -138,6 +138,7 @@ var products: [Product] = [
   .library(name: "MereRunTensor", targets: ["MereRunTensor"]),
   .library(name: "MereRunTextEncoder", targets: ["MereRunTextEncoder"]),
   .library(name: "MereRunImageModels", targets: ["MereRunImageModels"]),
+  .library(name: "MereRunDecode", targets: ["MereRunDecode"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
   .library(name: "MereRunKVCache", targets: ["MereRunKVCache"]),
   .library(name: "AudioParakeetModel", targets: ["AudioParakeetModel"]),
@@ -166,6 +167,7 @@ mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
 mereRunCoreDependencies.append("MereRunImageModels")
 mereRunCoreDependencies.append("MereRunKVCache")
+mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
@@ -336,6 +338,16 @@ var mereRunCLIDependencies: [Target.Dependency] = [
 if hasMediaIOTarget {
   mereRunCLIDependencies.append("MediaIO")
 }
+
+targets.append(
+  .target(
+    name: "MereRunDecode",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXRandom"),
+    path: "Sources/MereRunDecode",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
 
 targets.append(
   .target(
@@ -652,6 +664,17 @@ targets.append(
     dependencies: mlxDependency("MLX"),
     path: "Tests/MereRunMLXTestSupport",
     swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "DecodeRuntimeTests",
+    dependencies: ["MereRunDecode", "MereRunKVCache", "MereRunMLXTestSupport"]
+      + mlxDependency("MLXRandom"),
+    path: "Tests/DecodeRuntimeTests",
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
   )
 )
 

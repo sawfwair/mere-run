@@ -228,7 +228,7 @@ public final class AffineQuantizedKVCache: KVCache {
         return (self.keys!.dequantized(), self.values!.dequantized())
     }
 
-    func currentState() -> (MLXArray, MLXArray)? {
+    package func currentState() -> (MLXArray, MLXArray)? {
         guard let keys, let values else { return nil }
         return (keys.dequantized(), values.dequantized())
     }

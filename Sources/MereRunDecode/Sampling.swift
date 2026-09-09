@@ -4,66 +4,6 @@ import Foundation
 import MLX
 import MLXRandom
 
-public struct GenerationConfig: Sendable {
-    public var maxTokens: Int
-    public var temperature: Float
-    public var topK: Int
-    public var topP: Float
-    /// Minimum token probability relative to the most likely token. Zero disables it.
-    public var minP: Float
-    public var repetitionPenalty: Float?
-    public var repetitionContextSize: Int
-    public var presencePenalty: Float
-    public var frequencyPenalty: Float
-    /// Prompt tokens excluded from presence and frequency penalties.
-    public var penaltyPromptTokenCount: Int
-
-    var penaltyHistorySize: Int {
-        presencePenalty != 0 || frequencyPenalty != 0 ? Int.max : repetitionContextSize
-    }
-
-    var hasActivePenalties: Bool {
-        (repetitionPenalty != nil && repetitionPenalty != 1) || presencePenalty != 0 || frequencyPenalty != 0
-    }
-
-    var needsPenaltyHistory: Bool {
-        repetitionPenalty != nil || presencePenalty != 0 || frequencyPenalty != 0
-    }
-    /// Token ids that must never be sampled. Applied as a -inf logit mask.
-    public var bannedTokens: [Int]
-    /// Per-request top-p candidate limit. Nil uses the process policy; zero
-    /// requests exact full-vocabulary top-p sampling.
-    public var topPPrefilter: Int?
-
-    public init(
-        maxTokens: Int = 256,
-        temperature: Float = 0.7,
-        topK: Int = 0,
-        topP: Float = 0.9,
-        minP: Float = 0,
-        repetitionPenalty: Float? = 1.05,
-        repetitionContextSize: Int = 20,
-        presencePenalty: Float = 0,
-        frequencyPenalty: Float = 0,
-        penaltyPromptTokenCount: Int = 0,
-        bannedTokens: [Int] = [],
-        topPPrefilter: Int? = nil
-    ) {
-        self.maxTokens = maxTokens
-        self.temperature = temperature
-        self.topK = topK
-        self.topP = topP
-        self.minP = minP
-        self.repetitionPenalty = repetitionPenalty
-        self.repetitionContextSize = repetitionContextSize
-        self.presencePenalty = presencePenalty
-        self.frequencyPenalty = frequencyPenalty
-        self.penaltyPromptTokenCount = penaltyPromptTokenCount
-        self.bannedTokens = bannedTokens
-        self.topPPrefilter = topPPrefilter
-    }
-}
-
 public func applyTokenBan(logits: MLXArray, tokens: [Int]) -> MLXArray {
     guard !tokens.isEmpty else { return logits }
     let vocabularySize = logits.dim(-1)
@@ -146,7 +86,7 @@ enum SamplerPolicy {
 /// Applies an exact top-k threshold without sorting the full vocabulary.
 /// `argPartition` is linear-time on the selection axis and the selected
 /// candidates are only reduced to their minimum; their order is irrelevant.
-func applyingTopK(_ logits: MLXArray, topK: Int) -> MLXArray {
+package func applyingTopK(_ logits: MLXArray, topK: Int) -> MLXArray {
     let vocabulary = logits.dim(-1)
     guard topK > 0, topK < vocabulary else { return logits }
     let firstTopIndex = vocabulary - topK
@@ -498,104 +438,6 @@ public func samplingProbabilities(
         probs = probs / probs.sum(axis: -1, keepDims: true)
     }
     return probs
-}
-
-/// Measures the chosen token against both the unmodified model distribution
-/// and the exact distribution produced by the active sampling policy. This is
-/// intentionally host-reading diagnostic work and must stay opt-in.
-public func tokenLogprobMeasurement(
-    logits: MLXArray,
-    selectedToken: Int,
-    config: GenerationConfig,
-    previousTokens: [Int],
-    topLogprobs: Int = 0
-) -> ChatTokenLogprob {
-    let rawProbabilities = softmax(logits.asType(.float32), axis: -1)
-    let policyProbabilities = samplingProbabilities(
-        logits: logits,
-        config: config,
-        previousTokens: previousTokens
-    )
-    let rawEntropyArray = distributionEntropy(rawProbabilities)
-    let policyEntropyArray = distributionEntropy(policyProbabilities)
-    let candidateCount = min(
-        max(2, topLogprobs),
-        policyProbabilities.dim(-1)
-    )
-    let rawTopIndices = argPartition(
-        -rawProbabilities,
-        kth: candidateCount - 1,
-        axis: -1
-    )[..<candidateCount].asType(.int32)
-    let policyTopIndices = argPartition(
-        -policyProbabilities,
-        kth: candidateCount - 1,
-        axis: -1
-    )[..<candidateCount].asType(.int32)
-
-    MLX.eval(
-        rawProbabilities,
-        policyProbabilities,
-        rawEntropyArray,
-        policyEntropyArray,
-        rawTopIndices,
-        policyTopIndices
-    )
-
-    let rawTop = rankedProbabilities(rawProbabilities, indices: rawTopIndices)
-    let policyTop = rankedProbabilities(policyProbabilities, indices: policyTopIndices)
-    let requestedPolicyTop = Array(policyTop.prefix(max(0, topLogprobs)))
-    let candidates = requestedPolicyTop.map { candidate in
-        ChatTopLogprob(
-            tokenID: candidate.tokenID,
-            rawLogprob: stableLogProbability(rawProbabilities[candidate.tokenID].item(Float.self)),
-            policyLogprob: stableLogProbability(candidate.probability)
-        )
-    }
-
-    return ChatTokenLogprob(
-        tokenID: selectedToken,
-        rawLogprob: stableLogProbability(rawProbabilities[selectedToken].item(Float.self)),
-        policyLogprob: stableLogProbability(policyProbabilities[selectedToken].item(Float.self)),
-        rawEntropy: Double(rawEntropyArray.item(Float.self)),
-        policyEntropy: Double(policyEntropyArray.item(Float.self)),
-        rawTop1Top2Margin: topLogprobMargin(rawTop),
-        policyTop1Top2Margin: topLogprobMargin(policyTop),
-        topLogprobs: candidates
-    )
-}
-
-private func distributionEntropy(_ probabilities: MLXArray) -> MLXArray {
-    let contributions = MLX.where(
-        probabilities .> 0,
-        -probabilities * MLX.log(probabilities),
-        MLXArray.zeros(like: probabilities)
-    )
-    return contributions.sum(axis: -1)
-}
-
-private func rankedProbabilities(
-    _ probabilities: MLXArray,
-    indices: MLXArray
-) -> [(tokenID: Int, probability: Float)] {
-    let tokenIDs = indices.asArray(Int32.self).map(Int.init)
-    return tokenIDs
-        .map { tokenID in
-            (tokenID, probabilities[tokenID].item(Float.self))
-        }
-        .sorted { lhs, rhs in lhs.probability > rhs.probability }
-}
-
-private func stableLogProbability(_ probability: Float) -> Double {
-    Double(log(max(probability, Float.leastNonzeroMagnitude)))
-}
-
-private func topLogprobMargin(
-    _ probabilities: [(tokenID: Int, probability: Float)]
-) -> Double {
-    guard probabilities.count >= 2 else { return 0 }
-    return stableLogProbability(probabilities[0].probability)
-        - stableLogProbability(probabilities[1].probability)
 }
 
 public func sampleToken(probabilities: MLXArray) -> Int {
