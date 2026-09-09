@@ -261,9 +261,9 @@ sets the chunk interval (default 25).
 
 Tokenizer internals:
 
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer.swift`
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer+Encoder.swift`
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer+Decoder.swift`
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer.swift`
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Encoder.swift`
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Decoder.swift`
 
 ### STT runtime
 
@@ -275,9 +275,9 @@ Tokenizer internals:
 
 ### Diarization runtime
 
-- `Sources/AudioSTT/Sortformer/SortformerDiarizer.swift`
-- `Sources/AudioSTT/Sortformer/SortformerModel.swift`
-- `Sources/AudioSTT/Sortformer/SortformerFeatures.swift`
+- `Sources/AudioSortformer/SortformerDiarizer.swift`
+- `Sources/AudioSortformer/SortformerModel.swift`
+- `Sources/AudioSortformer/SortformerFeatures.swift`
 
 ## How speech synthesis flows
 

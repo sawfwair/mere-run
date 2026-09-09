@@ -1,6 +1,7 @@
 import XCTest
 import AudioCore
 @testable import AudioSTT
+@testable import AudioParakeetModel
 
 final class ParakeetASRLiveSessionTests: XCTestCase {
     func testParakeetLiveEmitsPartialCommitStatsAndFinal() async throws {

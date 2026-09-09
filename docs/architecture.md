@@ -95,6 +95,10 @@ Shared text encoder stack used by image models:
 
 ## Speech stack
 
+Read [Speech runtime boundaries](./internals/speech-runtime-boundaries.md) for
+the dependency map. Qwen ASR, Qwen TTS, Parakeet, and Sortformer build independently of
+`MereRunCore`; the speech orchestration modules retain compatibility exports.
+
 Speech synthesis command path:
 
 - CLI: `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
@@ -102,16 +106,19 @@ Speech synthesis command path:
 - Read next:
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Loading.swift`
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Generation.swift`
+  - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+PromptPreparation.swift`
+  - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+TokenGeneration.swift`
+  - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+StreamingAudio.swift`
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Support.swift`
 
 Speech tokenizer internals:
 
-- Public tokenizer surface:
-  `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer.swift`
+- Speech-token tensor surface:
+  `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer.swift`
 - Decoder stack:
-  `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer+Decoder.swift`
+  `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Decoder.swift`
 - Encoder stack:
-  `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer+Encoder.swift`
+  `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Encoder.swift`
 
 Speech transcription:
 
@@ -121,12 +128,17 @@ Speech transcription:
 - Runtime roots:
   - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
   - `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
+- Loading and execution: the adjacent `+Loading.swift`, `+Generation.swift`,
+  and `+Decoding.swift` files
+- Qwen model layers: `Sources/AudioQwen3ASRModel`
+- Parakeet model layers and decoders: `Sources/AudioParakeetModel`
+- Shared cache protocol and implementations: `Sources/MereRunKVCache`
 
 Speaker diarization:
 
 - CLI: `Sources/MereRunCLI/Commands/SpeechDiarizeCommand.swift`
-- Runtime root: `Sources/AudioSTT/Sortformer/SortformerDiarizer.swift`
-- Model and feature stack: `Sources/AudioSTT/Sortformer/SortformerModel.swift`
+- Runtime root: `Sources/AudioSortformer/SortformerDiarizer.swift`
+- Model and feature stack: `Sources/AudioSortformer/SortformerModel.swift`
 
 ## OCR and vision
 

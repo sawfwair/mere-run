@@ -2,10 +2,11 @@
 
 Parakeet speech-to-text backend implementation.
 
-- `ParakeetConfig.swift`: typed model configuration.
-- `ParakeetTokenizer.swift`: tokenizer loading and text decoding.
-- `ParakeetModel.swift`: native model layers.
-- `ParakeetGenerator.swift`: transcription orchestration.
+- `AudioParakeetModel`: configuration, model layers, decoding, and alignment.
+- `ParakeetAlignment+ASR.swift`: conversion to shared ASR results.
+- `ParakeetGenerator.swift`: actor state and public transcription lifecycle.
+- `ParakeetGenerator+Loading.swift`: model resolution, provider setup, and weights.
+- `ParakeetGenerator+Decoding.swift`: measured decoding, windows, and alignment.
 - `ParakeetExecutionProvider.swift`: explicit MLX or Core ML provider selection
   and standalone package discovery.
 - `ParakeetCoreMLEncoder.swift`: verified Core ML/MLX artifact contract and
@@ -20,6 +21,9 @@ Parakeet speech-to-text backend implementation.
 
 Keep backend routing in `AudioCore`; this directory should only own Parakeet
 loading, inference, and decoding behavior.
+
+Keep the task-safe MLX stream scopes around loading and prepared decoding.
+Core ML window batching, timing, and alignment remain provider-owned behavior.
 
 Schema-v4 artifacts use ANE-compatible encoder masks and decoder selection.
 Use `scripts/model-conversion/inspect_parakeet_coreml.py --require-ane` and an

@@ -4,7 +4,7 @@
 on Apple Silicon. This map identifies source owners. `mere.run.app` runs the
 CLI. `MereRunCore` owns inference; `MereRunModelKit` owns metadata and installed
 lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
-`AudioTTS` own speech runtimes. `MereRunCLI` owns command presentation.
+`AudioTTS` own speech orchestration. `MereRunCLI` owns command presentation.
 
 ## Read this first
 
@@ -32,8 +32,8 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunCore/SCAIL2/`: native SCAIL-2 transformer, OpenCLIP, masks,
   Wan 2.1 VAE loading, segmented generation, and MP4 orchestration
 - `Sources/MereRunCore/LoRA/`: LoRA checkpoint, artifact, and compatibility logic
-- `Sources/AudioSTT/Qwen3ASR/`: Qwen3 ASR config, tokenizer, model, and generator path
-- `Sources/AudioTTS/Qwen3TTS/`: Qwen3 TTS tokenizer, model, and generation path
+- `Sources/AudioQwen3ASRModel/`, `Sources/AudioQwen3TTSModel/`, `Sources/AudioParakeetModel/`, `Sources/AudioSortformer/`, and `Sources/MereRunKVCache/`: speech models, diarization, and attention caches
+- `Sources/AudioTTS/Qwen3TTS/`: Qwen TTS loading, prompts, token generation, and audio output
 - `Tests/MereRunCoreTests/`: most behavior and compatibility coverage
 - `Tests/MereRunCLITests/`: parsing and CLI contract coverage
 

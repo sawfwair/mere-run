@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+if [[ $# -gt 1 ]]; then
+  echo "Usage: scripts/check-speech-boundary.sh [package-manifest.json]" >&2
+  exit 64
+fi
+
+if [[ $# -eq 1 ]]; then
+  package_json="$1"
+else
+  package_json="$(mktemp "${TMPDIR:-/tmp}/mere-run-speech-package.XXXXXX")"
+  trap 'rm -f "$package_json"' EXIT
+  swift package dump-package >"$package_json"
+fi
+
+swift scripts/check-speech-boundary.swift "$package_json"

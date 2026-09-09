@@ -2,6 +2,7 @@
 import CoreML
 import XCTest
 @testable import AudioSTT
+@testable import AudioParakeetModel
 
 final class ParakeetCoreMLDecoderOutputTests: XCTestCase {
     func testReadsReturnedOutputsWithNoncontiguousStrides() throws {

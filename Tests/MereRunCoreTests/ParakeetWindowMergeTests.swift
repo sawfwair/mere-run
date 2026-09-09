@@ -1,5 +1,6 @@
 import XCTest
 @testable import AudioSTT
+@testable import AudioParakeetModel
 
 final class ParakeetWindowMergeTests: XCTestCase {
     func testDeduplicatesBoundaryTokenWithLaterTimestampInNextWindow() {

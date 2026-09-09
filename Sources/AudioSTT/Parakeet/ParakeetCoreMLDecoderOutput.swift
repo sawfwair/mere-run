@@ -1,3 +1,4 @@
+import AudioParakeetModel
 #if canImport(CoreML)
 import CoreML
 

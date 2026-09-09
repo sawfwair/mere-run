@@ -3,6 +3,7 @@ import Foundation
 import MLX
 import XCTest
 @testable import AudioSTT
+@testable import AudioParakeetModel
 
 final class ParakeetGeneratorStreamTests: MereRunCoreTestCase {
     func testVectorizedFrontendPadsAudioShorterThanFFTWindow() throws {

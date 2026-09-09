@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 @testable import AudioSTT
+@testable import AudioParakeetModel
 
 final class ParakeetPackagingTests: XCTestCase {
     func testLoadsCoreMLHybridPackagingMarker() throws {

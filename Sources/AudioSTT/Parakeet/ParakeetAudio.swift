@@ -1,3 +1,4 @@
+import AudioParakeetModel
 import AudioCodecs
 import Foundation
 import MLX

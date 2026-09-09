@@ -42,7 +42,11 @@ required_module_readmes=(
   Sources/AudioCore/README.md
   Sources/AudioCodecs/README.md
   Sources/AudioSTT/Parakeet/README.md
-  Sources/AudioSTT/Qwen3ASR/Model/README.md
+  Sources/AudioQwen3ASRModel/README.md
+  Sources/AudioQwen3TTSModel/README.md
+  Sources/AudioParakeetModel/README.md
+  Sources/AudioSortformer/README.md
+  Sources/MereRunKVCache/README.md
   Sources/AudioSTT/Qwen3ASR/README.md
   Sources/AudioTTS/Qwen3TTS/README.md
   apps/macos/README.md

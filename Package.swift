@@ -136,6 +136,11 @@ var products: [Product] = [
   .library(name: "MereRunResidency", targets: ["MereRunResidency"]),
   .library(name: "MereRunModelKit", targets: ["MereRunModelKit"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
+  .library(name: "MereRunKVCache", targets: ["MereRunKVCache"]),
+  .library(name: "AudioParakeetModel", targets: ["AudioParakeetModel"]),
+  .library(name: "AudioQwen3TTSModel", targets: ["AudioQwen3TTSModel"]),
+  .library(name: "AudioQwen3ASRModel", targets: ["AudioQwen3ASRModel"]),
+  .library(name: "AudioSortformer", targets: ["AudioSortformer"]),
   .library(name: "AudioCore", targets: ["AudioCore"]),
   .library(name: "AudioCodecs", targets: ["AudioCodecs"]),
   .library(name: "AudioSTT", targets: ["AudioSTT"]),
@@ -154,6 +159,7 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 mereRunCoreDependencies.append("MereRunModelKit")
+mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
@@ -275,10 +281,15 @@ if hasMediaIOTarget {
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
   "MereRunContract",
+  "MereRunMLXTestSupport",
   "MereRunCore",
   "AudioCore",
   "AudioCodecs",
   "AudioSTT",
+  "AudioQwen3ASRModel",
+  "AudioQwen3TTSModel",
+  "AudioParakeetModel",
+  "AudioSortformer",
   "AudioTTS",
   .product(name: "Jinja", package: "swift-jinja"),
   .product(name: "Crypto", package: "swift-crypto")
@@ -317,7 +328,60 @@ if hasMediaIOTarget {
   mereRunCLIDependencies.append("MediaIO")
 }
 
-targets.append(contentsOf: [
+targets.append(
+  .target(
+    name: "AudioParakeetModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/AudioParakeetModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "AudioQwen3TTSModel",
+    dependencies: [.target(name: "MereRunKVCache")]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/AudioQwen3TTSModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunKVCache",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunKVCache",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "AudioQwen3ASRModel",
+    dependencies: [.target(name: "MereRunKVCache")]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/AudioQwen3ASRModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "AudioSortformer",
+    dependencies: [.target(name: "MereRunModelKit")]
+      + mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Sources/AudioSortformer",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
   .target(
     name: "MereRunContract",
     dependencies: [],
@@ -325,7 +389,10 @@ targets.append(contentsOf: [
     exclude: [
       "README.md"
     ]
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "MereRunEvaluation",
     dependencies: [
@@ -335,7 +402,10 @@ targets.append(contentsOf: [
     exclude: [
       "README.md"
     ]
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "MereRunRelayKit",
     dependencies: [
@@ -345,25 +415,37 @@ targets.append(contentsOf: [
     exclude: [
       "README.md"
     ]
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "MereRunResidency",
     dependencies: ["MereRunAdmission"],
     path: "Sources/MereRunResidency",
     exclude: ["README.md"]
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "MereRunAdmission",
     dependencies: [],
     path: "Sources/MereRunAdmission",
     exclude: ["README.md"]
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "MereRunModelKit",
     dependencies: [.product(name: "Crypto", package: "swift-crypto")],
     path: "Sources/MereRunModelKit",
     exclude: ["README.md"]
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "MereRunCore",
     dependencies: mereRunCoreDependencies,
@@ -450,7 +532,10 @@ targets.append(contentsOf: [
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: mereRunCoreLinkerSettings
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "AudioCore",
     dependencies: [],
@@ -458,7 +543,10 @@ targets.append(contentsOf: [
     exclude: [
       "README.md"
     ]
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "AudioCodecs",
     dependencies: audioCodecsDependencies,
@@ -467,31 +555,38 @@ targets.append(contentsOf: [
       "README.md"
     ],
     swiftSettings: commonSwiftSettings
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "AudioSTT",
-    dependencies: audioRuntimeDependencies,
+    dependencies: audioRuntimeDependencies + ["AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel"],
     path: "Sources/AudioSTT",
     exclude: [
       "Parakeet/README.md",
-      "Qwen3ASR/Model/README.md",
-      "Qwen3ASR/README.md",
-      "Sortformer/README.md"
+      "Qwen3ASR/README.md"
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: isLinuxPackage ? [] : [
       .linkedFramework("CoreML", .when(platforms: [.macOS, .iOS]))
     ]
-  ),
+  )
+)
+
+targets.append(
   .target(
     name: "AudioTTS",
-    dependencies: audioRuntimeDependencies,
+    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel"],
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"
     ],
     swiftSettings: commonSwiftSettings
-  ),
+  )
+)
+
+targets.append(
   .executableTarget(
     name: "MereRunCLI",
     dependencies: mereRunCLIDependencies,
@@ -506,12 +601,37 @@ targets.append(contentsOf: [
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
-  ),
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunMLXTestSupport",
+    dependencies: mlxDependency("MLX"),
+    path: "Tests/MereRunMLXTestSupport",
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "SpeechRuntimeTests",
+    dependencies: ["AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioParakeetModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport"] + mlxDependency("MLXRandom"),
+    path: "Tests/SpeechRuntimeTests",
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
+targets.append(
   .testTarget(
     name: "MereRunContractTests",
     dependencies: ["MereRunContract"],
     path: "Tests/MereRunContractTests"
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "MereRunEvaluationTests",
     dependencies: ["MereRunEvaluation"],
@@ -519,32 +639,50 @@ targets.append(contentsOf: [
     resources: [
       .copy("Fixtures")
     ]
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "MereRunRelayKitTests",
     dependencies: ["MereRunRelayKit"],
     path: "Tests/MereRunRelayKitTests"
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "AudioCoreTests",
     dependencies: ["AudioCore"],
     path: "Tests/AudioCoreTests"
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "MereRunResidencyTests",
     dependencies: ["MereRunResidency"],
     path: "Tests/MereRunResidencyTests"
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "MereRunAdmissionTests",
     dependencies: ["MereRunAdmission"],
     path: "Tests/MereRunAdmissionTests"
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "MereRunModelKitTests",
     dependencies: ["MereRunModelKit"],
     path: "Tests/MereRunModelKitTests"
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "MereRunCoreTests",
     dependencies: mereRunCoreTestDependencies,
@@ -554,7 +692,10 @@ targets.append(contentsOf: [
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "MereRunCLITests",
     dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO"],
@@ -564,15 +705,18 @@ targets.append(contentsOf: [
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
-  ),
+  )
+)
+
+targets.append(
   .testTarget(
     name: "AudioTTSTests",
-    dependencies: ["AudioTTS"],
+    dependencies: ["AudioTTS", "MereRunMLXTestSupport"],
     path: "Tests/AudioTTSTests",
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
   )
-])
+)
 
 if !isLinuxPackage {
   // The Studio is three targets: StudioKit is the SwiftUI-free model layer (CLI environment,

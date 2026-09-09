@@ -1,3 +1,4 @@
+import AudioParakeetModel
 import Foundation
 import MLX
 

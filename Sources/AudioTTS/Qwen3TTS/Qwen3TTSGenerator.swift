@@ -1,3 +1,4 @@
+import AudioQwen3TTSModel
 import Foundation
 import MLX
 import MLXNN
