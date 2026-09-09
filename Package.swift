@@ -135,6 +135,9 @@ var products: [Product] = [
   .library(name: "MereRunAdmission", targets: ["MereRunAdmission"]),
   .library(name: "MereRunResidency", targets: ["MereRunResidency"]),
   .library(name: "MereRunModelKit", targets: ["MereRunModelKit"]),
+  .library(name: "MereRunTensor", targets: ["MereRunTensor"]),
+  .library(name: "MereRunTextEncoder", targets: ["MereRunTextEncoder"]),
+  .library(name: "MereRunImageModels", targets: ["MereRunImageModels"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
   .library(name: "MereRunKVCache", targets: ["MereRunKVCache"]),
   .library(name: "AudioParakeetModel", targets: ["AudioParakeetModel"]),
@@ -159,6 +162,9 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 mereRunCoreDependencies.append("MereRunModelKit")
+mereRunCoreDependencies.append("MereRunTensor")
+mereRunCoreDependencies.append("MereRunTextEncoder")
+mereRunCoreDependencies.append("MereRunImageModels")
 mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
@@ -282,6 +288,9 @@ if hasMediaIOTarget {
 var mereRunCoreTestDependencies: [Target.Dependency] = [
   "MereRunContract",
   "MereRunMLXTestSupport",
+  "MereRunTensor",
+  "MereRunTextEncoder",
+  "MereRunImageModels",
   "MereRunCore",
   "AudioCore",
   "AudioCodecs",
@@ -327,6 +336,45 @@ var mereRunCLIDependencies: [Target.Dependency] = [
 if hasMediaIOTarget {
   mereRunCLIDependencies.append("MediaIO")
 }
+
+targets.append(
+  .target(
+    name: "MereRunTensor",
+    dependencies: [.target(name: "MereRunModelKit")]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunTensor",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunTextEncoder",
+    dependencies: [.target(name: "MereRunKVCache")]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunTextEncoder",
+    exclude: ["README.md", "Vision/README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunImageModels",
+    dependencies: [.target(name: "MereRunTensor")]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Sources/MereRunImageModels",
+    exclude: [
+      "README.md",
+      "Flux2/Transformer/README.md",
+      "ZImage/README.md",
+      "ZImage/Transformer/README.md",
+      "VAE/README.md"
+    ],
+    swiftSettings: commonSwiftSettings
+  )
+)
 
 targets.append(
   .target(
@@ -467,7 +515,6 @@ targets.append(
       "FalconPerception/README.md",
       "Flux1/README.md",
       "Flux2Klein/README.md",
-      "Flux2Klein/Model/Transformer/README.md",
       "Gemma4/README.md",
       "Geometry/README.md",
       "HiDreamO1/README.md",
@@ -520,11 +567,6 @@ targets.append(
       "ZImageI2L/README.md",
       "ZImageI2L/Model/README.md",
       "ZImageTurbo/README.md",
-      "ZImageTurbo/Model/TextEncoder/README.md",
-      "ZImageTurbo/Model/TextEncoder/LLMGeneration/README.md",
-      "ZImageTurbo/Model/TextEncoder/Vision/README.md",
-      "ZImageTurbo/Model/Transformer/README.md",
-      "ZImageTurbo/Model/VAE/README.md",
       "ZImageTurbo/Util/README.md"
     ],
     resources: [
@@ -610,6 +652,17 @@ targets.append(
     dependencies: mlxDependency("MLX"),
     path: "Tests/MereRunMLXTestSupport",
     swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "ImageRuntimeTests",
+    dependencies: ["MereRunTensor", "MereRunTextEncoder", "MereRunImageModels", "MereRunMLXTestSupport"]
+      + mlxDependency("MLXRandom"),
+    path: "Tests/ImageRuntimeTests",
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
   )
 )
 

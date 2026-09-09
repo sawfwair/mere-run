@@ -47,6 +47,8 @@ required_module_readmes=(
   Sources/AudioParakeetModel/README.md
   Sources/AudioSortformer/README.md
   Sources/MereRunKVCache/README.md
+  Sources/MereRunTensor/README.md
+  Sources/MereRunImageModels/README.md
   Sources/AudioSTT/Qwen3ASR/README.md
   Sources/AudioTTS/Qwen3TTS/README.md
   apps/macos/README.md
@@ -57,7 +59,7 @@ required_module_readmes=(
   Sources/MereRunCore/ACEStep/VAE/README.md
   Sources/MereRunCore/CodeGen/README.md
   Sources/MereRunCore/FalconPerception/README.md
-  Sources/MereRunCore/Flux2Klein/Model/Transformer/README.md
+  Sources/MereRunImageModels/Flux2/Transformer/README.md
   Sources/MereRunCore/Flux2Klein/README.md
   Sources/MereRunCore/Gemma4/README.md
   Sources/MereRunCore/LightOnOCR/README.md
@@ -74,10 +76,10 @@ required_module_readmes=(
   Sources/MereRunCore/VLM/README.md
   Sources/MereRunCore/ZImageI2L/Model/README.md
   Sources/MereRunCore/ZImageI2L/README.md
-  Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/README.md
-  Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/Vision/README.md
-  Sources/MereRunCore/ZImageTurbo/Model/Transformer/README.md
-  Sources/MereRunCore/ZImageTurbo/Model/VAE/README.md
+  Sources/MereRunTextEncoder/README.md
+  Sources/MereRunTextEncoder/Vision/README.md
+  Sources/MereRunImageModels/ZImage/Transformer/README.md
+  Sources/MereRunImageModels/VAE/README.md
   Sources/MereRunCore/ZImageTurbo/README.md
   Sources/MereRunCore/ZImageTurbo/Util/README.md
   Sources/MereRunCore/README.md
@@ -126,7 +128,7 @@ dynamic_boundary_files=(
   "Sources/MereRunCore/SAM3/SAM31VideoIO.swift"
   "Sources/MereRunCore/Trellis2/Trellis2TexturedGLBWriter.swift"
   "Sources/MereRunCore/VLM/Qwen3VLAutoCaptioner.swift"
-  "Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/LLMGeneration/QwenGeneration.swift"
+  "Sources/MereRunCore/Decode/QwenGeneration.swift"
   "Sources/MereRunCore/ZImageTurbo/Tokenizer/QwenTokenizer.swift"
   "Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator.swift"
   "Sources/MereRunRelayKit/RelayCredentialStorage.swift"

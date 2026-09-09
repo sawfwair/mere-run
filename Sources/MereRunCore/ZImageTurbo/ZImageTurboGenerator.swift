@@ -141,98 +141,17 @@ public actor ZImageTurboGenerator: ImageGenerator, ChatGenerator {
                     latents = noise
                 }
 
-                let machine = MereRunMachineProfile.current
-                let useBatchedCFG = negativePromptEmbeds.map { negativeEmbeds in
-                    DiffusionCFGExecution.canPair(negativeEmbeds, promptEmbeds)
-                        && DiffusionCFGExecution.shouldBatch(
-                            mode: DiffusionCFGExecutionMode.current(
-                                modelEnvironmentKey: "MERERUN_ZIMAGE_BATCHED_CFG"
-                            ),
-                            width: inferenceConfig.width,
-                            height: inferenceConfig.height,
-                            physicalMemoryBytes: machine.physicalMemoryBytes,
-                            activeMemoryBytes: Memory.activeMemory,
-                            cacheMemoryBytes: Memory.cacheMemory,
-                            isUnifiedMemory: machine.isAppleSiliconMac,
-                            baseReserveBytes: 6 * DiffusionCFGExecution.gibibyte,
-                            activationBytesPerPixel: 4_096
-                        )
-                } ?? false
-
-                for stepIndex in startStep..<inferenceConfig.numInferenceSteps {
-                    try Task.checkCancellation()
-                    model.transformer.beginDenoisingStep(
-                        index: stepIndex,
-                        count: inferenceConfig.numInferenceSteps
-                    )
-                    progressHandler?(GenerationProgress(
-                        stage: .denoising,
-                        stepIndex: stepIndex,
-                        totalSteps: inferenceConfig.numInferenceSteps
-                    ))
-
-                    let tInput = (MLXArray([Float(1.0)]) - scheduler.sigmas[stepIndex].asType(.float32)).asType(.float32)
-                    let latentsModelInput = latents.asType(.bfloat16)
-
-                    let noisePred: MLXArray
-                    if let negativePromptEmbeds, cfgScale > 1 {
-                        if useBatchedCFG {
-                            let predictions = model.transformer.forward(
-                                latents: DiffusionCFGExecution.duplicateBatch(latentsModelInput),
-                                timestep: DiffusionCFGExecution.duplicateBatch(tInput),
-                                promptEmbeds: DiffusionCFGExecution.paired(negativePromptEmbeds, promptEmbeds)
-                            )
-                            noisePred = DiffusionCFGExecution.combinePositiveAnchoredPredictions(
-                                -predictions.asType(.float32),
-                                guidanceScale: cfgScale
-                            )
-                        } else {
-                            let predictedPos = model.transformer.forward(
-                                latents: latentsModelInput,
-                                timestep: tInput,
-                                promptEmbeds: promptEmbeds
-                            )
-                            let noisePos = (-predictedPos).asType(.float32)
-                            let predictedNeg = model.transformer.forward(
-                                latents: latentsModelInput,
-                                timestep: tInput,
-                                promptEmbeds: negativePromptEmbeds
-                            )
-                            let noiseNeg = (-predictedNeg).asType(.float32)
-                            noisePred = noisePos + (noisePos - noiseNeg) * MLXArray(cfgScale)
-                        }
-                    } else {
-                        let predictedPos = model.transformer.forward(
-                            latents: latentsModelInput,
-                            timestep: tInput,
-                            promptEmbeds: promptEmbeds
-                        )
-                        noisePred = (-predictedPos).asType(.float32)
-                    }
-
-                    latents = scheduler.step(noise: noisePred, timestep: stepIndex, latents: latents)
-                    MLX.eval(latents)
-                }
-
-                progressHandler?(GenerationProgress(
-                    stage: .decoding,
-                    stepIndex: inferenceConfig.numInferenceSteps,
-                    totalSteps: inferenceConfig.numInferenceSteps
-                ))
-
-                let decoded = decodeLatents(
-                    latents,
-                    vae: model.vae,
-                    height: inferenceConfig.height,
-                    width: inferenceConfig.width
+                latents = try denoise(
+                    latents: latents, transformer: model.transformer, scheduler: scheduler,
+                    inferenceConfig: inferenceConfig, startStep: startStep,
+                    promptEmbeds: promptEmbeds, negativePromptEmbeds: negativePromptEmbeds,
+                    cfgScale: cfgScale, progressHandler: progressHandler
                 )
 
-                progressHandler?(GenerationProgress(
-                    stage: .saving,
-                    stepIndex: inferenceConfig.numInferenceSteps,
-                    totalSteps: inferenceConfig.numInferenceSteps
-                ))
-                try QwenImageIO.saveImage(array: decoded, to: outputURL)
+                try decodeAndSave(
+                    latents: latents, vae: model.vae, inferenceConfig: inferenceConfig,
+                    outputURL: outputURL, progressHandler: progressHandler
+                )
             }
 
             model.transformer.clearCache()

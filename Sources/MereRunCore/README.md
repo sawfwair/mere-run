@@ -3,7 +3,9 @@
 Shared runtime validation, catalog assembly, generation protocols, and native
 runtime families. Model metadata and installed lookup live in `MereRunModelKit`;
 Core re-exports those types for existing callers.
-Shared full-attention caches live in `MereRunKVCache` and are also re-exported.
+Shared full-attention caches live in `MereRunKVCache`. Tensor loading, Qwen
+encoder layers, and FLUX.2/ZImage models live in `MereRunTensor`,
+`MereRunTextEncoder`, and `MereRunImageModels`. Core re-exports these libraries.
 
 - `Generation.swift`: image and chat request/response contracts.
 - `ImageGenerationOptions.swift` and `ImageGenerationPlan.swift`: typed image

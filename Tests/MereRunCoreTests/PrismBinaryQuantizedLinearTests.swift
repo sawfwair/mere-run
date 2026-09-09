@@ -1,6 +1,7 @@
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunTensor
 
 final class PrismLowBitQuantizationTests: XCTestCase {
     func testOneBitPreQuantizedEmbeddingDequantizesOnlySelectedRows() {

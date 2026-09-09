@@ -78,7 +78,7 @@ check_linux_package_view() {
     echo "[check-linux] Linux package view still exposes the app, xcframework llama, or framework links." >&2
     exit 1
   fi
-  bash ./scripts/check-speech-boundary.sh "$package_json"
+  bash ./scripts/check-model-boundaries.sh "$package_json"
 }
 
 bash ./scripts/check-evaluation-boundary.sh

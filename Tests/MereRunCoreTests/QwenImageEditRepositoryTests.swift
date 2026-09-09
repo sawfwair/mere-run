@@ -3,6 +3,7 @@ import MediaIO
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunTextEncoder
 
 final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
     func testQwenImageEditDeduplicatesInputAndReferenceURLs() {

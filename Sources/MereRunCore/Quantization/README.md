@@ -4,8 +4,8 @@ Runtime helpers for loading, writing, and executing quantized MLX weights.
 
 - `QuantizationIO.swift`: typed quantization metadata shared by loaders and manifests.
 - `QuantizedModelManifestWriter.swift`: model manifest emission for quantized checkpoints.
-- `ResidualQuantizedLinear.swift`: residual-aware quantized projection support.
-- `PortableQuantizedMatmul.swift`: CUDA-native quantized matmul/GatherQMM probing
+- `MereRunTensor/ResidualQuantizedLinear.swift`: residual-aware quantized projection support.
+- `MereRunTensor/PortableQuantizedMatmul.swift`: CUDA-native quantized matmul/GatherQMM probing
   with a per-operation dense compatibility fallback.
 
 On Linux CUDA, `MERERUN_MLX_CUDA_NATIVE_QUANT` accepts `auto` (the default),
