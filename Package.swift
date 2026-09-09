@@ -129,6 +129,7 @@ let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
   : []
 
 var products: [Product] = [
+  .library(name: "MereRunAudioModels", targets: ["MereRunAudioModels"]),
   .library(name: "MereRunContract", targets: ["MereRunContract"]),
   .library(name: "MereRunEvaluation", targets: ["MereRunEvaluation"]),
   .library(name: "MereRunRelayKit", targets: ["MereRunRelayKit"]),
@@ -165,6 +166,7 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFFT"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunCoreDependencies.append("MereRunAudioModels")
 mereRunCoreDependencies.append("MereRunModelKit")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
@@ -294,6 +296,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunAudioModels",
   "MereRunLTXModel",
   "MereRunGemmaModel",
   "MereRunQwenModel",
@@ -347,6 +350,21 @@ var mereRunCLIDependencies: [Target.Dependency] = [
 if hasMediaIOTarget {
   mereRunCLIDependencies.append("MediaIO")
 }
+
+var mereRunAudioModelsDependencies: [Target.Dependency] = []
+mereRunAudioModelsDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunAudioModelsDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunAudioModelsDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunAudioModelsDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+targets.append(
+  .target(
+    name: "MereRunAudioModels",
+    dependencies: mereRunAudioModelsDependencies,
+    path: "Sources/MereRunAudioModels",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
 
 targets.append(
   .target(

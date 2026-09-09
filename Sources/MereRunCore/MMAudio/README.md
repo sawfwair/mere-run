@@ -29,7 +29,8 @@ component license files are installed beside the managed assets.
 - `MMAudioLayers.swift`, `MMAudioTransformer.swift`, and
   `MMAudioNetwork.swift`: the large-v2 joint/fused MMDiT and Euler flow sampler.
 - `MMAudioVAE.swift`: 44.1 kHz magnitude-preserving latent decoder.
-- `MMAudioBigVGAN.swift`: native BigVGAN-v2 generator and alias-free
+- `MMAudioBigVGAN.swift`: checkpoint loading and mapping for BigVGAN-v2.
+  `MereRunAudioModels` owns the generator and alias-free
   activations.
 - `MMAudioBigVGANCheckpoint.swift`: restricted official PyTorch checkpoint
   mapping; it does not execute Python or arbitrary pickle globals.

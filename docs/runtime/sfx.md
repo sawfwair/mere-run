@@ -194,7 +194,8 @@ defaults to 8 seconds, 25 Euler flow steps, and CFG 4.5.
 - `Sources/MereRunCore/MMAudio/MMAudioNetwork.swift`
 - `Sources/MereRunCore/MMAudio/MMAudioCLIP.swift`
 - `Sources/MereRunCore/MMAudio/MMAudioVAE.swift`
-- `Sources/MereRunCore/MMAudio/MMAudioBigVGAN.swift`
+- `Sources/MereRunCore/MMAudio/MMAudioBigVGAN.swift` (loading and mapping)
+- `Sources/MereRunAudioModels/MMAudioBigVGAN.swift` (model computation)
 
 ## Reading order
 
