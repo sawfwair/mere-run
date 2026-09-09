@@ -1,75 +1,6 @@
 import Foundation
 import MLX
 
-enum LTXAudioToVideoParityError: LocalizedError {
-    case invalidNoiseShape(stage: String, expected: [Int], actual: [Int])
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidNoiseShape(let stage, let expected, let actual):
-            return "LTX A2Vid \(stage) parity noise has shape \(actual); expected \(expected)."
-        }
-    }
-}
-
-enum LTXAudioToVideoNoiseStage: String {
-    case stage1
-    case stage2
-}
-
-struct LTXAudioToVideoParityIO {
-    static let outputPrefixEnvironmentKey = "MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"
-    static let stage1NoiseEnvironmentKey = "MERERUN_VIDEO_LTX_A2VID_STAGE1_NOISE_PATH"
-    static let stage2NoiseEnvironmentKey = "MERERUN_VIDEO_LTX_A2VID_STAGE2_NOISE_PATH"
-
-    let outputPrefix: URL?
-    let stage1NoiseURL: URL?
-    let stage2NoiseURL: URL?
-
-    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
-        self.outputPrefix = Self.url(environment[Self.outputPrefixEnvironmentKey])
-        self.stage1NoiseURL = Self.url(environment[Self.stage1NoiseEnvironmentKey])
-        self.stage2NoiseURL = Self.url(environment[Self.stage2NoiseEnvironmentKey])
-    }
-
-    func resolveNoise(
-        stage: LTXAudioToVideoNoiseStage,
-        generated: MLXArray
-    ) throws -> MLXArray {
-        let sourceURL = switch stage {
-        case .stage1: stage1NoiseURL
-        case .stage2: stage2NoiseURL
-        }
-        guard let sourceURL else { return generated }
-
-        let loaded = try MLX.loadArray(url: sourceURL)
-        guard loaded.shape == generated.shape else {
-            throw LTXAudioToVideoParityError.invalidNoiseShape(
-                stage: stage.rawValue,
-                expected: generated.shape,
-                actual: loaded.shape
-            )
-        }
-        return loaded.asType(generated.dtype)
-    }
-
-    func save(_ array: MLXArray, suffix: String) throws {
-        guard let outputPrefix else { return }
-        let parent = outputPrefix.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
-        let outputURL = parent.appendingPathComponent(
-            "\(outputPrefix.lastPathComponent)_\(suffix).npy",
-            isDirectory: false
-        )
-        try MLX.save(array: array, url: outputURL)
-    }
-
-    private static func url(_ rawValue: String?) -> URL? {
-        guard let rawValue, !rawValue.isEmpty else { return nil }
-        return URL(fileURLWithPath: rawValue).standardizedFileURL
-    }
-}
-
 /// The upstream LTX-2.3 audio-to-video guidance defaults.
 public struct LTXAudioToVideoGuidance: Sendable, Hashable {
     public var classifierFreeScale: Float
@@ -169,30 +100,6 @@ public struct LTXMultiModalGuidance: Sendable, Hashable {
     }
 }
 
-struct LTXAudioToVideoPerturbation: Sendable, Hashable {
-    var skippedVideoSelfAttentionBlocks: Set<Int> = []
-    var skippedAudioSelfAttentionBlocks: Set<Int> = []
-    var skipsAudioToVideoCrossAttention = false
-    var skipsVideoToAudioCrossAttention = false
-
-    static let none = LTXAudioToVideoPerturbation()
-
-    static func spatioTemporal(blocks: Set<Int>) -> Self {
-        Self(skippedVideoSelfAttentionBlocks: blocks)
-    }
-
-    static func spatioTemporal(videoBlocks: Set<Int>, audioBlocks: Set<Int>) -> Self {
-        Self(
-            skippedVideoSelfAttentionBlocks: videoBlocks,
-            skippedAudioSelfAttentionBlocks: audioBlocks
-        )
-    }
-
-    static let isolatedModalities = LTXAudioToVideoPerturbation(
-        skipsAudioToVideoCrossAttention: true,
-        skipsVideoToAudioCrossAttention: true
-    )
-}
 
 /// Exact scheduler used by the full LTX-2.3 checkpoint in stage one.
 public enum LTX2DiffusionScheduler {

@@ -263,19 +263,16 @@ Video generation:
 
 - CLI:
   - `Sources/MereRunCLI/Commands/VideoCommand.swift` (`VideoGenerate` and `VideoExportLatents`)
-- Runtime root: `Sources/MereRunCore/LTX/LTXDistilledLatentGenerator.swift`
-- Read next:
-  - `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
-  - `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
+- Runtime state: `Sources/MereRunCore/LTX/LTXUnifiedAVGenerator.swift`
+- Loading and generation: `LTXUnifiedAVGenerator+*.swift` in the same directory
+- Model computation: `Sources/MereRunLTXModel/`
+- Text encoding: `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
+- Output: `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
 
-The LTX runtime combines public generation flow with lower-level model
-definitions. Read it in this order:
-
-- public generation types and `LTXDistilledLatentGenerator`
-- diffusion helpers such as `denoiseLoop`, latent conditioning, and image
-  loading
-- decoder and encoder support modules
-- unified AV generator types near the end
+Read the generation options, actor state, loading extensions, and execution
+stages before the model layers. The legacy distilled actor has separate loading
+and generation extensions. See [LTX runtime boundaries](./internals/ltx-runtime-boundaries.md)
+for ownership and validation.
 
 Cosmos3-Edge omnimodal generation and world simulation:
 

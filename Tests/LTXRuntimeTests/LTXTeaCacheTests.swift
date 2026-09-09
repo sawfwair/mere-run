@@ -1,9 +1,12 @@
 import Foundation
 import MLX
+import MLXNN
+import MLXRandom
+import MereRunMLXTestSupport
+@testable import MereRunLTXModel
 import XCTest
-@testable import MereRunCore
 
-final class LTXTeaCacheTests: XCTestCase {
+final class LTXTeaCacheTests: MLXTestCase {
     func testLTX25CalibrationIsGuidanceGroupAndSamplerSpecific() {
         let euler = LTXTeaCacheCalibration.ltx25(
             sampler: .euler,

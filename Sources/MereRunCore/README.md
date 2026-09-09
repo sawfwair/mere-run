@@ -8,7 +8,8 @@ encoder layers, and FLUX.2/ZImage models live in `MereRunTensor`,
 `MereRunTextEncoder`, and `MereRunImageModels`. Core re-exports these libraries and `MereRunDecode`, which owns shared token
 sampling, decoding, streaming, and logprob diagnostics. Native Qwen model layers
 live in `MereRunQwenModel`. Gemma layers, caches, and draft computation live in
-`MereRunGemmaModel`. Core retains resource loading and generation for both families.
+`MereRunGemmaModel`. LTX model computation lives in
+`MereRunLTXModel`. Core retains resource loading and generation for these families.
 
 - `Generation.swift`: image and chat request/response contracts.
 - `ImageGenerationOptions.swift` and `ImageGenerationPlan.swift`: typed image

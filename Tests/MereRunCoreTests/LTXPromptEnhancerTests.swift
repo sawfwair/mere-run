@@ -1,5 +1,6 @@
 import Foundation
 @testable import MereRunCore
+@testable import MereRunLTXModel
 import XCTest
 
 final class LTXPromptEnhancerTests: XCTestCase {

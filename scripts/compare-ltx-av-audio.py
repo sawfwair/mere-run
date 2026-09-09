@@ -447,12 +447,13 @@ def inspect_local_reference(repo_root: Path) -> dict[str, Any]:
     ffmpeg_io = read_text(repo_root / "Sources/MediaIO/FFmpegMediaIO.swift")
     apple_io = read_text(repo_root / "Sources/MediaIO/AppleMediaVideoIO.swift")
     writer = read_text(repo_root / "Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift")
-    generator = read_text(repo_root / "Sources/MereRunCore/LTX/LTXDistilledLatentGenerator.swift")
+    geometry = read_text(repo_root / "Sources/MereRunLTXModel/LTXAudioGeometry.swift")
+    vocoder = read_text(repo_root / "Sources/MereRunCore/LTX/LTXVocoder.swift")
     video_command = read_text(repo_root / "Sources/MereRunCLI/Commands/VideoCommand.swift")
     mux_block = extract_swift_func(ffmpeg_io, "static func mux")
 
     sample_rate = None
-    match = re.search(r"private let LTXAudioSampleRate\s*=\s*([0-9_]+)", generator)
+    match = re.search(r"package let LTXAudioSampleRate\s*=\s*([0-9_]+)", geometry)
     if match:
         sample_rate = int(match.group(1).replace("_", ""))
 
@@ -465,7 +466,7 @@ def inspect_local_reference(repo_root: Path) -> dict[str, Any]:
         "apple_mux_export_preset": "AVAssetExportPresetHighestQuality"
         if "AVAssetExportPresetHighestQuality" in apple_io
         else None,
-        "vocoder_with_bwe_supported": "VocoderWithBWE" in generator,
+        "vocoder_with_bwe_supported": "VocoderWithBWE" in vocoder,
         "passes_generation_audio_sample_rate_to_writer": "audioSampleRate: result.audioSampleRate" in video_command,
     }
 
