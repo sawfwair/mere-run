@@ -24,6 +24,7 @@ file, and then use the table to open the family entry point.
 ## Image families
 
 Read the [shared image operation](./internals/image-generation-operation.md)
+and the [image model boundaries](./internals/image-runtime-boundaries.md)
 before following a family implementation. CLI, API, and preflight adapters use
 `ImageGenerationPlan` for resolution and validation, and execution passes the
 resolved request to `ImageGenerationOperation`.
@@ -35,7 +36,8 @@ Klein image generation:
 - Read next:
   - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+ModelLoading.swift`
   - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Generation.swift`
-  - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Chat.swift`
+  - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Denoising.swift`
+  - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Output.swift`
 
 ZImage generation:
 
@@ -43,7 +45,8 @@ ZImage generation:
 - Read next:
   - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+ModelLoading.swift`
   - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+Inference.swift`
-  - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+LoRA.swift`
+  - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+Denoising.swift`
+  - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+Output.swift`
 
 Qwen image editing:
 
@@ -88,10 +91,10 @@ LFM2.5 text generation and LoRA training:
 Shared text encoder stack used by image models:
 
 - Public entry point:
-  `Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/TextEncoder.swift`
+  `Sources/MereRunTextEncoder/TextEncoder.swift`
 - Architecture internals:
-  - `Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/TextEncoder+RoPE.swift`
-  - `Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/TextEncoder+Blocks.swift`
+  - `Sources/MereRunTextEncoder/TextEncoder+RoPE.swift`
+  - `Sources/MereRunTextEncoder/TextEncoder+Blocks.swift`
 
 ## Speech stack
 
@@ -161,7 +164,7 @@ Captioning and inspect flows:
   - `Sources/MereRunCore/VLM/QwenVLCaptioner.swift`
   - `Sources/MereRunCore/VLM/Qwen3VLAutoCaptioner.swift`
   - `Sources/MereRunCore/VLM/QwenVLEncoder.swift`
-  - `Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/Vision/QwenVisionAttention.swift`
+  - `Sources/MereRunTextEncoder/Vision/QwenVisionAttention.swift`
 
 Segmentation and tracking runtime:
 

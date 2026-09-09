@@ -24,11 +24,11 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `apps/ios/`: the iOS Studio app, a relay client over `MereRunRelayKit` (see `docs/ios-studio.md`)
 - `Sources/MereRunAdmission/` and `Sources/MereRunResidency/`: reservations, queues, model generations, leases, and eviction
 - `Sources/MereRunModelKit/`: model identities, manifests, storage paths, registered locations, artifact pins, and installed lookup
-- `Sources/MereRunCore/`: catalog assembly, runtime manifest templates, downloads, shared runtime helpers, and modality runtime implementations
+- `Sources/MereRunCore/`: catalog assembly, downloads, and runtime orchestration
+- `Sources/MereRunTensor/`, `Sources/MereRunTextEncoder/`, and `Sources/MereRunImageModels/`: checkpoint loading, tensor kernels, and image model layers
 - `Sources/MereRunCore/ImageGeneration*.swift` and `Sources/AudioCore/SpeechTranscriptionOperation.swift`: shared operation plans, validation, execution, and outcomes
 - `Sources/MereRunCore/LTX/`: native video generation and MP4 output
-- `Sources/MereRunCore/Cosmos3/`: native Cosmos3-Edge omnimodal generation,
-  reasoner, learned action, and persistent world runtime
+- `Sources/MereRunCore/Cosmos3/`: omnimodal generation and world runtime
 - `Sources/MereRunCore/SCAIL2/`: native SCAIL-2 transformer, OpenCLIP, masks,
   Wan 2.1 VAE loading, segmented generation, and MP4 orchestration
 - `Sources/MereRunCore/LoRA/`: LoRA checkpoint, artifact, and compatibility logic

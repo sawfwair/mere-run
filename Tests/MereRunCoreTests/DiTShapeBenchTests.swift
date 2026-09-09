@@ -3,6 +3,8 @@ import MLX
 import MLXNN
 import MLXRandom
 @testable import MereRunCore
+@testable import MereRunImageModels
+@testable import MereRunTensor
 
 /// Always dequantizes in-graph and runs the dense GEMM (per-call transient).
 private final class BenchTransientDenseLinear: QuantizedLinear {

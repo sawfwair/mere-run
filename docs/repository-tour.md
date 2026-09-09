@@ -29,6 +29,9 @@ mere-run/
 - `MereRunResidency`
 - `MereRunModelKit`
 - `MereRunCore`
+- `MereRunTensor`
+- `MereRunTextEncoder`
+- `MereRunImageModels`
 - `AudioCore`
 - `AudioCodecs`
 - `AudioSTT`
@@ -104,6 +107,14 @@ streaming-lifetime rules.
 Model identities, manifests, configured paths, registered locations, artifact
 pins, and installed lookup. This library depends on Foundation and Crypto.
 Callers supply catalog descriptors and runtime validation for installed lookup.
+
+### Image model libraries
+
+`Sources/MereRunTensor` owns checkpoint loading and shared tensor kernels.
+`Sources/MereRunTextEncoder` owns the shared Qwen text encoder and vision tower.
+`Sources/MereRunImageModels` owns FLUX.2 and ZImage transformer layers and the
+shared VAE. Core re-exports these libraries and owns generation orchestration.
+See [Image runtime boundaries](./internals/image-runtime-boundaries.md).
 
 ### `Sources/MereRunCore`
 
