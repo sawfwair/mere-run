@@ -1,6 +1,7 @@
 import MLX
 @testable import MediaIO
 @testable import MereRunCore
+@testable import MereRunLTXModel
 import XCTest
 
 final class LTXVideoMP4WriterTests: MereRunCoreTestCase {

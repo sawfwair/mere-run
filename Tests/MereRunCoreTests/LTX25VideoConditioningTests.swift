@@ -1,6 +1,7 @@
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunLTXModel
 
 final class LTX25VideoConditioningTests: MereRunCoreTestCase {
     func testTemporalRetakeUsesOfficialCausalPixelBounds() {

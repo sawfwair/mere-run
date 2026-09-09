@@ -60,30 +60,6 @@ public final class LTX25DurationHead: Module {
         super.init()
     }
 
-    public static func load(
-        weightsURL: URL,
-        dtype: DType = .bfloat16,
-        fileManager: FileManager = .default
-    ) throws -> LTX25DurationHead {
-        guard fileManager.fileExists(atPath: weightsURL.path) else {
-            throw LTX25DurationHeadError.missingWeights(weightsURL)
-        }
-        let head = LTX25DurationHead()
-        try SafetensorsStreamingLoader.applyWeightsStreaming(
-            url: weightsURL,
-            to: head,
-            dtype: dtype,
-            verify: .all,
-            include: { $0.hasPrefix("duration_head.") },
-            mapper: { key, value in
-                mapLTX25DurationHeadWeight(key: key, value: value, dtype: dtype)
-            },
-            batchSize: 15
-        )
-        MLX.eval(head)
-        return head
-    }
-
     public func callAsFunction(
         videoTokens: MLXArray?,
         audioTokens: MLXArray?
@@ -197,34 +173,4 @@ private final class LTX25DurationCrossAttention: Module {
             attended.transposed(0, 2, 1, 3).reshaped(batch, queryCount, hiddenSize)
         )
     }
-}
-
-func mapLTX25DurationHeadWeight(
-    key: String,
-    value: MLXArray,
-    dtype: DType
-) -> [(String, MLXArray)] {
-    guard key.hasPrefix("duration_head.") else { return [] }
-    let mapped = String(key.dropFirst("duration_head.".count))
-    let casted = value.dtype.isFloatingPoint && value.dtype != dtype
-        ? value.asType(dtype)
-        : value
-    return [(mapped, casted)]
-}
-
-public func ltx25FrameCount(
-    predictedSeconds: Double,
-    frameRate: Double,
-    range: LTX25AutoDuration = LTX25AutoDuration()
-) -> Int {
-    precondition(frameRate > 0, "frameRate must be positive")
-    let minimumFrames = Int((range.minimumSeconds * frameRate).rounded(.toNearestOrEven))
-    let maximumFrames = Int((range.maximumSeconds * frameRate).rounded(.toNearestOrEven))
-    let rawFrames = Int((predictedSeconds * frameRate).rounded(.toNearestOrEven))
-    let clamped = min(max(rawFrames, minimumFrames), maximumFrames)
-    let snappedDown = ((max(1, clamped) - 1) / 8) * 8 + 1
-    if snappedDown >= minimumFrames {
-        return snappedDown
-    }
-    return min((((minimumFrames - 1) + 7) / 8) * 8 + 1, maximumFrames)
 }

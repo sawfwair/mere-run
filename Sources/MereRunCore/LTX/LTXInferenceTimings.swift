@@ -90,8 +90,3 @@ public struct LTXGenerationTimings: Codable, Hashable, Sendable {
         self.totalSeconds = totalSeconds
     }
 }
-
-@inline(__always)
-func ltxMonotonicSeconds() -> Double {
-    ProcessInfo.processInfo.systemUptime
-}

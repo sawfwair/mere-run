@@ -1,5 +1,6 @@
 import XCTest
 @testable import MereRunCore
+@testable import MereRunLTXModel
 
 final class LTXGuidanceProjectionCacheTests: XCTestCase {
     private let gibibyte = UInt64(1_073_741_824)

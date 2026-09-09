@@ -1,7 +1,7 @@
 # mere.run codebase map
 
 `mere.run` is a Swift package, CLI, and optional macOS GUI for local inference
-on Apple Silicon. This map identifies source owners. `mere.run.app` runs the
+on Apple Silicon. `mere.run.app` runs the
 CLI. `MereRunCore` owns inference; `MereRunModelKit` owns metadata and installed
 lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 `AudioTTS` own speech orchestration. `MereRunCLI` owns command presentation.
@@ -29,7 +29,8 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunDecode/`: shared sampling, pipelined token decoding, streaming, and logprob diagnostics
 - `Sources/MereRunTensor/`, `Sources/MereRunTextEncoder/`, and `Sources/MereRunImageModels/`: checkpoint loading, tensor kernels, and image model layers
 - `Sources/MereRunCore/ImageGeneration*.swift` and `Sources/AudioCore/SpeechTranscriptionOperation.swift`: shared operation plans, validation, execution, and outcomes
-- `Sources/MereRunCore/LTX/`: native video generation and MP4 output
+- `Sources/MereRunLTXModel/`: LTX transformers, VAEs, upsamplers, and model caches
+- `Sources/MereRunCore/LTX/`: video loading, conditioning, generation, and output
 - `Sources/MereRunCore/Cosmos3/`: omnimodal generation and world runtime
 - `Sources/MereRunCore/SCAIL2/`: native SCAIL-2 transformer, OpenCLIP, masks,
   Wan 2.1 VAE loading, segmented generation, and MP4 orchestration
@@ -50,8 +51,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 ## Review before editing
 
 - Do not modify `vendor/` without reviewing the vendored runtime requirements.
-- Before editing a large model-definition file in `Sources/MereRunCore/`, read
-  the local module README.
+- Before editing model definitions, read the local module README.
 - When you change canonical model IDs, migration vocabulary, or hosted-default
   hygiene checks, update the documentation and tests together.
 

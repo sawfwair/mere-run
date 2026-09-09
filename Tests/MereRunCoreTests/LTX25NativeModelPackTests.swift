@@ -2,6 +2,7 @@ import Foundation
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunLTXModel
 
 final class LTX25NativeModelPackTests: MereRunCoreTestCase {
     func testRealNativePackCoversV2TransformerParameters() throws {

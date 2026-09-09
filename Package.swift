@@ -138,6 +138,7 @@ var products: [Product] = [
   .library(name: "MereRunTensor", targets: ["MereRunTensor"]),
   .library(name: "MereRunTextEncoder", targets: ["MereRunTextEncoder"]),
   .library(name: "MereRunImageModels", targets: ["MereRunImageModels"]),
+  .library(name: "MereRunLTXModel", targets: ["MereRunLTXModel"]),
   .library(name: "MereRunGemmaModel", targets: ["MereRunGemmaModel"]),
   .library(name: "MereRunQwenModel", targets: ["MereRunQwenModel"]),
   .library(name: "MereRunDecode", targets: ["MereRunDecode"]),
@@ -172,6 +173,7 @@ mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
 mereRunCoreDependencies.append("MereRunGemmaModel")
+mereRunCoreDependencies.append("MereRunLTXModel")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
@@ -292,6 +294,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunLTXModel",
   "MereRunGemmaModel",
   "MereRunQwenModel",
   "MereRunContract",
@@ -344,6 +347,16 @@ var mereRunCLIDependencies: [Target.Dependency] = [
 if hasMediaIOTarget {
   mereRunCLIDependencies.append("MediaIO")
 }
+
+targets.append(
+  .target(
+    name: "MereRunLTXModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunLTXModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
 
 targets.append(
   .target(
@@ -703,6 +716,16 @@ targets.append(
     path: "Tests/DecodeRuntimeTests",
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "LTXRuntimeTests",
+    dependencies: [.target(name: "MereRunLTXModel"), .target(name: "MereRunMLXTestSupport")]
+      + mlxDependency("MLX") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Tests/LTXRuntimeTests",
+    swiftSettings: commonSwiftSettings
   )
 )
 

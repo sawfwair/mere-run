@@ -697,7 +697,9 @@ zero-memory. MP4 formats and backend selection are unchanged.
 
 ### Runtime
 
-- `Sources/MereRunCore/LTX/LTXDistilledLatentGenerator.swift`
+- `Sources/MereRunCore/LTX/LTXUnifiedAVGenerator.swift`
+- `Sources/MereRunCore/LTX/LTXUnifiedAVGenerator+Generation.swift`
+- `Sources/MereRunLTXModel/`
 - `Sources/MereRunCore/LTX/LTXInferenceTimings.swift`
 - `Sources/MereRunCore/LTX/LTXGemmaTextEncoder.swift`
 - `Sources/MereRunCore/LTX/LTXVideoMP4Writer.swift`
@@ -712,12 +714,14 @@ flow before reading the lower-level model definitions.
 
 Use this reading order:
 
-1. Public generation types and `LTXDistilledLatentGenerator`
+1. Public generation types and `LTXUnifiedAVGenerator` state
 2. Request normalization and generation flow
 3. Denoise and latent-conditioning helpers
 4. Decoding and media assembly code
-5. Lower-level model definitions
+5. Model definitions in `MereRunLTXModel`
 
 If you are new to the repository, use the
 [Architecture reading map](../architecture.md)
 before diving directly into the LTX implementation.
+
+See [LTX runtime boundaries](../internals/ltx-runtime-boundaries.md) for module ownership and independent tests.

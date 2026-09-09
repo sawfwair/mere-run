@@ -1,5 +1,6 @@
 import MLX
 @testable import MereRunCore
+@testable import MereRunLTXModel
 import XCTest
 
 final class LTX25DFRLayoutTests: MereRunCoreTestCase {

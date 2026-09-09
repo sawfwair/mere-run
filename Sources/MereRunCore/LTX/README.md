@@ -1,8 +1,17 @@
 # LTX Module
 
-This directory owns native video generation for mere.run.
+This directory owns native LTX loading, conditioning, generation, and output.
+`MereRunLTXModel` owns transformer layers, video and audio VAEs, DiffVAE,
+upsamplers, duration prediction, tiled decode, and model-cache computation.
+Core re-exports public model types and supplies their checkpoint-loading methods.
 
-- `LTXDistilledLatentGenerator.swift`: distilled text-to-video and image-to-video path
+- `LTXUnifiedAVGenerator.swift`: resident generation state and cleanup
+- `LTXUnifiedAVGenerator+Loading.swift` and `+FullLoading.swift`: checkpoint loading
+- `LTXUnifiedAVGenerator+Generation.swift`: unified video and audio execution
+- `LTXUnifiedAVGenerator+AudioToVideo.swift`: frozen-audio video generation
+- `LTXDistilledLatentGenerator.swift` and its extensions: legacy distilled generation
+- `LTX*Denoising.swift`: sampler and guidance execution
+- `LTX*WeightMapping.swift`: checkpoint layout adapters
 - `LTXInferenceTimings.swift`: typed model-load and generation phase timings
 - `LTXGemmaTextEncoder.swift`: text encoder support for LTX models
 - `LTXPromptEmbeddingCache.swift`: bounded resident-session prompt embedding cache

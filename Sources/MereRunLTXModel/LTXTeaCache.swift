@@ -17,11 +17,11 @@ public struct LTXTeaCacheConfiguration: Sendable, Hashable {
     }
 }
 
-struct LTXTeaCacheCalibration: Sendable, Hashable {
-    let coefficients: [Float]
-    let threshold: Float
+package struct LTXTeaCacheCalibration: Sendable, Hashable {
+    package let coefficients: [Float]
+    package let threshold: Float
 
-    static func ltx25(
+    package static func ltx25(
         sampler: LTXSamplerMode,
         key: LTXTeaCacheKey
     ) -> Self {
@@ -44,59 +44,71 @@ struct LTXTeaCacheCalibration: Sendable, Hashable {
     }
 }
 
-enum LTXTeaCacheBranch: String, Codable, Sendable, Hashable {
+package enum LTXTeaCacheBranch: String, Codable, Sendable, Hashable {
     case conditioned
     case unconditional
     case perturbed
     case isolated
 }
 
-enum LTXTeaCacheStage: String, Codable, Sendable, Hashable {
+package enum LTXTeaCacheStage: String, Codable, Sendable, Hashable {
     case primary
     case midpoint
 }
 
-enum LTXTeaCachePipelineStage: String, Codable, Sendable, Hashable {
+package enum LTXTeaCachePipelineStage: String, Codable, Sendable, Hashable {
     case coarse
     case detail
 }
 
-struct LTXTeaCacheKey: Sendable, Hashable {
-    let branch: LTXTeaCacheBranch
-    let stage: LTXTeaCacheStage
-    let pipelineStage: LTXTeaCachePipelineStage
+package struct LTXTeaCacheKey: Sendable, Hashable {
+    package let branch: LTXTeaCacheBranch
+    package let stage: LTXTeaCacheStage
+    package let pipelineStage: LTXTeaCachePipelineStage
+
+    package init(branch: LTXTeaCacheBranch, stage: LTXTeaCacheStage, pipelineStage: LTXTeaCachePipelineStage) {
+        self.branch = branch
+        self.stage = stage
+        self.pipelineStage = pipelineStage
+    }
 }
 
-struct LTXTeaCacheRequest {
-    let key: LTXTeaCacheKey
-    let stepIndex: Int
-    let stepCount: Int
+package struct LTXTeaCacheRequest {
+    package let key: LTXTeaCacheKey
+    package let stepIndex: Int
+    package let stepCount: Int
+
+    package init(key: LTXTeaCacheKey, stepIndex: Int, stepCount: Int) {
+        self.key = key
+        self.stepIndex = stepIndex
+        self.stepCount = stepCount
+    }
 }
 
-enum LTXTeaCacheDecision {
+package enum LTXTeaCacheDecision {
     case compute
     case reuse(videoResidual: MLXArray, audioResidual: MLXArray)
 }
 
-struct LTXTeaCacheCalibrationSample: Codable, Sendable, Hashable {
-    let branch: LTXTeaCacheBranch
-    let stage: LTXTeaCacheStage
-    let pipelineStage: LTXTeaCachePipelineStage
-    let stepIndex: Int
-    let inputRelativeL1: Float
-    let outputRelativeL1: Float
+package struct LTXTeaCacheCalibrationSample: Codable, Sendable, Hashable {
+    package let branch: LTXTeaCacheBranch
+    package let stage: LTXTeaCacheStage
+    package let pipelineStage: LTXTeaCachePipelineStage
+    package let stepIndex: Int
+    package let inputRelativeL1: Float
+    package let outputRelativeL1: Float
 }
 
-struct LTXTeaCacheCalibrationReport: Codable, Sendable, Hashable {
-    let schemaVersion: Int
-    let sampler: String
-    let samples: [LTXTeaCacheCalibrationSample]
+package struct LTXTeaCacheCalibrationReport: Codable, Sendable, Hashable {
+    package let schemaVersion: Int
+    package let sampler: String
+    package let samples: [LTXTeaCacheCalibrationSample]
 }
 
-final class LTXTeaCacheMetrics {
-    var decisionSeconds = 0.0
-    var computedBlockStacks = 0
-    var reusedBlockStacks = 0
+package final class LTXTeaCacheMetrics {
+    package var decisionSeconds = 0.0
+    package var computedBlockStacks = 0
+    package var reusedBlockStacks = 0
 }
 
 private struct LTXTeaCacheState {
@@ -119,26 +131,26 @@ private struct LTXTeaCacheGuidanceGroupDecision {
     let reusesResiduals: Bool
 }
 
-final class LTXTeaCacheController {
+package final class LTXTeaCacheController {
     private let configuration: LTXTeaCacheConfiguration
     private let sampler: LTXSamplerMode
-    private(set) var metrics = LTXTeaCacheMetrics()
+    package private(set) var metrics = LTXTeaCacheMetrics()
     private var states: [LTXTeaCacheKey: LTXTeaCacheState] = [:]
     private var guidanceGroupDecisions: [
         LTXTeaCacheGuidanceGroupKey: LTXTeaCacheGuidanceGroupDecision
     ] = [:]
     private(set) var calibrationSamples: [LTXTeaCacheCalibrationSample] = []
 
-    init(configuration: LTXTeaCacheConfiguration, sampler: LTXSamplerMode) {
+    package init(configuration: LTXTeaCacheConfiguration, sampler: LTXSamplerMode) {
         self.configuration = configuration
         self.sampler = sampler
     }
 
-    var isCalibrating: Bool {
+    package var isCalibrating: Bool {
         configuration.calibrationOutputURL != nil
     }
 
-    func decide(
+    package func decide(
         request: LTXTeaCacheRequest,
         gate: MLXArray
     ) -> LTXTeaCacheDecision {
@@ -210,7 +222,7 @@ final class LTXTeaCacheController {
         return .compute
     }
 
-    func recordComputedResidual(
+    package func recordComputedResidual(
         request: LTXTeaCacheRequest,
         videoResidual: MLXArray,
         audioResidual: MLXArray
@@ -241,7 +253,7 @@ final class LTXTeaCacheController {
         states[request.key] = state
     }
 
-    func writeCalibrationReport() throws {
+    package func writeCalibrationReport() throws {
         guard let url = configuration.calibrationOutputURL else { return }
         let report = LTXTeaCacheCalibrationReport(
             schemaVersion: 1,

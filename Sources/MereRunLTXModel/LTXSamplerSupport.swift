@@ -94,7 +94,7 @@ public enum LTXRes2s {
     }
 }
 
-func ltxEulerStep(
+package func ltxEulerStep(
     sample: MLXArray,
     denoised: MLXArray,
     sigma: Float,
@@ -106,7 +106,7 @@ func ltxEulerStep(
     return (sample32 + velocity * MLXArray(nextSigma - sigma)).asType(sample.dtype)
 }
 
-func ltxCfgPlusPlusStep(
+package func ltxCfgPlusPlusStep(
     sample: MLXArray,
     denoised: MLXArray,
     unconditionalDenoised: MLXArray,
@@ -138,7 +138,7 @@ func ltxCfgPlusPlusStep(
     return next.asType(sample.dtype)
 }
 
-func ltxRes2sSDEStep(
+package func ltxRes2sSDEStep(
     sample: MLXArray,
     denoised: MLXArray,
     sigma: Float,

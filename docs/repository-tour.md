@@ -30,6 +30,7 @@ mere-run/
 - `MereRunModelKit`
 - `MereRunQwenModel`
 - `MereRunGemmaModel`
+- `MereRunLTXModel`
 - `MereRunDecode`
 - `MereRunCore`
 - `MereRunTensor`
@@ -132,6 +133,12 @@ Gemma configurations, text and vision layers, expert routing, attention caches,
 quantization, and MTP draft computation. Core retains resource loading, templates,
 generation, and LoRA orchestration. See
 [Gemma runtime boundaries](./internals/gemma-runtime-boundaries.md).
+
+### `Sources/MereRunLTXModel`
+
+LTX transformer, video and audio VAE, diffusion decoder, upsampling, duration,
+and model-cache computation. Core retains checkpoint loading, conditioning,
+generation, and media output. See [LTX runtime boundaries](./internals/ltx-runtime-boundaries.md).
 
 ### `Sources/MereRunDecode`
 

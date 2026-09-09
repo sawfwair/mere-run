@@ -3,6 +3,7 @@ import MediaIO
 import MLX
 import MLXNN
 @testable import MereRunCore
+@testable import MereRunLTXModel
 import XCTest
 
 final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {

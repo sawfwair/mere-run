@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Extract LTX transformers, video and audio VAEs, DiffVAE, upsamplers, duration
+  prediction, and model caches into `MereRunLTXModel`. Separate loading,
+  conditioning, denoising, and output stages in Core. Preserve Core imports
+  and checkpoint-loading APIs, and enforce an independent model test boundary.
+
 - Extract Gemma model layers, caches, quantization, and MTP draft computation
   into `MereRunGemmaModel`. Split generator and model stages, and isolate
   numerical regressions from Core. Existing Core imports retain public types.
