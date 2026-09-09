@@ -1,3 +1,6 @@
+import MereRunTensor
+import MereRunGemmaModel
+import MereRunDecode
 import MLX
 import MLXFast
 
@@ -10,7 +13,7 @@ import MLXFast
 /// signed zero) a total order, with the original expert index as the stable
 /// tie-breaker. The implementation is the mechanism officially promoted by
 /// MLX Fast submission `cc6ddc12` after exact 1,344-step M5 Max validation.
-enum LagunaActive64Router {
+package enum LagunaActive64Router {
     private static let ordinalHeader = """
     METAL_FUNC uint mererun_laguna_router_key_ordinal(float key) {
         uint bits = as_type<uint>(key);
@@ -184,7 +187,7 @@ enum LagunaActive64Router {
         ensureRowContiguous: true
     )
 
-    static func routeIfEnabled(
+    package static func routeIfEnabled(
         logits: MLXArray,
         correctionBias: MLXArray,
         expertCount: Int,
@@ -211,7 +214,7 @@ enum LagunaActive64Router {
         )
     }
 
-    static func routeForTesting(
+    package static func routeForTesting(
         logits: MLXArray,
         correctionBias: MLXArray,
         normalizing: Bool

@@ -1,3 +1,6 @@
+import MereRunTensor
+import MereRunGemmaModel
+import MereRunDecode
 import MLX
 import MLXFast
 
@@ -5,11 +8,11 @@ import MLXFast
 /// per-head gate logits and the ungated attention row, reproduces MLX's stable
 /// FP32 softplus and BF16 rounding boundary, then performs the accepted
 /// group-32 affine INT8 output projection in the same dispatch.
-enum LagunaGatedAffineOProj {
+package enum LagunaGatedAffineOProj {
     private static let hiddenSize = 2_048
     private static let headDimension = 128
 
-    static func call(
+    package static func call(
         attentionOutput: MLXArray,
         gateLogits: MLXArray,
         codes: MLXArray,

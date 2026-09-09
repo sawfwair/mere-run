@@ -1,3 +1,6 @@
+import MereRunTensor
+import MereRunGemmaModel
+import MereRunDecode
 import Foundation
 
 public struct LagunaDFlashSpeculationConfig: Decodable, Sendable, Hashable {
@@ -141,7 +144,7 @@ public struct LagunaDFlashConfig: Decodable, Sendable, Hashable {
         }
     }
 
-    var ropeParameters: LagunaRopeParameters {
+    package var ropeParameters: LagunaRopeParameters {
         LagunaRopeParameters(ropeTheta: ropeTheta)
     }
 }

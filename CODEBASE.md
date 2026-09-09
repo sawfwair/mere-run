@@ -10,7 +10,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 
 1. `Package.swift` for target and dependency flow
 2. `Sources/MereRunCLI/MereRunCLI.swift` for the public command tree
-3. `apps/macos/StudioKit` and `apps/macos/StudioUI` for the optional SwiftUI wrapper
+3. `apps/macos/StudioKit` and `apps/macos/StudioUI` for Studio
 4. `docs/repository-tour.md` for top-level ownership
 5. `docs/architecture.md` for runtime reading order
 6. the module README inside the subsystem you are editing
@@ -19,7 +19,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 
 - `Sources/MereRunCLI/Commands/`: public command families
 - `apps/macos/`: macOS Studio sources, tests, assets, templates, and CLI launching
-- `Sources/MereRunEvaluation/`: runtime-neutral external evaluation-pack schema, validation, and content hashing
+- `Sources/MereRunEvaluation/`: external evaluation-pack schema, validation, and content hashing
 - `Sources/MereRunRelayKit/`: portable relay client, executor profiles/auth, and workflow wire types shared by the CLI and app shells
 - `apps/ios/`: the iOS Studio app, a relay client over `MereRunRelayKit` (see `docs/ios-studio.md`)
 - `Sources/MereRunAdmission/` and `Sources/MereRunResidency/`: reservations, queues, model generations, leases, and eviction
@@ -31,7 +31,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunCore/ImageGeneration*.swift` and `Sources/AudioCore/SpeechTranscriptionOperation.swift`: shared operation plans, validation, execution, and outcomes
 - `Sources/MereRunLTXModel/`: LTX transformers, VAEs, upsamplers, and model caches
 - `Sources/MereRunCore/LTX/`: video loading, conditioning, generation, and output
-- `Sources/MereRunCore/Cosmos3/`: omnimodal generation and world runtime
+- `Sources/MereRunH3Model/`, `Sources/MereRunLagunaModel/`, and `Sources/MereRunAudioModels/`: H3, Laguna, and shared vocoder computation
 - `Sources/MereRunCore/SCAIL2/`: native SCAIL-2 transformer, OpenCLIP, masks,
   Wan 2.1 VAE loading, segmented generation, and MP4 orchestration
 - `Sources/MereRunCore/LoRA/`: LoRA checkpoint, artifact, and compatibility logic

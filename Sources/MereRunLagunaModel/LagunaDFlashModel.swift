@@ -1,14 +1,17 @@
+import MereRunTensor
+import MereRunGemmaModel
+import MereRunDecode
 import Foundation
 import MLX
 import MLXFast
 import MLXNN
 
-final class LagunaDFlashAttention: Module {
-    @ModuleInfo(key: "qkv_proj") var qkvProj: Linear
-    @ModuleInfo(key: "o_proj") var oProj: Linear
-    @ModuleInfo(key: "g_proj") var gProj: Linear
-    @ModuleInfo(key: "q_norm") var qNorm: RMSNorm
-    @ModuleInfo(key: "k_norm") var kNorm: RMSNorm
+package final class LagunaDFlashAttention: Module {
+    @ModuleInfo(key: "qkv_proj") package var qkvProj: Linear
+    @ModuleInfo(key: "o_proj") package var oProj: Linear
+    @ModuleInfo(key: "g_proj") package var gProj: Linear
+    @ModuleInfo(key: "q_norm") package var qNorm: RMSNorm
+    @ModuleInfo(key: "k_norm") package var kNorm: RMSNorm
 
     private let headCount: Int
     private let keyValueHeadCount: Int
@@ -19,7 +22,7 @@ final class LagunaDFlashAttention: Module {
     private let slidingWindow: Int
     private let rope: LagunaRoPE
 
-    init(config: LagunaDFlashConfig) {
+    package init(config: LagunaDFlashConfig) {
         self.headCount = config.numAttentionHeads
         self.keyValueHeadCount = config.numKeyValueHeads
         self.headDim = config.headDim
@@ -49,7 +52,7 @@ final class LagunaDFlashAttention: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray, cache: Gemma4AttentionCache) -> MLXArray {
+    package func callAsFunction(_ x: MLXArray, cache: Gemma4AttentionCache) -> MLXArray {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
         let positionOffsets = (cache as? LagunaRaggedKVCache)?.positionOffsets
@@ -94,7 +97,7 @@ final class LagunaDFlashAttention: Module {
         return oProj(output.reshaped(batch, sequenceLength, querySize))
     }
 
-    func appendContext(
+    package func appendContext(
         _ context: MLXArray,
         inputLayerNorm: RMSNorm,
         cache: Gemma4AttentionCache
@@ -154,13 +157,13 @@ final class LagunaDFlashAttention: Module {
     }
 }
 
-final class LagunaDFlashDecoderLayer: Module {
-    @ModuleInfo(key: "self_attn") var selfAttention: LagunaDFlashAttention
-    @ModuleInfo(key: "mlp") var mlp: LagunaDenseMLP
-    @ModuleInfo(key: "input_layernorm") var inputLayerNorm: RMSNorm
-    @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: RMSNorm
+package final class LagunaDFlashDecoderLayer: Module {
+    @ModuleInfo(key: "self_attn") package var selfAttention: LagunaDFlashAttention
+    @ModuleInfo(key: "mlp") package var mlp: LagunaDenseMLP
+    @ModuleInfo(key: "input_layernorm") package var inputLayerNorm: RMSNorm
+    @ModuleInfo(key: "post_attention_layernorm") package var postAttentionLayerNorm: RMSNorm
 
-    init(config: LagunaDFlashConfig) {
+    package init(config: LagunaDFlashConfig) {
         self._selfAttention.wrappedValue = LagunaDFlashAttention(config: config)
         self._mlp.wrappedValue = LagunaDenseMLP(
             inputDimensions: config.hiddenSize,
@@ -177,12 +180,12 @@ final class LagunaDFlashDecoderLayer: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray, cache: Gemma4AttentionCache) -> MLXArray {
+    package func callAsFunction(_ x: MLXArray, cache: Gemma4AttentionCache) -> MLXArray {
         let attended = x + selfAttention(inputLayerNorm(x), cache: cache)
         return attended + mlp(postAttentionLayerNorm(attended))
     }
 
-    func appendContext(_ context: MLXArray, cache: Gemma4AttentionCache) {
+    package func appendContext(_ context: MLXArray, cache: Gemma4AttentionCache) {
         selfAttention.appendContext(
             context,
             inputLayerNorm: inputLayerNorm,
@@ -191,16 +194,16 @@ final class LagunaDFlashDecoderLayer: Module {
     }
 }
 
-final class LagunaDFlashModel: Module {
-    @ModuleInfo(key: "aux_hidden_norms") var auxHiddenNorms: [RMSNorm]
-    @ModuleInfo(key: "fc") var fc: Linear
-    @ModuleInfo(key: "hidden_norm") var hiddenNorm: RMSNorm
-    @ModuleInfo(key: "layers") var layers: [LagunaDFlashDecoderLayer]
-    @ModuleInfo(key: "norm") var norm: RMSNorm
+package final class LagunaDFlashModel: Module {
+    @ModuleInfo(key: "aux_hidden_norms") package var auxHiddenNorms: [RMSNorm]
+    @ModuleInfo(key: "fc") package var fc: Linear
+    @ModuleInfo(key: "hidden_norm") package var hiddenNorm: RMSNorm
+    @ModuleInfo(key: "layers") package var layers: [LagunaDFlashDecoderLayer]
+    @ModuleInfo(key: "norm") package var norm: RMSNorm
 
-    let config: LagunaDFlashConfig
+    package let config: LagunaDFlashConfig
 
-    init(config: LagunaDFlashConfig) {
+    package init(config: LagunaDFlashConfig) {
         self.config = config
         self._auxHiddenNorms.wrappedValue = config.dflash.targetLayerIDs.map { _ in
             RMSNorm(dimensions: config.hiddenSize, eps: config.rmsNormEps)
@@ -224,7 +227,7 @@ final class LagunaDFlashModel: Module {
         super.init()
     }
 
-    func combineTargetHiddenStates(_ states: [Int: MLXArray]) -> MLXArray {
+    package func combineTargetHiddenStates(_ states: [Int: MLXArray]) -> MLXArray {
         let normalized = zip(config.dflash.targetLayerIDs, auxHiddenNorms).map {
             layerID, layerNorm in
             layerNorm(states[layerID]!)
@@ -232,7 +235,7 @@ final class LagunaDFlashModel: Module {
         return hiddenNorm(fc(concatenated(normalized, axis: -1)))
     }
 
-    func appendTargetContext(
+    package func appendTargetContext(
         _ combinedContext: MLXArray,
         cache: [Gemma4AttentionCache]
     ) {
@@ -242,7 +245,7 @@ final class LagunaDFlashModel: Module {
         }
     }
 
-    func draftLogits(
+    package func draftLogits(
         anchorTokens: MLXArray,
         speculativeTokenCount: Int,
         cache: [Gemma4AttentionCache],
@@ -269,7 +272,7 @@ final class LagunaDFlashModel: Module {
         return target.logits(from: hidden)[0..., 1..., 0...]
     }
 
-    func makeCache(initialOffset: Int = 0) -> [Gemma4AttentionCache] {
+    package func makeCache(initialOffset: Int = 0) -> [Gemma4AttentionCache] {
         layers.map { _ in
             Gemma4SlidingKVCache(
                 maxSize: config.slidingWindow,

@@ -31,6 +31,9 @@ mere-run/
 - `MereRunQwenModel`
 - `MereRunGemmaModel`
 - `MereRunLTXModel`
+- `MereRunH3Model`
+- `MereRunLagunaModel`
+- `MereRunAudioModels`
 - `MereRunDecode`
 - `MereRunCore`
 - `MereRunTensor`
@@ -111,6 +114,13 @@ streaming-lifetime rules.
 Model identities, manifests, configured paths, registered locations, artifact
 pins, and installed lookup. This library depends on Foundation and Crypto.
 Callers supply catalog descriptors and runtime validation for installed lookup.
+
+### H3, Laguna, and shared audio model libraries
+
+`Sources/MereRunH3Model` owns H3 model computation. `Sources/MereRunLagunaModel`
+owns Laguna target and draft computation. `Sources/MereRunAudioModels` owns
+BigVGAN layers shared by H3 and MMAudio. Core retains their runtime adapters.
+See [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md).
 
 ### Image model libraries
 

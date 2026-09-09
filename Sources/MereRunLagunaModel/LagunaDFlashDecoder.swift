@@ -1,100 +1,10 @@
 import Foundation
 import MLX
+import MereRunDecode
+import MereRunGemmaModel
 
-public enum LagunaDFlashRouting {
-    public static let defaultSpeculativeTokens = 12
-    public static let defaultMinimumOutputTokens = 32
-    public static let immediateFallbackAcceptanceRate = 0.25
-    public static let defaultMinimumAcceptanceRate = 0.6
-    public static let defaultAcceptanceEvaluationRounds = 2
-
-    public static func shouldUseDFlash(
-        tokenBudget: Int,
-        minimumOutputTokens: Int
-    ) -> Bool {
-        tokenBudget >= minimumOutputTokens
-    }
-}
-
-public enum LagunaDFlashRoutingMode: String, Codable, Sendable {
-    case automatic
-    case targetOnly = "target-only"
-    case dflash
-}
-
-public struct LagunaDFlashStats: Codable, Equatable, Sendable {
-    public let enabled: Bool
-    public let speculativeTokens: Int
-    public let minimumOutputTokens: Int
-    public let routedRequests: Int
-    public let bypassedRequests: Int
-    public let rounds: Int
-    public let draftedTokens: Int
-    public let acceptedDraftTokens: Int
-    public let rejectedDraftTokens: Int
-    public let fullAcceptanceRounds: Int
-    public let targetVerificationForwards: Int
-    public let targetRecoveryForwards: Int
-    public let targetFallbackForwards: Int
-    public let adaptiveFallbacks: Int
-
-    public var acceptanceRate: Double {
-        guard draftedTokens > 0 else { return 0 }
-        return Double(acceptedDraftTokens) / Double(draftedTokens)
-    }
-
-    public init(
-        enabled: Bool,
-        speculativeTokens: Int,
-        minimumOutputTokens: Int = LagunaDFlashRouting.defaultMinimumOutputTokens,
-        routedRequests: Int = 0,
-        bypassedRequests: Int = 0,
-        rounds: Int = 0,
-        draftedTokens: Int = 0,
-        acceptedDraftTokens: Int = 0,
-        rejectedDraftTokens: Int = 0,
-        fullAcceptanceRounds: Int = 0,
-        targetVerificationForwards: Int = 0,
-        targetRecoveryForwards: Int = 0,
-        targetFallbackForwards: Int = 0,
-        adaptiveFallbacks: Int = 0
-    ) {
-        self.enabled = enabled
-        self.speculativeTokens = speculativeTokens
-        self.minimumOutputTokens = minimumOutputTokens
-        self.routedRequests = routedRequests
-        self.bypassedRequests = bypassedRequests
-        self.rounds = rounds
-        self.draftedTokens = draftedTokens
-        self.acceptedDraftTokens = acceptedDraftTokens
-        self.rejectedDraftTokens = rejectedDraftTokens
-        self.fullAcceptanceRounds = fullAcceptanceRounds
-        self.targetVerificationForwards = targetVerificationForwards
-        self.targetRecoveryForwards = targetRecoveryForwards
-        self.targetFallbackForwards = targetFallbackForwards
-        self.adaptiveFallbacks = adaptiveFallbacks
-    }
-}
-
-struct LagunaDFlashDecodeResult {
-    let generatedTokens: [Int]
-    let decodeSeconds: Double
-    let firstTokenSeconds: Double?
-    let stats: LagunaDFlashStats
-    let targetCache: [Gemma4AttentionCache]
-    let draftCache: [Gemma4AttentionCache]
-}
-
-private struct LagunaDFlashPreparedGreedyRound {
-    let anchor: Int
-    let proposals: [Int]
-    let targetTokens: [Int]
-    let candidateTargetCache: [Gemma4AttentionCache]
-    let candidate: LagunaForwardOutput
-}
-
-enum LagunaDFlashDecoder {
-    static func decode(
+package enum LagunaDFlashDecoder {
+    package static func decode(
         initialLogits: MLXArray,
         target: LagunaCausalLM,
         targetCache initialTargetCache: [Gemma4AttentionCache],
@@ -492,7 +402,7 @@ enum LagunaDFlashDecoder {
         )
     }
 
-    static func commitCandidatePrefix(
+    package static func commitCandidatePrefix(
         base: [Gemma4AttentionCache],
         candidate: [Gemma4AttentionCache],
         tokenCount: Int
@@ -513,7 +423,7 @@ enum LagunaDFlashDecoder {
         }
     }
 
-    static func rejectionDistribution(
+    package static func rejectionDistribution(
         target: MLXArray,
         draft: MLXArray
     ) -> MLXArray {

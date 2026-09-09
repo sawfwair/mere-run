@@ -43,6 +43,14 @@ model and generator stages. Start at `Sources/MereRunCore/Gemma4/Gemma4Generator
 for requests, then follow its loading, prefill, and decode extensions. Model math
 and cache implementations live in `Sources/MereRunGemmaModel`.
 
+## H3 video and Laguna text models
+
+Read [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md)
+for model ownership, generator stages, shared vocoder layers, and validation.
+H3 computation lives in `Sources/MereRunH3Model`; Laguna computation lives in
+`Sources/MereRunLagunaModel`. Their Core generator extensions own loading,
+request execution, conditioning or batching, and cleanup.
+
 ## Image families
 
 Read the [shared image operation](./internals/image-generation-operation.md)

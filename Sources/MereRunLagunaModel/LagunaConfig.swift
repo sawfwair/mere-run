@@ -1,3 +1,6 @@
+import MereRunTensor
+import MereRunGemmaModel
+import MereRunDecode
 import Foundation
 
 public struct LagunaQuantizationConfig: Decodable, Sendable, Hashable {
@@ -236,15 +239,15 @@ public struct LagunaConfig: Decodable, Sendable, Hashable {
         }
     }
 
-    func attentionHeads(layerIndex: Int) -> Int {
+    package func attentionHeads(layerIndex: Int) -> Int {
         numAttentionHeadsPerLayer?[layerIndex] ?? numAttentionHeads
     }
 
-    func ropeParameters(layerIndex: Int) -> LagunaRopeParameters {
+    package func ropeParameters(layerIndex: Int) -> LagunaRopeParameters {
         ropeParameters[layerTypes[layerIndex]]!
     }
 
-    func isSparse(layerIndex: Int) -> Bool {
+    package func isSparse(layerIndex: Int) -> Bool {
         if let mlpLayerTypes {
             return mlpLayerTypes[layerIndex] == "sparse"
         }

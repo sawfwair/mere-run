@@ -129,6 +129,7 @@ let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
   : []
 
 var products: [Product] = [
+  .library(name: "MereRunLagunaModel", targets: ["MereRunLagunaModel"]),
   .library(name: "MereRunH3Model", targets: ["MereRunH3Model"]),
   .library(name: "MereRunAudioModels", targets: ["MereRunAudioModels"]),
   .library(name: "MereRunContract", targets: ["MereRunContract"]),
@@ -169,6 +170,7 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 mereRunCoreDependencies.append("MereRunAudioModels")
 mereRunCoreDependencies.append("MereRunH3Model")
+mereRunCoreDependencies.append("MereRunLagunaModel")
 mereRunCoreDependencies.append("MereRunModelKit")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
@@ -298,6 +300,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunLagunaModel",
   "MereRunH3Model",
   "MereRunAudioModels",
   "MereRunLTXModel",
@@ -384,6 +387,21 @@ targets.append(
   )
 )
 
+var mereRunLagunaModelDependencies: [Target.Dependency] = ["MereRunTensor", "MereRunGemmaModel", "MereRunDecode"]
+mereRunLagunaModelDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunLagunaModelDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunLagunaModelDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunLagunaModelDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+targets.append(
+  .target(
+    name: "MereRunLagunaModel",
+    dependencies: mereRunLagunaModelDependencies,
+    path: "Sources/MereRunLagunaModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
 targets.append(
   .target(
     name: "MereRunLTXModel",
@@ -394,22 +412,30 @@ targets.append(
   )
 )
 
+var mereRunGemmaModelDependencies: [Target.Dependency] = [.target(name: "MereRunTensor"), .target(name: "MereRunDecode")]
+mereRunGemmaModelDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunGemmaModelDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunGemmaModelDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunGemmaModelDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 targets.append(
   .target(
     name: "MereRunGemmaModel",
-    dependencies: [.target(name: "MereRunTensor"), .target(name: "MereRunDecode")]
-      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    dependencies: mereRunGemmaModelDependencies,
     path: "Sources/MereRunGemmaModel",
     exclude: ["README.md"],
     swiftSettings: commonSwiftSettings
   )
 )
 
+var mereRunQwenModelDependencies: [Target.Dependency] = [.target(name: "MereRunTensor"), .target(name: "MereRunKVCache"), .target(name: "MereRunTextEncoder")]
+mereRunQwenModelDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunQwenModelDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunQwenModelDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunQwenModelDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 targets.append(
   .target(
     name: "MereRunQwenModel",
-    dependencies: [.target(name: "MereRunTensor"), .target(name: "MereRunKVCache"), .target(name: "MereRunTextEncoder")]
-      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    dependencies: mereRunQwenModelDependencies,
     path: "Sources/MereRunQwenModel",
     exclude: ["README.md"],
     swiftSettings: commonSwiftSettings
@@ -770,6 +796,21 @@ targets.append(
   )
 )
 
+var lagunaRuntimeTestsDependencies: [Target.Dependency] = ["MereRunLagunaModel", "MereRunGemmaModel", "MereRunTensor", "MereRunDecode", "MereRunMLXTestSupport"]
+lagunaRuntimeTestsDependencies.append(contentsOf: mlxDependency("MLX"))
+lagunaRuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXFast"))
+lagunaRuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXNN"))
+lagunaRuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+targets.append(
+  .testTarget(
+    name: "LagunaRuntimeTests",
+    dependencies: lagunaRuntimeTestsDependencies,
+    path: "Tests/LagunaRuntimeTests",
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
 targets.append(
   .testTarget(
     name: "LTXRuntimeTests",
@@ -780,11 +821,15 @@ targets.append(
   )
 )
 
+var gemmaRuntimeTestsDependencies: [Target.Dependency] = ["MereRunGemmaModel", "MereRunTensor", "MereRunDecode", "MereRunMLXTestSupport"]
+gemmaRuntimeTestsDependencies.append(contentsOf: mlxDependency("MLX"))
+gemmaRuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXFast"))
+gemmaRuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXNN"))
+gemmaRuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 targets.append(
   .testTarget(
     name: "GemmaRuntimeTests",
-    dependencies: ["MereRunGemmaModel", "MereRunTensor", "MereRunDecode", "MereRunMLXTestSupport"]
-      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    dependencies: gemmaRuntimeTestsDependencies,
     path: "Tests/GemmaRuntimeTests",
     swiftSettings: commonSwiftSettings
   )

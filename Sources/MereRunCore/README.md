@@ -9,7 +9,9 @@ encoder layers, and FLUX.2/ZImage models live in `MereRunTensor`,
 sampling, decoding, streaming, and logprob diagnostics. Native Qwen model layers
 live in `MereRunQwenModel`. Gemma layers, caches, and draft computation live in
 `MereRunGemmaModel`. LTX model computation lives in
-`MereRunLTXModel`. Core retains resource loading and generation for these families.
+`MereRunLTXModel`. H3 and Laguna computation live in `MereRunH3Model` and
+`MereRunLagunaModel`; shared BigVGAN layers live in `MereRunAudioModels`.
+Core retains resource loading and generation for these families.
 
 - `Generation.swift`: image and chat request/response contracts.
 - `ImageGenerationOptions.swift` and `ImageGenerationPlan.swift`: typed image

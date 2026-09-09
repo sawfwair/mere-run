@@ -1,3 +1,6 @@
+import MereRunTensor
+import MereRunGemmaModel
+import MereRunDecode
 import MLX
 import MLXFast
 
@@ -6,13 +9,13 @@ import MLXFast
 /// rounding boundary, then keeps each projection row's affine-QMV arithmetic
 /// and reduction order unchanged. Prefetching immutable weight bytes above the
 /// RMS prologue overlaps memory latency without changing consumption order.
-enum LagunaNormAffineQKV {
+package enum LagunaNormAffineQKV {
     private static let hiddenSize = 2_048
     private static let headDimension = 128
     private static let keyValueHeads = 8
     private static let prefetchDepth = 4
 
-    static func call(
+    package static func call(
         residual: MLXArray,
         normWeight: MLXArray,
         codes: MLXArray,

@@ -90,6 +90,19 @@ func checkBoundary(_ manifest: PackageManifest) -> [String] {
     let runtimeBoundaries: [String: Set<String>] = [
         "MereRunDecode": [],
         "MereRunLTXModel": [],
+        "MereRunAudioModels": [],
+        "MereRunH3Model": ["MereRunTensor", "MereRunModelKit", "MereRunAudioModels"],
+        "H3RuntimeTests": [
+            "MereRunH3Model", "MereRunTensor", "MereRunModelKit", "MereRunAudioModels",
+            "MereRunMLXTestSupport"
+        ],
+        "MereRunLagunaModel": [
+            "MereRunGemmaModel", "MereRunTensor", "MereRunModelKit", "MereRunDecode"
+        ],
+        "LagunaRuntimeTests": [
+            "MereRunLagunaModel", "MereRunGemmaModel", "MereRunTensor", "MereRunModelKit",
+            "MereRunDecode", "MereRunMLXTestSupport"
+        ],
         "LTXRuntimeTests": ["MereRunLTXModel", "MereRunMLXTestSupport"],
         "MereRunGemmaModel": ["MereRunTensor", "MereRunModelKit", "MereRunDecode"],
         "GemmaRuntimeTests": [
