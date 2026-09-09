@@ -2,9 +2,8 @@
 
 Parakeet speech-to-text backend implementation.
 
-- `ParakeetConfig.swift`: typed model configuration.
-- `ParakeetTokenizer.swift`: tokenizer loading and text decoding.
-- `ParakeetModel.swift`: native model layers.
+- `AudioParakeetModel`: configuration, model layers, decoding, and alignment.
+- `ParakeetAlignment+ASR.swift`: conversion to shared ASR results.
 - `ParakeetGenerator.swift`: actor state and public transcription lifecycle.
 - `ParakeetGenerator+Loading.swift`: model resolution, provider setup, and weights.
 - `ParakeetGenerator+Decoding.swift`: measured decoding, windows, and alignment.

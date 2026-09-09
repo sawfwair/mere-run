@@ -2,6 +2,7 @@ import MLX
 import XCTest
 @testable import MereRunCore
 @testable import AudioTTS
+@testable import AudioQwen3TTSModel
 
 final class Qwen3TTSSpeechTokenizerEncoderTests: MereRunCoreTestCase {
     func testEncodeReferenceProducesExpectedShapeAndRange() {

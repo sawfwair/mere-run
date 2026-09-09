@@ -1,9 +1,10 @@
 import MLX
 import XCTest
-@testable import MereRunCore
-@testable import AudioTTS
+import MereRunKVCache
+import MereRunMLXTestSupport
+@testable import AudioQwen3TTSModel
 
-final class Qwen3TTSSpeakerEncoderTests: MereRunCoreTestCase {
+final class Qwen3TTSSpeakerEncoderTests: MLXTestCase {
     func testSpeakerEncoderProducesFiniteEmbeddingWithExpectedShape() {
         let config = Qwen3TTSSpeakerEncoderConfig()
         let encoder = Qwen3TTSSpeakerEncoder(config: config)

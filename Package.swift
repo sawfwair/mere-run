@@ -137,6 +137,8 @@ var products: [Product] = [
   .library(name: "MereRunModelKit", targets: ["MereRunModelKit"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
   .library(name: "MereRunKVCache", targets: ["MereRunKVCache"]),
+  .library(name: "AudioParakeetModel", targets: ["AudioParakeetModel"]),
+  .library(name: "AudioQwen3TTSModel", targets: ["AudioQwen3TTSModel"]),
   .library(name: "AudioQwen3ASRModel", targets: ["AudioQwen3ASRModel"]),
   .library(name: "AudioSortformer", targets: ["AudioSortformer"]),
   .library(name: "AudioCore", targets: ["AudioCore"]),
@@ -285,6 +287,8 @@ var mereRunCoreTestDependencies: [Target.Dependency] = [
   "AudioCodecs",
   "AudioSTT",
   "AudioQwen3ASRModel",
+  "AudioQwen3TTSModel",
+  "AudioParakeetModel",
   "AudioSortformer",
   "AudioTTS",
   .product(name: "Jinja", package: "swift-jinja"),
@@ -323,6 +327,27 @@ var mereRunCLIDependencies: [Target.Dependency] = [
 if hasMediaIOTarget {
   mereRunCLIDependencies.append("MediaIO")
 }
+
+targets.append(
+  .target(
+    name: "AudioParakeetModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/AudioParakeetModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "AudioQwen3TTSModel",
+    dependencies: [.target(name: "MereRunKVCache")]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/AudioQwen3TTSModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
 
 targets.append(
   .target(
@@ -536,7 +561,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioSTT",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3ASRModel", "AudioSortformer"],
+    dependencies: audioRuntimeDependencies + ["AudioQwen3ASRModel", "AudioSortformer", "AudioParakeetModel"],
     path: "Sources/AudioSTT",
     exclude: [
       "Parakeet/README.md",
@@ -552,7 +577,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioTTS",
-    dependencies: audioRuntimeDependencies,
+    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel"],
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"
@@ -591,7 +616,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "SpeechRuntimeTests",
-    dependencies: ["AudioQwen3ASRModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport"],
+    dependencies: ["AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioParakeetModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport"] + mlxDependency("MLXRandom"),
     path: "Tests/SpeechRuntimeTests",
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings

@@ -1,5 +1,4 @@
 import Foundation
-import MLX
 
 /// Selects the execution engine for the compute-heavy Parakeet encoder.
 ///
@@ -15,22 +14,4 @@ public enum ParakeetExecutionProvider: Sendable, Hashable {
         let root = artifactURL.standardizedFileURL
         return ParakeetResources(rootURL: root).validate().isEmpty ? root : nil
     }
-}
-
-struct ParakeetEncoderOutput {
-    let features: MLXArray
-    let lengths: [Int]
-}
-
-protocol ParakeetExternalEncoder: AnyObject {
-    func encode(_ mel: MLXArray) throws -> ParakeetEncoderOutput
-}
-
-protocol ParakeetExternalTDTDecoder: AnyObject {
-    var maximumBatchSize: Int { get }
-
-    func decode(
-        encoded: MLXArray,
-        lengths: [Int]
-    ) throws -> [ParakeetAlignedResult]
 }

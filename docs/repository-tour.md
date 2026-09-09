@@ -33,6 +33,8 @@ mere-run/
 - `AudioCodecs`
 - `AudioSTT`
 - `AudioQwen3ASRModel`
+- `AudioQwen3TTSModel`
+- `AudioParakeetModel`
 - `AudioSortformer`
 - `MereRunKVCache`
 - `AudioTTS`
@@ -155,21 +157,24 @@ Speech transcription orchestration, native executors, and compatibility exports.
 
 - `Qwen3ASR/`: Qwen3 model loading, tokenization, transcription, and streaming
 - `Parakeet/`: Parakeet transcription path
-Public Qwen model and Sortformer types are re-exported from their owning libraries.
 
-### `Sources/AudioQwen3ASRModel`, `Sources/AudioSortformer`, and `Sources/MereRunKVCache`
+Public Qwen ASR, Parakeet, and Sortformer types are re-exported from their owning libraries.
 
-Qwen ASR configuration and model layers, the Sortformer diarization runtime,
-and shared full-attention caches build without `MereRunCore`. Qwen uses the
-same cache implementation as Core through `MereRunKVCache`. Sortformer uses
+### Speech model libraries
+
+`Sources/AudioQwen3ASRModel`, `Sources/AudioQwen3TTSModel`, and
+`Sources/AudioParakeetModel` own configuration and tensor computation.
+`Sources/AudioSortformer` owns the diarization runtime. These libraries build
+without `MereRunCore`, audio codecs, or model downloads. Qwen uses the same
+attention caches as Core through `Sources/MereRunKVCache`. Sortformer uses
 `MereRunModelKit` for directory traversal. See
 [Speech runtime boundaries](./internals/speech-runtime-boundaries.md).
 
 ### `Sources/AudioTTS`
 
-Text-to-speech backends.
+Text-to-speech orchestration, audio-input adapters, and compatibility exports.
 
-- `Qwen3TTS/`: native Qwen3-TTS generator and tokenizer
+- `Qwen3TTS/`: native Qwen TTS loading, prompts, token generation, and audio output
 - `TTS/`: shared TTS support types
 
 ## Tests

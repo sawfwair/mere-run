@@ -2,8 +2,7 @@ import Foundation
 import MLX
 import MLXFast
 import MLXNN
-import AudioCodecs
-import MereRunCore
+import MereRunKVCache
 
 // Owns the public speech tokenizer surface and weight sanitization helpers.
 // Decoder and encoder architecture blocks live in companion files so readers
@@ -11,14 +10,14 @@ import MereRunCore
 
 // MARK: - Speech Tokenizer
 
-final class Qwen3TTSSpeechTokenizer: Module {
-    let config: Qwen3TTSTokenizerConfig
+package final class Qwen3TTSSpeechTokenizer: Module {
+    package let config: Qwen3TTSTokenizerConfig
     let decodeUpsampleRate: Int
 
     @ModuleInfo(key: "decoder") var decoder: Qwen3TTSSpeechTokenizerDecoder
-    @ModuleInfo(key: "encoder_model") var encoderModel: Qwen3TTSSpeechTokenizerEncoder?
+    @ModuleInfo(key: "encoder_model") package var encoderModel: Qwen3TTSSpeechTokenizerEncoder?
 
-    init(config: Qwen3TTSTokenizerConfig) {
+    package init(config: Qwen3TTSTokenizerConfig) {
         self.config = config
         self.decodeUpsampleRate = config.decodeUpsampleRate
         self._decoder.wrappedValue = Qwen3TTSSpeechTokenizerDecoder(config: config.decoderConfig)
@@ -32,9 +31,9 @@ final class Qwen3TTSSpeechTokenizer: Module {
         }
     }
 
-    var hasEncoder: Bool { encoderModel != nil }
+    package var hasEncoder: Bool { encoderModel != nil }
 
-    func decode(_ audioCodes: MLXArray) -> (audio: MLXArray, lengths: MLXArray) {
+    package func decode(_ audioCodes: MLXArray) -> (audio: MLXArray, lengths: MLXArray) {
         let codes = audioCodes.transposed(0, 2, 1)
         let wav = decoder.chunkedDecode(codes: codes).squeezed(axis: 1)
         let valid = (audioCodes[.ellipsis, 0] .> MLXArray(Int32(0))).asType(.int32)
@@ -42,36 +41,7 @@ final class Qwen3TTSSpeechTokenizer: Module {
         return (wav, lengths)
     }
 
-    /// Native reference-audio encoder path using Seanet -> Transformer -> Downsample -> Split RVQ.
-    func encode(samples: [Float], sampleRate: Int) -> MLXArray {
-        guard let encoderModel else {
-            return MLXArray.zeros([1, 1, max(1, config.encoderValidNumQuantizers)], dtype: .int32)
-        }
-
-        let targetSampleRate = max(1, config.inputSampleRate)
-        let prepared: [Float]
-        if sampleRate == targetSampleRate {
-            prepared = samples
-        } else {
-            prepared = PCMStreamConverter.resampleLinear(
-                samples,
-                from: sampleRate,
-                to: targetSampleRate
-            )
-        }
-
-        guard !prepared.isEmpty else {
-            return MLXArray.zeros([1, 1, max(1, config.encoderValidNumQuantizers)], dtype: .int32)
-        }
-
-        let audio = MLXArray(prepared).reshaped(1, 1, prepared.count).asType(.float32)
-        let codes = encoderModel.encode(audio) // [B, Q, T]
-        let transposed = codes.transposed(0, 2, 1).asType(.int32) // [B, T, Q]
-        MLX.eval(transposed)
-        return transposed
-    }
-
-    static func sanitize(_ weights: [String: MLXArray], config: Qwen3TTSTokenizerConfig) -> [String: MLXArray] {
+    package static func sanitize(_ weights: [String: MLXArray], config: Qwen3TTSTokenizerConfig) -> [String: MLXArray] {
         var sanitized: [String: MLXArray] = [:]
         var decoderCodebookData: [String: (cluster: MLXArray?, sum: MLXArray?)] = [:]
         var encoderTransformerQKV: [Int: (q: MLXArray?, k: MLXArray?, v: MLXArray?)] = [:]

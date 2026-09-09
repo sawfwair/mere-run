@@ -1,5 +1,4 @@
 import Foundation
-import AudioCore
 
 public struct ParakeetAlignedToken: Sendable, Hashable {
     public let id: Int
@@ -145,7 +144,7 @@ public enum ParakeetAlignment {
         mergeLongestCommonSubsequence(a, b, overlapDuration: overlapDuration, windowOverlap: nil)
     }
 
-    static func mergeLongestCommonSubsequence(
+    package static func mergeLongestCommonSubsequence(
         _ a: [ParakeetAlignedToken],
         _ b: [ParakeetAlignedToken],
         overlapDuration: TimeInterval,
@@ -211,30 +210,6 @@ public enum ParakeetAlignment {
         }
 
         return stitchMerge(a, b, overlapA: overlapA, overlapPairs: pairs)
-    }
-
-    public static func toASRTokenAlignments(_ tokens: [ParakeetAlignedToken]) -> [ASRTokenAlignment] {
-        tokens.map {
-            ASRTokenAlignment(
-                id: $0.id,
-                text: $0.text,
-                startSeconds: $0.start,
-                durationSeconds: $0.duration,
-                endSeconds: $0.end
-            )
-        }
-    }
-
-    public static func toASRSentenceAlignments(_ sentences: [ParakeetAlignedSentence]) -> [ASRSentenceAlignment] {
-        sentences.map { sentence in
-            ASRSentenceAlignment(
-                text: sentence.text,
-                startSeconds: sentence.start,
-                durationSeconds: sentence.duration,
-                endSeconds: sentence.end,
-                tokens: toASRTokenAlignments(sentence.tokens)
-            )
-        }
     }
 
     private static func stitchMerge(

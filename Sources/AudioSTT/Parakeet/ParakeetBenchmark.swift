@@ -1,5 +1,4 @@
 import AudioCore
-import Dispatch
 import Foundation
 
 /// Stage-level timings for one prepared Parakeet transcription.
@@ -55,21 +54,5 @@ public struct ParakeetMeasuredTranscription: Sendable {
     public init(result: ASRResult, timings: ParakeetPipelineTimings) {
         self.result = result
         self.timings = timings
-    }
-}
-
-struct ParakeetModelTimings {
-    var encoderSeconds: TimeInterval = 0
-    var decoderSeconds: TimeInterval = 0
-    var alignmentSeconds: TimeInterval = 0
-}
-
-enum ParakeetMonotonicClock {
-    static func now() -> UInt64 {
-        DispatchTime.now().uptimeNanoseconds
-    }
-
-    static func seconds(since start: UInt64) -> TimeInterval {
-        TimeInterval(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
     }
 }

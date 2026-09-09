@@ -1,7 +1,7 @@
 import Foundation
 
-enum ParakeetTokenizer {
-    static func decode(tokens: [Int], vocabulary: [String]) -> String {
+package enum ParakeetTokenizer {
+    package static func decode(tokens: [Int], vocabulary: [String]) -> String {
         var text = ""
         text.reserveCapacity(tokens.count * 2)
         for token in tokens {

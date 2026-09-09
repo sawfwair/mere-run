@@ -3,10 +3,10 @@ import MLXFast
 import MLXNN
 import MLXRandom
 import XCTest
-@testable import AudioSTT
 @testable import AudioQwen3ASRModel
-@testable import AudioTTS
-@testable import MereRunCore
+@testable import AudioQwen3TTSModel
+import MereRunKVCache
+import MereRunMLXTestSupport
 
 private final class RecordingSpeechKVCache: KVCache {
     private(set) var offset = 0
@@ -33,7 +33,7 @@ private final class RecordingSpeechKVCache: KVCache {
     }
 }
 
-final class SpeechGroupedQueryAttentionTests: MereRunCoreTestCase {
+final class SpeechGroupedQueryAttentionTests: MLXTestCase {
     // XCTest constructs test-case instances during discovery, before
     // `invokeTest` can install MLX's bundled metallib. Keep device arrays lazy
     // so a clean runner does not initialize Metal while discovering tests.

@@ -2,8 +2,7 @@ import Foundation
 import MLX
 import MLXFast
 import MLXNN
-import AudioCodecs
-import MereRunCore
+import MereRunKVCache
 
 // Owns the Mimi-style speech tokenizer encoder stack.
 // This file intentionally keeps the encoder architecture together and
@@ -502,7 +501,7 @@ final class MimiConvDownsample1d: Module, UnaryLayer {
     }
 }
 
-final class Qwen3TTSSpeechTokenizerEncoder: Module {
+package final class Qwen3TTSSpeechTokenizerEncoder: Module {
     let config: Qwen3TTSTokenizerEncoderConfig
     let validNumQuantizers: Int
 
@@ -532,7 +531,7 @@ final class Qwen3TTSSpeechTokenizerEncoder: Module {
         )
     }
 
-    func encode(_ audio: MLXArray) -> MLXArray {
+    package func encode(_ audio: MLXArray) -> MLXArray {
         var hidden = encoder(audio)
         let cache = encoderTransformer.makeCache()
         hidden = encoderTransformer(hidden, cache: cache, mask: .causal)[0]

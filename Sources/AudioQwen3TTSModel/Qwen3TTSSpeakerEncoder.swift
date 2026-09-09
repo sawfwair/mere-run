@@ -305,19 +305,6 @@ public final class Qwen3TTSSpeakerEncoder: Module {
         return x.squeezed(axis: 2)
     }
 
-    public func extractEmbedding(audio: [Float]) -> MLXArray {
-        let mels = Qwen3TTSAudioPreprocessor.melSpectrogram(
-            samples: audio,
-            nMels: config.melDim,
-            frameSize: 1024,
-            hopSize: 256,
-            sampleRate: config.sampleRate
-        )
-        let embedding = callAsFunction(mels)
-        MLX.eval(embedding)
-        return embedding
-    }
-
     public static func sanitize(_ weights: [String: MLXArray]) -> [String: MLXArray] {
         var sanitized: [String: MLXArray] = [:]
         for (key, value) in weights {

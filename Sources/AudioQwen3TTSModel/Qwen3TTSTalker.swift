@@ -2,7 +2,7 @@ import Foundation
 import MLX
 import MLXFast
 import MLXNN
-import MereRunCore
+import MereRunKVCache
 
 // MARK: - Rotary helpers
 
@@ -490,7 +490,7 @@ final class Qwen3TTSCodePredictorModel: Module {
     }
 }
 
-final class Qwen3TTSTalkerCodePredictor: Module {
+package final class Qwen3TTSTalkerCodePredictor: Module {
     let config: Qwen3TTSTalkerCodePredictorConfig
 
     @ModuleInfo(key: "small_to_mtp_projection") var smallToMtpProjection: Linear?
@@ -512,9 +512,9 @@ final class Qwen3TTSTalkerCodePredictor: Module {
         }
     }
 
-    var codecEmbedding: [Embedding] { model.codecEmbedding }
+    package var codecEmbedding: [Embedding] { model.codecEmbedding }
 
-    func callAsFunction(
+    package func callAsFunction(
         _ inputsEmbeds: MLXArray,
         positionIds: MLXArray? = nil,
         mask: MLXFast.ScaledDotProductAttentionMaskMode? = nil,
@@ -534,22 +534,22 @@ final class Qwen3TTSTalkerCodePredictor: Module {
         return (logits, cache, generationStep + 1)
     }
 
-    func makeCache() -> [KVCache] {
+    package func makeCache() -> [KVCache] {
         model.makeCache()
     }
 }
 
 // MARK: - Talker wrapper
 
-final class Qwen3TTSTalkerForConditionalGeneration: Module {
-    let config: Qwen3TTSTalkerConfig
+package final class Qwen3TTSTalkerForConditionalGeneration: Module {
+    package let config: Qwen3TTSTalkerConfig
 
     @ModuleInfo(key: "model") var model: Qwen3TTSTalkerModel
-    @ModuleInfo(key: "text_projection") var textProjection: ResizeMLP
+    @ModuleInfo(key: "text_projection") package var textProjection: ResizeMLP
     @ModuleInfo(key: "codec_head") var codecHead: Linear
-    @ModuleInfo(key: "code_predictor") var codePredictor: Qwen3TTSTalkerCodePredictor
+    @ModuleInfo(key: "code_predictor") package var codePredictor: Qwen3TTSTalkerCodePredictor
 
-    init(config: Qwen3TTSTalkerConfig) {
+    package init(config: Qwen3TTSTalkerConfig) {
         self.config = config
         self._model.wrappedValue = Qwen3TTSTalkerModel(config: config)
         self._textProjection.wrappedValue = ResizeMLP(
@@ -563,15 +563,15 @@ final class Qwen3TTSTalkerForConditionalGeneration: Module {
         self._codePredictor.wrappedValue = Qwen3TTSTalkerCodePredictor(config: config.codePredictorConfig, talkerHiddenSize: config.hiddenSize)
     }
 
-    func getInputEmbeddings() -> Embedding {
+    package func getInputEmbeddings() -> Embedding {
         model.codecEmbedding
     }
 
-    func getTextEmbeddings() -> Embedding {
+    package func getTextEmbeddings() -> Embedding {
         model.textEmbedding
     }
 
-    func callAsFunction(
+    package func callAsFunction(
         _ inputsEmbeds: MLXArray,
         positionIds: MLXArray? = nil,
         mask: MLXFast.ScaledDotProductAttentionMaskMode? = nil,
@@ -585,14 +585,14 @@ final class Qwen3TTSTalkerForConditionalGeneration: Module {
         return (logits, hidden)
     }
 
-    func makeCache() -> [KVCache] {
+    package func makeCache() -> [KVCache] {
         model.makeCache()
     }
 }
 
 // MARK: - Resize MLP
 
-final class ResizeMLP: Module, UnaryLayer {
+package final class ResizeMLP: Module, UnaryLayer {
     @ModuleInfo(key: "linear_fc1") var linearFc1: Linear
     @ModuleInfo(key: "linear_fc2") var linearFc2: Linear
     private let activation: (MLXArray) -> MLXArray
@@ -617,7 +617,7 @@ final class ResizeMLP: Module, UnaryLayer {
         }
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    package func callAsFunction(_ x: MLXArray) -> MLXArray {
         linearFc2(activation(linearFc1(x)))
     }
 }

@@ -261,9 +261,9 @@ sets the chunk interval (default 25).
 
 Tokenizer internals:
 
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer.swift`
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer+Encoder.swift`
-- `Sources/AudioTTS/Qwen3TTS/Qwen3TTSSpeechTokenizer+Decoder.swift`
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer.swift`
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Encoder.swift`
+- `Sources/AudioQwen3TTSModel/Qwen3TTSSpeechTokenizer+Decoder.swift`
 
 ### STT runtime
 

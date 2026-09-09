@@ -2,7 +2,7 @@ import Foundation
 import MLX
 import MLXNN
 import MLXFast
-import MereRunCore
+import MereRunKVCache
 
 // MARK: - Qwen3 TTS Model
 

@@ -2,6 +2,7 @@ import AudioCodecs
 import Foundation
 import XCTest
 @testable import AudioSTT
+@testable import AudioParakeetModel
 
 final class ParakeetCoreMLE2ETests: MereRunCoreTestCase {
     func testPinnedArtifactMatchesExpectedTranscript() async throws {

@@ -6,12 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Extract Qwen ASR model layers, Sortformer diarization, and shared KV caches
-  into libraries that build without `MereRunCore`. Existing `AudioSTT` and
-  `MereRunCore` imports retain compatibility exports.
-- Separate Qwen and Parakeet generator loading, decoding, and streaming files.
-  Add isolated numerical, cache, and checkpoint-loading tests with shared MLX
-  test setup.
+- Extract Qwen ASR, Qwen TTS, Parakeet, Sortformer, and shared KV caches into
+  libraries that build without `MereRunCore`. Existing speech and Core imports
+  retain compatibility exports and audio-input methods.
+- Separate speech model layers, token decoders, prompt preparation, generation,
+  and streaming output. Add isolated tests for recurrent state, batched windows,
+  token timing, cached attention, waveform context, and checkpoint loading.
+- Declare package targets separately to keep the expanded manifest compatible
+  with the Swift 6.0 Linux compiler.
 
 - Add `MereRunResidency` for shared cold preparation, concurrent model leases,
   exclusive media slots, and TTL/LRU eviction. Active leases and generation
