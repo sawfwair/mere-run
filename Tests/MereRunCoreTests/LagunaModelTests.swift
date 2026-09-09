@@ -5,6 +5,7 @@ import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
+@testable import MereRunGemmaModel
 
 final class LagunaModelTests: MereRunCoreTestCase {
     private func makeConfig(

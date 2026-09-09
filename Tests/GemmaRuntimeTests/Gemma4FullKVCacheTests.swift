@@ -1,8 +1,9 @@
 import MLX
 import XCTest
-@testable import MereRunCore
+@testable import MereRunGemmaModel
+import MereRunMLXTestSupport
 
-final class Gemma4FullKVCacheTests: MereRunCoreTestCase {
+final class Gemma4FullKVCacheTests: MLXTestCase {
     func testPrefillGrowthPreservesEveryKeyAndValue() throws {
         // Semantic prompt boundaries need not align with the 256-token capacity
         // step. Growing after 175 tokens must retain room for all 337 new tokens.

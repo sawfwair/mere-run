@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Extract Gemma model layers, caches, quantization, and MTP draft computation
+  into `MereRunGemmaModel`. Split generator and model stages, and isolate
+  numerical regressions from Core. Existing Core imports retain public types.
+- Fix Gemma shared-KV query positions and retain preceding sliding-window
+  context during multi-token forward passes.
+
 - Extract native Qwen text and vision-language layers into `MereRunQwenModel`.
   Split generator loading, prefill, decode, batching, and speculation into
   focused files, and add model regressions that build without Core. Existing

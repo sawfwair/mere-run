@@ -2,9 +2,10 @@ import Foundation
 import XCTest
 import MLX
 import MLXRandom
-@testable import MereRunCore
+@testable import MereRunGemmaModel
+import MereRunMLXTestSupport
 
-final class Gemma4KVQuantizationTests: MereRunCoreTestCase {
+final class Gemma4KVQuantizationTests: MLXTestCase {
     func testUniformRejectsFractionalBits() {
         let config = Gemma4KVCacheQuantization(bits: 3.5, scheme: .uniform, groupSize: 64, quantizedStart: 0)
         XCTAssertThrowsError(try config.validated())

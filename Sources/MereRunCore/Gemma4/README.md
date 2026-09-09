@@ -2,13 +2,18 @@
 
 Gemma 4 text and vision-language runtime, tokenizer, and LoRA training support.
 
-- `Gemma4Config.swift`: typed text model configuration.
+Model configuration, layers, caches, and assistant computation live in
+[`MereRunGemmaModel`](../../MereRunGemmaModel/README.md). Core retains loading,
+templates, generation, and LoRA orchestration.
+
 - `Gemma4TokenizerAndTemplate.swift`: chat-template and tokenizer boundary.
 - `Gemma4CanonicalChatTemplate.swift`: checksum-gated canonical-template overlay
   for known stale Google/MLX model packages. The E4B generation primer remains
   separate from the shared 12B/26B/31B template.
-- `Gemma4Model.swift`: native model layers.
-- `Gemma4Generator.swift`: `ChatGenerator` integration.
+- `Gemma4Generator.swift`: actor state and `ChatGenerator` integration.
+  Extensions separate loading, request generation, policies, prefill, prefix
+  snapshots, decode, MTP verification, prompt lookup, and batching.
+- `Gemma4AssistantDraftModel+Loading.swift`: assistant checkpoint loading.
 - `Gemma4UnifiedImageProcessor.swift`: image preprocessing and visual-token
   metadata for unified inference and training.
 - `Gemma4UnifiedModelLoader.swift`: unified-model loading shared by inference

@@ -4,6 +4,7 @@ import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
+@testable import MereRunGemmaModel
 
 final class TextLoRATrainerTests: MereRunCoreTestCase {
     func testTrainingOrderIsSeededAndCoversEpochs() {

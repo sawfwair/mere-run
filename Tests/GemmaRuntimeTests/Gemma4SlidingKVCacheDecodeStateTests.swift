@@ -3,9 +3,10 @@ import XCTest
 import MLX
 import MLXFast
 import MLXRandom
-@testable import MereRunCore
+@testable import MereRunGemmaModel
+import MereRunMLXTestSupport
 
-final class Gemma4SlidingKVCacheDecodeStateTests: MereRunCoreTestCase {
+final class Gemma4SlidingKVCacheDecodeStateTests: MLXTestCase {
     private func appendTokens(_ cache: Gemma4SlidingKVCache, count: Int, heads: Int, dim: Int, seed: UInt64) {
         MLXRandom.seed(seed)
         for _ in 0..<count {

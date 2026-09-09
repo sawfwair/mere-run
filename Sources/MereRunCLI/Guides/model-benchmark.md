@@ -562,4 +562,4 @@ mere.run model benchmark vlm \
 - `Sources/MereRunCLI/Commands/ModelBenchmarkCodeCommand.swift`
 - `Sources/MereRunCLI/Commands/ModelBenchmarkVLMCommand.swift`
 - `Sources/MereRunCore/Gemma4/Gemma4Generator.swift`
-- `Sources/MereRunCore/Gemma4/Gemma4KVQuantization.swift`
+- `Sources/MereRunGemmaModel/Gemma4KVQuantization.swift`
