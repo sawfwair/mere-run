@@ -2,6 +2,7 @@ import Foundation
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Explicit installed-checkpoint qualification; the default suite never loads weights.
 final class Q35TransferCheckpointTests: MereRunCoreTestCase {

@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Extract native Qwen text and vision-language layers into `MereRunQwenModel`.
+  Split generator loading, prefill, decode, batching, and speculation into
+  focused files, and add model regressions that build without Core. Existing
+  Core imports retain the public Qwen types.
+
 - Extract Qwen ASR, Qwen TTS, Parakeet, Sortformer, and shared KV caches into
   libraries that build without `MereRunCore`. Existing speech and Core imports
   retain compatibility exports and audio-input methods.

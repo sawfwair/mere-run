@@ -1,6 +1,7 @@
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q35SamplingTests: MereRunCoreTestCase {
     func testRequestControlsReachSamplerWithoutEnablingNeutralPenalties() {

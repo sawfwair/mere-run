@@ -1,5 +1,6 @@
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q35MTPPolicyCostTests: XCTestCase {
     func testHigherDraftCostReducesDepthForSameObservedAcceptance() {

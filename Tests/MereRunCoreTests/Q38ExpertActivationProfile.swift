@@ -3,6 +3,7 @@ import MLX
 import MLXNN
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Test-only teacher observations. The generator actor serializes observations;
 /// the test switches modality only between awaited requests.

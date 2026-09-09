@@ -2,17 +2,26 @@
 
 Qwen 3.5/3.6/3.8 dense and hybrid MoE text and vision-language runtime.
 
-- `Q35Config.swift`: typed text/vision configuration.
-- `Q35TokenizerAndTemplate.swift`: checkpoint-native chat-template rendering,
-  image-token expansion, and tokenization.
-- `Q35Model.swift`: native model entry point.
-- `Q35CompiledOperations.swift`: compiled activations and request stream scopes.
-- `Q35MTPProfile.swift`: optional synchronized speculation diagnostics.
-- `Q35RuntimeTuning.swift`: scheduling defaults for the qualified managed Q4 targets.
-- Attention and MoE files own model math only.
+Model layers, typed configuration, hybrid caches, MTP heads, and compiled
+activations live in [`MereRunQwenModel`](../../MereRunQwenModel/README.md).
 
-Keep tokenizer/tool template compatibility isolated here; model layers should
-not know about CLI or managed-model concerns.
+- `Q35TokenizerAndTemplate.swift`: checkpoint-native chat templates, image-token
+  expansion, and tokenization.
+- `Q35Generator.swift`: actor state, request entry points, stream leases,
+  unloading, and statistics.
+- `Q35Generator+Loading.swift`, `+TextWeights`, `+MTPWeights`, and `+WeightMapping`:
+  resource selection and checkpoint installation.
+- `Q35Generator+Request.swift`, `+Vision`, and `+Policy`: request preparation,
+  multimodal positions, response assembly, and resource bounds.
+- `Q35Generator+Prefill.swift`: prompt chunks and prefix snapshots.
+- `Q35Generator+Decode.swift`, `+Speculation`, and `+Batching`: route selection,
+  target verification, repair, pipelining, and row scheduling.
+- `Q35MTPProfile.swift`: optional synchronized speculation diagnostics.
+- `Q35RuntimeTuning.swift`: scheduling defaults for qualified managed Q4 targets.
+
+Read [Qwen runtime boundaries](../../../docs/internals/qwen-runtime-boundaries.md)
+for ownership and validation. Keep checkpoint and template compatibility here;
+model layers do not depend on CLI or managed-model concerns.
 
 Official Hugging Face Qwen 3.5/3.8 checkpoints store zero-centered RMSNorm
 offsets, while converted MLX checkpoints store direct scales. The loader detects

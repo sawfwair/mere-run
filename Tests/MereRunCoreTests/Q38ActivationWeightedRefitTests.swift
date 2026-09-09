@@ -3,6 +3,7 @@ import MLX
 import MLXRandom
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q38ActivationWeightedRefitTests: MereRunCoreTestCase {
     func testProfilerInstallsAcrossArrayBackedLayersWithoutReplacingWeights() throws {

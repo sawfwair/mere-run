@@ -4,6 +4,7 @@ import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q38ExpertRequantizationTests: MereRunCoreTestCase {
     func testPackingPreservesLayoutAndDoesNotMutateQ4Source() throws {

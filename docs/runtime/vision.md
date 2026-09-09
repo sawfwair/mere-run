@@ -486,7 +486,7 @@ swift run mere.run vision ocr ./page.png \
 - `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator+Inference.swift`
 - `Sources/MereRunCore/LightOnOCR/LightOnOCRSupport.swift`
 - `Sources/MereRunCore/Q35/Q35Generator.swift`
-- `Sources/MereRunCore/Q35/Q35Model.swift`
+- `Sources/MereRunQwenModel/Q35Model.swift`
 - `Sources/MereRunCore/Q35/Q35VisionTower.swift`
 
 ### Vision-language support

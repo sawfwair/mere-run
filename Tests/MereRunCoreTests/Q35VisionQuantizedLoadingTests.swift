@@ -3,6 +3,7 @@ import MLX
 import MLXNN
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q35VisionQuantizedLoadingTests: MereRunCoreTestCase {
     func testShardedVisionLoadsQuantizedEmbeddingAndLinearWithoutLanguageShards() throws {

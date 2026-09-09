@@ -3,6 +3,7 @@ import MLX
 import MLXNN
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Research-only, in-memory conversion. The published Q4 source stays untouched.
 enum Q38ExpertRequantization: String, Sendable {

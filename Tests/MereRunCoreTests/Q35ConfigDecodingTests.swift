@@ -3,6 +3,7 @@ import XCTest
 import MLX
 import MLXRandom
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 final class Q35ConfigDecodingTests: MereRunCoreTestCase {
     func testQwen4ExpFlashNextConfigDecodesPublishedArchitecture() throws {

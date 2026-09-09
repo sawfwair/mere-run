@@ -3,6 +3,7 @@ import Foundation
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunQwenModel
 
 /// Runs exact OCR checks on an external manifest without changing its labels.
 final class Q38ProjectionOCRCheckpointTests: MereRunCoreTestCase {
