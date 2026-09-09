@@ -2,9 +2,10 @@ import Foundation
 import MLX
 import MLXRandom
 import XCTest
-@testable import MereRunCore
+@testable import MereRunH3Model
+import MereRunMLXTestSupport
 
-final class MiniMaxH3MPPProjectionTests: MereRunCoreTestCase {
+final class MiniMaxH3MPPProjectionTests: MLXTestCase {
     func testSelectsMeasuredFeedForwardOutputTile() {
         XCTAssertEqual(
             MiniMaxH3MPPProjection.tile(

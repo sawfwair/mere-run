@@ -1,3 +1,4 @@
+import MereRunTensor
 import Foundation
 import MLX
 import MLXFast
@@ -9,8 +10,8 @@ import MLXFast
 /// translated to Swift/MLX. This primitive remains outside production model
 /// dispatch until the repository's exactness and clean-host benchmark gates
 /// qualify it on supported Apple GPUs.
-enum MiniMaxH3MPPProjection {
-    struct Tile: Equatable, Sendable {
+package enum MiniMaxH3MPPProjection {
+    package struct Tile: Equatable, Sendable {
         let rows: Int
         let columns: Int
         let simdgroups: Int
@@ -25,17 +26,17 @@ enum MiniMaxH3MPPProjection {
         }
     }
 
-    static let standardTile = Tile(rows: 32, columns: 64, simdgroups: 2)
-    static let feedForwardOutputTile = Tile(rows: 64, columns: 128, simdgroups: 8)
+    package static let standardTile = Tile(rows: 32, columns: 64, simdgroups: 2)
+    package static let feedForwardOutputTile = Tile(rows: 64, columns: 128, simdgroups: 8)
 
-    static func tile(inputDimension: Int, outputDimension: Int) -> Tile {
+    package static func tile(inputDimension: Int, outputDimension: Int) -> Tile {
         if inputDimension == 14_336, outputDimension == 5_376 {
             return feedForwardOutputTile
         }
         return standardTile
     }
 
-    static var isAvailable: Bool {
+    package static var isAvailable: Bool {
         #if os(macOS)
         let version = ProcessInfo.processInfo.operatingSystemVersion
         return Device.defaultDevice().deviceType == .gpu
@@ -49,7 +50,7 @@ enum MiniMaxH3MPPProjection {
     ///
     /// Returning `nil` is the complete capability and shape fallback contract;
     /// callers retain standard MLX matmul as the source of truth.
-    static func project(
+    package static func project(
         source: MLXArray,
         weight: MLXArray,
         tile requestedTile: Tile? = nil

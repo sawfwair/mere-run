@@ -1,16 +1,17 @@
+import MereRunTensor
 import Foundation
 import MLX
 import MLXNN
 import MLXRandom
 
-final class MiniMaxH3CausalConv3D: Module {
-    let kernel: (Int, Int, Int)
-    let stride: (Int, Int, Int)
-    let spatialPadding: Int
-    @ParameterInfo(key: "weight") var weight: MLXArray
-    @ParameterInfo(key: "bias") var bias: MLXArray
+package final class MiniMaxH3CausalConv3D: Module {
+    package let kernel: (Int, Int, Int)
+    package let stride: (Int, Int, Int)
+    package let spatialPadding: Int
+    @ParameterInfo(key: "weight") package var weight: MLXArray
+    @ParameterInfo(key: "bias") package var bias: MLXArray
 
-    init(
+    package init(
         inputChannels: Int,
         outputChannels: Int,
         kernel: (Int, Int, Int),
@@ -24,7 +25,7 @@ final class MiniMaxH3CausalConv3D: Module {
         _bias.wrappedValue = MLXArray.zeros([outputChannels])
     }
 
-    func callAsFunction(_ value: MLXArray) -> MLXArray {
+    package func callAsFunction(_ value: MLXArray) -> MLXArray {
         var hidden = value
         if kernel.0 > 1 {
             hidden = MLX.concatenated([
@@ -46,7 +47,7 @@ final class MiniMaxH3CausalConv3D: Module {
         ) + bias
     }
 
-    static func reflectPad(_ value: MLXArray, amount: Int) -> MLXArray {
+    package static func reflectPad(_ value: MLXArray, amount: Int) -> MLXArray {
         var hidden = value
         let reverse = MLXArray(Array(Swift.stride(from: amount - 1, through: 0, by: -1)).map(Int32.init))
         let top = MLX.take(hidden[0..., 0..., 1..<(amount + 1), 0..., 0...], reverse, axis: 2)
@@ -66,20 +67,20 @@ final class MiniMaxH3CausalConv3D: Module {
     }
 }
 
-final class MiniMaxH3FrameGroupNorm: Module {
-    let groups: Int
-    let channels: Int
-    @ParameterInfo(key: "weight") var weight: MLXArray
-    @ParameterInfo(key: "bias") var bias: MLXArray
+package final class MiniMaxH3FrameGroupNorm: Module {
+    package let groups: Int
+    package let channels: Int
+    @ParameterInfo(key: "weight") package var weight: MLXArray
+    @ParameterInfo(key: "bias") package var bias: MLXArray
 
-    init(groups: Int = 32, channels: Int) {
+    package init(groups: Int = 32, channels: Int) {
         self.groups = groups
         self.channels = channels
         _weight.wrappedValue = MLXArray.ones([channels])
         _bias.wrappedValue = MLXArray.zeros([channels])
     }
 
-    func callAsFunction(_ value: MLXArray) -> MLXArray {
+    package func callAsFunction(_ value: MLXArray) -> MLXArray {
         let batch = value.dim(0)
         let frames = value.dim(1)
         let height = value.dim(2)
@@ -94,14 +95,14 @@ final class MiniMaxH3FrameGroupNorm: Module {
     }
 }
 
-final class MiniMaxH3VideoEncoderResnet: Module {
-    @ModuleInfo(key: "norm1") var firstNorm: MiniMaxH3FrameGroupNorm
-    @ModuleInfo(key: "conv1") var firstConvolution: MiniMaxH3CausalConv3D
-    @ModuleInfo(key: "norm2") var secondNorm: MiniMaxH3FrameGroupNorm
-    @ModuleInfo(key: "conv2") var secondConvolution: MiniMaxH3CausalConv3D
-    @ModuleInfo(key: "conv_shortcut") var shortcut: MiniMaxH3CausalConv3D?
+package final class MiniMaxH3VideoEncoderResnet: Module {
+    @ModuleInfo(key: "norm1") package var firstNorm: MiniMaxH3FrameGroupNorm
+    @ModuleInfo(key: "conv1") package var firstConvolution: MiniMaxH3CausalConv3D
+    @ModuleInfo(key: "norm2") package var secondNorm: MiniMaxH3FrameGroupNorm
+    @ModuleInfo(key: "conv2") package var secondConvolution: MiniMaxH3CausalConv3D
+    @ModuleInfo(key: "conv_shortcut") package var shortcut: MiniMaxH3CausalConv3D?
 
-    init(inputChannels: Int, outputChannels: Int) {
+    package init(inputChannels: Int, outputChannels: Int) {
         _firstNorm.wrappedValue = MiniMaxH3FrameGroupNorm(channels: inputChannels)
         _firstConvolution.wrappedValue = MiniMaxH3CausalConv3D(
             inputChannels: inputChannels, outputChannels: outputChannels, kernel: (3, 3, 3), spatialPadding: 1
@@ -115,18 +116,18 @@ final class MiniMaxH3VideoEncoderResnet: Module {
         )
     }
 
-    func callAsFunction(_ value: MLXArray) -> MLXArray {
+    package func callAsFunction(_ value: MLXArray) -> MLXArray {
         var hidden = firstConvolution(MLXNN.silu(firstNorm(value)))
         hidden = secondConvolution(MLXNN.silu(secondNorm(hidden)))
         return hidden + (shortcut?(value) ?? value)
     }
 }
 
-final class MiniMaxH3VideoDownsampler: Module {
-    let spatialStride: Int
-    @ModuleInfo(key: "conv") var convolution: MiniMaxH3CausalConv3D
+package final class MiniMaxH3VideoDownsampler: Module {
+    package let spatialStride: Int
+    @ModuleInfo(key: "conv") package var convolution: MiniMaxH3CausalConv3D
 
-    init(channels: Int, temporalStride: Int, spatialStride: Int) {
+    package init(channels: Int, temporalStride: Int, spatialStride: Int) {
         self.spatialStride = spatialStride
         _convolution.wrappedValue = MiniMaxH3CausalConv3D(
             inputChannels: channels,
@@ -136,7 +137,7 @@ final class MiniMaxH3VideoDownsampler: Module {
         )
     }
 
-    func callAsFunction(_ value: MLXArray) -> MLXArray {
+    package func callAsFunction(_ value: MLXArray) -> MLXArray {
         guard spatialStride == 2 else { return convolution(value) }
         let bottom = value[0..., 0..., (value.dim(2) - 2)..<(value.dim(2) - 1), 0..., 0...]
         let spatial = MLX.concatenated([value, bottom], axis: 2)
@@ -145,11 +146,11 @@ final class MiniMaxH3VideoDownsampler: Module {
     }
 }
 
-final class MiniMaxH3VideoDownBlock: Module {
-    @ModuleInfo(key: "resnets") var resnets: [MiniMaxH3VideoEncoderResnet]
-    @ModuleInfo(key: "downsamplers") var downsamplers: [MiniMaxH3VideoDownsampler]
+package final class MiniMaxH3VideoDownBlock: Module {
+    @ModuleInfo(key: "resnets") package var resnets: [MiniMaxH3VideoEncoderResnet]
+    @ModuleInfo(key: "downsamplers") package var downsamplers: [MiniMaxH3VideoDownsampler]
 
-    init(inputChannels: Int, outputChannels: Int, temporalFactor: Int, spatialFactor: Int) {
+    package init(inputChannels: Int, outputChannels: Int, temporalFactor: Int, spatialFactor: Int) {
         _resnets.wrappedValue = [
             MiniMaxH3VideoEncoderResnet(inputChannels: inputChannels, outputChannels: outputChannels),
             MiniMaxH3VideoEncoderResnet(inputChannels: outputChannels, outputChannels: outputChannels),
@@ -161,7 +162,7 @@ final class MiniMaxH3VideoDownBlock: Module {
             : []
     }
 
-    func callAsFunction(_ value: MLXArray) -> MLXArray {
+    package func callAsFunction(_ value: MLXArray) -> MLXArray {
         var hidden = resnets.reduce(value) { current, block in block(current) }
         for downsampler in downsamplers { hidden = downsampler(hidden) }
         return hidden
@@ -169,10 +170,10 @@ final class MiniMaxH3VideoDownBlock: Module {
 }
 
 public final class MiniMaxH3VideoEncoder: Module {
-    @ModuleInfo(key: "conv_in") var input: MiniMaxH3CausalConv3D
-    @ModuleInfo(key: "down_blocks") var blocks: [MiniMaxH3VideoDownBlock]
-    @ModuleInfo(key: "norm_out") var outputNorm: MiniMaxH3FrameGroupNorm
-    @ModuleInfo(key: "conv_out") var output: MiniMaxH3CausalConv3D
+    @ModuleInfo(key: "conv_in") package var input: MiniMaxH3CausalConv3D
+    @ModuleInfo(key: "down_blocks") package var blocks: [MiniMaxH3VideoDownBlock]
+    @ModuleInfo(key: "norm_out") package var outputNorm: MiniMaxH3FrameGroupNorm
+    @ModuleInfo(key: "conv_out") package var output: MiniMaxH3CausalConv3D
 
     public override init() {
         let channels = [128, 256, 256, 512, 512, 1_024]

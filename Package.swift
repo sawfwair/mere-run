@@ -129,6 +129,7 @@ let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
   : []
 
 var products: [Product] = [
+  .library(name: "MereRunH3Model", targets: ["MereRunH3Model"]),
   .library(name: "MereRunAudioModels", targets: ["MereRunAudioModels"]),
   .library(name: "MereRunContract", targets: ["MereRunContract"]),
   .library(name: "MereRunEvaluation", targets: ["MereRunEvaluation"]),
@@ -167,6 +168,7 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 mereRunCoreDependencies.append("MereRunAudioModels")
+mereRunCoreDependencies.append("MereRunH3Model")
 mereRunCoreDependencies.append("MereRunModelKit")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
@@ -296,6 +298,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunH3Model",
   "MereRunAudioModels",
   "MereRunLTXModel",
   "MereRunGemmaModel",
@@ -361,6 +364,21 @@ targets.append(
     name: "MereRunAudioModels",
     dependencies: mereRunAudioModelsDependencies,
     path: "Sources/MereRunAudioModels",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+var mereRunH3ModelDependencies: [Target.Dependency] = ["MereRunTensor", "MereRunAudioModels"]
+mereRunH3ModelDependencies.append(contentsOf: mlxDependency("MLX"))
+mereRunH3ModelDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunH3ModelDependencies.append(contentsOf: mlxDependency("MLXNN"))
+mereRunH3ModelDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+targets.append(
+  .target(
+    name: "MereRunH3Model",
+    dependencies: mereRunH3ModelDependencies,
+    path: "Sources/MereRunH3Model",
     exclude: ["README.md"],
     swiftSettings: commonSwiftSettings
   )
@@ -732,6 +750,21 @@ targets.append(
     dependencies: ["MereRunDecode", "MereRunKVCache", "MereRunMLXTestSupport"]
       + mlxDependency("MLXRandom"),
     path: "Tests/DecodeRuntimeTests",
+    swiftSettings: commonSwiftSettings,
+    linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
+var h3RuntimeTestsDependencies: [Target.Dependency] = ["MereRunH3Model", "MereRunAudioModels", "MereRunTensor", "MereRunMLXTestSupport"]
+h3RuntimeTestsDependencies.append(contentsOf: mlxDependency("MLX"))
+h3RuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXFast"))
+h3RuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXNN"))
+h3RuntimeTestsDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+targets.append(
+  .testTarget(
+    name: "H3RuntimeTests",
+    dependencies: h3RuntimeTestsDependencies,
+    path: "Tests/H3RuntimeTests",
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
   )

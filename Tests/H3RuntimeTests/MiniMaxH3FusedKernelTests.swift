@@ -4,9 +4,10 @@ import MLXFast
 import MLXNN
 import MLXRandom
 import XCTest
-@testable import MereRunCore
+@testable import MereRunH3Model
+import MereRunMLXTestSupport
 
-final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
+final class MiniMaxH3FusedKernelTests: MLXTestCase {
     #if os(macOS)
     func testPrepareAttentionInputMatchesDecomposedGraph() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
