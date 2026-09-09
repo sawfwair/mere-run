@@ -29,6 +29,7 @@ mere-run/
 - `MereRunResidency`
 - `MereRunModelKit`
 - `MereRunQwenModel`
+- `MereRunGemmaModel`
 - `MereRunDecode`
 - `MereRunCore`
 - `MereRunTensor`
@@ -124,6 +125,13 @@ Qwen-family configurations, dense and hybrid attention, expert routing, vision
 layers, and MTP draft state. Core retains loading, prompts, prefill scheduling,
 target verification, and request output. See
 [Qwen runtime boundaries](./internals/qwen-runtime-boundaries.md).
+
+### `Sources/MereRunGemmaModel`
+
+Gemma configurations, text and vision layers, expert routing, attention caches,
+quantization, and MTP draft computation. Core retains resource loading, templates,
+generation, and LoRA orchestration. See
+[Gemma runtime boundaries](./internals/gemma-runtime-boundaries.md).
 
 ### `Sources/MereRunDecode`
 

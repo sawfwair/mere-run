@@ -16,9 +16,9 @@ public struct Gemma4Resources: Sendable, Hashable {
     public static let twelveB4BitUpstreamRevision = "0d75fd929a55a29ea3d431b43b2ab5142a6566bf"
     public static let defaultUpstreamModelId = maxUpstreamModelId
     public static let defaultContextLength = 32_768
-    public static let defaultKVGroupSize = 64
-    public static let defaultQuantizedKVStart = 5_000
-    public static let defaultKVQuantizationScheme: Gemma4KVQuantizationScheme = .uniform
+    public static let defaultKVGroupSize = Gemma4KVCacheQuantization.defaultGroupSize
+    public static let defaultQuantizedKVStart = Gemma4KVCacheQuantization.defaultQuantizedStart
+    public static let defaultKVQuantizationScheme = Gemma4KVCacheQuantization.defaultScheme
     public static let defaultTurboKVBits = 4.0
     public static let defaultTurboQuantizedKVStart = 0
     public static let defaultTurboKVQuantizationScheme: Gemma4KVQuantizationScheme = .turboquant
@@ -126,28 +126,5 @@ public struct Gemma4Resources: Sendable, Hashable {
             .lowercased()
         return normalized == visionTwelveBModelId
             || normalized == twelveBUpstreamModelId.lowercased()
-    }
-}
-
-public enum Gemma4Error: LocalizedError {
-    case modelNotLoaded
-    case missingFiles([String])
-    case unsupportedConfiguration(String)
-    case unsupportedModelLocation(String)
-    case downloadFailed(String)
-
-    public var errorDescription: String? {
-        switch self {
-        case .modelNotLoaded:
-            return "Gemma4 model is not loaded."
-        case .missingFiles(let files):
-            return "Missing required Gemma4 files: \(files.joined(separator: ", "))"
-        case .unsupportedConfiguration(let message):
-            return message
-        case .unsupportedModelLocation(let location):
-            return "Could not resolve Gemma4 model location: \(location)"
-        case .downloadFailed(let message):
-            return "Gemma4 download failed: \(message)"
-        }
     }
 }

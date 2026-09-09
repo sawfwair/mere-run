@@ -3,6 +3,7 @@ import MediaIO
 import MLX
 import XCTest
 @testable import MereRunCore
+@testable import MereRunGemmaModel
 
 final class Gemma4UnifiedImageProcessorTests: MereRunCoreTestCase {
     func testExpandsBareImagePlaceholdersToUnifiedSoftTokens() throws {

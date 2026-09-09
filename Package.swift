@@ -138,6 +138,7 @@ var products: [Product] = [
   .library(name: "MereRunTensor", targets: ["MereRunTensor"]),
   .library(name: "MereRunTextEncoder", targets: ["MereRunTextEncoder"]),
   .library(name: "MereRunImageModels", targets: ["MereRunImageModels"]),
+  .library(name: "MereRunGemmaModel", targets: ["MereRunGemmaModel"]),
   .library(name: "MereRunQwenModel", targets: ["MereRunQwenModel"]),
   .library(name: "MereRunDecode", targets: ["MereRunDecode"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
@@ -170,6 +171,7 @@ mereRunCoreDependencies.append("MereRunImageModels")
 mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("MereRunDecode")
 mereRunCoreDependencies.append("MereRunQwenModel")
+mereRunCoreDependencies.append("MereRunGemmaModel")
 mereRunCoreDependencies.append("AudioCodecs")
 mereRunCoreDependencies.append(.product(name: "Crypto", package: "swift-crypto"))
 mereRunCoreDependencies.append(.product(name: "Transformers", package: "swift-transformers"))
@@ -290,6 +292,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunGemmaModel",
   "MereRunQwenModel",
   "MereRunContract",
   "MereRunMLXTestSupport",
@@ -341,6 +344,17 @@ var mereRunCLIDependencies: [Target.Dependency] = [
 if hasMediaIOTarget {
   mereRunCLIDependencies.append("MediaIO")
 }
+
+targets.append(
+  .target(
+    name: "MereRunGemmaModel",
+    dependencies: [.target(name: "MereRunTensor"), .target(name: "MereRunDecode")]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Sources/MereRunGemmaModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
 
 targets.append(
   .target(
@@ -689,6 +703,16 @@ targets.append(
     path: "Tests/DecodeRuntimeTests",
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "GemmaRuntimeTests",
+    dependencies: ["MereRunGemmaModel", "MereRunTensor", "MereRunDecode", "MereRunMLXTestSupport"]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN") + mlxDependency("MLXRandom"),
+    path: "Tests/GemmaRuntimeTests",
+    swiftSettings: commonSwiftSettings
   )
 )
 

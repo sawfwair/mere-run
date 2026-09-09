@@ -36,6 +36,13 @@ model library and generator stages. Start at `Sources/MereRunCore/Q35/Q35Generat
 for requests, then follow loading, prefill, and decode extensions. Model math
 lives in `Sources/MereRunQwenModel`.
 
+## Gemma text and vision-language models
+
+Read [Gemma runtime boundaries](./internals/gemma-runtime-boundaries.md) for the
+model and generator stages. Start at `Sources/MereRunCore/Gemma4/Gemma4Generator.swift`
+for requests, then follow its loading, prefill, and decode extensions. Model math
+and cache implementations live in `Sources/MereRunGemmaModel`.
+
 ## Image families
 
 Read the [shared image operation](./internals/image-generation-operation.md)
