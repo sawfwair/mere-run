@@ -28,24 +28,18 @@ has been a particularly useful—and fun—public proving ground for the runtime
 
 ## Files
 
-- `LagunaConfig.swift` decodes and validates the official typed model,
-  quantization, attention, mixture-of-experts, and YaRN configuration.
-- `LagunaModel.swift` implements the hybrid full/sliding attention stack,
-  per-head attention gates, dense and routed expert layers, NVFP4 projections,
-  rotary embeddings, and decode caches.
-- `LagunaTokenizerAndTemplate.swift` loads the official tokenizer and renders
-  the checkpoint's chat and tool prompt contract.
-- `LagunaGenerator.swift` verifies the local checkpoint layout, loads its
-  sharded safetensors, runs chunked prefill and serial or ragged continuous
-  decode, and owns streaming generation and acceleration metrics.
-- `LagunaDFlashConfig.swift` strictly decodes the official companion model
-  contract.
-- `LagunaDFlashModel.swift` implements the official six-layer DFlash draft
-  model and target-hidden-state context projection.
-- `LagunaDFlashDecoder.swift` performs lossless speculative verification,
-  including rejection-sampling recovery for non-greedy generation.
-- `LagunaToolParser.swift` converts the checkpoint's GLM-style tool markup to
-  mere.run's typed `ToolCall` output.
+Model configuration, layers, ragged caches, and DFlash verification live in
+`Sources/MereRunLagunaModel`. Shared routed quantization kernels live in
+`Sources/MereRunTensor`.
+
+- `LagunaGenerator.swift` owns the public actor interface and retained state.
+  Its extensions own loading, generation, prefill, ordinary batching, and
+  DFlash batching.
+- `LagunaTokenizerAndTemplate.swift` loads the tokenizer and renders the
+  checkpoint's chat and tool prompt contract.
+- `LagunaResources.swift` resolves checkpoint resources.
+- The `LagunaTextLoRA` files own training and adapter integration.
+- `LagunaToolParser.swift` converts checkpoint tool markup to typed output.
 
 ## Supported boundary
 

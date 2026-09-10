@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Separate H3, Laguna, and shared BigVGAN computation from Core runtime adapters.
+  Split generator stages and share routed quantization primitives with isolated
+  model tests and enforced dependency boundaries.
+
 - Extract LTX transformers, video and audio VAEs, DiffVAE, upsamplers, duration
   prediction, and model caches into `MereRunLTXModel`. Separate loading,
   conditioning, denoising, and output stages in Core. Preserve Core imports

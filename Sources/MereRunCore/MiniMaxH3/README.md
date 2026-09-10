@@ -1,7 +1,13 @@
 # MiniMax-H3
 
-This directory contains the native Swift/MLX implementation of MiniMax-H3. The
-runtime consumes a flat, self-contained MLX artifact rather than either
+This directory owns MiniMax-H3 resource loading, request policy, adapter
+installation, conditioning, generation, and output. Model computation lives in
+`MereRunH3Model`; shared BigVGAN layers live in `MereRunAudioModels`.
+
+Follow `MiniMaxH3Generator` and its loading, denoising, schedule, generation,
+reference, and conditioning extensions. Adapter recipes, installation, target
+mapping, projection wrappers, and AdaLN cache adaptation have separate files.
+The runtime consumes a flat, self-contained MLX artifact rather than either
 roughly 144 GB upstream partition directly.
 
 Supported open-checkpoint paths:

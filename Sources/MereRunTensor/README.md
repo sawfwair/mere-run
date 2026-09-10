@@ -17,3 +17,7 @@ This library depends on MLX and ModelKit. It does not resolve or download models
 Keep path selection and model-specific compatibility mappings in the caller.
 Both quantized loading entry points use one array-application implementation.
 Preserve array siblings and quantization metadata when replacing leaf modules.
+
+`RoutedMoERouting` owns guarded routed quantization dispatch and kernels. Its
+staging, sorted prefill, residual, and gather extensions retain the shared
+implementation used by Laguna and other Core model families.
