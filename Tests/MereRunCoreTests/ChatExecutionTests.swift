@@ -55,13 +55,14 @@ final class ChatExecutionTests: XCTestCase {
         XCTAssertThrowsError(try NativeChatRuntime.command(modelID: LagunaResources.modelID, modelPath: nil))
     }
 
-    func testEmptyModelSelectionKeepsTheSelectedEngineDefault() throws {
+    func testEmptyModelSelectionKeepsTheSelectedEngineDefault() async throws {
         // Gemma4 claims an empty spec, so the substituted ID has to stay in its family.
         let runtime = try NativeChatRuntime.command(modelID: "", modelPath: nil)
         guard case .textChatGemma4(let generator, _) = runtime else {
             return XCTFail("An empty model spec should keep selecting the Gemma4 family")
         }
-        XCTAssertEqual(generator.modelId, Gemma4Resources.defaultModelId)
+        let modelID = await generator.modelId
+        XCTAssertEqual(modelID, Gemma4Resources.defaultModelId)
     }
 
     func testExplicitOptionsPreserveToolMediaAndDiagnosticRequests() throws {
