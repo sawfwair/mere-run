@@ -53,7 +53,8 @@ files are removed.
 These Swift events do not change a CLI wire format. Existing `--receipt`,
 `--progress-json`, preflight JSON, run-plan files, and API response shapes retain
 their compatibility behavior. Optional `ImageRunSession` recording writes
-`image-run.json` atomically. Its held, non-inherited file lock distinguishes
+`image-run.json` atomically. `MereRunExecution` supplies the shared storage
+primitives without changing the image schema. Its held, non-inherited file lock distinguishes
 active work from abandoned records after termination or reboot. Inspection can
 persist an interrupted state without relying on process IDs or timestamps.
 An uncatchable process termination cannot emit a terminal Swift event.

@@ -129,6 +129,7 @@ let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
   : []
 
 var products: [Product] = [
+  .library(name: "MereRunExecution", targets: ["MereRunExecution"]),
   .library(name: "MereRunLagunaModel", targets: ["MereRunLagunaModel"]),
   .library(name: "MereRunH3Model", targets: ["MereRunH3Model"]),
   .library(name: "MereRunAudioModels", targets: ["MereRunAudioModels"]),
@@ -172,6 +173,7 @@ mereRunCoreDependencies.append("MereRunAudioModels")
 mereRunCoreDependencies.append("MereRunH3Model")
 mereRunCoreDependencies.append("MereRunLagunaModel")
 mereRunCoreDependencies.append("MereRunModelKit")
+mereRunCoreDependencies.append("MereRunExecution")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
 mereRunCoreDependencies.append("MereRunImageModels")
@@ -1065,6 +1067,23 @@ if !isLinuxPackage {
     .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.5")
   )
 }
+
+targets.append(
+  .target(
+    name: "MereRunExecution",
+    dependencies: [.product(name: "Crypto", package: "swift-crypto")],
+    path: "Sources/MereRunExecution",
+    exclude: ["README.md"]
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "MereRunExecutionTests",
+    dependencies: ["MereRunExecution"],
+    path: "Tests/MereRunExecutionTests"
+  )
+)
 
 let package = Package(
   name: "MereRun",

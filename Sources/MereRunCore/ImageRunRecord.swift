@@ -1,14 +1,12 @@
-import Crypto
+import MereRunExecution
 import Foundation
 
 /// Versioned image history. Requested settings retain omissions; resolved settings
 /// contain the values submitted to the runtime, including a seed chosen before execution.
 public struct ImageRunRecord: Codable, Equatable, Sendable {
     public static let filename = "image-run.json"
-    public enum State: String, Codable, Sendable {
-        case preparing, running, succeeded, failed, cancelled, interrupted
-        public var isTerminal: Bool { self != .preparing && self != .running }
-    }
+    public typealias State = RunState
+    public typealias Artifact = RunArtifact
 
     public let schemaVersion: Int
     public let id: UUID
@@ -30,24 +28,6 @@ public struct ImageRunRecord: Codable, Equatable, Sendable {
     public var artifacts: [Artifact]
     public var issue: ImageGenerationIssue?
 
-    public struct Artifact: Codable, Equatable, Sendable {
-        public let url: URL
-        public let sha256: String
-        public let byteCount: UInt64
-
-        public static func read(_ url: URL) throws -> Self {
-            let handle = try FileHandle(forReadingFrom: url)
-            defer { try? handle.close() }
-            var hash = SHA256()
-            var byteCount: UInt64 = 0
-            while let bytes = try handle.read(upToCount: 1_048_576), !bytes.isEmpty {
-                hash.update(data: bytes)
-                byteCount += UInt64(bytes.count)
-            }
-            return Self(url: url, sha256: hash.finalize().map { String(format: "%02x", $0) }.joined(), byteCount: byteCount)
-        }
-    }
-
     public static func recordURL(at url: URL) -> URL {
         url.lastPathComponent == filename ? url : url.appendingPathComponent(filename)
     }
@@ -56,7 +36,7 @@ public struct ImageRunRecord: Codable, Equatable, Sendable {
     /// abandoned nonterminal record persists an interrupted state, even after reboot.
     public static func inspect(at url: URL) throws -> Self {
         let recordURL = recordURL(at: url)
-        let lease = try ImageRunLease.acquire(in: recordURL.deletingLastPathComponent())
+        let lease = try RunDirectoryLease.acquire(in: recordURL.deletingLastPathComponent(), filename: ".image-run.lock")
         defer { lease?.release() }
         var record = try decode(Data(contentsOf: recordURL))
         if lease != nil, !record.state.isTerminal {
@@ -69,9 +49,7 @@ public struct ImageRunRecord: Codable, Equatable, Sendable {
     }
 
     static func decode(_ data: Data) throws -> Self {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let record = try decoder.decode(Self.self, from: data)
+        let record = try RunRecordCodec.decoder().decode(Self.self, from: data)
         guard record.schemaVersion == 1 else {
             throw ImageGenerationIssue("run_version_unsupported", "Unsupported image run record version: \(record.schemaVersion).")
         }
@@ -79,22 +57,18 @@ public struct ImageRunRecord: Codable, Equatable, Sendable {
     }
 
     static func timestamp() -> Date {
-        Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
+        RunRecordCodec.timestamp()
     }
 
     static func encoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
+        RunRecordCodec.encoder()
     }
 
     static func digest(_ manifest: MereRunModelManifest) throws -> String {
-        SHA256.hash(data: try encoder().encode(manifest)).map { String(format: "%02x", $0) }.joined()
+        try RunRecordCodec.digest(manifest)
     }
 
     func write(to url: URL) throws {
-        try Self.encoder().encode(self).write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen])
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        try RunRecordCodec.write(self, to: url)
     }
 }
