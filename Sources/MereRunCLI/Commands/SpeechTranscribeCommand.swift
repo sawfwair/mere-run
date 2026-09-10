@@ -62,6 +62,9 @@ struct SpeechTranscribe: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output file for transcript (optional, prints to stdout if omitted).")
     var output: String?
 
+    @Option(name: [.customLong("run-dir")], help: "Keep a durable file-transcription run in a new directory.")
+    var runDirectory: String?
+
     @Option(name: [.customShort("m"), .long], help: "Model ID or local model path override for the selected backend.")
     var model: String?
 
@@ -133,6 +136,16 @@ struct SpeechTranscribe: AsyncParsableCommand {
             throw ValidationError("--max-tokens must be positive.")
         }
         let readsStandardInput = audio == "-"
+        if let runDirectory {
+            guard !stream, !readsStandardInput else {
+                throw ValidationError("--run-dir supports non-streaming audio files only.")
+            }
+            if let output {
+                try SpeechTranscriptionRunSession.validateOutput(
+                    URL(fileURLWithPath: output), in: URL(fileURLWithPath: runDirectory)
+                )
+            }
+        }
         if receipt && readsStandardInput {
             throw ValidationError("--receipt is not available for raw streaming stdin ('-'); use --jsonl.")
         }
@@ -191,7 +204,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
     func run() async throws {
         let readsStandardInput = audio == "-"
 
-        if transcriptionExecutor == nil {
+        if transcriptionExecutor == nil, readsStandardInput || stream {
             try MLXBundleSupport.ensureAvailable(quiet: quiet)
         }
         if readsStandardInput {
@@ -242,14 +255,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
             return
         }
 
-        let execution = try await CLIASRRouting.transcribe(
-            request: request,
-            preferredBackend: backend.backend,
-            modelOverride: model,
-            parakeetExecutionProvider: try resolvedParakeetExecutionProvider(),
-            progressHandler: progressHandler,
-            executor: transcriptionExecutor
-        )
+        let execution = try await transcribeFile(request, progressHandler: progressHandler)
         let result = execution.result
         let outputText = renderOutput(result: result, includeTimestamps: timestamps)
 
@@ -269,11 +275,39 @@ struct SpeechTranscribe: AsyncParsableCommand {
         try emitReceipt(transcriptURL: transcriptURL)
     }
 
+    private func transcribeFile(
+        _ request: ASRRequest, progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) async throws -> SpeechTranscriptionOutcome {
+        let executionProvider = try resolvedParakeetExecutionProvider()
+        let recording = try runDirectory.map { directory in
+            try SpeechTranscriptionRunSession(
+                directory: URL(fileURLWithPath: directory),
+                requested: SpeechTranscriptionRunOptions(
+                    request: request, preferredBackend: backend.backend, modelOverride: model, provider: executionProvider
+                )
+            )
+        }
+        do {
+            if transcriptionExecutor == nil { try MLXBundleSupport.ensureAvailable(quiet: quiet) }
+            return try await CLIASRRouting.transcribe(
+                request: request, preferredBackend: backend.backend, modelOverride: model,
+                parakeetExecutionProvider: executionProvider, progressHandler: progressHandler,
+                recording: recording, executor: transcriptionExecutor
+            )
+        } catch {
+            try recording?.fail(error)
+            throw error
+        }
+    }
+
     /// Writes the transcript to `--output` when set and returns its URL. The
     /// receipt lists no outputs when the transcript only went to stdout.
     private func writeTranscriptIfRequested(_ outputText: String) throws -> URL? {
         guard let outputPath = output else { return nil }
         let outputURL = URL(fileURLWithPath: outputPath).standardizedFileURL
+        if let runDirectory {
+            try SpeechTranscriptionRunSession.validateOutput(outputURL, in: URL(fileURLWithPath: runDirectory))
+        }
         let outputDir = outputURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
         try outputText.write(to: outputURL, atomically: true, encoding: .utf8)

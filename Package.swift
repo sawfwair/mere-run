@@ -129,6 +129,7 @@ let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
   : []
 
 var products: [Product] = [
+  .library(name: "MereRunExecution", targets: ["MereRunExecution"]),
   .library(name: "MereRunLagunaModel", targets: ["MereRunLagunaModel"]),
   .library(name: "MereRunH3Model", targets: ["MereRunH3Model"]),
   .library(name: "MereRunAudioModels", targets: ["MereRunAudioModels"]),
@@ -172,6 +173,7 @@ mereRunCoreDependencies.append("MereRunAudioModels")
 mereRunCoreDependencies.append("MereRunH3Model")
 mereRunCoreDependencies.append("MereRunLagunaModel")
 mereRunCoreDependencies.append("MereRunModelKit")
+mereRunCoreDependencies.append("MereRunExecution")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
 mereRunCoreDependencies.append("MereRunImageModels")
@@ -329,6 +331,7 @@ if hasMediaIOTarget {
 
 var audioRuntimeDependencies: [Target.Dependency] = [
   "MereRunCore",
+  "MereRunExecution",
   "AudioCore",
   "AudioCodecs",
   .product(name: "Transformers", package: "swift-transformers")
@@ -339,6 +342,7 @@ audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXNN"))
 audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
 var mereRunCLIDependencies: [Target.Dependency] = [
+  "MereRunExecution",
   "MereRunAdmission",
   "MereRunResidency",
   "MereRunContract",
@@ -695,7 +699,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioCore",
-    dependencies: [],
+    dependencies: ["MereRunExecution"],
     path: "Sources/AudioCore",
     exclude: [
       "README.md"
@@ -897,7 +901,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "AudioCoreTests",
-    dependencies: ["AudioCore"],
+    dependencies: ["AudioCore", "MereRunExecution"],
     path: "Tests/AudioCoreTests"
   )
 )
@@ -1065,6 +1069,23 @@ if !isLinuxPackage {
     .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.5")
   )
 }
+
+targets.append(
+  .target(
+    name: "MereRunExecution",
+    dependencies: [.product(name: "Crypto", package: "swift-crypto")],
+    path: "Sources/MereRunExecution",
+    exclude: ["README.md"]
+  )
+)
+
+targets.append(
+  .testTarget(
+    name: "MereRunExecutionTests",
+    dependencies: ["MereRunExecution"],
+    path: "Tests/MereRunExecutionTests"
+  )
+)
 
 let package = Package(
   name: "MereRun",

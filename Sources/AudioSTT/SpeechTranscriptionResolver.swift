@@ -1,6 +1,7 @@
 import Foundation
 import AudioCore
 import MereRunCore
+import MereRunExecution
 
 /// Resolves model locations and backend policy without loading a generator.
 public enum SpeechTranscriptionResolver {
@@ -8,7 +9,8 @@ public enum SpeechTranscriptionResolver {
         request: ASRRequest,
         preferredBackend: ASRBackend,
         modelOverride: String? = nil,
-        parakeetExecutionProvider: ParakeetExecutionProvider = .mlx
+        parakeetExecutionProvider: ParakeetExecutionProvider = .mlx,
+        captureModelMetadata: Bool = false
     ) throws -> SpeechTranscriptionPlan {
         let normalizedOverride = normalized(
             modelOverride ?? parakeetExecutionProvider.bundledModelURL?.path
@@ -61,23 +63,43 @@ public enum SpeechTranscriptionResolver {
         let effectiveOverride = try compatibleModelOverride(
             normalizedOverride, inferredBackend: inferredBackend, selectedBackend: decision.backend
         )
-        let plan: SpeechTranscriptionPlan
+        var plan: SpeechTranscriptionPlan
         switch decision.backend {
         case .qwen:
             plan = SpeechTranscriptionPlan(
                 request: request, decision: decision,
                 modelID: qwenModelId(modelOverride: effectiveOverride),
-                modelPath: qwenModelPath(modelOverride: effectiveOverride, localRoot: qwenRoot, localAvailable: qwenLocalAvailable)
+                modelPath: qwenModelPath(modelOverride: effectiveOverride, localRoot: qwenRoot, localAvailable: qwenLocalAvailable),
+                provider: parakeetExecutionProvider
             )
         case .parakeet:
             plan = SpeechTranscriptionPlan(
                 request: request, decision: decision,
                 modelID: parakeetModelId(modelOverride: effectiveOverride),
-                modelPath: parakeetModelPath(modelOverride: effectiveOverride, localRoot: parakeetRoot, localAvailable: parakeetLocalAvailable)
+                modelPath: parakeetModelPath(modelOverride: effectiveOverride, localRoot: parakeetRoot, localAvailable: parakeetLocalAvailable),
+                provider: parakeetExecutionProvider
             )
         }
         try plan.validate()
+        if captureModelMetadata { plan = try recordingPlan(plan) }
         return plan
+    }
+
+    /// Fingerprints local configuration and installation metadata, not tensor
+    /// weights. Native model loading still owns checkpoint integrity checks.
+    private static func recordingPlan(_ plan: SpeechTranscriptionPlan) throws -> SpeechTranscriptionPlan {
+        guard let modelPath = plan.modelPath else { return plan }
+        let root = URL(fileURLWithPath: modelPath)
+        let modelRoot = plan.decision.backend == .parakeet ? ParakeetResources.resolveNestedIfNeeded(base: root) : root
+        var files = ["config.json", "tokenizer.json", "tokenizer_config.json", MereRunModelManifest.filename]
+            .map { modelRoot.appendingPathComponent($0) }
+        if case .coreML(let artifactURL) = plan.provider {
+            files.append(artifactURL.appendingPathComponent(ParakeetCoreMLManifest.filename))
+        }
+        return SpeechTranscriptionPlan(
+            request: plan.request, decision: plan.decision, modelID: plan.modelID, modelPath: plan.modelPath,
+            provider: plan.provider, modelMetadata: try files.map(RunFileSnapshot.capture)
+        )
     }
 
     private static func compatibleModelOverride(

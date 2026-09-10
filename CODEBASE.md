@@ -13,7 +13,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 3. `apps/macos/StudioKit` and `apps/macos/StudioUI` for Studio
 4. `docs/repository-tour.md` for top-level ownership
 5. `docs/architecture.md` for runtime reading order
-6. the module README inside the subsystem you are editing
+6. the subsystem README
 
 ## Key modules
 
@@ -22,7 +22,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunEvaluation/`: external evaluation-pack schema, validation, and content hashing
 - `Sources/MereRunRelayKit/`: portable relay client, executor profiles/auth, and workflow wire types shared by the CLI and app shells
 - `apps/ios/`: the iOS Studio app, a relay client over `MereRunRelayKit` (see `docs/ios-studio.md`)
-- `Sources/MereRunAdmission/` and `Sources/MereRunResidency/`: reservations, queues, model generations, leases, and eviction
+- `Sources/MereRunAdmission/`, `Sources/MereRunResidency/`, and `Sources/MereRunExecution/`: reservations, residency, leases, eviction, and durable storage
 - `Sources/MereRunModelKit/`: model identities, manifests, storage paths, registered locations, artifact pins, and installed lookup
 - `Sources/MereRunCore/`: catalog assembly, downloads, and runtime orchestration
 - `Sources/MereRunQwenModel/` and `Sources/MereRunGemmaModel/`: text/vision layers, caches, and draft state
@@ -51,7 +51,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 ## Review before editing
 
 - Do not modify `vendor/` without reviewing the vendored runtime requirements.
-- Before editing model definitions, read the local module README.
+- Read the subsystem README before editing model definitions.
 - When you change canonical model IDs, migration vocabulary, or hosted-default
   hygiene checks, update the documentation and tests together.
 

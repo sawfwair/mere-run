@@ -2764,7 +2764,7 @@ public enum MereRunCapabilityCatalog {
         id: "run.retry",
         command: ["run", "retry"],
         title: "Retry run",
-        summary: "Retry a recorded local image run or an immutable Relay graph job.",
+        summary: "Retry a recorded image or transcription run, or an immutable Relay graph job.",
         arguments: [
             .init(name: "reference", label: "Run reference", kind: .string, required: true)
         ],
@@ -3378,6 +3378,7 @@ public enum MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
+            .init(flag: "--run-dir", label: "Run directory", kind: .directory, group: Group.output, tier: .expert),
             .init(flag: "--timestamps", label: "Include timestamps", kind: .boolean),
             .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
@@ -3705,6 +3706,7 @@ public enum MereRunCapabilityCatalog {
         summary: "Serve installed models through OpenAI-compatible local APIs.",
         options: [
             .init(flag: "--image-run-records", label: "Image run records", kind: .directory, group: Group.output, tier: .expert),
+            .init(flag: "--transcription-run-records", label: "Transcription run records", kind: .directory, group: Group.output, tier: .expert),
             .init(
                 flag: "--warmup", label: "Warm model before serving", kind: .boolean, group: Group.run, tier: .expert
             ),

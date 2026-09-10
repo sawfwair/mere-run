@@ -1,14 +1,10 @@
 import Foundation
+import AudioCore
 
-/// Selects the execution engine for the compute-heavy Parakeet encoder.
-///
-/// Schema 1 Core ML artifacts are encoder-only and use a separate Parakeet
-/// checkpoint. Schema 2 artifacts also carry Mere's compact MLX decoder and
-/// can serve as the complete model root.
-public enum ParakeetExecutionProvider: Sendable, Hashable {
-    case mlx
-    case coreML(artifactURL: URL)
+public typealias ParakeetExecutionProvider = AudioCore.ParakeetExecutionProvider
 
+/// Resolves Core ML artifacts that bundle a complete Parakeet model.
+extension ParakeetExecutionProvider {
     public var bundledModelURL: URL? {
         guard case .coreML(let artifactURL) = self else { return nil }
         let root = artifactURL.standardizedFileURL

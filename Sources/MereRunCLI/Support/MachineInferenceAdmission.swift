@@ -111,6 +111,10 @@ enum CLIInferenceAdmissionClassifier {
         }
     }
 
+    static func speechTranscriptionRequest(modelID: String) -> MachineInferenceRequest {
+        MachineInferenceRequest(label: "speech transcribe", resourceClass: isLargeModel(modelID) ? .large : .small)
+    }
+
     static func imageGenerationRequest(modelID: String) -> MachineInferenceRequest {
         MachineInferenceRequest(label: "image generate", estimatedModelBytes: estimatedModelBytes(modelID))
     }

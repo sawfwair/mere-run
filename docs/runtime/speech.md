@@ -88,6 +88,39 @@ swift run mere.run speech listen --device <core-audio-uid>
 
 `speech listen` remains the Qwen-backed macOS microphone convenience command.
 
+#### Record and retry a transcription
+
+To keep the input audio and result for later inspection, use a new run directory:
+
+```bash
+mere.run speech transcribe ./meeting.wav --run-dir ./runs/meeting
+mere.run run inspect ./runs/meeting --json
+mere.run run list --root ./runs --json
+mere.run run retry ./runs/meeting --json
+```
+
+The directory contains `transcription-run.json`, a retained audio copy under
+`inputs`, `result.json` with available alignments, and a plain `transcript.txt`.
+Recording is optional. It preserves normal transcript output and the existing
+`--receipt` format. An optional `--output` file must be outside the run directory.
+
+Records distinguish success, failure, cancellation, and process interruption.
+Inspection marks an abandoned nonterminal record as interrupted. Retry creates
+a new sibling directory with the original run ID recorded as its parent; it
+does not modify the original or resume a partially completed decoder.
+
+Retry uses the saved model path, backend, provider, task, language, and token
+limit. It verifies retained audio and captured model metadata before executing.
+If either changed, start a new transcription command. Runs without captured
+local model metadata cannot be retried; install the model before recording if
+you need that behavior. Model metadata checks do not fingerprint tensor weights
+or guarantee identical recognition results.
+
+The API can retain uploaded audio and transcripts with
+[`--transcription-run-records`](api-server.md#keep-transcription-run-records).
+Run directories remain until you remove them. `--run-dir` supports non-streaming
+file input; live stdin and streamed-file sessions keep their existing protocol.
+
 #### Optional Parakeet Core ML/MLX package
 
 Parakeet uses MLX by default. For controlled Apple-platform experiments, Mere

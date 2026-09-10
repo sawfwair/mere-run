@@ -2365,6 +2365,7 @@ extension CommandFlags {
             "--stream-decode-ms": "2000"
         ]
 
+        package static let runDir = "--run-dir"
         package static let timestamps = "--timestamps"
         package static let output = "--output"
         package static let model = "--model"
@@ -2674,6 +2675,7 @@ extension CommandFlags {
         package static let command = ["api", "serve"]
 
         package static let imageRunRecords = "--image-run-records"
+        package static let transcriptionRunRecords = "--transcription-run-records"
         package static let warmup = "--warmup"
         package static let noWarmup = "--no-warmup"
         package static let port = "--port"

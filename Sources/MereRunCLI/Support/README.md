@@ -25,7 +25,10 @@ Shared helpers and runtime adapters for the public command surface.
 - `RuntimeServingServices.swift`: text/media composition, pressure coordination,
   request admission, maintenance, and transcription service ownership.
 - `APITranscription.swift` and `CLIASRRouting.swift`: API policy and CLI
-  presentation adapters over the shared speech resolver and operation.
+  presentation adapters over the shared speech resolver, operation, and optional
+  durable records.
+- `RecordedOperationRun.swift`: typed image/transcription history presentation
+  shared by local run inspection and listing.
 
 Keep stdout machine-readable when a command can be scripted; diagnostics and
 progress belong on stderr.

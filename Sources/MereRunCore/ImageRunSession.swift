@@ -1,4 +1,5 @@
 import Foundation
+import MereRunExecution
 
 /// Owns one run directory and its process lease. All mutations are serialized;
 /// terminal records release the lease only after their atomic write succeeds.
@@ -6,7 +7,7 @@ public final class ImageRunSession: @unchecked Sendable {
     public let directory: URL
     public let id: UUID
     private let mutex = NSLock()
-    private let lease: ImageRunLease
+    private let lease: RunDirectoryLease
     private var record: ImageRunRecord
 
     public init(directory: URL, requested: ImageGenerationOptions, modelSelector: String, parentID: UUID? = nil) throws {
@@ -16,8 +17,8 @@ public final class ImageRunSession: @unchecked Sendable {
         let manager = FileManager.default
         try manager.createDirectory(at: self.directory.deletingLastPathComponent(), withIntermediateDirectories: true)
         // Refuse existing directories, including earlier runs and unrelated user files.
-        try ImageRunLease.createDirectory(self.directory)
-        guard let lease = try ImageRunLease.acquire(in: self.directory) else {
+        try RunDirectoryLease.createDirectory(self.directory)
+        guard let lease = try RunDirectoryLease.acquire(in: self.directory, filename: ".image-run.lock") else {
             throw ImageGenerationIssue("run_active", "The image run directory is already in use.")
         }
         self.lease = lease

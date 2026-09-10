@@ -140,6 +140,24 @@ func checkBoundary(_ manifest: PackageManifest) -> [String] {
             )
         }
     }
+    let portableBoundaries: [String: Set<String>] = [
+        "MereRunExecution": [],
+        "MereRunExecutionTests": ["MereRunExecution"],
+        "AudioCore": ["MereRunExecution"],
+        "AudioCoreTests": ["AudioCore", "MereRunExecution"]
+    ]
+    for (root, allowedDependencies) in portableBoundaries.sorted(by: { $0.key < $1.key }) {
+        guard targets[root] != nil else {
+            failures.append("Missing execution boundary target: \(root)")
+            continue
+        }
+        let closure = dependencyClosure([root], targets: targets)
+        let unexpected = closure.local.subtracting(allowedDependencies.union([root]))
+            .union(closure.products.subtracting(["Crypto"]))
+        if !unexpected.isEmpty {
+            failures.append("\(root) has unexpected dependencies: " + unexpected.sorted().joined(separator: ", "))
+        }
+    }
     for product in manifest.products {
         let closure = dependencyClosure(product.targets, targets: targets)
         if closure.local.contains("MereRunMLXTestSupport") {
