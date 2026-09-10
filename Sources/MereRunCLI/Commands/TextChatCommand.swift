@@ -343,13 +343,21 @@ struct TextChat: AsyncParsableCommand {
         var lastMuseDFlashStats: MuseGlimmerDFlashStats?
         var lastNemotronDSparkStats: NemotronHDSparkStats?
         var lastLFM2DSparkStats: LFM2DSparkStats?
-        let runtime = try NativeChatRuntime.command(
-            modelID: normalizedModelId,
-            modelPath: LagunaResources.handles(modelSpec: normalizedModelId)
-                ? (modelRoot ?? installedModelPath) : runtimeModelRoot,
-            gemma4KVCacheQuantization: Gemma4Resources.handles(modelSpec: normalizedModelId)
-                ? resolveGemma4KVCacheQuantization(for: normalizedModelId) : Gemma4KVCacheQuantization()
-        )
+        let runtime: NativeChatRuntime
+        do {
+            // Selection reports missing models as request issues; the command surfaces
+            // them as argument validation failures, as it did before this path moved.
+            runtime = try NativeChatRuntime.command(
+                modelID: normalizedModelId,
+                modelPath: LagunaResources.handles(modelSpec: normalizedModelId)
+                    ? (modelRoot ?? installedModelPath) : runtimeModelRoot,
+                gemma4KVCacheQuantization: Gemma4Resources.handles(modelSpec: normalizedModelId)
+                    ? resolveGemma4KVCacheQuantization(for: normalizedModelId)
+                    : Gemma4KVCacheQuantization()
+            )
+        } catch let issue as ChatRequestIssue {
+            throw ValidationError(issue.localizedDescription)
+        }
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { request in
             let response = try await runtime.chat(request, progressHandler: progressHandler)
             let diagnostics = await runtime.diagnostics()
@@ -536,8 +544,15 @@ struct TextChat: AsyncParsableCommand {
     func resolvedChatRequest(
         modelID: String, messages: [ChatMessage], tools: [ToolDefinition]? = nil, lora: LoRA? = nil
     ) throws -> ChatRequest {
+        // `--max-tokens` defaults to 2048 independently of `--context-size`, and the
+        // command previously left the generator to cap generation against the context.
+        // Clamp instead of rejecting so lowering the context alone keeps working, and
+        // leave a non-positive context to the resolver so it reports that field.
+        let requestedMaxTokens =
+            contextSize.map { $0 > 0 ? min(maxTokens, $0) : maxTokens } ?? maxTokens
         let request = ChatRequest(
-            messages: messages, maxTokens: maxTokens, seed: seed, reasoningEffort: reasoningEffort,
+            messages: messages, maxTokens: requestedMaxTokens, seed: seed,
+            reasoningEffort: reasoningEffort,
             lora: lora, requiresJSON: responseFormat == .jsonObject, tools: tools,
             kvCacheMode: try resolveQ35KVCacheMode(for: modelID),
             maxContextTokens: contextSize, showUnmasking: showUnmasking

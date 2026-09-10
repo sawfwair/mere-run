@@ -39,6 +39,36 @@ final class ChatExecutionIntegrationTests: XCTestCase {
         }
     }
 
+    func testCommandClampsMaxTokensToASmallerContextInsteadOfRejecting() throws {
+        let id = Q35Resources.ornith35BMLX4BitModelId
+        // The default --max-tokens (2048) must not turn a smaller --context-size into a
+        // blocker; the command capped generation against the context before this moved.
+        let defaulted = try TextChat.parse(["--prompt", "hello", "--model", id, "--context-size", "1024"])
+        let defaultedRequest = try defaulted.resolvedChatRequest(
+            modelID: id, messages: [.init(role: .user, content: "hello")]
+        )
+        XCTAssertEqual(defaultedRequest.maxTokens, 1024)
+        XCTAssertEqual(defaultedRequest.maxContextTokens, 1024)
+        let report = defaulted.makePreflightReport(modelID: id, installedModelPath: nil)
+        XCTAssertFalse(report.diagnostics.contains { $0.id == "text_chat_request_invalid" })
+
+        let explicit = try TextChat.parse([
+            "--prompt", "hello", "--model", id, "--max-tokens", "4096", "--context-size", "512"
+        ])
+        let explicitRequest = try explicit.resolvedChatRequest(
+            modelID: id, messages: [.init(role: .user, content: "hello")]
+        )
+        XCTAssertEqual(explicitRequest.maxTokens, 512)
+
+        // Clamping must not swallow the values the command still rejects.
+        for arguments in [["--max-tokens", "0"], ["--context-size", "0"]] {
+            let invalid = try TextChat.parse(["--prompt", "hello", "--model", id] + arguments)
+            XCTAssertThrowsError(try invalid.resolvedChatRequest(
+                modelID: id, messages: [.init(role: .user, content: "hello")]
+            ), arguments.joined(separator: " "))
+        }
+    }
+
     func testSessionRetainsLeasesThroughResponseConstructionAndCoalescesCleanup() async throws {
         let releaseStarted = expectation(description: "model release started")
         let releaseGate = ChatSessionTestGate()

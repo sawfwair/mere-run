@@ -99,7 +99,15 @@ extension NativeChatRuntime {
         } else {
             engine = .textChatQ35
         }
-        let effectiveModelID = modelID.isEmpty ? Q35Resources.defaultModelId : modelID
+        // Gemma4 claims an empty spec, so an empty ID must fall back to the selected
+        // engine's own default rather than a Q35 ID the Gemma4 generator cannot use.
+        let effectiveModelID: String
+        if modelID.isEmpty {
+            effectiveModelID = engine == .textChatGemma4
+                ? Gemma4Resources.defaultModelId : Q35Resources.defaultModelId
+        } else {
+            effectiveModelID = modelID
+        }
         return make(
             engine: engine, modelID: effectiveModelID, modelPath: modelPath,
             gemma4KVCacheQuantization: gemma4KVCacheQuantization
