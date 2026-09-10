@@ -74,6 +74,7 @@ struct LoRATrainingRunPlanArguments: Codable, Equatable {
     let captionDropout: Float
     let seed: UInt64
     let lite: Bool
+    let baseQuantizationBits: Int?
     let excludePreviewImages: Bool
     let checkpointInterval: Int?
     let resumeFrom: String?
@@ -126,6 +127,7 @@ struct LoRATrainingRunPlanArguments: Codable, Equatable {
         case captionDropout = "caption_dropout"
         case seed
         case lite
+        case baseQuantizationBits = "base_quantization_bits"
         case excludePreviewImages = "exclude_preview_images"
         case checkpointInterval = "checkpoint_interval"
         case resumeFrom = "resume_from"
@@ -184,6 +186,7 @@ struct LoRATrainingRunPlanArguments: Codable, Equatable {
             captionDropout: captionDropout,
             seed: seed,
             lite: lite,
+            baseQuantizationBits: baseQuantizationBits,
             excludePreviewImages: excludePreviewImages,
             checkpointInterval: checkpointInterval,
             resumeFrom: resumeFrom,
@@ -246,6 +249,7 @@ struct LoRATrainingRunPlanArguments: Codable, Equatable {
             "--seed", String(seed),
         ]
         appendBoolFlag("--lite", when: lite, to: &args)
+        appendOption("--base-quantization-bits", baseQuantizationBits, to: &args)
         appendBoolFlag("--exclude-preview-images", when: excludePreviewImages, to: &args)
         appendOption("--checkpoint-interval", checkpointInterval, to: &args)
         appendOption("--resume-from", resumeFrom, to: &args)
@@ -364,6 +368,7 @@ extension ImageTrainLoRA {
                 captionDropout: options.captionDropout,
                 seed: seed,
                 lite: lite,
+                baseQuantizationBits: baseQuantizationBits,
                 excludePreviewImages: excludePreviewImages,
                 checkpointInterval: options.checkpointInterval,
                 resumeFrom: resumeFrom,

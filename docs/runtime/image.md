@@ -332,6 +332,12 @@ checkpoints, and the fast Klein target surface. Use
 comparison that trains every transformer Linear/QuantizedLinear layer instead
 of the default suffix allowlist.
 
+Image training uses the shared [image training operation](../internals/image-training-execution.md)
+for recipe resolution, dataset preparation, native configuration, and execution.
+Saved schema-v1 training plans retain `--base-quantization-bits`, including when
+you relocate the output path. Older plans without that field retain the
+unquantized default.
+
 Core `train-lora` hyperparameters and their defaults:
 
 - `--training-steps` / `--steps`: number of optimizer steps; default `1000`
