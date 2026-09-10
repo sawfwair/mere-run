@@ -331,6 +331,7 @@ if hasMediaIOTarget {
 
 var audioRuntimeDependencies: [Target.Dependency] = [
   "MereRunCore",
+  "MereRunExecution",
   "AudioCore",
   "AudioCodecs",
   .product(name: "Transformers", package: "swift-transformers")
@@ -697,7 +698,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioCore",
-    dependencies: [],
+    dependencies: ["MereRunExecution"],
     path: "Sources/AudioCore",
     exclude: [
       "README.md"
@@ -899,7 +900,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "AudioCoreTests",
-    dependencies: ["AudioCore"],
+    dependencies: ["AudioCore", "MereRunExecution"],
     path: "Tests/AudioCoreTests"
   )
 )

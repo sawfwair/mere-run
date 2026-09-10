@@ -25,7 +25,7 @@ public struct ASRBackendAvailability: Sendable, Hashable {
     }
 }
 
-public struct ASRBackendDecision: Sendable, Hashable {
+public struct ASRBackendDecision: Sendable, Hashable, Codable {
     public let backend: ASRResolvedBackend
     public let reason: String
     public let normalizedLanguageHint: String?

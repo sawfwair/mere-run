@@ -140,7 +140,7 @@ public extension TTSGenerator {
 
 // MARK: - ASR Types
 
-public struct ASRRequest: Sendable, Hashable {
+public struct ASRRequest: Sendable, Hashable, Codable {
     public var audioURL: URL
     public var language: String?
     public var task: ASRTask
