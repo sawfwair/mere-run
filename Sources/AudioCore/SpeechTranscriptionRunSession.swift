@@ -61,10 +61,10 @@ public final class SpeechTranscriptionRunSession: @unchecked Sendable {
             }
             let resultURL = directory.appendingPathComponent("result.json")
             let transcriptURL = directory.appendingPathComponent("transcript.txt")
-            try RunRecordCodec.write(outcome.result, to: resultURL)
+            let resultArtifact = try RunRecordCodec.writeArtifact(outcome.result, to: resultURL)
             try outcome.result.text.write(to: transcriptURL, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: transcriptURL.path)
-            record.artifacts = try [resultURL, transcriptURL].map(RunArtifact.read)
+            record.artifacts = [resultArtifact, try RunArtifact.read(transcriptURL)]
             try Task.checkCancellation()
             record.state = .succeeded
             do { try save() } catch {

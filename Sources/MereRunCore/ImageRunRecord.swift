@@ -38,7 +38,7 @@ public struct ImageRunRecord: Codable, Equatable, Sendable {
         let recordURL = recordURL(at: url)
         let lease = try RunDirectoryLease.acquire(in: recordURL.deletingLastPathComponent(), filename: ".image-run.lock")
         defer { lease?.release() }
-        var record = try decode(Data(contentsOf: recordURL))
+        var record = try decode(RunRecordCodec.readData(at: recordURL))
         if lease != nil, !record.state.isTerminal {
             record.state = .interrupted
             record.updatedAt = timestamp()

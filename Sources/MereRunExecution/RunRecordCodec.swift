@@ -25,8 +25,33 @@ public enum RunRecordCodec {
         SHA256.hash(data: try encoder().encode(value)).map { String(format: "%02x", $0) }.joined()
     }
 
+    /// Reading a closed protected record can require unlocking the device.
+    /// Permission failures do not establish that a run was interrupted.
+    public static func readData(at url: URL) throws -> Data {
+        do {
+            return try Data(contentsOf: url)
+        } catch let error as CocoaError where error.code == .fileReadNoPermission {
+            throw RunRecordReadIssue(url: url)
+        } catch let error as POSIXError where error.code == .EACCES || error.code == .EPERM {
+            throw RunRecordReadIssue(url: url)
+        }
+    }
+
     public static func write(_ value: some Encodable, to url: URL) throws {
-        try encoder().encode(value).write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen])
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        _ = try writeArtifact(value, to: url)
+    }
+
+    /// Returns provenance from the bytes committed through the open writer.
+    /// A protected artifact need not be reopened after the device locks.
+    public static func writeArtifact(_ value: some Encodable, to url: URL) throws -> RunArtifact {
+        try RunFileWriter.write(encoder().encode(value), to: url)
+    }
+}
+
+public struct RunRecordReadIssue: LocalizedError, Sendable {
+    public let url: URL
+
+    public var errorDescription: String? {
+        "Cannot read run record: \(url.path). Unlock the device or check the file permissions, then retry."
     }
 }
