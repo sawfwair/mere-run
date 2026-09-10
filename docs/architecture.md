@@ -37,6 +37,13 @@ native runtime selection, and cleanup. Core owns the common request and
 generation path. CLI and API adapters own presentation, tool authorization,
 wire compatibility, and admission or model-residency scope.
 
+## Shared text training
+
+Read [shared text training](./internals/text-training-execution.md) for typed
+options, dataset preparation, native pipeline dispatch, and manifest publication.
+The CLI owns presentation and the optional dashboard; native trainers retain
+optimizer and checkpoint behavior.
+
 ## Shared autoregressive decoding
 
 Read [shared decode boundaries](./internals/decode-runtime-boundaries.md) before

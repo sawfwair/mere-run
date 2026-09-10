@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share text LoRA option validation, dataset preparation, native execution, and
+  adapter-manifest publication in Core. Preserve CLI defaults and resume
+  formats, await dashboard shutdown, and prevent cancelled training from
+  publishing a successful manifest.
+- Record cancelled image execution as cancelled when the executor throws a
+  different error after task cancellation.
+- Preserve explicit speech model IDs during resolution instead of silently
+  loading an installed default checkpoint.
+
 - Share chat sampling resolution, numeric validation, native invocation, and
   cleanup between `text chat` and the API. `text chat` now range-checks sampling
   values that it previously passed straight to the generator, rejecting them
