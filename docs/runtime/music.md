@@ -379,8 +379,17 @@ format with `music train-adapter`; its objective matches ACE-Step flow
 matching, and its output is directly reloadable by `music generate` or the
 resident server. Adapter training writes the same durable `run_started`,
 per-step loss/progress, `run_finished`, and `run_failed` event stream the
-Studio's Train tasks read, so a music run has live feedback and survives app
-relaunch.
+Studio's Train tasks read. You can reopen the recorded progress after an app
+relaunch. Events begin before audio decoding and model loading, so preparation
+failures also produce `run_failed` events. Cancellation stops at the next
+preparation or training-step boundary and is checked before saving the adapter.
+It does not roll back files already written.
+
+Library callers use `ACEStepAdapterTrainingPlan.resolve` and
+`ACEStepAdapterTrainingOperation.execute` for the same manifest preparation,
+audio cropping, checkpoint discovery, and training path. Callers own machine
+admission; the CLI retains its process-level reservation. These training events
+remain separate from image and transcription run records.
 
 `music serve` holds the complete pipeline and its adapters in memory. It
 provides `GET /health`, `POST /v1/audio/music`, and serialized
