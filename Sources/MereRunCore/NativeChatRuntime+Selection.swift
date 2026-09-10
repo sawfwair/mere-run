@@ -1,3 +1,4 @@
+#if os(macOS) || os(Linux)
 import Foundation
 
 extension NativeChatRuntime {
@@ -105,3 +106,4 @@ extension NativeChatRuntime {
         )
     }
 }
+#endif

@@ -28,9 +28,11 @@ authorization and media-input checks remain in the command adapter.
 
 ## Generation and cleanup
 
-`NativeChatRuntime` selects and invokes native generators. Commands use the
-existing family selection rules, including command-only Psi and Inkling
-runtimes. The API selects its engine from the serving profile and passes its
+`NativeChatRuntime` selects and invokes native generators on macOS and Linux.
+This command/server adapter includes desktop-only GGUF and process-backed
+runtimes; the iOS app continues to select its on-device generators directly.
+Commands use the existing family selection rules, including command-only Psi
+and Inkling runtimes. The API selects its engine from the serving profile and passes its
 cache and batching settings to the same runtime factory.
 
 `ChatGenerationOperation.run` validates the effective request and checks

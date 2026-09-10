@@ -1,3 +1,4 @@
+#if os(macOS) || os(Linux)
 import Foundation
 
 public struct NativeChatDiagnostics: Sendable {
@@ -24,3 +25,4 @@ extension NativeChatRuntime {
         return result
     }
 }
+#endif

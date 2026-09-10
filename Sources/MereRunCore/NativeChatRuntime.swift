@@ -1,3 +1,4 @@
+#if os(macOS) || os(Linux)
 import Foundation
 
 /// Native runtime invocation shared by command sessions and resident API models.
@@ -205,3 +206,4 @@ public enum NativeChatRuntime: Sendable {
         }
     }
 }
+#endif
