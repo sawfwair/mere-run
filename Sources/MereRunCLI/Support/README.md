@@ -13,7 +13,15 @@ Shared helpers and runtime adapters for the public command surface.
 - `BuiltinTools.swift`: local tool authorization and execution policy.
 - `BoundedProcessRunner.swift`: concurrent output drainage, bounded capture,
   monotonic deadlines, and cancellation cleanup for approved shell tools and
-  code benchmark sandboxes.
+  code benchmark sandboxes, and workflow children. Throwing start and output
+  callbacks terminate and await the child group before errors propagate.
+- `WorkflowRunner.swift`: node scheduling, retry policy, and ordered events.
+- `WorkflowRunStore.swift`: exclusive run ownership, resume validation, manifests,
+  and synchronized event persistence.
+- `WorkflowArtifactStore.swift`: input localization, output verification, cache
+  storage, and digest checks for reuse.
+- `WorkflowProcessRunner.swift`: child registration, bounded stdout, streaming
+  callbacks, and workflow cancellation over the shared process runner.
 - `APIImageGeneration.swift`: API v1 compatibility settings for the Core image
   operation. `ImageGenerationPreflight.swift` presents the same Core resolver's
   diagnostics as an observational report.
