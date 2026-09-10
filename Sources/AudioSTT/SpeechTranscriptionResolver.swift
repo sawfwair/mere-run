@@ -178,7 +178,7 @@ public enum SpeechTranscriptionResolver {
         if let overridePath = existingPath(from: modelOverride) {
             return overridePath.path
         }
-        if localAvailable {
+        if localAvailable, modelOverride == nil || modelOverride == Qwen3ASRResources.defaultModelId {
             return localRoot.path
         }
         return nil
@@ -192,7 +192,7 @@ public enum SpeechTranscriptionResolver {
         if let overridePath = existingPath(from: modelOverride) {
             return overridePath.path
         }
-        if localAvailable {
+        if localAvailable, modelOverride == nil || modelOverride == ParakeetResources.defaultModelId {
             return localRoot.path
         }
         return nil
