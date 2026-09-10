@@ -27,6 +27,7 @@ mere-run/
 - `MereRunRelayKit`
 - `MereRunAdmission`
 - `MereRunResidency`
+- `MereRunExecution`
 - `MereRunModelKit`
 - `MereRunQwenModel`
 - `MereRunGemmaModel`

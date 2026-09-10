@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add optional durable file-transcription records through `speech transcribe
+  --run-dir` and `api serve --transcription-run-records`. Retain audio, resolved
+  settings, and transcript artifacts; inspect terminal or interrupted outcomes
+  and retry in a new directory through the existing run commands.
+- Share run leases, atomic writes, file hashes, and terminal states in the
+  portable `MereRunExecution` library. Preserve the image history schema and
+  existing transcription stdout, receipt, and API response formats.
+
 - Separate H3, Laguna, and shared BigVGAN computation from Core runtime adapters.
   Split generator stages and share routed quantization primitives with isolated
   model tests and enforced dependency boundaries.

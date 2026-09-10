@@ -97,10 +97,17 @@ struct RuntimeServingServices: Sendable {
         }
     }
 
-    func transcribe(_ plan: SpeechTranscriptionPlan) async throws -> SpeechTranscriptionOutcome {
-        try await withRuntimeRequestAdmission(using: admission) {
-            try ensureAvailable()
-            return try await SpeechTranscriptionOperation.execute(plan, executor: transcriptionExecutor)
+    func transcribe(
+        _ plan: SpeechTranscriptionPlan, recording: SpeechTranscriptionRunSession? = nil
+    ) async throws -> SpeechTranscriptionOutcome {
+        do {
+            return try await withRuntimeRequestAdmission(using: admission) {
+                try ensureAvailable()
+                return try await SpeechTranscriptionOperation.execute(plan, recording: recording, executor: transcriptionExecutor)
+            }
+        } catch {
+            try recording?.fail(error)
+            throw error
         }
     }
 }

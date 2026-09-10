@@ -120,6 +120,23 @@ final class ReceiptCommandRunTests: XCTestCase {
         XCTAssertEqual(stdout, "hello from the fixture\n{\"event\":\"result\",\"exit\":0,\"outputs\":[]}\n")
     }
 
+    func testRecordedTranscriptionPreservesStdoutAndReceiptContract() async throws {
+        let directory = temporaryDirectory.appendingPathComponent("recorded-run")
+        let transcript = temporaryDirectory.appendingPathComponent("copy.txt")
+        let command = try transcribeCommand(["--run-dir", directory.path, "--receipt", "--output", transcript.path])
+        let stdout = try await capturingStandardOutput { try await command.run() }
+        XCTAssertTrue(stdout.hasPrefix("hello from the fixture\n"))
+        XCTAssertEqual(stdout.split(separator: "\n").count, 2)
+        let record = try SpeechTranscriptionRunRecord.inspect(at: directory)
+        XCTAssertEqual(record.state, .succeeded)
+        XCTAssertEqual(record.artifacts.count, 2)
+        XCTAssertEqual(try String(contentsOf: transcript, encoding: .utf8), "hello from the fixture")
+        let receipt = try receipt(fromLastLineOf: stdout)
+        let outputs = try XCTUnwrap(receipt["outputs"] as? [[String: Any]])
+        XCTAssertEqual(outputs.count, 1)
+        XCTAssertEqual(outputs[0]["path"] as? String, transcript.path)
+    }
+
     // MARK: - speech synthesize
 
     private func synthesizeCommand(_ extra: [String]) throws -> (SpeechSynthesize, URL) {

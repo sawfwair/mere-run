@@ -37,6 +37,27 @@ on the server until you remove the run directories. It does not record API keys
 or HTTP headers. Use the local [`run inspect` and `run retry` commands](image.md#record-and-retry-an-image-run)
 to inspect or retry a record; there is no HTTP run-history endpoint.
 
+## Keep transcription run records
+
+To retain file transcriptions and translations, set a transcription record root:
+
+```bash
+mere.run api serve --transcription-run-records ./runs/api-transcriptions
+mere.run run list --root ./runs/api-transcriptions --json
+```
+
+Each resolved operation creates a private run directory. It retains the uploaded
+audio before temporary-file cleanup, records terminal outcomes, and saves the
+structured result and plain transcript. Requests rejected before their operation
+plan resolves do not create records. JSON, text, SRT, and VTT responses keep
+their existing formats.
+
+Recording is off by default. Enabling it retains uploaded audio, transcription
+settings, and results until you remove the run directories. It does not record
+API keys or HTTP headers. Use the local
+[inspection and retry commands](speech.md#record-and-retry-a-transcription)
+to work with saved runs. The API does not expose an HTTP history endpoint.
+
 ## macOS Server domain
 
 MereRun Studio exposes this control plane as the **Server** domain in its

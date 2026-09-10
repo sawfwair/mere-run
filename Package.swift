@@ -342,6 +342,7 @@ audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXNN"))
 audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
 var mereRunCLIDependencies: [Target.Dependency] = [
+  "MereRunExecution",
   "MereRunAdmission",
   "MereRunResidency",
   "MereRunContract",

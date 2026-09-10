@@ -156,6 +156,7 @@ actor CodeGenServer {
     private var sidecarPool: APISidecarModelPool { services.media }
     private let artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler
     private let imageRunRecords: URL?
+    private let transcriptionRunRecords: URL?
     private var processTelemetrySampler = RuntimeProcessTelemetrySampler()
 
     init(
@@ -171,9 +172,11 @@ actor CodeGenServer {
         memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
         artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler = APIArtifactDirectoryCleanupScheduler(),
         imageRunRecords: URL? = nil,
+        transcriptionRunRecords: URL? = nil,
         warmupDefaultModel: Bool = true
     ) async throws {
         self.imageRunRecords = imageRunRecords
+        self.transcriptionRunRecords = transcriptionRunRecords
         self.apiKey = apiKey
         self.contextSize = contextSize
         self.fallbackLoraPath = fallbackLoraPath
@@ -1560,8 +1563,9 @@ actor CodeGenServer {
         audioURL: URL,
         plan: APIServerContract.TranscriptionPlan
     ) async throws -> ASRResult {
-        let resolved = try APITranscription.plan(audioURL: audioURL, options: plan)
-        return try await services.transcribe(resolved).result
+        try await APITranscription.execute(
+            audioURL: audioURL, options: plan, recordingRoot: transcriptionRunRecords, services: services
+        ).result
     }
 
     private func resolveImageModel(

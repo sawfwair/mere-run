@@ -1,4 +1,5 @@
 import Foundation
+import AudioCore
 import MereRunRelayKit
 import MereRunCore
 
@@ -17,11 +18,13 @@ struct RunInspectionResult: Codable, Equatable {
     let report: StructuredReportInspectionSummary?
     let plan: RunPlanInspectionSummary?
     var imageRun: ImageRunRecord? = nil
+    var transcriptionRun: SpeechTranscriptionRunRecord? = nil
 
     enum CodingKeys: String, CodingKey {
         case kind
         case path
         case imageRun = "image_run"
+        case transcriptionRun = "transcription_run"
         case runDirectory = "run_directory"
         case report
         case plan
@@ -365,24 +368,23 @@ struct RunInspectionAnalyzer {
             )
             return RunInspectionResult(kind: "missing", path: targetURL.path, runDirectory: nil, report: nil, plan: nil)
         }
-        let imageURL = ImageRunRecord.recordURL(at: targetURL)
-        if fileManager.fileExists(atPath: imageURL.path) {
+        if let location = RecordedOperationRun.location(at: targetURL, fileManager: fileManager) {
             do {
-                let record = try ImageRunRecord.inspect(at: imageURL)
-                for artifact in record.artifacts where !fileManager.fileExists(atPath: artifact.url.path) {
+                let run = try RecordedOperationRun.inspect(kind: location.kind, at: location.url)
+                for artifact in run.artifacts where !fileManager.fileExists(atPath: artifact.url.path) {
                     diagnostics.append(PreflightDiagnostic(
-                        id: "image_run_artifact_missing", severity: .warning, title: "Recorded output missing",
-                        message: "The image run completed, but its retained output was removed.",
+                        id: "\(run.kind.rawValue)_artifact_missing", severity: .warning, title: "Recorded output missing",
+                        message: "A retained \(run.kind.label.lowercased()) output was removed.",
                         locations: [.init(kind: "file", path: artifact.url.path)]
                     ))
                 }
-                return RunInspectionResult(kind: "image_run", path: targetURL.path, runDirectory: nil, report: nil, plan: nil, imageRun: record)
+                return run.inspectionResult(path: targetURL.path)
             } catch {
                 diagnostics.append(PreflightDiagnostic(
-                    id: "image_run_unreadable", severity: .blocker, title: "Image run unreadable",
-                    message: error.localizedDescription, locations: [.init(kind: "file", path: imageURL.path)]
+                    id: "\(location.kind.rawValue)_unreadable", severity: .blocker, title: "\(location.kind.label) run unreadable",
+                    message: error.localizedDescription, locations: [.init(kind: "file", path: location.url.path)]
                 ))
-                return RunInspectionResult(kind: "image_run", path: targetURL.path, runDirectory: nil, report: nil, plan: nil)
+                return RunInspectionResult(kind: location.kind.rawValue, path: targetURL.path, runDirectory: nil, report: nil, plan: nil)
             }
         }
         if isDirectory.boolValue {
@@ -867,12 +869,8 @@ struct RunInspectionAnalyzer {
 
     private func actions(for result: RunInspectionResult, cwd: String) -> [DeclarativeAction] {
         var actions: [DeclarativeAction] = []
-        if let image = result.imageRun {
-            actions.append(DeclarativeAction(
-                id: "retry-image-run", label: "Retry image run", kind: .command, style: .primary,
-                enabled: image.state.isTerminal && image.resolvedOptions != nil,
-                command: DeclarativeCommand(argv: ["mere.run", "run", "retry", result.path], cwd: cwd, commandPath: ["run", "retry"])
-            ))
+        if let run = result.recordedOperation {
+            actions.append(run.retryAction(path: result.path, cwd: cwd))
         }
         if result.kind == "run_directory" {
             actions.append(
@@ -908,9 +906,7 @@ struct RunInspectionAnalyzer {
         result: RunInspectionResult,
         diagnostics: [PreflightDiagnostic]
     ) -> String {
-        if let image = result.imageRun {
-            return "Image run \(image.id.uuidString.lowercased()): \(image.state.rawValue), \(image.artifacts.count) artifact(s)."
-        }
+        if let run = result.recordedOperation { return run.summary }
         switch status {
         case .ok:
             return "Inspected \(result.kind) at \(result.path)."
@@ -1130,18 +1126,20 @@ struct RunListAnalyzer {
             fileManager: fileManager,
             now: now
         ).envelope()
-        guard ["run_directory", "report_file", "plan_file", "image_run"].contains(envelope.result.kind) else {
+        guard ["run_directory", "report_file", "plan_file"].contains(envelope.result.kind)
+            || RecordedOperationRun.Kind(rawValue: envelope.result.kind) != nil else {
             return nil
         }
         let relativePath = Self.relativePath(for: url, root: root)
         let runDirectory = envelope.result.runDirectory
         let report = envelope.result.report
         let plan = envelope.result.plan
-        let manifestCreatedAt = envelope.result.imageRun?.createdAt ?? runDirectory?.manifest?.createdAt
+        let operation = envelope.result.recordedOperation
+        let manifestCreatedAt = operation?.createdAt ?? runDirectory?.manifest?.createdAt
         let legacyCreatedAt = runDirectory?.legacyManifest?.createdAt
         let reportCreatedAt = report?.createdAt
         let planCreatedAt = plan?.createdAt
-        let eventCreatedAt = envelope.result.imageRun?.updatedAt ?? runDirectory?.events.latest?.createdAt
+        let eventCreatedAt = operation?.updatedAt ?? runDirectory?.events.latest?.createdAt
         let legacyUpdatedAt = runDirectory?.legacyManifest?.updatedAt
         let createdAt = manifestCreatedAt ??
             legacyCreatedAt ??
@@ -1160,23 +1158,23 @@ struct RunListAnalyzer {
             relativePath: relativePath,
             depth: depth,
             status: envelope.status,
-            state: envelope.result.imageRun?.state.rawValue ?? runDirectory?.status ?? report?.status.rawValue,
+            state: operation?.state.rawValue ?? runDirectory?.status ?? report?.status.rawValue,
             createdAt: createdAt,
             updatedAt: updatedAt,
             summary: envelope.summary,
-            command: envelope.result.imageRun == nil ? report?.command ?? plan?.command : ["image", "generate"],
-            format: envelope.result.imageRun == nil ? runDirectory?.manifest?.format ?? plan?.kind : "image.generate",
+            command: operation?.kind.command ?? report?.command ?? plan?.command,
+            format: operation?.kind.command.joined(separator: ".") ?? runDirectory?.manifest?.format ?? plan?.kind,
             eventCount: runDirectory?.events.count,
-            artifactCount: envelope.result.imageRun?.artifacts.count ?? runDirectory?.artifacts.count,
+            artifactCount: operation?.artifacts.count ?? runDirectory?.artifacts.count,
             diagnosticCount: envelope.diagnostics.count,
             blockerCount: envelope.diagnostics.filter { $0.severity == .blocker }.count,
-            actions: entryActions(path: url.path, kind: envelope.result.kind) + envelope.actions.filter { $0.id == "retry-image-run" }
+            actions: entryActions(path: url.path, kind: envelope.result.kind) + envelope.actions.filter { $0.id == operation?.kind.retryActionID }
         )
     }
 
     private func isRunDirectoryCandidate(_ url: URL, contents: [URL]) -> Bool {
         let names = Set(contents.map(\.lastPathComponent))
-        if names.contains(ImageRunRecord.filename) || names.contains(LoRATrainingRunManifest.filename) {
+        if RecordedOperationRun.kinds.contains(where: { names.contains($0.filename) }) || names.contains(LoRATrainingRunManifest.filename) {
             return true
         }
         let hasPlan = names.contains("plan.json")
@@ -1246,7 +1244,8 @@ struct RunListAnalyzer {
                 )
             ),
         ]
-        if kind == "run_directory" || (kind == "image_run" && URL(fileURLWithPath: path).lastPathComponent != ImageRunRecord.filename) {
+        let recordKind = RecordedOperationRun.Kind(rawValue: kind)
+        if kind == "run_directory" || (recordKind != nil && URL(fileURLWithPath: path).lastPathComponent != recordKind?.filename) {
             actions.append(
                 DeclarativeAction(
                     id: "open",

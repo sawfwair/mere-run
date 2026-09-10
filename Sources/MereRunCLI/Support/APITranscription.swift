@@ -5,12 +5,30 @@ import MereRunCore
 
 /// Applies API model-allowlist policy before using the shared speech resolver.
 enum APITranscription {
-    static func plan(audioURL: URL, options: APIServerContract.TranscriptionPlan) throws -> SpeechTranscriptionPlan {
+    static func plan(
+        audioURL: URL, options: APIServerContract.TranscriptionPlan, captureModelMetadata: Bool = false
+    ) throws -> SpeechTranscriptionPlan {
         let selection = try resolveModel(options.modelID)
         return try SpeechTranscriptionResolver.resolve(
             request: ASRRequest(audioURL: audioURL, language: options.language, task: options.task, maxTokens: options.maxTokens),
-            preferredBackend: selection.backend, modelOverride: selection.modelOverride
+            preferredBackend: selection.backend, modelOverride: selection.modelOverride,
+            captureModelMetadata: captureModelMetadata
         )
+    }
+
+    static func execute(
+        audioURL: URL, options: APIServerContract.TranscriptionPlan, recordingRoot: URL?, services: RuntimeServingServices
+    ) async throws -> SpeechTranscriptionOutcome {
+        let resolved = try plan(audioURL: audioURL, options: options, captureModelMetadata: recordingRoot != nil)
+        let recording = try recordingRoot.map { root in
+            try SpeechTranscriptionRunSession(
+                directory: root.appendingPathComponent("transcription-\(UUID().uuidString.lowercased())"),
+                requested: SpeechTranscriptionRunOptions(
+                    request: resolved.request, preferredBackend: .auto, modelOverride: options.modelID
+                )
+            )
+        }
+        return try await services.transcribe(resolved, recording: recording)
     }
 
     private static func resolveModel(

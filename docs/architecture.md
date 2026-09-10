@@ -21,6 +21,15 @@ For the broader documentation set, start at the
 If you want to understand what a command does end to end, start at the command
 file, and then use the table to open the family entry point.
 
+## Durable operation history
+
+`MereRunExecution` owns run-directory leases, file fingerprints, atomic record
+writes, and terminal states. Core owns image records; AudioCore owns file
+transcription records. CLI inspection and listing use one typed operation-record
+adapter. See [shared transcription](./internals/speech-transcription-operation.md)
+and [shared image generation](./internals/image-generation-operation.md) for
+preparation, recovery, and retry responsibilities.
+
 ## Shared autoregressive decoding
 
 Read [shared decode boundaries](./internals/decode-runtime-boundaries.md) before

@@ -13,6 +13,9 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.customLong("image-run-records")], help: "Keep durable image run directories under this root.")
     var imageRunRecords: String?
 
+    @Option(name: [.customLong("transcription-run-records")], help: "Keep durable file-transcription runs and uploaded audio under this root.")
+    var transcriptionRunRecords: String?
+
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
 
     static let configuration = CommandConfiguration(
@@ -251,6 +254,7 @@ struct APIServe: AsyncParsableCommand {
                 gemma4KVCacheQuantization: gemma4KVCacheQuantization,
                 memoryPressurePolicy: memoryPressurePolicy,
                 imageRunRecords: imageRunRecords.map { URL(fileURLWithPath: $0).standardizedFileURL },
+                transcriptionRunRecords: transcriptionRunRecords.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 warmupDefaultModel: warmup
             )
             try await server.run(host: host, port: port)

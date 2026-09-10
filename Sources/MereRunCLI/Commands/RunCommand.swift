@@ -1,4 +1,6 @@
 import ArgumentParser
+import AudioCore
+import AudioSTT
 import MereRunRelayKit
 import MereRunCore
 import Foundation
@@ -146,6 +148,14 @@ struct RunInspect: AsyncParsableCommand {
                 if let seed = image.effective?.seed { print("Seed: \(seed)") }
                 for artifact in image.artifacts { print("Output: \(artifact.url.path)") }
                 if let issue = image.issue { stderr("[\(issue.code)] \(issue.message)") }
+            } else if let transcription = envelope.result.transcriptionRun {
+                print("Status: \(transcription.state.rawValue)")
+                if let plan = transcription.effective {
+                    print("Model: \(plan.modelID)")
+                    print("Backend: \(plan.decision.backend.rawValue)")
+                }
+                for artifact in transcription.artifacts { print("Output: \(artifact.url.path)") }
+                if let issue = transcription.issue { stderr("[\(issue.code)] \(issue.message)") }
             } else if let runDirectory = envelope.result.runDirectory {
                 print("Status: \(runDirectory.status)")
                 if let manifest = runDirectory.manifest {
@@ -287,12 +297,20 @@ struct RunCancel: AsyncParsableCommand {
 }
 
 struct RunRetry: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "retry", abstract: "Retry a recorded local image run or an immutable relay graph job.")
-    @Argument(help: "Local image run directory, image-run.json path, or relay:// job reference.") var reference: String
+    static let configuration = CommandConfiguration(commandName: "retry", abstract: "Retry a recorded image or transcription run, or an immutable relay graph job.")
+    @Argument(help: "Local image or transcription run directory, record JSON path, or relay:// job reference.") var reference: String
     @Flag(name: [.customLong("json")], help: "Emit the retry job as JSON.") var json = false
 
     func run() async throws {
         if !reference.hasPrefix("relay://") && !reference.hasPrefix("ssh://") {
+            let url = URL(fileURLWithPath: reference)
+            if FileManager.default.fileExists(atPath: SpeechTranscriptionRunRecord.recordURL(at: url).path) {
+                let record = try await Self.retryTranscription(at: url)
+                if json { print(try StructuredRunOutput.encode(record)) } else {
+                    print(record.artifacts[0].url.deletingLastPathComponent().path)
+                }
+                return
+            }
             let retry = try ImageRunSession.retryPlan(at: URL(fileURLWithPath: reference))
             do {
                 let lease = try await MachineInferenceCoordinator.shared.acquire(
@@ -314,6 +332,31 @@ struct RunRetry: AsyncParsableCommand {
         let job = try await WorkflowRemoteJobController.retry(mapRelayErrors { try WorkflowRemoteReference(reference) })
         if json { print(try StructuredRunOutput.encode(job)) } else { print("[\(job.state.rawValue)] \(job.jobReference)") }
     }
+
+    static func retryTranscription(
+        at url: URL, executor: (any SpeechTranscriptionExecutor)? = nil,
+        admission: MachineInferenceCoordinator = .shared
+    ) async throws -> SpeechTranscriptionRunRecord {
+        let retry = try SpeechTranscriptionRunSession.retryPlan(at: url)
+        do {
+            let lease = try await admission.acquire(
+                CLIInferenceAdmissionClassifier.speechTranscriptionRequest(modelID: retry.plan.modelID)
+            ) { snapshot in
+                CLIStderr.write("Transcription retry queued by machine admission (\(snapshot.activePermits)/\(snapshot.capacityPermits) permits active).\n")
+            }
+            defer { lease.release() }
+            if executor == nil { try MLXBundleSupport.ensureAvailable(quiet: true) }
+            _ = try await SpeechTranscriptionOperation.execute(
+                retry.plan, recording: retry.session,
+                executor: executor ?? NativeSpeechTranscriptionExecutor(parakeetExecutionProvider: retry.plan.provider)
+            )
+        } catch {
+            try retry.session.fail(error)
+            throw error
+        }
+        return try SpeechTranscriptionRunRecord.inspect(at: retry.session.directory)
+    }
+
 }
 
 private struct RemoteRunListResult: Codable {
