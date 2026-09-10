@@ -30,6 +30,13 @@ adapter. See [shared transcription](./internals/speech-transcription-operation.m
 and [shared image generation](./internals/image-generation-operation.md) for
 preparation, recovery, and retry responsibilities.
 
+## Shared chat execution
+
+Read [shared chat execution](./internals/chat-execution.md) for request resolution,
+native runtime selection, and cleanup. Core owns the common request and
+generation path. CLI and API adapters own presentation, tool authorization,
+wire compatibility, and admission or model-residency scope.
+
 ## Shared autoregressive decoding
 
 Read [shared decode boundaries](./internals/decode-runtime-boundaries.md) before

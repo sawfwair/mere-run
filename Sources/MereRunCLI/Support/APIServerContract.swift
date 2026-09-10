@@ -1973,15 +1973,11 @@ enum APIServerContract {
             )
         }
 
-        let maxTokens = try validateMaxTokens(
+        let maxTokens = try resolveMaxTokens(
             maxTokens: openaiRequest.max_tokens,
             maxCompletionTokens: openaiRequest.max_completion_tokens,
-            contextSize: contextSize,
             capabilities: capabilities
         )
-        let temperature = try validateTemperature(openaiRequest.temperature)
-        let topP = try validateTopP(openaiRequest.top_p)
-        let minP = try validateMinP(openaiRequest.min_p)
         let tools = try toolDefinitions(from: openaiRequest, capabilities: capabilities)
         let toolChoice = try chatToolChoice(from: openaiRequest, capabilities: capabilities)
         let parallelToolCalls = openaiRequest.parallel_tool_calls ?? true
@@ -2019,8 +2015,6 @@ enum APIServerContract {
         let laneModelID = servedModelID ?? ""
         let resolvedAPIProfile = apiProfile
             ?? servedModelID.flatMap { ManagedModelCatalog.apiProfile(for: $0) }
-        let recommendedSampling = Q35Resources.recommendedSampling(forModelId: laneModelID)
-        let isLaguna = LagunaResources.handles(modelSpec: laneModelID)
         let reasoningEffort = try reasoningEffort(
             from: openaiRequest.reasoning_effort,
             capabilities: capabilities,
@@ -2051,31 +2045,14 @@ enum APIServerContract {
             }
         }
 
-        return ChatRequest(
+        let request = ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
-            temperature: openaiRequest.temperature == nil
-                ? (isLaguna ? LagunaResources.recommendedTemperature : recommendedSampling?.temperature)
-                    ?? temperature
-                : temperature,
-            topP: openaiRequest.top_p == nil
-                ? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
-                    ?? topP
-                : topP,
-            topK: openaiRequest.top_k
-                ?? (isLaguna ? LagunaResources.recommendedTopK : recommendedSampling?.topK),
-            minP: openaiRequest.min_p == nil && isLaguna
-                ? LagunaResources.recommendedMinP
-                : minP,
             presencePenalty: openaiRequest.presence_penalty ?? 0,
             frequencyPenalty: openaiRequest.frequency_penalty ?? 0,
             repetitionPenalty: openaiRequest.repetition_penalty ?? 1,
             seed: openaiRequest.seed.map(UInt64.init),
             reasoningEffort: reasoningEffort,
-            showThinking: requiresJSON
-                ? false
-                : Q35Resources.thinkingDefault(forModelId: laneModelID)
-                    || resolvedAPIProfile?.thinkingLevels == [.high],
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,
@@ -2086,7 +2063,21 @@ enum APIServerContract {
             logprobCapture: logprobCapture,
             showUnmasking: openaiRequest.mere_show_unmasking == true
         )
+        do {
+            let resolved = try ChatRequestResolver.resolve(
+                request, modelID: laneModelID,
+                sampling: ChatSamplingOptions(
+                    temperature: openaiRequest.temperature, topP: openaiRequest.top_p,
+                    topK: openaiRequest.top_k, minP: openaiRequest.min_p
+                ), policy: .openAI, apiProfile: resolvedAPIProfile
+            )
+            try validateSamplingCapabilities(openaiRequest, capabilities: capabilities)
+            return resolved
+        } catch let issue as ChatRequestIssue {
+            throw APIRequestValidationError.invalidField(issue.field, issue.message)
+        }
     }
+
 
     static func includeUsageInStreaming(
         _ openaiRequest: OpenAIChatRequest,
@@ -2295,13 +2286,6 @@ enum APIServerContract {
         if let seed = request.seed, seed < 0 {
             throw APIRequestValidationError.invalidField("seed", "must be an unsigned integer")
         }
-        try validateSamplingControls(request, capabilities: capabilities)
-        if let penalty = request.presence_penalty, penalty != 0, !capabilities.supportsPenalties {
-            throw APIRequestValidationError.invalidField("presence_penalty", "presence penalties are not supported by this engine")
-        }
-        if let penalty = request.frequency_penalty, penalty != 0, !capabilities.supportsPenalties {
-            throw APIRequestValidationError.invalidField("frequency_penalty", "frequency penalties are not supported by this engine")
-        }
         if request.logprobs == true, !capabilities.supportsLogprobs {
             throw APIRequestValidationError.invalidField("logprobs", "token log probabilities are not supported by this engine")
         }
@@ -2508,10 +2492,9 @@ enum APIServerContract {
         }
     }
 
-    private static func validateMaxTokens(
+    private static func resolveMaxTokens(
         maxTokens: Int?,
         maxCompletionTokens: Int?,
-        contextSize: Int,
         capabilities: APIEngineCapabilities
     ) throws -> Int {
         if maxCompletionTokens != nil, !capabilities.supportsMaxCompletionTokens {
@@ -2526,7 +2509,7 @@ enum APIServerContract {
                 "must match max_tokens when both are provided"
             )
         }
-        return try validateMaxTokens(maxCompletionTokens ?? maxTokens, contextSize: contextSize)
+        return maxCompletionTokens ?? maxTokens ?? defaultMaxTokens
     }
 
     private static func reasoningEffort(
@@ -2595,73 +2578,24 @@ enum APIServerContract {
         }
     }
 
-    private static func validateMaxTokens(_ rawValue: Int?, contextSize: Int) throws -> Int {
-        let value = rawValue ?? defaultMaxTokens
-        let upperBound = min(contextSize, Int(Int32.max))
-        guard upperBound > 0 else {
-            throw APIRequestValidationError.invalidField("context_size", "must be greater than zero")
-        }
-        guard (1...upperBound).contains(value) else {
-            throw APIRequestValidationError.invalidField(
-                "max_tokens",
-                "must be between 1 and \(upperBound)"
-            )
-        }
-        return value
-    }
-
-    private static func validateSamplingControls(
+    private static func validateSamplingCapabilities(
         _ request: OpenAIChatRequest,
         capabilities: APIEngineCapabilities
     ) throws {
-        if let topK = request.top_k {
-            guard topK >= 0 else {
-                throw APIRequestValidationError.invalidField("top_k", "must be zero or greater")
-            }
-            if topK != 0, !capabilities.supportsTopK {
-                throw APIRequestValidationError.invalidField("top_k", "top-k sampling is not supported by this engine")
-            }
+        if let topK = request.top_k, topK != 0, !capabilities.supportsTopK {
+            throw APIRequestValidationError.invalidField("top_k", "top-k sampling is not supported by this engine")
         }
-        for (field, value) in [("presence_penalty", request.presence_penalty),
-                               ("frequency_penalty", request.frequency_penalty)] {
-            if let value, !value.isFinite || !(-2...2).contains(value) {
-                throw APIRequestValidationError.invalidField(field, "must be between -2 and 2")
-            }
+        if let penalty = request.presence_penalty, penalty != 0, !capabilities.supportsPenalties {
+            throw APIRequestValidationError.invalidField("presence_penalty", "presence penalties are not supported by this engine")
         }
-        if let penalty = request.repetition_penalty {
-            guard penalty.isFinite, Float(penalty).isFinite, Float(penalty) > 0 else {
-                throw APIRequestValidationError.invalidField("repetition_penalty", "must be a finite positive sampler value")
-            }
-            if penalty != 1, !capabilities.supportsRepetitionPenalty {
-                throw APIRequestValidationError.invalidField(
-                    "repetition_penalty", "repetition penalties are not supported by this engine"
-                )
-            }
+        if let penalty = request.frequency_penalty, penalty != 0, !capabilities.supportsPenalties {
+            throw APIRequestValidationError.invalidField("frequency_penalty", "frequency penalties are not supported by this engine")
         }
-    }
-
-    private static func validateTemperature(_ rawValue: Double?) throws -> Double {
-        let value = rawValue ?? 1.0
-        guard value.isFinite, (0...2).contains(value) else {
-            throw APIRequestValidationError.invalidField("temperature", "must be between 0 and 2")
+        if let penalty = request.repetition_penalty, penalty != 1, !capabilities.supportsRepetitionPenalty {
+            throw APIRequestValidationError.invalidField(
+                "repetition_penalty", "repetition penalties are not supported by this engine"
+            )
         }
-        return value
-    }
-
-    private static func validateTopP(_ rawValue: Double?) throws -> Double {
-        let value = rawValue ?? 0.95
-        guard value.isFinite, (0...1).contains(value) else {
-            throw APIRequestValidationError.invalidField("top_p", "must be between 0 and 1")
-        }
-        return value
-    }
-
-    private static func validateMinP(_ rawValue: Double?) throws -> Double {
-        let value = rawValue ?? 0
-        guard value.isFinite, (0...1).contains(value) else {
-            throw APIRequestValidationError.invalidField("min_p", "must be between 0 and 1")
-        }
-        return value
     }
 
     private static func imageSize(from rawValue: String?) throws -> (width: Int, height: Int) {

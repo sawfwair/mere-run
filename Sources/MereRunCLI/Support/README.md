@@ -23,7 +23,11 @@ Shared helpers and runtime adapters for the public command surface.
 - `RuntimeModelPool.swift` and `APISidecarModelPool.swift`: loaded-model
   runtime adapters, batching, and caches over `MereRunResidency`.
 - `RuntimeServingServices.swift`: text/media composition, pressure coordination,
-  request admission, maintenance, and transcription service ownership.
+  request admission, maintenance, and chat/transcription service ownership.
+- `RuntimeChatSession.swift`: paired model and admission leases for one chat
+  request, with awaited release after generation or proxy consumption.
+- `RuntimeChatProxyStream.swift`: upstream byte streaming and cancellation
+  when the downstream consumer disconnects.
 - `APITranscription.swift` and `CLIASRRouting.swift`: API policy and CLI
   presentation adapters over the shared speech resolver, operation, and optional
   durable records.

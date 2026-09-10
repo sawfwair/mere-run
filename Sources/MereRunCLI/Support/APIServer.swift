@@ -440,68 +440,32 @@ actor CodeGenServer {
             return makeErrorResponse(status: .badRequest, message: "Invalid request payload.", type: "invalid_request_error")
         }
 
-        let admissionLease = try await requestAdmission.acquire()
-        let plan: RuntimeChatPlan
+        let session: RuntimeChatSession
         do {
-            plan = try await pool.makeChatPlan(
-                for: openaiRequest,
-                fallbackLoraPath: fallbackLoraPath,
-                serverContextSize: contextSize
+            session = try await services.startChat(
+                openaiRequest, fallbackLoraPath: fallbackLoraPath, contextSize: contextSize
             )
         } catch {
-            await admissionLease.release()
             return runtimeErrorResponse(error)
         }
-        await admissionLease.configure(
-            modelID: plan.modelID,
-            streaming: openaiRequest.stream == true,
-            requestedMaxTokens: plan.request.maxTokens,
-            toolCount: plan.request.tools?.count ?? 0
-        )
-
-        if plan.engine == .textChatDeepseekV4Flash {
-            do {
-                return try await proxyDeepseekV4FlashChatCompletions(
-                    body: body,
-                    contentType: request.headers[.contentType],
-                    lease: plan.lease,
-                    admissionLease: admissionLease
-                )
-            } catch {
-                await plan.lease.release()
-                await admissionLease.release()
-                return makeErrorResponse(status: .internalServerError, message: "Request failed.", type: "server_error")
-            }
-        }
 
         do {
-            if openaiRequest.stream == true {
-                return try await handleStreamingChat(
-                    plan.request,
-                    modelID: plan.modelID,
-                    includeUsage: plan.includeUsage,
-                    lease: plan.lease,
-                    admissionLease: admissionLease
-                )
-            } else {
-                return handleNonStreamingChat(
-                    plan.request,
-                    modelID: plan.modelID,
-                    lease: plan.lease,
-                    admissionLease: admissionLease
+            if session.engine == .textChatDeepseekV4Flash {
+                return try await proxyDeepseekV4FlashChatCompletions(
+                    body: body, contentType: request.headers[.contentType], session: session
                 )
             }
+            if openaiRequest.stream == true {
+                return try await handleStreamingChat(session)
+            }
+            return handleNonStreamingChat(session)
         } catch let error as APIRequestValidationError {
-            await plan.lease.release()
-            await admissionLease.release()
+            await session.finish(cancelled: Task.isCancelled)
             return makeErrorResponse(
-                status: .badRequest,
-                message: error.localizedDescription,
-                type: "invalid_request_error"
+                status: .badRequest, message: error.localizedDescription, type: "invalid_request_error"
             )
         } catch {
-            await plan.lease.release()
-            await admissionLease.release()
+            await session.finish(cancelled: Task.isCancelled || error is CancellationError)
             return makeErrorResponse(status: .internalServerError, message: "Request failed.", type: "server_error")
         }
     }
@@ -1299,12 +1263,9 @@ actor CodeGenServer {
         }
     }
 
-    private func handleNonStreamingChat(
-        _ request: ChatRequest,
-        modelID: String,
-        lease: RuntimeModelLease,
-        admissionLease: RuntimeRequestAdmissionLease
-    ) -> Response {
+    private func handleNonStreamingChat(_ session: RuntimeChatSession) -> Response {
+        let request = session.request
+        let modelID = session.modelID
         let (stream, continuation) = AsyncStream<NonStreamingChatEvent>.makeStream()
         let heartbeatTask = Task<Void, Never> {
             do {
@@ -1319,9 +1280,7 @@ actor CodeGenServer {
         }
         let generationTask = Task {
             do {
-                let result = try await lease.chat(request) { progress in
-                    admissionLease.observe(progress)
-                }
+                let result = try await session.chat()
                 let responseToolCalls = openAIToolCalls(
                     from: result.toolCalls,
                     tools: request.tools,
@@ -1358,8 +1317,7 @@ actor CodeGenServer {
                 let data = try JSONEncoder().encode(response)
                 var trailers = Self.openAITimingHeaders(for: result)
                 trailers["x-mere-runtime-status"] = "200"
-                await lease.release()
-                await admissionLease.release()
+                await session.finish()
                 heartbeatTask.cancel()
                 continuation.yield(.completion(NonStreamingChatPayload(
                     data: data,
@@ -1367,8 +1325,7 @@ actor CodeGenServer {
                 )))
                 continuation.finish()
             } catch {
-                await lease.release()
-                await admissionLease.release(
+                await session.finish(
                     cancelled: Task.isCancelled || error is CancellationError
                 )
                 heartbeatTask.cancel()
@@ -1386,7 +1343,7 @@ actor CodeGenServer {
         }
         continuation.onTermination = { termination in
             if case .cancelled = termination {
-                admissionLease.observeClientDisconnect()
+                session.observeClientDisconnect()
                 heartbeatTask.cancel()
                 generationTask.cancel()
             }
@@ -1397,7 +1354,7 @@ actor CodeGenServer {
             .trailer: Self.openAITimingTrailerNames.joined(separator: ", "),
         ]
         if let requestIDName = HTTPField.Name("x-mere-request-id") {
-            headers[requestIDName] = admissionLease.requestID.uuidString
+            headers[requestIDName] = session.requestID.uuidString
         }
 
         return Response(
@@ -1421,7 +1378,7 @@ actor CodeGenServer {
                     }
                     try await writer.finish(nil)
                 } catch {
-                    admissionLease.observeClientDisconnect()
+                    session.observeClientDisconnect()
                     heartbeatTask.cancel()
                     generationTask.cancel()
                     throw error
@@ -1717,10 +1674,9 @@ actor CodeGenServer {
     private func proxyDeepseekV4FlashChatCompletions(
         body: ByteBuffer,
         contentType: String?,
-        lease: RuntimeModelLease,
-        admissionLease: RuntimeRequestAdmissionLease
+        session: RuntimeChatSession
     ) async throws -> Response {
-        let upstreamURL = try await lease.deepseekChatCompletionsURL(progressHandler: nil)
+        let upstreamURL = try await session.deepseekChatCompletionsURL()
         let data = Data(body.readableBytesView)
 
         if !DeepseekV4FlashClient.requestWantsStreamingResponse(data) {
@@ -1732,12 +1688,10 @@ actor CodeGenServer {
                     contentType: contentType
                 )
             } catch {
-                await lease.release()
-                await admissionLease.release()
+                await session.finish()
                 throw error
             }
-            await lease.release()
-            await admissionLease.release()
+            await session.finish()
             var headers: HTTPFields = [:]
             headers[.contentType] = upstreamResponse.contentType
             return Response(
@@ -1760,13 +1714,10 @@ actor CodeGenServer {
         if DeepseekV4FlashClient.isEventStreamContentType(headers[.contentType]) {
             headers[.init("Cache-Control")!] = "no-cache"
             headers[.connection] = "keep-alive"
+            await session.finish()
             let stream = AsyncStream<ByteBuffer> { continuation in
                 if !upstreamData.isEmpty {
                     continuation.yield(ByteBuffer(bytes: upstreamData))
-                }
-                Task {
-                    await lease.release()
-                    await admissionLease.release()
                 }
                 continuation.finish()
             }
@@ -1780,8 +1731,7 @@ actor CodeGenServer {
             upstreamData,
             contentType: headers[.contentType]
         )
-        await lease.release()
-        await admissionLease.release()
+        await session.finish()
         return Response(
             status: .init(code: http?.statusCode ?? 502),
             headers: headers,
@@ -1795,31 +1745,7 @@ actor CodeGenServer {
         if DeepseekV4FlashClient.isEventStreamContentType(headers[.contentType]) {
             headers[.init("Cache-Control")!] = "no-cache"
             headers[.connection] = "keep-alive"
-            let stream = AsyncStream<ByteBuffer> { continuation in
-                Task {
-                    var buffer = Data()
-                    buffer.reserveCapacity(4_096)
-                    do {
-                        for try await byte in upstreamBytes {
-                            buffer.append(byte)
-                            if byte == 10 || buffer.count >= 4_096 {
-                                continuation.yield(ByteBuffer(bytes: buffer))
-                                buffer.removeAll(keepingCapacity: true)
-                            }
-                        }
-                        if !buffer.isEmpty {
-                            continuation.yield(ByteBuffer(bytes: buffer))
-                        }
-                        await lease.release()
-                        await admissionLease.release()
-                        continuation.finish()
-                    } catch {
-                        await lease.release()
-                        await admissionLease.release()
-                        continuation.finish()
-                    }
-                }
-            }
+            let stream = RuntimeChatProxyStream.make(from: upstreamBytes, session: session)
             return Response(
                 status: .init(code: http?.statusCode ?? 502),
                 headers: headers,
@@ -1833,12 +1759,10 @@ actor CodeGenServer {
                 upstreamData.append(byte)
             }
         } catch {
-            await lease.release()
-            await admissionLease.release()
+            await session.finish()
             throw error
         }
-        await lease.release()
-        await admissionLease.release()
+        await session.finish()
         let repairedData = DeepseekV4FlashClient.normalizedChatCompletionBody(
             upstreamData,
             contentType: headers[.contentType]
@@ -1851,13 +1775,10 @@ actor CodeGenServer {
 #endif
     }
 
-    private func handleStreamingChat(
-        _ request: ChatRequest,
-        modelID: String,
-        includeUsage: Bool,
-        lease: RuntimeModelLease,
-        admissionLease: RuntimeRequestAdmissionLease
-    ) async throws -> Response {
+    private func handleStreamingChat(_ session: RuntimeChatSession) async throws -> Response {
+        let request = session.request
+        let modelID = session.modelID
+        let includeUsage = session.includeUsage
         let id = "chatcmpl-\(UUID().uuidString.prefix(8))"
         let encoder = JSONEncoder()
 
@@ -1870,8 +1791,7 @@ actor CodeGenServer {
             do {
                 let streamedContent = StreamingContentTracker()
                 let shouldBufferForToolCalls = request.tools?.isEmpty == false
-                let result = try await lease.chat(request) { progress in
-                    admissionLease.observe(progress)
+                let result = try await session.chat { progress in
                     guard !shouldBufferForToolCalls else { return }
                     if let diffusion = progress.diffusion {
                         let chunk = OpenAIChatResponse(
@@ -2002,8 +1922,7 @@ actor CodeGenServer {
                 }
 
                 continuation.yield(ByteBuffer(string: "data: [DONE]\n\n"))
-                await lease.release()
-                await admissionLease.release()
+                await session.finish()
                 continuation.finish()
             } catch {
                 if !Task.isCancelled {
@@ -2015,8 +1934,7 @@ actor CodeGenServer {
                         continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
                     }
                 }
-                await lease.release()
-                await admissionLease.release(
+                await session.finish(
                     cancelled: Task.isCancelled || error is CancellationError
                 )
                 continuation.finish()
@@ -2025,7 +1943,7 @@ actor CodeGenServer {
         continuation.onTermination = { termination in
             heartbeatTask.cancel()
             if case .cancelled = termination {
-                admissionLease.observeClientDisconnect()
+                session.observeClientDisconnect()
                 generationTask.cancel()
             }
         }

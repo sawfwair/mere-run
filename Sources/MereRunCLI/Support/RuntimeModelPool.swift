@@ -515,7 +515,7 @@ struct RuntimeModelStartupTiming: Codable, Equatable, Sendable {
 }
 
 struct RuntimeChatPlan: Sendable {
-    let lease: RuntimeModelLease
+    let lease: any RuntimeChatModelLease
     let request: ChatRequest
     let modelID: String
     let engine: RuntimeServingEngine
@@ -1166,84 +1166,31 @@ actor RuntimeModelPool {
     }
 
     private nonisolated func makeLoadedModel(for resolved: ResolvedModel) -> RuntimeLoadedModel {
+        let prefixCache: Bool?
+        let batching: Bool?
         switch resolved.engine {
-        case .textCode:
-            return .textCode(
-                CodeGenGenerator(modelId: resolved.id),
-                modelPath: resolved.installPath
-            )
-        case .textChatKlein:
-            let useStandalone = resolved.id == ModelResolver.ModelID.mebot.rawValue
-                && resolved.installPath == MeBotModelCatalog.resolveModelPath()
-            return .textChatKlein(
-                Flux2KleinGenerator(),
-                modelPath: resolved.installPath,
-                useStandalone: useStandalone
-            )
         case .textChatGemma4:
-            return .textChatGemma4(
-                Gemma4Generator(
-                    modelId: resolved.id,
-                    kvCacheQuantization: gemma4KVCacheQuantization,
-                    prefixKVCacheEnabled: gemma4PrefixKVCacheEnabled,
-                    continuousBatchingEnabled: gemma4ContinuousBatchingEnabled
-                ),
-                modelPath: resolved.installPath
-            )
-        case .textChatDiffusionGemma:
-            return .textChatDiffusionGemma(
-                DiffusionGemmaGenerator(modelID: resolved.id),
-                modelPath: resolved.installPath
-            )
+            prefixCache = gemma4PrefixKVCacheEnabled
+            batching = gemma4ContinuousBatchingEnabled
         case .textChatLaguna:
-            return .textChatLaguna(
-                LagunaGenerator(
-                    continuousBatchingEnabled: lagunaContinuousBatchingEnabled,
-                    dflashModelPath: LagunaResources.installedDFlashPath(
-                        for: resolved.id
-                    )
-                ),
-                modelPath: resolved.installPath
-            )
-        case .textChatQ36, .textChatQ35:
-            return .textChatQ35(
-                Q35Generator(
-                    modelId: resolved.id,
-                    prefixKVCacheEnabled: q35PrefixKVCacheEnabled,
-                    continuousBatchingEnabled: q35ContinuousBatchingEnabled
-                ),
-                modelPath: resolved.installPath
-            )
+            prefixCache = nil
+            batching = lagunaContinuousBatchingEnabled
+        case .textChatQ35, .textChatQ36:
+            prefixCache = q35PrefixKVCacheEnabled
+            batching = q35ContinuousBatchingEnabled
         case .textChatLFM2:
-            return .textChatLFM2(
-                LFM2Generator(
-                    modelId: resolved.id,
-                    prefixKVCacheEnabled: lfm2PrefixKVCacheEnabled,
-                    continuousBatchingEnabled: lfm2ContinuousBatchingEnabled
-                ),
-                modelPath: resolved.installPath
-            )
-        case .textChatDeepseekV4Flash:
-            return .textChatDeepseekV4Flash(
-                DeepseekV4FlashGenerator(modelId: resolved.id),
-                modelPath: resolved.installPath
-            )
-        case .textChatMuseGlimmer:
-            return .textChatMuseGlimmer(
-                MuseGlimmerGenerator(modelID: resolved.id),
-                modelPath: resolved.installPath
-            )
-        case .textChatNemotronH:
-            return .textChatNemotronH(
-                NemotronHGenerator(),
-                modelPath: resolved.installPath
-            )
-        case .textChatNemotronOmni:
-            return .textChatNemotronOmni(
-                NemotronOmniGenerator(),
-                modelPath: resolved.installPath
-            )
+            prefixCache = lfm2PrefixKVCacheEnabled
+            batching = lfm2ContinuousBatchingEnabled
+        case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash,
+             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni:
+            prefixCache = nil
+            batching = nil
         }
+        return NativeChatRuntime.make(
+            engine: resolved.engine, modelID: resolved.id, modelPath: resolved.installPath,
+            gemma4KVCacheQuantization: gemma4KVCacheQuantization,
+            prefixKVCacheEnabled: prefixCache, continuousBatchingEnabled: batching
+        )
     }
 
     private func resolveModel(
@@ -1525,7 +1472,7 @@ actor RuntimeModelPool {
     #endif
 }
 
-final class RuntimeModelLease: @unchecked Sendable {
+final class RuntimeModelLease: RuntimeChatModelLease, @unchecked Sendable {
     let modelID: String
     let engine: RuntimeServingEngine
 
@@ -1577,7 +1524,10 @@ final class RuntimeModelLease: @unchecked Sendable {
     func deepseekChatCompletionsURL(
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws -> URL {
-        try await loaded.deepseekChatCompletionsURL(progressHandler: progressHandler)
+        guard case .textChatDeepseekV4Flash = loaded else {
+            throw RuntimeModelPoolError.rawProxyUnavailable("")
+        }
+        return try await loaded.deepseekChatCompletionsURL(progressHandler: progressHandler)
     }
 
     func release() async {
@@ -1595,187 +1545,7 @@ final class RuntimeModelLease: @unchecked Sendable {
     }
 }
 
-enum RuntimeLoadedModel: Sendable {
-    case textCode(CodeGenGenerator, modelPath: String?)
-    case textChatKlein(Flux2KleinGenerator, modelPath: String?, useStandalone: Bool)
-    case textChatGemma4(Gemma4Generator, modelPath: String?)
-    case textChatDiffusionGemma(DiffusionGemmaGenerator, modelPath: String?)
-    case textChatLaguna(LagunaGenerator, modelPath: String?)
-    case textChatQ35(Q35Generator, modelPath: String?)
-    case textChatLFM2(LFM2Generator, modelPath: String?)
-    case textChatDeepseekV4Flash(DeepseekV4FlashGenerator, modelPath: String?)
-    case textChatMuseGlimmer(MuseGlimmerGenerator, modelPath: String?)
-    case textChatNemotronH(NemotronHGenerator, modelPath: String?)
-    case textChatNemotronOmni(NemotronOmniGenerator, modelPath: String?)
-
-    func prepare(progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws {
-        switch self {
-        case .textCode(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatKlein(let generator, let modelPath, let useStandalone):
-            guard let modelPath else {
-                throw Flux2Error.modelNotFound(ModelResolver.ModelID.mebot.rawValue)
-            }
-            try await generator.prepareChat(
-                modelPath: modelPath,
-                standalone: useStandalone,
-                progressHandler: progressHandler
-            )
-        case .textChatGemma4(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatDiffusionGemma(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatLaguna(let generator, let modelPath):
-            guard let modelPath else {
-                throw LagunaError.modelPathRequired
-            }
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatQ35(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatLFM2(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatDeepseekV4Flash(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatMuseGlimmer(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatNemotronH(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatNemotronOmni(let generator, let modelPath):
-            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
-        }
-    }
-
-    func unload() async {
-        switch self {
-        case .textCode(let generator, _):
-            await generator.unload()
-        case .textChatKlein(let generator, _, _):
-            await generator.unload()
-        case .textChatGemma4(let generator, _):
-            await generator.unload()
-        case .textChatDiffusionGemma(let generator, _):
-            await generator.unload()
-        case .textChatLaguna(let generator, _):
-            await generator.unload()
-        case .textChatQ35(let generator, _):
-            await generator.unload()
-        case .textChatLFM2(let generator, _):
-            await generator.unload()
-        case .textChatDeepseekV4Flash(let generator, _):
-            await generator.shutdown()
-        case .textChatMuseGlimmer(let generator, _):
-            await generator.unload()
-        case .textChatNemotronH(let generator, _):
-            await generator.unload()
-        case .textChatNemotronOmni(let generator, _):
-            await generator.unload()
-        }
-    }
-
-    func prefixKVCacheStats() async -> PrefixKVCacheStats? {
-        switch self {
-        case .textChatGemma4(let generator, _):
-            return await generator.prefixKVCacheStats()
-        case .textChatQ35(let generator, _):
-            return await generator.prefixKVCacheStats()
-        case .textChatLFM2(let generator, _):
-            return await generator.prefixKVCacheStats()
-        case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatDeepseekV4Flash,
-             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni:
-            return nil
-        }
-    }
-
-    func continuousBatchingStats() async -> RuntimeDecodeBatchingStats? {
-        switch self {
-        case .textChatGemma4(let generator, _):
-            return await generator.continuousBatchingStats()
-        case .textChatLaguna(let generator, _):
-            return await generator.continuousBatchingStats()
-        case .textChatQ35(let generator, _):
-            return await generator.continuousBatchingStats()
-        case .textChatLFM2(let generator, _):
-            return await generator.continuousBatchingStats()
-        case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
-             .textChatNemotronH, .textChatNemotronOmni:
-            return nil
-        }
-    }
-
-    func mtpStats() async -> Gemma4MTPStats? {
-        switch self {
-        case .textChatGemma4(let generator, _):
-            return await generator.mtpStats()
-        case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35, .textChatLFM2,
-             .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH,
-             .textChatNemotronOmni:
-            return nil
-        }
-    }
-
-    func chat(
-        _ request: ChatRequest,
-        progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws -> ChatResponse {
-        switch self {
-        case .textCode(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatKlein(let generator, let modelPath, let useStandalone):
-            guard let modelPath else {
-                throw Flux2Error.modelNotFound(ModelResolver.ModelID.mebot.rawValue)
-            }
-            if useStandalone {
-                return try await generator.chatStandalone(
-                    request,
-                    modelPath: modelPath,
-                    progressHandler: progressHandler
-                )
-            }
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatGemma4(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatDiffusionGemma(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatLaguna(let generator, let modelPath):
-            guard let modelPath else {
-                throw LagunaError.modelPathRequired
-            }
-            return try await generator.chat(
-                request,
-                modelPath: modelPath,
-                progressHandler: progressHandler
-            )
-        case .textChatQ35(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatLFM2(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatDeepseekV4Flash(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatMuseGlimmer(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatNemotronH(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        case .textChatNemotronOmni(let generator, let modelPath):
-            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
-        }
-    }
-
-    func deepseekChatCompletionsURL(
-        progressHandler: (@Sendable (ChatProgress) -> Void)?
-    ) async throws -> URL {
-        switch self {
-        case .textChatDeepseekV4Flash(let generator, let modelPath):
-            return try await generator.chatCompletionsURL(
-                modelPath: modelPath,
-                progressHandler: progressHandler
-            )
-        case .textCode, .textChatKlein, .textChatGemma4, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35,
-             .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH,
-             .textChatNemotronOmni:
-            throw RuntimeModelPoolError.rawProxyUnavailable("")
-        }
-    }
-}
+typealias RuntimeLoadedModel = NativeChatRuntime
 
 extension RuntimeServingEngine {
     var openAICompatibility: APIEngineCapabilities {

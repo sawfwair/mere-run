@@ -14,6 +14,10 @@ live in `MereRunQwenModel`. Gemma layers, caches, and draft computation live in
 Core retains resource loading and generation for these families.
 
 - `Generation.swift`: image and chat request/response contracts.
+- `ChatRequestResolution.swift`: shared chat sampling defaults and numeric
+  validation, with explicit CLI and OpenAI compatibility policies.
+- `NativeChatRuntime*.swift` and `ChatGenerationOperation.swift`: shared native
+  chat selection, invocation, diagnostics, and awaited operation cleanup.
 - `ImageGenerationOptions.swift` and `ImageGenerationPlan.swift`: typed image
   inputs, model selection, effective sampling, conditioning, and validation.
 - `ImageGenerationOperation.swift`: image preparation, executor invocation,
