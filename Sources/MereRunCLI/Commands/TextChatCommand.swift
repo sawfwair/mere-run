@@ -315,92 +315,8 @@ struct TextChat: AsyncParsableCommand {
             lora = nil
         }
 
-        let recommendedSampling = Q35Resources.recommendedSampling(forModelId: model)
-        let isLaguna = LagunaResources.handles(modelSpec: normalizedModelId)
-        let isMuseGlimmer = MuseGlimmerResources.handles(modelSpec: normalizedModelId)
-        let isNemotronH = NemotronHResources.handles(modelSpec: normalizedModelId)
-        let isNemotronOmni = NemotronOmniResources.handles(modelSpec: normalizedModelId)
-        let isLFM2Vision = normalizedModelId == LFM2Resources.visionModelId
-        let q35KVCacheMode = try resolveQ35KVCacheMode(for: normalizedModelId)
-        if let contextSize, contextSize <= 0 {
-            throw ValidationError("--context-size must be greater than zero.")
-        }
-        let requiresJSON = responseFormat == .jsonObject
-        let resolvedTemperature: Double
-        if let temperature {
-            resolvedTemperature = temperature
-        } else if isLFM2Vision {
-            resolvedTemperature = 0.2
-        } else if isNemotronOmni {
-            resolvedTemperature = NemotronOmniResources.thinkingTemperature
-        } else if isNemotronH {
-            resolvedTemperature = NemotronHResources.recommendedTemperature
-        } else if isMuseGlimmer {
-            resolvedTemperature = MuseGlimmerResources.recommendedTemperature
-        } else if isLaguna {
-            resolvedTemperature = LagunaResources.recommendedTemperature
-        } else {
-            resolvedTemperature = recommendedSampling?.temperature ?? 0.7
-        }
-
-        let resolvedTopP: Double
-        if let topP {
-            resolvedTopP = topP
-        } else if isNemotronOmni {
-            resolvedTopP = NemotronOmniResources.thinkingTopP
-        } else if isNemotronH {
-            resolvedTopP = NemotronHResources.recommendedTopP
-        } else if isMuseGlimmer {
-            resolvedTopP = MuseGlimmerResources.recommendedTopP
-        } else if isLaguna {
-            resolvedTopP = LagunaResources.recommendedTopP
-        } else {
-            resolvedTopP = recommendedSampling?.topP ?? 0.9
-        }
-
-        let resolvedTopK: Int?
-        if let topK {
-            resolvedTopK = topK
-        } else if isLFM2Vision {
-            resolvedTopK = 50
-        } else if isMuseGlimmer {
-            resolvedTopK = MuseGlimmerResources.recommendedTopK
-        } else if isLaguna {
-            resolvedTopK = LagunaResources.recommendedTopK
-        } else {
-            resolvedTopK = recommendedSampling?.topK
-        }
-
-        let resolvedMinP = minP ?? (isLaguna ? LagunaResources.recommendedMinP : 0)
-        let resolvedShowThinking: Bool
-        if requiresJSON {
-            resolvedShowThinking = false
-        } else if let thinking {
-            resolvedShowThinking = thinking
-        } else if isNemotronOmni {
-            resolvedShowThinking = true
-        } else if isMuseGlimmer {
-            resolvedShowThinking = false
-        } else {
-            resolvedShowThinking = Q35Resources.thinkingDefault(forModelId: model)
-        }
-
-        let request = ChatRequest(
-            messages: messages,
-            maxTokens: maxTokens,
-            temperature: resolvedTemperature,
-            topP: resolvedTopP,
-            topK: resolvedTopK,
-            minP: resolvedMinP,
-            seed: seed,
-            reasoningEffort: reasoningEffort,
-            showThinking: resolvedShowThinking,
-            lora: lora,
-            requiresJSON: requiresJSON,
-            tools: toolDefs,
-            kvCacheMode: q35KVCacheMode,
-            maxContextTokens: contextSize,
-            showUnmasking: showUnmasking
+        let request = try resolvedChatRequest(
+            modelID: normalizedModelId, messages: messages, tools: toolDefs, lora: lora
         )
 
         let markdownPresentation = TerminalMarkdownPresentation.resolve(
@@ -427,283 +343,214 @@ struct TextChat: AsyncParsableCommand {
         var lastMuseDFlashStats: MuseGlimmerDFlashStats?
         var lastNemotronDSparkStats: NemotronHDSparkStats?
         var lastLFM2DSparkStats: LFM2DSparkStats?
-        let lagunaGenerator = isLaguna
-            ? LagunaGenerator(
-                dflashModelPath: LagunaResources.installedDFlashPath(
-                    for: normalizedModelId
-                )
-            )
-            : nil
-        let nemotronGenerator = isNemotronH ? NemotronHGenerator() : nil
-        let nemotronOmniGenerator = isNemotronOmni ? NemotronOmniGenerator() : nil
-        let lfm2Generator = LFM2Resources.handles(modelSpec: normalizedModelId)
-            ? LFM2Generator(
-                modelId: normalizedModelId.isEmpty
-                    ? LFM2Resources.defaultModelId
-                    : normalizedModelId
-            )
-            : nil
-
-        let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
-            if normalizedModelId == Psi3ChatResources.defaultModelId {
-                let generator = Psi3ChatGenerator(modelId: Psi3ChatResources.defaultModelId)
-                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
-            } else if normalizedModelId == DiffusionGemmaResources.modelID {
-                let generator = DiffusionGemmaGenerator(modelID: normalizedModelId)
-                return try await generator.chat(
-                    req,
-                    modelPath: runtimeModelRoot,
-                    progressHandler: progressHandler
-                )
-            } else if Gemma4Resources.handles(modelSpec: normalizedModelId) {
-                let effectiveModelId = normalizedModelId.isEmpty ? Gemma4Resources.defaultModelId : normalizedModelId
-                let kvQuantization = try self.resolveGemma4KVCacheQuantization(for: effectiveModelId)
-                let generator = Gemma4Generator(
-                    modelId: effectiveModelId,
-                    kvCacheQuantization: kvQuantization
-                )
-                let response = try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
-                lastGemma4MTPStats = await generator.mtpStats()
-                return response
-            } else if LagunaResources.handles(modelSpec: normalizedModelId) {
-                guard let lagunaModelPath = self.modelRoot ?? installedModelPath else {
-                    let requestedID = LagunaResources.managedModelID(for: normalizedModelId)
-                        ?? normalizedModelId
-                    throw ValidationError(
-                        "Model '\(requestedID)' is not installed. Run "
-                            + "'mere.run model pull \(requestedID)' first."
-                    )
-                }
-                guard let generator = lagunaGenerator else {
-                    throw LagunaError.modelNotLoaded
-                }
-                let response = try await generator.chat(
-                    req,
-                    modelPath: lagunaModelPath,
-                    progressHandler: progressHandler
-                )
-                lastLagunaDFlashStats = await generator.dflashStats()
-                return response
-            } else if ManagedModelCatalog.spec(for: normalizedModelId)?.validationKind == .codegenGGUF {
-                // GGUF chat models run through the llama.cpp engine (the same path
-                // `text code` uses). On Linux CUDA this is the GB10-optimized
-                // llama.cpp runtime, which has fast quantized-MoE kernels MLX lacks.
-                let generator = CodeGenGenerator(modelId: normalizedModelId)
-                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
-            } else if InklingResources.handles(modelSpec: normalizedModelId) {
-                let generator = InklingGenerator(modelID: normalizedModelId)
-                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
-            } else if MuseGlimmerResources.handles(modelSpec: normalizedModelId) {
-                let generator = MuseGlimmerGenerator(modelID: normalizedModelId)
-                let response = try await generator.chat(
-                    req,
-                    modelPath: runtimeModelRoot,
-                    progressHandler: progressHandler
-                )
-                lastMuseDFlashStats = await generator.dflashStats()
-                return response
-            } else if NemotronOmniResources.handles(modelSpec: normalizedModelId) {
-                guard let generator = nemotronOmniGenerator else {
-                    throw NemotronOmniError.generationFailed("generator is unavailable")
-                }
-                return try await generator.chat(
-                    req,
-                    modelPath: runtimeModelRoot,
-                    progressHandler: progressHandler
-                )
-            } else if NemotronHResources.handles(modelSpec: normalizedModelId) {
-                guard let generator = nemotronGenerator else {
-                    throw NemotronHError.generationFailed("generator is unavailable")
-                }
-                let response = try await generator.chat(
-                    req,
-                    modelPath: runtimeModelRoot,
-                    progressHandler: progressHandler
-                )
-                lastNemotronDSparkStats = await generator.dsparkStats()
-                return response
-            } else if LFM2Resources.handles(modelSpec: normalizedModelId) {
-                guard let generator = lfm2Generator else {
-                    throw LFM2Error.generationFailed("generator is unavailable")
-                }
-                let response = try await generator.chat(
-                    req,
-                    modelPath: runtimeModelRoot,
-                    progressHandler: progressHandler
-                )
-                lastLFM2DSparkStats = await generator.dsparkStats()
-                return response
-            } else {
-                let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId
-                let generator = Q35Generator(modelId: effectiveModelId)
-                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
-            }
+        let runtime = try NativeChatRuntime.command(
+            modelID: normalizedModelId,
+            modelPath: LagunaResources.handles(modelSpec: normalizedModelId)
+                ? (modelRoot ?? installedModelPath) : runtimeModelRoot,
+            gemma4KVCacheQuantization: Gemma4Resources.handles(modelSpec: normalizedModelId)
+                ? resolveGemma4KVCacheQuantization(for: normalizedModelId) : Gemma4KVCacheQuantization()
+        )
+        let chatOnce: (ChatRequest) async throws -> ChatResponse = { request in
+            let response = try await runtime.chat(request, progressHandler: progressHandler)
+            let diagnostics = await runtime.diagnostics()
+            lastGemma4MTPStats = diagnostics.gemma4MTP
+            lastLagunaDFlashStats = diagnostics.lagunaDFlash
+            lastMuseDFlashStats = diagnostics.museDFlash
+            lastNemotronDSparkStats = diagnostics.nemotronDSpark
+            lastLFM2DSparkStats = diagnostics.lfm2DSpark
+            return response
         }
 
-        if toolLoop, let toolDefs, !toolDefs.isEmpty {
-            let sandbox: URL
-            if let sandboxDir {
-                sandbox = URL(fileURLWithPath: sandboxDir).standardizedFileURL
-            } else {
-                sandbox = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("mererun-tools-\(ProcessInfo.processInfo.processIdentifier)")
-            }
-            try FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
-            if !quiet { CLIStderr.write("[tool-loop] Sandbox: \(sandbox.path)\n") }
-            let toolPolicy = BuiltinTools.ToolExecutionPolicy(
-                sandboxDir: sandbox,
-                allowShellExec: allowShellExec,
-                allowAbsolutePaths: allowAbsoluteToolPaths
-            )
-
-            var loopMessages = messages
-            let maxIterations = 10
-
-            for iteration in 0..<maxIterations {
-                var req = request
-                req.messages = loopMessages
-
-                let result = try await chatOnce(req)
-
-                guard let calls = result.toolCalls, !calls.isEmpty else {
-                    if stream && streamingOutput.hasWritten {
-                        streamingOutput.finishLine()
-                    } else {
-                        print(cleanResponse(result.response, showThinking: request.showThinking))
-                    }
-                    return
-                }
-
-                // Show the model's response (may contain text before/after tool calls)
-                let textBeforeTools = result.response
-                    .replacingOccurrences(
-                        of: "<\\|tool_call>.*?<tool_call\\|>",
-                        with: "",
-                        options: String.CompareOptions.regularExpression
-                    )
-                    .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-                if !textBeforeTools.isEmpty {
-                    CLIStderr.write(cleanResponse(textBeforeTools, showThinking: request.showThinking) + "\n")
-                }
-
-                loopMessages.append(ChatMessage(
-                    role: .assistant,
-                    content: result.response,
-                    reasoningContent: result.reasoningContent
-                ))
-
-                for call in calls {
-                    if !quiet { CLIStderr.write("[tool] \(call.name)(\(call.arguments.map { "\($0.key)=\($0.value.prefix(80))" }.joined(separator: ", ")))\n") }
-                    let approved = BuiltinTools.canAutoApprove(call, autoApproveTools: autoApproveTools)
-                        || confirmToolCall(
-                            call,
-                            sandbox: sandbox,
-                            autoApproveToolsRequested: autoApproveTools
-                        )
-                    let output: String
-                    if approved {
-                        do {
-                            output = try BuiltinTools.execute(call, policy: toolPolicy)
-                        } catch {
-                            output = "Error: \(error.localizedDescription)"
-                        }
-                    } else {
-                        output = "Denied: tool execution was not approved."
-                    }
-                    if !quiet { CLIStderr.write("[tool] → \(output.prefix(200))\n") }
-                    loopMessages.append(ChatMessage(role: .tool, content: output, name: call.name))
-                }
-
-                if !quiet { CLIStderr.write("[tool-loop] Iteration \(iteration + 1)/\(maxIterations)\n") }
-            }
-
-            CLIStderr.write("[tool-loop] Hit iteration limit (\(maxIterations))\n")
-        } else {
-            let result = try await chatOnce(request)
-            let wroteStreamedOutput = stream && streamingOutput.hasWritten
-            if wroteStreamedOutput {
-                // Finalize terminal presentation before diagnostics so, for
-                // example, --stats cannot appear inside an open code fence.
-                streamingOutput.finishLine()
-            }
-
-            let elapsed = Date().timeIntervalSince(startTime)
-            if stats {
-                let e2eTps = elapsed > 0 ? Double(result.tokensGenerated) / elapsed : 0
-                if let timing = result.timing {
-                    let decodeTps = timing.decodeTokensPerSecond
-                        ?? (timing.decodeSeconds > 0 ? Double(result.tokensGenerated) / timing.decodeSeconds : 0)
-                    var line = String(
-                        format: "time=%.2fs load=%.2fs prefill=%.2fs decode=%.2fs tokens=%d decode_tps=%.2f e2e_tps=%.2f",
-                        elapsed,
-                        timing.loadSeconds,
-                        timing.prefillSeconds,
-                        timing.decodeSeconds,
-                        result.tokensGenerated,
-                        decodeTps,
-                        e2eTps
-                    )
-                    if let prefillTps = timing.prefillTokensPerSecond {
-                        line += String(format: " prefill_tps=%.2f", prefillTps)
-                    }
-                    if let firstToken = timing.firstTokenSeconds,
-                       let ttft = Self.ttftSeconds(for: timing) {
-                        line += String(format: " ttft_s=%.3f first_token_s=%.3f", ttft, firstToken)
-                    }
-                    if let diffusion = result.diffusion {
-                        line += String(
-                            format: " seed=%llu canvas_tokens=%d denoise_steps=%d work_tokens=%d canvas_tps=%.2f work_tps=%.2f",
-                            diffusion.seed,
-                            diffusion.canvasTokens,
-                            diffusion.denoisingSteps,
-                            diffusion.workTokens,
-                            diffusion.canvasTokensPerSecond,
-                            diffusion.workTokensPerSecond
-                        )
-                        if let firstDraftSeconds = diffusion.firstDraftSeconds {
-                            line += String(format: " first_draft_s=%.3f", firstDraftSeconds)
-                        }
-                    }
-                    CLIStderr.write("\(line)\n")
-                    if let mtp = lastGemma4MTPStats {
-                        CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
-                    }
-                    if let dflash = lastLagunaDFlashStats {
-                        CLIStderr.write(Self.formatLagunaDFlashStats(dflash) + "\n")
-                    }
-                    if let dflash = lastMuseDFlashStats {
-                        CLIStderr.write(Self.formatMuseDFlashStats(dflash) + "\n")
-                    }
-                    if let dspark = lastNemotronDSparkStats {
-                        CLIStderr.write(Self.formatNemotronDSparkStats(dspark) + "\n")
-                    }
-                    if let dspark = lastLFM2DSparkStats {
-                        CLIStderr.write(Self.formatLFM2DSparkStats(dspark) + "\n")
-                    }
+        try await ChatGenerationOperation.withCleanup {
+            if toolLoop, let toolDefs, !toolDefs.isEmpty {
+                let sandbox: URL
+                if let sandboxDir {
+                    sandbox = URL(fileURLWithPath: sandboxDir).standardizedFileURL
                 } else {
-                    let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
-                    CLIStderr.write("\(line)\n")
-                    if let mtp = lastGemma4MTPStats {
-                        CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
+                    sandbox = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("mererun-tools-\(ProcessInfo.processInfo.processIdentifier)")
+                }
+                try FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
+                if !quiet { CLIStderr.write("[tool-loop] Sandbox: \(sandbox.path)\n") }
+                let toolPolicy = BuiltinTools.ToolExecutionPolicy(
+                    sandboxDir: sandbox,
+                    allowShellExec: allowShellExec,
+                    allowAbsolutePaths: allowAbsoluteToolPaths
+                )
+
+                var loopMessages = messages
+                let maxIterations = 10
+
+                for iteration in 0..<maxIterations {
+                    var req = request
+                    req.messages = loopMessages
+
+                    let result = try await chatOnce(req)
+
+                    guard let calls = result.toolCalls, !calls.isEmpty else {
+                        if stream && streamingOutput.hasWritten {
+                            streamingOutput.finishLine()
+                        } else {
+                            print(cleanResponse(result.response, showThinking: request.showThinking))
+                        }
+                        return
                     }
-                    if let dflash = lastLagunaDFlashStats {
-                        CLIStderr.write(Self.formatLagunaDFlashStats(dflash) + "\n")
+
+                    // Show the model's response (may contain text before/after tool calls)
+                    let textBeforeTools = result.response
+                        .replacingOccurrences(
+                            of: "<\\|tool_call>.*?<tool_call\\|>",
+                            with: "",
+                            options: String.CompareOptions.regularExpression
+                        )
+                        .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                    if !textBeforeTools.isEmpty {
+                        CLIStderr.write(cleanResponse(textBeforeTools, showThinking: request.showThinking) + "\n")
                     }
-                    if let dflash = lastMuseDFlashStats {
-                        CLIStderr.write(Self.formatMuseDFlashStats(dflash) + "\n")
+
+                    loopMessages.append(ChatMessage(
+                        role: .assistant,
+                        content: result.response,
+                        reasoningContent: result.reasoningContent
+                    ))
+
+                    for call in calls {
+                        if !quiet { CLIStderr.write("[tool] \(call.name)(\(call.arguments.map { "\($0.key)=\($0.value.prefix(80))" }.joined(separator: ", ")))\n") }
+                        let approved = BuiltinTools.canAutoApprove(call, autoApproveTools: autoApproveTools)
+                            || confirmToolCall(
+                                call,
+                                sandbox: sandbox,
+                                autoApproveToolsRequested: autoApproveTools
+                            )
+                        let output: String
+                        if approved {
+                            do {
+                                output = try BuiltinTools.execute(call, policy: toolPolicy)
+                            } catch {
+                                output = "Error: \(error.localizedDescription)"
+                            }
+                        } else {
+                            output = "Denied: tool execution was not approved."
+                        }
+                        if !quiet { CLIStderr.write("[tool] → \(output.prefix(200))\n") }
+                        loopMessages.append(ChatMessage(role: .tool, content: output, name: call.name))
                     }
-                    if let dspark = lastNemotronDSparkStats {
-                        CLIStderr.write(Self.formatNemotronDSparkStats(dspark) + "\n")
-                    }
-                    if let dspark = lastLFM2DSparkStats {
-                        CLIStderr.write(Self.formatLFM2DSparkStats(dspark) + "\n")
+
+                    if !quiet { CLIStderr.write("[tool-loop] Iteration \(iteration + 1)/\(maxIterations)\n") }
+                }
+
+                CLIStderr.write("[tool-loop] Hit iteration limit (\(maxIterations))\n")
+            } else {
+                let result = try await chatOnce(request)
+                let wroteStreamedOutput = stream && streamingOutput.hasWritten
+                if wroteStreamedOutput {
+                    // Finalize terminal presentation before diagnostics so, for
+                    // example, --stats cannot appear inside an open code fence.
+                    streamingOutput.finishLine()
+                }
+
+                let elapsed = Date().timeIntervalSince(startTime)
+                if stats {
+                    let e2eTps = elapsed > 0 ? Double(result.tokensGenerated) / elapsed : 0
+                    if let timing = result.timing {
+                        let decodeTps = timing.decodeTokensPerSecond
+                            ?? (timing.decodeSeconds > 0 ? Double(result.tokensGenerated) / timing.decodeSeconds : 0)
+                        var line = String(
+                            format: "time=%.2fs load=%.2fs prefill=%.2fs decode=%.2fs tokens=%d decode_tps=%.2f e2e_tps=%.2f",
+                            elapsed,
+                            timing.loadSeconds,
+                            timing.prefillSeconds,
+                            timing.decodeSeconds,
+                            result.tokensGenerated,
+                            decodeTps,
+                            e2eTps
+                        )
+                        if let prefillTps = timing.prefillTokensPerSecond {
+                            line += String(format: " prefill_tps=%.2f", prefillTps)
+                        }
+                        if let firstToken = timing.firstTokenSeconds,
+                           let ttft = Self.ttftSeconds(for: timing) {
+                            line += String(format: " ttft_s=%.3f first_token_s=%.3f", ttft, firstToken)
+                        }
+                        if let diffusion = result.diffusion {
+                            line += String(
+                                format: " seed=%llu canvas_tokens=%d denoise_steps=%d work_tokens=%d canvas_tps=%.2f work_tps=%.2f",
+                                diffusion.seed,
+                                diffusion.canvasTokens,
+                                diffusion.denoisingSteps,
+                                diffusion.workTokens,
+                                diffusion.canvasTokensPerSecond,
+                                diffusion.workTokensPerSecond
+                            )
+                            if let firstDraftSeconds = diffusion.firstDraftSeconds {
+                                line += String(format: " first_draft_s=%.3f", firstDraftSeconds)
+                            }
+                        }
+                        CLIStderr.write("\(line)\n")
+                        if let mtp = lastGemma4MTPStats {
+                            CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
+                        }
+                        if let dflash = lastLagunaDFlashStats {
+                            CLIStderr.write(Self.formatLagunaDFlashStats(dflash) + "\n")
+                        }
+                        if let dflash = lastMuseDFlashStats {
+                            CLIStderr.write(Self.formatMuseDFlashStats(dflash) + "\n")
+                        }
+                        if let dspark = lastNemotronDSparkStats {
+                            CLIStderr.write(Self.formatNemotronDSparkStats(dspark) + "\n")
+                        }
+                        if let dspark = lastLFM2DSparkStats {
+                            CLIStderr.write(Self.formatLFM2DSparkStats(dspark) + "\n")
+                        }
+                    } else {
+                        let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
+                        CLIStderr.write("\(line)\n")
+                        if let mtp = lastGemma4MTPStats {
+                            CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
+                        }
+                        if let dflash = lastLagunaDFlashStats {
+                            CLIStderr.write(Self.formatLagunaDFlashStats(dflash) + "\n")
+                        }
+                        if let dflash = lastMuseDFlashStats {
+                            CLIStderr.write(Self.formatMuseDFlashStats(dflash) + "\n")
+                        }
+                        if let dspark = lastNemotronDSparkStats {
+                            CLIStderr.write(Self.formatNemotronDSparkStats(dspark) + "\n")
+                        }
+                        if let dspark = lastLFM2DSparkStats {
+                            CLIStderr.write(Self.formatLFM2DSparkStats(dspark) + "\n")
+                        }
                     }
                 }
-            }
 
-            if !wroteStreamedOutput {
-                print(cleanResponse(result.response, showThinking: request.showThinking))
+                if !wroteStreamedOutput {
+                    print(cleanResponse(result.response, showThinking: request.showThinking))
+                }
             }
+        } cleanup: {
+            await runtime.unload()
+        }
+
+    }
+
+    func resolvedChatRequest(
+        modelID: String, messages: [ChatMessage], tools: [ToolDefinition]? = nil, lora: LoRA? = nil
+    ) throws -> ChatRequest {
+        let request = ChatRequest(
+            messages: messages, maxTokens: maxTokens, seed: seed, reasoningEffort: reasoningEffort,
+            lora: lora, requiresJSON: responseFormat == .jsonObject, tools: tools,
+            kvCacheMode: try resolveQ35KVCacheMode(for: modelID),
+            maxContextTokens: contextSize, showUnmasking: showUnmasking
+        )
+        do {
+            return try ChatRequestResolver.resolve(
+                request, modelID: modelID,
+                sampling: ChatSamplingOptions(
+                    temperature: temperature, topP: topP, topK: topK, minP: minP, thinking: thinking
+                ), policy: .command
+            )
+        } catch let issue as ChatRequestIssue {
+            throw ValidationError(issue.localizedDescription)
         }
     }
 
@@ -799,6 +646,14 @@ struct TextChat: AsyncParsableCommand {
                     message: "\(label) file not found: \(url.path)"
                 ))
             }
+        }
+        do {
+            _ = try resolvedChatRequest(modelID: modelID, messages: [ChatMessage(role: .user, content: prompt)])
+        } catch {
+            diagnostics.append(.init(
+                id: "text_chat_request_invalid", severity: .blocker,
+                title: "Invalid chat request", message: error.localizedDescription
+            ))
         }
         return TextChatPreflightReport(
             schemaVersion: 1,

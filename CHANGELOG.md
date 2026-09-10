@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share chat sampling resolution, numeric validation, native invocation, and
+  cleanup between `text chat` and the API. Reject invalid CLI sampling values
+  before generation and report them in preflight. Preserve existing defaults
+  for each entry point and retain one runtime through CLI tool conversations.
+- Keep API chat model residency and request admission under one session. Cancel
+  upstream proxy reads when a streaming client disconnects, and await lease
+  release on completion, failure, or cancellation.
+
 - Add optional durable file-transcription records through `speech transcribe
   --run-dir` and `api serve --transcription-run-records`. Retain audio, resolved
   settings, and transcript artifacts; inspect terminal or interrupted outcomes

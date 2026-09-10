@@ -941,3 +941,11 @@ If you want to understand the text stack:
 
 For repository orientation, pair this page with
 [CLI and runtime internals](../internals/cli-and-runtime.md).
+
+## Request validation and lifetime
+
+`text chat` checks numeric sampling and token limits before generation. Its
+preflight report uses the same checks. During a tool conversation, the command
+retains one native runtime and unloads it after completion, failure, or
+cancellation. See [shared chat execution](../internals/chat-execution.md) for the
+request and runtime boundaries shared with the API.

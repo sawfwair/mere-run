@@ -97,6 +97,35 @@ struct RuntimeServingServices: Sendable {
         }
     }
 
+    func startChat(
+        _ request: OpenAIChatRequest, fallbackLoraPath: String?, contextSize: Int
+    ) async throws -> RuntimeChatSession {
+        let admitted = try await admission.acquire()
+        var session: RuntimeChatSession?
+        do {
+            try Task.checkCancellation()
+            let plan = try await models.makeChatPlan(
+                for: request, fallbackLoraPath: fallbackLoraPath, serverContextSize: contextSize
+            )
+            let prepared = RuntimeChatSession(plan: plan, admission: admitted)
+            session = prepared
+            await admitted.configure(
+                modelID: plan.modelID, streaming: request.stream == true,
+                requestedMaxTokens: plan.request.maxTokens, toolCount: plan.request.tools?.count ?? 0
+            )
+            try Task.checkCancellation()
+            return prepared
+        } catch {
+            let cancelled = Task.isCancelled || error is CancellationError
+            if let session {
+                await session.finish(cancelled: cancelled)
+            } else {
+                await admitted.release(cancelled: cancelled)
+            }
+            throw error
+        }
+    }
+
     func transcribe(
         _ plan: SpeechTranscriptionPlan, recording: SpeechTranscriptionRunSession? = nil
     ) async throws -> SpeechTranscriptionOutcome {
