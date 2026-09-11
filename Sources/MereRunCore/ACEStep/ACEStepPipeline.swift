@@ -275,7 +275,8 @@ public final class ACEStepPipeline {
             dcwScaler: config.dcwScaler,
             dcwHighScaler: config.dcwHighScaler,
             velocityNormThreshold: config.velocityNormThreshold,
-            velocityEMAFactor: config.velocityEMAFactor
+            velocityEMAFactor: config.velocityEMAFactor,
+            checkCancellation: {}
         )
 
         if config.useTiledVaeDecode {
@@ -368,7 +369,7 @@ public final class ACEStepPipeline {
         )
 
         let timesteps = inferenceTimesteps(config)
-        let latents = denoiseTurbo(
+        let latents = try denoiseTurbo(
             noise: noise,
             timesteps: timesteps,
             inferMethod: config.inferMethod,
@@ -396,7 +397,8 @@ public final class ACEStepPipeline {
             repaintMask: conditionInputs.repaintMask,
             cleanSourceLatents: conditionInputs.cleanSourceLatents,
             repaintInjectionRatio: conditionInputs.repaintConfiguration?.injectionRatio ?? 0,
-            repaintCrossfadeFrames: conditionInputs.repaintConfiguration?.latentCrossfadeFrames ?? 0
+            repaintCrossfadeFrames: conditionInputs.repaintConfiguration?.latentCrossfadeFrames ?? 0,
+            checkCancellation: { try Task.checkCancellation() }
         )
 
         let audio = try decodeAndApplyRepaintSplice(
@@ -490,7 +492,7 @@ public final class ACEStepPipeline {
         )
 
         let timesteps = inferenceTimesteps(config)
-        let latents = denoiseTurbo(
+        let latents = try denoiseTurbo(
             noise: noise,
             timesteps: timesteps,
             inferMethod: config.inferMethod,
@@ -518,7 +520,8 @@ public final class ACEStepPipeline {
             repaintMask: conditionInputs.repaintMask,
             cleanSourceLatents: conditionInputs.cleanSourceLatents,
             repaintInjectionRatio: conditionInputs.repaintConfiguration?.injectionRatio ?? 0,
-            repaintCrossfadeFrames: conditionInputs.repaintConfiguration?.latentCrossfadeFrames ?? 0
+            repaintCrossfadeFrames: conditionInputs.repaintConfiguration?.latentCrossfadeFrames ?? 0,
+            checkCancellation: { try Task.checkCancellation() }
         )
 
         return try decodeAndApplyRepaintSplice(

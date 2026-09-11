@@ -1,3 +1,4 @@
+import AudioCore
 import ArgumentParser
 import Foundation
 import MLX
@@ -6,6 +7,37 @@ import XCTest
 @testable import MereRunCore
 
 final class MusicServeAndExportTests: XCTestCase {
+    func testBothMusicRequestsDecodeSharedExportSettings() throws {
+        let ace = try JSONDecoder().decode(MusicAPIGenerationRequest.self, from: Data(
+            #"{"prompt":"guitar","export":{"format":"float32","fade_in_ms":0,"fade_out_ms":7}}"#.utf8
+        ))
+        let mini = try JSONDecoder().decode(MiniMaxMusic3SpeechRequest.self, from: Data(
+            #"{"instructions":"guitar","input":"[Instrumental]","export":{"format":"pcm24","target_peak_db":-3,"dither":true}}"#.utf8
+        ))
+        let acePlan = try XCTUnwrap(ace.export).resolve(defaults: .music)
+        let miniPlan = try XCTUnwrap(mini.export).resolve(defaults: .referencePCM16)
+        XCTAssertEqual(acePlan.options.format, .float32)
+        XCTAssertEqual(acePlan.options.fadeInMilliseconds, 0)
+        XCTAssertEqual(acePlan.options.fadeOutMilliseconds, 7)
+        XCTAssertEqual(acePlan.options.normalization, .peak)
+        XCTAssertEqual(miniPlan.options.format, .pcm24)
+        XCTAssertEqual(miniPlan.options.targetPeakDB, -3)
+        XCTAssertEqual(miniPlan.options.normalization, .none)
+        XCTAssertTrue(miniPlan.options.dither)
+        XCTAssertEqual(ace.generationOptions().prompt, "guitar")
+        XCTAssertEqual(mini.generationSettings().lyrics, "[Instrumental]")
+    }
+
+    func testMusicRequestRejectsInvalidNestedExportBeforeExecution() throws {
+        let request = try JSONDecoder().decode(MiniMaxMusic3SpeechRequest.self, from: Data(
+            #"{"instructions":"guitar","input":"[Instrumental]","export":{"fade_out_ms":-1}}"#.utf8
+        ))
+        XCTAssertThrowsError(try XCTUnwrap(request.export).resolve(defaults: .referencePCM16))
+        XCTAssertThrowsError(try JSONDecoder().decode(MusicAPIGenerationRequest.self, from: Data(
+            #"{"prompt":"guitar","export":{"format":"unsupported"}}"#.utf8
+        )))
+    }
+
     func testMusicCommandExposesResidentServe() {
         let names = Set(Music.configuration.subcommands.map {
             $0.configuration.commandName
@@ -379,54 +411,6 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(request.responseFormat, "wav")
     }
 
-    func testHighQualityWAVFormatsHaveTruthfulHeadersAndSizes() throws {
-        let audio = MLXArray([
-            Float(0.25), Float(-0.25),
-            Float(0.5), Float(-0.5),
-            Float(0.75), Float(-0.75),
-        ], [1, 3, 2])
-
-        for (format, bits, bytesPerSample) in [
-            (ACEStepAudioFormat.pcm16, UInt16(16), 2),
-            (.pcm24, UInt16(24), 3),
-            (.float32, UInt16(32), 4),
-        ] {
-            let data = try ACEStepWAVWriter.wavData(
-                audio,
-                sampleRate: 48_000,
-                options: .init(
-                    format: format,
-                    normalization: .none,
-                    targetPeakDB: -1,
-                    fadeInMilliseconds: 0,
-                    fadeOutMilliseconds: 0,
-                    dither: false
-                )
-            )
-            XCTAssertEqual(String(data: data[0..<4], encoding: .utf8), "RIFF")
-            XCTAssertEqual(readUInt16(data, offset: 34), bits)
-            XCTAssertEqual(data.count, 44 + 6 * bytesPerSample)
-        }
-    }
-
-    func testStereoResamplingPreservesChannelOrderAndDuration() throws {
-        let audio = MLXArray(
-            [Float(0), 10, 1, 11, 2, 12, 3, 13],
-            [1, 4, 2]
-        )
-        let resampled = try ACEStepWAVWriter.resample(
-            audio,
-            from: 4,
-            to: 2
-        )
-
-        XCTAssertEqual(resampled.shape, [1, 2, 2])
-        XCTAssertEqual(
-            resampled.reshaped(-1).asArray(Float.self),
-            [0, 10, 2, 12]
-        )
-    }
-
     func testDAWBundleContainsPortableAudioRecipeMarkersAndProject() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -442,10 +426,8 @@ final class MusicServeAndExportTests: XCTestCase {
             [Float](repeating: 0.1, count: 960),
             [1, 480, 2]
         )
-        try ACEStepWAVWriter.writeWAV(
-            audio,
-            to: mixURL,
-            sampleRate: 48_000
+        _ = try AudioExportService.write(
+            MusicWaveformAdapter.aceStep(audio), plan: AudioExportPlan(options: .music), to: mixURL
         )
         try Data("{}".utf8).write(to: recipeURL)
         let lrc = ACEStepLRCDocument(

@@ -157,7 +157,7 @@ extension ACEStepPipeline {
             contextSource: contextSource,
             attentionMask: attentionMask
         )
-        let targetLatents = flowEditSamplingLoop(
+        let targetLatents = try flowEditSamplingLoop(
             sourceLatents: sourceLatents,
             sourceCondition: sourceCondition,
             targetCondition: targetCondition,
@@ -214,7 +214,7 @@ extension ACEStepPipeline {
         ),
         config: ACEStepInferenceConfig,
         flowEdit: ACEStepFlowEditConfiguration
-    ) -> MLXArray {
+    ) throws -> MLXArray {
         var timesteps = inferenceTimesteps(config)
         if timesteps.last != 0 {
             timesteps.append(0)
@@ -351,6 +351,7 @@ extension ACEStepPipeline {
         }
 
         for step in 0..<stepCount {
+            try Task.checkCancellation()
             guard step >= window.minimum else {
                 continue
             }

@@ -351,6 +351,40 @@ spectral flatness, frame-energy movement, periodicity, time-varying spectral
 structure, and tail continuity. This prevents loud stationary noise or a
 prematurely dead ending from winning on level statistics alone.
 
+ACE-Step and MiniMax CLI and resident API requests share their model preparation
+and execution operations. Each resident runtime retains its CPU and GPU streams
+across requests and serializes model loading, planning, generation, and tensor
+evaluation. Cancellation is checked between generation steps and during export;
+a cancelled file export preserves any existing destination.
+
+Music export uses `AudioCore` for explicit interleaved waveforms, fades, peak
+normalization, nonfinite-sample replacement, clipping, and WAV encoding. WAV
+files support PCM16, PCM24, and float32. File encoding writes bounded chunks to
+a temporary file and atomically replaces the destination when complete. Recipe
+`export_statistics` records replaced and clipped sample counts, applied fade
+frames, normalization gain, input/output peaks, and output RMS before quantization.
+
+Both resident endpoints accept an optional nested `export` object:
+
+```json
+{
+  "export": {
+    "format": "pcm24",
+    "normalization": "peak",
+    "target_peak_db": -1,
+    "fade_in_ms": 5,
+    "fade_out_ms": 20,
+    "dither": true
+  }
+}
+```
+
+Add this object to an otherwise complete generation request. Omitted fields keep
+the endpoint's defaults: ACE-Step uses PCM24, peak normalization at -1 dBFS,
+5 ms fade-in, 20 ms fade-out, and dither. MiniMax's speech endpoint uses PCM16,
+no normalization or fades, and no dither. Its sample rate remains 32 kHz unless
+you set `sample_rate` to `44100`. Export settings are validated before inference.
+
 Every ACE-Step generation writes 48 kHz stereo 24-bit WAV by default plus a
 schema 5 reproducible recipe JSON. The recipe records exact checkpoint
 repositories and immutable revisions, adapter hashes and scales,

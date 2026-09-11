@@ -3,6 +3,7 @@
 Shared audio-domain types and streaming primitives used by speech synthesis,
 speech transcription, and CLI streaming sessions.
 
+- `AudioExportPlan.swift`, `AudioExportProcessor.swift`, and `AudioWAVEncoder.swift`: validated WAV export, explicit interleaved waveforms, fades, normalization, statistics, and atomic chunked file encoding. These types have no MLX dependency.
 - `AudioGeneration.swift`: request, response, progress, and streaming protocols.
 - `ASRBackendRouting.swift`: speech-to-text backend selection policy.
 - `SpeechTranscriptionOperation.swift`: typed file transcription plans, validation, executors, events, and outcomes.

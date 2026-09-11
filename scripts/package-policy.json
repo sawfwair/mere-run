@@ -1,0 +1,1118 @@
+{
+  "schemaVersion": 1,
+  "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+  "existingImplementationProducts": ["AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSortformer", "MereRunAdmission", "MereRunAudioModels", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunQwenModel", "MereRunResidency", "MereRunTensor", "MereRunTextEncoder"],
+  "targets": [
+    {
+      "name": "AudioCodecs",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "audio",
+      "purpose": "Audio codecs and spectral features",
+      "allowedDirect": ["MediaIO", "product:mlx-swift/MLX"],
+      "allowedTransitive": ["MediaIO", "product:mlx-swift/MLX"]
+    },
+    {
+      "name": "AudioCore",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "audio",
+      "purpose": "Portable audio-domain operations and contracts",
+      "allowedDirect": ["MereRunExecution"],
+      "allowedTransitive": ["MereRunExecution", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "AudioCoreTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for AudioCore, MereRunExecution",
+      "allowedDirect": ["AudioCore", "MereRunExecution"],
+      "allowedTransitive": ["AudioCore", "MereRunExecution", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "AudioParakeetModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "AudioParakeetModel",
+      "purpose": "Parakeet model computation",
+      "allowedDirect": ["product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"],
+      "allowedTransitive": ["product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"]
+    },
+    {
+      "name": "AudioQwen3ASRModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "AudioQwen3ASRModel",
+      "purpose": "Qwen speech recognition computation",
+      "allowedDirect": ["MereRunKVCache", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"],
+      "allowedTransitive": ["MereRunKVCache", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"]
+    },
+    {
+      "name": "AudioQwen3TTSModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "AudioQwen3TTSModel",
+      "purpose": "Qwen speech synthesis computation",
+      "allowedDirect": ["MereRunKVCache", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"],
+      "allowedTransitive": ["MereRunKVCache", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"]
+    },
+    {
+      "name": "AudioSTT",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "speech",
+      "purpose": "Speech recognition orchestration and compatibility facade",
+      "allowedDirect": ["AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioSortformer", "MereRunCore", "MereRunExecution", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-transformers/Transformers"],
+      "allowedTransitive": ["AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioSortformer", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunCore", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
+    },
+    {
+      "name": "AudioSortformer",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "AudioSortformer",
+      "purpose": "Speaker diarization model computation",
+      "allowedDirect": ["MereRunModelKit", "product:mlx-swift/MLX", "product:mlx-swift/MLXNN"],
+      "allowedTransitive": ["MereRunModelKit", "product:mlx-swift/MLX", "product:mlx-swift/MLXNN", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "AudioTTS",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "speech",
+      "purpose": "Speech synthesis orchestration and compatibility facade",
+      "allowedDirect": ["AudioCodecs", "AudioCore", "AudioQwen3TTSModel", "MereRunCore", "MereRunExecution", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-transformers/Transformers"],
+      "allowedTransitive": ["AudioCodecs", "AudioCore", "AudioQwen3TTSModel", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunCore", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
+    },
+    {
+      "name": "AudioTTSTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for AudioTTS, MereRunMLXTestSupport",
+      "allowedDirect": ["AudioTTS", "MereRunMLXTestSupport"],
+      "allowedTransitive": ["AudioCodecs", "AudioCore", "AudioQwen3TTSModel", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunCore", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
+    },
+    {
+      "name": "COnnxRuntimeCoreML",
+      "variants": ["darwin"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "speech",
+      "purpose": "Bridge ONNX inference to the macOS CoreML provider",
+      "allowedDirect": ["product:swift-onnxruntime/CONNXRuntime"],
+      "allowedTransitive": ["product:swift-onnxruntime/CONNXRuntime"]
+    },
+    {
+      "name": "DecodeRuntimeTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunDecode, MereRunKVCache, MereRunMLXTestSupport, product:mlx-swift/MLXRandom",
+      "allowedDirect": ["MereRunDecode", "MereRunKVCache", "MereRunMLXTestSupport", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunDecode", "MereRunKVCache", "MereRunMLXTestSupport", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"]
+    },
+    {
+      "name": "GemmaRuntimeTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunDecode, MereRunGemmaModel, MereRunMLXTestSupport, MereRunTensor, product:mlx-swift/MLX, product:mlx-swift/MLXFast, product:mlx-swift/MLXNN, product:mlx-swift/MLXRandom",
+      "allowedDirect": ["MereRunDecode", "MereRunGemmaModel", "MereRunMLXTestSupport", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunDecode", "MereRunGemmaModel", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "H3RuntimeTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunAudioModels, MereRunH3Model, MereRunMLXTestSupport, MereRunTensor, product:mlx-swift/MLX, product:mlx-swift/MLXFast, product:mlx-swift/MLXNN, product:mlx-swift/MLXRandom",
+      "allowedDirect": ["MereRunAudioModels", "MereRunH3Model", "MereRunMLXTestSupport", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunAudioModels", "MereRunH3Model", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "ImageRuntimeTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunImageModels, MereRunMLXTestSupport, MereRunTensor, MereRunTextEncoder, product:mlx-swift/MLXRandom",
+      "allowedDirect": ["MereRunImageModels", "MereRunMLXTestSupport", "MereRunTensor", "MereRunTextEncoder", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunImageModels", "MereRunKVCache", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunTensor", "MereRunTextEncoder", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "LTXRuntimeTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunLTXModel, MereRunMLXTestSupport, product:mlx-swift/MLX, product:mlx-swift/MLXNN, product:mlx-swift/MLXRandom",
+      "allowedDirect": ["MereRunLTXModel", "MereRunMLXTestSupport", "product:mlx-swift/MLX", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunLTXModel", "MereRunMLXTestSupport", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"]
+    },
+    {
+      "name": "LagunaRuntimeTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunDecode, MereRunGemmaModel, MereRunLagunaModel, MereRunMLXTestSupport, MereRunTensor, product:mlx-swift/MLX, product:mlx-swift/MLXFast, product:mlx-swift/MLXNN, product:mlx-swift/MLXRandom",
+      "allowedDirect": ["MereRunDecode", "MereRunGemmaModel", "MereRunLagunaModel", "MereRunMLXTestSupport", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunDecode", "MereRunGemmaModel", "MereRunLagunaModel", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MediaIO",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "media",
+      "purpose": "Portable media reading and writing",
+      "allowedDirect": [],
+      "allowedTransitive": [],
+      "requiresSwiftSources": ["Sources/MediaIO"]
+    },
+    {
+      "name": "MediaIOSmoke",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "executable-entry-point",
+      "manifestType": "executable",
+      "owner": "media",
+      "purpose": "Local media transport smoke executable; not a shipped product",
+      "allowedDirect": ["MediaIO"],
+      "allowedTransitive": ["MediaIO"],
+      "requiresSwiftSources": ["Sources/MediaIO", "Sources/MediaIOSmoke"]
+    },
+    {
+      "name": "MereRunAdmission",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "admission",
+      "purpose": "Machine inference admission and reservations",
+      "allowedDirect": [],
+      "allowedTransitive": []
+    },
+    {
+      "name": "MereRunAdmissionTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunAdmission",
+      "allowedDirect": ["MereRunAdmission"],
+      "allowedTransitive": ["MereRunAdmission"]
+    },
+    {
+      "name": "MereRunApp",
+      "variants": ["darwin"],
+      "role": "executable-entry-point",
+      "manifestType": "executable",
+      "owner": "studio",
+      "purpose": "macOS Studio application entry point",
+      "allowedDirect": ["MereRunContract", "StudioKit", "StudioUI", "product:Sparkle/Sparkle"],
+      "allowedTransitive": ["MereRunContract", "StudioKit", "StudioUI", "product:Sparkle/Sparkle"]
+    },
+    {
+      "name": "MereRunAppTests",
+      "variants": ["darwin"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunApp, MereRunContract",
+      "allowedDirect": ["MereRunApp", "MereRunContract"],
+      "allowedTransitive": ["MereRunApp", "MereRunContract", "StudioKit", "StudioUI", "product:Sparkle/Sparkle"]
+    },
+    {
+      "name": "MereRunAudioModels",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "MereRunAudioModels",
+      "purpose": "Shared vocoder computation",
+      "allowedDirect": ["product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"]
+    },
+    {
+      "name": "MereRunCLI",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "executable-entry-point",
+      "manifestType": "executable",
+      "owner": "cli",
+      "purpose": "Public CLI parsing, transport, and presentation",
+      "allowedDirect": ["AudioCodecs", "AudioCore", "AudioSTT", "AudioTTS", "MediaIO", "MereRunAdmission", "MereRunContract", "MereRunCore", "MereRunEvaluation", "MereRunExecution", "MereRunRelayKit", "MereRunResidency", "product:hummingbird/Hummingbird", "product:swift-argument-parser/ArgumentParser", "product:swift-crypto/Crypto"],
+      "allowedTransitive": ["AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAdmission", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunEvaluation", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunModelKit", "MereRunQwenModel", "MereRunRelayKit", "MereRunResidency", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:hummingbird/Hummingbird", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-argument-parser/ArgumentParser", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
+    },
+    {
+      "name": "MereRunCLITests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MediaIO, MereRunCLI, MereRunEvaluation",
+      "allowedDirect": ["AudioCore", "MediaIO", "MereRunCLI", "MereRunEvaluation"],
+      "allowedTransitive": ["AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAdmission", "MereRunAudioModels", "MereRunCLI", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunEvaluation", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunModelKit", "MereRunQwenModel", "MereRunRelayKit", "MereRunResidency", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:hummingbird/Hummingbird", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-argument-parser/ArgumentParser", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
+    },
+    {
+      "name": "MereRunContract",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "contract",
+      "purpose": "Portable CLI capability and result contracts",
+      "allowedDirect": [],
+      "allowedTransitive": []
+    },
+    {
+      "name": "MereRunContractTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunContract",
+      "allowedDirect": ["MereRunContract"],
+      "allowedTransitive": ["MereRunContract"]
+    },
+    {
+      "name": "MereRunCore",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "runtime",
+      "purpose": "Public runtime orchestration and compatibility facade",
+      "allowedDirect": ["AudioCore", "AudioCodecs", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"],
+      "allowedTransitive": ["AudioCore", "AudioCodecs", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
+    },
+    {
+      "name": "MereRunCoreTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for AudioCodecs, AudioCore, AudioParakeetModel, AudioQwen3ASRModel, AudioQwen3TTSModel, AudioSTT, AudioSortformer, AudioTTS, MediaIO, MereRunAudioModels, MereRunContract, MereRunCore, MereRunGemmaModel, MereRunH3Model, MereRunImageModels, MereRunLTXModel, MereRunLagunaModel, MereRunMLXTestSupport, MereRunQwenModel, MereRunTensor, MereRunTextEncoder, product:swift-crypto/Crypto, product:swift-jinja/Jinja",
+      "allowedDirect": ["AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "MediaIO", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunLTXModel", "MereRunLagunaModel", "MereRunMLXTestSupport", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "product:swift-crypto/Crypto", "product:swift-jinja/Jinja"],
+      "allowedTransitive": ["AudioCodecs", "AudioCore", "AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSTT", "AudioSortformer", "AudioTTS", "COnnxRuntimeCoreML", "MediaIO", "MereRunAudioModels", "MereRunContract", "MereRunCore", "MereRunDecode", "MereRunExecution", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunKVCache", "MereRunLTXModel", "MereRunLagunaModel", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "llama", "magentart", "product:mlx-swift/MLX", "product:mlx-swift/MLXFFT", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXOptimizers", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto", "product:swift-jinja/Jinja", "product:swift-onnxruntime/CONNXRuntime", "product:swift-transformers/Transformers"]
+    },
+    {
+      "name": "MereRunDecode",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "decode",
+      "purpose": "Shared autoregressive sampling and decoding",
+      "allowedDirect": ["product:mlx-swift/MLX", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["product:mlx-swift/MLX", "product:mlx-swift/MLXRandom"]
+    },
+    {
+      "name": "MereRunEvaluation",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "evaluation",
+      "purpose": "Versioned external evaluation pack format",
+      "allowedDirect": ["product:swift-crypto/Crypto"],
+      "allowedTransitive": ["product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunEvaluationTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunEvaluation",
+      "allowedDirect": ["MereRunEvaluation"],
+      "allowedTransitive": ["MereRunEvaluation", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunExecution",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "execution",
+      "purpose": "Durable operation storage and terminal state",
+      "allowedDirect": ["product:swift-crypto/Crypto"],
+      "allowedTransitive": ["product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunExecutionTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunExecution",
+      "allowedDirect": ["MereRunExecution"],
+      "allowedTransitive": ["MereRunExecution", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunGemmaModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "MereRunGemmaModel",
+      "purpose": "Gemma text and vision computation",
+      "allowedDirect": ["MereRunDecode", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunDecode", "MereRunModelKit", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunH3Model",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "MereRunH3Model",
+      "purpose": "H3 transformer and VAE computation",
+      "allowedDirect": ["MereRunAudioModels", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunAudioModels", "MereRunModelKit", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunImageModels",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "MereRunImageModels",
+      "purpose": "Image model computation",
+      "allowedDirect": ["MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunModelKit", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunKVCache",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "decode",
+      "purpose": "Attention cache storage and quantization",
+      "allowedDirect": ["product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"],
+      "allowedTransitive": ["product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"]
+    },
+    {
+      "name": "MereRunLTXModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "MereRunLTXModel",
+      "purpose": "LTX transformer and VAE computation",
+      "allowedDirect": ["product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"],
+      "allowedTransitive": ["product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"]
+    },
+    {
+      "name": "MereRunLagunaModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "MereRunLagunaModel",
+      "purpose": "Laguna text computation",
+      "allowedDirect": ["MereRunDecode", "MereRunGemmaModel", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunDecode", "MereRunGemmaModel", "MereRunModelKit", "MereRunTensor", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunMLXTestSupport",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-support",
+      "manifestType": "regular",
+      "owner": "testing",
+      "purpose": "MLX test fixtures and device preparation",
+      "allowedDirect": ["product:mlx-swift/MLX"],
+      "allowedTransitive": ["product:mlx-swift/MLX"]
+    },
+    {
+      "name": "MereRunModelKit",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "model-management",
+      "purpose": "Portable model identity and storage metadata",
+      "allowedDirect": ["product:swift-crypto/Crypto"],
+      "allowedTransitive": ["product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunModelKitTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunModelKit",
+      "allowedDirect": ["MereRunModelKit"],
+      "allowedTransitive": ["MereRunModelKit", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunQwenModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "MereRunQwenModel",
+      "purpose": "Qwen text and vision computation",
+      "allowedDirect": ["MereRunKVCache", "MereRunTensor", "MereRunTextEncoder", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunKVCache", "MereRunModelKit", "MereRunTensor", "MereRunTextEncoder", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunRelayKit",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "public-library",
+      "manifestType": "regular",
+      "owner": "relay",
+      "purpose": "Portable relay client and workflow transport",
+      "allowedDirect": ["product:swift-crypto/Crypto"],
+      "allowedTransitive": ["product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunRelayKitTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunRelayKit",
+      "allowedDirect": ["MereRunRelayKit"],
+      "allowedTransitive": ["MereRunRelayKit", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunResidency",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "residency",
+      "purpose": "Resource leases and runtime eviction",
+      "allowedDirect": ["MereRunAdmission"],
+      "allowedTransitive": ["MereRunAdmission"]
+    },
+    {
+      "name": "MereRunResidencyTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunResidency",
+      "allowedDirect": ["MereRunResidency"],
+      "allowedTransitive": ["MereRunAdmission", "MereRunResidency"]
+    },
+    {
+      "name": "MereRunTensor",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "tensor",
+      "purpose": "Tensor kernels and checkpoint loading",
+      "allowedDirect": ["MereRunModelKit", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"],
+      "allowedTransitive": ["MereRunModelKit", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "MereRunTextEncoder",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "model-runtime",
+      "manifestType": "regular",
+      "owner": "text-encoder",
+      "purpose": "Shared text conditioning encoders",
+      "allowedDirect": ["MereRunKVCache", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"],
+      "allowedTransitive": ["MereRunKVCache", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN"]
+    },
+    {
+      "name": "QwenRuntimeTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunKVCache, MereRunMLXTestSupport, MereRunQwenModel, MereRunTensor, product:mlx-swift/MLXRandom",
+      "allowedDirect": ["MereRunKVCache", "MereRunMLXTestSupport", "MereRunQwenModel", "MereRunTensor", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["MereRunKVCache", "MereRunMLXTestSupport", "MereRunModelKit", "MereRunQwenModel", "MereRunTensor", "MereRunTextEncoder", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "SpeechRuntimeTests",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for AudioParakeetModel, AudioQwen3ASRModel, AudioQwen3TTSModel, AudioSortformer, MereRunKVCache, MereRunMLXTestSupport, product:mlx-swift/MLXRandom",
+      "allowedDirect": ["AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport", "product:mlx-swift/MLXRandom"],
+      "allowedTransitive": ["AudioParakeetModel", "AudioQwen3ASRModel", "AudioQwen3TTSModel", "AudioSortformer", "MereRunKVCache", "MereRunMLXTestSupport", "MereRunModelKit", "product:mlx-swift/MLX", "product:mlx-swift/MLXFast", "product:mlx-swift/MLXNN", "product:mlx-swift/MLXRandom", "product:swift-crypto/Crypto"]
+    },
+    {
+      "name": "StudioKit",
+      "variants": ["darwin"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "studio",
+      "purpose": "Portable Studio command and job state",
+      "allowedDirect": ["MereRunContract"],
+      "allowedTransitive": ["MereRunContract"]
+    },
+    {
+      "name": "StudioKitTests",
+      "variants": ["darwin"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunContract, StudioKit, StudioTestSupport",
+      "allowedDirect": ["MereRunContract", "StudioKit", "StudioTestSupport"],
+      "allowedTransitive": ["MereRunContract", "StudioKit", "StudioTestSupport"]
+    },
+    {
+      "name": "StudioTestSupport",
+      "variants": ["darwin"],
+      "role": "test-support",
+      "manifestType": "regular",
+      "owner": "studio",
+      "purpose": "Shared Studio test fixtures",
+      "allowedDirect": ["StudioKit"],
+      "allowedTransitive": ["MereRunContract", "StudioKit"]
+    },
+    {
+      "name": "StudioUI",
+      "variants": ["darwin"],
+      "role": "internal-operation",
+      "manifestType": "regular",
+      "owner": "studio",
+      "purpose": "macOS Studio SwiftUI presentation",
+      "allowedDirect": ["MereRunContract", "StudioKit"],
+      "allowedTransitive": ["MereRunContract", "StudioKit"]
+    },
+    {
+      "name": "StudioUITests",
+      "variants": ["darwin"],
+      "role": "test-target",
+      "manifestType": "test",
+      "owner": "testing",
+      "purpose": "Regression coverage for MereRunContract, StudioKit, StudioTestSupport, StudioUI",
+      "allowedDirect": ["MereRunContract", "StudioKit", "StudioTestSupport", "StudioUI"],
+      "allowedTransitive": ["MereRunContract", "StudioKit", "StudioTestSupport", "StudioUI"]
+    },
+    {
+      "name": "llama",
+      "variants": ["darwin"],
+      "role": "binary-adapter",
+      "manifestType": "binary",
+      "owner": "llama",
+      "purpose": "Platform adapter for llama.cpp",
+      "allowedDirect": [],
+      "allowedTransitive": []
+    },
+    {
+      "name": "llama",
+      "variants": ["linux-source", "linux-cuda-prebuilt"],
+      "role": "system-adapter",
+      "manifestType": "system",
+      "owner": "llama",
+      "purpose": "Platform adapter for llama.cpp",
+      "allowedDirect": [],
+      "allowedTransitive": [],
+      "requiresPath": "Sources/llama/module.modulemap"
+    },
+    {
+      "name": "magentart",
+      "variants": ["darwin"],
+      "role": "binary-adapter",
+      "manifestType": "binary",
+      "owner": "music",
+      "purpose": "Vendored Magenta realtime runtime adapter",
+      "allowedDirect": [],
+      "allowedTransitive": [],
+      "requiresPath": "vendor/magentart.xcframework"
+    }
+  ],
+  "products": [
+    {
+      "name": "AudioCodecs",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "audio",
+      "purpose": "Audio codecs and spectral features",
+      "targets": ["AudioCodecs"],
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCore", "MereRunCoreTests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "AudioCore",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "audio",
+      "purpose": "Portable audio-domain operations and contracts",
+      "targets": ["AudioCore"],
+      "consumers": ["AudioCoreTests", "AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "AudioParakeetModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "AudioParakeetModel",
+      "purpose": "Parakeet model computation",
+      "targets": ["AudioParakeetModel"],
+      "consumers": ["AudioSTT", "MereRunCoreTests", "SpeechRuntimeTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "AudioQwen3ASRModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "AudioQwen3ASRModel",
+      "purpose": "Qwen speech recognition computation",
+      "targets": ["AudioQwen3ASRModel"],
+      "consumers": ["AudioSTT", "MereRunCoreTests", "SpeechRuntimeTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "AudioQwen3TTSModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "AudioQwen3TTSModel",
+      "purpose": "Qwen speech synthesis computation",
+      "targets": ["AudioQwen3TTSModel"],
+      "consumers": ["AudioTTS", "MereRunCoreTests", "SpeechRuntimeTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "AudioSTT",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "speech",
+      "purpose": "Speech recognition orchestration and compatibility facade",
+      "targets": ["AudioSTT"],
+      "consumers": ["MereRunCLI", "MereRunCoreTests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "AudioSortformer",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "AudioSortformer",
+      "purpose": "Speaker diarization model computation",
+      "targets": ["AudioSortformer"],
+      "consumers": ["AudioSTT", "MereRunCoreTests", "SpeechRuntimeTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "AudioTTS",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "speech",
+      "purpose": "Speech synthesis orchestration and compatibility facade",
+      "targets": ["AudioTTS"],
+      "consumers": ["AudioTTSTests", "MereRunCLI", "MereRunCoreTests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "MediaIO",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "media",
+      "purpose": "Portable media reading and writing",
+      "targets": ["MediaIO"],
+      "consumers": ["AudioCodecs", "MediaIOSmoke", "MereRunCLI", "MereRunCLITests", "MereRunCore", "MereRunCoreTests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required.",
+      "requiresSwiftSources": ["Sources/MediaIO"]
+    },
+    {
+      "name": "MereRunAdmission",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "admission",
+      "purpose": "Machine inference admission and reservations",
+      "targets": ["MereRunAdmission"],
+      "consumers": ["MereRunAdmissionTests", "MereRunCLI", "MereRunResidency"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunAudioModels",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "MereRunAudioModels",
+      "purpose": "Shared vocoder computation",
+      "targets": ["MereRunAudioModels"],
+      "consumers": ["H3RuntimeTests", "MereRunCore", "MereRunCoreTests", "MereRunH3Model"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunContract",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "contract",
+      "purpose": "Portable CLI capability and result contracts",
+      "targets": ["MereRunContract"],
+      "consumers": ["MereRunApp", "MereRunAppTests", "MereRunCLI", "MereRunContractTests", "MereRunCoreTests", "StudioKit", "StudioKitTests", "StudioUI", "StudioUITests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "MereRunCore",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "runtime",
+      "purpose": "Public runtime orchestration and compatibility facade",
+      "targets": ["MereRunCore"],
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "MereRunDecode",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "decode",
+      "purpose": "Shared autoregressive sampling and decoding",
+      "targets": ["MereRunDecode"],
+      "consumers": ["DecodeRuntimeTests", "GemmaRuntimeTests", "LagunaRuntimeTests", "MereRunCore", "MereRunGemmaModel", "MereRunLagunaModel"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunEvaluation",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "evaluation",
+      "purpose": "Versioned external evaluation pack format",
+      "targets": ["MereRunEvaluation"],
+      "consumers": ["MereRunCLI", "MereRunCLITests", "MereRunEvaluationTests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "MereRunExecution",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "execution",
+      "purpose": "Durable operation storage and terminal state",
+      "targets": ["MereRunExecution"],
+      "consumers": ["AudioCore", "AudioCoreTests", "AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCore", "MereRunExecutionTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunGemmaModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "MereRunGemmaModel",
+      "purpose": "Gemma text and vision computation",
+      "targets": ["MereRunGemmaModel"],
+      "consumers": ["GemmaRuntimeTests", "LagunaRuntimeTests", "MereRunCore", "MereRunCoreTests", "MereRunLagunaModel"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunH3Model",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "MereRunH3Model",
+      "purpose": "H3 transformer and VAE computation",
+      "targets": ["MereRunH3Model"],
+      "consumers": ["H3RuntimeTests", "MereRunCore", "MereRunCoreTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunImageModels",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "MereRunImageModels",
+      "purpose": "Image model computation",
+      "targets": ["MereRunImageModels"],
+      "consumers": ["ImageRuntimeTests", "MereRunCore", "MereRunCoreTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunKVCache",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "decode",
+      "purpose": "Attention cache storage and quantization",
+      "targets": ["MereRunKVCache"],
+      "consumers": ["AudioQwen3ASRModel", "AudioQwen3TTSModel", "DecodeRuntimeTests", "MereRunCore", "MereRunQwenModel", "MereRunTextEncoder", "QwenRuntimeTests", "SpeechRuntimeTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunLTXModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "MereRunLTXModel",
+      "purpose": "LTX transformer and VAE computation",
+      "targets": ["MereRunLTXModel"],
+      "consumers": ["LTXRuntimeTests", "MereRunCore", "MereRunCoreTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunLagunaModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "MereRunLagunaModel",
+      "purpose": "Laguna text computation",
+      "targets": ["MereRunLagunaModel"],
+      "consumers": ["LagunaRuntimeTests", "MereRunCore", "MereRunCoreTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunModelKit",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "model-management",
+      "purpose": "Portable model identity and storage metadata",
+      "targets": ["MereRunModelKit"],
+      "consumers": ["AudioSortformer", "MereRunCore", "MereRunModelKitTests", "MereRunTensor"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "MereRunQwenModel",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "MereRunQwenModel",
+      "purpose": "Qwen text and vision computation",
+      "targets": ["MereRunQwenModel"],
+      "consumers": ["MereRunCore", "MereRunCoreTests", "QwenRuntimeTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunRelayKit",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-sdk",
+      "owner": "relay",
+      "purpose": "Portable relay client and workflow transport",
+      "targets": ["MereRunRelayKit"],
+      "consumers": ["MereRunCLI", "MereRunRelayKitTests"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "MereRunResidency",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "residency",
+      "purpose": "Resource leases and runtime eviction",
+      "targets": ["MereRunResidency"],
+      "consumers": ["MereRunCLI", "MereRunResidencyTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunTensor",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "tensor",
+      "purpose": "Tensor kernels and checkpoint loading",
+      "targets": ["MereRunTensor"],
+      "consumers": ["GemmaRuntimeTests", "H3RuntimeTests", "ImageRuntimeTests", "LagunaRuntimeTests", "MereRunCore", "MereRunCoreTests", "MereRunGemmaModel", "MereRunH3Model", "MereRunImageModels", "MereRunLagunaModel", "MereRunQwenModel", "QwenRuntimeTests"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "MereRunTextEncoder",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "implementation-exposure",
+      "owner": "text-encoder",
+      "purpose": "Shared text conditioning encoders",
+      "targets": ["MereRunTextEncoder"],
+      "consumers": ["ImageRuntimeTests", "MereRunCore", "MereRunCoreTests", "MereRunQwenModel"],
+      "disposition": "Retain the published import while auditing external consumers; internal callers can import the owning target directly.",
+      "removalCondition": "Remove only after published-import usage is audited, affected consumers migrate, and a documented compatible replacement or breaking-release migration is available."
+    },
+    {
+      "name": "mere.run",
+      "variants": ["darwin", "linux-source", "linux-cuda-prebuilt"],
+      "exposure": "supported-tool",
+      "owner": "cli",
+      "purpose": "Public CLI parsing, transport, and presentation",
+      "targets": ["MereRunCLI"],
+      "consumers": ["CLI users and Studio process adapters"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    },
+    {
+      "name": "mere.run.app",
+      "variants": ["darwin"],
+      "exposure": "supported-tool",
+      "owner": "studio",
+      "purpose": "macOS Studio application entry point",
+      "targets": ["MereRunApp"],
+      "consumers": ["macOS Studio users"],
+      "disposition": "Retain the supported public interface.",
+      "removalCondition": "No removal is scheduled; public compatibility review is required."
+    }
+  ],
+  "reexports": [
+    {
+      "file": "Sources/AudioSTT/AudioSTT.swift",
+      "module": "AudioParakeetModel",
+      "owner": "AudioSTT",
+      "purpose": "Preserve imports through AudioSTT after ownership moved to AudioParakeetModel",
+      "consumers": ["MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit AudioParakeetModel import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published AudioSTT imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/AudioSTT/AudioSTT.swift",
+      "module": "AudioQwen3ASRModel",
+      "owner": "AudioSTT",
+      "purpose": "Preserve imports through AudioSTT after ownership moved to AudioQwen3ASRModel",
+      "consumers": ["MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit AudioQwen3ASRModel import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published AudioSTT imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/AudioSTT/AudioSTT.swift",
+      "module": "AudioSortformer",
+      "owner": "AudioSTT",
+      "purpose": "Preserve imports through AudioSTT after ownership moved to AudioSortformer",
+      "consumers": ["MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit AudioSortformer import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published AudioSTT imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/AudioTTS/AudioTTS.swift",
+      "module": "AudioQwen3TTSModel",
+      "owner": "AudioTTS",
+      "purpose": "Preserve imports through AudioTTS after ownership moved to AudioQwen3TTSModel",
+      "consumers": ["AudioTTSTests", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit AudioQwen3TTSModel import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published AudioTTS imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCLI/Support/AdmissionExports.swift",
+      "module": "MereRunAdmission",
+      "owner": "MereRunCLI",
+      "purpose": "Preserve imports through MereRunCLI after ownership moved to MereRunAdmission",
+      "consumers": ["MereRunCLITests"],
+      "migration": "Migrate callers to an explicit MereRunAdmission import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCLI imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCLI/Support/ResidencyExports.swift",
+      "module": "MereRunResidency",
+      "owner": "MereRunCLI",
+      "purpose": "Preserve imports through MereRunCLI after ownership moved to MereRunResidency",
+      "consumers": ["MereRunCLITests"],
+      "migration": "Migrate callers to an explicit MereRunResidency import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCLI imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/DecodeRuntimeExports.swift",
+      "module": "MereRunDecode",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunDecode",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunDecode import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/GemmaRuntimeExports.swift",
+      "module": "MereRunGemmaModel",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunGemmaModel",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunGemmaModel import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/ImageRuntimeExports.swift",
+      "module": "MereRunTensor",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunTensor",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunTensor import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/ImageRuntimeExports.swift",
+      "module": "MereRunTextEncoder",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunTextEncoder",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunTextEncoder import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/ImageRuntimeExports.swift",
+      "module": "MereRunImageModels",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunImageModels",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunImageModels import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/KVCacheExports.swift",
+      "module": "MereRunKVCache",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunKVCache",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunKVCache import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/LTXRuntimeExports.swift",
+      "module": "MereRunLTXModel",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunLTXModel",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunLTXModel import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/ModelManagementExports.swift",
+      "module": "MereRunModelKit",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunModelKit",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunModelKit import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/QwenRuntimeExports.swift",
+      "module": "MereRunQwenModel",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunQwenModel",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunQwenModel import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/RuntimeBundleExports.swift",
+      "module": "MereRunH3Model",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunH3Model",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunH3Model import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/RuntimeBundleExports.swift",
+      "module": "MereRunLagunaModel",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunLagunaModel",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunLagunaModel import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    },
+    {
+      "file": "Sources/MereRunCore/RuntimeBundleExports.swift",
+      "module": "MereRunAudioModels",
+      "owner": "MereRunCore",
+      "purpose": "Preserve imports through MereRunCore after ownership moved to MereRunAudioModels",
+      "consumers": ["AudioSTT", "AudioTTS", "MereRunCLI", "MereRunCoreTests"],
+      "migration": "Migrate callers to an explicit MereRunAudioModels import and declare its target dependency.",
+      "removalCondition": "Remove after in-repo callers migrate and published MereRunCore imports have a documented deprecation or compatible replacement."
+    }
+  ]
+}

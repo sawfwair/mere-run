@@ -109,6 +109,7 @@ public final class MiniMaxMusic3Pipeline {
         options: MiniMaxMusic3GenerationOptions,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)? = nil
     ) throws -> MiniMaxMusic3GenerationResult {
+        try Task.checkCancellation()
         guard !options.caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw MiniMaxMusic3Error.invalidPrompt("the caption is empty")
         }
@@ -179,6 +180,7 @@ public final class MiniMaxMusic3Pipeline {
         if loadingStrategy == .staged {
             MLX.Memory.clearCache()
         }
+        try Task.checkCancellation()
         let flowStart = ContinuousClock.now
         let flow = try flowStage(
             frameHiddens: frameHiddens,
@@ -195,6 +197,7 @@ public final class MiniMaxMusic3Pipeline {
         if loadingStrategy == .staged {
             MLX.Memory.clearCache()
         }
+        try Task.checkCancellation()
         let vocoderStart = ContinuousClock.now
         let decoded = try vocoderStage(
             flow: flow,
@@ -295,7 +298,7 @@ public final class MiniMaxMusic3Pipeline {
             performanceMode: performanceMode
         )
         recorder?.record(.flowLoad, since: loadStart)
-        let chunks = denoise(
+        let chunks = try denoise(
             frameHiddens: frameHiddens,
             steps: steps,
             guidanceScale: guidanceScale,
@@ -330,14 +333,14 @@ public final class MiniMaxMusic3Pipeline {
         recorder?.record(.vocoderLoad, since: loadStart)
         let waveform = switch strategy {
         case .sequential:
-            decodeSequential(
+            try decodeSequential(
                 chunks: flow.latents,
                 vocoder: vocoder,
                 recorder: recorder,
                 progress: progress
             )
         case .overlapAverage:
-            decodeWholeLatent(
+            try decodeWholeLatent(
                 flow.latents[0],
                 vocoder: vocoder,
                 recorder: recorder,
@@ -421,6 +424,7 @@ public final class MiniMaxMusic3Pipeline {
         var frameHiddens: [MLXArray] = []
         frameHiddens.reserveCapacity(maximumFrames)
         for frameIndex in 0...maximumFrames {
+            try Task.checkCancellation()
             let guidanceEnabled = Self.autoregressiveGuidanceEnabled(
                 generatedFrameCount: frameHiddens.count,
                 guidanceFrames: autoregressiveGuidanceFrames
@@ -845,9 +849,9 @@ public final class MiniMaxMusic3Pipeline {
         generator: MLXRandom.RandomState,
         recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
-    ) -> [MLXArray] {
+    ) throws -> [MLXArray] {
         if strategy == .overlapAverage {
-            return [denoiseOverlapAverage(
+            return [try denoiseOverlapAverage(
                 frameHiddens: frameHiddens,
                 steps: steps,
                 guidanceScale: guidanceScale,
@@ -861,7 +865,7 @@ public final class MiniMaxMusic3Pipeline {
             )]
         }
         if performanceMode == .reference {
-            return denoiseReference(
+            return try denoiseReference(
                 frameHiddens: frameHiddens,
                 steps: steps,
                 guidanceScale: guidanceScale,
@@ -880,6 +884,7 @@ public final class MiniMaxMusic3Pipeline {
         chunks.reserveCapacity(starts.count)
 
         for (chunkIndex, start) in starts.enumerated() {
+            try Task.checkCancellation()
             let end = min(start + 200, frameHiddens.dim(1))
             let conditionStart = ContinuousClock.now
             var condition = conditionEncoder(frameHiddens[0..., start..<end, 0...])
@@ -912,6 +917,7 @@ public final class MiniMaxMusic3Pipeline {
             var previousVelocity: MLXArray?
 
             for step in 0..<steps {
+                try Task.checkCancellation()
                 let transformerStart = ContinuousClock.now
                 let time = Float(step) / Float(steps)
                 if overlap > 0, let previousLatent, let noisePrompt {
@@ -1004,7 +1010,7 @@ public final class MiniMaxMusic3Pipeline {
         generator: MLXRandom.RandomState,
         recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
-    ) -> MLXArray {
+    ) throws -> MLXArray {
         let conditionStart = ContinuousClock.now
         let condition = conditionEncoder(frameHiddens).asType(.bfloat16)
         let uncondition = conditionEncoder(MLXArray.zeros(
@@ -1041,6 +1047,7 @@ public final class MiniMaxMusic3Pipeline {
         var previousVelocity: MLXArray?
 
         for step in 0..<steps {
+                try Task.checkCancellation()
             let transformerStart = ContinuousClock.now
             let timestep = MLXArray([Float(step) / Float(steps)]).asType(latents.dtype)
             let guidanceEnabled = Self.flowGuidanceEnabled(
@@ -1061,6 +1068,7 @@ public final class MiniMaxMusic3Pipeline {
             )
             var firstPendingProgressIndex = 0
             for (windowIndex, start) in starts.enumerated() {
+                try Task.checkCancellation()
                 let end = min(start + windowLength, latentLength)
                 let length = end - start
                 let rotary = rotaryCaches[length] ?? transformer.rotaryCache(
@@ -1175,7 +1183,7 @@ public final class MiniMaxMusic3Pipeline {
         transformer: MiniMaxMusic3Transformer,
         generator: MLXRandom.RandomState,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
-    ) -> [MLXArray] {
+    ) throws -> [MLXArray] {
         let starts = MiniMaxMusic3Prompt.chunkStarts(frameCount: frameHiddens.dim(1))
         var previousLatent: MLXArray?
         var previousCondition: MLXArray?
@@ -1183,6 +1191,7 @@ public final class MiniMaxMusic3Pipeline {
         chunks.reserveCapacity(starts.count)
 
         for (chunkIndex, start) in starts.enumerated() {
+            try Task.checkCancellation()
             let end = min(start + 200, frameHiddens.dim(1))
             var condition = conditionEncoder(frameHiddens[0..., start..<end, 0...])
                 .asType(.bfloat16)
@@ -1202,6 +1211,7 @@ public final class MiniMaxMusic3Pipeline {
             var previousVelocity: MLXArray?
 
             for step in 0..<steps {
+                try Task.checkCancellation()
                 let time = Float(step) / Float(steps)
                 if overlap > 0, let previousLatent, let noisePrompt {
                     let blended = (1 - (1 - 1e-6) * time) * noisePrompt
@@ -1271,10 +1281,11 @@ public final class MiniMaxMusic3Pipeline {
         vocoder: MiniMaxMusic3Vocoder,
         recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
-    ) -> MLXArray {
+    ) throws -> MLXArray {
         var waveforms: [MLXArray] = []
         waveforms.reserveCapacity(chunks.count)
         for (index, chunk) in chunks.enumerated() {
+            try Task.checkCancellation()
             let decodeStart = ContinuousClock.now
             let waveform = vocoder(chunk.asType(.bfloat16))
             let left = index == 0 ? 0 : 86 * 512
@@ -1294,12 +1305,13 @@ public final class MiniMaxMusic3Pipeline {
         vocoder: MiniMaxMusic3Vocoder,
         recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
-    ) -> MLXArray {
+    ) throws -> MLXArray {
         let slices = MiniMaxMusic3DAVDecodeSlice.plan(frameCount: latent.dim(2))
         let upsample = vocoder.configuration.upsamplingRatios.reduce(1, *)
         var waveforms: [MLXArray] = []
         waveforms.reserveCapacity(slices.count)
         for (index, slice) in slices.enumerated() {
+            try Task.checkCancellation()
             let decodeStart = ContinuousClock.now
             let waveform = vocoder(latent[0..., 0..., slice.context].asType(.bfloat16))
             let retainedStart = slice.retained.lowerBound * upsample

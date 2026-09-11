@@ -1,3 +1,4 @@
+import AudioCore
 import Foundation
 import MLX
 import MereRunCore
@@ -77,7 +78,8 @@ struct ACEStepGenerationRecipe: Codable {
     var flowEdit: ACEStepFlowEditConfiguration?
     var languageModelUsed: Bool
     var candidates: [ACEStepRecipeCandidate]
-    var export: ACEStepAudioExportOptions
+    var export: AudioExportOptions
+    var exportStatistics: AudioExportStatistics? = nil
     var sourceAudioSHA256: String?
     var outputFilename: String
     var outputSHA256: String
@@ -112,6 +114,7 @@ struct ACEStepGenerationRecipe: Codable {
         case languageModelUsed = "language_model_used"
         case candidates
         case export
+        case exportStatistics = "export_statistics"
         case sourceAudioSHA256 = "source_audio_sha256"
         case outputFilename = "output_filename"
         case outputSHA256 = "output_sha256"
@@ -215,7 +218,7 @@ enum ACEStepDAWBundleWriter {
         candidates: [Track],
         stems: [Track],
         lrc: ACEStepLRCDocument?,
-        exportOptions: ACEStepAudioExportOptions
+        exportOptions: AudioExportOptions
     ) throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(
@@ -242,11 +245,9 @@ enum ACEStepDAWBundleWriter {
                 let safeName = safeFilename(track.name)
                 let filename = "\(prefix)-\(index + 1)-\(safeName).wav"
                 let destination = audioDirectory.appendingPathComponent(filename)
-                try ACEStepWAVWriter.writeWAV(
-                    track.audio,
-                    to: destination,
-                    sampleRate: 48_000,
-                    options: exportOptions
+                _ = try AudioExportService.write(
+                    MusicWaveformAdapter.aceStep(track.audio),
+                    plan: AudioExportPlan(options: exportOptions), to: destination
                 )
                 projectFiles.append((track.name, destination))
             }

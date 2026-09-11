@@ -1,3 +1,4 @@
+import AudioCore
 import ArgumentParser
 import AudioCodecs
 import Foundation
@@ -101,10 +102,10 @@ struct MusicGenerate: AsyncParsableCommand {
     var output: String?
 
     @Option(name: [.customLong("export-format")], help: "WAV encoding: pcm16, pcm24, or float32.")
-    var exportFormat: ACEStepAudioFormat = .pcm24
+    var exportFormat: AudioWAVEncoding = .pcm24
 
     @Option(name: [.customLong("normalize")], help: "Output normalization: none or peak.")
-    var normalization: ACEStepNormalizationMode = .peak
+    var normalization: AudioNormalizationMode = .peak
 
     @Option(name: [.customLong("target-peak-db")], help: "Peak-normalization target in dBFS.")
     var targetPeakDB: Float = -1
@@ -487,13 +488,7 @@ struct MusicGenerate: AsyncParsableCommand {
     var magentaPrefillDuration: Float = 1.64
 
     func run() async throws {
-        guard targetPeakDB.isFinite, targetPeakDB <= 0 else {
-            throw ValidationError("--target-peak-db must be finite and <= 0")
-        }
-        guard fadeInMilliseconds.isFinite, fadeOutMilliseconds.isFinite,
-              fadeInMilliseconds >= 0, fadeOutMilliseconds >= 0 else {
-            throw ValidationError("Output fades must be finite and >= 0")
-        }
+        let exportPlan = try resolvedExportPlan()
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         let explicitDurationSeconds = try resolvedExplicitDurationSeconds()
@@ -607,7 +602,7 @@ struct MusicGenerate: AsyncParsableCommand {
         }
 
         if isMiniMaxMusic3Request {
-            try await runMiniMaxMusic3(explicitDurationSeconds: explicitDurationSeconds)
+            try await runMiniMaxMusic3(explicitDurationSeconds: explicitDurationSeconds, exportPlan: exportPlan)
             return
         }
 
@@ -676,10 +671,6 @@ struct MusicGenerate: AsyncParsableCommand {
                 )
             }
         }
-        let qualityDefaults = resolvedQuality.defaults(
-            for: checkpointVariant,
-            task: effectiveTask
-        )
         let resolvedLM = try await wantsLMResources
             ? ACEStepCLIHelper.resolveLMResources(
                 checkpointsRoot: checkpointsRootURL,
@@ -702,49 +693,6 @@ struct MusicGenerate: AsyncParsableCommand {
         let resolvedLyrics = instrumental
             ? "[Instrumental]"
             : try inputLRC?.lyrics ?? loadLyrics()
-        let effectiveLMRepetitionPenalty = lmRepetitionPenalty == 1
-            ? nil
-            : lmRepetitionPenalty
-        let sourceAudio48kHz = try loadACEStepSourceAudio48kHz()
-        let referenceAudio48kHz = try loadACEStepReferenceAudio48kHz()
-        if effectiveTask.requiresSourceAudio && sourceAudio48kHz == nil {
-            throw ValidationError("--source-audio is required for ACE-Step \(effectiveTask.rawValue).")
-        }
-        var effectiveDurationSeconds = resolvedACEStepDurationSeconds(
-            task: effectiveTask,
-            sourceAudio48kHz: sourceAudio48kHz,
-            fallback: explicitDurationSeconds ?? qualityDefaults.fallbackDurationSeconds
-        )
-        let resolvedInstruction = resolveInstruction(
-            task: effectiveTask,
-            explicitInstruction: instruction,
-            trackName: trackName,
-            completeTrackClasses: completeTrackClasses
-        )
-
-        let shouldPlanDuration = effectiveUseLM
-            && explicitDurationSeconds == nil
-            && qualityDefaults.automaticDuration
-            && !effectiveTask.locksDurationToSource
-        var effectiveCaption = caption
-        var lmCodeGenerationContext: ACEStepLMCodeGenerationContext?
-        let effectiveLanguage = ACEStepPlanningPolicy.effectiveLanguage(
-            vocalLanguage: vocalLanguage,
-            metadataLanguage: metadataLanguage
-        )
-        var userMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
-            bpm: bpm.map(String.init),
-            caption: caption,
-            duration: shouldPlanDuration
-                ? nil
-                : resolvedLMMetadataDuration(
-                    effectiveDurationSeconds: effectiveDurationSeconds
-                ),
-            keyscale: keyscale,
-            language: effectiveLanguage,
-            timesignature: timesignature
-        )
-
         if !quiet {
             CLIStderr.write("Loading ACE-Step checkpoints from \(checkpointsRootURL.path)\n")
             if let resolvedLM {
@@ -772,417 +720,307 @@ struct MusicGenerate: AsyncParsableCommand {
             }
         )
         let resources = try await container.resources()
-        let pipeline = try ACEStepPipeline(
-            decoderResources: resources.decoderResources,
-            vaeResources: resources.vaeResources,
-            lmResources: resources.lmResources,
-            textEncoderResources: resources.textEncoderResources
-        )
-        let loadedAdapters = try loadAdapters(into: pipeline)
+        let runtime = ACEStepMusicRuntime(resources: resources, variant: checkpointVariant)
+        try await runtime.perform { operation in
+            let loadedAdapters = try loadAdapters(into: operation.session.pipeline)
+            var options = ACEStepGenerationOptions(prompt: caption)
+            options.lyrics = resolvedLyrics
+            options.instrumental = nil
+            let resolvedInstruction = resolveInstruction(task: effectiveTask, explicitInstruction: instruction, trackName: trackName, completeTrackClasses: completeTrackClasses)
+            options.instruction = resolvedInstruction
+            options.durationSeconds = explicitDurationSeconds
+            options.quality = resolvedQuality
+            options.task = effectiveTask
+            options.seed = seed
+            options.retakeSeed = retakeSeed
+            options.retakeVariance = retakeVariance
+            options.candidates = candidateCount
+            options.steps = steps
+            options.shift = shift
+            options.inferMethod = inferMethod
+            options.guidanceScale = guidanceScale
+            options.guidanceMode = guidanceMode
+            options.cfgIntervalStart = resolvedCFGStart
+            options.cfgIntervalEnd = resolvedCFGEnd
+            options.velocityNormThreshold = velocityNormThreshold
+            options.velocityEMAFactor = velocityEMAFactor
+            options.sampler = samplerMode
+            options.useLanguageModel = effectiveUseLM
+            options.lmTopK = lmTopK
+            options.lmTopP = lmTopP
+            options.lmTemperature = lmTemperature
+            options.lmRepetitionPenalty = lmRepetitionPenalty
+            options.lmCFGScale = lmCFGScale
+            options.lmNegativePrompt = lmNegativePrompt
+            options.bpm = bpm
+            options.keyscale = keyscale
+            options.metadataLanguage = metadataLanguage
+            options.timeSignature = timesignature
+            options.vocalLanguage = vocalLanguage
+            options.sourceAudioPath = sourceAudio
+            options.referenceAudioPaths = referenceAudio
+            options.audioCoverStrength = audioCoverStrength
+            options.coverNoiseStrength = coverNoiseStrength
+            options.sourceCaption = flowEdit ? sourceCaption ?? "" : nil
+            options.sourceLyrics = sourceLyrics
+            options.flowEditNMin = flowEditNMin
+            options.flowEditNMax = flowEditNMax
+            options.flowEditNAverage = flowEditNAverage
+            options.trackName = trackName
+            options.completeTrackClasses = parseCompleteTrackClasses(completeTrackClasses)
+            options.repaintStartSeconds = repaintStartSeconds
+            options.repaintEndSeconds = repaintEndSeconds
+            options.chunkMaskMode = chunkMaskMode
+            options.repaintMode = repaintMode
+            options.repaintStrength = repaintStrength
+            options.useTiledVAEDecode = !noTiledVAE
+            options.vaeChunkSize = vaeChunkSize
+            options.vaeOverlap = vaeOverlap
+            options.rewriteCaption = !noLMCaptionRewrite
+            options.planningSeed = seed
+            options.analyzeSourceAudio = analyzeSourceAudio
+            options.roundMetadataDuration = false
+            let plan = try operation.prepare(options)
+            let inference = plan.request.config
+            let effectiveCaption = plan.request.caption
+            let effectiveDurationSeconds = inference.durationSeconds
+            let effectiveLanguage = plan.request.vocalLanguage
+            let userMetadata = plan.conditioningMetadata
+            let lmCodeGenerationContext = plan.request.lmCodeGenerationContext
+            let repaintConfiguration = plan.request.repaintConfiguration
+            let flowEditConfiguration = plan.request.flowEditConfiguration
+            let session = operation.session
+            if !quiet {
+                CLIStderr.write("ACE-Step effective plan: \(ACEStepPlanningPolicy.summary(userMetadata))\n")
+                CLIStderr.write("Running ACE-Step in one warm session; candidates=\(plan.candidateCount)\n")
+            }
+            let ranked = try operation.generate(plan)
 
-        if analyzeSourceAudio {
-            guard let sourceAudio48kHz else {
-                throw ValidationError("--analyze-source-audio requires --source-audio.")
-            }
-            if !quiet {
-                CLIStderr.write("Analyzing ACE-Step source audio with 5Hz LM\n")
-            }
-            let sourceAnalysis = try pipeline.understandSourceAudio(
-                sourceAudio48kHz: sourceAudio48kHz,
-                durationSeconds: effectiveDurationSeconds,
-                lmConfig: .init(
-                    maxNewTokens: 2_048,
-                    temperature: 0.3,
-                    topK: lmTopK,
-                    topP: lmTopP,
-                    repetitionPenalty: effectiveLMRepetitionPenalty
-                )
+            let exportOptions = exportPlan.options
+            let primaryExport = try AudioExportService.write(
+                MusicWaveformAdapter.aceStep(ranked.best.audio), plan: exportPlan, to: outputURL
             )
-            let merge = mergedMetadataWithSourceAnalysis(userMetadata, sourceAnalysis.metadata)
-            userMetadata = merge.metadata
-            if !quiet {
-                let summary = sourceAnalysis.metadata.understandingSummary
-                CLIStderr.write("ACE-Step source analysis: \(summary)\n")
-                if merge.filledFields.isEmpty {
-                    CLIStderr.write("No missing ACE-Step metadata fields were filled from source analysis\n")
-                } else {
-                    CLIStderr.write("Filled ACE-Step metadata from source analysis: \(merge.filledFields.joined(separator: ", "))\n")
+            var receiptSidecars: [RunReceipt.Output] = []
+            if keepCandidates {
+                for candidate in ranked.candidates {
+                    let candidateURL = candidateOutputURL(
+                        selectedOutputURL: outputURL,
+                        rank: ranked.candidates.firstIndex { $0.index == candidate.index } ?? 0,
+                        candidate: candidate
+                    )
+                    _ = try AudioExportService.write(
+                        MusicWaveformAdapter.aceStep(candidate.audio), plan: exportPlan, to: candidateURL
+                    )
+                    receiptSidecars.append(.init(url: candidateURL, kind: .audio, role: "candidate"))
                 }
             }
-        }
 
-        if effectiveUseLM {
-            if !quiet {
-                CLIStderr.write("Planning ACE-Step \(resolvedQuality.rawValue) metadata with the 5Hz LM\n")
-            }
-            let planningMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
-                bpm: userMetadata.bpm,
-                caption: nil,
-                duration: shouldPlanDuration ? nil : userMetadata.duration,
-                keyscale: userMetadata.keyscale,
-                language: userMetadata.language,
-                timesignature: userMetadata.timesignature
-            )
-            let plan = try pipeline.planMusic(
-                caption: caption,
-                lyrics: resolvedLyrics,
-                instruction: resolvedInstruction,
-                userMetadata: planningMetadata,
-                useCotCaption: !noLMCaptionRewrite,
-                lmConfig: .init(
-                    maxNewTokens: 1_024,
-                    temperature: lmTemperature,
-                    topK: lmTopK,
-                    topP: lmTopP,
-                    repetitionPenalty: effectiveLMRepetitionPenalty,
-                    seed: seed
-                )
-            )
-            lmCodeGenerationContext = plan.codeGenerationContext
-            if !noLMCaptionRewrite,
-               let plannedCaption = nonEmpty(plan.metadata.caption)
-            {
-                effectiveCaption = plannedCaption
-            }
-            if shouldPlanDuration, let plannedDuration = plan.metadata.durationSeconds {
-                effectiveDurationSeconds = clampedAutomaticDuration(plannedDuration)
-            }
-            userMetadata = ACEStepPlanningPolicy.merge(
-                userMetadata: userMetadata,
-                plan: plan.metadata,
-                caption: effectiveCaption,
-                durationSeconds: effectiveDurationSeconds
-            )
-            lmCodeGenerationContext = lmCodeGenerationContext?.applying(
-                userMetadata: userMetadata
-            )
-            if !quiet {
-                CLIStderr.write(
-                    "ACE-Step effective plan: "
-                        + "\(ACEStepPlanningPolicy.summary(userMetadata))\n"
-                )
-            }
-        }
-
-        let inference = ACEStepInferenceConfig(
-            durationSeconds: effectiveDurationSeconds,
-            fixNFE: steps ?? qualityDefaults.inferenceSteps,
-            shift: shift ?? qualityDefaults.shift,
-            timesteps: nil,
-            coverNoiseStrength: coverNoiseStrength,
-            retakeSeed: retakeSeed,
-            retakeVariance: retakeVariance,
-            inferMethod: inferMethod ?? .ode,
-            samplerMode: samplerMode ?? qualityDefaults.samplerMode,
-            guidanceScale: guidanceScale ?? qualityDefaults.guidanceScale,
-            guidanceMode: guidanceMode ?? .apg,
-            cfgIntervalStart: resolvedCFGStart,
-            cfgIntervalEnd: resolvedCFGEnd,
-            velocityNormThreshold: velocityNormThreshold
-                ?? qualityDefaults.velocityNormThreshold,
-            velocityEMAFactor: velocityEMAFactor
-                ?? qualityDefaults.velocityEMAFactor,
-            useTiledVaeDecode: !noTiledVAE,
-            vaeChunkSize: vaeChunkSize,
-            vaeOverlap: vaeOverlap,
-            seed: seed
-        )
-        let repaintConfiguration = effectiveTask == .repaint || effectiveTask == .lego
-            ? ACEStepRepaintConfiguration(
-                startSeconds: repaintStartSeconds,
-                endSeconds: repaintEndSeconds,
-                chunkMaskMode: chunkMaskMode,
-                mode: repaintMode,
-                strength: repaintStrength
-            )
-            : nil
-        let flowEditConfiguration = flowEdit
-            ? ACEStepFlowEditConfiguration(
-                sourceCaption: sourceCaption ?? "",
-                sourceLyrics: sourceLyrics,
-                nMin: flowEditNMin,
-                nMax: flowEditNMax,
-                nAverage: flowEditNAverage,
-                retakeSeed: retakeSeed
-            )
-            : nil
-
-        let resolvedCandidateCount = candidateCount ?? qualityDefaults.candidateCount
-        if !quiet {
-            let mode = effectiveUseLM ? "constrained 5Hz LM + diffusion" : "direct prompt-to-audio diffusion"
-            CLIStderr.write(
-                "Running \(mode) in one warm session; candidates=\(resolvedCandidateCount)\n"
-            )
-        }
-        let session = ACEStepGenerationSession(pipeline: pipeline)
-        let ranked = try session.generateBest(
-            ACEStepSessionRequest(
-                caption: effectiveCaption,
-                lyrics: resolvedLyrics,
-                config: inference,
-                lmConfig: .init(
-                    maxNewTokens: 4_096,
-                    temperature: lmTemperature,
-                    topK: lmTopK,
-                    topP: lmTopP,
-                    repetitionPenalty: effectiveLMRepetitionPenalty,
-                    cfgScale: lmCFGScale,
-                    negativePrompt: lmNegativePrompt
-                ),
-                lmUserMetadata: userMetadata,
-                lmCodeGenerationContext: lmCodeGenerationContext,
-                sourceAudio48kHz: sourceAudio48kHz,
-                referenceTimbreAudio48kHz: referenceAudio48kHz,
-                audioCoverStrength: audioCoverStrength,
-                vocalLanguage: effectiveLanguage,
-                instruction: resolvedInstruction,
-                task: effectiveTask,
-                repaintConfiguration: repaintConfiguration,
-                flowEditConfiguration: flowEditConfiguration,
-                useLanguageModel: effectiveUseLM
-            ),
-            candidateCount: resolvedCandidateCount
-        )
-
-        let exportOptions = ACEStepAudioExportOptions(
-            format: exportFormat,
-            normalization: normalization,
-            targetPeakDB: targetPeakDB,
-            fadeInMilliseconds: fadeInMilliseconds,
-            fadeOutMilliseconds: fadeOutMilliseconds,
-            dither: !noDither
-        )
-        try ACEStepWAVWriter.writeWAV(
-            ranked.best.audio,
-            to: outputURL,
-            sampleRate: 48_000,
-            options: exportOptions
-        )
-        var receiptSidecars: [RunReceipt.Output] = []
-        if keepCandidates {
-            for candidate in ranked.candidates {
-                let candidateURL = candidateOutputURL(
+            var stemTracks: [ACEStepDAWBundleWriter.Track] = []
+            for stemName in stemNames {
+                if !quiet {
+                    CLIStderr.write("Extracting ACE-Step stem: \(stemName)\n")
+                }
+                var stemConfig = inference
+                stemConfig.seed = ranked.best.seed
+                let extracted = try session.generateBest(
+                    ACEStepSessionRequest(
+                        caption: effectiveCaption,
+                        lyrics: "",
+                        config: stemConfig,
+                        lmUserMetadata: userMetadata,
+                        sourceAudio48kHz: ranked.best.audio,
+                        vocalLanguage: effectiveLanguage,
+                        instruction: ACEStepTask.extract.instruction(
+                            trackName: stemName
+                        ),
+                        task: .extract,
+                        useLanguageModel: false
+                    ),
+                    candidateCount: 1
+                ).best
+                let stemURL = stemOutputURL(
                     selectedOutputURL: outputURL,
-                    rank: ranked.candidates.firstIndex { $0.index == candidate.index } ?? 0,
-                    candidate: candidate
+                    stemName: stemName
                 )
-                try ACEStepWAVWriter.writeWAV(
-                    candidate.audio,
-                    to: candidateURL,
-                    sampleRate: 48_000,
-                    options: exportOptions
+                _ = try AudioExportService.write(
+                    MusicWaveformAdapter.aceStep(extracted.audio), plan: exportPlan, to: stemURL
                 )
-                receiptSidecars.append(.init(url: candidateURL, kind: .audio, role: "candidate"))
-            }
-        }
-
-        var stemTracks: [ACEStepDAWBundleWriter.Track] = []
-        for stemName in stemNames {
-            if !quiet {
-                CLIStderr.write("Extracting ACE-Step stem: \(stemName)\n")
-            }
-            var stemConfig = inference
-            stemConfig.seed = ranked.best.seed
-            let extracted = try session.generateBest(
-                ACEStepSessionRequest(
-                    caption: effectiveCaption,
-                    lyrics: "",
-                    config: stemConfig,
-                    lmUserMetadata: userMetadata,
-                    sourceAudio48kHz: ranked.best.audio,
-                    vocalLanguage: effectiveLanguage,
-                    instruction: ACEStepTask.extract.instruction(
-                        trackName: stemName
-                    ),
-                    task: .extract,
-                    useLanguageModel: false
-                ),
-                candidateCount: 1
-            ).best
-            let stemURL = stemOutputURL(
-                selectedOutputURL: outputURL,
-                stemName: stemName
-            )
-            try ACEStepWAVWriter.writeWAV(
-                extracted.audio,
-                to: stemURL,
-                sampleRate: 48_000,
-                options: exportOptions
-            )
-            stemTracks.append(
-                ACEStepDAWBundleWriter.Track(
-                    name: stemName,
-                    audio: extracted.audio
-                )
-            )
-            receiptSidecars.append(.init(url: stemURL, kind: .audio, role: "stem"))
-        }
-
-        let synchronizedLyrics: ACEStepLRCDocument? = {
-            if let inputLRC {
-                return inputLRC
-            }
-            if lrcOutput != nil || dawBundle != nil, !resolvedLyrics.isEmpty {
-                return .approximate(
-                    lyrics: resolvedLyrics,
-                    durationSeconds: Double(effectiveDurationSeconds)
-                )
-            }
-            return nil
-        }()
-        let synchronizedLyricsURL: URL? = try {
-            guard let synchronizedLyrics else {
-                return nil
-            }
-            let url = lrcOutput.map(resolveUserPath)
-                ?? outputURL.deletingPathExtension().appendingPathExtension("lrc")
-            try synchronizedLyrics.rendered().write(
-                to: url,
-                atomically: true,
-                encoding: .utf8
-            )
-            return url
-        }()
-
-        let recipeURL: URL? = try {
-            guard !noRecipe else {
-                return nil
-            }
-            let url = recipeOutput.map(resolveUserPath)
-                ?? outputURL.deletingPathExtension()
-                    .appendingPathExtension("recipe.json")
-            let manifest = try MereRunModelManifest.loadIfPresent(
-                from: checkpointsRootURL
-            )
-            let sourceSHA256 = try sourceAudio.map {
-                try ModelArtifactPin.fileSHA256(resolveUserPath($0))
-            }
-            let recipe = ACEStepGenerationRecipe(
-                schemaVersion: ACEStepGenerationRecipe.currentSchemaVersion,
-                createdAt: Date(),
-                modelID: model,
-                checkpointVariant: checkpointVariant,
-                decoderSubdirectory: resolvedTurboSubdirectory,
-                checkpointSources:
-                    ACEStepGenerationRecipe.checkpointProvenance(
-                        modelID: model,
-                        manifest: manifest
-                    ),
-                languageModelSubdirectory: resolvedLM?.rootURL.lastPathComponent,
-                languageModelSource: resolvedLM?.source,
-                languageModelRoot: resolvedLM?.rootURL.path,
-                languageModelSources: resolvedLM.map {
-                    ACEStepGenerationRecipe.languageModelProvenance(
-                        source: $0.source,
-                        subdirectory: $0.rootURL.lastPathComponent,
-                        checkpointModelID: model,
-                        checkpointManifest: manifest
-                    )
-                } ?? [],
-                textEncoderSubdirectory: resolvedTextSubdirectory ?? "",
-                adapters: loadedAdapters,
-                task: effectiveTask,
-                quality: resolvedQuality,
-                inputCaption: caption,
-                caption: effectiveCaption,
-                lyrics: resolvedLyrics,
-                instruction: resolvedInstruction,
-                languageModelReasoning: lmCodeGenerationContext?.reasoning,
-                conditioningMetadata:
-                    ACEStepRecipeConditioningMetadata(userMetadata),
-                languageModelSampling: effectiveUseLM
-                    ? ACEStepRecipeLMSampling(
-                        temperature: lmTemperature,
-                        topK: lmTopK,
-                        topP: lmTopP,
-                        repetitionPenalty: lmRepetitionPenalty,
-                        cfgScale: lmCFGScale,
-                        negativePrompt: lmNegativePrompt,
-                        useCotCaption: !noLMCaptionRewrite
-                    )
-                    : nil,
-                inference: inference,
-                repaint: repaintConfiguration,
-                flowEdit: flowEditConfiguration,
-                languageModelUsed: effectiveUseLM,
-                candidates: ranked.candidates.enumerated().map {
-                    rank,
-                    candidate in
-                    ACEStepRecipeCandidate(
-                        rank: rank + 1,
-                        index: candidate.index,
-                        seed: candidate.seed,
-                        score: candidate.score,
-                        metrics: candidate.metrics,
-                        lmAudioCodeCount: candidate.lmAudioCodeCount,
-                        selected: candidate.index == ranked.best.index
-                    )
-                },
-                export: exportOptions,
-                sourceAudioSHA256: sourceSHA256,
-                outputFilename: outputURL.lastPathComponent,
-                outputSHA256: try ModelArtifactPin.fileSHA256(outputURL),
-                lrcFilename: synchronizedLyricsURL?.lastPathComponent,
-                lrcTimingIsApproximate:
-                    synchronizedLyrics?.timingIsApproximate
-            )
-            try recipe.write(to: url)
-            return url
-        }()
-
-        if let dawBundle {
-            guard let recipeURL else {
-                throw ValidationError("DAW bundle requires a recipe.")
-            }
-            let directory = resolveUserPath(dawBundle)
-            try ACEStepDAWBundleWriter.write(
-                directory: directory,
-                mixURL: outputURL,
-                recipeURL: recipeURL,
-                lrcURL: synchronizedLyricsURL,
-                candidates: ranked.candidates.enumerated().map {
-                    rank,
-                    candidate in
+                stemTracks.append(
                     ACEStepDAWBundleWriter.Track(
-                        name: "Candidate \(rank + 1) seed \(candidate.seed)",
-                        audio: candidate.audio
-                    )
-                },
-                stems: stemTracks,
-                lrc: synchronizedLyrics,
-                exportOptions: exportOptions
-            )
-            if !quiet {
-                CLIStderr.write("Saved DAW bundle: \(directory.path)\n")
-            }
-        }
-
-        if !quiet {
-            for (rank, candidate) in ranked.candidates.enumerated() {
-                let selected = candidate.index == ranked.best.index ? " selected" : ""
-                CLIStderr.write(
-                    String(
-                        format: "Candidate %d: seed=%llu score=%.2f%@\n",
-                        rank + 1,
-                        candidate.seed,
-                        candidate.score,
-                        selected
+                        name: stemName,
+                        audio: extracted.audio
                     )
                 )
+                receiptSidecars.append(.init(url: stemURL, kind: .audio, role: "stem"))
             }
-            CLIStderr.write("Saved audio: \(outputURL.path)\n")
+
+            let synchronizedLyrics: ACEStepLRCDocument? = {
+                if let inputLRC {
+                    return inputLRC
+                }
+                if lrcOutput != nil || dawBundle != nil, !resolvedLyrics.isEmpty {
+                    return .approximate(
+                        lyrics: resolvedLyrics,
+                        durationSeconds: Double(effectiveDurationSeconds)
+                    )
+                }
+                return nil
+            }()
+            let synchronizedLyricsURL: URL? = try {
+                guard let synchronizedLyrics else {
+                    return nil
+                }
+                let url = lrcOutput.map(resolveUserPath)
+                    ?? outputURL.deletingPathExtension().appendingPathExtension("lrc")
+                try synchronizedLyrics.rendered().write(
+                    to: url,
+                    atomically: true,
+                    encoding: .utf8
+                )
+                return url
+            }()
+
+            let recipeURL: URL? = try {
+                guard !noRecipe else {
+                    return nil
+                }
+                let url = recipeOutput.map(resolveUserPath)
+                    ?? outputURL.deletingPathExtension()
+                        .appendingPathExtension("recipe.json")
+                let manifest = try MereRunModelManifest.loadIfPresent(
+                    from: checkpointsRootURL
+                )
+                let sourceSHA256 = try sourceAudio.map {
+                    try ModelArtifactPin.fileSHA256(resolveUserPath($0))
+                }
+                let recipe = ACEStepGenerationRecipe(
+                    schemaVersion: ACEStepGenerationRecipe.currentSchemaVersion,
+                    createdAt: Date(),
+                    modelID: model,
+                    checkpointVariant: checkpointVariant,
+                    decoderSubdirectory: resolvedTurboSubdirectory,
+                    checkpointSources:
+                        ACEStepGenerationRecipe.checkpointProvenance(
+                            modelID: model,
+                            manifest: manifest
+                        ),
+                    languageModelSubdirectory: resolvedLM?.rootURL.lastPathComponent,
+                    languageModelSource: resolvedLM?.source,
+                    languageModelRoot: resolvedLM?.rootURL.path,
+                    languageModelSources: resolvedLM.map {
+                        ACEStepGenerationRecipe.languageModelProvenance(
+                            source: $0.source,
+                            subdirectory: $0.rootURL.lastPathComponent,
+                            checkpointModelID: model,
+                            checkpointManifest: manifest
+                        )
+                    } ?? [],
+                    textEncoderSubdirectory: resolvedTextSubdirectory ?? "",
+                    adapters: loadedAdapters,
+                    task: effectiveTask,
+                    quality: resolvedQuality,
+                    inputCaption: caption,
+                    caption: effectiveCaption,
+                    lyrics: resolvedLyrics,
+                    instruction: resolvedInstruction,
+                    languageModelReasoning: lmCodeGenerationContext?.reasoning,
+                    conditioningMetadata:
+                        ACEStepRecipeConditioningMetadata(userMetadata),
+                    languageModelSampling: effectiveUseLM
+                        ? ACEStepRecipeLMSampling(
+                            temperature: lmTemperature,
+                            topK: lmTopK,
+                            topP: lmTopP,
+                            repetitionPenalty: lmRepetitionPenalty,
+                            cfgScale: lmCFGScale,
+                            negativePrompt: lmNegativePrompt,
+                            useCotCaption: !noLMCaptionRewrite
+                        )
+                        : nil,
+                    inference: inference,
+                    repaint: repaintConfiguration,
+                    flowEdit: flowEditConfiguration,
+                    languageModelUsed: effectiveUseLM,
+                    candidates: ranked.candidates.enumerated().map {
+                        rank,
+                        candidate in
+                        ACEStepRecipeCandidate(
+                            rank: rank + 1,
+                            index: candidate.index,
+                            seed: candidate.seed,
+                            score: candidate.score,
+                            metrics: candidate.metrics,
+                            lmAudioCodeCount: candidate.lmAudioCodeCount,
+                            selected: candidate.index == ranked.best.index
+                        )
+                    },
+                    export: exportOptions,
+                    exportStatistics: primaryExport.statistics,
+                    sourceAudioSHA256: sourceSHA256,
+                    outputFilename: outputURL.lastPathComponent,
+                    outputSHA256: try ModelArtifactPin.fileSHA256(outputURL),
+                    lrcFilename: synchronizedLyricsURL?.lastPathComponent,
+                    lrcTimingIsApproximate:
+                        synchronizedLyrics?.timingIsApproximate
+                )
+                try recipe.write(to: url)
+                return url
+            }()
+
+            if let dawBundle {
+                guard let recipeURL else {
+                    throw ValidationError("DAW bundle requires a recipe.")
+                }
+                let directory = resolveUserPath(dawBundle)
+                try ACEStepDAWBundleWriter.write(
+                    directory: directory,
+                    mixURL: outputURL,
+                    recipeURL: recipeURL,
+                    lrcURL: synchronizedLyricsURL,
+                    candidates: ranked.candidates.enumerated().map {
+                        rank,
+                        candidate in
+                        ACEStepDAWBundleWriter.Track(
+                            name: "Candidate \(rank + 1) seed \(candidate.seed)",
+                            audio: candidate.audio
+                        )
+                    },
+                    stems: stemTracks,
+                    lrc: synchronizedLyrics,
+                    exportOptions: exportOptions
+                )
+                if !quiet {
+                    CLIStderr.write("Saved DAW bundle: \(directory.path)\n")
+                }
+            }
+
+            if !quiet {
+                for (rank, candidate) in ranked.candidates.enumerated() {
+                    let selected = candidate.index == ranked.best.index ? " selected" : ""
+                    CLIStderr.write(
+                        String(
+                            format: "Candidate %d: seed=%llu score=%.2f%@\n",
+                            rank + 1,
+                            candidate.seed,
+                            candidate.score,
+                            selected
+                        )
+                    )
+                }
+                CLIStderr.write("Saved audio: \(outputURL.path)\n")
+            }
+            print(outputURL.path)
+            if let synchronizedLyricsURL {
+                receiptSidecars.append(.init(url: synchronizedLyricsURL, kind: .text, role: "lyrics"))
+            }
+            if let recipeURL {
+                receiptSidecars.append(.init(url: recipeURL, kind: .json, role: "recipe"))
+            }
+            if let dawBundle {
+                receiptSidecars.append(.init(url: resolveUserPath(dawBundle), kind: .directory, role: "daw-bundle"))
+            }
+            try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL, sidecars: receiptSidecars), enabled: receipt)
         }
-        print(outputURL.path)
-        if let synchronizedLyricsURL {
-            receiptSidecars.append(.init(url: synchronizedLyricsURL, kind: .text, role: "lyrics"))
-        }
-        if let recipeURL {
-            receiptSidecars.append(.init(url: recipeURL, kind: .json, role: "recipe"))
-        }
-        if let dawBundle {
-            receiptSidecars.append(.init(url: resolveUserPath(dawBundle), kind: .directory, role: "daw-bundle"))
-        }
-        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL, sidecars: receiptSidecars), enabled: receipt)
     }
 
     private func loadAdapters(
@@ -1240,7 +1078,21 @@ struct MusicGenerate: AsyncParsableCommand {
         return MiniMaxMusic3Resources.looksLikeRoot(resolveUserPath(model))
     }
 
-    private func runMiniMaxMusic3(explicitDurationSeconds: Float?) async throws {
+    private func resolvedExportPlan() throws -> AudioExportPlan {
+        do {
+            return try AudioExportPlan(options: .init(
+                format: exportFormat, normalization: normalization, targetPeakDB: targetPeakDB,
+                fadeInMilliseconds: fadeInMilliseconds, fadeOutMilliseconds: fadeOutMilliseconds,
+                dither: !noDither
+            ))
+        } catch AudioExportError.invalidPeak {
+            throw ValidationError("--target-peak-db must be finite and <= 0")
+        } catch AudioExportError.invalidFade {
+            throw ValidationError("Output fades must be finite and >= 0")
+        }
+    }
+
+    private func runMiniMaxMusic3(explicitDurationSeconds: Float?, exportPlan: AudioExportPlan) async throws {
         var receiptSidecars: [RunReceipt.Output] = []
         try validateMiniMaxMusic3Options(explicitDurationSeconds: explicitDurationSeconds)
         let inputLRC = try loadLRC()
@@ -1330,14 +1182,28 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         let effectiveCaption = composition?.song.caption ?? caption
         let resolvedLyrics = composition?.song.lyrics ?? inputLyrics
-        let lyricPreflight = miniMaxLyricPreflightPolicy == .off
-            ? nil
-            : MiniMaxMusic3LyricPreflight.inspect(
-                lyrics: resolvedLyrics,
-                durationSeconds: requestedDuration,
-                instrumental: instrumental,
-                blueprint: composition?.blueprint
-            )
+        var settings = MiniMaxMusic3GenerationSettings(caption: effectiveCaption, lyrics: resolvedLyrics)
+        settings.audioDuration = explicitDurationSeconds
+        settings.minimumAudioDuration = miniMaxMinimumDurationSeconds
+        settings.minNewTokens = miniMaxMinimumFrames
+        settings.maxNewTokens = miniMaxMaximumFrames
+        settings.samplingTier = miniMaxSamplingTier
+        settings.numInferenceSteps = steps
+        settings.seed = seed
+        settings.guidanceScale = guidanceScale
+        settings.sampleRate = miniMaxOutputSampleRate
+        settings.flowStrategy = miniMaxFlowStrategy
+        settings.flowSolver = miniMaxFlowSolver
+        settings.autoregressiveGuidanceFrames = miniMaxAutoregressiveGuidanceFrames
+        settings.flowGuidanceEnd = miniMaxFlowGuidanceEnd
+        settings.seedStrategy = miniMaxSeedStrategy
+        settings.lyricPreflight = miniMaxLyricPreflightPolicy
+        settings.profilingEnabled = miniMaxProfileOutput != nil
+        settings.blueprint = composition?.blueprint
+        let generationPlan = try settings.resolve(
+            exportPlan: exportPlan, defaultSampleRate: 44_100, defaultDurationSeconds: requestedDuration, extendImplicitDurationToMinimum: true
+        )
+        let lyricPreflight = generationPlan.lyricPreflight
         if let lyricPreflight {
             for issue in lyricPreflight.issues where !quiet {
                 CLIStderr.write(
@@ -1365,11 +1231,11 @@ struct MusicGenerate: AsyncParsableCommand {
                     + "depth \(performanceMode.depthDecoderPrecision.rawValue))\n"
             )
         }
-        let inferenceSteps = resolvedMiniMaxInferenceSteps
-        let flowStrategy = miniMaxFlowStrategy ?? .sequential
-        let flowSolver = miniMaxFlowSolver ?? .euler
-        let flowGuidanceEnd = miniMaxFlowGuidanceEnd ?? 1
-        let seedStrategy = miniMaxSeedStrategy ?? .legacy
+        let inferenceSteps = generationPlan.generation.inferenceSteps
+        let flowStrategy = generationPlan.generation.flowStrategy
+        let flowSolver = generationPlan.generation.flowSolver
+        let flowGuidanceEnd = generationPlan.generation.flowGuidanceEnd
+        let seedStrategy = generationPlan.generation.seedStrategy
         if !quiet {
             CLIStderr.write("MiniMax flow strategy: \(flowStrategy.rawValue)\n")
             CLIStderr.write("MiniMax flow solver: \(flowSolver.rawValue)\n")
@@ -1389,29 +1255,12 @@ struct MusicGenerate: AsyncParsableCommand {
                 "MiniMax sampling tier: \(samplingLabel) (\(inferenceSteps) flow steps)\n"
             )
         }
-        let pipeline = try MiniMaxMusic3Pipeline(
-            resources: resources,
-            loadingStrategy: loadingStrategy,
-            performanceMode: performanceMode
+        let operation = MiniMaxMusic3GenerationOperation(
+            resources: resources, loadingStrategy: loadingStrategy, performanceMode: performanceMode
         )
         let progressStream = progressJson ? JSONProgressStream() : nil
-        let result = try pipeline.generate(
-            options: MiniMaxMusic3GenerationOptions(
-                caption: effectiveCaption,
-                lyrics: resolvedLyrics,
-                durationSeconds: requestedDuration,
-                minimumFrames: requestedMinimumFrames,
-                maximumFrames: miniMaxMaximumFrames,
-                inferenceSteps: inferenceSteps,
-                seed: seed ?? 0,
-                guidanceScale: guidanceScale ?? 1.7,
-                profilingEnabled: miniMaxProfileOutput != nil,
-                flowStrategy: flowStrategy,
-                flowSolver: flowSolver,
-                autoregressiveGuidanceFrames: miniMaxAutoregressiveGuidanceFrames,
-                flowGuidanceEnd: flowGuidanceEnd,
-                seedStrategy: seedStrategy
-            ),
+        let result = try await operation.generate(
+            generationPlan,
             progress: { event in
                 if let progressStream {
                     let progress = Self.miniMaxProgressEvent(event, strategy: flowStrategy)
@@ -1453,26 +1302,9 @@ struct MusicGenerate: AsyncParsableCommand {
             }
             receiptSidecars.append(.init(url: profileURL, kind: .json, role: "profile"))
         }
-        let exportOptions = ACEStepAudioExportOptions(
-            format: exportFormat,
-            normalization: normalization,
-            targetPeakDB: targetPeakDB,
-            fadeInMilliseconds: fadeInMilliseconds,
-            fadeOutMilliseconds: fadeOutMilliseconds,
-            dither: !noDither
-        )
-        let outputSampleRate = miniMaxOutputSampleRate ?? result.sampleRate
-        let outputWaveform = try ACEStepWAVWriter.resample(
-            result.waveform.transposed(0, 2, 1),
-            from: result.sampleRate,
-            to: outputSampleRate
-        )
-        try ACEStepWAVWriter.writeWAV(
-            outputWaveform,
-            to: outputURL,
-            sampleRate: outputSampleRate,
-            options: exportOptions
-        )
+        let exportOptions = exportPlan.options
+        let outputSampleRate = generationPlan.sampleRate
+        let primaryExport = try AudioExportService.write(result.waveform, plan: generationPlan.export, to: outputURL)
         if !noRecipe {
             let recipeURL = recipeOutput.map(resolveUserPath)
                 ?? outputURL.deletingPathExtension().appendingPathExtension("recipe.json")
@@ -1496,7 +1328,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 inferenceSteps: inferenceSteps,
                 seed: seed ?? 0,
                 guidanceScale: guidanceScale ?? 1.7,
-                nativeSampleRate: result.sampleRate,
+                nativeSampleRate: result.nativeSampleRate,
                 outputSampleRate: outputSampleRate,
                 loadingStrategy: loadingStrategy,
                 performanceMode: performanceMode,
@@ -1509,6 +1341,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 seedStrategy: seedStrategy,
                 audioHealth: result.audioHealth,
                 export: exportOptions,
+                exportStatistics: primaryExport.statistics,
                 outputFilename: outputURL.lastPathComponent,
                 outputSHA256: try ModelArtifactPin.fileSHA256(outputURL)
             )
@@ -1583,7 +1416,7 @@ struct MusicGenerate: AsyncParsableCommand {
             )
         }
         if let miniMaxMinimumDurationSeconds,
-           miniMaxMinimumDurationSeconds <= 0 || miniMaxMinimumDurationSeconds > 360
+           !miniMaxMinimumDurationSeconds.isFinite || miniMaxMinimumDurationSeconds <= 0 || miniMaxMinimumDurationSeconds > 360
         {
             throw ValidationError("--minimum-duration must be greater than 0 and at most 360 seconds.")
         }
@@ -2049,7 +1882,7 @@ struct MusicGenerate: AsyncParsableCommand {
             throw ValidationError("--duration and --metadata-duration must match when both are provided.")
         }
         let resolved = durationSeconds ?? legacyDuration
-        if let resolved, resolved <= 0 || resolved > 600 {
+        if let resolved, !resolved.isFinite || resolved <= 0 || resolved > 600 {
             throw ValidationError("--duration must be greater than 0 and at most 600 seconds.")
         }
         return resolved
@@ -2073,48 +1906,7 @@ struct MusicGenerate: AsyncParsableCommand {
         _ metadata: ACEStep5HzLMConstrainedSampler.UserMetadata,
         _ analysis: ACEStepMusicUnderstandingMetadata
     ) -> (metadata: ACEStep5HzLMConstrainedSampler.UserMetadata, filledFields: [String]) {
-        var filledFields: [String] = []
-
-        let analyzedBPM = analysis.bpm.map(String.init)
-        let mergedBPM = fillMissing(metadata.bpm, with: analyzedBPM, field: "bpm", filledFields: &filledFields)
-        let mergedKeyscale = fillMissing(metadata.keyscale, with: analysis.keyscale, field: "keyscale", filledFields: &filledFields)
-        let mergedLanguage = fillMissing(metadata.language, with: analysis.language, field: "language", filledFields: &filledFields)
-        let mergedTimeSignature = fillMissing(
-            metadata.timesignature,
-            with: analysis.timesignature,
-            field: "timesignature",
-            filledFields: &filledFields
-        )
-
-        return (
-            ACEStep5HzLMConstrainedSampler.UserMetadata(
-                bpm: mergedBPM,
-                caption: metadata.caption,
-                duration: metadata.duration,
-                keyscale: mergedKeyscale,
-                language: mergedLanguage,
-                timesignature: mergedTimeSignature
-            ),
-            filledFields
-        )
-    }
-
-    private func fillMissing(
-        _ existing: String?,
-        with analyzed: String?,
-        field: String,
-        filledFields: inout [String]
-    ) -> String? {
-        let trimmedExisting = existing?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmedExisting.isEmpty {
-            return existing
-        }
-        let trimmedAnalyzed = analyzed?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !trimmedAnalyzed.isEmpty else {
-            return existing
-        }
-        filledFields.append(field)
-        return trimmedAnalyzed
+        ACEStepPlanningPolicy.mergeMissing(userMetadata: metadata, analysis: analysis)
     }
 
     private func resolveInstruction(
