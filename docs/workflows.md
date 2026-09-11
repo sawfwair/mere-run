@@ -259,6 +259,17 @@ cross-run content-addressed cache. Cache keys include normalized arguments,
 provider identity, model provenance, and directly referenced artifact digests.
 `cache: refresh` recomputes and replaces an entry; `cache: never` bypasses it.
 
+Each run permits one active worker. A second worker cannot reset its
+cancellation marker or child registrations. Resume rejects changed graph or
+input fingerprints before modifying the previous run. If registered children
+are still running after an interruption, wait for them to stop before resuming.
+
+Workflow child stdout is limited to 16 MiB. Exceeding the limit fails the node;
+write larger results as declared artifacts. Cancellation, timeout, and output
+callback failures stop the child process group. See
+[workflow execution ownership](internals/workflow-execution.md) for storage and
+process boundaries.
+
 `--resume` reuses a finished node only when its provider pin, normalized
 arguments, exact model provenance, directly referenced upstream outputs, and
 every output digest still match. Unrelated branches do not invalidate each

@@ -912,6 +912,70 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         return temp
     }
 
+    func testSavedRunPlanPreservesQuantizationAndReadsOlderPlans() throws {
+        for bits in [4, 8] {
+            let command = try ImageTrainLoRA.parse([
+                "--output", "/tmp/adapter.safetensors", "--synthetic-samples", "2",
+                "--base-quantization-bits", String(bits), "--recipe", "krea-fast-style",
+            ])
+            let plan = command.makeRunPlan(options: try command.resolvedTrainingOptions())
+            let encoded = try JSONEncoder().encode(plan.arguments)
+            let decoded = try JSONDecoder().decode(LoRATrainingRunPlanArguments.self, from: encoded)
+            let relocated = decoded.relocatingOutput(to: "/tmp/new/adapter.safetensors")
+            let replay = try ImageTrainLoRA.parse(relocated.trainLoRAArguments())
+            XCTAssertEqual(replay.trainingOptions().baseQuantizationBits, bits)
+            XCTAssertEqual(replay.output, "/tmp/new/adapter.safetensors")
+            XCTAssertEqual(try replay.resolvedTrainingOptions().learningRate, 0.0005)
+            // Removing an optional key reproduces a schema-v1 plan from before this field existed.
+            let text = String(decoding: encoded, as: UTF8.self)
+            let legacy = text.replacingOccurrences(of: "\"base_quantization_bits\":\(bits),", with: "")
+                .replacingOccurrences(of: ",\"base_quantization_bits\":\(bits)", with: "")
+            let older = try JSONDecoder().decode(LoRATrainingRunPlanArguments.self, from: Data(legacy.utf8))
+            XCTAssertNil(older.baseQuantizationBits)
+        }
+    }
+
+    func testCommandBuildsSharedKleinPlanWithNativeOverrides() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = root.appendingPathComponent("model")
+        try writeManifest(id: ModelResolver.ModelID.kleinBase9B.rawValue, family: .klein, to: model)
+        let data = root.appendingPathComponent("data")
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        try Data().write(to: data.appendingPathComponent("one.png"))
+        try "caption".write(to: data.appendingPathComponent("one.txt"), atomically: true, encoding: .utf8)
+        let command = try ImageTrainLoRA.parse([
+            "--data", data.path, "--model", model.path,
+            "--output", root.appendingPathComponent("adapter.safetensors").path,
+            "--rank", "8", "--alpha", "4", "--steps", "25", "--batch-size", "2",
+            "--width", "512", "--height", "256", "--max-text-length", "128",
+            "--lr", "0.0002", "--caption-dropout", "0.2", "--seed", "77",
+            "--gradient-checkpointing", "--low-ram", "--sample-interval", "5",
+            "--sample-model", model.path, "--sample-prompt", "explicit preview", "--sample-seed", "9",
+            "--lora-target-ranks", ".attn.to_q=32", "--timestep-sampling", "shift",
+        ])
+        let plan = try ImageLoRATrainingPlan.resolve(command.trainingOptions())
+        guard case .klein(_, let config, _, let sample) = plan.training else { return XCTFail("Expected Klein") }
+        XCTAssertEqual(config.width, 512)
+        XCTAssertEqual(config.height, 256)
+        XCTAssertEqual(config.trainingSteps, 25)
+        XCTAssertEqual(config.batchSize, 2)
+        XCTAssertEqual(config.maxTextLength, 128)
+        XCTAssertEqual(config.loraRank, 8)
+        XCTAssertEqual(config.loraAlpha, 4)
+        XCTAssertEqual(config.learningRate, 0.0002)
+        XCTAssertEqual(config.captionDropout, 0.2)
+        XCTAssertEqual(config.seed, 77)
+        XCTAssertTrue(config.gradientCheckpointing)
+        XCTAssertTrue(config.lowRam)
+        XCTAssertFalse(config.useCompile)
+        XCTAssertEqual(config.sampleInterval, 5)
+        XCTAssertEqual(config.loraTargetRankSuffixes?[".attn.to_q"], 32)
+        XCTAssertEqual(config.timestepSampling, .shift)
+        XCTAssertEqual(sample?.prompt, "explicit preview")
+        XCTAssertEqual(sample?.seed, 9)
+    }
+
     private func writeManifest(
         id: String,
         family: MereRunModelManifest.Family,
