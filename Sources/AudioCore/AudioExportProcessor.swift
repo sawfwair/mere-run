@@ -12,7 +12,7 @@ public struct AudioExportStatistics: Codable, Sendable, Equatable {
     public let outputRMS: Double
 }
 
-/// Only the processor constructs this value, so the encoder receives finite, bounded samples.
+/// Only the processor constructs this value, so the encoder receives finite samples with the plan's clipping policy applied.
 public struct ProcessedAudio: Sendable {
     public let waveform: AudioWaveform
     public let plan: AudioExportPlan
@@ -64,8 +64,10 @@ public enum AudioExportProcessor {
         var sumSquares = 0.0
         for index in samples.indices {
                 if index.isMultiple(of: 16_384) { try Task.checkCancellation() }
-            if abs(samples[index]) > 1 { clipped += 1 }
-            samples[index] = max(-1, min(1, samples[index]))
+            if plan.clipping == .unitRange {
+                if abs(samples[index]) > 1 { clipped += 1 }
+                samples[index] = max(-1, min(1, samples[index]))
+            }
             outputPeak = max(outputPeak, abs(samples[index]))
             sumSquares += Double(samples[index]) * Double(samples[index])
         }

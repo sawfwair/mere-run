@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share speech synthesis validation, model selection, native waveform generation,
+  and WAV export between the CLI and resident API. Reject empty text and invalid
+  temperatures before model loading or clone preparation.
+- Finalize streaming speech WAV headers before publishing the file or receipt.
+  Preserve existing output on failure or cooperative cancellation, cancel the
+  producer when its stream consumer terminates, and retain float32 streaming
+  output alongside PCM16 offline output.
+- Emit streaming speech token progress with `--quiet --progress-json`.
 - Share `video generate` model selection, option validation, geometry, and
   native request construction between preflight and execution in Core.
   Preflight now applies H3 conditioning rules, reads HDR IC-LoRA canvas

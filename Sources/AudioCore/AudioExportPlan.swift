@@ -11,6 +11,12 @@ public enum AudioNormalizationMode: String, CaseIterable, Codable, Sendable {
     case none, peak
 }
 
+public enum AudioClippingMode: Sendable, Hashable {
+    case unitRange
+    /// Retains finite float WAV samples outside [-1, 1]. Integer WAV encodings cannot use this policy.
+    case preserveFloatHeadroom
+}
+
 /// Serializable options. Construct a plan to validate them before inference.
 /// Coding keys retain the existing music recipe representation.
 public struct AudioExportOptions: Codable, Hashable, Sendable {
@@ -37,6 +43,10 @@ public struct AudioExportOptions: Codable, Hashable, Sendable {
     public static let music = AudioExportOptions()
     public static let referencePCM16 = AudioExportOptions(
         format: .pcm16, normalization: .none, targetPeakDB: 0,
+        fadeInMilliseconds: 0, fadeOutMilliseconds: 0, dither: false
+    )
+    public static let speechStreaming = AudioExportOptions(
+        format: .float32, normalization: .none, targetPeakDB: 0,
         fadeInMilliseconds: 0, fadeOutMilliseconds: 0, dither: false
     )
 }
@@ -84,6 +94,7 @@ public struct AudioExportOverrides: Codable, Sendable {
 public enum AudioExportError: Error, LocalizedError, Sendable {
     case invalidChannels(Int), invalidSampleRate(Int), incompleteFrame(samples: Int, channels: Int)
     case invalidPeak(Float), invalidFade(Float), wavSizeLimit
+    case invalidClippingMode, unsupportedStreamingProcessing, streamClosed
 
     public var errorDescription: String? {
         switch self {
@@ -93,21 +104,29 @@ public enum AudioExportError: Error, LocalizedError, Sendable {
         case .invalidPeak(let peak): "Target peak must be finite and at most 0 dBFS; got \(peak)."
         case .invalidFade(let milliseconds): "Output fade duration must be finite and nonnegative; got \(milliseconds) ms."
         case .wavSizeLimit: "Audio exceeds the size or byte-rate limits of a RIFF WAV file."
+        case .invalidClippingMode: "Preserving float headroom requires float32 WAV output."
+        case .unsupportedStreamingProcessing: "Incremental WAV output requires no normalization or fades."
+        case .streamClosed: "The WAV export stream is closed."
         }
     }
 }
 
 public struct AudioExportPlan: Sendable, Hashable {
     public let options: AudioExportOptions
+    public let clipping: AudioClippingMode
 
-    public init(options: AudioExportOptions) throws {
+    public init(options: AudioExportOptions, clipping: AudioClippingMode = .unitRange) throws {
         guard options.targetPeakDB.isFinite, options.targetPeakDB <= 0 else {
             throw AudioExportError.invalidPeak(options.targetPeakDB)
         }
         for milliseconds in [options.fadeInMilliseconds, options.fadeOutMilliseconds] {
             guard milliseconds.isFinite, milliseconds >= 0 else { throw AudioExportError.invalidFade(milliseconds) }
         }
+        guard clipping != .preserveFloatHeadroom || options.format == .float32 else {
+            throw AudioExportError.invalidClippingMode
+        }
         self.options = options
+        self.clipping = clipping
     }
 }
 

@@ -616,6 +616,23 @@ enum APIServerContract {
         let responseFormat: String
         let speed: Float
         let temperature: Float
+
+        func synthesisPlan(outputURL: URL) throws -> SpeechSynthesisPlan {
+            try SpeechSynthesisPlan(request: TTSRequest(
+                text: input, voiceDescription: voiceDescription, speed: speed,
+                temperature: temperature, outputURL: outputURL
+            ))
+        }
+
+        func modelSelection() throws -> SpeechSynthesisModelSelection {
+            do {
+                return try SpeechSynthesisModelSelection.resolve(modelID)
+            } catch Qwen3TTSError.unsupportedModelId {
+                throw APIRequestValidationError.invalidField(
+                    "model", "use a mere.run TTS model id or a local Qwen3-TTS model path"
+                )
+            }
+        }
     }
 
     struct TranscriptionPlan: Equatable, Sendable {
@@ -1867,14 +1884,13 @@ enum APIServerContract {
 
     static func speechPlan(from request: OpenAIAudioSpeechRequest) throws -> SpeechPlan {
         let input = request.input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !input.isEmpty else {
-            throw APIRequestValidationError.invalidField("input", "must not be empty")
-        }
         let responseFormat = try speechResponseFormat(request.response_format)
         let speed = try speechSpeed(request.speed)
-        let temperature = request.temperature ?? 0.6
-        guard temperature.isFinite, (0...2).contains(temperature) else {
-            throw APIRequestValidationError.invalidField("temperature", "must be between 0 and 2")
+        let temperature = request.temperature ?? TTSRequest.defaultTemperature
+        do {
+            try SpeechSynthesisPlan.validateParameters(text: input, temperature: temperature, speed: speed)
+        } catch SpeechSynthesisError.invalidInput(let field, let message) {
+            throw APIRequestValidationError.invalidField(field == .text ? "input" : field.rawValue, message)
         }
         let voiceDescription = voiceDescription(for: request.voice, instructions: request.instructions)
         var promptUTF8Bytes = 0
@@ -2736,11 +2752,11 @@ enum APIServerContract {
     }
 
     private static func speechSpeed(_ rawValue: Double?) throws -> Float {
-        let value = rawValue ?? 1.0
-        guard value.isFinite, (0.25...4.0).contains(value) else {
-            throw APIRequestValidationError.invalidField("speed", "must be between 0.25 and 4.0")
+        do {
+            return try SpeechSynthesisPlan.validatedSpeed(rawValue ?? Double(TTSRequest.defaultSpeed))
+        } catch SpeechSynthesisError.invalidInput(_, let message) {
+            throw APIRequestValidationError.invalidField("speed", message)
         }
-        return Float(value)
     }
 
     private static func transcriptionResponseFormat(_ rawValue: String?) throws -> String {
@@ -2905,7 +2921,7 @@ enum APIServerContract {
         case "fable":
             base = "A warm narrative voice with a measured pace"
         case "nova":
-            base = "A calm female voice with clear pronunciation"
+            base = TTSRequest.defaultVoiceDescription
         case "onyx":
             base = "A deep, confident voice with crisp articulation"
         case "sage":
@@ -2914,7 +2930,7 @@ enum APIServerContract {
             base = "A bright, gentle voice with smooth pronunciation"
         default:
             base = rawVoice?.trimmingCharacters(in: .whitespacesAndNewlines)
-                ?? "A calm female voice with clear pronunciation"
+                ?? TTSRequest.defaultVoiceDescription
         }
         if let instructionText {
             return "\(base). \(instructionText)"

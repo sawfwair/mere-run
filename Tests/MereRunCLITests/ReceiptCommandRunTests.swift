@@ -25,15 +25,24 @@ final class ReceiptCommandRunTests: XCTestCase {
         }
     }
 
-    private struct FixtureTTS: CLISpeechSynthesizing {
+    private struct FixtureTTS: SpeechSynthesisExecutor {
         func generate(
             _ request: TTSRequest,
-            modelPath: String?,
             progressHandler: (@Sendable (TTSProgress) -> Void)?
-        ) async throws -> TTSResult {
+        ) async throws -> AudioWaveform {
             progressHandler?(TTSProgress(stage: .generating, tokensGenerated: 25))
-            try Data("RIFF".utf8).write(to: request.outputURL)
-            return TTSResult(audioURL: request.outputURL, duration: 1.0)
+            return try AudioWaveform(interleaved: [0, 0.25, -0.25], channels: 1, sampleRate: 24_000)
+        }
+
+        func generateStream(_ request: TTSRequest, options: TTSStreamingOptions) -> AsyncThrowingStream<TTSStreamingEvent, Error> {
+            AsyncThrowingStream { continuation in
+                if options.emitTokenEvents {
+                    for token in 0..<25 { continuation.yield(.token(id: token)) }
+                }
+                continuation.yield(.audioChunk(samples: [0, 0.25, -0.25], sampleRate: 24_000))
+                continuation.yield(.completed(result: TTSResult(audioURL: request.outputURL, duration: 3.0 / 24_000)))
+                continuation.finish()
+            }
         }
     }
 
@@ -165,5 +174,19 @@ final class ReceiptCommandRunTests: XCTestCase {
         XCTAssertEqual(outputs.map { $0["kind"] as? String }, ["audio"])
         XCTAssertEqual(outputs[0]["path"] as? String, outputURL.standardizedFileURL.path)
         XCTAssertNil(outputs[0]["role"])
+    }
+
+    func testStreamingSynthesizeReceiptNamesACompletedFloatWAV() async throws {
+        let (command, outputURL) = try synthesizeCommand(["--stream", "--receipt", "--progress-json"])
+        let stdout = try await capturingStandardOutput { try await command.run() }
+        XCTAssertEqual(stdout.split(separator: "\n").count, 2)
+        let receipt = try receipt(fromLastLineOf: stdout)
+        let outputs = try XCTUnwrap(receipt["outputs"] as? [[String: Any]])
+        XCTAssertEqual(outputs[0]["path"] as? String, outputURL.standardizedFileURL.path)
+        let data = try Data(contentsOf: outputURL)
+        XCTAssertEqual(data.count, 56)
+        XCTAssertEqual(data[20], 3)
+        XCTAssertEqual(data[34], 32)
+        XCTAssertEqual(data[40], 12)
     }
 }

@@ -811,6 +811,15 @@ whole-image conditioning rather than strict masked inpainting.
 The normalized input and voice instructions may total at most 32 KiB of UTF-8
 text.
 
+`temperature` defaults to 0.6 and must be finite and between 0 and 2. `speed`
+defaults to 1 and accepts finite values from 0.25 through 4 for compatibility.
+The current Qwen3-TTS generator does not apply speed changes.
+
+Speech requests use the same validation, native generation, and PCM16 WAV
+export as offline `speech synthesize`. The API retains its resident model and
+request admission. It removes temporary audio files after materializing the
+response body, including partial transcoding output on failure.
+
 `POST /v1/audio/transcriptions` accepts multipart form fields:
 
 - `file`: required audio file part

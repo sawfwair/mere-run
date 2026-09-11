@@ -27,6 +27,11 @@ public struct TTSCloneReference: Sendable, Hashable, Codable {
 }
 
 public struct TTSRequest: Sendable, Hashable {
+    public static let defaultVoiceDescription = "A calm female voice with clear pronunciation"
+    public static let defaultLanguage = "auto"
+    public static let defaultSpeed: Float = 1
+    public static let defaultTemperature: Float = 0.6
+
     public var text: String
     public var voiceDescription: String
     public var voiceMode: TTSVoiceMode
@@ -38,12 +43,12 @@ public struct TTSRequest: Sendable, Hashable {
 
     public init(
         text: String,
-        voiceDescription: String = "A calm female voice with clear pronunciation",
+        voiceDescription: String = TTSRequest.defaultVoiceDescription,
         voiceMode: TTSVoiceMode = .style,
         cloneReference: TTSCloneReference? = nil,
-        language: String = "auto",
-        speed: Float = 1.0,
-        temperature: Float = 0.6,
+        language: String = TTSRequest.defaultLanguage,
+        speed: Float = TTSRequest.defaultSpeed,
+        temperature: Float = TTSRequest.defaultTemperature,
         outputURL: URL
     ) {
         self.text = text

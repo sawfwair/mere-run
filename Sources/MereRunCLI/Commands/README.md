@@ -5,6 +5,9 @@ This directory owns the public CLI surface.
 - one command file per modality or command cluster
 - parser defaults and public flags are covered in `Tests/MereRunCLITests/`
 - stdout should remain machine-readable where possible; diagnostics belong on stderr
+- `speech synthesize` owns profiles, optional reference transcription, progress,
+  and receipts. AudioTTS resolves models; AudioCore validates synthesis and
+  publishes completed audio through the shared operation.
 - `video generate` translates flags and compound arguments into Core video
   options. Keep model defaults and compatibility in `VideoGenerationOptions`
   and `VideoGenerationPlan`; keep preflight JSON and filesystem diagnostics in
