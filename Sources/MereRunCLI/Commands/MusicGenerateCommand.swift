@@ -487,6 +487,13 @@ struct MusicGenerate: AsyncParsableCommand {
     var magentaPrefillDuration: Float = 1.64
 
     func run() async throws {
+        guard targetPeakDB.isFinite, targetPeakDB <= 0 else {
+            throw ValidationError("--target-peak-db must be finite and <= 0")
+        }
+        guard fadeInMilliseconds.isFinite, fadeOutMilliseconds.isFinite,
+              fadeInMilliseconds >= 0, fadeOutMilliseconds >= 0 else {
+            throw ValidationError("Output fades must be finite and >= 0")
+        }
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         let explicitDurationSeconds = try resolvedExplicitDurationSeconds()
@@ -592,12 +599,6 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         if instrumental, lrcFile != nil || lyricsFile != nil || !lyrics.isEmpty {
             throw ValidationError("--instrumental cannot be combined with lyrics options.")
-        }
-        guard targetPeakDB <= 0 else {
-            throw ValidationError("--target-peak-db must be <= 0")
-        }
-        guard fadeInMilliseconds >= 0, fadeOutMilliseconds >= 0 else {
-            throw ValidationError("Output fades must be >= 0")
         }
         if dawBundle != nil, noRecipe {
             throw ValidationError(

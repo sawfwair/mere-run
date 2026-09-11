@@ -43,6 +43,7 @@ enum ACEStepWAVWriter {
         case invalidChannels(Int)
         case invalidSampleRate(Int)
         case invalidPeak(Float)
+        case invalidFade(Float)
 
         var errorDescription: String? {
             switch self {
@@ -54,7 +55,9 @@ enum ACEStepWAVWriter {
             case .invalidSampleRate(let sampleRate):
                 return "Invalid sample rate \(sampleRate)."
             case .invalidPeak(let peak):
-                return "Target peak must be at most 0 dBFS; got \(peak)."
+                return "Target peak must be finite and at most 0 dBFS; got \(peak)."
+            case .invalidFade(let milliseconds):
+                return "Output fade duration must be finite and nonnegative; got \(milliseconds) ms."
             }
         }
     }
@@ -79,8 +82,13 @@ enum ACEStepWAVWriter {
         guard sampleRate > 0 else {
             throw WriterError.invalidSampleRate(sampleRate)
         }
-        guard options.targetPeakDB <= 0 else {
+        guard options.targetPeakDB.isFinite, options.targetPeakDB <= 0 else {
             throw WriterError.invalidPeak(options.targetPeakDB)
+        }
+        for milliseconds in [options.fadeInMilliseconds, options.fadeOutMilliseconds] {
+            guard milliseconds.isFinite, milliseconds >= 0 else {
+                throw WriterError.invalidFade(milliseconds)
+            }
         }
         let (interleaved, channels) = try flattenToInterleaved(audio)
         guard (1...8).contains(channels) else {
@@ -256,13 +264,11 @@ enum ACEStepWAVWriter {
         guard frameCount > 0 else {
             return
         }
-        let fadeInFrames = min(
-            frameCount,
-            max(0, Int(Float(sampleRate) * fadeInMilliseconds / 1_000))
+        let fadeInFrames = boundedFadeFrames(
+            milliseconds: fadeInMilliseconds, sampleRate: sampleRate, frameCount: frameCount
         )
-        let fadeOutFrames = min(
-            frameCount,
-            max(0, Int(Float(sampleRate) * fadeOutMilliseconds / 1_000))
+        let fadeOutFrames = boundedFadeFrames(
+            milliseconds: fadeOutMilliseconds, sampleRate: sampleRate, frameCount: frameCount
         )
         for frame in 0..<fadeInFrames {
             let gain = Float(frame) / Float(max(fadeInFrames - 1, 1))
@@ -278,6 +284,16 @@ enum ACEStepWAVWriter {
                 samples[frame * channels + channel] *= gain
             }
         }
+    }
+
+    private static func boundedFadeFrames(milliseconds: Float, sampleRate: Int, frameCount: Int) -> Int {
+        // Keep ordinary Float rounding, but bound the result before converting to Int.
+        // A finite duration can still overflow the multiplication to infinity.
+        let requestedFrames = Float(sampleRate) * milliseconds / 1_000
+        guard requestedFrames < Float(frameCount) else {
+            return frameCount
+        }
+        return Int(requestedFrames)
     }
 
     private static func triangularDither(index: Int) -> Float {

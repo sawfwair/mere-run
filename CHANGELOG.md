@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Bound audio export fades to the waveform length before converting to frame
+  counts. Reject nonfinite peak targets and nonfinite or negative fades before
+  music generation instead of risking a crash during WAV export.
 - Write durable run records on Apple volumes without file protection support.
   Keep private permissions and atomic replacement on every filesystem; apply
   `completeUnlessOpen` on volumes that support it.
