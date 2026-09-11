@@ -58,6 +58,25 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertTrue(command.ltxTeaCache)
         XCTAssertEqual(command.ltxTeaCacheThreshold, 0.75)
         XCTAssertEqual(command.ltxTeaCacheCalibrationOutput, "/tmp/ltx25-teacache.json")
+        let settings = command.makeGenerationOptions(outputURL: makeTempOutput(name: "full-recipe.mp4"))
+        let plan = try VideoGenerationPlan(options: settings, profile: .ltx25Full)
+        let preparation = try VideoGenerationLTXPreparation(options: settings, profile: .ltx25Full, loras: [])
+        let native = VideoGenerationLTXRequest(plan: plan, preparation: preparation, prompt: settings.prompt).unifiedOptions()
+        XCTAssertEqual(native.sigmas, [1, 0.5, 0])
+        XCTAssertEqual(native.stage2Sigmas, [0.9, 0.3, 0])
+        XCTAssertEqual(native.distilledLoRAStrengthStage1, 0.2)
+        XCTAssertEqual(native.distilledLoRAStrengthStage2, 0.45)
+        XCTAssertEqual(native.sampler.eta, 0.4)
+        XCTAssertFalse(native.sampler.res2sBongMath)
+        XCTAssertEqual(native.sampler.res2sBongMathMaxIterations, 12)
+        XCTAssertEqual(native.sampler.gradientEstimationGamma, 1.5)
+        XCTAssertEqual(native.videoGuidance.spatioTemporalScale, 0)
+        XCTAssertEqual(native.videoGuidance.skipStep, 1)
+        XCTAssertEqual(native.audioGuidance.skipStep, 2)
+        XCTAssertEqual(native.transformerExecution, .compiled)
+        XCTAssertEqual(native.guidanceProjectionCache, .enabled)
+        XCTAssertEqual(native.teaCache?.threshold, 0.75)
+        XCTAssertEqual(native.teaCache?.calibrationOutputURL?.path, "/tmp/ltx25-teacache.json")
     }
 
     func testVideoGenerateParsesICLoRASpatialMaskAndStageOnePreview() throws {
@@ -2037,6 +2056,180 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(envelope.result.plan.resolvedHeight, 576)
         XCTAssertEqual(envelope.result.plan.resolvedNumFrames, 17)
         XCTAssertFalse(envelope.result.plan.writesAudio)
+        let settings = cmd.makeGenerationOptions(outputURL: output)
+        let native = try VideoGenerationPlan(options: settings, profile: .wan).wanOptions(sourceImageURL: sourceImage)
+        XCTAssertEqual(native.width, 1056)
+        XCTAssertEqual(native.height, 576)
+        XCTAssertEqual(native.numFrames, 17)
+        XCTAssertEqual(native.steps, 40)
+        XCTAssertEqual(native.fps, 24)
+        XCTAssertEqual(native.seed, 42)
+    }
+
+    func testSharedVideoPlanPreservesLTXRecipesAndNativeRequests() throws {
+        let cases: [([String], VideoGenerationModelProfile, Int, Int, Int, Float, Float)] = [
+            ([], .ltx23Distilled, 768, 512, 42, 0, 1),
+            (["--model", "video-ltx25-distilled-bf16"], .ltx25Distilled, 1536, 1024, 10, 0, 1),
+            (["--ltx-preset", "hq"], .ltx25Full, 1920, 1088, 10, 0.25, 0.5),
+            (["--ltx-pipeline", "dev-one-stage"], .ltx25Full, 768, 512, 10, 0, 0),
+            (["--dfr"], .ltx25Full, 1536, 1024, 10, 1, 1),
+        ]
+        for (arguments, profile, width, height, seed, stage1, stage2) in cases {
+            let command = try VideoGenerate.parse(["A boat on calm water.", "--num-frames", "25"] + arguments)
+            let output = makeTempOutput(name: "planned.mp4")
+            let settings = command.makeGenerationOptions(outputURL: output)
+            let plan = try VideoGenerationPlan(options: settings, profile: profile)
+            let preparation = try VideoGenerationLTXPreparation(options: settings, profile: profile, loras: [])
+            let request = VideoGenerationLTXRequest(plan: plan, preparation: preparation, prompt: settings.prompt)
+            let native = request.unifiedOptions()
+            let preview = command.makePreflightEnvelope(outputURL: output).result.plan
+            XCTAssertEqual(native.width, width, "\(arguments)")
+            XCTAssertEqual(native.height, height)
+            XCTAssertEqual(native.seed, seed)
+            XCTAssertEqual(native.numFrames, 25)
+            XCTAssertEqual(native.distilledLoRAStrengthStage1, stage1)
+            XCTAssertEqual(native.distilledLoRAStrengthStage2, stage2)
+            XCTAssertEqual(preview.resolvedWidth, native.width)
+            XCTAssertEqual(preview.resolvedHeight, native.height)
+            XCTAssertEqual(preview.resolvedNumFrames, native.numFrames)
+            XCTAssertEqual(preview.seed, native.seed)
+            if arguments.contains("hq") {
+                XCTAssertEqual(native.inferenceSteps, 15)
+                XCTAssertEqual(native.sampler.mode, .res2s)
+                XCTAssertEqual(native.sampler.noiseSeedOffset, -1)
+                XCTAssertEqual(native.sampler.substepNoiseSeedOffset, 9999)
+                XCTAssertEqual(native.videoGuidance.spatioTemporalScale, 0)
+                XCTAssertEqual(native.videoGuidance.rescale, 0.45)
+                XCTAssertEqual(native.audioGuidance.rescale, 1)
+                XCTAssertTrue(native.videoGuidance.spatioTemporalBlocks.isEmpty)
+            }
+        }
+    }
+
+    func testSharedVideoPlanRejectsUnrepresentableDurationBeforeSideEffects() async throws {
+        for value in ["inf", "nan", "1e308"] {
+            let output = makeTempOutput(name: "must-not-create/result.mp4")
+            let command = try VideoGenerate.parse([
+                "A boat on calm water.", "--duration", value,
+                "--model-root", output.appendingPathComponent("missing-model").path,
+                "--output", output.path,
+            ])
+            let envelope = command.makePreflightEnvelope(outputURL: output)
+            XCTAssertEqual(envelope.status, .blocked)
+            XCTAssertTrue(envelope.diagnostics.contains { ["duration_invalid", "frame_count_overflow"].contains($0.id) })
+            XCTAssertNil(envelope.result.plan.resolvedNumFrames)
+            XCTAssertNoThrow(try VideoGenerate.encodePreflight(envelope))
+            do {
+                try await command.run()
+                XCTFail("Unrepresentable duration should fail before model resolution")
+            } catch {
+                XCTAssertTrue("\(error) \(error.localizedDescription)".contains("duration"), error.localizedDescription)
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: output.deletingLastPathComponent().path))
+        }
+    }
+
+    func testInvalidAutomaticDurationNeverConstructsUncheckedDurationRange() throws {
+        for range in [["0", "1"], ["4", "2"], ["nan", "2"], ["1", "inf"], ["1", "1e308"]] {
+            let command = try VideoGenerate.parse(["A boat on calm water.", "--auto-duration"] + range)
+            let envelope = command.makePreflightEnvelope(outputURL: makeTempOutput(name: "invalid-auto.mp4"))
+            XCTAssertEqual(envelope.status, .blocked)
+            XCTAssertTrue(envelope.diagnostics.contains { ["auto_duration_invalid", "frame_count_overflow"].contains($0.id) })
+            XCTAssertNoThrow(try VideoGenerate.encodePreflight(envelope))
+        }
+    }
+
+    func testVideoDurationDiagnosticPreservesFractionalFPS() throws {
+        let command = try VideoGenerate.parse(["A boat on calm water.", "--duration", "5", "--fps", "23.976"])
+        let envelope = command.makePreflightEnvelope(outputURL: makeTempOutput(name: "fractional.mp4"))
+        let diagnostic = try XCTUnwrap(envelope.diagnostics.first { $0.id == "duration_resolved_to_frame_count" })
+        XCTAssertTrue(diagnostic.message.contains("121 frames at 23.976 fps"), diagnostic.message)
+    }
+
+    func testSharedVideoValidationReportsGenerationOnlyConflictsInPreflight() throws {
+        let cases: [([String], String)] = [
+            (["--steps", "0"], "steps_invalid"),
+            (["--shift", "0"], "shift_invalid"),
+            (["--ltx-preset", "hq", "--ltx-pipeline", "dev-one-stage"], "hq_pipeline_conflict"),
+            (["--temporal-upsample-rounds", "1"], "dfr_controls_without_dfr"),
+            (["--ltx-stage-2-sigmas", "0.5", "0.8", "0"], "ltx_sigma_schedule_invalid"),
+        ]
+        for (arguments, expectedID) in cases {
+            let command = try VideoGenerate.parse(["A boat on calm water."] + arguments)
+            let envelope = command.makePreflightEnvelope(outputURL: makeTempOutput(name: "invalid.mp4"))
+            XCTAssertEqual(envelope.status, .blocked)
+            XCTAssertTrue(envelope.diagnostics.contains { $0.id == expectedID }, "\(arguments): \(envelope.diagnostics)")
+        }
+    }
+
+    func testHDRPreflightPreservesNativeICLoRACanvasAndReferenceScale() throws {
+        struct Header: Encodable { let __metadata__: [String: String] }
+        let header = try JSONEncoder().encode(Header(__metadata__: ["hdr_transform": "logc3", "reference_downscale_factor": "2"]))
+        var length = UInt64(header.count).littleEndian
+        var data = withUnsafeBytes(of: &length) { Data($0) }
+        data.append(header)
+        let lora = try makeTempDirectory().appendingPathComponent("hdr.safetensors")
+        try data.write(to: lora)
+        let reference = try makeTempFile(name: "reference.mp4")
+        let modelRoot = try makeValidLTX25ModelRoot()
+        let command = try VideoGenerate.parse([
+            "Preserve the lighting.", "--model-root", modelRoot.path,
+            "--width", "1057", "--height", "577", "--num-frames", "17",
+            "--lora", lora.path, "--video-conditioning", reference.path,
+        ])
+        let output = makeTempOutput(name: "hdr.mp4")
+        let settings = command.makeGenerationOptions(outputURL: output)
+        let preparation = try VideoGenerationLTXPreparation(options: settings, profile: .ltx25Distilled, loras: [.init(url: lora)])
+        let plan = try VideoGenerationPlan(options: settings, profile: .ltx25Distilled, preparation: preparation)
+        let preview = command.makePreflightEnvelope(outputURL: output)
+        XCTAssertEqual(preview.status, .ok, "\(preview.diagnostics)")
+        XCTAssertEqual(preview.result.plan.resolvedWidth, 1057)
+        XCTAssertEqual(preview.result.plan.resolvedHeight, 577)
+        XCTAssertEqual(plan.width, 1057)
+        XCTAssertEqual(plan.height, 577)
+        XCTAssertEqual(preparation.referenceDownscaleFactor, 2)
+        XCTAssertEqual(preparation.hdrTransfer, .logC3)
+    }
+
+    func testTimedImageArgumentPreservesStrengthWhenCRFIsPresent() throws {
+        let image = try makeTempFile(name: "guide.png")
+        let command = try VideoGenerate.parse([
+            "A boat on calm water.", "--image-conditioning", "8:\(image.path):0.4:18",
+        ])
+        let options = command.makeGenerationOptions(outputURL: makeTempOutput(name: "guide.mp4"))
+        let guides = try VideoGenerationArgumentParser(options: options).parseLTXImageConditionings()
+        XCTAssertEqual(guides.count, 1)
+        XCTAssertEqual(guides.first?.strength, 0.4)
+        XCTAssertEqual(guides.first?.crf, 18)
+    }
+
+    func testH3PreflightUsesNativeFastH3ConditioningValidation() throws {
+        let image = try makeTempFile(name: "frame.png")
+        let command = try VideoGenerate.parse([
+            "A boat on calm water.", "--model", "video-minimax-h3-fasth3-vsa-datafree-mlx",
+            "--num-frames", "22", "--image", image.path,
+        ])
+        let envelope = command.makePreflightEnvelope(outputURL: makeTempOutput(name: "h3.mp4"))
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "h3_generation_options_invalid" && $0.message.contains("text-to-audio/video only") })
+        XCTAssertNil(envelope.result.plan.resolvedSteps)
+    }
+
+    func testSharedA2VidRequestPreservesLTX25DefaultsAndAudioWindow() throws {
+        let command = try VideoGenerate.parse([
+            "A boat on calm water.", "--model", "video-ltx25-full-bf16",
+            "--audio", "/tmp/source.wav", "--audio-start-time", "2.5", "--audio-max-duration", "3",
+        ])
+        let settings = command.makeGenerationOptions(outputURL: makeTempOutput(name: "a2v.mp4"))
+        let plan = try VideoGenerationPlan(options: settings, profile: .ltx25Full)
+        let preparation = try VideoGenerationLTXPreparation(options: settings, profile: .ltx25Full, loras: [])
+        let native = VideoGenerationLTXRequest(plan: plan, preparation: preparation, prompt: settings.prompt)
+            .audioToVideoOptions(audioURL: URL(fileURLWithPath: "/tmp/source.wav"))
+        XCTAssertEqual(native.numFrames, 121)
+        XCTAssertEqual(native.seed, 10)
+        XCTAssertEqual(native.audioStartTime, 2.5)
+        XCTAssertEqual(native.audioMaxDuration, 3)
+        XCTAssertEqual(native.inferenceSteps, 30)
+        XCTAssertNil(plan.autoDuration)
     }
 
     private func makeTempDirectory() throws -> URL {

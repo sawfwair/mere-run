@@ -68,6 +68,13 @@ and cache implementations live in `Sources/MereRunGemmaModel`.
 
 ## H3 video and Laguna text models
 
+For `video generate`, start with `VideoGenerationOptions` and
+`VideoGenerationPlan` in Core. They own model selection, option validation,
+geometry, seed defaults, and native request construction for LTX, H3, and Wan.
+LTX and H3 preparation resolves adapter metadata and compatibility without
+loading tensors. CLI preflight uses these same owners, while execution retains
+the existing generator loading, admission, cleanup, and output paths.
+
 Read [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md)
 for model ownership, generator stages, shared vocoder layers, and validation.
 H3 computation lives in `Sources/MereRunH3Model`; Laguna computation lives in
