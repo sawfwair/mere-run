@@ -69,7 +69,8 @@ and cache implementations live in `Sources/MereRunGemmaModel`.
 ## H3 video and Laguna text models
 
 For `video generate`, start with `VideoGenerationOptions` and
-`VideoGenerationPlan` in Core. They own model selection, option validation,
+`VideoGenerationPlan` in Core. Core depends on `MereRunContract` for the existing
+public quality, output-mode, and variant enums. The plans own model selection, option validation,
 geometry, seed defaults, and native request construction for LTX, H3, and Wan.
 LTX and H3 preparation resolves adapter metadata and compatibility without
 loading tensors. CLI preflight uses these same owners, while execution retains
