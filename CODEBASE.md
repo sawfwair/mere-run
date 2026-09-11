@@ -1,7 +1,6 @@
 # mere.run codebase map
 
-`mere.run` is a Swift package, CLI, and optional macOS GUI for local inference
-on Apple Silicon. `mere.run.app` runs the
+`mere.run` provides local inference on Apple Silicon. Its optional macOS GUI, `mere.run.app`, runs the
 CLI. `MereRunCore` owns inference; `MereRunModelKit` owns metadata and installed
 lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 `AudioTTS` own speech orchestration. `MereRunCLI` owns command presentation.
@@ -56,6 +55,8 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
   hygiene checks, update the documentation and tests together.
 
 ## Editing rules
+
+- Follow [package policy](docs/internals/package-policy.md) when changing targets, products, dependencies, or re-exports.
 
 - Prefer typed decoding at configuration and tokenizer boundaries over
   `[String: Any]`.

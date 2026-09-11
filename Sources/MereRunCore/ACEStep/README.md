@@ -2,6 +2,8 @@
 
 Music generation pipeline and ACE-Step model resources.
 
+- `ACEStepGenerationOptions.swift`, `ACEStepGenerationPreparation.swift`, and `ACEStepGenerationOperation.swift`: shared CLI/API defaults, option validation, source conditioning, metadata planning, and ranked generation.
+- `ACEStepMusicRuntime.swift`: serialized loading, planning, generation, and export on retained CPU/GPU streams. Evaluate lazy tensors before returning from `perform`.
 - `ACEStepPipeline*.swift`: prompt preparation and generation orchestration.
 - `ACEStepRuntimePreparation.swift`: shared checkpoint discovery and audio decoding.
 - `ACEStepAdapterTrainingOptions.swift` and `ACEStepAdapterTrainingPlan.swift`:

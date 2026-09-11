@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share ACE-Step and MiniMax music preparation and execution between the CLI
+  and resident APIs. Keep loading and generation on retained CPU/GPU streams.
+- Share music WAV export in `AudioCore`, with validated settings, explicit
+  channel layouts, bounded encoding, atomic file replacement, and recipe
+  statistics. Both music APIs accept optional nested `export` settings while
+  preserving their existing export defaults.
+- Check the declared target, product, and re-export policy for macOS and both
+  Linux manifest variants in the repository validation gates.
+
+- Bound audio export fades to the waveform length before converting to frame
+  counts. Reject nonfinite peak targets and nonfinite or negative fades before
+  music generation instead of risking a crash during WAV export.
 - Write durable run records on Apple volumes without file protection support.
   Keep private permissions and atomic replacement on every filesystem; apply
   `completeUnlessOpen` on volumes that support it.

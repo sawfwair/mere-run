@@ -169,6 +169,7 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFFT"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunCoreDependencies.append("AudioCore")
 mereRunCoreDependencies.append("MereRunAudioModels")
 mereRunCoreDependencies.append("MereRunH3Model")
 mereRunCoreDependencies.append("MereRunLagunaModel")
@@ -946,7 +947,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "MereRunCLITests",
-    dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO"],
+    dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO", "AudioCore"],
     path: "Tests/MereRunCLITests",
     resources: [
       .copy("Fixtures")

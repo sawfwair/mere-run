@@ -1,3 +1,4 @@
+import AudioCore
 import Foundation
 import MereRunCore
 
@@ -35,7 +36,8 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
     var flowGuidanceEnd: Float
     var seedStrategy: MiniMaxMusic3SeedStrategy
     var audioHealth: MiniMaxMusic3AudioHealthReport
-    var export: ACEStepAudioExportOptions
+    var export: AudioExportOptions
+    var exportStatistics: AudioExportStatistics? = nil
     var outputFilename: String
     var outputSHA256: String
 
@@ -72,6 +74,7 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
         case seedStrategy = "seed_strategy"
         case audioHealth = "audio_health"
         case export
+        case exportStatistics = "export_statistics"
         case outputFilename = "output_filename"
         case outputSHA256 = "output_sha256"
     }
