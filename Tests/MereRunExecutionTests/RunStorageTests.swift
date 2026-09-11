@@ -62,7 +62,7 @@ final class RunStorageTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? Int, 0o600)
     }
 
-    func testReplacementKeepsOldReaderAndPublishesCompleteProtectedArtifact() throws {
+    func testReplacementKeepsOldReaderAndPublishesCompletePrivateArtifact() throws {
         let file = try root().appendingPathComponent("record.json")
         try RunRecordCodec.write(["value": "original"], to: file)
         let original = try Data(contentsOf: file)
@@ -77,7 +77,10 @@ final class RunStorageTests: XCTestCase {
         let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
         XCTAssertEqual(attributes[.posixPermissions] as? Int, 0o600)
 #if canImport(Darwin)
-        XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType, .completeUnlessOpen)
+        let volume = try file.resourceValues(forKeys: [.volumeSupportsFileProtectionKey])
+        if volume.allValues[.volumeSupportsFileProtectionKey] as? Bool == true {
+            XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType, .completeUnlessOpen)
+        }
 #endif
     }
 
@@ -110,7 +113,9 @@ final class RunStorageTests: XCTestCase {
     }
 
     private func root() throws -> URL {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let base = ProcessInfo.processInfo.environment["MERERUN_TEST_STORAGE_ROOT"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? FileManager.default.temporaryDirectory
+        let root = base.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: root) }
         return root

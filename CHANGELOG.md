@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Write durable run records on Apple volumes without file protection support.
+  Keep private permissions and atomic replacement on every filesystem; apply
+  `completeUnlessOpen` on volumes that support it.
 - Share text LoRA option validation, dataset preparation, native execution, and
   adapter-manifest publication in Core. Preserve CLI defaults and resume
   formats, await dashboard shutdown, and prevent cancelled training from

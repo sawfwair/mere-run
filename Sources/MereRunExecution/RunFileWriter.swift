@@ -6,7 +6,7 @@ import Darwin
 import Glibc
 #endif
 
-/// Publishes a complete protected file without opening the previous version.
+/// Publishes a complete private file without opening the previous version.
 /// Operation owners retain their run lease around this write.
 enum RunFileWriter {
     static func write(_ data: Data, to destination: URL) throws -> RunArtifact {
@@ -24,9 +24,12 @@ enum RunFileWriter {
 #if canImport(Darwin)
         // Set protection before writing sensitive bytes. Keeping this descriptor
         // open lets the write finish if the device locks in the meantime.
-        try FileManager.default.setAttributes(
-            [.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: temporary.path
-        )
+        let volume = try temporary.resourceValues(forKeys: [.volumeSupportsFileProtectionKey])
+        if volume.allValues[.volumeSupportsFileProtectionKey] as? Bool == true {
+            try FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.completeUnlessOpen], ofItemAtPath: temporary.path
+            )
+        }
 #endif
         try handle.write(contentsOf: data)
         try handle.synchronize()
