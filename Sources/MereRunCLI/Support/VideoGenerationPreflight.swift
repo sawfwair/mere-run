@@ -4,98 +4,6 @@ import ArgumentParser
 import MereRunContract
 import MereRunCore
 
-struct VideoGenerationPreflightInput {
-    let prompt: String
-    let outputURL: URL
-    let model: String
-    let variant: LTXVideoVariant
-    let quality: LTXVideoQuality?
-    let outputMode: LTXVideoOutputMode?
-    let legacyVariant: LTXVideoVariant?
-    let productSelectionValidationMessage: String?
-    let modelRoot: String?
-    let width: Int
-    let height: Int
-    let numFrames: Int
-    let numFramesSpecified: Bool
-    let steps: Int?
-    let h3WeightMode: String
-    let h3AccelerationMode: String
-    let h3RenderWidth: Int?
-    let h3RenderHeight: Int?
-    let h3Adapter: String?
-    let h3AdapterStrength: Float
-    let h3FrameInputs: [String]
-    let h3WindowFrames: Int?
-    let h3WindowOverlap: Int
-    let duration: Double?
-    let autoDuration: [Double]
-    let videoDecoder: LTXVideoDecoderKind?
-    let hdrColorSpace: LTXHDRColorSpace?
-    let hdrTransfer: LTXHDRTransfer?
-    let highQualityHDR: Bool
-    let textEmbeddings: String?
-    let vaeSpatialTileSize: Int?
-    let vaeSpatialTileOverlap: Int
-    let skipHDRMP4: Bool
-    let fps: Double
-    let seed: Int?
-    let negativePrompt: String?
-    let enhancePrompt: Bool
-    let promptEnhancerModel: String?
-    let promptEnhancerModelRoot: String?
-    let audio: String?
-    let audioStartTime: Double
-    let audioMaxDuration: Double?
-    let a2vGuidanceScale: Float
-    let videoCFGGuidanceScale: Float
-    let audioCFGGuidanceScale: Float
-    let v2aGuidanceScale: Float
-    let a2vSteps: Int
-    let ltxPreset: LTXGenerationPreset
-    let ltxPipeline: LTXGenerationPipeline
-    let ltxSampler: LTXSamplerMode?
-    let ltxSigmas: [Float]
-    let ltxStage2Sigmas: [Float]
-    let distilledLoRAStrengthStage1: Float?
-    let distilledLoRAStrengthStage2: Float?
-    let ltxSamplerEta: Float
-    let videoSTGScale: Float
-    let videoGuidanceRescale: Float
-    let videoSTGBlocks: [Int]
-    let videoGuidanceSkipStep: Int
-    let audioSTGScale: Float
-    let audioGuidanceRescale: Float
-    let audioSTGBlocks: [Int]
-    let audioGuidanceSkipStep: Int
-    let noRes2sBongMath: Bool
-    let res2sBongMaxIterations: Int
-    let gradientEstimationGamma: Float
-    let image: String?
-    let imageStrength: Float
-    let endImage: String?
-    let endImageStrength: Float
-    let imageConditionings: [String]
-    let numGeneratedKeyframes: Int
-    let generatedKeyframeIndices: [Int]
-    let loras: [String]
-    let videoConditionings: [String]
-    let conditioningAttentionStrength: Float
-    let conditioningAttentionMask: String?
-    let skipStage2: Bool
-    let referenceDownscaleFactor: Int?
-    let referenceTemporalScaleFactor: Int?
-    let dfr: Bool
-    let temporalUpsampleRounds: Int
-    let detailingLoRAs: [String]
-    let detailingReferenceDownscaleFactor: Int?
-    let references: [String]
-    let timings: Bool
-    let timingsOutput: String?
-    let generationArgv: [String]
-    let cwd: String
-}
-
 struct VideoGenerationPreflightRequest: Codable, Equatable {
     let prompt: String
     let output: String
@@ -445,104 +353,52 @@ typealias VideoGenerationPreflightEnvelope = StructuredRunEnvelope<
 >
 
 struct VideoGenerationPreflightAnalyzer {
-    let input: VideoGenerationPreflightInput
+    let input: VideoGenerationOptions
+    let generationArgv: [String]
+    let cwd: String
     let fileManager: FileManager
     let adaptersRoot: URL
     let now: () -> Date
+    private let modelProfile: VideoGenerationModelProfile
 
     init(
-        input: VideoGenerationPreflightInput,
+        input: VideoGenerationOptions,
+        generationArgv: [String],
+        cwd: String,
         fileManager: FileManager = .default,
         adaptersRoot: URL = MereRunModelPaths.adaptersDir,
         now: @escaping () -> Date = Date.init
     ) {
         self.input = input
+        self.generationArgv = generationArgv
+        self.cwd = cwd
         self.fileManager = fileManager
         self.adaptersRoot = adaptersRoot
         self.now = now
+        self.modelProfile = input.observedProfile(fileManager: fileManager)
     }
 
-    private var usesWanGeometry: Bool {
-        if input.model.trimmingCharacters(in: .whitespacesAndNewlines) == Wan2Resources.modelID {
-            return true
-        }
-        let candidate = input.modelRoot ?? input.model
-        let url = URL(fileURLWithPath: candidate).standardizedFileURL
-        let resources = Wan2Resources(rootURL: url)
-        return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
-    }
-
-    private var usesMiniMaxH3Geometry: Bool {
-        let requested = input.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
-            return true
-        }
-        let candidate = input.modelRoot ?? input.model
-        let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: candidate).standardizedFileURL)
-        return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
-    }
-
-    private var usesMiniMaxH3Ref2VA: Bool {
-        let requested = input.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        if requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
-            return true
-        }
-        if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue {
-            return false
-        }
-        let candidate = input.modelRoot ?? input.model
-        let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: candidate).standardizedFileURL)
-        return (try? resources.loadConfiguration().task) == MiniMaxH3TurboAdapter.Task.ref2va.rawValue
-    }
-
-    private var usesAudioConditioning: Bool {
-        guard let audio = input.audio else { return false }
-        return !audio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
+    private var usesWanGeometry: Bool { modelProfile == .wan }
+    private var usesMiniMaxH3Geometry: Bool { modelProfile.isH3 }
+    private var usesMiniMaxH3Ref2VA: Bool { modelProfile == .h3Ref2VA }
+    private var usesAudioConditioning: Bool { input.hasSourceAudio }
 
     private func effectiveAutoDuration(
         model: VideoGenerationModelPreflightSummary
     ) -> [Double]? {
-        if input.numFramesSpecified { return nil }
-        if !input.autoDuration.isEmpty { return input.autoDuration }
-        guard input.duration == nil,
-              !usesAudioConditioning,
-              model.layout == "ltx25_full" || model.layout == "ltx25_distilled" else {
-            return nil
-        }
-        return [1, 20]
+        guard let range = try? VideoGenerationPlan(options: input, profile: modelProfile).autoDuration else { return nil }
+        return [range.minimumSeconds, range.maximumSeconds]
     }
 
     private var h3AdapterInferenceRecipe: MiniMaxH3TurboAdapter.InferenceRecipe? {
-        guard let reference = input.h3Adapter else {
-            return usesEmbeddedFastH3Adapter
-                ? MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
-                : nil
-        }
-        let filename = ManagedAdapterCatalog.spec(for: reference)?.artifact.filename
-            ?? URL(fileURLWithPath: reference).lastPathComponent
-        return MiniMaxH3TurboAdapter.inferenceRecipe(filename: filename)
+        input.h3AdapterInferenceRecipe
     }
-
-    private var usesEmbeddedFastH3Adapter: Bool {
-        input.h3Adapter == nil
-            && input.model.trimmingCharacters(in: .whitespacesAndNewlines)
-                == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
-    }
+    private var usesEmbeddedFastH3Adapter: Bool { input.usesEmbeddedFastH3Adapter }
 
     func envelope() -> VideoGenerationPreflightEnvelope {
         var diagnostics: [PreflightDiagnostic] = []
         validateStaticOptions(diagnostics: &diagnostics)
         let model = modelSummary(diagnostics: &diagnostics)
-        validateProductSelection(model: model, diagnostics: &diagnostics)
-        validateTimingOptions(model: model, diagnostics: &diagnostics)
         let output = outputSummary(diagnostics: &diagnostics)
         let inputs = inputSummary(model: model, diagnostics: &diagnostics)
         let plan = planSummary(model: model, inputs: inputs, diagnostics: &diagnostics)
@@ -555,7 +411,7 @@ struct VideoGenerationPreflightAnalyzer {
             mode: .preflight,
             status: status,
             createdAt: now(),
-            cwd: input.cwd,
+            cwd: cwd,
             summary: summary(status: status, diagnostics: diagnostics),
             request: request(model: model),
             result: VideoGenerationPreflightResult(
@@ -573,14 +429,14 @@ struct VideoGenerationPreflightAnalyzer {
         VideoGenerationPreflightRequest(
             prompt: input.prompt,
             output: input.outputURL.path,
-            model: input.model,
+            model: input.resolvedRequestedModel,
             variant: input.variant.rawValue,
             quality: input.quality?.rawValue,
             outputMode: input.outputMode?.rawValue,
             modelRoot: input.modelRoot,
-            width: input.width,
-            height: input.height,
-            numFrames: input.numFramesSpecified ? input.numFrames : nil,
+            width: input.resolvedOutputWidth,
+            height: input.resolvedOutputHeight,
+            numFrames: input.numFramesSpecified ? input.requestedFrameCount : nil,
             steps: input.steps,
             h3WeightMode: usesMiniMaxH3Geometry ? input.h3WeightMode : nil,
             h3AccelerationMode: usesMiniMaxH3Geometry ? input.h3AccelerationMode : nil,
@@ -680,522 +536,23 @@ struct VideoGenerationPreflightAnalyzer {
         )
     }
 
-    private func validateTimingOptions(
-        model: VideoGenerationModelPreflightSummary,
-        diagnostics: inout [PreflightDiagnostic]
-    ) {
-        guard input.timings || input.timingsOutput != nil else { return }
-        guard !usesAudioConditioning else { return }
-        guard !usesMiniMaxH3Geometry else {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "timings_lane_unsupported",
-                    severity: .blocker,
-                    title: "Phase timings are unavailable for this lane",
-                    message: "--timings and --timings-output are not available for MiniMax-H3 yet."
-                )
-            )
-            return
-        }
-        guard !usesWanGeometry else {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "timings_lane_unsupported",
-                    severity: .blocker,
-                    title: "Phase timings are unavailable for this lane",
-                    message: "--timings and --timings-output are available for native LTX generation, not Wan2.2 TI2V."
-                )
-            )
-            return
-        }
-
-        let route = resolvedLTXRoute(model: model)
-        if route?.supportsPhaseTimings == false {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "timings_lane_unsupported",
-                    severity: .blocker,
-                    title: "Phase timings are unavailable for this lane",
-                    message: "Use an LTX 2.3 split model, --quality final, --output-mode audio-video, or --audio for phase timings."
-                )
-            )
-        }
-    }
-
-    private func resolvedLTXRoute(
-        model: VideoGenerationModelPreflightSummary
-    ) -> LTXVideoGenerationRoute? {
-        if let path = model.path {
-            return resolveLTXVideoGenerationRoute(
-                variant: input.variant,
-                modelRoot: URL(fileURLWithPath: path),
-                fileManager: fileManager
-            )
-        }
-        if input.variant == .unifiedAV {
-            return .unifiedAV
-        }
-        if input.model == ModelResolver.ModelID.ltxVideo23AVMLX.rawValue {
-            return .splitDistilledVideo
-        }
-        return nil
+    private func resolvedLTXRoute(model: VideoGenerationModelPreflightSummary) -> LTXVideoGenerationRoute? {
+        modelProfile.ltxRoute(outputMode: input.effectiveOutputMode)
     }
 
     private func validateStaticOptions(diagnostics: inout [PreflightDiagnostic]) {
-        if let message = input.productSelectionValidationMessage {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "video_product_selection_conflict",
-                    severity: .blocker,
-                    title: "Video product selection is ambiguous",
-                    message: message
-                )
-            )
-        }
-        if input.numGeneratedKeyframes < 0 {
-            diagnostics.append(PreflightDiagnostic(
-                id: "ltx_generated_keyframe_count_invalid",
-                severity: .blocker,
-                title: "Generated keyframe count is invalid",
-                message: "--num-generated-keyframes must be nonnegative."
-            ))
-        }
-        if input.numGeneratedKeyframes > 0, !input.generatedKeyframeIndices.isEmpty {
-            diagnostics.append(PreflightDiagnostic(
-                id: "ltx_generated_keyframe_mode_conflict",
-                severity: .blocker,
-                title: "Generated keyframe request is ambiguous",
-                message: "Use --num-generated-keyframes or explicit --generated-keyframe positions, not both."
-            ))
-        }
-        if usesWanGeometry, input.quality != nil || input.outputMode != nil {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "ltx_product_selection_with_wan",
-                    severity: .blocker,
-                    title: "LTX product options do not apply to Wan",
-                    message: "--quality and --output-mode currently select native LTX generation, not Wan2.2 TI2V."
-                )
-            )
-        }
-        if usesMiniMaxH3Geometry, input.quality != nil || input.outputMode != nil || input.legacyVariant != nil {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "ltx_product_selection_with_minimax_h3",
-                    severity: .blocker,
-                    title: "LTX product options do not apply to MiniMax-H3",
-                    message: "--quality, --output-mode, and --variant cannot be combined with MiniMax-H3."
-                )
-            )
-        }
-        if !usesMiniMaxH3Geometry, input.h3Adapter != nil {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_adapter_with_non_h3_model",
-                severity: .blocker,
-                title: "MiniMax-H3 adapter requires MiniMax-H3",
-                message: "--h3-adapter can only be used with a MiniMax-H3 model."
-            ))
-        }
-        if !usesMiniMaxH3Geometry,
-           (!input.h3FrameInputs.isEmpty
-            || input.h3WindowFrames != nil
-            || input.h3RenderWidth != nil
-            || input.h3RenderHeight != nil) {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_window_or_frame_with_non_h3_model",
-                severity: .blocker,
-                title: "MiniMax-H3 controls require MiniMax-H3",
-                message: "H3 frame, window, and internal-render controls require a MiniMax-H3 model."
-            ))
-        }
-        if usesMiniMaxH3Geometry,
-           (input.h3RenderWidth == nil) != (input.h3RenderHeight == nil) {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_render_canvas_incomplete",
-                severity: .blocker,
-                title: "MiniMax-H3 internal render canvas is incomplete",
-                message: "--h3-render-width and --h3-render-height must be set together."
-            ))
-        }
-        if !input.references.isEmpty, !input.h3FrameInputs.isEmpty {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_frame_ref2va_unsupported",
-                severity: .blocker,
-                title: "Timed H3 frames require FL2VA",
-                message: "Use --h3-frame with FL2VA; Ref2VA uses ordered --reference inputs."
-            ))
-        }
-        if input.h3Adapter != nil, input.h3AdapterStrength <= 0 {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_adapter_strength_invalid",
-                severity: .blocker,
-                title: "MiniMax-H3 adapter strength is invalid",
-                message: "--h3-adapter-strength must be > 0."
-            ))
-        }
-        if let h3AdapterInferenceRecipe {
-            let requestedTask: MiniMaxH3TurboAdapter.Task = usesMiniMaxH3Ref2VA ? .ref2va : .fl2va
-            if h3AdapterInferenceRecipe.task != requestedTask {
-                diagnostics.append(PreflightDiagnostic(
-                    id: "h3_adapter_task_mismatch",
-                    severity: .blocker,
-                    title: "MiniMax-H3 adapter task does not match the model",
-                    message: "Adapter \(h3AdapterInferenceRecipe.name) requires \(h3AdapterInferenceRecipe.task.rawValue), not \(requestedTask.rawValue)."
-                ))
-            }
-            if h3AdapterInferenceRecipe.task == .fl2va, !input.references.isEmpty {
-                diagnostics.append(PreflightDiagnostic(
-                    id: "h3_fl2va_adapter_with_references",
-                    severity: .blocker,
-                    title: "MiniMax-H3 FL2VA adapter cannot use references",
-                    message: "Use the FL2VA adapter for text or keyframe generation without --reference."
-                ))
-            }
-            if h3AdapterInferenceRecipe.task == .ref2va, input.references.isEmpty {
-                diagnostics.append(PreflightDiagnostic(
-                    id: "h3_ref2va_adapter_without_references",
-                    severity: .blocker,
-                    title: "MiniMax-H3 Ref2VA adapter requires references",
-                    message: "Add at least one ordered image or video --reference."
-                ))
-            }
-            if h3AdapterInferenceRecipe.task == .ref2va, input.h3WeightMode == "quantized" {
-                diagnostics.append(PreflightDiagnostic(
-                    id: "h3_ref2va_adapter_requires_resident_bf16",
-                    severity: .blocker,
-                    title: "MiniMax-H3 Ref2VA Turbo requires resident BF16 weights",
-                    message: "Use --h3-weight-mode resident-bf16 on a machine with sufficient memory."
-                ))
-            }
-        }
-        if input.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "prompt_empty",
-                    severity: .blocker,
-                    title: "Prompt is empty",
-                    message: "Provide a non-empty video prompt."
-                )
-            )
-        }
-        if !input.fps.isFinite || input.fps < 1 {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "fps_invalid",
-                    severity: .blocker,
-                    title: "FPS is invalid",
-                    message: "--fps must be finite and >= 1."
-                )
-            )
-        }
-        if usesWanGeometry, input.fps.isFinite, input.fps.rounded() != input.fps {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "wan_fps_fractional",
-                    severity: .blocker,
-                    title: "Wan frame rate must be integral",
-                    message: "Wan2.2 TI2V requires an integer --fps value."
-                )
-            )
-        }
-        if let duration = input.duration, duration <= 0 {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "duration_invalid",
-                    severity: .blocker,
-                    title: "Duration is invalid",
-                    message: "--duration must be > 0."
-                )
-            )
-        }
-        if !input.autoDuration.isEmpty {
-            let valid = input.autoDuration.count == 2
-                && input.autoDuration[0].isFinite
-                && input.autoDuration[1].isFinite
-                && input.autoDuration[0] > 0
-                && input.autoDuration[1] >= input.autoDuration[0]
-            if !valid {
-                diagnostics.append(
-                    PreflightDiagnostic(
-                        id: "auto_duration_invalid",
-                        severity: .blocker,
-                        title: "Automatic duration range is invalid",
-                        message: "--auto-duration requires 0 < MIN_SECONDS <= MAX_SECONDS."
-                    )
-                )
-            }
-            if input.numFramesSpecified {
-                diagnostics.append(
-                    PreflightDiagnostic(
-                        id: "auto_duration_ignored_by_num_frames",
-                        severity: .warning,
-                        title: "Explicit frame count wins",
-                        message: "--auto-duration is ignored because --num-frames was supplied."
-                    )
-                )
-            }
-            if input.duration != nil {
-                diagnostics.append(
-                    PreflightDiagnostic(
-                        id: "auto_duration_conflict",
-                        severity: .blocker,
-                        title: "Duration selection is ambiguous",
-                        message: "Use --duration or --auto-duration, not both."
-                    )
-                )
-            }
-            if usesAudioConditioning {
-                diagnostics.append(
-                    PreflightDiagnostic(
-                        id: "auto_duration_a2vid_unsupported",
-                        severity: .blocker,
-                        title: "Automatic duration is unavailable for A2Vid",
-                        message: "Source-audio A2Vid derives duration from the selected audio segment."
-                    )
-                )
-            }
-        }
-        if !input.audioStartTime.isFinite || input.audioStartTime < 0 {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "audio_start_time_invalid",
-                    severity: .blocker,
-                    title: "Audio start time is invalid",
-                    message: "--audio-start-time must be finite and >= 0."
-                )
-            )
-        }
-        if let audioMaxDuration = input.audioMaxDuration,
-           !audioMaxDuration.isFinite || audioMaxDuration <= 0 {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "audio_max_duration_invalid",
-                    severity: .blocker,
-                    title: "Audio maximum duration is invalid",
-                    message: "--audio-max-duration must be finite and > 0."
-                )
-            )
-        }
-        if input.a2vGuidanceScale < 0
-            || input.videoCFGGuidanceScale < 0
-            || input.audioCFGGuidanceScale < 0
-            || input.v2aGuidanceScale < 0 {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "ltx_guidance_invalid",
-                    severity: .blocker,
-                    title: "LTX guidance is invalid",
-                    message: "LTX full/A2Vid guidance scales must be >= 0."
-                )
-            )
-        }
-        if input.a2vSteps < 1 {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "a2v_steps_invalid",
-                    severity: .blocker,
-                    title: "A2Vid steps are invalid",
-                    message: "--a2v-steps must be >= 1."
-                )
-            )
-        }
-        if usesAudioConditioning,
-           input.modelRoot == nil,
-           ModelResolver.ModelID(rawValue: input.model) != nil,
-           input.model != ModelResolver.ModelID.ltxVideo23FullMLX.rawValue,
-           input.model != ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "audio_model_incompatible",
-                    severity: .blocker,
-                    title: "Model does not support audio conditioning",
-                    message: "--audio requires \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)."
-                )
-            )
-        }
-        let minimumSpatialDimension = usesWanGeometry || usesMiniMaxH3Geometry ? 32 : 64
-        let minimumFrameCount = usesMiniMaxH3Geometry ? 22 : (usesWanGeometry ? 5 : 9)
-        if input.width < minimumSpatialDimension {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "width_too_small",
-                    severity: .blocker,
-                    title: "Width is too small",
-                    message: "--width must be >= \(minimumSpatialDimension)."
-                )
-            )
-        }
-        if input.height < minimumSpatialDimension {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "height_too_small",
-                    severity: .blocker,
-                    title: "Height is too small",
-                    message: "--height must be >= \(minimumSpatialDimension)."
-                )
-            )
-        }
-        if input.numFrames < minimumFrameCount {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "num_frames_too_small",
-                    severity: .blocker,
-                    title: "Frame count is too small",
-                    message: "--num-frames must be >= \(minimumFrameCount)."
-                )
-            )
-        }
-        if !(0...1).contains(input.imageStrength) {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "image_strength_invalid",
-                    severity: .blocker,
-                    title: "Image strength is invalid",
-                    message: "--image-strength must be between 0 and 1."
-                )
-            )
-        }
-        if !(0...1).contains(input.endImageStrength) {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "end_image_strength_invalid",
-                    severity: .blocker,
-                    title: "End image strength is invalid",
-                    message: "--end-image-strength must be between 0 and 1."
-                )
-            )
-        }
-        if input.endImage != nil, input.image == nil {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "end_image_requires_source_image",
-                    severity: .blocker,
-                    title: "End keyframe needs a source image",
-                    message: "--end-image requires --image so the start keyframe is anchored."
-                )
-            )
-        }
-        if (input.variant == .unifiedAV || usesAudioConditioning), input.fps > 0, input.fps != 24 {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "unified_av_fps_unusual",
-                    severity: .warning,
-                    title: "LTX audio/video is tuned for 24 fps",
-                    message: "LTX audio/video is trained around 24 fps; --fps \(input.fps) can make motion look time-stretched relative to audio."
-                )
-            )
-        }
-        if usesMiniMaxH3Geometry,
-           input.fps != Double(MiniMaxH3Geometry.framesPerSecond) {
-            diagnostics.append(
-                PreflightDiagnostic(
-                    id: "minimax_h3_fps_fixed",
-                    severity: .note,
-                    title: "MiniMax-H3 uses fixed 24 fps",
-                    message: "MiniMax-H3 output will use 24 fps; --fps \(input.fps) is ignored."
-                )
-            )
-        }
-    }
-
-    private func validateProductSelection(
-        model: VideoGenerationModelPreflightSummary,
-        diagnostics: inout [PreflightDiagnostic]
-    ) {
-        if input.videoDecoder != nil,
-           model.layout != "ltx25_full",
-           model.layout != "ltx25_distilled" {
-            diagnostics.append(PreflightDiagnostic(
-                id: "video_decoder_requires_ltx25",
-                severity: .blocker,
-                title: "Selected video decoder requires LTX 2.5",
-                message: "--video-decoder is available for official LTX 2.5 model roots."
-            ))
-        }
-        if h3AdapterInferenceRecipe != nil, usesMiniMaxH3Geometry {
-            let expectedBaseModelID: String
-            if usesMiniMaxH3Ref2VA {
-                expectedBaseModelID = ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
-            } else if model.requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue {
-                expectedBaseModelID = ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
-            } else {
-                expectedBaseModelID = ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
-            }
-            if let reference = input.h3Adapter,
-               let spec = ManagedAdapterCatalog.spec(for: reference),
-               !spec.supports(baseModelID: expectedBaseModelID) {
-                diagnostics.append(PreflightDiagnostic(
-                    id: "h3_adapter_base_model_mismatch",
-                    severity: .blocker,
-                    title: "MiniMax-H3 adapter base model does not match",
-                    message: "Adapter \(spec.id) does not support \(expectedBaseModelID)."
-                ))
-            }
-            if h3AdapterInferenceRecipe?.task == .fl2va {
-                let supportsTurbo: Bool
-                if let path = model.path {
-                    supportsTurbo = (try? MiniMaxH3Resources(
-                        rootURL: URL(fileURLWithPath: path).standardizedFileURL
-                    ).transformerStorage().supportsFL2VATurboAdapters) == true
-                } else {
-                    supportsTurbo = model.requested
-                        == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
-                        || model.requested == MiniMaxH3Resources.fl2vaQ8ModelID
-                        || model.requested == MiniMaxH3Resources.fastH3ModelID
-                }
-                if !supportsTurbo {
-                    diagnostics.append(PreflightDiagnostic(
-                        id: "h3_adapter_requires_bf16_or_q8",
-                        severity: .blocker,
-                        title: "MiniMax-H3 FL2VA Turbo requires compact BF16 or Q8",
-                        message: "Legacy MiniMax-H3 Q4 does not support FL2VA Turbo adapters."
-                    ))
-                }
-            }
-            if let steps = input.steps,
-               let recipe = h3AdapterInferenceRecipe,
-               !recipe.supports(schedulePointCount: steps) {
-                let supported = recipe.supportedSchedulePointCounts
-                    .sorted()
-                    .map(String.init)
-                    .joined(separator: " or ")
-                diagnostics.append(PreflightDiagnostic(
-                    id: "h3_adapter_steps_invalid",
-                    severity: .blocker,
-                    title: "MiniMax-H3 Turbo step recipe does not match",
-                    message: "Omit --steps or set --steps \(supported) schedule points for \(recipe.name)."
-                ))
-            }
-        }
-        guard let requestedQuality = input.quality,
-              let actualQuality = resolvedQuality(model: model),
-              requestedQuality != actualQuality else {
-            return
-        }
-        let requiredModel = requestedQuality == .final
-            ? ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
-            : ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
-        diagnostics.append(
+        diagnostics += input.validationIssues(profile: modelProfile).map { issue in
             PreflightDiagnostic(
-                id: "video_quality_model_mismatch",
-                severity: .blocker,
-                title: "Checkpoint does not match requested quality",
-                message: "--quality \(requestedQuality.rawValue) requires \(requiredModel)."
+                id: issue.id,
+                severity: issue.severity == .blocker ? .blocker : (issue.severity == .warning ? .warning : .note),
+                title: issue.title,
+                message: issue.message
             )
-        )
+        }
     }
 
-    private func resolvedQuality(
-        model: VideoGenerationModelPreflightSummary
-    ) -> LTXVideoQuality? {
-        switch model.layout {
-        case "ltx23_full_split", "ltx23_a2vid_split", "ltx25_full", "ltx25_distilled":
-            return .final
-        case "ltx23_distilled_split", "ltx_merged":
-            return .draft
-        default:
-            return nil
-        }
+    private func resolvedQuality(model: VideoGenerationModelPreflightSummary) -> LTXVideoQuality? {
+        modelProfile.quality
     }
 
     private func modelSummary(
@@ -1209,7 +566,7 @@ struct VideoGenerationPreflightAnalyzer {
             )
         }
 
-        let trimmedModel = input.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedModel = input.resolvedRequestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         let requested = trimmedModel.isEmpty ? ModelResolver.ModelID.ltxVideo23AVMLX.rawValue : trimmedModel
         let localURL = URL(fileURLWithPath: requested).standardizedFileURL
         if fileManager.fileExists(atPath: localURL.path) {
@@ -1391,29 +748,8 @@ struct VideoGenerationPreflightAnalyzer {
     }
 
     private func videoLayout(at url: URL) -> String? {
-        let h3 = MiniMaxH3Resources(rootURL: url)
-        if h3.validate().isEmpty, let configuration = try? h3.loadConfiguration() {
-            return "minimax_h3_\(configuration.task)_mlx"
-        }
-        let resources = Wan2Resources(rootURL: url)
-        if resources.validate().isEmpty, (try? resources.loadConfiguration()) != nil {
-            return "wan22_ti2v_mlx"
-        }
-        if isLTX23FullModelRoot(url, fileManager: fileManager) {
-            return "ltx23_full_split"
-        }
-        if isLTX23AudioToVideoModelRoot(url, fileManager: fileManager) {
-            return "ltx23_a2vid_split"
-        }
-        if isLTX25FullModelRoot(url, fileManager: fileManager) {
-            return "ltx25_full"
-        }
-        if isLTX25ModelRoot(url, fileManager: fileManager) {
-            return "ltx25_distilled"
-        }
-        return isLTX23SplitModelRoot(url, fileManager: fileManager)
-            ? "ltx23_distilled_split"
-            : "ltx_merged"
+        let profile = VideoGenerationModelProfile.observe(root: url, fileManager: fileManager)
+        return profile == .unknown ? nil : profile.rawValue
     }
 
     private func validateSelectedModelRoot(_ url: URL) throws {
@@ -1758,62 +1094,41 @@ struct VideoGenerationPreflightAnalyzer {
         let spatialMultiple = usesWanGeometry || usesMiniMaxH3Geometry ? 32 : 64
         let temporalMultiple = usesWanGeometry ? 4 : 8
         let minimumFrames = usesMiniMaxH3Geometry ? 22 : (usesWanGeometry ? 5 : 9)
-        let defaultFrameCount = usesAudioConditioning
-            && !input.numFramesSpecified
-            && input.duration == nil
-            && (model.layout == "ltx25_full" || model.layout == "ltx25_distilled")
-            ? 121
-            : input.numFrames
-        let resolvedWidth = max(spatialMultiple, (input.width / spatialMultiple) * spatialMultiple)
-        let resolvedHeight = max(spatialMultiple, (input.height / spatialMultiple) * spatialMultiple)
-        let requestedFrames = input.duration.map {
-            usesMiniMaxH3Geometry
-                ? Int(($0 * Double(MiniMaxH3Geometry.framesPerSecond)).rounded())
-                : usesWanGeometry
-                ? nearestWanFrameCount(duration: $0, fps: input.fps)
-                : nearestLTXFrameCount(duration: $0, fps: input.fps)
-        } ?? defaultFrameCount
-        let resolvedFrames = usesMiniMaxH3Geometry
-            ? (try? MiniMaxH3Geometry.alignFrameCount(max(minimumFrames, requestedFrames))) ?? minimumFrames
-            : max(minimumFrames, ((requestedFrames - 1) / temporalMultiple) * temporalMultiple + 1)
-        var validH3RenderWidth: Int?
-        var validH3RenderHeight: Int?
-        if usesMiniMaxH3Geometry,
-           let renderWidth = input.h3RenderWidth,
-           let renderHeight = input.h3RenderHeight {
-            let (leftAspect, leftOverflow) = renderWidth.multipliedReportingOverflow(by: resolvedHeight)
-            let (rightAspect, rightOverflow) = renderHeight.multipliedReportingOverflow(by: resolvedWidth)
-            if renderWidth < 32
-                || renderHeight < 32
-                || !renderWidth.isMultiple(of: 32)
-                || !renderHeight.isMultiple(of: 32)
-                || renderWidth > resolvedWidth
-                || renderHeight > resolvedHeight
-                || leftOverflow
-                || rightOverflow
-                || leftAspect != rightAspect {
-                diagnostics.append(PreflightDiagnostic(
-                    id: "h3_render_canvas_invalid",
-                    severity: .blocker,
-                    title: "MiniMax-H3 internal render canvas is invalid",
-                    message: "Internal render dimensions must preserve output aspect, use 32px multiples, and not exceed the resolved output canvas."
-                ))
+        let plan: VideoGenerationPlan?
+        do {
+            let arguments = VideoGenerationArgumentParser(
+                options: input, fileManager: fileManager, adaptersRoot: adaptersRoot, requireFiles: false
+            )
+            let baseModelID = modelProfile == .ltx25Full ? ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
+                : modelProfile.isLTX25 ? ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+                : input.resolvedRequestedModel
+            let loras = try arguments.parseLTXLoRAConfigurations(input.loras, optionName: "--lora", baseModelID: baseModelID)
+            _ = try arguments.parseLTXImageConditionings()
+            // Missing adapters already have path diagnostics. Their metadata is unknown.
+            let preparation: VideoGenerationLTXPreparation?
+            if loras.allSatisfy({ fileManager.fileExists(atPath: $0.url.path) }) {
+                preparation = try VideoGenerationLTXPreparation(options: input, profile: modelProfile, loras: loras)
             } else {
-                validH3RenderWidth = renderWidth
-                validH3RenderHeight = renderHeight
+                preparation = nil
+            }
+            _ = try arguments.parseLTXReferenceVideoConditionings(
+                downscaleFactor: preparation?.referenceDownscaleFactor ?? 1,
+                temporalScaleFactor: preparation?.referenceTemporalScaleFactor ?? 1
+            )
+            plan = try VideoGenerationPlan(options: input, profile: modelProfile, preparation: preparation)
+        } catch {
+            plan = nil
+            let issue = error as? VideoGenerationIssue
+            if !diagnostics.contains(where: { $0.id == issue?.id }) {
+                diagnostics.append(PreflightDiagnostic(
+                    id: issue?.id ?? "video_plan_invalid", severity: .blocker,
+                    title: issue?.title ?? "Video plan is invalid", message: error.localizedDescription
+                ))
             }
         }
-        if usesMiniMaxH3Geometry,
-           input.h3WindowFrames != nil,
-           validH3RenderWidth != nil,
-           (validH3RenderWidth != resolvedWidth || validH3RenderHeight != resolvedHeight) {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_render_canvas_sliding_window_unsupported",
-                severity: .blocker,
-                title: "Reduced H3 rendering cannot use sliding windows yet",
-                message: "Run a single H3 window or remove --h3-render-width and --h3-render-height."
-            ))
-        }
+        let resolvedWidth = plan?.width ?? input.resolvedOutputWidth
+        let resolvedHeight = plan?.height ?? input.resolvedOutputHeight
+        let resolvedFrames = plan?.numFrames ?? 0
         let h3FrameIndices = input.h3FrameInputs.compactMap { value -> Int? in
             guard let separator = value.firstIndex(of: ":") else { return nil }
             return Int(value[..<separator])
@@ -1836,50 +1151,33 @@ struct VideoGenerationPreflightAnalyzer {
                 message: "--h3-frame indices must be unique and inside the resolved output timeline."
             ))
         }
-        var slidingWindowPlan: MiniMaxH3SlidingWindowPlan?
-        if usesMiniMaxH3Geometry, let windowFrames = input.h3WindowFrames {
-            do {
-                let options = try MiniMaxH3SlidingWindowOptions(
-                    totalFrameCount: resolvedFrames,
-                    windowFrameCount: windowFrames,
-                    overlapFrameCount: input.h3WindowOverlap
-                )
-                slidingWindowPlan = MiniMaxH3SlidingWindowPlan(options: options)
-            } catch {
-                diagnostics.append(PreflightDiagnostic(
-                    id: "h3_sliding_window_invalid",
-                    severity: .blocker,
-                    title: "MiniMax-H3 sliding window is invalid",
-                    message: error.localizedDescription
-                ))
-            }
-        }
+        let slidingWindowPlan = plan?.h3SlidingWindowOptions.map(MiniMaxH3SlidingWindowPlan.init(options:))
 
-        if input.width >= spatialMultiple,
-           input.height >= spatialMultiple,
-           resolvedWidth != input.width || resolvedHeight != input.height {
+        if plan != nil, input.resolvedOutputWidth >= spatialMultiple,
+           input.resolvedOutputHeight >= spatialMultiple,
+           resolvedWidth != input.resolvedOutputWidth || resolvedHeight != input.resolvedOutputHeight {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "dimensions_will_be_adjusted",
                     severity: .note,
                     title: "Dimensions will be adjusted",
-                    message: "Video dimensions will be snapped from \(input.width)x\(input.height) to \(resolvedWidth)x\(resolvedHeight)."
+                    message: "Video dimensions will be snapped from \(input.resolvedOutputWidth)x\(input.resolvedOutputHeight) to \(resolvedWidth)x\(resolvedHeight)."
                 )
             )
         }
-        if input.numFrames >= minimumFrames, input.duration == nil, resolvedFrames != input.numFrames {
+        if plan != nil, input.requestedFrameCount >= minimumFrames, input.duration == nil, resolvedFrames != input.requestedFrameCount {
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "num_frames_will_be_adjusted",
                     severity: .note,
                     title: "Frame count will be adjusted",
                     message: usesMiniMaxH3Geometry
-                        ? "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy 17*n+5."
-                        : "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy \(temporalMultiple)n+1."
+                        ? "Frame count will be snapped from \(input.requestedFrameCount) to \(resolvedFrames) to satisfy 17*n+5."
+                        : "Frame count will be snapped from \(input.requestedFrameCount) to \(resolvedFrames) to satisfy \(temporalMultiple)n+1."
                 )
             )
         }
-        if let duration = input.duration, input.fps > 0, duration > 0 {
+        if plan != nil, let duration = input.duration, input.fps > 0, duration > 0 {
             let outputFPS = usesMiniMaxH3Geometry
                 ? Double(MiniMaxH3Geometry.framesPerSecond)
                 : input.fps
@@ -1890,7 +1188,7 @@ struct VideoGenerationPreflightAnalyzer {
                     severity: .note,
                     title: "Duration resolved to frame count",
                     message: String(
-                        format: "Duration %.2fs resolves to %d frames at %d fps (~%.2fs).",
+                        format: "Duration %.2fs resolves to %d frames at %g fps (~%.2fs).",
                         duration,
                         resolvedFrames,
                         outputFPS,
@@ -1905,30 +1203,30 @@ struct VideoGenerationPreflightAnalyzer {
         let resolvedOutputMode: LTXVideoOutputMode? = usesWanGeometry || usesMiniMaxH3Geometry
             ? nil
             : (usesAudioConditioning || input.variant == .unifiedAV ? .audioVideo : .videoOnly)
-        let resolvedVideoDecoder: LTXVideoDecoderKind? = if model.layout == "ltx25_full" {
-            input.videoDecoder ?? .diffusion
-        } else if model.layout == "ltx25_distilled" {
-            input.videoDecoder ?? .convolutional
-        } else {
-            nil
-        }
-        let h3AccelerationMode = MiniMaxH3AccelerationMode(rawValue: input.h3AccelerationMode) ?? .quality
-        let resolvedH3Steps: Int? = if usesMiniMaxH3Geometry {
-            input.steps ?? (h3AdapterInferenceRecipe != nil
-                ? h3AdapterInferenceRecipe?.defaultSchedulePointCount
-                : (try? MiniMaxH3StepPolicy.recommendedPointCount(
-                width: validH3RenderWidth ?? resolvedWidth,
-                height: validH3RenderHeight ?? resolvedHeight,
-                numFrames: resolvedFrames,
-                keyframeCount: [input.image, input.endImage].compactMap { $0 }.count
-                    + input.h3FrameInputs.count,
-                referenceKinds: input.references.compactMap { reference in
-                    MiniMaxH3ReferenceKind(rawValue: String(reference.prefix { $0 != ":" }))
-                },
-                accelerationMode: h3AccelerationMode
-            )))
-        } else {
-            nil
+        let resolvedVideoDecoder = modelProfile.isLTX25 ? plan?.videoDecoder : nil
+        var resolvedH3Steps: Int?
+        if usesMiniMaxH3Geometry, let plan {
+            do {
+                let frames = try parseMiniMaxH3FrameArguments(input.h3FrameInputs, requireFiles: false)
+                let references = try parseMiniMaxH3ReferenceArguments(input.references, requireFiles: false)
+                let preparation = try VideoGenerationH3Preparation(
+                    options: input, profile: modelProfile,
+                    modelRoot: model.path.map { URL(fileURLWithPath: $0) },
+                    adaptersRoot: adaptersRoot, fileManager: fileManager, requireInstalled: false
+                )
+                resolvedH3Steps = try plan.miniMaxH3Options(
+                    adapterURL: preparation.adapterURL,
+                    firstFrameURL: input.image.map { URL(fileURLWithPath: $0) },
+                    lastFrameURL: input.endImage.map { URL(fileURLWithPath: $0) },
+                    frames: frames, references: references
+                ).steps
+            } catch {
+                let issue = error as? VideoGenerationIssue
+                diagnostics.append(PreflightDiagnostic(
+                    id: issue?.id ?? "h3_generation_options_invalid", severity: .blocker,
+                    title: issue?.title ?? "MiniMax-H3 request is invalid", message: error.localizedDescription
+                ))
+            }
         }
         return VideoGenerationPlanPreflightSummary(
             variant: usesMiniMaxH3Geometry
@@ -1939,11 +1237,11 @@ struct VideoGenerationPreflightAnalyzer {
             quality: resolvedQuality(model: model)?.rawValue,
             outputMode: resolvedOutputMode?.rawValue,
             inputMode: inputs.mode,
-            requestedWidth: input.width,
-            requestedHeight: input.height,
+            requestedWidth: input.resolvedOutputWidth,
+            requestedHeight: input.resolvedOutputHeight,
             resolvedWidth: resolvedWidth,
             resolvedHeight: resolvedHeight,
-            requestedNumFrames: input.numFramesSpecified ? input.numFrames : nil,
+            requestedNumFrames: input.numFramesSpecified ? input.requestedFrameCount : nil,
             requestedDurationSeconds: input.duration,
             autoDuration: effectiveAutoDuration(model: model),
             videoDecoder: resolvedVideoDecoder?.rawValue,
@@ -1970,14 +1268,14 @@ struct VideoGenerationPreflightAnalyzer {
                 ? Double(MiniMaxH3Geometry.framesPerSecond)
                 : input.fps,
             resolvedNumFrames: effectiveAutoDuration(model: model) == nil
-                ? resolvedFrames
+                ? plan?.numFrames
                 : nil,
-            resolvedDurationSeconds: effectiveAutoDuration(model: model) == nil && input.fps > 0
+            resolvedDurationSeconds: plan != nil && effectiveAutoDuration(model: model) == nil && input.fps > 0
                 ? Double(resolvedFrames) / (usesMiniMaxH3Geometry
                     ? Double(MiniMaxH3Geometry.framesPerSecond)
                     : input.fps)
                 : nil,
-            seed: input.seed ?? (model.layout?.hasPrefix("ltx25_") == true ? 10 : 42),
+            seed: plan?.seed ?? input.seed ?? (modelProfile.isLTX25 ? 10 : 42),
             writesAudio: usesMiniMaxH3Geometry || usesAudioConditioning || (!usesWanGeometry && routeWritesAudio),
             audioConditioning: usesAudioConditioning,
             preservesSourceAudio: usesAudioConditioning,
@@ -2005,8 +1303,8 @@ struct VideoGenerationPreflightAnalyzer {
                 enabled: !blocked,
                 disabledReason: blocked ? "Resolve hard blockers first." : nil,
                 command: DeclarativeCommand(
-                    argv: input.generationArgv,
-                    cwd: input.cwd,
+                    argv: generationArgv,
+                    cwd: cwd,
                     commandPath: ["video", "generate"]
                 ),
                 requires: ["preflight.passed"]
@@ -2022,7 +1320,7 @@ struct VideoGenerationPreflightAnalyzer {
                     style: .secondary,
                     command: DeclarativeCommand(
                         argv: ["mere.run", "model", "pull", model.requested],
-                        cwd: input.cwd,
+                        cwd: cwd,
                         commandPath: ["model", "pull"]
                     )
                 )

@@ -27,6 +27,13 @@ Core retains resource loading and generation for these families.
   cleanup, typed events, and results. The caller's executor owns admission and
   runtime residency.
 - `ImageMaskEditing.swift`: mask/outpaint preparation and pixel restoration.
+- `VideoGenerationOptions*.swift` and `VideoGenerationPlan*.swift`: shared
+  video selection, option validation, geometry, seeds, and native request
+  construction for LTX, Wan, and MiniMax-H3.
+- `VideoGenerationLTXPreparation.swift`, `VideoGenerationH3Preparation.swift`,
+  and `VideoGenerationLTXRequest.swift`: adapter compatibility, metadata-based
+  preparation, and typed LTX requests. CLI preflight observes the same rules;
+  the command retains loading, progress, cleanup, and export.
 - `ManagedAdapterArgumentResolver.swift`: installed adapter lookup and base-model
   compatibility shared by image, text, video, and evaluation adapters.
 - `ManagedModel*.swift`: public managed-model catalog and install metadata.

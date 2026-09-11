@@ -175,6 +175,8 @@ mereRunCoreDependencies.append("MereRunH3Model")
 mereRunCoreDependencies.append("MereRunLagunaModel")
 mereRunCoreDependencies.append("MereRunModelKit")
 mereRunCoreDependencies.append("MereRunExecution")
+// Shared video plans consume the public quality, output-mode, and variant enums.
+mereRunCoreDependencies.append("MereRunContract")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
 mereRunCoreDependencies.append("MereRunImageModels")

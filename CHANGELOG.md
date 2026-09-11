@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share `video generate` model selection, option validation, geometry, and
+  native request construction between preflight and execution in Core.
+  Preflight now applies H3 conditioning rules, reads HDR IC-LoRA canvas
+  metadata, and reports generation-only option conflicts before loading.
+- Reject nonfinite durations and frame-count overflow before model resolution.
+  Preserve timed-image conditioning strength when a CRF value is also supplied.
 - Share ACE-Step and MiniMax music preparation and execution between the CLI
   and resident APIs. Keep loading and generation on retained CPU/GPU streams.
 - Share music WAV export in `AudioCore`, with validated settings, explicit
