@@ -202,16 +202,26 @@ struct RestrictedStateDictPickle {
     }
 
     private mutating func finish() throws -> [ParsedTensor] {
-        guard index == data.count, stack.count == 1, case .dictionary(let dictionary) = stack[0] else {
+        guard index == data.count, stack.count == 1 else {
             throw PyTorchStateDictError.malformedPickle("STOP did not terminate one state dictionary")
         }
         let stateDictionary: [(String, PickleValue)]
-        if dictionary.count == 1,
-           dictionary[0].0 == "generator",
-           case .dictionary(let generator) = dictionary[0].1 {
-            stateDictionary = generator
-        } else {
-            stateDictionary = dictionary
+        switch stack[0] {
+        case .tensor:
+            // `torch.save(tensor)` stores a bare tensor rather than a mapping.
+            // It is still one rebuilt tensor over one whitelisted storage, so it
+            // is admitted under the single reserved name.
+            stateDictionary = [(PyTorchStateDictArchive.bareTensorName, stack[0])]
+        case .dictionary(let dictionary):
+            if dictionary.count == 1,
+               dictionary[0].0 == "generator",
+               case .dictionary(let generator) = dictionary[0].1 {
+                stateDictionary = generator
+            } else {
+                stateDictionary = dictionary
+            }
+        default:
+            throw PyTorchStateDictError.malformedPickle("STOP did not terminate one state dictionary")
         }
         return try stateDictionary.map { name, value in
             guard case .tensor(let tensor) = value else {

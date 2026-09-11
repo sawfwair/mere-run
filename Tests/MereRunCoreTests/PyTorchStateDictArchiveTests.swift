@@ -27,6 +27,36 @@ final class PyTorchStateDictArchiveTests: XCTestCase {
         XCTAssertEqual(array.asArray(Float.self), [1.5, -2])
     }
 
+    func testAcceptsBareTensorWrittenByTorchSaveTensor() throws {
+        let url = try writeCheckpoint(
+            pickle: bareTensorPickle(shape: [2, 2], stride: [2, 1], storageElementCount: 4),
+            storage: floatData([1, 2, 3, 4])
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let archive = try PyTorchStateDictArchive(url: url)
+        XCTAssertEqual(archive.tensors.map(\.name), [PyTorchStateDictArchive.bareTensorName])
+        let descriptor = try XCTUnwrap(archive.bareTensor)
+        XCTAssertEqual(descriptor.shape, [2, 2])
+        XCTAssertEqual(descriptor.dataType, .float32)
+
+        let array = try archive.loadArray(for: descriptor)
+        MLX.eval(array)
+        XCTAssertEqual(array.shape, [2, 2])
+        XCTAssertEqual(array.asArray(Float.self), [1, 2, 3, 4])
+    }
+
+    func testBareTensorAccessorIgnoresMappedStateDictionaries() throws {
+        let url = try writeCheckpoint(
+            pickle: stateDictPickle(shape: [2], stride: [1], storageElementCount: 2),
+            storage: floatData([1.5, -2])
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let archive = try PyTorchStateDictArchive(url: url)
+        XCTAssertNil(archive.bareTensor, "A named state dictionary is not a bare tensor archive")
+    }
+
     func testAcceptsExactGeneratorStateDictWrapper() throws {
         let url = try writeCheckpoint(
             pickle: generatorStateDictPickle(shape: [2], stride: [1], storageElementCount: 2),
@@ -350,6 +380,33 @@ private func stateDictPickle(
     data.append(contentsOf: [0x29, 0x52]) // EMPTY_TUPLE, REDUCE
     data.append(contentsOf: [0x74, 0x52]) // TUPLE, REDUCE
     data.append(contentsOf: [0x75, 0x2E]) // SETITEMS, STOP
+    return data
+}
+
+private func bareTensorPickle(
+    shape: [Int],
+    stride: [Int],
+    storageElementCount: Int,
+    storageKey: String = "0",
+    storageDevice: String = "cpu"
+) -> Data {
+    var inner = stateDictPickle(
+        shape: shape,
+        stride: stride,
+        storageElementCount: storageElementCount,
+        storageKey: storageKey,
+        storageDevice: storageDevice
+    )
+    // Drop PROTO 2, EMPTY_DICT, MARK, and the "weight" key so the rebuilt tensor
+    // is the pickle root, which is what `torch.save(tensor)` writes.
+    inner.removeFirst(4)
+    let keyByteCount = 1 + 4 + Data("weight".utf8).count
+    inner.removeFirst(keyByteCount)
+    inner.removeLast(2) // SETITEMS, STOP
+
+    var data = Data([0x80, 0x02]) // PROTO 2
+    data.append(inner)
+    data.append(0x2E) // STOP
     return data
 }
 

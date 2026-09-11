@@ -39,6 +39,7 @@ mesh. The runtime provides 19 commands that run on your machine.
 | --- | --- |
 | `mere.run vision pose` | Detect body, hand, and face landmarks with the native platform runtime. |
 | `mere.run vision flow` | Generate dense optical flow between two equal-size images. |
+| `mere.run vision depth` | Estimate affine-invariant depth for a still image with native Marigold V2. |
 | `mere.run vision depth-video` | Generate temporally consistent relative or metric video depth with native VDA-S. |
 | `mere.run vision geometry` | Generate metric depth, normals, camera intrinsics, and a point cloud with native MoGe-2. |
 | `mere.run vision geometry-multiview` | Solve native DA3-Small multi-view relative geometry, confidence, and cameras. |
@@ -72,6 +73,7 @@ canonical reconstruction flow.
 - `vision-depth-vda-small`
 - `vision-depth-vda-small-metric`
 - `vision-geometry-da3-small`
+- `vision-depth-marigold-v2`
 - `image-3d-triposr`
 - `image-3d-trellis2-4b`
 - `image-3d-instantmesh-base`
@@ -298,6 +300,35 @@ swift run mere.run vision flow ./frame-001.png ./frame-002.png \
 The two images must have equal dimensions. Output vectors use the Middlebury
 `.flo` format and preserve full-resolution 32-bit horizontal and vertical
 motion components.
+
+### Estimate depth for a single image
+
+```bash
+swift run mere.run model pull vision-depth-marigold-v2
+swift run mere.run vision depth ./photo.jpg --output ./photo-depth
+```
+
+Native Marigold V2 writes a depth EXR, a preview PNG, and a manifest JSON into
+the output directory (default `<stem>-depth` next to the input). Inference is a
+single rectified-flow step at a fixed timestep on a frozen, 4-bit quantized
+Qwen-Image-Edit-2509 transformer with rank-128 adapters installed on top, so
+there is no step count or guidance scale to set.
+
+Output is affine-invariant: depth is recovered up to an unknown scale and shift
+per image. Values are normalized per image so that larger means farther, and the
+manifest records the mapping that was applied along with the raw range. No
+camera intrinsics or point cloud are written, because the model does not
+estimate them; use `vision geometry` when you need metric units or a camera.
+
+`--max-edge` bounds the longest inference edge, rounded to a multiple of 16
+(default 1024); `--native` runs at the source resolution instead. Memory grows
+with resolution, so raise the cap only with headroom to spare. `--checkpoint`
+selects a published variant — `log-stage2` (default) is the paper model, the
+`*-layered` variants predict see-through depth behind glass, and the
+`disparity-*` and `uniform-*` variants change the depth parameterization.
+Variants other than the default are not part of the managed install and need a
+local Marigold repository root passed to `--model`. `--dry-run` and `--json`
+behave as in `geometry`.
 
 ### Generate temporally consistent video depth
 

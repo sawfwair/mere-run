@@ -106,6 +106,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case visionDepthVDASmall = "vision-depth-vda-small"
     case visionDepthVDASmallMetric = "vision-depth-vda-small-metric"
     case visionGeometryDA3Small = "vision-geometry-da3-small"
+    case visionDepthMarigoldV2 = "vision-depth-marigold-v2"
     case image3DTripoSR = "image-3d-triposr"
     case image3DInstantMeshBase = "image-3d-instantmesh-base"
     case image3DTrellis2 = "image-3d-trellis2-4b"

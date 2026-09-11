@@ -75,6 +75,7 @@ public enum QuantizedModelManifestWriter {
             case .insightFace: return .face
             case .moge2, .depthAnything3: return .geometry
             case .videoDepthAnything: return .depth
+            case .marigoldV2: return .depth
             case .tripoSR, .instantMesh, .trellis2: return .threeD
             case .qwen3TTS: return .tts
             case .qwen3ASR, .parakeetASR: return .asr
@@ -175,6 +176,8 @@ public enum QuantizedModelManifestWriter {
                     return [.temporalDepth]
                 case .depthAnything3:
                     return [.relativeDepth, .cameraIntrinsics, .cameraExtrinsics, .pointCloud]
+                case .marigoldV2:
+                    return [.relativeDepth]
                 case .tripoSR, .trellis2:
                     return [.imageTo3D, .meshGeneration]
                 case .instantMesh:
@@ -293,7 +296,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .samSegmentation, .falconPerception, .terramindFlood, .terramindFire, .tessera,
                  .olmoEarth, .insightFace, .moge2,
-                 .videoDepthAnything, .depthAnything3,
+                 .videoDepthAnything, .depthAnything3, .marigoldV2,
                  .tripoSR, .instantMesh, .trellis2:
                 break
             case .qwen3TTS, .qwen3ASR, .parakeetASR, .sortformer, .qwen3Embedding, .openAIPrivacyFilter,

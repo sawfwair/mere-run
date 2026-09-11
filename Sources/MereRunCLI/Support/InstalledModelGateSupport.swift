@@ -380,6 +380,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedDA3Check(model: spec.id)
             }
 
+        case .marigoldV2:
+            return direct(spec, route: "vision depth") { runner in
+                try await runner.installedMarigoldDepthCheck(model: spec.id)
+            }
+
         case .tripoSR:
             return direct(spec, route: "vision image-to-3d") { runner in
                 try await runner.installedTripoCheck(model: spec.id)
@@ -1245,6 +1250,22 @@ extension GateRunner {
             timeout: 1_800
         )
         return try directoryObservation(output, run: run, label: "video depth artifacts")
+    }
+
+    func installedMarigoldDepthCheck(model: String) async throws -> GateObservation {
+        let image = try fixtureImage()
+        let output = workDirectory.appendingPathComponent("\(safeName(model))-depth", isDirectory: true)
+        let run = try await exec(
+            [
+                "vision", "depth", image.path,
+                "--model", model,
+                "--max-edge", "256",
+                "--output", output.path,
+                "--json",
+            ],
+            timeout: 1_800
+        )
+        return try directoryObservation(output, run: run, label: "depth artifacts")
     }
 
     func installedDA3Check(model: String) async throws -> GateObservation {

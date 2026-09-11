@@ -638,6 +638,16 @@ source revision and checksum-verified as part of runtime readiness.
   [`ByteDance-Seed/Depth-Anything-3`](https://github.com/ByteDance-Seed/Depth-Anything-3)
   commit `41736238f5bced4debf3f2a12375d2466874866d`; Apache License 2.0. The shared
   DINOv2 encoder remains Apache License 2.0.
+- **Marigold V2 depth** — single-step dense-prediction inference (latent
+  normalization, fixed-timestep velocity step, and channel readout) derived from
+  [`huawei-bayerlab/marigold-v2`](https://github.com/huawei-bayerlab/marigold-v2);
+  Apache License 2.0. Adapter and prompt-embedding weights are pinned to
+  [`huawei-bayerlab/marigold-v2-0`](https://huggingface.co/huawei-bayerlab/marigold-v2-0)
+  revision `6fd6d1ca246c9d2d99a4d8ac375a4eccc87178ad` in
+  `Sources/MereRunCore/MarigoldV2/MarigoldV2Resources.swift` rather than in
+  `GeometryModelPins.swift`. The frozen base model
+  [`Qwen/Qwen-Image-Edit-2509`](https://huggingface.co/Qwen/Qwen-Image-Edit-2509)
+  keeps its own license and is downloaded separately.
 - **TripoSR** — reconstruction graph, camera conditioning, field decoder, and
   preprocessing derived from
   [`VAST-AI-Research/TripoSR`](https://github.com/VAST-AI-Research/TripoSR)

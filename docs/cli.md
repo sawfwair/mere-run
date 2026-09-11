@@ -66,6 +66,7 @@ Public tree:
   - `mere.run vision track-live` — Capture from a camera and track text-prompted objects with the native SAM 3.1 runtime.
   - `mere.run vision pose` — Detect body, hand, and face landmarks in an image with the native platform runtime.
   - `mere.run vision flow` — Generate dense optical flow between two equal-size images.
+  - `mere.run vision depth` — Estimate affine-invariant depth for a still image with native Marigold V2.
   - `mere.run vision depth-video` — Generate temporally consistent relative or metric video depth with native VDA-S.
   - `mere.run vision geometry` — Generate metric depth, normals, camera intrinsics, and a point cloud with native MoGe-2.
   - `mere.run vision geometry-multiview` — Solve native DA3-Small multi-view relative geometry, confidence, and cameras.

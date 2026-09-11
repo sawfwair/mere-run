@@ -7,7 +7,7 @@ For source research and recipe status, see the
 
 ## Read a model guide
 
-The handbook contains original recipes for 139 managed model IDs, organized
+The handbook contains original recipes for 140 managed model IDs, organized
 into 59 families. Each guide includes an example, supported controls, variant
 notes, review advice, and sources. Models without a text-prompt interface have
 input-preparation guidance.

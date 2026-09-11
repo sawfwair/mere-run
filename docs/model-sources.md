@@ -136,6 +136,7 @@ an effective overlay; they are not a second capability catalog.
 | `vision-depth` | `vision-depth-vda-small` |
 | `vision-depth` | `vision-depth-vda-small-metric` |
 | `vision-geometry` | `vision-geometry-da3-small` |
+| `vision-depth` | `vision-depth-marigold-v2` |
 | `image-3d` | `image-3d-triposr` |
 | `image-3d` | `image-3d-instantmesh-base` |
 | `image-3d` | `image-3d-trellis2-4b` |

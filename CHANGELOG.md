@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add single-image depth estimation through `vision depth`, backed by native
+  Marigold V2 on a frozen, 4-bit quantized Qwen-Image-Edit-2509 transformer with
+  rank-128 adapters and, where the checkpoint ships one, a fine-tuned VAE
+  decoder. Inference is one rectified-flow step at a fixed timestep with no
+  guidance, conditioned on the precomputed prompt embeddings, so the base text
+  encoder is neither loaded nor downloaded. Output is affine-invariant and
+  normalized per image; the run writes a depth EXR, a preview PNG, and a
+  manifest recording the applied mapping, and writes no camera or point cloud
+  because the model does not estimate them. Adds the managed model
+  `vision-depth-marigold-v2`, and accepts a bare tensor written by
+  `torch.save(tensor)` in the non-executing PyTorch state-dict reader.
+
 - Share chat sampling resolution, numeric validation, native invocation, and
   cleanup between `text chat` and the API. `text chat` now range-checks sampling
   values that it previously passed straight to the generator, rejecting them

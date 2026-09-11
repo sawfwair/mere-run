@@ -1,17 +1,17 @@
-# MoGe2, Video Depth Anything, and DA3
+# MoGe2, Video Depth Anything, DA3, and Marigold V2
 
 ## Purpose
 
 This guide is for mere.run Studio and command-line users.
 
-Prepare images and video for MoGe2, Video Depth Anything, and Depth Anything 3
-(DA3).
+Prepare images and video for MoGe2, Video Depth Anything, Depth Anything 3
+(DA3), and Marigold V2.
 
 ## Start here
 
-Choose the task before the model: single-image geometry, video depth, or ordered
-multiview geometry. These inputs use image evidence and camera conventions
-rather than a text prompt.
+Choose the task before the model: single-image geometry, single-image depth,
+video depth, or ordered multiview geometry. These inputs use image evidence and
+camera conventions rather than a text prompt.
 
 ## Example to adapt
 
@@ -31,6 +31,15 @@ depth, and DA3 for its local multiview path. Keep relative and metric Video
 Depth Anything variants distinct. Relative depth describes distance
 relationships. Metric depth estimates distance in physical units. A relative
 depth map can't be interpreted as meters without an appropriate calibration.
+
+Use Marigold V2 for single-image depth when edge detail matters more than scale.
+Its output is affine-invariant: depth is recovered up to an unknown scale and
+shift per image, so two images can't be compared directly and no camera or point
+cloud is produced. Prefer MoGe2 when you need intrinsics or metric units. The
+shipped checkpoint predicts log depth, which increases with distance. Inference
+runs one step at a fixed timestep rather than a sampled trajectory, so there is
+no step count or guidance scale to tune. The longest edge is capped by default
+because memory grows with resolution; raise it only if the machine has headroom.
 
 ## Iterate and review
 
@@ -65,6 +74,7 @@ To inspect the available command options, run the following command:
 
 ```bash
 mere.run vision geometry --help
+mere.run vision depth --help
 ```
 
 For your first run, use the selected command's defaults. To compare later runs,
@@ -78,13 +88,14 @@ This guide covers the following managed model IDs:
 - `vision-depth-vda-small`
 - `vision-depth-vda-small-metric`
 - `vision-geometry-da3-small`
+- `vision-depth-marigold-v2`
 
 ## Sources and validation
 
 This original mere.run recipe draws on provider material and local command
 documentation. Check the local controls before applying provider examples.
 
-Editorial review date: September 4, 2026.
+Editorial review date: September 11, 2026.
 
 These recipes have not been validated with model inference. Review generated
 results before relying on a recipe.

@@ -5,7 +5,7 @@ find provider sources, update the offline handbook, and record recipe validation
 For instructions on reading guides, see [Cookbooks](./cookbooks.md).
 
 Inventory snapshot: September 4, 2026, repository commit
-`b4a692ec144f2e5f3c61504e657dbbb1989c6c09`. The table accounts for all 139 managed model IDs in the [canonical catalog](./model-sources.md#canonical-managed-model-ids),
+`b4a692ec144f2e5f3c61504e657dbbb1989c6c09`. The table accounts for all 140 managed model IDs in the [canonical catalog](./model-sources.md#canonical-managed-model-ids),
 grouped into 59 rows. Each exact ID appears once. This inventory excludes aliases, separately managed
 adapters, and hidden companion artifacts.
 
@@ -470,11 +470,11 @@ Table 5 lists provider sources and local recipes for vision and reconstruction m
       <td>Not verified</td>
     </tr>
     <tr>
-      <td>MoGe2, Video Depth Anything, and DA3</td>
-      <td><code>vision-geometry-moge2-small</code>, <code>vision-depth-vda-small</code>, <code>vision-depth-vda-small-metric</code>, <code>vision-geometry-da3-small</code></td>
+      <td>MoGe2, Video Depth Anything, DA3, and Marigold V2</td>
+      <td><code>vision-geometry-moge2-small</code>, <code>vision-depth-vda-small</code>, <code>vision-depth-vda-small-metric</code>, <code>vision-geometry-da3-small</code>, <code>vision-depth-marigold-v2</code></td>
       <td>No free-text task</td>
       <td>Geometry and depth estimation; track image and video preparation, scale, and camera conventions.</td>
-      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-depth-geometry.md">MoGe2, Video Depth Anything, and DA3 guide (draft)</a></td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-depth-geometry.md">MoGe2, Video Depth Anything, DA3, and Marigold V2 guide (draft)</a></td>
       <td>Not verified</td>
     </tr>
     <tr>

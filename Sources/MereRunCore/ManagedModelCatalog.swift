@@ -552,6 +552,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case moge2
     case videoDepthAnything
     case depthAnything3
+    case marigoldV2
     case tripoSR
     case instantMesh
     case trellis2
@@ -2908,6 +2909,19 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["vision geometry-multiview"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.visionDepthMarigoldV2.rawValue,
+            category: .visionDepth,
+            installShape: .structuredRoot,
+            hubFallback: MarigoldV2Repository.baseHubFallback,
+            mountedHubFallbacks: MarigoldV2Repository.mountedHubFallbacks,
+            upstreamRepoId: MarigoldV2Repository.upstreamRepoId,
+            upstreamRevision: MarigoldV2Repository.upstreamRevision,
+            validationKind: .marigoldV2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: MarigoldV2Repository.estimatedDownloadBytes,
+            defaultCLICommands: ["vision depth"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.image3DTripoSR.rawValue,
             category: .image3D,
             installShape: .directoryRoot,
@@ -4438,6 +4452,8 @@ public extension ManagedModelSpec {
             return SCAIL2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .dreamXCausalMLX:
             return Wan2DreamXCausalResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .marigoldV2:
+            return MarigoldV2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hfTextChat:
             return Self.missingHFTextRootPaths(in: rootURL, fileManager: fileManager)
         }

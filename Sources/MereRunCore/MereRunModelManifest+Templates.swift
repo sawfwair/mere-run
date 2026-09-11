@@ -1498,6 +1498,19 @@ extension MereRunModelManifest {
                 upstreamRepoId: "depth-anything/DA3-SMALL@e08cab65ca0ec38e7826075418411ab90cab4da3",
                 createdAt: createdAt
             )
+        case .visionDepthMarigoldV2:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .marigoldV2,
+                family: .depth,
+                tier: .large,
+                variant: .standard,
+                precision: .int4,
+                supports: [.relativeDepth],
+                components: nil,
+                upstreamRepoId: "huawei-bayerlab/marigold-v2-0@6fd6d1ca246c9d2d99a4d8ac375a4eccc87178ad",
+                createdAt: createdAt
+            )
         case .image3DTripoSR:
             return MereRunModelManifest(
                 id: modelID.rawValue,
