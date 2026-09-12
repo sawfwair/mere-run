@@ -946,7 +946,10 @@ struct StudioModelsView: View {
     }
 
     private func status(of row: StudioModelInventoryRow) -> StudioModelRowStatus {
-        StudioModelsPresenter.status(of: row, job: activeJob)
+        if let download = modelStore.download(modelID: row.id) {
+            return .pulling(download.progress?.fractionCompleted)
+        }
+        return StudioModelsPresenter.status(of: row, job: activeJob)
     }
 
     private func detailBody(for row: StudioModelInventoryRow) -> String {
