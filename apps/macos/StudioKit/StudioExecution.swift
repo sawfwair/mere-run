@@ -1,6 +1,16 @@
 import Foundation
 import MereRunContract
 
+extension CommandTemplate {
+    /// Both preparation and final job admission validate the same effective command.
+    package func validationMessage(for draft: CommandDraft, execution: StudioExecution?) -> String? {
+        if let execution {
+            return execution.validationMessage ?? StudioConsoleCommand.connectionValidationMessage(for: id, draft: draft)
+        }
+        return validationMessage(for: draft)
+    }
+}
+
 /// The command a user approved, before the launcher adds global configuration and transport flags.
 /// History and replay retain this vector rather than reconstructing it from a simplified form.
 package struct StudioExecution: Codable, Equatable {

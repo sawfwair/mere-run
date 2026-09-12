@@ -30,6 +30,11 @@ in Contract; API transport policy and response construction stay in the CLI.
 
 ## Durable operation history
 
+For macOS task state and request preparation, read
+[Studio prompt workspace ownership](./internals/studio-prompt-workspace.md).
+Studio's prompt controller consumes the CLI contract and submits through the
+existing job store.
+
 `MereRunExecution` owns run-directory leases, file fingerprints, atomic record
 writes, and terminal states. Core owns image records; AudioCore owns file
 transcription records. CLI inspection and listing use one typed operation-record
