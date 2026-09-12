@@ -979,7 +979,8 @@ if !isLinuxPackage {
     .target(
       name: "StudioKit",
       dependencies: ["MereRunContract"],
-      path: "apps/macos/StudioKit"
+      path: "apps/macos/StudioKit",
+      exclude: ["README.md"]
     )
   )
   targets.append(
@@ -987,6 +988,7 @@ if !isLinuxPackage {
       name: "StudioUI",
       dependencies: ["StudioKit", "MereRunContract"],
       path: "apps/macos/StudioUI",
+      exclude: ["README.md"],
       resources: [
         // Caveat (OFL 1.1) for the sidebar wordmark; registered at launch by MereRunTheme.Brand.
         .copy("Resources/Fonts")
