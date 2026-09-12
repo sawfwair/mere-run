@@ -37,7 +37,7 @@ final class CommandContractGuardTests: XCTestCase {
             [],
             """
             The app emits flags the shared contract does not declare. Add each to \
-            CommandCapabilityContract.swift if the CLI accepts it, or stop emitting it if the CLI \
+            the matching CommandCapabilityCatalog family file if the CLI accepts it, or stop emitting it if the CLI \
             does not.
             """
         )
@@ -253,4 +253,3 @@ private protocol OptionalWrapping {
 extension Optional: OptionalWrapping {
     static var wrappedType: Any.Type { Wrapped.self }
 }
-
