@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 package final class StudioModelStore: ObservableObject {
     @Published package private(set) var rows: [StudioModelInventoryRow] = []
+    @Published package private(set) var hasInventory = false
     @Published package private(set) var storage: StudioModelStorageReport?
     @Published package private(set) var isRefreshing = false
     @Published package private(set) var error: String?
@@ -80,6 +81,7 @@ package final class StudioModelStore: ObservableObject {
         isRefreshing = true
         if snapshotContext != context {
             rows = []
+            hasInventory = false
             storage = nil
             metadata = [:]
             snapshotContext = context
@@ -116,6 +118,7 @@ package final class StudioModelStore: ObservableObject {
         metadata = freshMetadata
         storage = freshStorage
         rows = applyingStorage(freshStorage, to: StudioModelCatalogParser.applying(freshMetadata, to: freshRows))
+        hasInventory = true
         error = nil
     }
 

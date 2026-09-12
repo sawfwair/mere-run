@@ -25,6 +25,30 @@ final class StudioModelStoreTests: XCTestCase {
 
     private func settle() async { try? await Task.sleep(for: .milliseconds(30)) }
 
+    func testFailedFirstRefreshIsUnknownUntilAnEmptyInventorySucceeds() async {
+        let runner = RecordingProcessRunner()
+        let host = controller(runner)
+        defer { host.terminateAllProcesses() }
+        let store = host.modelStore
+        XCTAssertFalse(store.hasInventory)
+        let failed = Task { await store.refresh() }
+        await settle()
+        runner.starts[0].stdout("{broken"); runner.starts[0].termination(0)
+        await failed.value
+        XCTAssertFalse(store.hasInventory)
+        XCTAssertNotNil(store.error)
+        let recovered = Task { await store.refresh() }
+        await settle()
+        runner.starts[1].stdout("{\"inventory\":{\"rows\":[]},\"usageTerms\":[]}")
+        runner.starts[1].termination(0)
+        await settle()
+        runner.starts[2].stdout("{\"models\":[]}"); runner.starts[2].termination(0)
+        await recovered.value
+        XCTAssertTrue(store.hasInventory)
+        XCTAssertTrue(store.rows.isEmpty)
+        XCTAssertNil(store.error)
+    }
+
     func testRefreshPublishesSharedSnapshotAndRetainsItAfterMalformedOrFailedResponses() async {
         let runner = RecordingProcessRunner()
         let host = controller(runner)
@@ -47,6 +71,7 @@ final class StudioModelStoreTests: XCTestCase {
             runner.starts.last?.stdout(output); runner.starts.last?.termination(exitCode)
             await refresh.value
             XCTAssertEqual(store.rows.map(\.id), ["image-zimage-nano"])
+            XCTAssertTrue(store.hasInventory)
             XCTAssertNotNil(store.error)
             XCTAssertFalse(store.isRefreshing)
         }
@@ -88,6 +113,7 @@ final class StudioModelStoreTests: XCTestCase {
         runner.starts[0].stdout(inventory("old")); runner.starts[0].termination(0)
         await old.value
         XCTAssertTrue(host.modelStore.rows.isEmpty)
+        XCTAssertFalse(host.modelStore.hasInventory)
         let new = Task { await host.modelStore.refresh() }
         await settle()
         XCTAssertTrue(runner.starts[1].configuration.arguments.contains(host.modelsRoot))

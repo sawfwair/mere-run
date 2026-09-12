@@ -66,7 +66,8 @@ private struct StudioWorkspaceView: View {
     @ObservedObject private var models: StudioModelStore
     private var modelInventory: [StudioModelInventoryRow] { models.rows }
     private var modelInventorySummary: StudioModelInventorySummary? {
-        StudioModelInventorySummary(installedCount: models.rows.filter(\.isInstalled).count,
+        guard models.hasInventory else { return nil }
+        return StudioModelInventorySummary(installedCount: models.rows.filter(\.isInstalled).count,
                                     storageBytes: models.storage?.applicationSupportBytes)
     }
     private var modelUsageTermsByID: [String: StudioModelUsageTerms] {

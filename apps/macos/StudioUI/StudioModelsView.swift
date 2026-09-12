@@ -353,14 +353,15 @@ struct StudioModelsView: View {
             HStack(spacing: 8) {
                 StudioModelsSearchPill(
                     text: $searchText,
-                    placeholder: "Search \(installedRows.count) \(installedRows.count == 1 ? "model" : "models")"
+                    placeholder: modelStore.hasInventory
+                        ? "Search \(installedRows.count) \(installedRows.count == 1 ? "model" : "models")" : "Search models"
                 )
 
                 Button("Pull…") {
                     showPullSheet = true
                 }
                 .buttonStyle(ModelsPrimaryButtonStyle())
-                .disabled(isRefreshing)
+                .disabled(isRefreshing || !modelStore.hasInventory)
                 .help("Pull a model into managed storage")
             }
             .padding(EdgeInsets(top: 14, leading: 14, bottom: 8, trailing: 14))
@@ -455,6 +456,7 @@ struct StudioModelsView: View {
 
     private var emptyListMessage: String {
         if isRefreshing, rows.isEmpty { return "Loading models…" }
+        if !modelStore.hasInventory { return "Model inventory unavailable. Refresh to try again." }
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "No models match the search."
         }
