@@ -103,6 +103,8 @@ public enum SpeechSynthesisOperation {
                     continuation.yield(.completed(result: result))
                     continuation.finish()
                 } catch {
+                    writer?.cancel()
+                    writer = nil
                     continuation.finish(throwing: error)
                 }
             }
