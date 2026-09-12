@@ -79,6 +79,7 @@ enum APIVFXClientErrorPolicy {
     static func status(for error: Error) -> HTTPResponse.Status? {
         switch error {
         case is MoGe2TokenGridError,
+             is MoGe2GenerationError,
              is VideoDepthAnythingLimitError,
              is VideoGenerationError,
              is VideoGenerationIssue,
@@ -752,23 +753,16 @@ actor CodeGenServer {
                 )
                 defer { try? FileManager.default.removeItem(at: inputURL) }
                 let outputDirectory = try temporaryOutputDirectory(directoryName: "mere-run-api-geometry")
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = MoGe2Generator()
                 do {
-                    let result = try await generator.generate(
-                        imageURL: inputURL,
-                        outputDirectory: outputDirectory,
-                        model: nil,
-                        configuration: plan.configuration,
-                        progress: nil
+                    let result = try await MoGe2GenerationOperation.execute(
+                        plan.request(imageURL: inputURL, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.geometryResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }

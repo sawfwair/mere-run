@@ -892,6 +892,13 @@ default model ID (depth video also accepts its metric variant).
 - `token_count`: optional integer 1 through 3,600
 - `max_points`: optional positive point-count cap
 
+This route and `vision geometry` use the same validated settings and native
+operation. The derived patch grid must fit within 3,600 tokens after rounding;
+the CLI dry-run checks this limit too. The API retains its single request slot
+and creates a MoGe-2 runtime for each request. It awaits unloading before
+publishing the artifact response. See the
+[shared single-image geometry operation](../internals/geometry-generation-operation.md).
+
 `POST /v1/vision/geometry/multiview` accepts:
 
 - `image` / `image[]`: one or more image file parts; multipart order is the

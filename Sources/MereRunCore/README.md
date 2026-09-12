@@ -39,6 +39,8 @@ Core retains resource loading and generation for these families.
   compound input parsing and checkpoint lookup shared by preflight and execution.
 - `ManagedAdapterArgumentResolver.swift`: installed adapter lookup and base-model
   compatibility shared by image, text, video, and evaluation adapters.
+- `VisionGeometry/MoGe2/MoGe2GenerationOperation.swift`: shared single-image
+  geometry settings, observational plans, execution, and awaited unloading.
 - `ManagedModel*.swift`: public managed-model catalog and install metadata.
 - `ModelResolver.swift`: adapts the catalog and family validators to ModelKit lookup.
 - `MereRunModelManifest+Templates.swift`: runtime-dependent manifest templates.

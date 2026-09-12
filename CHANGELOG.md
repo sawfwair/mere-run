@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share MoGe-2 geometry settings, execution, and awaited unloading between the
+  CLI and API. Make `vision geometry --dry-run` apply the native dimension and
+  derived token-grid limits before model loading, and recheck inputs at execution.
+
 - Share native video preparation, execution, unloading, and media output between
   the CLI and video API through a Core operation. Preserve API defaults,
   optional argument syntax, request admission, and artifact retention without
