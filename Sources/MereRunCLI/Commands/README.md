@@ -10,7 +10,8 @@ This directory owns the public CLI surface.
   publishes completed audio through the shared operation.
 - `video generate` translates flags and compound arguments into Core video
   options. Keep model defaults and compatibility in `VideoGenerationOptions`
-  and `VideoGenerationPlan`; keep preflight JSON and filesystem diagnostics in
-  `Support/VideoGenerationPreflight.swift`.
+  and `VideoGenerationPlan`. `VideoGenerationOperation` owns execution; the CLI
+  formats progress, timings, and receipts. Keep preflight JSON and filesystem
+  diagnostics in `Support/VideoGenerationPreflight.swift`.
 
 If you change a flag, subcommand name, or help contract, update the nearest parsing tests and any affected user-facing docs in the same change.

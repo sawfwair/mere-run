@@ -4,6 +4,7 @@ import AudioSTT
 import AudioTTS
 import MediaIO
 import MereRunCore
+import MereRunContract
 
 struct APIEngineCapabilities: Equatable, Sendable {
     var supportsRawProxy: Bool = false
@@ -584,29 +585,9 @@ enum APIServerContract {
         let numFrames: Int?
         let fps: Int
         let seed: Int?
-        let quality: String?
-        let outputMode: String?
+        let quality: LTXVideoQuality?
+        let outputMode: LTXVideoOutputMode?
         let options: [String]
-
-        var commandArguments: [String] {
-            var arguments = [
-                prompt,
-                "--model", modelID,
-                "--width", String(width),
-                "--height", String(height),
-                "--fps", String(fps),
-            ]
-            if let seconds {
-                arguments += ["--duration", String(seconds)]
-            } else if let numFrames {
-                arguments += ["--num-frames", String(numFrames)]
-            }
-            if let seed { arguments += ["--seed", String(seed)] }
-            if let quality { arguments += ["--quality", quality] }
-            if let outputMode { arguments += ["--output-mode", outputMode] }
-            arguments += options
-            return arguments
-        }
     }
 
     struct SpeechPlan: Equatable, Sendable {
@@ -1831,16 +1812,23 @@ enum APIServerContract {
         guard fps > 0, fps <= 240 else {
             throw APIRequestValidationError.invalidField("fps", "must be between 1 and 240")
         }
-        let quality = normalizedOptional(request.quality)?.lowercased()
-        if let quality, !["draft", "final"].contains(quality) {
-            throw APIRequestValidationError.invalidField("quality", "expected draft or final")
+        let quality: LTXVideoQuality?
+        if let value = normalizedOptional(request.quality)?.lowercased() {
+            guard let parsed = LTXVideoQuality(rawValue: value) else {
+                throw APIRequestValidationError.invalidField("quality", "expected draft or final")
+            }
+            quality = parsed
+        } else {
+            quality = nil
         }
-        let outputMode = normalizedOptional(request.output_mode)?.lowercased()
-        if let outputMode, !["video-only", "audio-video"].contains(outputMode) {
-            throw APIRequestValidationError.invalidField(
-                "output_mode",
-                "expected video-only or audio-video"
-            )
+        let outputMode: LTXVideoOutputMode?
+        if let value = normalizedOptional(request.output_mode)?.lowercased() {
+            guard let parsed = LTXVideoOutputMode(rawValue: value) else {
+                throw APIRequestValidationError.invalidField("output_mode", "expected video-only or audio-video")
+            }
+            outputMode = parsed
+        } else {
+            outputMode = nil
         }
         let options = try videoGenerationOptions(request.options ?? [])
         return VideoGenerationPlan(

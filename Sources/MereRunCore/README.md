@@ -32,8 +32,11 @@ Core retains resource loading and generation for these families.
   construction for LTX, Wan, and MiniMax-H3.
 - `VideoGenerationLTXPreparation.swift`, `VideoGenerationH3Preparation.swift`,
   and `VideoGenerationLTXRequest.swift`: adapter compatibility, metadata-based
-  preparation, and typed LTX requests. CLI preflight observes the same rules;
-  the command retains loading, progress, cleanup, and export.
+  preparation, and typed LTX requests. CLI preflight observes the same rules.
+- `VideoGenerationOperation*.swift`: shared CLI/API preparation, native loading,
+  generation, unloading, and media output. Callers retain admission and presentation.
+- `VideoGenerationArgumentParsing.swift` and `VideoGenerationModelResolver.swift`:
+  compound input parsing and checkpoint lookup shared by preflight and execution.
 - `ManagedAdapterArgumentResolver.swift`: installed adapter lookup and base-model
   compatibility shared by image, text, video, and evaluation adapters.
 - `ManagedModel*.swift`: public managed-model catalog and install metadata.

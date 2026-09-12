@@ -1,7 +1,7 @@
 import Foundation
 
-/// A prepared LTX request. Tensor loading, admission, progress, and export stay
-/// with the caller; every native options object comes from these same settings.
+/// A prepared LTX request. The shared operation owns loading and export;
+/// every native options object comes from these same settings.
 public struct VideoGenerationLTXRequest: Sendable {
     public let settings: VideoGenerationOptions
     public let plan: VideoGenerationPlan

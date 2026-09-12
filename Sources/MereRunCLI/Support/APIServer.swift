@@ -80,6 +80,8 @@ enum APIVFXClientErrorPolicy {
         switch error {
         case is MoGe2TokenGridError,
              is VideoDepthAnythingLimitError,
+             is VideoGenerationError,
+             is VideoGenerationIssue,
              is DepthAnything3LimitError,
              is MediaIOError,
              is VFXImageInputValidationError,
@@ -614,16 +616,7 @@ actor CodeGenServer {
                 )
                 let outputURL = outputDirectory.appendingPathComponent("output.mp4")
                 do {
-                    let command = try VideoGenerate.parse(
-                        plan.commandArguments + ["--output", outputURL.path, "--quiet"]
-                    )
-                    try await command.run()
-                    guard FileManager.default.fileExists(atPath: outputURL.path) else {
-                        throw APIRequestValidationError.invalidField(
-                            "output",
-                            "video generation completed without an MP4 artifact"
-                        )
-                    }
+                    _ = try await APIVideoGeneration.generate(plan, outputURL: outputURL)
                     return try retainedArtifactJSONResponse(
                         APIServerContract.videoGenerationResponse(
                             outputURL: outputURL,

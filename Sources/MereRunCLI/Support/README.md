@@ -25,6 +25,9 @@ Shared helpers and runtime adapters for the public command surface.
   storage, and digest checks for reuse.
 - `WorkflowProcessRunner.swift`: child registration, bounded stdout, streaming
   callbacks, and workflow cancellation over the shared process runner.
+- `APIVideoGeneration.swift`: API video field and argument translation over the
+  shared Core operation. The HTTP route retains admission and artifact cleanup.
+  `CLIVideoGenerationPresentation.swift` formats Core video events for the CLI.
 - `APIImageGeneration.swift`: API v1 compatibility settings for the Core image
   operation. `ImageGenerationPreflight.swift` presents the same Core resolver's
   diagnostics as an observational report.

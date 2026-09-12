@@ -1,8 +1,8 @@
 import Foundation
 import MereRunContract
 
-/// User settings shared by video planning and execution. Compound conditioning
-/// arguments are parsed by the CLI before native request construction.
+/// User settings shared by video planning and execution. Core parses compound
+/// conditioning inputs before constructing the native request.
 public struct VideoGenerationOptions: Sendable {
     public let prompt: String
     public let outputURL: URL

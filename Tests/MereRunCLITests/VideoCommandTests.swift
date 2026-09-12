@@ -1033,41 +1033,41 @@ final class VideoCommandTests: XCTestCase {
         let ltx25Root = try makeValidLTX25ModelRoot()
         let ltx25FullRoot = try makeValidLTX25FullModelRoot()
 
-        let legacy = resolveLTXVideoGenerationRoute(variant: .distilled, modelRoot: legacyRoot)
+        let legacy = try XCTUnwrap(VideoGenerationModelProfile.observe(root: legacyRoot).ltxRoute(outputMode: .videoOnly))
         XCTAssertEqual(legacy, .legacyDistilledVideo)
         XCTAssertFalse(legacy.writesAudio)
         XCTAssertFalse(legacy.supportsPhaseTimings)
 
-        let split = resolveLTXVideoGenerationRoute(variant: .distilled, modelRoot: splitRoot)
+        let split = try XCTUnwrap(VideoGenerationModelProfile.observe(root: splitRoot).ltxRoute(outputMode: .videoOnly))
         XCTAssertEqual(split, .splitDistilledVideo)
         XCTAssertFalse(split.writesAudio)
         XCTAssertTrue(split.supportsPhaseTimings)
 
-        let fullVideo = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: fullRoot)
+        let fullVideo = try XCTUnwrap(VideoGenerationModelProfile.observe(root: fullRoot).ltxRoute(outputMode: .videoOnly))
         XCTAssertEqual(fullVideo, .fullQualityVideo)
         XCTAssertFalse(fullVideo.writesAudio)
         XCTAssertTrue(fullVideo.supportsPhaseTimings)
 
-        let compatibleFullVideo = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: a2vRoot)
+        let compatibleFullVideo = try XCTUnwrap(VideoGenerationModelProfile.observe(root: a2vRoot).ltxRoute(outputMode: .videoOnly))
         XCTAssertEqual(compatibleFullVideo, .fullQualityVideo)
         XCTAssertFalse(compatibleFullVideo.writesAudio)
 
-        let ltx25Video = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: ltx25Root)
+        let ltx25Video = try XCTUnwrap(VideoGenerationModelProfile.observe(root: ltx25Root).ltxRoute(outputMode: .videoOnly))
         XCTAssertEqual(ltx25Video, .splitDistilledVideo)
         XCTAssertFalse(ltx25Video.writesAudio)
         XCTAssertTrue(ltx25Video.supportsPhaseTimings)
 
-        let ltx25AV = resolveLTXVideoGenerationRoute(outputMode: .audioVideo, modelRoot: ltx25Root)
+        let ltx25AV = try XCTUnwrap(VideoGenerationModelProfile.observe(root: ltx25Root).ltxRoute(outputMode: .audioVideo))
         XCTAssertEqual(ltx25AV, .unifiedAV)
         XCTAssertTrue(ltx25AV.writesAudio)
 
-        let ltx25FullVideo = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: ltx25FullRoot)
+        let ltx25FullVideo = try XCTUnwrap(VideoGenerationModelProfile.observe(root: ltx25FullRoot).ltxRoute(outputMode: .videoOnly))
         XCTAssertEqual(ltx25FullVideo, .fullQualityVideo)
 
-        let ltx25FullAV = resolveLTXVideoGenerationRoute(outputMode: .audioVideo, modelRoot: ltx25FullRoot)
+        let ltx25FullAV = try XCTUnwrap(VideoGenerationModelProfile.observe(root: ltx25FullRoot).ltxRoute(outputMode: .audioVideo))
         XCTAssertEqual(ltx25FullAV, .unifiedAV)
 
-        let unified = resolveLTXVideoGenerationRoute(variant: .unifiedAV, modelRoot: splitRoot)
+        let unified = try XCTUnwrap(VideoGenerationModelProfile.observe(root: splitRoot).ltxRoute(outputMode: .audioVideo))
         XCTAssertEqual(unified, .unifiedAV)
         XCTAssertTrue(unified.writesAudio)
         XCTAssertTrue(unified.supportsPhaseTimings)
