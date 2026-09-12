@@ -158,30 +158,12 @@ extension APIServerContract {
 
     static func instantMeshPlan(from form: MultipartFormData) throws -> InstantMeshPlan {
         let allowedTextFields: Set<String> = ["model", "resolution", "vertex_colors", "cameras"]
-        for part in form.parts {
-            if part.filename != nil {
-                guard part.name == "image" || part.name == "image[]" else {
-                    throw APIRequestValidationError.invalidField(
-                        part.name,
-                        "only uploaded image or image[] view files are accepted"
-                    )
-                }
-            } else {
-                guard allowedTextFields.contains(part.name) else {
-                    throw APIRequestValidationError.invalidField(
-                        part.name,
-                        "unsupported field; client input, output, and checkpoint paths are not accepted"
-                    )
-                }
-                guard String(data: part.body, encoding: .utf8) != nil else {
-                    throw APIRequestValidationError.invalidField(part.name, "must contain valid UTF-8 text")
-                }
-            }
-        }
-        for field in allowedTextFields
-        where form.parts.filter({ $0.name == field && $0.filename == nil }).count > 1 {
-            throw APIRequestValidationError.invalidField(field, "must be supplied at most once")
-        }
+        try form.validateFields(
+            textFields: allowedTextFields,
+            fileFields: ["image", "image[]"],
+            unsupportedTextMessage: "unsupported field; client input, output, and checkpoint paths are not accepted",
+            unsupportedFileMessage: "only uploaded image or image[] view files are accepted"
+        )
 
         let uploads = form.parts
             .filter { $0.filename != nil && ($0.name == "image" || $0.name == "image[]") }

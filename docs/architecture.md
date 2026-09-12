@@ -21,6 +21,13 @@ For the broader documentation set, start at the
 If you want to understand what a command does end to end, start at the command
 file, and then use the table to open the family entry point.
 
+## Catalogs and contracts
+
+Read [catalog and contract ownership](./internals/catalog-contracts.md) before
+changing model discovery, shell capability metadata, or API translation. Model
+definitions and profiles stay in Core; capability schemas and definitions stay
+in Contract; API transport policy and response construction stay in the CLI.
+
 ## Durable operation history
 
 `MereRunExecution` owns run-directory leases, file fingerprints, atomic record
