@@ -78,7 +78,8 @@ enum APIVFXArtifactRoutePolicy {
 enum APIVFXClientErrorPolicy {
     static func status(for error: Error) -> HTTPResponse.Status? {
         switch error {
-        case is TripoSRGeneratorError,
+        case is InstantMeshGeneratorError,
+             is TripoSRGeneratorError,
              is MoGe2TokenGridError,
              is MoGe2GenerationError,
              is VideoDepthAnythingLimitError,
@@ -1017,25 +1018,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-instantmesh"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = InstantMeshGenerator()
                 do {
-                    let result = try await generator.generate(
-                        viewURLs: inputURLs,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        cameras: plan.cameras,
-                        extractionResolution: plan.extractionResolution,
-                        includeVertexColors: plan.includesVertexColors,
-                        progress: nil
+                    let result = try await InstantMeshGenerationOperation.execute(
+                        plan.request(viewURLs: inputURLs, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.instantMeshResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }

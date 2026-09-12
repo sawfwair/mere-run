@@ -143,9 +143,17 @@ extension APIServerContract {
 
     struct InstantMeshPlan: Equatable, Sendable {
         let modelID: String
-        let extractionResolution: Int
-        let includesVertexColors: Bool
-        let cameras: [[Float]]?
+        let settings: InstantMeshGenerationSettings
+
+        var extractionResolution: Int { settings.extractionResolution }
+        var includesVertexColors: Bool { settings.includesVertexColors }
+        var cameras: [[Float]]? { settings.cameras }
+
+        func request(viewURLs: [URL], outputDirectory: URL) -> InstantMeshGenerationRequest {
+            InstantMeshGenerationRequest(
+                viewURLs: viewURLs, outputDirectory: outputDirectory, model: modelID, settings: settings
+            )
+        }
     }
 
     static func instantMeshPlan(from form: MultipartFormData) throws -> InstantMeshPlan {
@@ -178,7 +186,9 @@ extension APIServerContract {
         let uploads = form.parts
             .filter { $0.filename != nil && ($0.name == "image" || $0.name == "image[]") }
             .filter { !$0.body.isEmpty }
-        guard uploads.count == 4 || uploads.count == 6 else {
+        do {
+            try InstantMeshGenerationSettings.validateViewCount(uploads.count)
+        } catch {
             throw APIRequestValidationError.invalidField(
                 "image[]",
                 "exactly 4 or 6 non-empty uploaded image views are required"
@@ -211,7 +221,7 @@ extension APIServerContract {
 
         let extractionResolution: Int
         if let raw = form.field("resolution")?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
-            guard let value = Int(raw), (2...256).contains(value) else {
+            guard let value = Int(raw) else {
                 throw APIRequestValidationError.invalidField(
                     "resolution",
                     "must be an integer between 2 and 256"
@@ -233,28 +243,26 @@ extension APIServerContract {
                     "must be schemaVersion 1 JSON with one 16-value camera per uploaded view"
                 )
             }
-            for (index, camera) in document.cameras.enumerated()
-            where camera.count != 16 || !camera.allSatisfy(\.isFinite) {
-                throw APIRequestValidationError.invalidField(
-                    "cameras",
-                    "camera \(index) must contain 16 finite values"
-                )
-            }
             cameras = document.cameras
         } else {
             cameras = nil
         }
 
-        return InstantMeshPlan(
-            modelID: defaultInstantMeshModelID,
-            extractionResolution: extractionResolution,
-            includesVertexColors: try instantMeshBoolean(
-                form.field("vertex_colors"),
-                field: "vertex_colors",
-                defaultValue: true
-            ),
-            cameras: cameras
-        )
+        do {
+            let settings = try InstantMeshGenerationSettings(
+                extractionResolution: extractionResolution,
+                includesVertexColors: try instantMeshBoolean(
+                    form.field("vertex_colors"), field: "vertex_colors", defaultValue: true
+                ),
+                cameras: cameras
+            )
+            try settings.validate(viewCount: uploads.count)
+            return InstantMeshPlan(modelID: defaultInstantMeshModelID, settings: settings)
+        } catch InstantMeshGeneratorError.invalidExtractionResolution {
+            throw APIRequestValidationError.invalidField("resolution", "must be an integer between 2 and 256")
+        } catch InstantMeshPreprocessingError.invalidCamera(let index) {
+            throw APIRequestValidationError.invalidField("cameras", "camera \(index) must contain 16 finite values")
+        }
     }
 
     static func instantMeshResponse(

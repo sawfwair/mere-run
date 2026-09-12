@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share InstantMesh view and camera validation, reconstruction execution, and
+  awaited cleanup across the CLI and API while preserving ordered inputs.
+
 - Share TripoSR settings and execution between both reconstruction commands and
   the API, with current-input checks and awaited cleanup before returning.
 
