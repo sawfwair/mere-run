@@ -36,7 +36,7 @@ struct WorkflowRunStore {
             throw ValidationError("Workflow run still has active child processes: \(liveChildren.map(String.init).joined(separator: ", ")). Wait for them to stop before resuming.")
         }
         let manifest = try initialManifest(graph: graph, job: job, order: order)
-        let eventCount = try existingEventCount()
+        let eventCount = try Self.repairEventTail(in: runDirectory, fileManager: fileManager)
         try initializeDirectory()
         return Session(lease: lease, manifest: manifest, eventCount: eventCount)
     }
@@ -98,6 +98,8 @@ struct WorkflowRunStore {
             existing.attempt += 1
             existing.state = .planned
             existing.error = nil
+            existing.outputs = []
+            existing.interruptedAt = nil
             existing.executor = executor
             existing.updatedAt = now()
             return existing
@@ -155,8 +157,45 @@ struct WorkflowRunStore {
         eventHandler?(event)
     }
 
-    func existingEventCount() throws -> Int {
-        let url = runDirectory.appendingPathComponent("events.jsonl")
+    /// Called only while holding the run lease. Preserve an incomplete last write
+    /// before repairing it, and reject corruption in complete records unchanged.
+    static func repairEventTail(in directory: URL, fileManager: FileManager = .default) throws -> Int {
+        let url = directory.appendingPathComponent("events.jsonl")
         guard fileManager.fileExists(atPath: url.path) else { return 0 }
-        return try String(contentsOf: url, encoding: .utf8).split(separator: "\n").count
-    }}
+        let data = try Data(contentsOf: url)
+        var offset = data.startIndex
+        var sequence = 0
+        while let newline = data[offset...].firstIndex(of: 0x0A) {
+            let event = try WorkflowBundleCodec.decoder().decode(GraphRunEvent.self, from: data[offset..<newline])
+            guard event.sequence == sequence else {
+                throw ValidationError("Workflow event log has an invalid sequence at event \(sequence).")
+            }
+            sequence += 1
+            offset = data.index(after: newline)
+        }
+        guard offset < data.endIndex else { return sequence }
+        let tail = data[offset...]
+        if let event = try? WorkflowBundleCodec.decoder().decode(GraphRunEvent.self, from: tail) {
+            guard event.sequence == sequence else {
+                throw ValidationError("Workflow event log has an invalid final sequence.")
+            }
+            let handle = try FileHandle(forWritingTo: url)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data([0x0A]))
+            try handle.synchronize()
+            return sequence + 1
+        }
+        if (try? WorkflowBundleCodec.decoder().decode(WorkflowValue.self, from: tail)) != nil {
+            throw ValidationError("Workflow event log ends with a complete but invalid event.")
+        }
+        let fragment = directory.appendingPathComponent("events-tail-\(UUID().uuidString).fragment")
+        try tail.write(to: fragment, options: .atomic)
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fragment.path)
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        try handle.truncate(atOffset: UInt64(offset))
+        try handle.synchronize()
+        return sequence
+    }
+}

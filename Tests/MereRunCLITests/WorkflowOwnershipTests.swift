@@ -68,7 +68,10 @@ final class WorkflowOwnershipTests: XCTestCase {
         let cancel = run.appendingPathComponent("cancel.request")
         try Data("cancel".utf8).write(to: cancel)
         let marker = run.appendingPathComponent("events.jsonl")
-        try Data("previous event\n".utf8).write(to: marker)
+        let previousEvent = try WorkflowBundleCodec.lineEncoder().encode(GraphRunEvent(
+            sequence: 0, createdAt: Date(), type: "run_started", state: .running, nodeID: nil, message: nil
+        )) + Data([10])
+        try previousEvent.write(to: marker)
         let record = run.appendingPathComponent(GraphRunManifest.filename)
         let original = try Data(contentsOf: record)
         let second = store(bundle: fixture.bundle, run: run, resume: true)
@@ -76,7 +79,7 @@ final class WorkflowOwnershipTests: XCTestCase {
             XCTAssertTrue(String(describing: error).contains("active worker"))
         }
         XCTAssertEqual(try Data(contentsOf: record), original)
-        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "previous event\n")
+        XCTAssertEqual(try Data(contentsOf: marker), previousEvent)
         XCTAssertTrue(FileManager.default.fileExists(atPath: cancel.path))
         session.lease.release()
         let livePID = ProcessInfo.processInfo.processIdentifier

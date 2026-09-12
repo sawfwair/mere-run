@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// Decodes a byte stream into UTF-8 incrementally, retaining any incomplete trailing
 /// multibyte sequence until the next read so codepoints split across pipe reads are
@@ -92,19 +93,24 @@ extension FileManager: MereRunFileProbing {}
 package final class FoundationRunningProcess: MereRunRunningProcess, @unchecked Sendable {
     private let process: Process
     private let stdinPipe: Pipe?
-    private let stdoutPipe: Pipe
-    private let stderrPipe: Pipe
+    private let stdout: ProcessOutputReader
+    private let stderr: ProcessOutputReader
+    private let lock = NSLock()
+    private let inputLock = NSLock()
+    private var cancellationRequested = false
 
-    package init(process: Process, stdinPipe: Pipe?, stdoutPipe: Pipe, stderrPipe: Pipe) {
+    fileprivate init(process: Process, stdinPipe: Pipe?, stdout: ProcessOutputReader, stderr: ProcessOutputReader) {
         self.process = process
         self.stdinPipe = stdinPipe
-        self.stdoutPipe = stdoutPipe
-        self.stderrPipe = stderrPipe
+        self.stdout = stdout
+        self.stderr = stderr
     }
 
     package func terminate() {
-        try? stdinPipe?.fileHandleForWriting.close()
-        process.terminate()
+        lock.withLock {
+            cancellationRequested = true
+            try? stdinPipe?.fileHandleForWriting.close()
+        }
     }
 
     package func interrupt() {
@@ -115,19 +121,138 @@ package final class FoundationRunningProcess: MereRunRunningProcess, @unchecked 
         guard let stdinPipe else {
             throw MereRunProcessInputError.unavailable
         }
-        try stdinPipe.fileHandleForWriting.write(contentsOf: Data(text.utf8))
-    }
-
-    package func cleanup() {
-        try? stdinPipe?.fileHandleForWriting.close()
-        stdoutPipe.fileHandleForReading.readabilityHandler = nil
-        stderrPipe.fileHandleForReading.readabilityHandler = nil
+        inputLock.lock()
+        defer { inputLock.unlock() }
+        let data = Data(text.utf8)
+        var offset = 0
+        while offset < data.count {
+            let written = try lock.withLock {
+                guard !cancellationRequested, process.isRunning else { throw MereRunProcessInputError.unavailable }
+                let count = data.withUnsafeBytes { bytes in
+                    Darwin.write(stdinPipe.fileHandleForWriting.fileDescriptor,
+                                 bytes.baseAddress?.advanced(by: offset), data.count - offset)
+                }
+                if count < 0 {
+                    guard errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR else {
+                        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                    }
+                    return 0
+                }
+                return count
+            }
+            offset += written
+            if written == 0 { Thread.sleep(forTimeInterval: 0.01) }
+        }
     }
 
     package func waitUntilExit() -> Int32 {
+        defer {
+            lock.withLock { try? stdinPipe?.fileHandleForWriting.close() }
+            stdout.close()
+            stderr.close()
+        }
+        var stopStarted: TimeInterval?
+        var didEscalate = false
+        var exitedAt: TimeInterval?
+        var outputError = false
+        while true {
+            let readOutput = stdout.drain()
+            let readError = stderr.drain()
+            outputError = outputError || stdout.failure != nil || stderr.failure != nil
+            let now = ProcessInfo.processInfo.systemUptime
+            let running = process.isRunning
+            let cancelled = lock.withLock { cancellationRequested }
+            if stopStarted == nil, cancelled || outputError || (!running && ownsLiveGroup) {
+                signalGroup(SIGTERM)
+                stopStarted = now
+            }
+            if let stopStarted, !didEscalate, now - stopStarted >= 0.2 {
+                signalGroup(SIGKILL)
+                didEscalate = true
+            }
+            if !running {
+                if exitedAt == nil { exitedAt = now }
+                if stdout.atEnd && stderr.atEnd && !ownsLiveGroup { break }
+                // A deliberately detached descendant can retain a pipe without
+                // belonging to our group. Bound final drainage after parent exit.
+                if let exitedAt, now - exitedAt >= 0.4 { break }
+            }
+            if !readOutput && !readError { Thread.sleep(forTimeInterval: 0.01) }
+        }
         process.waitUntilExit()
-        cleanup()
+        stdout.finish()
+        stderr.finish()
+        if let error = stdout.failure ?? stderr.failure {
+            stderr.report("Could not read process output: \(error.localizedDescription)\n")
+            return -1
+        }
         return process.terminationStatus
+    }
+
+    private var ownsLiveGroup: Bool {
+        let pid = process.processIdentifier
+        return pid > 0 && pid != getpgrp() && kill(-pid, 0) == 0
+    }
+
+    private func signalGroup(_ signal: Int32) {
+        // Foundation gives this child its own process group. Match the CLI's
+        // bounded process ownership and never signal the Studio process group.
+        let pid = process.processIdentifier
+        guard pid > 0, pid != getpgrp() else { return }
+        kill(-pid, signal)
+        if process.isRunning { kill(pid, signal) }
+    }
+}
+
+/// Both readers are drained on the process waiter queue. Decoding and callbacks
+/// finish before completion is delivered, including after a short-lived child.
+private final class ProcessOutputReader {
+    let pipe = Pipe()
+    private let decoder = IncrementalUTF8Decoder()
+    private let output: @Sendable (String) -> Void
+    private var buffer = [UInt8](repeating: 0, count: 64 * 1_024)
+    private(set) var atEnd = false
+    private(set) var failure: POSIXError?
+
+    init(output: @escaping @Sendable (String) -> Void) throws {
+        self.output = output
+        let descriptor = pipe.fileHandleForReading.fileDescriptor
+        let flags = fcntl(descriptor, F_GETFL)
+        guard flags != -1, fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) != -1 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+    }
+
+    func report(_ message: String) { output(message) }
+
+    func closeWriter() { try? pipe.fileHandleForWriting.close() }
+
+    @discardableResult
+    func drain() -> Bool {
+        guard !atEnd else { return false }
+        let count = buffer.withUnsafeMutableBytes {
+            Darwin.read(pipe.fileHandleForReading.fileDescriptor, $0.baseAddress, $0.count)
+        }
+        if count == 0 { atEnd = true; return false }
+        if count < 0 {
+            if errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR {
+                failure = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                atEnd = true
+            }
+            return false
+        }
+        if let text = decoder.push(Data(buffer.prefix(count))) { output(text) }
+        return true
+    }
+
+    func finish() {
+        for _ in 0..<16 where drain() {}
+        if let text = decoder.flush() { output(text) }
+    }
+
+    func close() {
+        try? pipe.fileHandleForReading.close()
+        closeWriter()
     }
 }
 
@@ -145,41 +270,31 @@ package final class FoundationMereRunProcessRunner: MereRunProcessRunning {
         process.environment = configuration.environment
 
         let stdinPipe = configuration.keepsStandardInputOpen ? Pipe() : nil
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
+        if let stdinPipe {
+            let descriptor = stdinPipe.fileHandleForWriting.fileDescriptor
+            let flags = fcntl(descriptor, F_GETFL)
+            guard flags != -1,
+                  fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) != -1,
+                  fcntl(descriptor, F_SETNOSIGPIPE, 1) != -1 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+        }
+        let stdoutReader = try ProcessOutputReader(output: stdout)
+        let stderrReader = try ProcessOutputReader(output: stderr)
         process.standardInput = stdinPipe
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
+        process.standardOutput = stdoutReader.pipe
+        process.standardError = stderrReader.pipe
 
         let runningProcess = FoundationRunningProcess(
             process: process,
             stdinPipe: stdinPipe,
-            stdoutPipe: stdoutPipe,
-            stderrPipe: stderrPipe
+            stdout: stdoutReader,
+            stderr: stderrReader
         )
-
-        let stdoutDecoder = IncrementalUTF8Decoder()
-        let stderrDecoder = IncrementalUTF8Decoder()
-
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            if data.isEmpty {
-                if let tail = stdoutDecoder.flush() { stdout(tail) }
-                return
-            }
-            if let text = stdoutDecoder.push(data) { stdout(text) }
-        }
-
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            if data.isEmpty {
-                if let tail = stderrDecoder.flush() { stderr(tail) }
-                return
-            }
-            if let text = stderrDecoder.push(data) { stderr(text) }
-        }
-
         try process.run()
+        stdoutReader.closeWriter()
+        stderrReader.closeWriter()
+        try? stdinPipe?.fileHandleForReading.close()
 
         DispatchQueue.global(qos: .userInitiated).async {
             termination(runningProcess.waitUntilExit())

@@ -33,9 +33,16 @@
     "node_heartbeat",
     "node_resumed",
     "node_finished",
+    "node_failed",
+    "node_cancelled",
+    "node_retrying",
+    "node_cache_hit",
+    "node_cache_stored",
+    "node_cache_store_failed",
     "run_finished",
     "run_failed",
-    "run_cancelled"
+    "run_cancelled",
+    "run_interrupted"
    ]
   },
   "state": {

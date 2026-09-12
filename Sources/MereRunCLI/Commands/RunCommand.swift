@@ -399,5 +399,8 @@ private func localGraphManifest(at path: String) throws -> GraphRunManifest? {
     }
     guard FileManager.default.fileExists(atPath: manifestURL.path) else { return nil }
     let data = try Data(contentsOf: manifestURL)
-    return try? WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: data)
+    guard let manifest = try? WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: data) else { return nil }
+    // An exported standalone snapshot has no associated worker directory to recover.
+    guard manifestURL.lastPathComponent == GraphRunManifest.filename else { return manifest }
+    return try WorkflowRunRecovery.inspect(at: manifestURL.deletingLastPathComponent())
 }

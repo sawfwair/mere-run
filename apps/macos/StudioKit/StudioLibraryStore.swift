@@ -187,12 +187,8 @@ package final class StudioLibraryStore: ObservableObject {
         item.exitCode = exitCode
         item.updatedAt = Date()
         item.commandPreview = commandPreview
-        if let outputURL {
-            item.outputURL = outputURL
-        }
-        if !artifactURLs.isEmpty {
-            item.artifactURLs = artifactURLs
-        }
+        item.outputURL = outputURL
+        item.artifactURLs = artifactURLs.isEmpty ? nil : artifactURLs
         item.artifactRoles = artifactRoles.isEmpty ? nil : artifactRoles
         item.outputText = outputText
 

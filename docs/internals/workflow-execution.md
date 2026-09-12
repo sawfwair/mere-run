@@ -19,7 +19,15 @@ A resumed worker validates the run contract, graph fingerprint, and input
 fingerprints before resetting run state. It rejects an active run lease or live
 registered children. Rejected resumes preserve the previous manifest, events,
 and cancellation marker. The lease remains held until the execution driver
-finishes its children and terminal persistence.
+finishes its children and terminal persistence. Resume resets graph output
+references, and rerun nodes clear prior artifact references before preflight.
+Verified completed nodes remain reusable.
+
+`WorkflowRunRecovery` uses the same lease during local and worker inspection.
+It marks abandoned execution as failed with `interrupted_at`, retaining the v1
+state vocabulary. Live children and remote executor states prevent recovery.
+The run store validates event sequences and preserves an incomplete final write
+in a separate fragment before repairing the append position.
 
 Each node still requires matching provider pins, normalized arguments, model
 provenance, and output digests for reuse. Existing localized input files must
@@ -30,7 +38,9 @@ remain unchanged.
 
 The shared runner drains stdout and stderr without blocking cancellation on a
 silent pipe. A throwing start or output callback terminates and waits for the
-process group before propagating the error. Timeouts and cancellation also
+process group before propagating the error. The synchronous workflow caller
+forwards task cancellation to parallel workers through a shared cancellation
+signal and waits for every child outcome before recording run completion. Timeouts and cancellation also
 terminate descendants that retain a pipe after the group leader exits.
 
 Workflow child stdout has a 16 MiB limit. Exceeding it fails the node and stops

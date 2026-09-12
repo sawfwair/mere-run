@@ -1589,6 +1589,39 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(staleProcess.arguments.count, 2)
     }
 
+    func testFailedResumeDoesNotAdvertisePreviousAttemptOutputs() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundle = try WorkflowBundleMaterializer(
+            graph: singleImageGraph(), suppliedInputs: .init(values: ["prompt": .string("fixture")]),
+            destination: root.appendingPathComponent("bundle"), seed: { 44 }
+        ).materialize()
+        let directory = root.appendingPathComponent("run")
+        let first = try WorkflowRunner(
+            bundleDirectory: bundle.directory, runDirectory: directory,
+            processRunner: FixtureWorkflowProcessRunner()
+        ).execute()
+        XCTAssertEqual(first.state, .finished)
+        let url = directory.appendingPathComponent(GraphRunManifest.filename)
+        var previous = try WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: Data(contentsOf: url))
+        let output = try XCTUnwrap(previous.nodes.first?.outputs.first?.path)
+        let retainedFile = directory.appendingPathComponent(output)
+        let retainedBytes = try Data(contentsOf: retainedFile)
+        previous.nodes[0].fingerprint = "requires-rerun"
+        try WorkflowBundleCodec.write(previous, to: url)
+        let failed = try WorkflowRunner(
+            bundleDirectory: bundle.directory, runDirectory: directory, resume: true,
+            processRunner: FailingPreflightWorkflowProcessRunner()
+        ).execute()
+        let manifest = try WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: Data(contentsOf: url))
+        XCTAssertEqual(failed.state, .failed)
+        XCTAssertTrue(failed.outputs.isEmpty)
+        XCTAssertTrue(manifest.nodes[0].outputs.isEmpty)
+        XCTAssertTrue(manifest.nodes[0].artifacts.isEmpty)
+        XCTAssertEqual(manifest.nodes[0].state, .failed)
+        XCTAssertEqual(try Data(contentsOf: retainedFile), retainedBytes)
+    }
+
     func testSSHSubmissionUsesBatchModeAndQuotesAdversarialProfilePaths() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

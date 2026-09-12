@@ -455,6 +455,11 @@ swift run mere.run api serve \
   queued client cancellations are removed from the FIFO instead of being
   admitted later. Explicit runtime model load/unload maintenance shares the
   same queue.
+- A disconnected client cancels request preparation and active work. Admission
+  remains held until the operation finishes its cleanup, so the next request
+  cannot start while that cleanup is still using the runtime. Streaming response
+  producers keep their existing cancellation lifecycle after response handoff.
+  Cancellation remains cooperative at the runtime's supported checkpoints.
 - Machine admission complements rather than replaces `--max-active-requests`:
   the server's local limit controls request and batching concurrency inside its
   weighted machine reservation.
