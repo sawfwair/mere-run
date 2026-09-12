@@ -150,8 +150,11 @@ public enum VideoGenerationModelResolver {
             return envPath
         }
 
-        let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser
+        #if os(macOS)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        #else
+        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        #endif
         let zeroModels = MereRunModelPaths.modelsDir
         let candidates: [String] = {
             switch variant {
