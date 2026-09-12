@@ -93,6 +93,14 @@ computation, and geometry export. Read the
 [shared single-image geometry operation](./internals/geometry-generation-operation.md)
 for caller admission, transport policy, cancellation, and validation boundaries.
 
+## Reconstruction and video depth
+
+TripoSR, InstantMesh, Depth Anything 3, and Video Depth Anything use Core
+operations for shared CLI/API settings, preparation, execution, and awaited
+cleanup. DA3 also owns scene export. Read the
+[shared vision generation operations](./internals/vision-generation-operations.md)
+for input snapshots, camera validation, transport policy, and acceptance boundaries.
+
 ## Image families
 
 Read the [shared image operation](./internals/image-generation-operation.md)

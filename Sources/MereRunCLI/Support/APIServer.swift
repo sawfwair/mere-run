@@ -78,7 +78,9 @@ enum APIVFXArtifactRoutePolicy {
 enum APIVFXClientErrorPolicy {
     static func status(for error: Error) -> HTTPResponse.Status? {
         switch error {
-        case VideoDepthAnythingGeneratorError.inputVideoNotFound:
+        case VideoDepthAnythingGeneratorError.inputVideoNotFound,
+             DepthAnything3GeneratorError.imageNotFound,
+             DepthAnything3GeneratorError.cameraCountMismatch:
             return .badRequest
         case is InstantMeshGeneratorError,
              is TripoSRGeneratorError,
@@ -837,38 +839,20 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-geometry-multiview"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = DepthAnything3Generator()
                 do {
-                    let result = try await generator.generate(
-                        imageURLs: inputURLs,
-                        model: plan.modelID,
-                        knownCameras: plan.knownCameras,
-                        referenceViewStrategy: plan.referenceViewStrategy,
-                        processResolution: plan.processResolution,
-                        progress: nil
+                    let result = try await DepthAnything3GenerationOperation.execute(
+                        plan.request(imageURLs: inputURLs, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    let exportStart = Date()
-                    let export = try MultiViewGeometryExporter.export(
-                        run: result,
-                        outputDirectory: outputDirectory,
-                        configuration: try MultiViewGeometryExportConfiguration(
-                            confidencePercentile: plan.confidencePercentile,
-                            maximumPointCount: plan.maximumPointCount
-                        )
-                    )
-                    let exportSeconds = Date().timeIntervalSince(exportStart)
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.multiViewGeometryResponse(
-                            from: result,
-                            export: export,
-                            exportSeconds: exportSeconds
+                            from: result.run,
+                            export: result.export,
+                            exportSeconds: result.exportSeconds
                         ),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }

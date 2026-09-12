@@ -31,7 +31,7 @@ struct VisionGeometryMultiView: AsyncParsableCommand {
     var cameras: String?
 
     @Option(name: [.long], help: "Upper bound for the longest processed image side. (default: 504)")
-    var processResolution: Int = 504
+    var processResolution: Int = DepthAnything3GenerationSettings.defaultProcessResolution
 
     @Option(
         name: [.long],
@@ -40,10 +40,10 @@ struct VisionGeometryMultiView: AsyncParsableCommand {
     var referenceView: String = DepthAnything3ReferenceViewStrategy.saddleBalanced.rawValue
 
     @Option(name: [.long], help: "Discard points below this confidence percentile. (default: 40)")
-    var confidencePercentile: Double = 40
+    var confidencePercentile: Double = MultiViewGeometryExportConfiguration.defaultConfidencePercentile
 
     @Option(name: [.long], help: "Maximum deterministic colored points in scene exports. (default: 1000000)")
-    var maxPoints: Int = 1_000_000
+    var maxPoints: Int = MultiViewGeometryExportConfiguration.defaultMaximumPointCount
 
     @Flag(name: [.long], help: "Verify model and inputs, then print the execution plan without inference.")
     var dryRun = false
@@ -52,41 +52,15 @@ struct VisionGeometryMultiView: AsyncParsableCommand {
     var json = false
 
     mutating func run() async throws {
-        guard !images.isEmpty else { throw ValidationError("Provide at least one image path.") }
-        try Self.validateRequestLimits(
-            viewCount: images.count,
-            processResolution: processResolution
-        )
-        guard confidencePercentile.isFinite, (0...100).contains(confidencePercentile) else {
-            throw ValidationError("--confidence-percentile must be between 0 and 100")
+        let request = try makeGenerationRequest()
+        do {
+            try DepthAnything3GenerationOperation.prepare(request)
+        } catch {
+            throw ValidationError(error.localizedDescription)
         }
-        guard maxPoints > 0 else { throw ValidationError("--max-points must be positive") }
-        guard let strategy = DepthAnything3ReferenceViewStrategy(rawValue: referenceView.lowercased()) else {
-            throw ValidationError("Unsupported --reference-view value: \(referenceView)")
-        }
-        let inputURLs = images.map { URL(fileURLWithPath: $0).standardizedFileURL }
-        for url in inputURLs where !FileManager.default.fileExists(atPath: url.path) {
-            throw ValidationError("Input image not found: \(url.path)")
-        }
-        let sourceDimensions = try Self.validateResourceLimits(
-            imageURLs: inputURLs,
-            processResolution: processResolution
-        )
-        let knownCameras = try Self.loadCameras(cameras, expectedCount: inputURLs.count)
-        if let knownCameras {
-            for index in knownCameras.indices {
-                let dimensions = sourceDimensions[index]
-                let intrinsics = knownCameras[index].intrinsics
-                guard intrinsics.imageWidth == dimensions.width,
-                      intrinsics.imageHeight == dimensions.height else {
-                    throw ValidationError(
-                        "Camera \(index) describes \(intrinsics.imageWidth)x\(intrinsics.imageHeight), "
-                            + "not its \(dimensions.width)x\(dimensions.height) image"
-                    )
-                }
-            }
-        }
-        let outputURL = Self.resolveOutputURL(output, firstInput: inputURLs[0])
+        let inputURLs = request.imageURLs
+        let outputURL = request.outputDirectory
+        let settings = request.settings
 
         if dryRun {
             let checkpoint = try await DepthAnything3Resources.resolve(requestedModel: model)
@@ -95,43 +69,51 @@ struct VisionGeometryMultiView: AsyncParsableCommand {
                 outputDirectory: outputURL.path,
                 checkpoint: checkpoint,
                 processResolution: processResolution,
-                referenceViewStrategy: strategy,
-                poseConditioned: knownCameras != nil,
+                referenceViewStrategy: settings.referenceViewStrategy,
+                poseConditioned: settings.knownCameras != nil,
                 confidencePercentile: confidencePercentile,
                 maximumPointCount: maxPoints
             )))
             return
         }
 
-        try MLXBundleSupport.ensureAvailable(quiet: true)
-        let generator = DepthAnything3Generator()
-        do {
-            let run = try await generator.generate(
-                imageURLs: inputURLs,
-                model: model,
-                knownCameras: knownCameras,
-                referenceViewStrategy: strategy,
-                processResolution: processResolution,
-                progress: { event in CLIStderr.write("[geometry-multiview] \(event.message)\n") }
-            )
-            let export = try MultiViewGeometryExporter.export(
-                run: run,
-                outputDirectory: outputURL,
-                configuration: try MultiViewGeometryExportConfiguration(
-                    confidencePercentile: confidencePercentile,
-                    maximumPointCount: maxPoints
-                )
-            )
-            await generator.unload()
-            if json {
-                print(try Self.jsonString(try VisionGeometryMultiViewRunPayload(run: run, export: export)))
-            } else {
-                print(export.manifestURL.path)
-            }
-        } catch {
-            await generator.unload()
-            throw error
+        let result = try await DepthAnything3GenerationOperation.execute(
+            request,
+            prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) },
+            progress: { event in CLIStderr.write("[geometry-multiview] \(event.message)\n") }
+        )
+        if json {
+            print(try Self.jsonString(try VisionGeometryMultiViewRunPayload(run: result.run, export: result.export)))
+        } else {
+            print(result.export.manifestURL.path)
         }
+    }
+
+    func makeGenerationRequest() throws -> DepthAnything3GenerationRequest {
+        guard !images.isEmpty else { throw ValidationError("Provide at least one image path.") }
+        guard let strategy = DepthAnything3ReferenceViewStrategy(rawValue: referenceView.lowercased()) else {
+            throw ValidationError("Unsupported --reference-view value: \(referenceView)")
+        }
+        let settings: DepthAnything3GenerationSettings
+        do {
+            settings = try DepthAnything3GenerationSettings(
+                processResolution: processResolution, referenceViewStrategy: strategy,
+                knownCameras: Self.loadCameras(cameras, expectedCount: images.count),
+                confidencePercentile: confidencePercentile, maximumPointCount: maxPoints
+            )
+            try settings.validate(viewCount: images.count)
+        } catch MultiViewGeometryExportConfigurationError.invalidConfidencePercentile {
+            throw ValidationError("--confidence-percentile must be between 0 and 100")
+        } catch MultiViewGeometryExportConfigurationError.invalidMaximumPointCount {
+            throw ValidationError("--max-points must be positive")
+        } catch {
+            throw ValidationError(error.localizedDescription)
+        }
+        let inputURLs = images.map { URL(fileURLWithPath: $0).standardizedFileURL }
+        return DepthAnything3GenerationRequest(
+            imageURLs: inputURLs, outputDirectory: Self.resolveOutputURL(output, firstInput: inputURLs[0]),
+            model: model, settings: settings
+        )
     }
 
     static func resolveOutputURL(_ raw: String?, firstInput: URL) -> URL {

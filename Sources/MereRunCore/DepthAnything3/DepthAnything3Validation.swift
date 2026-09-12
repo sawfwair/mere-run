@@ -198,6 +198,28 @@ public enum DepthAnything3CameraValidation {
         }
     }
 
+    /// Validates camera conditioning against the exact admitted image dimensions.
+    public static func validate(
+        _ cameras: [DepthAnything3KnownCamera]?,
+        sourceDimensions: [(width: Int, height: Int)]
+    ) throws {
+        guard let cameras else { return }
+        guard cameras.count == sourceDimensions.count else {
+            throw DepthAnything3GeneratorError.cameraCountMismatch(images: sourceDimensions.count, cameras: cameras.count)
+        }
+        for (index, camera) in cameras.enumerated() {
+            try validate(camera, index: index)
+            let size = sourceDimensions[index]
+            let intrinsics = camera.intrinsics
+            guard intrinsics.imageWidth == size.width, intrinsics.imageHeight == size.height else {
+                throw DepthAnything3PreprocessingError.cameraImageDimensionMismatch(
+                    index: index, expectedWidth: size.width, expectedHeight: size.height,
+                    actualWidth: intrinsics.imageWidth, actualHeight: intrinsics.imageHeight
+                )
+            }
+        }
+    }
+
     public static func issue(for camera: DepthAnything3KnownCamera) -> String? {
         let intrinsics = camera.intrinsics
         guard intrinsics.imageWidth > 0, intrinsics.imageHeight > 0 else {

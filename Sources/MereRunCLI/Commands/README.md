@@ -16,4 +16,8 @@ This directory owns the public CLI surface.
 - `vision geometry` translates options into Core MoGe-2 settings. Its dry-run
   presents the shared token-grid plan; execution uses `MoGe2GenerationOperation`.
 
+- Reconstruction, multiview geometry, and video-depth commands translate options
+  into the corresponding Core generation request. Keep shared validation and
+  runtime cleanup in those operations; commands own paths and presentation.
+
 If you change a flag, subcommand name, or help contract, update the nearest parsing tests and any affected user-facing docs in the same change.

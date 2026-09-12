@@ -640,13 +640,20 @@ enum APIServerContract {
 
     struct MultiViewGeometryPlan: Equatable, Sendable {
         let modelID: String
-        let processResolution: Int
-        let referenceViewStrategy: DepthAnything3ReferenceViewStrategy
-        let confidencePercentile: Double
-        let maximumPointCount: Int
-        let knownCameras: [DepthAnything3KnownCamera]?
+        let settings: DepthAnything3GenerationSettings
 
+        var processResolution: Int { settings.processResolution }
+        var referenceViewStrategy: DepthAnything3ReferenceViewStrategy { settings.referenceViewStrategy }
+        var confidencePercentile: Double { settings.export.confidencePercentile }
+        var maximumPointCount: Int { settings.export.maximumPointCount }
+        var knownCameras: [DepthAnything3KnownCamera]? { settings.knownCameras }
         var poseConditioned: Bool { knownCameras != nil }
+
+        func request(imageURLs: [URL], outputDirectory: URL) -> DepthAnything3GenerationRequest {
+            DepthAnything3GenerationRequest(
+                imageURLs: imageURLs, outputDirectory: outputDirectory, model: modelID, settings: settings
+            )
+        }
     }
 
     struct ImageTo3DPlan: Equatable, Sendable {
@@ -1036,7 +1043,7 @@ enum APIServerContract {
         let processResolution = try optionalPositiveIntField(
             form.field("process_resolution"),
             field: "process_resolution"
-        ) ?? 504
+        ) ?? DepthAnything3GenerationSettings.defaultProcessResolution
         do {
             try DepthAnything3Limits.validateRequest(
                 viewCount: imageUploads.count,
@@ -1058,11 +1065,11 @@ enum APIServerContract {
         let maximumPointCount = try optionalPositiveIntField(
             form.field("max_points"),
             field: "max_points"
-        ) ?? 1_000_000
+        ) ?? MultiViewGeometryExportConfiguration.defaultMaximumPointCount
 
         let confidencePercentile: Double
         if let raw = normalizedOptional(form.field("confidence_percentile")) {
-            guard let value = Double(raw), value.isFinite, (0...100).contains(value) else {
+            guard let value = Double(raw) else {
                 throw APIRequestValidationError.invalidField(
                     "confidence_percentile",
                     "must be a finite number between 0 and 100"
@@ -1070,7 +1077,7 @@ enum APIServerContract {
             }
             confidencePercentile = value
         } else {
-            confidencePercentile = 40
+            confidencePercentile = MultiViewGeometryExportConfiguration.defaultConfidencePercentile
         }
 
         let referenceViewRaw = normalizedOptional(form.field("reference_view"))?.lowercased()
@@ -1121,14 +1128,18 @@ enum APIServerContract {
             try decodeMultiViewCameraDocument($0, expectedCount: imageUploads.count)
         }
 
-        return MultiViewGeometryPlan(
-            modelID: modelID,
-            processResolution: processResolution,
-            referenceViewStrategy: referenceViewStrategy,
-            confidencePercentile: confidencePercentile,
-            maximumPointCount: maximumPointCount,
-            knownCameras: knownCameras
-        )
+        do {
+            let settings = try DepthAnything3GenerationSettings(
+                processResolution: processResolution, referenceViewStrategy: referenceViewStrategy,
+                knownCameras: knownCameras, confidencePercentile: confidencePercentile,
+                maximumPointCount: maximumPointCount
+            )
+            return MultiViewGeometryPlan(modelID: modelID, settings: settings)
+        } catch MultiViewGeometryExportConfigurationError.invalidConfidencePercentile {
+            throw APIRequestValidationError.invalidField(
+                "confidence_percentile", "must be a finite number between 0 and 100"
+            )
+        }
     }
 
     static func multiViewGeometryResponse(

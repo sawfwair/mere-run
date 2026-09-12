@@ -899,6 +899,12 @@ and creates a MoGe-2 runtime for each request. It awaits unloading before
 publishing the artifact response. See the
 [shared single-image geometry operation](../internals/geometry-generation-operation.md).
 
+The multiview geometry, TripoSR, InstantMesh, and video-depth routes also share
+Core operations with their CLI commands. The operations await runtime cleanup
+within the API's existing admission slot. HTTP handlers retain upload cleanup,
+failed-output removal, and artifact retention. See
+[shared vision generation operations](../internals/vision-generation-operations.md).
+
 `POST /v1/vision/geometry/multiview` accepts:
 
 - `image` / `image[]`: one or more image file parts; multipart order is the

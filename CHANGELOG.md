@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share Depth Anything 3 view/camera validation, generation, scene-export settings,
+  and awaited cleanup between the multiview geometry CLI and API.
+
 - Share bounded video-depth settings, preflight, execution, and awaited unloading
   between the CLI and API. Check cancellation between native temporal windows.
 
