@@ -81,6 +81,12 @@ surface for is still reachable the day the contract declares it.
 - `StudioUI/StudioRootView.swift`: the `NavigationSplitView` shell, the content
   header (`StudioUI/StudioTaskControl.swift`), and the prompt workspace; hosts
   every task in the detail area.
+- `StudioKit/StudioPromptTaskController.swift` and its extensions: active prompt
+  state, task and conversation transitions, and run preparation. The shell
+  delegates these operations and retains navigation, layout, focus, and dialogs.
+- `StudioKit/StudioTaskSessions.swift`: inactive drafts, selection memory,
+  Command overrides, and persistence. See
+  [prompt workspace ownership](../../docs/internals/studio-prompt-workspace.md).
 - `StudioKit/StudioTypes.swift`: user-facing mode, draft, and request types.
 - `StudioKit/CommandCatalog.swift`: `CommandTemplateID`, `CommandDraft`, and the
   `CommandTemplate` record type.
@@ -196,8 +202,10 @@ persist per window under `studio.libraryView`, `studio.libraryKind`, and
 Each task retains its full draft and selected run through `StudioTaskSessions`.
 Prompt modes preserve model, seed, dimensions, attachments, and sampling values;
 specialist forms retain their typed settings. The versioned JSON store excludes
-launch credentials and preserves unreadable files. `studio.drafts` remains a
-migration fallback for older prompt-only scene state.
+launch credentials and preserves unreadable files. Prompt edits update task
+sessions synchronously. `studio.drafts` remains a migration source for earlier
+prompt-only scene state; importing it preserves unvisited tasks and gives full
+session drafts precedence.
 
 Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…; View ▸
 Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C), and the system sidebar toggle; Go ▸ every domain

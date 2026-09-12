@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Preserve the previous conversation reply and unsent draft when Studio rejects
+  a retry. Send and retry share Command overrides and validation. Prompt task
+  edits save through one state owner, and legacy draft import retains unvisited
+  tasks without replacing full saved settings.
+
 - Reject TripoSR foreground padding that exceeds the VFX image budget before
   integer conversion or allocation, including extremely small positive ratios.
 
