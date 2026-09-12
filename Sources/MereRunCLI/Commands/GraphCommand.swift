@@ -917,8 +917,7 @@ struct GraphWorkerInspect: ParsableCommand {
 
     func run() throws {
         try mapRelayErrors {
-            let url = URL(fileURLWithPath: runDirectory).appendingPathComponent(GraphRunManifest.filename)
-            let manifest = try WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: Data(contentsOf: url))
+            let manifest = try WorkflowRunRecovery.inspect(at: URL(fileURLWithPath: runDirectory))
             if json { print(try StructuredRunOutput.encode(manifest)) } else { print("\(manifest.jobID) \(manifest.state.rawValue)") }
         }
     }

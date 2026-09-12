@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Cancel queued and active API work when its client disconnects, and retain
+  request admission until cleanup finishes. Preserve HTTP keep-alive behavior.
+- Settle active workflow nodes on cancellation, stop parallel child processes
+  when the caller cancels, and recover abandoned local workers during inspection.
+  Preserve incomplete event-log tails before repair and reuse verified completed
+  outputs on resume without advertising stale outputs from a failed attempt.
+- Drain Studio process output before completion and stop owned descendants on
+  cancellation. Failed jobs and Library rows retain only confirmed outputs;
+  partial files remain on disk.
+
 - Share Studio model inventory and download jobs between the composer and Models.
   Keep download progress and cancellation available across navigation, reject stale
   inventory refreshes, and recheck the current model after a download completes.

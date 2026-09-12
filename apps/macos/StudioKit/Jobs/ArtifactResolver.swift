@@ -6,6 +6,8 @@ package struct ArtifactResolution: Equatable {
     package enum Source: Equatable {
         /// The CLI's `--receipt` line named every output and its role.
         case receipt
+        /// The resident session reported a completed render over its JSON protocol.
+        case residentResult
         /// The contract declares a file or directory output and the requested `--output` landed.
         case declaredOutput
         /// Nothing structured was available: stdout heuristics and filesystem probing.
@@ -116,8 +118,8 @@ package struct ArtifactResolver {
         expected: URL?,
         stdout: String
     ) -> ArtifactResolution {
-        if let receipt = StudioRunReceipt.parse(stdout: stdout), !receipt.outputs.isEmpty {
-            var artifacts = [Artifact(url: receipt.outputs[0].url, role: .primary)]
+        if let receipt = StudioRunReceipt.parse(stdout: stdout) {
+            var artifacts = receipt.outputs.first.map { [Artifact(url: $0.url, role: .primary)] } ?? []
             artifacts += receipt.outputs.dropFirst().map {
                 Artifact(url: $0.url, role: .sidecar, sidecarRole: $0.role)
             }

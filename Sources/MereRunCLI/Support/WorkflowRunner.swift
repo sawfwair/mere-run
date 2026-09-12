@@ -65,6 +65,18 @@ private final class WorkflowParallelOutcomeBox: @unchecked Sendable {
     }
 }
 
+private final class WorkflowCancellationSignal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    func cancel() { lock.lock(); cancelled = true; lock.unlock() }
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+}
+
 struct WorkflowRunner: @unchecked Sendable {
     let bundleDirectory: URL
     let runDirectory: URL
@@ -164,7 +176,6 @@ struct WorkflowRunner: @unchecked Sendable {
 
         let session = try runStore.prepare(graph: graph, job: job, order: validation.order)
         defer { session.lease.release() }
-        let localizedInputs = try artifactStore.localizeInputs(graph: graph, inputs: inputs, assets: assets)
         var manifest = session.manifest
         var sequence = session.eventCount
         try runStore.persist(manifest)
@@ -185,6 +196,7 @@ struct WorkflowRunner: @unchecked Sendable {
 
         var nodeOutputs: [String: [String: WorkflowValue]] = [:]
         do {
+            let localizedInputs = try artifactStore.localizeInputs(graph: graph, inputs: inputs, assets: assets)
             if graph.execution?.resolvedMaxParallelNodes ?? 1 > 1 {
                 try executeParallelNodes(
                     graph: graph,
@@ -257,6 +269,11 @@ struct WorkflowRunner: @unchecked Sendable {
                     nodeDirectory: nodeDirectory,
                     jobID: job.jobID
                 )
+                manifest.nodes[nodeIndex].artifacts = []
+                manifest.nodes[nodeIndex].outputs = []
+                manifest.nodes[nodeIndex].completedAt = nil
+                manifest.nodes[nodeIndex].exitStatus = nil
+                manifest.nodes[nodeIndex].error = nil
                 manifest.nodes[nodeIndex].fingerprint = fingerprint
                 manifest.nodes[nodeIndex].provider = providerIdentity
                 manifest.nodes[nodeIndex].models = nodeModels
@@ -432,7 +449,7 @@ struct WorkflowRunner: @unchecked Sendable {
                             node: node,
                             nodeDirectory: nodeDirectory
                         )
-                    } catch is WorkflowCancellationError {
+                    } catch let error where error is WorkflowCancellationError || error is CancellationError {
                         throw WorkflowCancellationError()
                     } catch {
                         let message = (error as? ValidationError)?.message ?? error.localizedDescription
@@ -506,6 +523,7 @@ struct WorkflowRunner: @unchecked Sendable {
             }
             }
 
+            try throwIfCancellationRequested()
             manifest.outputs = try artifactStore.materializeGraphOutputs(graph: graph, nodeOutputs: nodeOutputs)
             manifest.state = .finished
             manifest.updatedAt = now()
@@ -518,7 +536,9 @@ struct WorkflowRunner: @unchecked Sendable {
                 nodeID: nil,
                 message: nil
             ))
-        } catch is WorkflowCancellationError {
+        } catch let error where error is WorkflowCancellationError || error is CancellationError {
+            try settleActiveNodes(manifest: &manifest, sequence: &sequence, state: .cancelled,
+                                  message: "Workflow cancellation requested.")
             manifest.state = .cancelled
             manifest.error = "Workflow cancellation requested."
             manifest.updatedAt = now()
@@ -533,11 +553,7 @@ struct WorkflowRunner: @unchecked Sendable {
             ))
         } catch {
             let message = (error as? ValidationError)?.message ?? error.localizedDescription
-            if let running = manifest.nodes.firstIndex(where: { $0.state == .running || $0.state == .preflighting }) {
-                manifest.nodes[running].state = .failed
-                manifest.nodes[running].completedAt = now()
-                manifest.nodes[running].error = message
-            }
+            try settleActiveNodes(manifest: &manifest, sequence: &sequence, state: .failed, message: message)
             manifest.state = .failed
             manifest.error = message
             manifest.updatedAt = now()
@@ -645,6 +661,11 @@ struct WorkflowRunner: @unchecked Sendable {
                     nodeDirectory: nodeDirectory,
                     jobID: job.jobID
                 )
+                manifest.nodes[nodeIndex].artifacts = []
+                manifest.nodes[nodeIndex].outputs = []
+                manifest.nodes[nodeIndex].completedAt = nil
+                manifest.nodes[nodeIndex].exitStatus = nil
+                manifest.nodes[nodeIndex].error = nil
                 manifest.nodes[nodeIndex].fingerprint = fingerprint
                 manifest.nodes[nodeIndex].provider = provider
                 manifest.nodes[nodeIndex].models = models
@@ -747,14 +768,20 @@ struct WorkflowRunner: @unchecked Sendable {
             guard !prepared.isEmpty else { continue }
             let queue = OperationQueue()
             queue.maxConcurrentOperationCount = maximumParallelNodes
+            let cancellation = WorkflowCancellationSignal()
             let boxes = prepared.map { item -> WorkflowParallelOutcomeBox in
                 let box = WorkflowParallelOutcomeBox()
                 queue.addOperation {
-                    box.store(runParallelNode(item))
+                    box.store(runParallelNode(item, cancellation: cancellation))
                 }
                 return box
             }
-            queue.waitUntilAllOperationsAreFinished()
+            // OperationQueue does not inherit Swift task cancellation. Keep the
+            // synchronous caller observing it until every owned child has settled.
+            while queue.operationCount > 0 {
+                if Task.isCancelled { cancellation.cancel() }
+                Thread.sleep(forTimeInterval: 0.01)
+            }
 
             var firstFailure: String?
             var wasCancelled = false
@@ -813,6 +840,13 @@ struct WorkflowRunner: @unchecked Sendable {
                     manifest.nodes[item.index].state = outcome.cancelled ? .cancelled : .failed
                     manifest.nodes[item.index].error = message
                     manifest.nodes[item.index].completedAt = now()
+                    try runStore.record(.init(
+                        sequence: sequence, createdAt: now(),
+                        type: outcome.cancelled ? "node_cancelled" : "node_failed",
+                        state: outcome.cancelled ? .cancelled : .failed,
+                        nodeID: item.node.id, message: message
+                    ))
+                    sequence += 1
                     firstFailure = firstFailure ?? message
                     wasCancelled = wasCancelled || outcome.cancelled
                     continue
@@ -874,7 +908,8 @@ struct WorkflowRunner: @unchecked Sendable {
     }
 
     private func runParallelNode(
-        _ prepared: WorkflowPreparedParallelNode
+        _ prepared: WorkflowPreparedParallelNode,
+        cancellation: WorkflowCancellationSignal
     ) -> WorkflowParallelNodeOutcome {
         var attempt = 0
         var exitStatus: Int32?
@@ -882,6 +917,8 @@ struct WorkflowRunner: @unchecked Sendable {
         while attempt < prepared.maxAttempts {
             attempt += 1
             do {
+                if cancellation.isCancelled { throw WorkflowCancellationError() }
+                try throwIfCancellationRequested()
                 var providerOutputs: [String: WorkflowValue]?
                 var providerSequence = -1
                 let execution = try executeInvocation(
@@ -905,12 +942,14 @@ struct WorkflowRunner: @unchecked Sendable {
                         } else {
                             events.append(.provider(event))
                         }
-                    } : nil
+                    } : nil,
+                    isCancelled: { cancellation.isCancelled }
                 )
                 let result = execution.result
                 if let intrinsicOutputs = execution.outputs {
                     providerOutputs = intrinsicOutputs
                 }
+                if cancellation.isCancelled { throw WorkflowCancellationError() }
                 try throwIfCancellationRequested()
                 try Data(result.stdout.utf8).write(
                     to: prepared.directory.appendingPathComponent("stdout.txt"),
@@ -934,7 +973,7 @@ struct WorkflowRunner: @unchecked Sendable {
                     error: nil,
                     cancelled: false
                 )
-            } catch is WorkflowCancellationError {
+            } catch let error where error is WorkflowCancellationError || error is CancellationError {
                 return .init(
                     verified: nil,
                     attempt: attempt,
@@ -1011,7 +1050,8 @@ struct WorkflowRunner: @unchecked Sendable {
         currentDirectory: URL,
         timeoutSeconds: Int?,
         stdoutLineHandler: ((String) throws -> Void)?,
-        stdoutChunkHandler: ((Data) throws -> Void)? = nil
+        stdoutChunkHandler: ((Data) throws -> Void)? = nil,
+        isCancelled: () -> Bool = { Task.isCancelled }
     ) throws -> (result: WorkflowProcessResult, outputs: [String: WorkflowValue]?) {
         if let intrinsic = invocation.intrinsic {
             try throwIfCancellationRequested()
@@ -1028,7 +1068,8 @@ struct WorkflowRunner: @unchecked Sendable {
             currentDirectory: currentDirectory,
             timeoutSeconds: timeoutSeconds,
             stdoutLineHandler: stdoutLineHandler,
-            stdoutChunkHandler: stdoutChunkHandler
+            stdoutChunkHandler: stdoutChunkHandler,
+            isCancelled: isCancelled
         )
         guard result.status == 0, let outputName = invocation.stdoutOutputName else {
             return (result, nil)
@@ -1053,8 +1094,17 @@ struct WorkflowRunner: @unchecked Sendable {
         currentDirectory: URL,
         timeoutSeconds: Int?,
         stdoutLineHandler: ((String) throws -> Void)?,
-        stdoutChunkHandler: ((Data) throws -> Void)? = nil
+        stdoutChunkHandler: ((Data) throws -> Void)? = nil,
+        isCancelled: () -> Bool = { Task.isCancelled }
     ) throws -> WorkflowProcessResult {
+        if isCancelled() { throw WorkflowCancellationError() }
+        if let cancellableRunner = processRunner as? any WorkflowCancellableProcessRunning {
+            return try cancellableRunner.run(
+                executable: executable, arguments: arguments, currentDirectory: currentDirectory,
+                timeoutSeconds: timeoutSeconds, stdoutLineHandler: stdoutLineHandler,
+                stdoutChunkHandler: stdoutChunkHandler, isCancelled: isCancelled
+            )
+        }
         if let streamingRunner = processRunner as? any WorkflowStreamingProcessRunning {
             return try streamingRunner.run(
                 executable: executable,
@@ -1165,6 +1215,23 @@ struct WorkflowRunner: @unchecked Sendable {
             return localized
         default:
             return value
+        }
+    }
+
+    private func settleActiveNodes(
+        manifest: inout GraphRunManifest, sequence: inout Int, state: GraphRunState, message: String
+    ) throws {
+        for index in manifest.nodes.indices where manifest.nodes[index].state == .running
+            || manifest.nodes[index].state == .preflighting {
+            manifest.nodes[index].state = state
+            manifest.nodes[index].completedAt = now()
+            manifest.nodes[index].error = message
+            try runStore.record(.init(
+                sequence: sequence, createdAt: now(),
+                type: state == .cancelled ? "node_cancelled" : "node_failed",
+                state: state, nodeID: manifest.nodes[index].id, message: message
+            ))
+            sequence += 1
         }
     }
 

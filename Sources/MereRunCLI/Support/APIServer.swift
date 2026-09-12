@@ -22,10 +22,12 @@ extension APIServerContract {
 struct APIServerRequestContext: RequestContext, RemoteAddressRequestContext {
     var coreContext: CoreRequestContextStorage
     let remoteAddress: SocketAddress?
+    let channel: any Channel
 
     init(source: Source) {
         self.coreContext = CoreRequestContextStorage(source: source)
         self.remoteAddress = source.channel.remoteAddress
+        self.channel = source.channel
     }
 }
 
@@ -229,6 +231,7 @@ actor CodeGenServer {
 
     nonisolated func buildRouter() -> Router<APIServerRequestContext> {
         let router = Router(context: APIServerRequestContext.self)
+        router.middlewares.add(APIRequestCancellationMiddleware())
 
         // Health check
         router.get("/health") { _, _ in

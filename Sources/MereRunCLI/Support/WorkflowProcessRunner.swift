@@ -226,6 +226,15 @@ protocol WorkflowStreamingProcessRunning {
     ) throws -> WorkflowProcessResult
 }
 
+/// A runner that can stop native children when its caller executes on a worker queue.
+protocol WorkflowCancellableProcessRunning {
+    func run(
+        executable: URL, arguments: [String], currentDirectory: URL,
+        timeoutSeconds: Int?, stdoutLineHandler: ((String) throws -> Void)?,
+        stdoutChunkHandler: ((Data) throws -> Void)?, isCancelled: () -> Bool
+    ) throws -> WorkflowProcessResult
+}
+
 extension WorkflowStreamingProcessRunning {
     // Chunk delivery is opt-in for runners that support it; others keep
     // line-based behavior and ignore raw chunks.
@@ -247,7 +256,7 @@ extension WorkflowStreamingProcessRunning {
     }
 }
 
-struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRunning {
+struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRunning, WorkflowCancellableProcessRunning {
     let maximumStdoutBytes: Int
 
     init(maximumStdoutBytes: Int = 16 * 1024 * 1024) {
@@ -293,6 +302,18 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         stdoutLineHandler: ((String) throws -> Void)?,
         stdoutChunkHandler: ((Data) throws -> Void)?
     ) throws -> WorkflowProcessResult {
+        try run(
+            executable: executable, arguments: arguments, currentDirectory: currentDirectory,
+            timeoutSeconds: timeoutSeconds, stdoutLineHandler: stdoutLineHandler,
+            stdoutChunkHandler: stdoutChunkHandler, isCancelled: { Task.isCancelled }
+        )
+    }
+
+    func run(
+        executable: URL, arguments: [String], currentDirectory: URL,
+        timeoutSeconds: Int?, stdoutLineHandler: ((String) throws -> Void)?,
+        stdoutChunkHandler: ((Data) throws -> Void)?, isCancelled: () -> Bool
+    ) throws -> WorkflowProcessResult {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
@@ -312,7 +333,7 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
             result = try BoundedProcessRunner.run(
                 process, timeout: timeoutSeconds.map(TimeInterval.init), outputLimitBytes: 0,
                 isCancelled: {
-                    Task.isCancelled || FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("cancel.request").path)
+                    isCancelled() || FileManager.default.fileExists(atPath: runDirectory.appendingPathComponent("cancel.request").path)
                 },
                 onStarted: { try WorkflowChildProcessRegistry.register($0, in: runDirectory) },
                 stdoutHandler: { data in
