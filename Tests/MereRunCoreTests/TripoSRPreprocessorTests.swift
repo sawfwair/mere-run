@@ -46,6 +46,11 @@ final class TripoSRPreprocessorTests: MereRunCoreTestCase {
         XCTAssertFalse(result.croppedTransparentForeground)
         XCTAssertEqual(result.preparedWidth, 2)
         XCTAssertEqual(result.image.asArray(Float.self).prefix(3), [1, 0, 0])
+        let tinyRatio = try TripoSRPreprocessor.prepare(
+            image: image, size: 2,
+            foregroundPolicy: .automaticTransparentAlpha(foregroundRatio: .leastNonzeroMagnitude)
+        )
+        XCTAssertEqual(tinyRatio.image.asArray(Float.self), result.image.asArray(Float.self))
     }
 
     func testRejectsNonPositivePublicConditioningSize() throws {
@@ -53,6 +58,31 @@ final class TripoSRPreprocessorTests: MereRunCoreTestCase {
         XCTAssertThrowsError(try TripoSRPreprocessor.prepare(image: image, size: 0)) {
             XCTAssertEqual($0 as? TripoSRPreprocessingError, .invalidImageSize(0))
         }
+    }
+
+    func testTinyForegroundRatiosRejectPaddingBeforeIntegerConversionOrAllocation() throws {
+        let image = try MediaImage(
+            width: 2, height: 2,
+            rgba8: [255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        )
+        for ratio: Float in [.leastNonzeroMagnitude, 1e-30, 1 / 8192] {
+            XCTAssertThrowsError(try TripoSRPreprocessor.prepare(
+                image: image, size: 2,
+                foregroundPolicy: .automaticTransparentAlpha(foregroundRatio: ratio)
+            )) {
+                XCTAssertEqual(
+                    $0 as? TripoSRPreprocessingError,
+                    .foregroundPaddingLimitExceeded(maximumSide: 8000)
+                )
+            }
+        }
+    }
+
+    func testForegroundPaddingPreservesTruncationAtTheImageBudgetBoundary() throws {
+        XCTAssertEqual(try TripoSRPreprocessor.foregroundPaddingSize(squareSize: 8000, foregroundRatio: 1), 8000)
+        XCTAssertEqual(try TripoSRPreprocessor.foregroundPaddingSize(squareSize: 8000, foregroundRatio: 0.9999), 8000)
+        XCTAssertThrowsError(try TripoSRPreprocessor.foregroundPaddingSize(squareSize: 8000, foregroundRatio: 0.9998))
+        XCTAssertEqual(try TripoSRPreprocessor.foregroundPaddingSize(squareSize: 2, foregroundRatio: 0.85), 2)
     }
 
     func testAntialiasedBilinearDownsampleMatchesPinnedPyTorchFixture() {

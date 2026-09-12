@@ -24,6 +24,8 @@ managed model IDs; the operation does not expand either adapter's model policy.
 
 Construct the family's immutable settings before execution. TripoSR settings
 validate extraction resolution, density threshold, and foreground ratio.
+Native transparent-foreground preparation also bounds the padded canvas by the
+VFX image budget before converting its size to an integer or allocating it.
 InstantMesh settings validate extraction resolution and supplied camera rows;
 preparation checks view and camera counts without changing view order. Video
 depth settings resolve the bounded frame-count default through the native limits.

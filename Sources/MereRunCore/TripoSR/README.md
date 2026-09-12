@@ -21,3 +21,7 @@ requests cannot terminate the process through a precondition trap.
 execution. `TripoSRGenerationOperation` rechecks current image headers, invokes
 the snapshot-based generator, and awaits unloading on success, failure, and
 cancellation. Callers retain admission and artifact-retention policy.
+
+Transparent-foreground padding uses the VFX image budget for its intermediate
+square canvas. Ratios that exceed that budget fail before integer conversion or
+allocation; ordinary ratios retain the native truncation and compositing rules.

@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reject TripoSR foreground padding that exceeds the VFX image budget before
+  integer conversion or allocation, including extremely small positive ratios.
+
 - Share Depth Anything 3 view/camera validation, generation, scene-export settings,
   and awaited cleanup between the multiview geometry CLI and API.
 
