@@ -39,28 +39,12 @@ struct VisionDepthVideo: AsyncParsableCommand {
     var json = false
 
     mutating func run() async throws {
-        do {
-            _ = try VideoDepthAnythingLimits.validateRequest(
-                inputSize: inputSize,
-                maximumFrameCount: maxFrames
-            )
-        } catch {
-            throw ValidationError(error.localizedDescription)
-        }
-
-        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
-        guard FileManager.default.fileExists(atPath: inputURL.path) else {
-            throw ValidationError("Input video not found: \(inputURL.path)")
-        }
-        let outputURL = Self.resolveOutputURL(output, inputURL: inputURL)
+        let request = try makeGenerationRequest()
+        let inputURL = request.videoURL
+        let outputURL = request.outputDirectory
 
         if dryRun {
-            let preflight = try await VideoDepthAnythingGenerator.preflight(
-                videoURL: inputURL,
-                model: model,
-                inputSize: inputSize,
-                maximumFrameCount: maxFrames
-            )
+            let preflight = try await VideoDepthAnythingGenerationOperation.preflight(request)
             print(try Self.jsonString(Self.makePlan(
                 inputURL: inputURL,
                 outputURL: outputURL,
@@ -71,26 +55,29 @@ struct VisionDepthVideo: AsyncParsableCommand {
             return
         }
 
-        let generator = VideoDepthAnythingGenerator()
-        do {
-            let result = try await generator.generate(
-                videoURL: inputURL,
-                outputDirectory: outputURL,
-                model: model,
-                inputSize: inputSize,
-                maximumFrameCount: maxFrames,
-                progress: { event in CLIStderr.write("[depth-video] \(event.message)\n") }
-            )
-            await generator.unload()
-            if json {
-                print(try Self.jsonString(VisionDepthVideoRunPayload(result: result)))
-            } else {
-                print(result.export.manifestURL.path)
-            }
-        } catch {
-            await generator.unload()
-            throw error
+        let result = try await VideoDepthAnythingGenerationOperation.execute(
+            request,
+            progress: { event in CLIStderr.write("[depth-video] \(event.message)\n") }
+        )
+        if json {
+            print(try Self.jsonString(VisionDepthVideoRunPayload(result: result)))
+        } else {
+            print(result.export.manifestURL.path)
         }
+    }
+
+    func makeGenerationRequest() throws -> VideoDepthAnythingGenerationRequest {
+        let settings: VideoDepthAnythingGenerationSettings
+        do {
+            settings = try VideoDepthAnythingGenerationSettings(inputSize: inputSize, maximumFrameCount: maxFrames)
+        } catch {
+            throw ValidationError(error.localizedDescription)
+        }
+        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
+        return VideoDepthAnythingGenerationRequest(
+            videoURL: inputURL, outputDirectory: Self.resolveOutputURL(output, inputURL: inputURL),
+            model: model, settings: settings
+        )
     }
 
     static func resolveOutputURL(_ raw: String?, inputURL: URL) -> URL {

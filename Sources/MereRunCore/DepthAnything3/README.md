@@ -19,3 +19,9 @@ solving.
 The public output is camera-aware point geometry, not a claimed mesh or trained
 3D Gaussian field. The 3DGS handoff contains transforms plus a colored point
 cloud and explicitly records that Gaussian parameters are absent.
+
+`DepthAnything3GenerationOperation` shares validated settings, current-image and
+camera checks, native execution, transactional scene export, and awaited
+unloading across CLI and API. `DepthAnything3CameraValidation` checks supplied
+cameras against the current headers during planning and the admitted snapshot
+dimensions during execution. Callers retain model and transport policy.

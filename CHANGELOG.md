@@ -6,6 +6,21 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reject TripoSR foreground padding that exceeds the VFX image budget before
+  integer conversion or allocation, including extremely small positive ratios.
+
+- Share Depth Anything 3 view/camera validation, generation, scene-export settings,
+  and awaited cleanup between the multiview geometry CLI and API.
+
+- Share bounded video-depth settings, preflight, execution, and awaited unloading
+  between the CLI and API. Check cancellation between native temporal windows.
+
+- Share InstantMesh view and camera validation, reconstruction execution, and
+  awaited cleanup across the CLI and API while preserving ordered inputs.
+
+- Share TripoSR settings and execution between both reconstruction commands and
+  the API, with current-input checks and awaited cleanup before returning.
+
 - Share MoGe-2 geometry settings, execution, and awaited unloading between the
   CLI and API. Make `vision geometry --dry-run` apply the native dimension and
   derived token-grid limits before model loading, and recheck inputs at execution.

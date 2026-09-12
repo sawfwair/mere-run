@@ -640,34 +640,52 @@ enum APIServerContract {
 
     struct MultiViewGeometryPlan: Equatable, Sendable {
         let modelID: String
-        let processResolution: Int
-        let referenceViewStrategy: DepthAnything3ReferenceViewStrategy
-        let confidencePercentile: Double
-        let maximumPointCount: Int
-        let knownCameras: [DepthAnything3KnownCamera]?
+        let settings: DepthAnything3GenerationSettings
 
+        var processResolution: Int { settings.processResolution }
+        var referenceViewStrategy: DepthAnything3ReferenceViewStrategy { settings.referenceViewStrategy }
+        var confidencePercentile: Double { settings.export.confidencePercentile }
+        var maximumPointCount: Int { settings.export.maximumPointCount }
+        var knownCameras: [DepthAnything3KnownCamera]? { settings.knownCameras }
         var poseConditioned: Bool { knownCameras != nil }
+
+        func request(imageURLs: [URL], outputDirectory: URL) -> DepthAnything3GenerationRequest {
+            DepthAnything3GenerationRequest(
+                imageURLs: imageURLs, outputDirectory: outputDirectory, model: modelID, settings: settings
+            )
+        }
     }
 
     struct ImageTo3DPlan: Equatable, Sendable {
         let modelID: String
-        let extractionResolution: Int
-        let densityThreshold: Float
-        let foregroundRatio: Float
-        let alreadyFramed: Bool
-        let includesVertexColors: Bool
+        let settings: TripoSRGenerationSettings
 
-        var foregroundPolicy: TripoSRForegroundPolicy {
-            alreadyFramed
-                ? .alreadyFramed
-                : .automaticTransparentAlpha(foregroundRatio: foregroundRatio)
+        var extractionResolution: Int { settings.extractionResolution }
+        var densityThreshold: Float { settings.densityThreshold }
+        var foregroundRatio: Float { settings.foregroundRatio }
+        var alreadyFramed: Bool { settings.alreadyFramed }
+        var includesVertexColors: Bool { settings.includesVertexColors }
+        var foregroundPolicy: TripoSRForegroundPolicy { settings.foregroundPolicy }
+
+        func request(imageURL: URL, outputDirectory: URL) -> TripoSRGenerationRequest {
+            TripoSRGenerationRequest(
+                imageURL: imageURL, outputDirectory: outputDirectory, model: modelID, settings: settings
+            )
         }
     }
 
     struct DepthVideoPlan: Equatable, Sendable {
         let modelID: String
-        let inputSize: Int
-        let maximumFrameCount: Int
+        let settings: VideoDepthAnythingGenerationSettings
+
+        var inputSize: Int { settings.inputSize }
+        var maximumFrameCount: Int { settings.maximumFrameCount }
+
+        func request(videoURL: URL, outputDirectory: URL) -> VideoDepthAnythingGenerationRequest {
+            VideoDepthAnythingGenerationRequest(
+                videoURL: videoURL, outputDirectory: outputDirectory, model: modelID, settings: settings
+            )
+        }
     }
 
     static func healthStatus() -> APIHealthStatus {
@@ -1025,7 +1043,7 @@ enum APIServerContract {
         let processResolution = try optionalPositiveIntField(
             form.field("process_resolution"),
             field: "process_resolution"
-        ) ?? 504
+        ) ?? DepthAnything3GenerationSettings.defaultProcessResolution
         do {
             try DepthAnything3Limits.validateRequest(
                 viewCount: imageUploads.count,
@@ -1047,11 +1065,11 @@ enum APIServerContract {
         let maximumPointCount = try optionalPositiveIntField(
             form.field("max_points"),
             field: "max_points"
-        ) ?? 1_000_000
+        ) ?? MultiViewGeometryExportConfiguration.defaultMaximumPointCount
 
         let confidencePercentile: Double
         if let raw = normalizedOptional(form.field("confidence_percentile")) {
-            guard let value = Double(raw), value.isFinite, (0...100).contains(value) else {
+            guard let value = Double(raw) else {
                 throw APIRequestValidationError.invalidField(
                     "confidence_percentile",
                     "must be a finite number between 0 and 100"
@@ -1059,7 +1077,7 @@ enum APIServerContract {
             }
             confidencePercentile = value
         } else {
-            confidencePercentile = 40
+            confidencePercentile = MultiViewGeometryExportConfiguration.defaultConfidencePercentile
         }
 
         let referenceViewRaw = normalizedOptional(form.field("reference_view"))?.lowercased()
@@ -1110,14 +1128,18 @@ enum APIServerContract {
             try decodeMultiViewCameraDocument($0, expectedCount: imageUploads.count)
         }
 
-        return MultiViewGeometryPlan(
-            modelID: modelID,
-            processResolution: processResolution,
-            referenceViewStrategy: referenceViewStrategy,
-            confidencePercentile: confidencePercentile,
-            maximumPointCount: maximumPointCount,
-            knownCameras: knownCameras
-        )
+        do {
+            let settings = try DepthAnything3GenerationSettings(
+                processResolution: processResolution, referenceViewStrategy: referenceViewStrategy,
+                knownCameras: knownCameras, confidencePercentile: confidencePercentile,
+                maximumPointCount: maximumPointCount
+            )
+            return MultiViewGeometryPlan(modelID: modelID, settings: settings)
+        } catch MultiViewGeometryExportConfigurationError.invalidConfidencePercentile {
+            throw APIRequestValidationError.invalidField(
+                "confidence_percentile", "must be a finite number between 0 and 100"
+            )
+        }
     }
 
     static func multiViewGeometryResponse(
@@ -1343,59 +1365,43 @@ enum APIServerContract {
             )
         }
 
-        let extractionResolution = try optionalPositiveIntField(
-            form.field("resolution"),
-            field: "resolution"
-        ) ?? 256
-        guard (2...512).contains(extractionResolution) else {
-            throw APIRequestValidationError.invalidField(
-                "resolution",
-                "must be an integer between 2 and 512"
-            )
-        }
-
-        let densityThreshold: Float
+        let resolution = try optionalPositiveIntField(form.field("resolution"), field: "resolution")
+            ?? TripoSRGenerationSettings.defaultResolution
+        let density: Float
         if let raw = normalizedOptional(form.field("density_threshold")) {
-            guard let value = Float(raw), value.isFinite else {
-                throw APIRequestValidationError.invalidField(
-                    "density_threshold",
-                    "must be a finite number"
-                )
+            guard let value = Float(raw) else {
+                throw APIRequestValidationError.invalidField("density_threshold", "must be a finite number")
             }
-            densityThreshold = value
+            density = value
         } else {
-            densityThreshold = TripoSRConfiguration.production.densityThreshold
+            density = TripoSRConfiguration.production.densityThreshold
         }
-
-        let foregroundRatio: Float
+        let ratio: Float
         if let raw = normalizedOptional(form.field("foreground_ratio")) {
-            guard let value = Float(raw), value.isFinite, value > 0, value <= 1 else {
-                throw APIRequestValidationError.invalidField(
-                    "foreground_ratio",
-                    "must be greater than 0 and at most 1"
-                )
+            guard let value = Float(raw) else {
+                throw APIRequestValidationError.invalidField("foreground_ratio", "must be greater than 0 and at most 1")
             }
-            foregroundRatio = value
+            ratio = value
         } else {
-            foregroundRatio = 0.85
+            ratio = TripoSRGenerationSettings.defaultForegroundRatio
         }
-
-        return ImageTo3DPlan(
-            modelID: modelID,
-            extractionResolution: extractionResolution,
-            densityThreshold: densityThreshold,
-            foregroundRatio: foregroundRatio,
-            alreadyFramed: try multipartBoolean(
-                form.field("already_framed"),
-                field: "already_framed",
-                defaultValue: false
-            ),
-            includesVertexColors: try multipartBoolean(
-                form.field("vertex_colors"),
-                field: "vertex_colors",
-                defaultValue: true
-            )
-        )
+        do {
+            return ImageTo3DPlan(modelID: modelID, settings: try TripoSRGenerationSettings(
+                extractionResolution: resolution, densityThreshold: density, foregroundRatio: ratio,
+                alreadyFramed: try multipartBoolean(
+                    form.field("already_framed"), field: "already_framed", defaultValue: false
+                ),
+                includesVertexColors: try multipartBoolean(
+                    form.field("vertex_colors"), field: "vertex_colors", defaultValue: true
+                )
+            ))
+        } catch TripoSRGeneratorError.invalidExtractionResolution {
+            throw APIRequestValidationError.invalidField("resolution", "must be an integer between 2 and 512")
+        } catch TripoSRGeneratorError.invalidDensityThreshold {
+            throw APIRequestValidationError.invalidField("density_threshold", "must be a finite number")
+        } catch TripoSRPreprocessingError.invalidForegroundRatio {
+            throw APIRequestValidationError.invalidField("foreground_ratio", "must be greater than 0 and at most 1")
+        }
     }
 
     static func imageTo3DResponse(
@@ -1572,8 +1578,9 @@ enum APIServerContract {
                 form.field("max_frames"),
                 field: "max_frames"
             ) ?? VideoDepthAnythingLimits.defaultMaximumFrameCount
+        let settings: VideoDepthAnythingGenerationSettings
         do {
-            _ = try VideoDepthAnythingLimits.validateRequest(
+            settings = try VideoDepthAnythingGenerationSettings(
                 inputSize: inputSize,
                 maximumFrameCount: maximumFrameCount
             )
@@ -1589,11 +1596,7 @@ enum APIServerContract {
         } catch {
             throw APIRequestValidationError.invalidField("video", error.localizedDescription)
         }
-        return DepthVideoPlan(
-            modelID: modelID,
-            inputSize: inputSize,
-            maximumFrameCount: maximumFrameCount
-        )
+        return DepthVideoPlan(modelID: modelID, settings: settings)
     }
 
     static func depthVideoResponse(

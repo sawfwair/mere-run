@@ -172,10 +172,10 @@ private struct VideoDepthAnythingAdmission: Sendable {
         maximumFrameCount requestedMaximumFrameCount: Int?,
         progress: (@Sendable (VideoDepthAnythingProgress) -> Void)?
     ) async throws -> Self {
-        let maximumFrameCount = try VideoDepthAnythingLimits.validateRequest(
-            inputSize: inputSize,
-            maximumFrameCount: requestedMaximumFrameCount
-        )
+        try Task.checkCancellation()
+        let maximumFrameCount = try VideoDepthAnythingGenerationSettings(
+            inputSize: inputSize, maximumFrameCount: requestedMaximumFrameCount
+        ).maximumFrameCount
         let inputURL = videoURL.standardizedFileURL
         guard FileManager.default.fileExists(atPath: inputURL.path) else {
             throw VideoDepthAnythingGeneratorError.inputVideoNotFound(inputURL.path)
@@ -194,6 +194,7 @@ private struct VideoDepthAnythingAdmission: Sendable {
             )
             let checkpointVerificationSeconds = Date().timeIntervalSince(verificationStart)
 
+            try Task.checkCancellation()
             progress?(.extractingFrames)
             let extractionStart = Date()
             let sequence = try MediaVideoIO.extractFrames(
@@ -299,6 +300,7 @@ public actor VideoDepthAnythingGenerator {
         let checkpointVerificationSeconds = admission.checkpointVerificationSeconds
         let frameExtractionSeconds = admission.frameExtractionSeconds
 
+        try Task.checkCancellation()
         progress?(.loadingModel)
         let loadStart = Date()
         let nativeModel = try loadModelIfNeeded(checkpoint)
@@ -333,6 +335,7 @@ public actor VideoDepthAnythingGenerator {
         let inferenceStart = Date()
         var finalizedFrameIndex = 0
         for (index, plan) in plans.enumerated() {
+            try Task.checkCancellation()
             progress?(.runningWindow(current: index + 1, total: plans.count))
             let frames = try plan.sourceFrameIndices.map {
                 try MediaImageIO.decode(sequence.frameURLs[$0])
@@ -353,6 +356,7 @@ public actor VideoDepthAnythingGenerator {
                 width: sequence.frameWidth,
                 height: sequence.frameHeight
             )
+            try Task.checkCancellation()
             let aligned = try aligner.append(
                 window: window,
                 isFinal: index == plans.count - 1
@@ -375,10 +379,12 @@ public actor VideoDepthAnythingGenerator {
         progress?(.aligningWindows)
         let inferenceSeconds = Date().timeIntervalSince(inferenceStart)
 
+        try Task.checkCancellation()
         progress?(.exportingDepth)
         let exportStart = Date()
         let export = try streamingExporter.finalize()
 
+        try Task.checkCancellation()
         progress?(.writingReviewVideo)
         let previewURLs = try export.manifest.frames.map { frame -> URL in
             guard let relativePath = frame.previewPath else {

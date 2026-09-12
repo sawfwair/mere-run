@@ -15,6 +15,7 @@ public enum TripoSRPreprocessingError: Error, Equatable, LocalizedError, Sendabl
     case emptyForeground
     case invalidForegroundRatio(Float)
     case invalidImageSize(Int)
+    case foregroundPaddingLimitExceeded(maximumSide: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -24,6 +25,8 @@ public enum TripoSRPreprocessingError: Error, Equatable, LocalizedError, Sendabl
             "TripoSR foreground ratio must be in (0, 1], found \(ratio)."
         case .invalidImageSize(let size):
             "TripoSR conditioning image size must be positive; received \(size)."
+        case .foregroundPaddingLimitExceeded(let maximumSide):
+            "TripoSR foreground padding exceeds the \(maximumSide)-pixel square image limit. Increase the foreground ratio."
         }
     }
 }
@@ -126,7 +129,7 @@ public enum TripoSRPreprocessor {
         let cropWidth = max(1, maximumX - minimumX)
         let cropHeight = max(1, maximumY - minimumY)
         let squareSize = max(cropWidth, cropHeight)
-        let paddedSize = max(squareSize, Int(Float(squareSize) / foregroundRatio))
+        let paddedSize = try foregroundPaddingSize(squareSize: squareSize, foregroundRatio: foregroundRatio)
         var canvas = [UInt8](repeating: 0, count: paddedSize * paddedSize * 4)
         let destinationX = (paddedSize - cropWidth) / 2
         let destinationY = (paddedSize - cropHeight) / 2
@@ -145,6 +148,19 @@ public enum TripoSRPreprocessor {
             height: paddedSize,
             values: compositeRGBA(canvas, width: paddedSize, height: paddedSize)
         )
+    }
+
+    /// Applies the existing VFX image budget to the square foreground canvas.
+    static func foregroundPaddingSize(squareSize: Int, foregroundRatio: Float) throws -> Int {
+        let limits = VFXImageInputLimits.production
+        let maximumSide = min(limits.maximumDimension, Int(Double(limits.maximumPixelsPerImage).squareRoot()))
+        let requestedSize = Float(squareSize) / foregroundRatio
+        // Bound the floating-point result before integer conversion or allocation.
+        // The exclusive upper bound preserves the native truncation toward zero.
+        guard requestedSize.isFinite, requestedSize < Float(maximumSide + 1) else {
+            throw TripoSRPreprocessingError.foregroundPaddingLimitExceeded(maximumSide: maximumSide)
+        }
+        return max(squareSize, Int(requestedSize))
     }
 
     private static func compositeRGBA(_ rgba: [UInt8], width: Int, height: Int) -> [Float] {

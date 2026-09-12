@@ -1,6 +1,5 @@
 import ArgumentParser
 import Foundation
-import MediaIO
 import MereRunCore
 
 struct VisionImageTo3D: AsyncParsableCommand {
@@ -19,13 +18,13 @@ struct VisionImageTo3D: AsyncParsableCommand {
     var model: String?
 
     @Option(name: [.long], help: "Native density-grid resolution from 2 through 512.")
-    var resolution: Int = 256
+    var resolution: Int = TripoSRGenerationSettings.defaultResolution
 
     @Option(name: [.long], help: "Activated-density isosurface threshold.")
     var densityThreshold: Float = TripoSRConfiguration.production.densityThreshold
 
     @Option(name: [.long], help: "Transparent foreground occupancy ratio in (0, 1].")
-    var foregroundRatio: Float = 0.85
+    var foregroundRatio: Float = TripoSRGenerationSettings.defaultForegroundRatio
 
     @Flag(name: [.long], help: "Skip transparent-foreground crop/pad and treat the image as already framed.")
     var alreadyFramed = false
@@ -66,38 +65,22 @@ struct VisionImageTo3D: AsyncParsableCommand {
         dryRun: Bool,
         json: Bool
     ) async throws {
-        guard (2...512).contains(resolution) else {
-            throw ValidationError("--resolution must be between 2 and 512")
-        }
-        guard densityThreshold.isFinite else {
-            throw ValidationError("--density-threshold must be finite")
-        }
-        guard foregroundRatio.isFinite, foregroundRatio > 0, foregroundRatio <= 1 else {
-            throw ValidationError("--foreground-ratio must be greater than 0 and at most 1")
-        }
-
-        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
-        guard FileManager.default.fileExists(atPath: inputURL.path) else {
-            throw ValidationError("Input image not found: \(inputURL.path)")
-        }
-        do {
-            _ = try VFXImageInputValidator.inspectAndValidate([inputURL])
-        } catch {
-            throw ValidationError(error.localizedDescription)
-        }
-        let outputURL = resolveOutputURL(output, inputURL: inputURL)
-        let foregroundPolicy: TripoSRForegroundPolicy = alreadyFramed
-            ? .alreadyFramed
-            : .automaticTransparentAlpha(foregroundRatio: foregroundRatio)
+        let request = try makeGenerationRequest(
+            input: input, output: output, model: model, resolution: resolution,
+            densityThreshold: densityThreshold, foregroundRatio: foregroundRatio,
+            alreadyFramed: alreadyFramed, noVertexColors: noVertexColors
+        )
+        let dimensions = try TripoSRGenerationOperation.prepare(request)
+        let inputURL = request.imageURL
+        let outputURL = request.outputDirectory
 
         if dryRun {
             let checkpoint = try await TripoSRResources.resolve(requestedModel: model)
-            let size = try MediaImageIO.size(of: inputURL)
             print(try jsonString(VisionImageTo3DPlanPayload(
                 inputPath: inputURL.path,
                 outputDirectory: outputURL.path,
-                inputWidth: size.width,
-                inputHeight: size.height,
+                inputWidth: dimensions.width,
+                inputHeight: dimensions.height,
                 checkpoint: checkpoint,
                 extractionResolution: resolution,
                 densityThreshold: densityThreshold,
@@ -108,29 +91,41 @@ struct VisionImageTo3D: AsyncParsableCommand {
             return
         }
 
-        try MLXBundleSupport.ensureAvailable(quiet: true)
-        let generator = TripoSRGenerator()
-        do {
-            let result = try await generator.generate(
-                imageURL: inputURL,
-                outputDirectory: outputURL,
-                model: model,
-                foregroundPolicy: foregroundPolicy,
-                extractionResolution: resolution,
-                densityThreshold: densityThreshold,
-                includeVertexColors: !noVertexColors,
-                progress: { event in CLIStderr.write("[image-to-3d] \(event.message)\n") }
-            )
-            await generator.unload()
-            if json {
-                print(try jsonString(try VisionImageTo3DRunPayload(result: result)))
-            } else {
-                print(result.runManifest.manifestURL.path)
-            }
-        } catch {
-            await generator.unload()
-            throw error
+        let result = try await TripoSRGenerationOperation.execute(
+            request,
+            prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) },
+            progress: { event in CLIStderr.write("[image-to-3d] \(event.message)\n") }
+        )
+        if json {
+            print(try jsonString(try VisionImageTo3DRunPayload(result: result)))
+        } else {
+            print(result.runManifest.manifestURL.path)
         }
+    }
+
+    static func makeGenerationRequest(
+        input: String, output: String?, model: String?, resolution: Int,
+        densityThreshold: Float, foregroundRatio: Float, alreadyFramed: Bool, noVertexColors: Bool
+    ) throws -> TripoSRGenerationRequest {
+        let settings: TripoSRGenerationSettings
+        do {
+            settings = try TripoSRGenerationSettings(
+                extractionResolution: resolution, densityThreshold: densityThreshold,
+                foregroundRatio: foregroundRatio, alreadyFramed: alreadyFramed,
+                includesVertexColors: !noVertexColors
+            )
+        } catch TripoSRGeneratorError.invalidExtractionResolution {
+            throw ValidationError("--resolution must be between 2 and 512")
+        } catch TripoSRGeneratorError.invalidDensityThreshold {
+            throw ValidationError("--density-threshold must be finite")
+        } catch TripoSRPreprocessingError.invalidForegroundRatio {
+            throw ValidationError("--foreground-ratio must be greater than 0 and at most 1")
+        }
+        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
+        return TripoSRGenerationRequest(
+            imageURL: inputURL, outputDirectory: resolveOutputURL(output, inputURL: inputURL),
+            model: model, settings: settings
+        )
     }
 
     static func resolveOutputURL(_ raw: String?, inputURL: URL) -> URL {

@@ -121,12 +121,11 @@ public actor InstantMeshGenerator {
         includeVertexColors: Bool = true,
         progress: (@Sendable (InstantMeshProgress) -> Void)? = nil
     ) async throws -> InstantMeshRunResult {
-        guard viewURLs.count == 4 || viewURLs.count == 6 else {
-            throw InstantMeshGeneratorError.invalidViewCount(viewURLs.count)
-        }
-        guard (2...256).contains(extractionResolution) else {
-            throw InstantMeshGeneratorError.invalidExtractionResolution(extractionResolution)
-        }
+        try Task.checkCancellation()
+        let settings = try InstantMeshGenerationSettings(
+            extractionResolution: extractionResolution, includesVertexColors: includeVertexColors, cameras: cameras
+        )
+        try settings.validate(viewCount: viewURLs.count)
         let inputs = viewURLs.map(\.standardizedFileURL)
         for input in inputs where !FileManager.default.fileExists(atPath: input.path) {
             throw InstantMeshGeneratorError.inputViewNotFound(input.path)
@@ -160,17 +159,20 @@ public actor InstantMeshGenerator {
         let prepared = try InstantMeshPreprocessor.prepare(sourceImages: images, cameras: cameras)
         let preprocessingSeconds = Date().timeIntervalSince(preprocessingStart)
 
+        try Task.checkCancellation()
         progress?(.loadingModel)
         let loadStart = Date()
         let nativeModel = try loadModelIfNeeded(checkpoint)
         let modelLoadSeconds = Date().timeIntervalSince(loadStart)
 
+        try Task.checkCancellation()
         progress?(.encodingScene)
         let encodingStart = Date()
         let sceneCode = nativeModel(images: prepared.images, cameras: prepared.cameras)
         MLX.eval(sceneCode.planes)
         let sceneEncodingSeconds = Date().timeIntervalSince(encodingStart)
 
+        try Task.checkCancellation()
         progress?(.extractingMesh)
         let extractionStart = Date()
         let extraction = try InstantMeshIsosurfaceExtractor.extractMeshWithMetadata(
@@ -184,6 +186,7 @@ public actor InstantMeshGenerator {
         let mesh = extraction.mesh
         let meshExtractionSeconds = Date().timeIntervalSince(extractionStart)
 
+        try Task.checkCancellation()
         progress?(.exportingAssets)
         let exportStart = Date()
         let export = try InstantMeshAssetExporter.export(

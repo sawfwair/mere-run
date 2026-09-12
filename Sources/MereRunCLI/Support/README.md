@@ -4,9 +4,9 @@ Shared helpers and runtime adapters for the public command surface.
 
 - `APIServerContract.swift`: API wire types, model policy, and request/response contracts.
 - `APIServer.swift`: HTTP routing, authentication, transport, and streaming ownership.
-- The single-image geometry route calls `MoGe2GenerationOperation` for shared
-  settings, execution, and unloading. The HTTP handler retains admission,
-  upload and output cleanup, and artifact retention.
+- Geometry, reconstruction, and video-depth routes call their Core generation
+  operations for shared settings, execution, and awaited unloading. HTTP handlers
+  retain admission, upload and output cleanup, and artifact retention.
 - Speech API model aliases and voice descriptions belong to `APIServerContract`.
   `APISidecarModelPool` retains admission and residency around the shared
   `AudioCore.SpeechSynthesisOperation`.

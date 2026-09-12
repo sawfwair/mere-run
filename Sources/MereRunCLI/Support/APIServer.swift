@@ -78,7 +78,13 @@ enum APIVFXArtifactRoutePolicy {
 enum APIVFXClientErrorPolicy {
     static func status(for error: Error) -> HTTPResponse.Status? {
         switch error {
-        case is MoGe2TokenGridError,
+        case VideoDepthAnythingGeneratorError.inputVideoNotFound,
+             DepthAnything3GeneratorError.imageNotFound,
+             DepthAnything3GeneratorError.cameraCountMismatch:
+            return .badRequest
+        case is InstantMeshGeneratorError,
+             is TripoSRGeneratorError,
+             is MoGe2TokenGridError,
              is MoGe2GenerationError,
              is VideoDepthAnythingLimitError,
              is VideoGenerationError,
@@ -833,38 +839,20 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-geometry-multiview"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = DepthAnything3Generator()
                 do {
-                    let result = try await generator.generate(
-                        imageURLs: inputURLs,
-                        model: plan.modelID,
-                        knownCameras: plan.knownCameras,
-                        referenceViewStrategy: plan.referenceViewStrategy,
-                        processResolution: plan.processResolution,
-                        progress: nil
+                    let result = try await DepthAnything3GenerationOperation.execute(
+                        plan.request(imageURLs: inputURLs, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    let exportStart = Date()
-                    let export = try MultiViewGeometryExporter.export(
-                        run: result,
-                        outputDirectory: outputDirectory,
-                        configuration: try MultiViewGeometryExportConfiguration(
-                            confidencePercentile: plan.confidencePercentile,
-                            maximumPointCount: plan.maximumPointCount
-                        )
-                    )
-                    let exportSeconds = Date().timeIntervalSince(exportStart)
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.multiViewGeometryResponse(
-                            from: result,
-                            export: export,
-                            exportSeconds: exportSeconds
+                            from: result.run,
+                            export: result.export,
+                            exportSeconds: result.exportSeconds
                         ),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
@@ -934,26 +922,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-image-to-3d"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = TripoSRGenerator()
                 do {
-                    let result = try await generator.generate(
-                        imageURL: inputURL,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        foregroundPolicy: plan.foregroundPolicy,
-                        extractionResolution: plan.extractionResolution,
-                        densityThreshold: plan.densityThreshold,
-                        includeVertexColors: plan.includesVertexColors,
-                        progress: nil
+                    let result = try await TripoSRGenerationOperation.execute(
+                        plan.request(imageURL: inputURL, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.imageTo3DResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
@@ -1026,25 +1004,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-instantmesh"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = InstantMeshGenerator()
                 do {
-                    let result = try await generator.generate(
-                        viewURLs: inputURLs,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        cameras: plan.cameras,
-                        extractionResolution: plan.extractionResolution,
-                        includeVertexColors: plan.includesVertexColors,
-                        progress: nil
+                    let result = try await InstantMeshGenerationOperation.execute(
+                        plan.request(viewURLs: inputURLs, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.instantMeshResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
@@ -1114,24 +1083,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-depth-video"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = VideoDepthAnythingGenerator()
                 do {
-                    let result = try await generator.generate(
-                        videoURL: inputURL,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        inputSize: plan.inputSize,
-                        maximumFrameCount: plan.maximumFrameCount,
-                        progress: nil
+                    let result = try await VideoDepthAnythingGenerationOperation.execute(
+                        plan.request(videoURL: inputURL, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.depthVideoResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }

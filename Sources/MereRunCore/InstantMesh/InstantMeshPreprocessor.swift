@@ -131,16 +131,7 @@ public enum InstantMeshPreprocessor {
         let cameraValues: [[Float]]
         let usedOfficialCameraRig: Bool
         if let suppliedCameras {
-            guard suppliedCameras.count == sourceImages.count else {
-                throw InstantMeshPreprocessingError.cameraCountMismatch(
-                    expected: sourceImages.count,
-                    actual: suppliedCameras.count
-                )
-            }
-            for (index, camera) in suppliedCameras.enumerated()
-                where camera.count != 16 || !camera.allSatisfy(\.isFinite) {
-                throw InstantMeshPreprocessingError.invalidCamera(index: index)
-            }
+            try InstantMeshGenerationSettings(cameras: suppliedCameras).validate(viewCount: sourceImages.count)
             cameraValues = suppliedCameras
             usedOfficialCameraRig = false
         } else {
