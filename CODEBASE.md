@@ -27,7 +27,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunQwenModel/` and `Sources/MereRunGemmaModel/`: text/vision layers, caches, and draft state
 - `Sources/MereRunDecode/`: shared sampling, pipelined token decoding, streaming, and logprob diagnostics
 - `Sources/MereRunTensor/`, `Sources/MereRunTextEncoder/`, and `Sources/MereRunImageModels/`: checkpoint loading, tensor kernels, and image model layers
-- `Sources/MereRunCore/*Generation*.swift` and `Sources/AudioCore/SpeechTranscriptionOperation.swift`: shared plans, validation, execution, and outcomes
+- `Sources/MereRunCore/*Generation*.swift` and `Sources/AudioCore/Speech*Operation.swift`: shared plans, validation, execution, and outcomes
 - `Sources/MereRunLTXModel/`: LTX transformers, VAEs, upsamplers, and model caches
 - `Sources/MereRunCore/LTX/`: video loading, conditioning, generation, and output
 - `Sources/MereRunH3Model/`, `Sources/MereRunLagunaModel/`, and `Sources/MereRunAudioModels/`: H3, Laguna, and shared vocoder computation

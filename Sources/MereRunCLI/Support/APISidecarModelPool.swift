@@ -291,10 +291,12 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
     }
 
     func synthesizeSpeech(
-        modelID: String,
-        modelPath: String?,
-        request: TTSRequest
+        selection: SpeechSynthesisModelSelection,
+        plan: SpeechSynthesisPlan
     ) async throws -> TTSResult {
+        try plan.validateForExecution()
+        let modelID = selection.modelID
+        let modelPath = selection.modelPath
         let key = APISidecarSpeechKey(
             modelID: modelID,
             modelPath: modelPath.map(normalizedPath)
@@ -326,14 +328,10 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         )
                     )
                 },
-                make: { Qwen3TTSGenerator(modelId: modelID) },
+                make: { selection.makeGenerator() },
                 unload: { generator in await generator.unload() },
                 operation: { generator in
-                    try await generator.generate(
-                        request,
-                        modelPath: modelPath,
-                        progressHandler: nil
-                    )
+                    try await SpeechSynthesisOperation.execute(plan, executor: selection.executor(using: generator)).result
                 }
             )
         }

@@ -4,6 +4,9 @@ Shared helpers and runtime adapters for the public command surface.
 
 - `APIServerContract.swift`: API wire types, model policy, and request/response contracts.
 - `APIServer.swift`: HTTP routing, authentication, transport, and streaming ownership.
+- Speech API model aliases and voice descriptions belong to `APIServerContract`.
+  `APISidecarModelPool` retains admission and residency around the shared
+  `AudioCore.SpeechSynthesisOperation`.
 
 - `CLIModelStoreBootstrap.swift`: global model-root handling.
 - `CLIOutput.swift` and `CLIStderr.swift`: output channel discipline.

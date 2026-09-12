@@ -1188,7 +1188,11 @@ actor CodeGenServer {
             let plan = try APIServerContract.speechPlan(from: openaiRequest)
             return try await withRuntimeRequestAdmission(using: requestAdmission) {
                 let outputURL = try await synthesizeSpeech(plan)
+                defer { try? FileManager.default.removeItem(at: outputURL) }
                 let responseURL = try speechResponseURL(outputURL, responseFormat: plan.responseFormat)
+                defer {
+                    if responseURL != outputURL { try? FileManager.default.removeItem(at: responseURL) }
+                }
                 let data = try Data(contentsOf: responseURL)
                 let response = binaryResponse(
                     data,
@@ -1483,23 +1487,12 @@ actor CodeGenServer {
     }
 
     private func synthesizeSpeech(_ plan: APIServerContract.SpeechPlan) async throws -> URL {
+        let selection = try plan.modelSelection()
         try MLXBundleSupport.ensureAvailable(quiet: true)
-        let selection = try resolveSpeechModel(plan.modelID)
         let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-speech", extension: "wav")
-        let request = TTSRequest(
-            text: plan.input,
-            voiceDescription: plan.voiceDescription,
-            voiceMode: .style,
-            cloneReference: nil,
-            language: "auto",
-            speed: plan.speed,
-            temperature: plan.temperature,
-            outputURL: outputURL
-        )
         _ = try await sidecarPool.synthesizeSpeech(
-            modelID: selection.modelID,
-            modelPath: selection.modelPath,
-            request: request
+            selection: selection,
+            plan: plan.synthesisPlan(outputURL: outputURL)
         )
         return outputURL
     }
@@ -1512,7 +1505,12 @@ actor CodeGenServer {
             directoryName: "mere-run-api-speech",
             extension: responseFormat
         )
-        try MediaAudioIO.transcode(wavURL, to: outputURL, format: responseFormat)
+        do {
+            try MediaAudioIO.transcode(wavURL, to: outputURL, format: responseFormat)
+        } catch {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw error
+        }
         return outputURL
     }
 
@@ -1536,24 +1534,6 @@ actor CodeGenServer {
         let manifest = try MereRunModelManifest.loadRequired(from: root)
         if case .managed(let id) = selection { return (id.rawValue, root, manifest) }
         return (manifest.id, root, manifest)
-    }
-
-    private func resolveSpeechModel(
-        _ requestedModel: String
-    ) throws -> (modelID: String, modelPath: String?) {
-        let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let asPath = URL(fileURLWithPath: normalized).standardizedFileURL
-        if FileManager.default.fileExists(atPath: asPath.path) {
-            return (Qwen3TTSResources.defaultModelId, asPath.path)
-        }
-        if let spec = ManagedModelCatalog.spec(for: normalized),
-           spec.category == .speechTTS {
-            return (spec.id, nil)
-        }
-        throw APIRequestValidationError.invalidField(
-            "model",
-            "use a mere.run TTS model id or a local Qwen3-TTS model path"
-        )
     }
 
     private nonisolated func temporaryOutputURL(

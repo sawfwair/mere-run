@@ -72,20 +72,31 @@ public enum AudioWAVEncoder {
 
     private static func chunks(_ audio: ProcessedAudio, layout: AudioWAVLayout, sink: (Data) throws -> Void) throws {
         try Task.checkCancellation()
-        let options = audio.plan.options
+        try sink(header(layout: layout, channels: audio.waveform.channels,
+                        sampleRate: audio.waveform.sampleRate, encoding: audio.plan.options.format))
+        try payloadChunks(audio, sampleOffset: 0, sink: sink)
+        try Task.checkCancellation()
+        if layout.paddingBytes == 1 { try sink(Data([0])) }
+    }
+
+    static func header(layout: AudioWAVLayout, channels: Int, sampleRate: Int, encoding: AudioWAVEncoding) -> Data {
         var header = Data("RIFF".utf8)
         append(UInt32(36 + layout.dataBytes + layout.paddingBytes), to: &header)
         header.append(Data("WAVEfmt ".utf8))
         append(UInt32(16), to: &header)
-        append(UInt16(options.format == .float32 ? 3 : 1), to: &header)
-        append(UInt16(audio.waveform.channels), to: &header)
-        append(UInt32(audio.waveform.sampleRate), to: &header)
+        append(UInt16(encoding == .float32 ? 3 : 1), to: &header)
+        append(UInt16(channels), to: &header)
+        append(UInt32(sampleRate), to: &header)
         append(layout.byteRate, to: &header)
         append(layout.blockAlign, to: &header)
-        append(options.format.bitsPerSample, to: &header)
+        append(encoding.bitsPerSample, to: &header)
         header.append(Data("data".utf8))
         append(UInt32(layout.dataBytes), to: &header)
-        try sink(header)
+        return header
+    }
+
+    static func payloadChunks(_ audio: ProcessedAudio, sampleOffset: Int, sink: (Data) throws -> Void) throws {
+        let options = audio.plan.options
         let samples = audio.waveform.samples
         let chunkSamples = 16_384
         for start in stride(from: 0, to: samples.count, by: chunkSamples) {
@@ -97,10 +108,10 @@ public enum AudioWAVEncoder {
                 let sample = samples[index]
                 switch options.format {
                 case .pcm16:
-                    let noise = options.dither ? dither(index) / 32_768 : 0
+                    let noise = options.dither ? dither(sampleOffset + index) / 32_768 : 0
                     append(Int16(max(-1, min(1, sample + noise)) * 32_767), to: &chunk)
                 case .pcm24:
-                    let noise = options.dither ? dither(index) / 8_388_608 : 0
+                    let noise = options.dither ? dither(sampleOffset + index) / 8_388_608 : 0
                     let value = Int32(max(-1, min(1, sample + noise)) * 8_388_607)
                     chunk.append(UInt8(truncatingIfNeeded: value))
                     chunk.append(UInt8(truncatingIfNeeded: value >> 8))
@@ -111,8 +122,6 @@ public enum AudioWAVEncoder {
             }
             try sink(chunk)
         }
-        try Task.checkCancellation()
-        if layout.paddingBytes == 1 { try sink(Data([0])) }
     }
 
     private static func append<T: FixedWidthInteger>(_ value: T, to data: inout Data) {

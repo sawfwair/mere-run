@@ -165,6 +165,9 @@ the dependency map. Qwen ASR, Qwen TTS, Parakeet, and Sortformer build independe
 
 Speech synthesis command path:
 
+- [Shared synthesis](./internals/speech-synthesis-operation.md): validated plans,
+  waveform execution, and WAV publication in `AudioCore`
+- Model selection and native adapter: `Sources/AudioTTS/Qwen3TTS/SpeechSynthesisModelSelection.swift`
 - CLI: `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
 - Runtime entry point: `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator.swift`
 - Read next:

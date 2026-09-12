@@ -271,7 +271,7 @@ swift run mere.run speech synthesize \
 ```
 
 If `--ref-text` is omitted, the speech transcriber automatically transcribes the
-speech transcriber. `--language` hints the language (default `auto`). Add
+reference audio. `--language` hints the language (default `auto`). Add
 `--stream` to emit audio incrementally while generating; `--stream-chunk-tokens`
 sets the chunk interval (default 25).
 
@@ -316,17 +316,28 @@ Tokenizer internals:
 
 At a high level:
 
-1. The CLI resolves the selected text-to-speech (TTS) model.
-2. The runtime loads the optional profile or voice configuration.
-3. The runtime converts text into the model's intermediate token representation.
-4. The generator produces waveform data.
-5. The codec and output helpers write the audio to disk.
+1. The CLI validates text, temperature, and streaming options before resolving
+   the model or preparing a clone reference.
+2. The CLI resolves profiles and optional reference transcription. The API
+   maps model and voice aliases. Both construct a shared synthesis plan.
+3. AudioTTS loads the model and generates host waveform samples through one
+   native path for offline and streaming requests.
+4. AudioCore encodes the samples and publishes the completed WAV. CLI progress
+   and receipts and API response formatting remain in their adapters.
 
-`MediaAudioIO` can write float WAV output incrementally from chunk providers,
-including device-backed producers, which avoids constructing a second
-whole-file `Data` copy. Individual TTS generators may still produce a complete
-waveform before handing it to the output helper; the streaming writer API does
-not by itself make every synthesis model incremental.
+`--temperature` must be finite and between 0 and 2. Streaming chunk intervals
+must be greater than zero. Offline output remains unnormalized, undithered
+PCM16. `--stream` retains float32 output, including finite samples outside
+the unit range. Both replace nonfinite samples with zero.
+
+Streaming writes to a temporary sibling file and publishes the destination
+after generation ends and the WAV header is complete. Failure or cooperative
+cancellation removes the temporary file and preserves an existing destination.
+The receipt therefore describes the finalized file. With `--progress-json`,
+streaming token progress is emitted even when you also specify `--quiet`.
+
+See [shared speech synthesis](../internals/speech-synthesis-operation.md) for
+execution, export, and model lifetime ownership.
 
 ## How transcription flows
 
