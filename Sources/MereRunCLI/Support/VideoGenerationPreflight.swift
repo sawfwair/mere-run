@@ -1207,8 +1207,8 @@ struct VideoGenerationPreflightAnalyzer {
         var resolvedH3Steps: Int?
         if usesMiniMaxH3Geometry, let plan {
             do {
-                let frames = try parseMiniMaxH3FrameArguments(input.h3FrameInputs, requireFiles: false)
-                let references = try parseMiniMaxH3ReferenceArguments(input.references, requireFiles: false)
+                let frames = try VideoGenerationArgumentParser.h3Frames(input.h3FrameInputs, requireFiles: false)
+                let references = try VideoGenerationArgumentParser.h3References(input.references, requireFiles: false)
                 let preparation = try VideoGenerationH3Preparation(
                     options: input, profile: modelProfile,
                     modelRoot: model.path.map { URL(fileURLWithPath: $0) },

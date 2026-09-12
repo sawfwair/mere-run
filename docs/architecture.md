@@ -73,8 +73,10 @@ For `video generate`, start with `VideoGenerationOptions` and
 public quality, output-mode, and variant enums. The plans own model selection, option validation,
 geometry, seed defaults, and native request construction for LTX, H3, and Wan.
 LTX and H3 preparation resolves adapter metadata and compatibility without
-loading tensors. CLI preflight uses these same owners, while execution retains
-the existing generator loading, admission, cleanup, and output paths.
+loading tensors. CLI preflight uses these same owners. The CLI and video API
+call `VideoGenerationOperation` for preparation, native execution, unloading,
+and media output. Their adapters retain admission and presentation. See the
+[shared video generation operation](./internals/video-generation-operation.md).
 
 Read [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md)
 for model ownership, generator stages, shared vocoder layers, and validation.

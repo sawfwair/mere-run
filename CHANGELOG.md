@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share native video preparation, execution, unloading, and media output between
+  the CLI and video API through a Core operation. Preserve API defaults,
+  optional argument syntax, request admission, and artifact retention without
+  running the CLI command inside the HTTP handler.
+- Keep video API JSON fields literal, return HTTP 400 for invalid optional
+  arguments and native settings, and check cooperative cancellation before
+  video output and before reporting success.
+
 - Share speech synthesis validation, model selection, native waveform generation,
   and WAV export between the CLI and resident API. Reject empty text and invalid
   temperatures before model loading or clone preparation.

@@ -90,6 +90,7 @@ lifecycle. API keys still cross the process boundary only through
 - `POST /v1/embeddings`
 - `POST /v1/images/generations`
 - `POST /v1/images/edits`
+- `POST /v1/videos/generations`
 - `POST /v1/vision/geometry`
 - `POST /v1/vision/geometry/multiview`
 - `POST /v1/vision/image-to-3d`
@@ -107,6 +108,46 @@ Qwen, Ornith, Laguna, Gemma 4, and Muse use their native templates to render
 Streaming responses send SSE keepalive comments during long generations, including
 buffered tool calls. Clients should ignore comment frames and wait for response
 data and the final usage chunk.
+
+## Generate a video
+
+Send video requests from the serving machine. This route is loopback-only
+because its response contains a server-local MP4 URL. The server retains the
+artifact for one hour and includes its byte count and SHA-256.
+
+With `video-ltx23-av-mlx` installed, send a bounded video-only request:
+
+```bash
+curl http://127.0.0.1:8080/v1/videos/generations \
+  -H "Content-Type: application/json" \
+  --data '{
+    "model": "video-ltx23-av-mlx",
+    "prompt": "A small wooden boat floats on calm water.",
+    "size": "512x320",
+    "num_frames": 9,
+    "fps": 24,
+    "seed": 42,
+    "output_mode": "video-only"
+  }'
+```
+
+If you omit `model`, the API selects `video-ltx25-distilled-bf16`. The default
+canvas is 768 × 512 at 24 fps. Use either `seconds` or `num_frames` to specify
+length. The selected model normalizes frame counts to its native cadence.
+
+The optional `options` array accepts additional `video generate` arguments,
+such as `["--ltx-preset", "hq"]` for a compatible full model. Typed request
+fields control the model, canvas, duration, frame rate, seed, quality, and
+output mode; you cannot replace those flags in `options`. `--skip-mp4` is
+unavailable because the response requires an MP4 artifact.
+
+CLI and API video generation use the same Core preparation and execution
+operation. Video runtimes load for each request; they do not join a resident
+sidecar pool. One API request slot encloses preparation, generation, and
+artifact publication. Invalid video arguments and native settings return HTTP 400. Failed
+requests remove partial output, and successful responses retain the artifact.
+The HTTP response contains JSON; CLI progress and receipt flags do not create
+an HTTP event stream or command output.
 
 ## What it is for
 
