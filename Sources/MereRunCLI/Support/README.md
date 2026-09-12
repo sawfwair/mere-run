@@ -2,7 +2,14 @@
 
 Shared helpers and runtime adapters for the public command surface.
 
-- `APIServerContract.swift`: API wire types, model policy, and request/response contracts.
+- `APIServerContract.swift`: transport headers, JSON decoding, health, and validation errors.
+- `APIServerContract+Models.swift`: discovery and engine capability projections
+  from Core model profiles. Modality files own request translation and response
+  construction, with each vision response schema beside its constructor.
+- `APIServerContract+Fields.swift`: shared optional-field parsing and model-name
+  normalization. Modality files retain their aliases, defaults, and diagnostics.
+- `APIMultipartFormData.swift`: ordered multipart parsing and shared field checks.
+  Each route declares its allowed fields, diagnostics, and text-decoding policy.
 - `APIServer.swift`: HTTP routing, authentication, transport, and streaming ownership.
 - Geometry, reconstruction, and video-depth routes call their Core generation
   operations for shared settings, execution, and awaited unloading. HTTP handlers
@@ -53,3 +60,6 @@ Shared helpers and runtime adapters for the public command surface.
 
 Keep stdout machine-readable when a command can be scripted; diagnostics and
 progress belong on stderr.
+
+Read [catalog and contract ownership](../../../docs/internals/catalog-contracts.md)
+before changing discovery, capability metadata, or API translation.
