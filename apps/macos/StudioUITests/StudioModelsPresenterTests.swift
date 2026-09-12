@@ -100,7 +100,7 @@ final class StudioModelsPresenterTests: XCTestCase {
             row("vision-chat-qwen3.6-vl-4b", category: "vision-chat", status: "missing", size: "—"),
             row("text-chat-qwen3.6-4b", category: "text-chat", status: "missing", size: "—"),
         ]
-        let listed = StudioModelsPresenter.listRows(rows, pullingIDs: ["vision-chat-qwen3.6-vl-4b"])
+        let listed = StudioModelsPresenter.listRows(rows, downloadIDs: ["vision-chat-qwen3.6-vl-4b"])
         XCTAssertEqual(listed.map(\.id), ["image-zimage-nano", "vision-chat-qwen3.6-vl-4b"])
     }
 
@@ -236,26 +236,12 @@ final class StudioModelsPresenterTests: XCTestCase {
 
     // MARK: Jobs
 
-    func testLibraryPullJobDescribesTheRunningComposerPull() {
-        let now = Date()
-        let rows = [row("vision-chat-qwen3.6-vl-4b", category: "vision-chat", status: "missing", size: "—", title: "Qwen3.6-VL 4B")]
-        let pull = item(
-            mode: .readImage,
-            commandPreview: "mere.run model pull vision-chat-qwen3.6-vl-4b",
-            status: .running,
-            createdAt: now,
-            templateID: .modelPull
-        )
-        let progress = StudioRunProgress(label: "vision-chat-qwen3.6-vl-4b", fractionCompleted: 0.25, detail: "1.2 GB / 4.8 GB")
-        let job = StudioModelsPresenter.libraryPullJob(in: [pull], rows: rows, progressByRequestID: [pull.id: progress])
-
-        XCTAssertEqual(job?.kind, .pull)
-        XCTAssertEqual(job?.modelID, "vision-chat-qwen3.6-vl-4b")
-        XCTAssertEqual(job?.label, "Models · Pull Qwen3.6-VL 4B")
-        XCTAssertEqual(job?.detail, "1.2 GB / 4.8 GB")
-        XCTAssertEqual(job?.fraction, 0.25)
-        XCTAssertEqual(job?.libraryItemID, pull.id)
-        XCTAssertNil(StudioModelsPresenter.libraryPullJob(in: [], rows: rows, progressByRequestID: [:]))
+    func testQueuedDownloadExplainsItsStateAndCanShowCancellation() {
+        let job = StudioModelsJob(kind: .pull, modelID: "image-zimage-nano", subject: "Z-Image", isQueued: true)
+        XCTAssertEqual(job.label, "Models · Pull Z-Image")
+        XCTAssertEqual(job.detail, "Queued")
+        let cancelled = StudioModelsJob(kind: .pull, modelID: "image-zimage-nano", subject: "Z-Image", isCancelling: true, isQueued: true)
+        XCTAssertEqual(cancelled.detail, "Cancelling…")
     }
 
     func testJobLabelsAndCancellingDetail() {

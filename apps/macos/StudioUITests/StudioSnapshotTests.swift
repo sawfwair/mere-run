@@ -487,8 +487,8 @@ final class StudioSnapshotTests: XCTestCase {
     /// Models ▸ Installed at the mockup size with a seeded inventory: `model list`,
     /// `model capabilities`, `model storage`, `model info`, `model runtime get`, and
     /// `adapter list` are answered by a scripted runner, and the Library carries the runs the
-    /// detail column reads (usage, a quality gate, a benchmark) plus a running composer pull so
-    /// the job bar renders. No CLI is launched.
+    /// detail column reads (usage, a quality gate, a benchmark). A real fixture job
+    /// supplies the running download in the job bar. No CLI is launched.
     func testModelsInstalledFidelitySnapshots() throws {
         let directory = try XCTUnwrap(Self.snapshotDirectory())
         fixture.tearDown()
@@ -514,6 +514,17 @@ final class StudioSnapshotTests: XCTestCase {
                 afterAppear: { navigation.open(task: .modelsInstalled) }
             )
         }
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+            try fixture.write(view, size: CGSize(width: 768, height: 820), appearance: appearance,
+                name: "models-installed-compact-\(appearance.rawValue)", settle: 2,
+                afterAppear: { navigation.open(task: .modelsInstalled) })
+        }
+
     }
 
     func testResultWorkspaceFocusAndComparisonSnapshots() throws {
@@ -1161,23 +1172,14 @@ private final class SnapshotFixture {
             commandDraft: liteDraft
         ))
 
-        var pullDraft = CommandDraft()
+        guard let runner = liveSessionRunner, let template = CommandCatalog.template(id: .modelPull) else {
+            throw StudioSnapshotError.noContentView
+        }
+        runner.liveSessionMarkers = ["pull"]
+        var pullDraft = template.defaultDraft()
         pullDraft.model = ModelsInventoryScript.pullingModelID
-        rows.append(StudioLibraryItem(
-            id: UUID(),
-            mode: .readImage,
-            prompt: "",
-            inputURL: nil,
-            outputURL: nil,
-            createdAt: now.addingTimeInterval(-60 * 3),
-            updatedAt: now.addingTimeInterval(-60 * 3),
-            status: .running,
-            exitCode: nil,
-            commandPreview: "mere.run model pull \(ModelsInventoryScript.pullingModelID)",
-            outputText: nil,
-            templateID: .modelPull,
-            commandDraft: pullDraft
-        ))
+        let pull = StudioRunRequest(mode: .readImage, templateID: .modelPull, template: template, draft: pullDraft)
+        guard controller.modelStore.startPull(pull) else { throw StudioSnapshotError.noContentView }
 
         for row in rows.sorted(by: { $0.createdAt < $1.createdAt }) {
             library.upsert(row)
@@ -1974,7 +1976,8 @@ private enum ConverseScript {
                 stdout: SnapshotProcessRunner.statusSnapshot(installedModelCount: SnapshotProcessRunner.installedModelCount),
                 exitCode: 0
             ),
-            .init(matches: { $0 == ["model", "list"] || $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list"] }, stdout: ModelsInventoryScript.modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: ModelsInventoryScript.modelList), exitCode: 0),
             .init(
                 matches: { $0 == ["model", "capabilities", "--all", "--json"] },
                 stdout: ModelsInventoryScript.capabilities,
@@ -2006,6 +2009,18 @@ private enum ModelsInventoryScript {
     speech-asr-parakeet-tdt    speech-asr   installed  2.4 GB
 
     """
+
+    static func inventoryJSON(from text: String) -> String {
+        struct Row: Encodable { let id: String; let category: String; let status: String; let size: String }
+        struct Inventory: Encodable { let rows: [Row] }
+        struct Document: Encodable { let inventory: Inventory; let usageTerms: [String] }
+        let rows = StudioModelInventoryParser.rows(from: text).map {
+            Row(id: $0.id, category: $0.category, status: $0.status, size: $0.size)
+        }
+        do {
+            return String(decoding: try JSONEncoder().encode(Document(inventory: Inventory(rows: rows), usageTerms: [])), as: UTF8.self)
+        } catch { preconditionFailure("Could not encode snapshot inventory: \(error)") }
+    }
 
     static let capabilities = """
     {"models": [
@@ -2057,7 +2072,8 @@ private enum ModelsInventoryScript {
     /// to the runner's default so the footer keeps the boards' "Ready · 92 models".
     static var readinessResponses: [SnapshotProcessRunner.Response] {
         [
-            .init(matches: { $0 == ["model", "list"] || $0 == ["model", "list", "--json"] }, stdout: modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: modelList), exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
             version,
         ]
@@ -2088,7 +2104,8 @@ private enum ModelsInventoryScript {
             of: "\n]}", with: "\n\(extraCapabilities)\n]}"
         )
         return [
-            .init(matches: { $0 == ["model", "list"] || $0 == ["model", "list", "--json"] }, stdout: list, exitCode: 0),
+            .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
+            .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: list), exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
         ]
     }
@@ -2107,7 +2124,8 @@ private enum ModelsInventoryScript {
                 stdout: SnapshotProcessRunner.statusSnapshot(installedModelCount: installedModelCount),
                 exitCode: 0
             ),
-            .init(matches: { $0 == ["model", "list"] || $0 == ["model", "list", "--json"] }, stdout: modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: modelList), exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
             .init(matches: { $0 == ["model", "storage", "--json"] }, stdout: storage, exitCode: 0),
             .init(matches: { $0.starts(with: ["model", "info", defaultModelID]) }, stdout: modelInfo, exitCode: 0),

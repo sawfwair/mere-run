@@ -58,23 +58,27 @@ private struct StudioWorkspaceView: View {
     @State private var highlightReset: Task<Void, Never>?
     /// A run of this mode that finished while its card was off-screen ("New result ↓").
     @State private var newResultID: UUID?
-    @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var pendingRestrictedPull: StudioRunRequest?
     @State private var studioError: String?
     /// A run whose user-visible destination could not be created, explained once per launch.
     @State private var outputFallbackNotice: String?
     @State private var outputFallbackAnnounced = false
-    /// Every `model list` row, installed or not, feeding the composer's model chip.
-    @State private var modelInventory: [StudioModelInventoryRow] = []
-    /// What Models ▸ Installed last reported, so the content header's subtitle shows the real inventory.
-    @State private var modelInventorySummary: StudioModelInventorySummary?
-    @State private var modelUsageTermsByID: [String: StudioModelUsageTerms] = [:]
+    @ObservedObject private var models: StudioModelStore
+    private var modelInventory: [StudioModelInventoryRow] { models.rows }
+    private var modelInventorySummary: StudioModelInventorySummary? {
+        StudioModelInventorySummary(installedCount: models.rows.filter(\.isInstalled).count,
+                                    storageBytes: models.storage?.applicationSupportBytes)
+    }
+    private var modelUsageTermsByID: [String: StudioModelUsageTerms] {
+        Dictionary(uniqueKeysWithValues: models.rows.compactMap { row in row.usageTerms.map { (row.id, $0) } })
+    }
     @State private var imageDatasetTask: StudioUtilityTask = .datasetDiscovery
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
     @FocusState private var promptFocused: Bool
     init(controller: MereRunController, library: StudioLibraryStore, navigation: NavigationModel,
          seededDrafts: [StudioMode: StudioDraft]) {
         self.controller = controller
+        self.models = controller.modelStore
         self.library = library
         self.navigation = navigation
         _prompt = State(initialValue: StudioPromptTaskController(controller: controller, library: library, seededDrafts: seededDrafts))
@@ -644,11 +648,8 @@ private struct StudioWorkspaceView: View {
             StudioGeoLabView(tool: geoToolBinding)
         case .modelsInstalled:
             StudioModelsView(
-                onModelsChanged: {
-                    refreshReadiness()
-                    refreshInstalledModels()
-                },
-                onInventoryChanged: { modelInventorySummary = $0 },
+                modelStore: models,
+                onModelsChanged: refreshReadiness,
                 adapterTargetTitle: mode.destination.domain.title,
                 onUseAdapter: applyAdapter,
                 onTrain: openTraining
@@ -809,7 +810,7 @@ private struct StudioWorkspaceView: View {
         VStack(spacing: 0) {
             if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
                 StudioResultWorkspaceView(item: item, url: selection.url, items: library.items,
-                    onClose: { focusedResult = nil }, onVary: varyLibraryItem,
+                    onClose: { focusedResult = nil; promptFocused = true }, onVary: varyLibraryItem,
                     onSave: saveOutput, onContinue: continueResult)
             } else if mode.isConversational {
                 converseSurface
@@ -907,18 +908,21 @@ private struct StudioWorkspaceView: View {
     }
 
     private var focusedResult: StudioResultSelection? {
-        get {
-            let selection = controller.taskSessions.value(for: destination.task.rawValue + ".focus", default: Optional<StudioResultSelection>.none)
-            return selection.flatMap { selected in library.items.contains(where: { $0.id == selected.itemID }) ? selected : nil }
-        }
-        nonmutating set { controller.taskSessions.set(newValue, for: destination.task.rawValue + ".focus") }
+        get { controller.taskSessions.focusedResult(for: destination.task, items: library.items) }
+        nonmutating set { controller.taskSessions.setFocus(newValue, for: destination.task) }
     }
 
     private func focusResult(_ item: StudioLibraryItem, _ url: URL) {
+        guard item.allArtifactURLs.contains(url), FileManager.default.fileExists(atPath: url.path) else {
+            studioError = "That result is no longer on disk."
+            return
+        }
         guard StudioOutputFileKind.classify(url) == .image else {
             QuickLookCoordinator.shared.preview(url)
             return
         }
+        navigation.selectedLibraryID = item.id
+        controller.taskSessions.rememberSelection(item.id, for: mode)
         focusedResult = StudioResultSelection(itemID: item.id, url: url)
     }
 
@@ -1172,14 +1176,17 @@ private struct StudioWorkspaceView: View {
         }
         .onChange(of: controller.cliPath) { _, _ in
             studioError = nil
+            refreshInstalledModels()
             refreshReadiness()
         }
         .onChange(of: controller.modelsRoot) { _, _ in
             studioError = nil
+            refreshInstalledModels()
             refreshReadiness()
         }
         .onChange(of: controller.hubCache) { _, _ in
             studioError = nil
+            refreshInstalledModels()
             refreshReadiness()
         }
     }
@@ -1204,23 +1211,17 @@ private struct StudioWorkspaceView: View {
 
             // The card updates in place; selection stays where the user left it, and a finished
             // card that is scrolled out of view announces itself with the "New result" pill.
-            let completedLibraryItem = result.requestID != nil
+            let completedLibraryItem = result.requestID.map { id in library.items.contains { $0.id == id } } == true
             if let requestID = result.requestID {
                 if result.exitCode == 0, library.items.first(where: { $0.id == requestID })?.mode == mode {
                     newResultID = requestID
                 }
             }
 
-            let mutatedModels = result.templateID == .modelPull
-                || result.templateID == .modelRemove
+            let mutatedModels = result.templateID == .modelRemove
                 || result.templateID == .modelRepairManifests
 
-            if let pendingPullRefresh, result.templateID == .modelPull {
-                self.pendingPullRefresh = nil
-                controller.checkReadiness(for: pendingPullRefresh.mode, draft: pendingPullRefresh.draft)
-            } else if mutatedModels || completedLibraryItem {
-                refreshReadiness()
-            }
+            if mutatedModels || completedLibraryItem { refreshReadiness() }
 
             if mutatedModels {
                 refreshInstalledModels()
@@ -1250,6 +1251,7 @@ private struct StudioWorkspaceView: View {
     private func selectLibraryItem(_ item: StudioLibraryItem) {
         libraryOverlay = false
         navigation.selectedLibraryID = item.id
+        controller.taskSessions.rememberSelection(item.id, for: item.mode)
         highlightCard(item.id)
         guard item.mode != mode || !showsPromptWorkspace else {
             if destination.task.isAnalyzeTask { prompt.selectAnalyzeInput(from: item) }
@@ -1317,6 +1319,7 @@ private struct StudioWorkspaceView: View {
     private func deleteLibraryItems(_ ids: Set<UUID>, trashingFiles: Bool) {
         let failures = library.delete(ids: ids, trashingFiles: trashingFiles)
         prompt.forgetConversations(ids)
+        controller.taskSessions.forgetLibraryItems(ids)
         if let first = failures.first {
             studioError = failures.count == 1
                 ? "Could not move \(first.lastPathComponent) to the Trash."
@@ -1344,8 +1347,7 @@ private struct StudioWorkspaceView: View {
     /// "Save to…": copies a row's artifacts (or a whole batch's) somewhere the user picks, leaving
     /// the originals — and the Library rows that point at them — untouched.
     private func exportLibraryItems(_ selected: [StudioLibraryItem]) {
-        let urls = selected.flatMap(\.allArtifactURLs)
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        let urls = StudioFileExport.uniqueSources(selected.flatMap(\.allArtifactURLs))
         guard !urls.isEmpty else {
             studioError = "Those runs have no files to save."
             return
@@ -1356,7 +1358,8 @@ private struct StudioWorkspaceView: View {
             panel.nameFieldStringValue = source.lastPathComponent
             panel.canCreateDirectories = true
             guard panel.runModal() == .OK, let destination = panel.url else { return }
-            copyExport(from: [source], into: destination.deletingLastPathComponent(), names: [destination.lastPathComponent])
+            do { try StudioFileExport.copy(source, to: destination) }
+            catch { studioError = "Could not save \(source.lastPathComponent): \(error.localizedDescription)" }
             return
         }
 
@@ -1367,30 +1370,10 @@ private struct StudioWorkspaceView: View {
         panel.prompt = "Save"
         panel.message = "Choose a folder for \(urls.count) files."
         guard panel.runModal() == .OK, let directory = panel.url else { return }
-        copyExport(from: urls, into: directory, names: urls.map(\.lastPathComponent))
-    }
-
-    private func copyExport(from sources: [URL], into directory: URL, names: [String]) {
-        let fileManager = FileManager.default
-        var failures = 0
-        for (source, name) in zip(sources, names) {
-            var destination = directory.appendingPathComponent(name)
-            var counter = 2
-            let stem = destination.deletingPathExtension().lastPathComponent
-            let ext = destination.pathExtension
-            while fileManager.fileExists(atPath: destination.path), counter < 1_000 {
-                let candidate = ext.isEmpty ? "\(stem)-\(counter)" : "\(stem)-\(counter).\(ext)"
-                destination = directory.appendingPathComponent(candidate)
-                counter += 1
-            }
-            do {
-                try fileManager.copyItem(at: source, to: destination)
-            } catch {
-                failures += 1
-            }
-        }
-        if failures > 0 {
-            studioError = failures == 1 ? "One file could not be saved." : "\(failures) files could not be saved."
+        let report = StudioFileExport.copy(urls, into: directory)
+        if !report.failures.isEmpty {
+            studioError = "Saved \(report.destinations.count) of \(urls.count) files. Could not save: "
+                + report.failures.map(\.lastPathComponent).joined(separator: ", ") + "."
         }
     }
 
@@ -1763,11 +1746,8 @@ private struct StudioWorkspaceView: View {
             createdAt: request.createdAt,
             conversationID: request.conversationID
         )
-        pendingPullRefresh = StudioReadinessRefresh(mode: request.mode, draft: draft)
-        controller.readinessByMode[request.mode] = .checking
-        // The feed's readiness card shows the pull's own progress (bytes, speed, Cancel).
-        if !controller.run(studio: effectiveRequest) {
-            pendingPullRefresh = nil
+        if !models.startPull(effectiveRequest) {
+            studioError = controller.status
             refreshReadiness()
         }
     }
@@ -1778,21 +1758,7 @@ private struct StudioWorkspaceView: View {
 
     /// Refreshes the composer's model chip from `model list`.
     private func refreshInstalledModels() {
-        Task {
-            let result = await controller.utilityCommandResult(args: ["model", "list", "--json"])
-            guard result.exitCode == 0 else { return }
-            let rows = StudioModelInventoryParser.rows(from: result.stdout)
-            modelInventory = rows
-            modelInventorySummary = StudioModelInventorySummary(
-                installedCount: rows.filter(\.isInstalled).count,
-                storageBytes: modelInventorySummary?.storageBytes
-            )
-            modelUsageTermsByID = Dictionary(
-                uniqueKeysWithValues: rows.compactMap { row in
-                    row.usageTerms.map { (row.id, $0) }
-                }
-            )
-        }
+        Task { await models.refresh() }
     }
 
     // MARK: - Attachments
@@ -1833,9 +1799,4 @@ private struct StudioWorkspaceView: View {
         }
     }
 
-}
-
-private struct StudioReadinessRefresh: Equatable {
-    let mode: StudioMode
-    let draft: StudioDraft
 }

@@ -330,6 +330,7 @@ package final class MereRunController: ObservableObject {
     /// CLI reads and writes in the utility lane, readiness and status probes in the probe lane.
     /// The controller mirrors the foreground inference job into its published console fields and
     /// re-broadcasts completions; views may also observe a `Job` directly.
+    package lazy var modelStore = StudioModelStore(controller: self)
     package let jobs: JobStore
     /// The job whose live state mirrors into the published console fields (the run the
     /// single-pane console/canvas currently shows). Background jobs still complete into the
@@ -987,6 +988,14 @@ package final class MereRunController: ObservableObject {
         }
     }
 
+    /// Recheck current model requests after installation changes; never restore a captured draft.
+    package func refreshRequestedReadiness() {
+        for mode in readinessRequests.keys {
+            readinessByMode[mode] = .checking
+            probeModelList(for: mode)
+        }
+    }
+
     private func probeCapabilities(for mode: StudioMode) {
         guard let template = CommandCatalog.template(id: .modelCapabilities) else { return }
         var draft = template.defaultDraft()
@@ -1033,6 +1042,10 @@ package final class MereRunController: ObservableObject {
             guard let modelID = readinessRequests[mode]?.modelID else { return }
             if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
                 readinessByMode[mode] = .unsupported(message)
+                return
+            }
+            guard result.exitCode == 0 else {
+                readinessByMode[mode] = .unknown("Could not list models. Check the CLI and model location.")
                 return
             }
             readinessByMode[mode] = ModelReadinessParser.state(
@@ -1129,13 +1142,6 @@ package final class MereRunController: ObservableObject {
         let draft = execution?.project(onto: draft) ?? draft
         let launch = cliResolve(cliPath)
         let args = arguments.map(cliArguments) ?? commandArguments(template: template, draft: draft)
-        // The structured-output flags are the app's own transport: the launched process gets
-        // them, the preview and the library row keep the command a person would type.
-        let launchArgs = args + StudioMachineOutputFlags.arguments(
-            template: template,
-            draft: draft,
-            appendingTo: args
-        )
         let request = JobRequest(
             lane: .inference,
             template: template,
@@ -1144,7 +1150,7 @@ package final class MereRunController: ObservableObject {
             conversationID: conversationID,
             configuration: processConfiguration(
                 launch: launch,
-                args: launchArgs,
+                args: args,
                 template: template,
                 draft: draft
             ),
@@ -1534,6 +1540,15 @@ package final class MereRunController: ObservableObject {
         return env
     }
 
+    /// Match a retained job against today's CLI, model location, cache, and environment.
+    package func usesCurrentConfiguration(_ job: Job) -> Bool {
+        guard let template = job.request.template, let draft = job.request.draft else { return false }
+        let args = job.request.execution.map { cliArguments($0.arguments) }
+            ?? commandArguments(template: template, draft: draft)
+        return job.request.configuration == processConfiguration(
+            launch: cliResolve(cliPath), args: args, template: template, draft: draft)
+    }
+
     /// The launch for a catalog command: the template's environment (serve API keys) and stdin
     /// policy (open for the resident session templates) apply.
     private func processConfiguration(
@@ -1542,9 +1557,11 @@ package final class MereRunController: ObservableObject {
         template: CommandTemplate,
         draft: CommandDraft
     ) -> MereRunProcessConfiguration {
-        processConfiguration(
+        // Machine output flags belong to the process transport, never its displayed command.
+        let launchArgs = args + StudioMachineOutputFlags.arguments(template: template, draft: draft, appendingTo: args)
+        return processConfiguration(
             launch: launch,
-            args: args,
+            args: launchArgs,
             environment: processEnvironment(
                 overrides: CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
             ),

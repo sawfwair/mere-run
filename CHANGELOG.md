@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share Studio model inventory and download jobs between the composer and Models.
+  Keep download progress and cancellation available across navigation, reject stale
+  inventory refreshes, and recheck the current model after a download completes.
+  Reconcile result focus with Library selection and honor confirmed Save destinations.
+  Folder exports keep existing files, deduplicate sources, and report partial failures.
+
 - Preserve the previous conversation reply and unsent draft when Studio rejects
   a retry. Send and retry share Command overrides and validation. Prompt task
   edits save through one state owner, and legacy draft import retains unvisited

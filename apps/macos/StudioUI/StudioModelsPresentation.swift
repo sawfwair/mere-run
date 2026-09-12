@@ -104,9 +104,7 @@ enum StudioModelRowStatus: Equatable {
     }
 }
 
-/// A Models-domain job the page's job bar reports: a pull, an optimization, or a storage
-/// clean-up. Pulls started from the composer arrive as running `.modelPull` Library rows; the
-/// page's own pulls, optimizations, and clean-ups are tracked locally.
+/// A presentation of a model download, optimization, or storage cleanup.
 struct StudioModelsJob: Equatable {
     enum Kind: Equatable {
         case pull
@@ -127,8 +125,7 @@ struct StudioModelsJob: Equatable {
     let subject: String
     let progress: StudioRunProgress?
     let isCancelling: Bool
-    /// The Library row backing a composer-initiated pull, so Cancel routes to the controller.
-    let libraryItemID: UUID?
+    let isQueued: Bool
 
     init(
         kind: Kind,
@@ -136,14 +133,14 @@ struct StudioModelsJob: Equatable {
         subject: String,
         progress: StudioRunProgress? = nil,
         isCancelling: Bool = false,
-        libraryItemID: UUID? = nil
+        isQueued: Bool = false
     ) {
         self.kind = kind
         self.modelID = modelID
         self.subject = subject
         self.progress = progress
         self.isCancelling = isCancelling
-        self.libraryItemID = libraryItemID
+        self.isQueued = isQueued
     }
 
     var label: String {
@@ -152,6 +149,7 @@ struct StudioModelsJob: Equatable {
 
     var detail: String? {
         if isCancelling { return "Cancelling…" }
+        if isQueued { return "Queued" }
         return progress?.detail
     }
 
@@ -223,13 +221,13 @@ enum StudioModelsPresenter {
         }
     }
 
-    /// Installed rows plus any row that is being pulled right now, so a pull shows up in the
-    /// list the moment it starts.
+    /// Include active and recently completed downloads so progress, retry, and selection
+    /// remain available while the inventory refreshes.
     static func listRows(
         _ rows: [StudioModelInventoryRow],
-        pullingIDs: Set<String>
+        downloadIDs: Set<String>
     ) -> [StudioModelInventoryRow] {
-        rows.filter { $0.isInstalled || pullingIDs.contains($0.id) }
+        rows.filter { $0.isInstalled || downloadIDs.contains($0.id) }
     }
 
     static func status(of row: StudioModelInventoryRow, job: StudioModelsJob?) -> StudioModelRowStatus {
@@ -350,33 +348,6 @@ enum StudioModelsPresenter {
             line += " · \(suite.capitalized) suite"
         }
         return line
-    }
-
-    /// Composer-initiated pulls show up as running `.modelPull` Library rows.
-    static func libraryPullJob(
-        in items: [StudioLibraryItem],
-        rows: [StudioModelInventoryRow],
-        progressByRequestID: [UUID: StudioRunProgress]
-    ) -> StudioModelsJob? {
-        guard let item = items.first(where: { $0.templateID == .modelPull && $0.status == .running }) else {
-            return nil
-        }
-        let modelID = item.commandDraft?.model ?? item.model ?? pulledModelID(fromPreview: item.commandPreview)
-        let subject = rows.first { $0.id == modelID }.map(displayName) ?? modelID ?? "model"
-        return StudioModelsJob(
-            kind: .pull,
-            modelID: modelID,
-            subject: subject,
-            progress: progressByRequestID[item.id],
-            libraryItemID: item.id
-        )
-    }
-
-    static func pulledModelID(fromPreview preview: String) -> String? {
-        let tokens = preview.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard let pull = tokens.firstIndex(of: "pull"), pull + 1 < tokens.count,
-              pull > 0, tokens[pull - 1] == "model" else { return nil }
-        return tokens[pull + 1]
     }
 
     static func facts(fromInfo output: String) -> StudioModelInfoFacts {

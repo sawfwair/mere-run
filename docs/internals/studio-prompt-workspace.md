@@ -9,10 +9,11 @@ changes. Studio runs the public CLI; it does not implement model inference.
 | Owner | Responsibility |
 | --- | --- |
 | `StudioPromptTaskController` | Active prompt draft, conversation identity, task restoration, Analyze handoffs, and request preparation |
-| `StudioTaskSessions` | Inactive drafts, per-thread Chat and Code drafts, selection memory, Command overrides, and versioned persistence |
+| `StudioTaskSessions` | Inactive drafts, per-thread Chat and Code drafts, selection memory, result focus, Command overrides, and versioned persistence |
 | `NavigationModel` | Destination, selected Library item, and panel visibility |
 | `StudioRootView` | Window composition, navigation wiring, layout, focus, dialogs, and platform interactions |
 | `MereRunController` and `JobStore` | CLI launch configuration, admission, queues, cancellation, and completion |
+| `StudioModelStore` | Shared model inventory, refresh identity, and download discovery through JobStore |
 | `StudioLibraryStore` | Conversation transcripts, run history, receipts, and artifacts |
 
 Bind the composer, inspector, and mapped Command fields to the active draft.
@@ -51,12 +52,41 @@ output identity through `StudioLibraryReplay`. Current Command overrides do not
 change historical replay. Stop selects the current task's job or the open
 conversation's turn, even when another task submitted a newer job.
 
+## Model setup and result recovery
+
+Both the composer and Models read `MereRunController.modelStore`. The store
+publishes inventory and catalog metadata together, retains the last readable
+snapshot after a failed refresh in the same configuration, and rejects responses
+from superseded requests or another CLI/model location. A location change clears
+the previous location's inventory before loading its replacement.
+
+Submit downloads through `StudioModelStore.startPull`. It reuses an active pull
+for the same model and launch configuration, and submits new pulls through the
+existing inference queue. A pull for another model location remains owned by
+JobStore and does not satisfy the new location's download request.
+Queued and running downloads expose their actual job progress, logs, and cancel
+action on the Models page. Model pulls stay in the job store for the current session and do not create
+media Library entries. The Models page keeps the latest download log available
+after failure or cancellation. Completion refreshes inventory and the currently requested model
+readiness, without restoring the draft that initiated the download.
+
+When you select another Library row, `StudioTaskSessions.rememberSelection`
+clears a different focused result. Task detours retain focus for the same row.
+Deletion clears saved focus and selection references. Closing the result returns
+keyboard focus to the composer. Historical retry and continuation preserve the
+source artifact and use their existing lineage and output-allocation rules.
+
+Use `StudioFileExport.copy(_:to:)` after the user chooses a single destination.
+It copies before replacing a confirmed destination. Use `copy(_:into:)` for
+folder exports: it deduplicates shared sources, keeps existing destination files,
+and returns every missing or failed source for the UI to report.
+
 ## Validate a change
 
 Run the prompt controller journey tests:
 
 ```bash
-swift test --filter StudioPromptTaskControllerTests
+swift test --filter 'StudioPromptTaskControllerTests|StudioModelStoreTests|StudioResultWorkflowTests'
 ```
 
 Also run command argument/default fixtures, session and Library persistence
