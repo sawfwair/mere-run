@@ -16,3 +16,8 @@ TripoSR single-image reconstruction checkpoint.
 
 Configuration and memory limits are throwing public APIs so malformed external
 requests cannot terminate the process through a precondition trap.
+
+`TripoSRGenerationSettings` owns scalar validation for CLI, API, and native
+execution. `TripoSRGenerationOperation` rechecks current image headers, invokes
+the snapshot-based generator, and awaits unloading on success, failure, and
+cancellation. Callers retain admission and artifact-retention policy.

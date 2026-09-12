@@ -651,16 +651,19 @@ enum APIServerContract {
 
     struct ImageTo3DPlan: Equatable, Sendable {
         let modelID: String
-        let extractionResolution: Int
-        let densityThreshold: Float
-        let foregroundRatio: Float
-        let alreadyFramed: Bool
-        let includesVertexColors: Bool
+        let settings: TripoSRGenerationSettings
 
-        var foregroundPolicy: TripoSRForegroundPolicy {
-            alreadyFramed
-                ? .alreadyFramed
-                : .automaticTransparentAlpha(foregroundRatio: foregroundRatio)
+        var extractionResolution: Int { settings.extractionResolution }
+        var densityThreshold: Float { settings.densityThreshold }
+        var foregroundRatio: Float { settings.foregroundRatio }
+        var alreadyFramed: Bool { settings.alreadyFramed }
+        var includesVertexColors: Bool { settings.includesVertexColors }
+        var foregroundPolicy: TripoSRForegroundPolicy { settings.foregroundPolicy }
+
+        func request(imageURL: URL, outputDirectory: URL) -> TripoSRGenerationRequest {
+            TripoSRGenerationRequest(
+                imageURL: imageURL, outputDirectory: outputDirectory, model: modelID, settings: settings
+            )
         }
     }
 
@@ -1343,59 +1346,43 @@ enum APIServerContract {
             )
         }
 
-        let extractionResolution = try optionalPositiveIntField(
-            form.field("resolution"),
-            field: "resolution"
-        ) ?? 256
-        guard (2...512).contains(extractionResolution) else {
-            throw APIRequestValidationError.invalidField(
-                "resolution",
-                "must be an integer between 2 and 512"
-            )
-        }
-
-        let densityThreshold: Float
+        let resolution = try optionalPositiveIntField(form.field("resolution"), field: "resolution")
+            ?? TripoSRGenerationSettings.defaultResolution
+        let density: Float
         if let raw = normalizedOptional(form.field("density_threshold")) {
-            guard let value = Float(raw), value.isFinite else {
-                throw APIRequestValidationError.invalidField(
-                    "density_threshold",
-                    "must be a finite number"
-                )
+            guard let value = Float(raw) else {
+                throw APIRequestValidationError.invalidField("density_threshold", "must be a finite number")
             }
-            densityThreshold = value
+            density = value
         } else {
-            densityThreshold = TripoSRConfiguration.production.densityThreshold
+            density = TripoSRConfiguration.production.densityThreshold
         }
-
-        let foregroundRatio: Float
+        let ratio: Float
         if let raw = normalizedOptional(form.field("foreground_ratio")) {
-            guard let value = Float(raw), value.isFinite, value > 0, value <= 1 else {
-                throw APIRequestValidationError.invalidField(
-                    "foreground_ratio",
-                    "must be greater than 0 and at most 1"
-                )
+            guard let value = Float(raw) else {
+                throw APIRequestValidationError.invalidField("foreground_ratio", "must be greater than 0 and at most 1")
             }
-            foregroundRatio = value
+            ratio = value
         } else {
-            foregroundRatio = 0.85
+            ratio = TripoSRGenerationSettings.defaultForegroundRatio
         }
-
-        return ImageTo3DPlan(
-            modelID: modelID,
-            extractionResolution: extractionResolution,
-            densityThreshold: densityThreshold,
-            foregroundRatio: foregroundRatio,
-            alreadyFramed: try multipartBoolean(
-                form.field("already_framed"),
-                field: "already_framed",
-                defaultValue: false
-            ),
-            includesVertexColors: try multipartBoolean(
-                form.field("vertex_colors"),
-                field: "vertex_colors",
-                defaultValue: true
-            )
-        )
+        do {
+            return ImageTo3DPlan(modelID: modelID, settings: try TripoSRGenerationSettings(
+                extractionResolution: resolution, densityThreshold: density, foregroundRatio: ratio,
+                alreadyFramed: try multipartBoolean(
+                    form.field("already_framed"), field: "already_framed", defaultValue: false
+                ),
+                includesVertexColors: try multipartBoolean(
+                    form.field("vertex_colors"), field: "vertex_colors", defaultValue: true
+                )
+            ))
+        } catch TripoSRGeneratorError.invalidExtractionResolution {
+            throw APIRequestValidationError.invalidField("resolution", "must be an integer between 2 and 512")
+        } catch TripoSRGeneratorError.invalidDensityThreshold {
+            throw APIRequestValidationError.invalidField("density_threshold", "must be a finite number")
+        } catch TripoSRPreprocessingError.invalidForegroundRatio {
+            throw APIRequestValidationError.invalidField("foreground_ratio", "must be greater than 0 and at most 1")
+        }
     }
 
     static func imageTo3DResponse(

@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share TripoSR settings and execution between both reconstruction commands and
+  the API, with current-input checks and awaited cleanup before returning.
+
 - Share MoGe-2 geometry settings, execution, and awaited unloading between the
   CLI and API. Make `vision geometry --dry-run` apply the native dimension and
   derived token-grid limits before model loading, and recheck inputs at execution.

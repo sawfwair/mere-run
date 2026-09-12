@@ -78,7 +78,8 @@ enum APIVFXArtifactRoutePolicy {
 enum APIVFXClientErrorPolicy {
     static func status(for error: Error) -> HTTPResponse.Status? {
         switch error {
-        case is MoGe2TokenGridError,
+        case is TripoSRGeneratorError,
+             is MoGe2TokenGridError,
              is MoGe2GenerationError,
              is VideoDepthAnythingLimitError,
              is VideoGenerationError,
@@ -934,26 +935,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-image-to-3d"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = TripoSRGenerator()
                 do {
-                    let result = try await generator.generate(
-                        imageURL: inputURL,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        foregroundPolicy: plan.foregroundPolicy,
-                        extractionResolution: plan.extractionResolution,
-                        densityThreshold: plan.densityThreshold,
-                        includeVertexColors: plan.includesVertexColors,
-                        progress: nil
+                    let result = try await TripoSRGenerationOperation.execute(
+                        plan.request(imageURL: inputURL, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.imageTo3DResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
