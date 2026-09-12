@@ -44,7 +44,13 @@ Core retains resource loading and generation for these families.
 - Family `*GenerationOperation.swift` files under `TripoSR/`, `InstantMesh/`,
   `DepthAnything3/`, and `VideoDepth/VDA/`: shared CLI/API settings, preparation,
   execution, and awaited per-request cleanup. DA3 also owns scene export.
-- `ManagedModel*.swift`: public managed-model catalog and install metadata.
+- `ManagedModelCatalog.swift`: ordered catalog assembly and model lookup.
+  `ManagedModelCatalog+*.swift` keeps definitions, pinned sources, and usage terms
+  with their model families. Companion models remain discoverable by lookup
+  without appearing in the public inventory.
+- `ManagedModelSpec.swift` and `ManagedModelAPIProfile.swift`: model metadata
+  and API capability profiles. `ManagedModelSpec+Validation.swift` owns installed
+  root normalization, artifact validation, conversion guidance, and runtime lookup.
 - `ModelResolver.swift`: adapts the catalog and family validators to ModelKit lookup.
 - `MereRunModelManifest+Templates.swift`: runtime-dependent manifest templates.
 - Runtime family directories own model-specific loading, inference, and decode
