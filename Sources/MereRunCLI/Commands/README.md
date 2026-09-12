@@ -13,5 +13,7 @@ This directory owns the public CLI surface.
   and `VideoGenerationPlan`. `VideoGenerationOperation` owns execution; the CLI
   formats progress, timings, and receipts. Keep preflight JSON and filesystem
   diagnostics in `Support/VideoGenerationPreflight.swift`.
+- `vision geometry` translates options into Core MoGe-2 settings. Its dry-run
+  presents the shared token-grid plan; execution uses `MoGe2GenerationOperation`.
 
 If you change a flag, subcommand name, or help contract, update the nearest parsing tests and any affected user-facing docs in the same change.

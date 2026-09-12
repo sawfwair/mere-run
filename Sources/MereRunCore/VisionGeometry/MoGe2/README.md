@@ -12,3 +12,9 @@ input/checkpoint provenance, and artifact hashes.
 
 Token count is centrally capped for CLI and API requests so image resolution
 cannot create an unbounded attention workload.
+
+`MoGe2GenerationOperation` owns complete CLI/API request execution and awaited
+unloading. Its validated settings and observational plan share dimension and
+token-grid rules with native execution. Callers retain admission, transport,
+and presentation. The generator retains its public compatibility interface,
+immutable input snapshots, checkpoint validation, model computation, and export.

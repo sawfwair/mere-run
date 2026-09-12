@@ -505,7 +505,7 @@ enum APIServerContract {
     static let defaultVideoModelID = ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
     static let defaultSpeechModelID = Qwen3TTSResources.defaultModelId
     static let defaultTranscriptionModelID = ParakeetResources.defaultModelId
-    static let defaultGeometryModelID = ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue
+    static let defaultGeometryModelID = MoGe2GenerationRequest.defaultModelID
     static let defaultMultiViewGeometryModelID = ModelResolver.ModelID.visionGeometryDA3Small.rawValue
     static let defaultImageTo3DModelID = ModelResolver.ModelID.image3DTripoSR.rawValue
     static let defaultDepthVideoModelID = ModelResolver.ModelID.visionDepthVDASmall.rawValue
@@ -626,16 +626,15 @@ enum APIServerContract {
 
     struct GeometryPlan: Equatable, Sendable {
         let modelID: String
-        let resolutionLevel: Int
-        let tokenCount: Int?
-        let maximumPointCount: Int?
+        let settings: MoGe2GenerationSettings
 
-        var configuration: MoGe2InferenceConfiguration {
-            MoGe2InferenceConfiguration(
-                resolutionLevel: resolutionLevel,
-                tokenCount: tokenCount,
-                maximumPointCount: maximumPointCount
-            )
+        var resolutionLevel: Int { settings.configuration.resolutionLevel }
+        var tokenCount: Int? { settings.configuration.tokenCount }
+        var maximumPointCount: Int? { settings.configuration.maximumPointCount }
+
+        func request(imageURL: URL, outputDirectory: URL) -> MoGe2GenerationRequest {
+            // The API accepts only the managed model; retain its default lookup.
+            MoGe2GenerationRequest(imageURL: imageURL, outputDirectory: outputDirectory, settings: settings)
         }
     }
 
@@ -859,33 +858,40 @@ enum APIServerContract {
                 "only \(defaultGeometryModelID) is supported"
             )
         }
-        let resolutionLevel: Int
-        if let raw = normalizedOptional(form.field("resolution_level")) {
-            guard let value = Int(raw), (0...9).contains(value) else {
-                throw APIRequestValidationError.invalidField(
-                    "resolution_level",
-                    "must be an integer between 0 and 9"
+        let resolutionLevel = try optionalGeometryIntField(
+            form.field("resolution_level"), field: "resolution_level", message: "must be an integer between 0 and 9"
+        ) ?? MoGe2GenerationSettings.defaultResolutionLevel
+        let tokenCount = try optionalGeometryIntField(form.field("token_count"), field: "token_count")
+        let maximumPointCount = try optionalGeometryIntField(form.field("max_points"), field: "max_points")
+        do {
+            return GeometryPlan(
+                modelID: modelID,
+                settings: try MoGe2GenerationSettings(
+                    resolutionLevel: resolutionLevel, tokenCount: tokenCount, maximumPointCount: maximumPointCount
                 )
-            }
-            resolutionLevel = value
-        } else {
-            resolutionLevel = 9
-        }
-        let tokenCount = try optionalPositiveIntField(form.field("token_count"), field: "token_count")
-        if let tokenCount,
-           (tokenCount < MoGe2InferenceConfiguration.minimumTokenCount
-            || tokenCount > MoGe2InferenceConfiguration.maximumTokenCount) {
-            throw APIRequestValidationError.invalidField(
-                "token_count",
-                "must be an integer between 1 and 3600"
             )
+        } catch let error as MoGe2GenerationError {
+            switch error {
+            case .invalidResolutionLevel:
+                throw APIRequestValidationError.invalidField("resolution_level", "must be an integer between 0 and 9")
+            case .invalidTokenCount(let value):
+                throw APIRequestValidationError.invalidField(
+                    "token_count", value <= 0 ? "must be greater than zero" : "must be an integer between 1 and 3600"
+                )
+            case .invalidMaximumPointCount:
+                throw APIRequestValidationError.invalidField("max_points", "must be greater than zero")
+            case .inputNotFound:
+                throw error
+            }
         }
-        return GeometryPlan(
-            modelID: modelID,
-            resolutionLevel: resolutionLevel,
-            tokenCount: tokenCount,
-            maximumPointCount: try optionalPositiveIntField(form.field("max_points"), field: "max_points")
-        )
+    }
+
+    private static func optionalGeometryIntField(
+        _ raw: String?, field: String, message: String = "must be greater than zero"
+    ) throws -> Int? {
+        guard let raw = normalizedOptional(raw) else { return nil }
+        guard let value = Int(raw) else { throw APIRequestValidationError.invalidField(field, message) }
+        return value
     }
 
     static func geometryResponse(

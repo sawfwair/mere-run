@@ -3,6 +3,7 @@ import MediaIO
 @preconcurrency import MLX
 
 public struct MoGe2InferenceConfiguration: Equatable, Sendable {
+    public static let defaultResolutionLevel = 9
     public static let minimumTokenCount = MoGe2TokenGrid.minimumTokenCount
     public static let maximumTokenCount = MoGe2TokenGrid.maximumTokenCount
 
@@ -11,7 +12,7 @@ public struct MoGe2InferenceConfiguration: Equatable, Sendable {
     public let maximumPointCount: Int?
 
     public init(
-        resolutionLevel: Int = 9,
+        resolutionLevel: Int = defaultResolutionLevel,
         tokenCount: Int? = nil,
         maximumPointCount: Int? = nil
     ) {
@@ -63,6 +64,7 @@ public actor MoGe2Generator {
         configuration: MoGe2InferenceConfiguration = MoGe2InferenceConfiguration(),
         progress: (@Sendable (String) -> Void)? = nil
     ) async throws -> MoGe2RunResult {
+        try Task.checkCancellation()
         let tokenCount = configuration.effectiveTokenCount
         guard tokenCount >= MoGe2InferenceConfiguration.minimumTokenCount,
               tokenCount <= MoGe2InferenceConfiguration.maximumTokenCount else {
@@ -93,20 +95,24 @@ public actor MoGe2Generator {
 
         progress?("Resolving pinned MoGe-2 weights")
         let loadStart = Date()
+        try Task.checkCancellation()
         let nativeModel = try await loadModelIfNeeded(requestedModel: model)
         let loadSeconds = Date().timeIntervalSince(loadStart)
 
         progress?("Running native MLX geometry inference at \(tokenCount) tokens")
         let inferenceStart = Date()
+        try Task.checkCancellation()
         let raw = nativeModel(input, tokenGrid: tokenGrid)
         MLX.eval(raw.points, raw.normals, raw.maskProbability, raw.metricScale)
         let inferenceSeconds = Date().timeIntervalSince(inferenceStart)
 
+        try Task.checkCancellation()
         progress?("Recovering camera and metric geometry")
         let postprocessStart = Date()
         let processed = try MoGe2Postprocessor.process(raw)
         let postprocessSeconds = Date().timeIntervalSince(postprocessStart)
 
+        try Task.checkCancellation()
         progress?("Writing EXR, PNG, camera, and point-cloud artifacts")
         let provenance = GeometryModelProvenance(
             modelID: GeometryModelPins.moge2Small.modelID,
@@ -147,7 +153,7 @@ public actor MoGe2Generator {
     private func loadModelIfNeeded(requestedModel: String?) async throws -> MoGe2Model {
         let resolved = try await ManagedModelResolver.resolveForRuntime(
             requestedModel: requestedModel,
-            defaultModelID: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+            defaultModelID: MoGe2GenerationRequest.defaultModelID,
             allowAutoDownload: true
         )
         var isDirectory: ObjCBool = false

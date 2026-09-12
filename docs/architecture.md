@@ -84,6 +84,15 @@ H3 computation lives in `Sources/MereRunH3Model`; Laguna computation lives in
 `Sources/MereRunLagunaModel`. Their Core generator extensions own loading,
 request execution, conditioning or batching, and cleanup.
 
+## Single-image geometry
+
+`vision geometry` and its API route use Core's `MoGe2GenerationOperation` for
+validated settings, token-grid planning, execution, and awaited unloading.
+The native generator owns immutable input snapshots, pinned weights, model
+computation, and geometry export. Read the
+[shared single-image geometry operation](./internals/geometry-generation-operation.md)
+for caller admission, transport policy, cancellation, and validation boundaries.
+
 ## Image families
 
 Read the [shared image operation](./internals/image-generation-operation.md)
