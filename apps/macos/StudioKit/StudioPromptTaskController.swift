@@ -169,7 +169,7 @@ package final class StudioPromptTaskController {
               let next = action.draft(from: item, url: url, baseline: freshDraft(for: mode)) else { return false }
         sessions.set(next, for: action.task.rawValue + ".draft")
         sessions.set(Optional<StudioTaskCommandState>.none, for: action.task.rawValue + ".commandOverride")
-        sessions.set(Optional<StudioResultSelection>.none, for: action.task.rawValue + ".focus")
+        sessions.setFocus(nil, for: action.task)
         if mode == activatedMode { draft = next }
         return true
     }

@@ -2071,43 +2071,14 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(template.arguments(from: draft).contains("--accept-model-license"))
     }
 
-    func testStudioModelDownloadCommandBuildsOpenAndRestrictedPulls() {
-        XCTAssertEqual(
-            StudioModelDownloadCommand.arguments(
-                modelID: "image-klein-nano",
-                acknowledgingUsageTerms: false
-            ),
-            ["model", "pull", "image-klein-nano"]
-        )
-        XCTAssertEqual(
-            StudioModelDownloadCommand.arguments(
-                modelID: "vision-face-buffalo-l",
-                acknowledgingUsageTerms: true
-            ),
-            ["model", "pull", "vision-face-buffalo-l", "--accept-model-license"]
-        )
-    }
-
-    func testStudioModelDownloadOutputNormalizesProgressAndStaysBounded() {
-        let output = StudioModelDownloadCommand.appendingOutput(
+    func testStudioModelMaintenanceOutputNormalizesProgressAndStaysBounded() {
+        let output = StudioModelMaintenanceOutput.appendingOutput(
             "25%\r50%\r",
             to: "start\n",
             limit: 12
         )
 
         XCTAssertEqual(output, "art\n25%\n50%\n")
-    }
-
-    func testStudioModelDownloadFindsLatestProgressUpdate() throws {
-        let progress = try XCTUnwrap(
-            StudioModelDownloadCommand.latestProgress(
-                in: "starting\n[image-zimage-nano] 42.5% 1.2 GB / 2.8 GB (45 MB/s)\n"
-            )
-        )
-
-        XCTAssertEqual(progress.label, "image-zimage-nano")
-        XCTAssertEqual(progress.fractionCompleted, 0.425)
-        XCTAssertEqual(progress.detail, "1.2 GB / 2.8 GB (45 MB/s)")
     }
 
     func testStudioModelCatalogMetadataEnrichesMissingInventoryRows() throws {

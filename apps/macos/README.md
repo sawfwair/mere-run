@@ -374,7 +374,12 @@ shows differences between the recorded commands. **Continue with…** opens a
 new draft for editing, reference guidance, video, image understanding, or
 segmentation. The resulting run records its parent; the original stays in Library.
 **Save copy…** copies before replacing a destination and treats saving onto the
-source as a no-op.
+source as a no-op. Library **Save to…** uses the same replacement behavior for
+one file. Saving several artifacts into a folder preserves existing files and
+saves each shared source once. Missing files and copy failures are reported.
+Selecting a different Library row closes the focused result; returning from a
+task detour keeps focus on the same result. Closing focus returns keyboard focus
+to the composer.
 
 ## Jobs, artifacts, and output
 
@@ -538,7 +543,9 @@ carry before a run rather than after it, exposes engine-specific controls
 space-time tokens), and preserves every produced safetensors file as a durable
 Library artifact.
 
-**Models ▸ Installed** is a list-and-detail page. The content header's subtitle
+**Models ▸ Installed** is a list-and-detail page. In a narrow window, select a
+model to open its full-width details. Choose **All models** or press Escape to
+return to the list. The content header's subtitle
 reports the real inventory ("92 installed · 48 GB on this Mac", from `model list`
 and `model storage`). The 320pt list shows installed models plus any model being
 pulled, with a family chip row (Image, Chat, Vision, …) and a status dot: green
@@ -554,8 +561,16 @@ is (Use in `<domain>` applies one to the composer, Train new… opens the
 trainer), and the runtime-settings editor and raw `model info` output under two
 folds. Rows whose data the CLI or Library does not have are omitted rather than
 faked. A job bar at the page bottom reports a pull, MiniMax-H3 optimize or
-rebuild, or storage clean-up in flight (composer pulls arrive through their
-Library row) with Cancel and Log. Reveal, Remove…, refresh, opening the store,
+rebuild, or storage clean-up in flight with Cancel and Log. Downloads started
+from either the composer or Models use the same job, including queued downloads.
+You can leave Models and return to its progress and cancellation controls.
+After failure or cancellation, use **Download log** for details and **Pull…**
+to retry. The latest failed download stays listed so you can also retry from its
+details.
+Pulling the same model again reuses its active download. After a download
+finishes, Studio refreshes inventory and readiness for your current selection.
+The composer and Models share one inventory; a failed refresh reports an error
+and keeps the previous inventory for that location. Reveal, Remove…, refresh, opening the store,
 and clean-up stay on the page.
 
 **Models ▸ Locations** is the store editor over `model location`. It shows the
