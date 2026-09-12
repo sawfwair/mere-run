@@ -669,8 +669,16 @@ enum APIServerContract {
 
     struct DepthVideoPlan: Equatable, Sendable {
         let modelID: String
-        let inputSize: Int
-        let maximumFrameCount: Int
+        let settings: VideoDepthAnythingGenerationSettings
+
+        var inputSize: Int { settings.inputSize }
+        var maximumFrameCount: Int { settings.maximumFrameCount }
+
+        func request(videoURL: URL, outputDirectory: URL) -> VideoDepthAnythingGenerationRequest {
+            VideoDepthAnythingGenerationRequest(
+                videoURL: videoURL, outputDirectory: outputDirectory, model: modelID, settings: settings
+            )
+        }
     }
 
     static func healthStatus() -> APIHealthStatus {
@@ -1559,8 +1567,9 @@ enum APIServerContract {
                 form.field("max_frames"),
                 field: "max_frames"
             ) ?? VideoDepthAnythingLimits.defaultMaximumFrameCount
+        let settings: VideoDepthAnythingGenerationSettings
         do {
-            _ = try VideoDepthAnythingLimits.validateRequest(
+            settings = try VideoDepthAnythingGenerationSettings(
                 inputSize: inputSize,
                 maximumFrameCount: maximumFrameCount
             )
@@ -1576,11 +1585,7 @@ enum APIServerContract {
         } catch {
             throw APIRequestValidationError.invalidField("video", error.localizedDescription)
         }
-        return DepthVideoPlan(
-            modelID: modelID,
-            inputSize: inputSize,
-            maximumFrameCount: maximumFrameCount
-        )
+        return DepthVideoPlan(modelID: modelID, settings: settings)
     }
 
     static func depthVideoResponse(

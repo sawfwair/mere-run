@@ -19,3 +19,9 @@ Video Depth Anything Small relative and metric variants.
 
 Inference is native MLX. Python is used only by the offline, exact-version
 conversion and parity tooling under `scripts/`.
+
+`VideoDepthAnythingGenerationSettings` resolves the shared bounded defaults.
+`VideoDepthAnythingGenerationOperation` owns CLI/API execution and awaited
+unloading. Dry-run uses the generator's bounded snapshot/decode preflight;
+execution performs its own admission once against current bytes. CLI and API
+retain presentation and transport policy without loading a second runtime.

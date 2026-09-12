@@ -78,6 +78,8 @@ enum APIVFXArtifactRoutePolicy {
 enum APIVFXClientErrorPolicy {
     static func status(for error: Error) -> HTTPResponse.Status? {
         switch error {
+        case VideoDepthAnythingGeneratorError.inputVideoNotFound:
+            return .badRequest
         case is InstantMeshGeneratorError,
              is TripoSRGeneratorError,
              is MoGe2TokenGridError,
@@ -1097,24 +1099,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-depth-video"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = VideoDepthAnythingGenerator()
                 do {
-                    let result = try await generator.generate(
-                        videoURL: inputURL,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        inputSize: plan.inputSize,
-                        maximumFrameCount: plan.maximumFrameCount,
-                        progress: nil
+                    let result = try await VideoDepthAnythingGenerationOperation.execute(
+                        plan.request(videoURL: inputURL, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.depthVideoResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }

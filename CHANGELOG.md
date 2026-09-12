@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Share bounded video-depth settings, preflight, execution, and awaited unloading
+  between the CLI and API. Check cancellation between native temporal windows.
+
 - Share InstantMesh view and camera validation, reconstruction execution, and
   awaited cleanup across the CLI and API while preserving ordered inputs.
 
