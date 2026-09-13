@@ -108,7 +108,9 @@ final class ProcessRecoveryTests: XCTestCase {
         XCTAssertTrue(store.cancel(first))
         XCTAssertTrue(store.cancel(second))
         for _ in 0..<400 {
-            if store.job(third)?.state.isTerminal == true { break }
+            // Either cancelled job can free the slot that starts the retry.
+            // The other process may still be draining when the retry finishes.
+            if [first, second, third].allSatisfy({ store.job($0)?.state.isTerminal == true }) { break }
             try await Task.sleep(for: .milliseconds(10))
         }
         let result = try XCTUnwrap(store.job(third)?.result)

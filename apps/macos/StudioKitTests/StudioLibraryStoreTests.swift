@@ -194,12 +194,13 @@ final class StudioLibraryStoreTests: XCTestCase {
         store.appendUser(
             conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "hi"
         )
-        store.appendAssistant(conversationID: conversationID, content: "boom", exitCode: 1)
+        store.appendAssistant(conversationID: conversationID, content: "boom", exitCode: 15)
 
         XCTAssertEqual(store.items.count, 1)
         let item = try XCTUnwrap(store.items.first)
         XCTAssertEqual(item.status, .failed)
         XCTAssertEqual(item.messages?.last?.failed, true)
+        XCTAssertNil(item.messages?.last?.cancelled)
     }
 
     func testAppendAssistantOnUnknownConversationIsNoOp() throws {
@@ -688,6 +689,7 @@ final class StudioLibraryStoreTests: XCTestCase {
         let thread = try XCTUnwrap(store.items.first { $0.isConversation })
         XCTAssertEqual(thread.messages?.count, 2)
         XCTAssertEqual(thread.model, "gemma4-e4b")
+        XCTAssertTrue(thread.messages?.allSatisfy { $0.cancelled == nil } == true)
 
         let imported = try XCTUnwrap(store.items.first { $0.source == .raycast })
         XCTAssertEqual(imported.customTitle, "Raycast mug")

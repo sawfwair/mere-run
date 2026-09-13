@@ -43,12 +43,15 @@ package final class StudioLibraryStore: ObservableObject {
             guard let self, let controller, let requestID = result.requestID,
                   self.completedRequests.insert(requestID).inserted else { return }
             let job = controller.jobs.job(requestID: requestID)
+            let cancelled: Bool
+            if case .cancelled = job?.state { cancelled = true } else { cancelled = false }
             if let conversationID = result.conversationID {
                 let text = result.outputText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 self.appendAssistant(
                     conversationID: conversationID,
                     content: text.isEmpty ? (result.exitCode == 0 ? "(No output.)" : "Run stopped before a reply was received.") : text,
                     exitCode: result.exitCode,
+                    cancelled: cancelled,
                     model: job?.request.draft?.model,
                     systemPrompt: job?.request.draft?.secondaryText,
                     tokensPerSecond: job.flatMap { ConversationTranscript.decodeTokensPerSecond(in: $0.log.lines.map(\.text)) }
@@ -58,7 +61,7 @@ package final class StudioLibraryStore: ObservableObject {
                               outputText: result.outputText, commandPreview: result.commandPreview.maskingAPIKeyValue(),
                               artifactURLs: result.artifactURLs, artifactRoles: result.artifactRoles)
             }
-            if let job, case .cancelled = job.state,
+            if cancelled,
                let index = self.items.firstIndex(where: { $0.id == (result.conversationID ?? requestID) }) {
                 self.items[index].status = .cancelled
                 self.save()
@@ -255,6 +258,7 @@ package final class StudioLibraryStore: ObservableObject {
         conversationID: UUID,
         content: String,
         exitCode: Int32,
+        cancelled: Bool = false,
         model: String? = nil,
         systemPrompt: String? = nil,
         tokensPerSecond: Double? = nil
@@ -266,13 +270,14 @@ package final class StudioLibraryStore: ObservableObject {
             role: .assistant,
             content: content,
             failed: exitCode != 0,
+            cancelled: cancelled ? true : nil,
             model: model,
             systemPrompt: systemPrompt,
             tokensPerSecond: tokensPerSecond,
             preset: item.mode
         ))
         item.messages = messages
-        item.status = exitCode == 0 ? .completed : .failed
+        item.status = cancelled ? .cancelled : (exitCode == 0 ? .completed : .failed)
         item.exitCode = exitCode
         item.updatedAt = Date()
         items[index] = item
@@ -313,6 +318,7 @@ package final class StudioLibraryStore: ObservableObject {
                 content: message.content,
                 createdAt: message.createdAt,
                 failed: message.failed,
+                cancelled: message.cancelled,
                 imagePath: message.imagePath,
                 model: message.model,
                 systemPrompt: message.systemPrompt,
@@ -332,7 +338,7 @@ package final class StudioLibraryStore: ObservableObject {
             outputURL: nil,
             createdAt: now,
             updatedAt: now,
-            status: kept.last?.failed == true ? .failed : .completed,
+            status: kept.last?.cancelled == true ? .cancelled : (kept.last?.failed == true ? .failed : .completed),
             exitCode: kept.last?.failed == true ? 1 : 0,
             commandPreview: source.commandPreview,
             outputText: nil,

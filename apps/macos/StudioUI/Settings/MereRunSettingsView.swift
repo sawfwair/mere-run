@@ -60,6 +60,7 @@ package struct MereRunSettingsView: View {
             Text("The app uses a bundled `mere.run` first, then nearby SwiftPM build products, common install locations, and the current package checkout.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         EditorSection("Working directory") {
             PathField(path: $controller.workingDirectory, placeholder: "Working directory", mode: .openDirectory)
@@ -72,6 +73,7 @@ package struct MereRunSettingsView: View {
             Text("Leave this empty to file work by what it is: pictures and clips in `~/Pictures/mere.run`, audio in `~/Music/mere.run`, everything else in `~/Documents/mere.run`, each under a folder named for the domain. Set a folder to keep every domain together there instead. Runs already in the Library keep the paths they recorded.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -221,6 +223,7 @@ package struct MereRunSettingsView: View {
             Text("Studio-managed CLI payloads keep every runtime asset in Application Support and activate the command with an atomic symlink. Skill install copies the bundled `use-mere-run` Codex skill to `~/.codex/skills`.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         EditorSection("Stored configuration") {
             if configurationSummary.isEmpty {
@@ -231,6 +234,7 @@ package struct MereRunSettingsView: View {
                 Text(configurationSummary)
                     .font(MereRunTheme.monoFont)
                     .foregroundStyle(MereRunTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)

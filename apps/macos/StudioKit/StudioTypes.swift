@@ -942,6 +942,8 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
     package var createdAt: Date
     /// True for an assistant turn whose run exited non-zero; the thread is kept either way.
     package var failed: Bool
+    /// Records user cancellation separately from a runtime failure. Absent in older threads.
+    package var cancelled: Bool?
     /// The image attached to this user turn (vision chat), so edit/retry resend it. Optional so
     /// older persisted threads decode unchanged.
     package var imagePath: String?
@@ -962,6 +964,7 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         content: String,
         createdAt: Date = Date(),
         failed: Bool = false,
+        cancelled: Bool? = nil,
         imagePath: String? = nil,
         model: String? = nil,
         systemPrompt: String? = nil,
@@ -973,6 +976,7 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         self.content = content
         self.createdAt = createdAt
         self.failed = failed
+        self.cancelled = cancelled
         self.imagePath = imagePath
         self.model = model
         self.systemPrompt = systemPrompt

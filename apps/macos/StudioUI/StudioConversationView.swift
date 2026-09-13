@@ -290,6 +290,7 @@ struct StudioConversationView: View {
             role: message.role,
             content: message.content,
             failed: message.failed,
+            cancelled: message.cancelled == true,
             meta: message.role == .assistant ? meta(for: message) : nil,
             onCopy: message.content.isEmpty ? nil : { onCopy(message.content) },
             onRetry: retryAction(for: message),
@@ -360,6 +361,7 @@ private struct StudioTurnView: View {
     let role: StudioMessageRole
     let content: String
     var failed = false
+    var cancelled = false
     var isStreaming = false
     /// "Model · speed · time" under an assistant turn.
     var meta: String?
@@ -481,7 +483,11 @@ private struct StudioTurnView: View {
             VStack(alignment: .leading, spacing: 10) {
                 assistantBody
 
-                if failed {
+                if cancelled {
+                    Label("Reply stopped", systemImage: "stop.circle")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                } else if failed {
                     Label("This turn failed", systemImage: "exclamationmark.triangle")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.red)
@@ -553,7 +559,7 @@ private struct StudioTurnView: View {
     private var accessibilityText: String {
         let speaker = isUser ? "You" : "Assistant"
         if isStreaming && content.isEmpty { return "\(speaker) is generating a reply" }
-        let suffix = failed ? " (this turn failed)" : ""
+        let suffix = cancelled ? " (reply stopped)" : (failed ? " (this turn failed)" : "")
         let provenance = meta.map { ", \($0)" } ?? ""
         return "\(speaker): \(content)\(suffix)\(provenance)"
     }
