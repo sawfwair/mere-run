@@ -14,7 +14,9 @@ struct MereRunCommands: Commands {
     @ObservedObject var controller: MereRunController
     @ObservedObject var library: StudioLibraryStore
     let updater: SPUUpdater
+    let isStudioOpen: Bool
 
+    @Environment(\.openWindow) private var openWindow
     @FocusedValue(\.studioActions) private var actions: StudioSceneActions?
 
     /// Writes a secret-free support report the user can attach to an issue.
@@ -52,6 +54,12 @@ struct MereRunCommands: Commands {
 
         CommandGroup(after: .appInfo) {
             MereRunCheckForUpdatesView(updater: updater)
+        }
+
+        CommandGroup(before: .windowList) {
+            Button("Open Studio") { openWindow(id: "studio") }
+                .disabled(isStudioOpen)
+            Divider()
         }
 
         // The system Show/Hide Sidebar item already lives in this group (NavigationSplitView owns it).

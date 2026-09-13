@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Keep the Studio Command Console panes at the window's full height so command
+  fields remain accessible. Wrap Settings explanations and stored configuration
+  values instead of clipping them to one line.
+- Reopen Studio from the Window menu after closing its main window. Identify
+  user-stopped conversation replies separately from runtime failures, including
+  after relaunch or branching.
+
 - Validate Studio chat token budgets with the same bounds as the runtime before
   sending or retrying. Invalid budgets preserve the previous reply and unsent draft.
 

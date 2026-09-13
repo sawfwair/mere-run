@@ -319,6 +319,32 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertEqual(runner.processes[1].terminateCallCount, 0)
     }
 
+    func testStoppedReplyRetainsCancellationAfterReloadAndBranching() async throws {
+        activate(.chat)
+        prompt.draft.prompt = "Keep the partial reply"
+        let submission = try XCTUnwrap(prompt.runPrompt(inventory: []))
+        let conversationID = try XCTUnwrap(submission.request.conversationID)
+        runner.starts[0].stdout("Partial reply")
+        prompt.stop(task: .chatChat)
+        runner.starts[0].termination(15)
+        for _ in 0..<100 where controller.runningConversationIDs.contains(conversationID) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        let restored = StudioLibraryStore(libraryURL: library.libraryURL)
+        let item = try XCTUnwrap(restored.items.first { $0.id == conversationID })
+        let reply = try XCTUnwrap(item.messages?.last)
+        XCTAssertEqual(item.status, .cancelled)
+        XCTAssertEqual(reply.content, "Partial reply")
+        XCTAssertEqual(reply.cancelled, true)
+        XCTAssertTrue(reply.failed, "Keep the legacy nonzero-exit flag for older readers.")
+        let branch = try XCTUnwrap(restored.branch(conversationID: conversationID, at: reply.id, inclusive: true))
+        XCTAssertEqual(branch.status, .cancelled)
+        XCTAssertEqual(branch.messages?.last?.cancelled, true)
+        XCTAssertEqual(branch.messages?.last?.content, "Partial reply")
+        XCTAssertEqual(restored.items.first { $0.id == conversationID }, item)
+    }
+
     func testEditingTheFirstUserTurnKeepsItsTextAsANewUnsentConversation() throws {
         let id = thread(reply: "An answer")
         activate(.chat, selected: id)
