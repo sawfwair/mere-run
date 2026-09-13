@@ -41,6 +41,9 @@ Validate the resolved request with
 `CommandTemplate.validationMessage(for:execution:)` before changing history or
 preparing output directories. Final job admission repeats the same validation.
 The command contract and template retain their respective validation policies.
+Chat uses `TextChatTokenBudget` from `MereRunContract` for the same output/context
+bounds as Core. Numeric display ranges remain hints; they do not reject valid
+requests outside a preferred slider range.
 
 Conversation send and retry share transcript rendering, context budgeting, and
 command resolution. Retry builds a candidate transcript without changing the

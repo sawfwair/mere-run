@@ -259,17 +259,33 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         activate(.chat, selected: id)
         prompt.draft.prompt = "Unsent follow-up"
         let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft)
-        override(base, flag: "--max-tokens", value: "invalid")
         let original = try XCTUnwrap(library.items.first { $0.id == id })
         let stored = try Data(contentsOf: library.libraryURL)
         let draft = prompt.draft
-        XCTAssertThrowsError(try prompt.retryLastTurn(inventory: []))
-        XCTAssertEqual(library.items.first { $0.id == id }, original)
-        XCTAssertEqual(try Data(contentsOf: library.libraryURL), stored)
-        XCTAssertEqual(prompt.draft, draft)
-        XCTAssertEqual(prompt.activeConversationID, id)
-        XCTAssertTrue(controller.jobs.all.isEmpty)
-        XCTAssertTrue(runner.starts.isEmpty)
+        for value in ["invalid", "0", "-1", "2147483648"] {
+            override(base, flag: "--max-tokens", value: value)
+            XCTAssertThrowsError(try prompt.retryLastTurn(inventory: []), value)
+            XCTAssertEqual(library.items.first { $0.id == id }, original)
+            XCTAssertEqual(try Data(contentsOf: library.libraryURL), stored)
+            XCTAssertEqual(prompt.draft, draft)
+            XCTAssertEqual(prompt.activeConversationID, id)
+            XCTAssertTrue(controller.jobs.all.isEmpty)
+            XCTAssertTrue(runner.starts.isEmpty)
+        }
+    }
+
+    func testSendRejectsInvalidTokenBudgetBeforeCreatingHistory() throws {
+        activate(.chat)
+        prompt.draft.prompt = "Keep this unsent question"
+        for tokens in [0, -1, 129] {
+            prompt.draft.maxTokens = tokens
+            prompt.draft.contextSize = 128
+            let original = prompt.draft
+            XCTAssertThrowsError(try prompt.runPrompt(inventory: []))
+            XCTAssertEqual(prompt.draft, original)
+            XCTAssertTrue(library.items.isEmpty)
+            XCTAssertTrue(runner.starts.isEmpty)
+        }
     }
 
     func testRetryUsesTheSameCommandResolutionAsSendWithoutConsumingUnsentText() throws {

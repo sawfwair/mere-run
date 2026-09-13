@@ -202,6 +202,15 @@ package enum StudioConsoleCommand {
                 }
             }
         }
+        if capability.id == "text.chat" {
+            let defaultMaxTokens = capability.options.first { $0.flag == "--max-tokens" }?.defaultValue
+            let maxTokens = Int(draft.text("--max-tokens")) ?? defaultMaxTokens.flatMap { Int($0) }
+            if let issue = TextChatTokenBudget.issue(maxTokens: maxTokens, contextSize: Int(draft.text("--context-size"))) {
+                let flag = "--" + issue.field.replacingOccurrences(of: "_", with: "-")
+                let label = capability.options.first { $0.flag == flag }?.label ?? flag
+                return "\(label) \(issue.message)."
+            }
+        }
         return nil
     }
 

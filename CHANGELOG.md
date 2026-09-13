@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Validate Studio chat token budgets with the same bounds as the runtime before
+  sending or retrying. Invalid budgets preserve the previous reply and unsent draft.
+
+- Report LFM2 token-limited chat replies as `length` in the API. Preserve the
+  checkpoint's thinking prefix in streamed and completed output so a truncated
+  reasoning block stays hidden when thinking output is disabled.
+
 - Cancel queued and active API work when its client disconnects, and retain
   request admission until cleanup finishes. Preserve HTTP keep-alive behavior.
 - Settle active workflow nodes on cancellation, stop parallel child processes
