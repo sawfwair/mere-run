@@ -103,5 +103,7 @@ fall back to MLX's portable gather path.
 - Cold model preparation is deduplicated by the serving pool. Residency epochs
   invalidate stale decode loops and explicit unloads without canceling another
   request that is waiting on the same shared preparation task.
-- Public generator entrypoints establish a task-local MLX default stream before
-  loading or evaluating the model, matching the other native MLX chat engines.
+- Public generator entrypoints lease task-local MLX streams before loading or
+  evaluating the model. Overlapping requests use separate contexts. Completed
+  and cancelled requests synchronize their submitted work before returning the
+  context for reuse, so sequential requests do not accumulate backend streams.

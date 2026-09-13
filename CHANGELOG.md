@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reuse LFM2 runtime streams between completed API requests, and wait for
+  submitted work before reusing a cancelled request's streams. Overlapping
+  requests retain separate stream contexts.
+
 - Keep the Studio Command Console panes at the window's full height so command
   fields remain accessible. Wrap Settings explanations and stored configuration
   values instead of clipping them to one line.

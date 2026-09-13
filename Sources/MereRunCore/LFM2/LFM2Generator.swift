@@ -182,6 +182,7 @@ public actor LFM2Generator: ChatGenerator {
     private var totalBatchedRows = 0
     private var maxObservedBatchSize = 0
     private var latestDSparkStats = LFM2DSparkStats()
+    private var availableStreamContexts: [MLX.Stream.Context] = []
 
     public init(
         modelId: String = LFM2Resources.defaultModelId,
@@ -207,7 +208,7 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String?,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        try await Stream.withNewDefaultStream {
+        try await withRequestStream {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -239,7 +240,7 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Stream.withNewDefaultStream {
+        try await withRequestStream {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -250,6 +251,19 @@ public actor LFM2Generator: ChatGenerator {
 
     public func unload() {
         beginResidencyTransition()
+    }
+
+    /// Each active request owns a context across actor suspensions. Reuse completed
+    /// contexts because MLX retains backend streams until the process exits.
+    func withRequestStream<Result>(
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        let context = availableStreamContexts.popLast() ?? MLX.Stream.Context()
+        defer {
+            context.synchronize()
+            availableStreamContexts.append(context)
+        }
+        return try await Stream.withDefaultStream(context, operation)
     }
 
     public func continuousBatchingStats() -> LFM2ContinuousBatchingStats {
