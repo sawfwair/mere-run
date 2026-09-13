@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Announce Studio reply progress, completion, cancellation, and prompt errors to
+  VoiceOver while preserving composer focus. Prevent Studio jobs from remaining
+  active after their subprocess exits and output has drained.
+
 - Reuse LFM2 runtime streams between completed API requests, and wait for
   submitted work before reusing a cancelled request's streams. Overlapping
   requests retain separate stream contexts.

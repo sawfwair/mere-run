@@ -141,6 +141,31 @@ final class ProcessRecoveryTests: XCTestCase {
         XCTAssertEqual(output.completed?.stderr, String(repeating: "y", count: 131_072))
     }
 
+    func testRepeatedShortProcessesDeliverFinalOutputAndExitStatus() async throws {
+        let root = try temporaryDirectory()
+        let runner = FoundationMereRunProcessRunner()
+        for index in 0..<32 {
+            let output = ProcessRecoveryOutput()
+            let finished = expectation(description: "short process \(index) finished")
+            let exitCode: Int32 = index.isMultiple(of: 2) ? 0 : 7
+            let process = try runner.start(
+                configuration: configuration(
+                    "printf 'result-\(index)\\n'; printf 'diagnostic-\(index)\\n' >&2; exit \(exitCode)",
+                    root: root
+                ),
+                stdout: { output.append($0, error: false) },
+                stderr: { output.append($0, error: true) },
+                termination: { output.finish($0); finished.fulfill() }
+            )
+            defer { process.terminate() }
+            await fulfillment(of: [finished], timeout: 5)
+            let result = try XCTUnwrap(output.completed)
+            XCTAssertEqual(result.code, exitCode)
+            XCTAssertEqual(result.stdout, "result-\(index)\n")
+            XCTAssertEqual(result.stderr, "diagnostic-\(index)\n")
+        }
+    }
+
     private func configuration(_ script: String, root: URL) -> MereRunProcessConfiguration {
         .init(executableURL: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", script],
               currentDirectoryURL: root, environment: ProcessInfo.processInfo.environment,
