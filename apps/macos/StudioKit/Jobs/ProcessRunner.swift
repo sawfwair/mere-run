@@ -179,7 +179,8 @@ package final class FoundationRunningProcess: MereRunRunningProcess, @unchecked 
             }
             if !readOutput && !readError { Thread.sleep(forTimeInterval: 0.01) }
         }
-        process.waitUntilExit()
+        // The loop already observed process exit. A second Foundation wait can
+        // strand this worker in its run loop after the child has finished.
         stdout.finish()
         stderr.finish()
         if let error = stdout.failure ?? stderr.failure {

@@ -19,7 +19,8 @@ queues, cancellation, and completion. `StudioLibraryStore` records history and
 artifacts independently of window lifetime. Historical replay uses recorded
 arguments rather than the active task's command overrides.
 
-The native process runner drains both output streams before reporting completion.
+The native process runner observes process exit and drains both output streams,
+then reports completion after the final decoding callbacks.
 Cancellation stops the owned process group and escalates if it ignores termination.
 Job results retain outputs confirmed by a success receipt or a resident render
 result. An unsuccessful exit clears unverified file probes from the job and
