@@ -8,6 +8,23 @@ import XCTest
 /// a template starts on exactly the command the app would otherwise have run, and every option
 /// the contract declares has a row.
 final class StudioConsoleDraftTests: XCTestCase {
+    func testChatTokenBudgetUsesRuntimeLimitsRatherThanDisplayRangeHints() {
+        let capability = MereRunCapabilityCatalog.textChat
+        let fixtures: [(String, String, Bool)] = [
+            ("128", "128", true), ("1", "1", true), ("129", "128", false),
+            ("0", "128", false), ("-1", "128", false), ("128", "0", false),
+            ("128", "-1", false), ("", "128", false), ("131073", "262144", true),
+        ]
+        for (tokens, context, valid) in fixtures {
+            var form = StudioConsoleCommand.seed(capability: capability,
+                arguments: ["text", "chat", "--prompt", "Question"])
+            form["--max-tokens"] = .text(tokens)
+            form["--context-size"] = .text(context)
+            XCTAssertEqual(StudioConsoleCommand.validationMessage(for: capability, draft: form) == nil,
+                           valid, "max_tokens=\(tokens) context_size=\(context)")
+        }
+    }
+
     // MARK: Seeding
 
     /// The console reads a template's own argv into contract values, and builds the same argv

@@ -11,6 +11,10 @@ emitted by `mere.run catalog --json`. The CLI remains the runtime source of trut
 shells use this module to build and validate commands instead of maintaining a
 second copy of the command surface.
 
+`TextChatTokenBudget` owns chat output/context token bounds shared by Core and
+Studio validation. Numeric capability ranges remain display hints; they do not
+replace runtime constraints.
+
 To change a capability, open its `CommandCapabilityCatalog+<family>.swift` file.
 Model benchmark definitions have their own file. Shared receipt and progress
 options belong to `CommandCapabilityCatalog+Options.swift`; typed text and video
