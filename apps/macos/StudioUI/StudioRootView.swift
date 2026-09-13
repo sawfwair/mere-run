@@ -29,6 +29,7 @@ private struct StudioWorkspaceView: View {
     @ObservedObject private var navigation: NavigationModel
     @State private var prompt: StudioPromptTaskController
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Persisted per scene so relaunch restores the last place, the last prompt mode, and the panel
     // layout. `studio.mode` keeps its v1 meaning (the last prompt mode) so drafts and readiness
@@ -59,7 +60,14 @@ private struct StudioWorkspaceView: View {
     /// A run of this mode that finished while its card was off-screen ("New result ↓").
     @State private var newResultID: UUID?
     @State private var pendingRestrictedPull: StudioRunRequest?
-    @State private var studioError: String?
+    @State private var studioErrorStorage: String?
+    private var studioError: String? {
+        get { studioErrorStorage }
+        nonmutating set {
+            studioErrorStorage = newValue
+            if let newValue { announce("Error: " + newValue) }
+        }
+    }
     /// A run whose user-visible destination could not be created, explained once per launch.
     @State private var outputFallbackNotice: String?
     @State private var outputFallbackAnnounced = false
@@ -1194,6 +1202,11 @@ private struct StudioWorkspaceView: View {
 
     private var observedShell: some View {
         validationObservedShell
+        .onChange(of: activeConversationRunning) { _, isRunning in
+            if showsPromptWorkspace, mode.isConversational, isRunning {
+                announce("Generating a reply.")
+            }
+        }
         .onReceive(controller.runCompletions) { result in
             // Subscribe to the lossless completion stream, not lastRunResult: two runs finishing
             // in the same runloop turn would coalesce through onChange and drop one.
@@ -1205,6 +1218,11 @@ private struct StudioWorkspaceView: View {
                 // background turn completing must not yank selection away from the foreground.
                 if mode.isConversational, activeConversationID == conversationID {
                     navigation.selectedLibraryID = conversationID
+                    if showsPromptWorkspace, let requestID = result.requestID,
+                       let job = controller.jobs.job(requestID: requestID),
+                       let message = StudioConversationAnnouncement.completion(for: job.state) {
+                        announce(message)
+                    }
                 }
                 refreshReadiness()
                 return
@@ -1423,6 +1441,15 @@ private struct StudioWorkspaceView: View {
     }
 
     // MARK: - Running
+
+    /// Announce status without moving the cursor or reading every streamed token. Only the
+    /// active window speaks; background jobs retain their existing notification behavior.
+    private func announce(_ message: String) {
+        guard controlActiveState == .key, NSApp.isActive else { return }
+        var announcement = AttributedString(message)
+        announcement.accessibilitySpeechAnnouncementPriority = .high
+        AccessibilityNotification.Announcement(announcement).post()
+    }
 
     private func runStudioCommand() {
         studioError = nil

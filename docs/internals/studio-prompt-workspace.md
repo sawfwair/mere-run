@@ -100,3 +100,15 @@ Model tests establish state, command, and fixture-backed job behavior. Rendered
 screens establish layout. Neither establishes keyboard operation, VoiceOver
 announcements, real-model output quality, or GPU cancellation recovery. Record
 those checks separately when validating the corresponding workflow.
+
+## VoiceOver status
+
+The active Studio window announces prompt validation errors, including repeated
+submissions with the same error. Chat and Code announce when a reply starts,
+finishes, fails, or stops. These announcements keep keyboard focus in place;
+you can navigate to the transcript to read the reply. Streaming tokens do not
+each trigger an announcement.
+
+Completion announcements use the job's terminal state from the completion
+stream. A cancelled job announces that the reply stopped even if its process
+exits with code 0. Background threads do not interrupt the active conversation.
