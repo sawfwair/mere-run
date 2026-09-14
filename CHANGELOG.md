@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.52.0 - 2026-09-14
+
 - Announce Studio reply progress, completion, cancellation, and prompt errors to
   VoiceOver while preserving composer focus. Prevent Studio jobs from remaining
   active after their subprocess exits and output has drained.
