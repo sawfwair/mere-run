@@ -2,10 +2,10 @@
 
 Single-step monocular depth on a frozen Qwen-Image-Edit-2509 transformer.
 
-This runtime is experimental. Native checkpoint runs produce valid artifacts,
-but the upstream church example has substantially weaker object boundaries than
-the reference at both the default and matched 1536-pixel inference edges. Output
-quality has not passed validation; the differences below need investigation.
+This runtime is experimental. The first image-modulation projection must remain
+unquantized: quantizing it produces severely blurred depth. The native loader
+preserves this projection, matching the reference's exclusion. Accuracy parity
+with the reference has not been established.
 
 - `MarigoldV2Resources.swift`: repository identity, checkpoint variants, install
   layout, artifact pins, and validation.
@@ -15,12 +15,15 @@ quality has not passed validation; the differences below need investigation.
 - `MarigoldV2PromptConditioning.swift`: precomputed prompt embeddings, which
   stand in for the base text encoder.
 - `MarigoldV2Generator.swift`: encode, one rectified-flow step, decode, read out.
+- `MarigoldV2TransformerQuantization.swift`: quantization policy and validation
+  of the excluded first image-modulation projection.
 - `MarigoldV2DepthNormalization.swift` and `MarigoldV2DepthExport.swift`:
   affine-relative normalization and the EXR, preview, and manifest artifacts.
 
 The transformer uses MLX affine 4-bit quantization before the adapters are
-installed. The reference uses bitsandbytes NF4 with selected layers excluded
-from quantization or dequantized. The native VAE encoder also uses the posterior
+installed, except for the first image-modulation projection. The reference uses
+bitsandbytes NF4 with this projection excluded from quantization and its output
+projection dequantized. The native VAE encoder also uses the posterior
 mode; the reference samples the posterior. These differences require separate
 checkpoint accuracy validation. A build or unit-test pass does not establish
 reference parity.
@@ -33,3 +36,6 @@ cloud is written.
 
 Keep the fixed timestep, the velocity step, and the channel readout covered by tests
 before changing inference defaults.
+
+See [Marigold V2 component diagnostics](../../../scripts/reference-parity/marigold-v2.md)
+for reference tensor comparisons and the quantization experiment.

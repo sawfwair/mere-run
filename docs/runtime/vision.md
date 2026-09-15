@@ -308,9 +308,8 @@ swift run mere.run model pull vision-depth-marigold-v2
 swift run mere.run vision depth ./photo.jpg --output ./photo-depth
 ```
 
-Treat this runtime as experimental. Initial native checks on the upstream church
-example produce blurred object boundaries compared with the reference, including
-at the same inference resolution. Output quality has not passed validation.
+Treat this runtime as experimental. Accuracy parity with the reference has not
+been established.
 
 Native Marigold V2 writes a depth EXR, a preview PNG, and a manifest JSON into
 the output directory (default `<stem>-depth` next to the input). Inference is a
@@ -335,6 +334,9 @@ local Marigold repository root passed to `--model`. `--dry-run` and `--json`
 behave as in `geometry`.
 
 The native runtime uses MLX affine 4-bit weights and deterministic VAE encoding.
+It preserves the first image-modulation projection in full precision; quantizing
+that projection destroys depth structure. Prequantized checkpoints must preserve
+this projection too.
 The reference uses bitsandbytes NF4 and samples the VAE posterior. Accuracy
 parity between these implementations has not been established. Loading also
 requires the BF16 base before quantization, so the reference's quantized

@@ -325,6 +325,7 @@ public actor MarigoldV2Generator {
                 from: resources.quantizedTransformerWeightsURL
             )
             let factory = DenseLayerFactory(arrays: arrays, quantConfig: quantConfig)
+            try MarigoldV2TransformerQuantization.validate(factory: factory)
             let transformer = MMDiT(config: config, factory: factory)
             try transformer.update(
                 parameters: ModuleParameters.unflattened(arrays),
@@ -337,13 +338,7 @@ public actor MarigoldV2Generator {
         try Self.applyTransformerWeights(resources: resources, into: transformer)
         // Marigold trains its adapters against a 4-bit quantized transformer, so
         // the base is quantized before the adapters are installed on top.
-        MLXNN.quantize(model: transformer, groupSize: 64, bits: 4) { _, module in
-            if let linear = module as? Linear {
-                let (_, inputDim) = linear.shape
-                return inputDim % 64 == 0
-            }
-            return true
-        }
+        MarigoldV2TransformerQuantization.apply(to: transformer)
         return transformer
     }
 

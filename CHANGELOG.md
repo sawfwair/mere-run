@@ -16,7 +16,8 @@ The format is based on Keep a Changelog.
   manifest recording the applied mapping, and writes no camera or point cloud
   because the model does not estimate them. Adds the managed model
   `vision-depth-marigold-v2`, and accepts a bare tensor written by
-  `torch.save(tensor)` in the non-executing PyTorch state-dict reader.
+  `torch.save(tensor)` in the non-executing PyTorch state-dict reader. Keeps the
+  first image-modulation projection unquantized to preserve depth structure.
 
 ## 0.52.0 - 2026-09-14
 
