@@ -954,6 +954,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                MarigoldV2Repository.modelId,
+                "Single-image relative depth",
+                "Estimates relative depth with Marigold V2. Loads the BF16 base before 4-bit quantization.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 ModelResolver.ModelID.image3DTripoSR.rawValue,
                 "Single-image object mesh",
                 "Reconstructs a normalized object mesh and vertex colors from one image with TripoSR.",

@@ -420,13 +420,14 @@
   },
   {
     "topic": "handbook-depth-geometry",
-    "title": "MoGe2, Video Depth Anything, and DA3",
+    "title": "MoGe2, Video Depth Anything, DA3, and Marigold V2",
     "category": "Vision and reconstruction",
     "models": [
       "vision-geometry-moge2-small",
       "vision-depth-vda-small",
       "vision-depth-vda-small-metric",
-      "vision-geometry-da3-small"
+      "vision-geometry-da3-small",
+      "vision-depth-marigold-v2"
     ],
     "resourceName": "handbook-depth-geometry.md"
   },

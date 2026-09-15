@@ -330,6 +330,8 @@ public extension ManagedModelSpec {
             return SCAIL2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .dreamXCausalMLX:
             return Wan2DreamXCausalResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .marigoldV2:
+            return MarigoldV2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hfTextChat:
             return Self.missingHFTextRootPaths(in: rootURL, fileManager: fileManager)
         }

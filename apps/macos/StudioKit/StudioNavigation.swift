@@ -149,7 +149,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
             self = .chat
         case .visionInspect, .visionEmbed, .visionCaption, .visionOCR, .visionGround, .visionSegment,
              .visionTrack, .visionTrackLive, .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare,
-             .visionFaceBatch, .visionPose, .visionFlow, .visionDepthVideo, .visionGeometry,
+             .visionFaceBatch, .visionPose, .visionFlow, .visionDepth, .visionDepthVideo, .visionGeometry,
              .visionGeometryMultiview:
             self = .vision
         case .speechTranscribe, .speechDiarize, .speechListen, .audioEnhance:

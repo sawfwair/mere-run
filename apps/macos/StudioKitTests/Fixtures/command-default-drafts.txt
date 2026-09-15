@@ -238,6 +238,9 @@ visionCaption	maxTokens	96
 visionCaption	outputPath	~/Documents/mere.run/Vision/caption-<stamp>
 visionCaption	prompt	Write a short, concrete caption describing the image for LoRA training. Avoid fluff.
 visionCaption	temperature	0.2
+visionDepth	dryRun	true
+visionDepth	model	vision-depth-marigold-v2
+visionDepth	outputPath	~/Documents/mere.run/Vision/image-depth-<stamp>
 visionDepthVideo	dryRun	true
 visionDepthVideo	model	vision-depth-vda-small
 visionDepthVideo	outputPath	~/Documents/mere.run/Vision/video-depth-<stamp>

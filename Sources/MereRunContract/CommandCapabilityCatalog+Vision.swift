@@ -382,6 +382,30 @@ extension MereRunCapabilityCatalog {
         output: .init(kind: .file, fileExtension: "flo", flag: "--output")
     )
 
+    public static let visionDepth = MereRunCommandCapability(
+        id: "vision.depth",
+        command: ["vision", "depth"],
+        title: "Image depth",
+        summary: "Estimate relative depth for a still image with native Marigold V2.",
+        arguments: [.init(name: "input", label: "Image", kind: .file, required: true)],
+        options: [
+            .init(flag: "--output", label: "Output directory", kind: .directory),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--max-edge", label: "Maximum inference edge", kind: .integer),
+            .init(flag: "--native", label: "Use source resolution", kind: .boolean),
+            .init(
+                flag: "--checkpoint", label: "Depth checkpoint", kind: .choice,
+                choices: [
+                    "log-stage2", "log-stage1", "log-layered", "uniform-base",
+                    "uniform-layered", "disparity-base", "disparity-layered"
+                ]
+            ),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--json", label: "Print JSON", kind: .boolean)
+        ],
+        output: .init(kind: .directory, flag: "--output")
+    )
+
     public static let visionDepthVideo = MereRunCommandCapability(
         id: "vision.depth-video",
         command: ["vision", "depth-video"],
