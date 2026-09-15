@@ -39,11 +39,6 @@ public enum MarigoldV2DepthNormalizer {
     /// preview and EXR consumers, so the range starts just above it.
     public static let normalizedFloor: Float = 1.0 / 65_535
 
-    /// Robust percentiles used for the mapping, matching the preview convention
-    /// already used for geometry artifacts.
-    public static let lowPercentile = 0.02
-    public static let highPercentile = 0.98
-
     /// - Parameters:
     ///   - raw: decoded values, one per pixel.
     ///   - parameterization: how the checkpoint encodes distance. Disparity
@@ -58,12 +53,12 @@ public enum MarigoldV2DepthNormalizer {
         let rawMinimum = finite.min() ?? 0
         let rawMaximum = finite.max() ?? 0
 
-        // Orient so that larger always means farther before choosing the range.
+        // Use the full finite range. Percentile clipping would lose the extreme
+        // depths and make the recorded affine mapping impossible to invert.
         let oriented = parameterization.increasesTowardCamera ? raw.map { -$0 } : raw
-        let sorted = oriented.filter(\.isFinite).sorted()
-        let near = percentile(sorted, lowPercentile)
-        let far = percentile(sorted, highPercentile)
-        let span = max(far - near, Float.ulpOfOne)
+        let near = parameterization.increasesTowardCamera ? -rawMaximum : rawMinimum
+        let far = parameterization.increasesTowardCamera ? -rawMinimum : rawMaximum
+        let span = far == near ? 1 : far - near
 
         let scale = 1 - normalizedFloor
         let values = oriented.map { value -> Float in
@@ -87,13 +82,4 @@ public enum MarigoldV2DepthNormalizer {
         )
     }
 
-    static func percentile(_ sorted: [Float], _ fraction: Double) -> Float {
-        guard let first = sorted.first, let last = sorted.last else { return 0 }
-        guard sorted.count > 1 else { return first }
-        let position = fraction * Double(sorted.count - 1)
-        let lower = Int(position.rounded(.down))
-        let upper = min(sorted.count - 1, lower + 1)
-        let weight = Float(position - Double(lower))
-        return sorted[lower] * (1 - weight) + sorted[upper] * weight
-    }
 }

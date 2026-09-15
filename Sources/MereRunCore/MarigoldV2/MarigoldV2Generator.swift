@@ -8,9 +8,9 @@ public struct MarigoldV2InferenceConfiguration: Equatable, Sendable {
     /// patches, so both image sides must be multiples of sixteen.
     public static let alignment = 16
 
-    /// Longest side the transformer runs at unless the caller raises it. The
-    /// published figures are about 17 GB of accelerator memory at 1024 and
-    /// 29 GB at 2048, so the default keeps a single run inside a 24 GB machine.
+    /// Longest side the transformer runs at unless the caller raises it.
+    /// Loading the BF16 base before quantization needs more memory than the
+    /// quantized inference step; resolution alone does not bound loading memory.
     public static let defaultMaximumEdge = 1_024
 
     public let checkpoint: MarigoldV2DepthCheckpoint
@@ -79,9 +79,12 @@ public enum MarigoldV2GeneratorError: Error, Equatable, LocalizedError, Sendable
 /// guidance: encode the image into the Qwen VAE latent space, predict a velocity,
 /// step once, decode, and read depth from the mean of the decoded channels.
 public actor MarigoldV2Generator {
-    /// Fixed inference timestep, normalized to [0, 1]. The transformer's sinusoidal
-    /// embedding rescales it by 1,000 internally, reproducing the reference's 499.
-    static let timestep: Float = 0.499
+    /// The reference rounds 499 to BF16 before dividing by 1,000. Preserve
+    /// that order: converting the Float value 0.499 afterward gives a different
+    /// timestep. The transformer's embedding rescales this value internally.
+    static func inferenceTimestep() -> MLXArray {
+        MLXArray([Float(499)]).asType(.bfloat16) / MLXArray(Float(1_000)).asType(.bfloat16)
+    }
 
     private var loaded: LoadedModel?
 
@@ -93,6 +96,7 @@ public actor MarigoldV2Generator {
         let prompt: MarigoldV2PromptConditioning
         let adapterPairCount: Int
         let vaeDecoderTensorCount: Int
+        let provenance: GeometryModelProvenance
     }
 
     public init() {}
@@ -164,13 +168,6 @@ public actor MarigoldV2Generator {
         let postprocessSeconds = Date().timeIntervalSince(postprocessStart)
 
         progress?("Writing EXR, preview, and manifest artifacts")
-        let provenance = GeometryModelProvenance(
-            modelID: MarigoldV2Repository.modelId,
-            upstreamRepository: MarigoldV2Repository.upstreamRepoId,
-            upstreamRevision: MarigoldV2Repository.upstreamRevision,
-            license: MarigoldV2Repository.license,
-            weightsSHA256: MarigoldV2Repository.trainablesPin.sha256
-        )
         let export = try MarigoldV2DepthArtifactExporter.export(
             depth: depth,
             width: dimensions.width,
@@ -181,7 +178,7 @@ public actor MarigoldV2Generator {
             checkpoint: configuration.checkpoint,
             inputURL: standardizedImage,
             outputDirectory: outputDirectory,
-            provenance: provenance,
+            provenance: loadedModel.provenance,
             inputRecord: admittedInput.inputRecords[0]
         )
 
@@ -216,7 +213,7 @@ public actor MarigoldV2Generator {
         let latentWidth = latents.dim(3)
 
         let packed = QwenImageEditLatentCreator.packLatents(latents).asType(.bfloat16)
-        let timestep = MLXArray([Self.timestep]).asType(.bfloat16)
+        let timestep = Self.inferenceTimestep()
         let prediction = model.transformer(
             hiddenStates: packed,
             timestep: timestep,
@@ -310,7 +307,8 @@ public actor MarigoldV2Generator {
             vae: vae,
             prompt: prompt,
             adapterPairCount: adapterPairCount,
-            vaeDecoderTensorCount: vaeDecoderTensorCount
+            vaeDecoderTensorCount: vaeDecoderTensorCount,
+            provenance: try resources.modelProvenance()
         )
         loaded = model
         return model

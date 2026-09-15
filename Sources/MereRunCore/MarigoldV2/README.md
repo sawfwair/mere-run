@@ -13,9 +13,18 @@ Single-step monocular depth on a frozen Qwen-Image-Edit-2509 transformer.
 - `MarigoldV2DepthNormalization.swift` and `MarigoldV2DepthExport.swift`:
   affine-relative normalization and the EXR, preview, and manifest artifacts.
 
-The transformer is quantized to 4 bits before the adapters are installed, matching
-how the checkpoints were trained. Output is affine-invariant: depth is recovered up
-to an unknown scale and shift, so no camera or point cloud is written.
+The transformer uses MLX affine 4-bit quantization before the adapters are
+installed. The reference uses bitsandbytes NF4 with selected layers excluded
+from quantization or dequantized. The native VAE encoder also uses the posterior
+mode; the reference samples the posterior. These differences require separate
+checkpoint accuracy validation. A build or unit-test pass does not establish
+reference parity.
+
+The runtime loads the BF16 transformer before quantization. The catalog's
+64 GB minimum and 96 GB recommendation reserve loading headroom; they are
+provisional, not measured inference requirements. Output is affine-invariant:
+depth is recovered up to an unknown scale and shift, so no camera or point
+cloud is written.
 
 Keep the fixed timestep, the velocity step, and the channel readout covered by tests
 before changing inference defaults.

@@ -1,10 +1,17 @@
 import ArgumentParser
 import Foundation
+import MereRunContract
 import MereRunCore
 import XCTest
 @testable import MereRunCLI
 
 final class VisionDepthCommandTests: XCTestCase {
+    func testCatalogCheckpointChoicesMatchTheRuntime() throws {
+        let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: "vision.depth"))
+        let checkpoint = try XCTUnwrap(capability.options.first { $0.flag == "--checkpoint" })
+        XCTAssertEqual(checkpoint.choices, MarigoldV2DepthCheckpoint.allCases.map(\.rawValue))
+    }
+
     func testParsesProductionOptions() throws {
         let command = try VisionDepth.parse([
             "/tmp/frame.png",

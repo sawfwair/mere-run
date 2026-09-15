@@ -62,6 +62,7 @@ public enum MereRunCapabilityCatalog {
             visionFaceBatch,
             visionPose,
             visionFlow,
+            visionDepth,
             visionDepthVideo,
             visionGeometry,
             visionGeometryMultiview,

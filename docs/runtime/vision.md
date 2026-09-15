@@ -330,6 +330,12 @@ Variants other than the default are not part of the managed install and need a
 local Marigold repository root passed to `--model`. `--dry-run` and `--json`
 behave as in `geometry`.
 
+The native runtime uses MLX affine 4-bit weights and deterministic VAE encoding.
+The reference uses bitsandbytes NF4 and samples the VAE posterior. Accuracy
+parity between these implementations has not been established. Loading also
+requires the BF16 base before quantization, so the reference's quantized
+inference memory figures do not describe native loading requirements.
+
 ### Generate temporally consistent video depth
 
 ```bash

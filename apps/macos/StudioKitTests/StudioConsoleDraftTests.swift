@@ -8,6 +8,19 @@ import XCTest
 /// a template starts on exactly the command the app would otherwise have run, and every option
 /// the contract declares has a row.
 final class StudioConsoleDraftTests: XCTestCase {
+    func testMarigoldDepthCommandRetainsCheckpointAndResolutionOptions() throws {
+        let template = try XCTUnwrap(CommandCatalog.templates.first { $0.id == .visionDepth })
+        XCTAssertEqual(template.id.studioTask, .visionDepth)
+        XCTAssertEqual(template.defaultModel, "vision-depth-marigold-v2")
+        let capability = try XCTUnwrap(template.id.capability)
+        let argv = [
+            "vision", "depth", "/tmp/photo.png", "--output", "/tmp/photo-depth",
+            "--model", "/tmp/local-model", "--native", "--checkpoint", "log-layered", "--json"
+        ]
+        let draft = StudioConsoleCommand.seed(capability: capability, arguments: argv)
+        XCTAssertEqual(StudioConsoleCommand.arguments(for: capability, draft: draft), argv)
+    }
+
     func testChatTokenBudgetUsesRuntimeLimitsRatherThanDisplayRangeHints() {
         let capability = MereRunCapabilityCatalog.textChat
         let fixtures: [(String, String, Bool)] = [

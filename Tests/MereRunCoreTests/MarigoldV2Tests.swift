@@ -1,9 +1,17 @@
 import Foundation
+import MLX
 @testable import MereRunCore
 import MereRunModelKit
 import XCTest
 
 final class MarigoldV2Tests: XCTestCase {
+
+    func testTimestepPreservesTheReferencesBF16OperationOrder() {
+        let timestep = MarigoldV2Generator.inferenceTimestep()
+        XCTAssertEqual(timestep.dtype, .bfloat16)
+        XCTAssertEqual(timestep.item(Float.self), 0.5)
+        XCTAssertNotEqual(timestep.item(Float.self), MLXArray(Float(0.499)).asType(.bfloat16).item(Float.self))
+    }
 
     // MARK: - Adapter mapping
 
@@ -121,6 +129,22 @@ final class MarigoldV2Tests: XCTestCase {
         }
     }
 
+    func testNormalizationPreservesExtremeDepthsThroughTheRecordedMapping() {
+        let raw: [Float] = [-100] + (0..<100).map { Float($0) / 100 } + [100]
+        for parameterization in MarigoldV2DepthParameterization.allCases {
+            let result = MarigoldV2DepthNormalizer.normalize(raw: raw, parameterization: parameterization)
+            let statistics = result.statistics
+            let recovered = result.values.map {
+                statistics.normalizationNear
+                    + ($0 - statistics.normalizedFloor) / (1 - statistics.normalizedFloor)
+                    * (statistics.normalizationFar - statistics.normalizationNear)
+            }
+            for (actual, expected) in zip(recovered, raw) {
+                XCTAssertEqual(actual, expected, accuracy: 0.0001)
+            }
+        }
+    }
+
     // MARK: - Checkpoint metadata
 
     func testCheckpointMetadataMatchesThePublishedTable() {
@@ -172,6 +196,18 @@ final class MarigoldV2Tests: XCTestCase {
         XCTAssertEqual(resources.validate(), [])
     }
 
+    func testLocalCheckpointProvenanceHashesTheSelectedFile() throws {
+        let root = try makeInstallTree(mounted: false)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let resources = MarigoldV2Resources(rootURL: root)
+        try Data("local adapter".utf8).write(to: resources.trainablesURL)
+
+        let provenance = try resources.modelProvenance()
+        XCTAssertEqual(provenance.weightsSHA256, try ModelArtifactPin.fileSHA256(resources.trainablesURL))
+        XCTAssertNotEqual(provenance.weightsSHA256, MarigoldV2Repository.trainablesPin.sha256)
+        XCTAssertEqual(provenance.upstreamRevision, "unverified-local")
+    }
+
     func testValidationReportsAMissingAdapterPayload() throws {
         let root = try makeInstallTree(mounted: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -205,6 +241,8 @@ final class MarigoldV2Tests: XCTestCase {
         XCTAssertEqual(spec.installShape, .structuredRoot)
         XCTAssertEqual(spec.defaultCLICommands, ["vision depth"])
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertNotNil(ManagedModelCapabilityCatalog.descriptor(for: spec.id))
+        XCTAssertNil(spec.apiProfile)
     }
 
     func testCatalogPullsTheFrozenBaseAndMountsTheAdapters() throws {

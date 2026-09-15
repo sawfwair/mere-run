@@ -149,6 +149,16 @@ extension CommandCatalog {
             outputKind: .file("flo")
         ),
         CommandTemplate(
+            id: .visionDepth,
+            category: .vision,
+            title: "Image depth",
+            subtitle: "Relative depth with native Marigold V2",
+            systemImage: "square.3.layers.3d",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "vision-depth-marigold-v2"
+        ),
+        CommandTemplate(
             id: .visionDepthVideo,
             category: .vision,
             title: "Video depth",
@@ -425,6 +435,17 @@ extension CommandArguments {
             args.option(F.jsonOutput, draft.visionJSONOutputPath)
         }
         args.option(F.accuracy, draft.visionFlowAccuracy)
+        if draft.json { args.flag(F.json) }
+        return args.arguments
+    }
+
+    package static func visionDepth(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.VisionDepth
+        var args = ArgumentBuilder(F.self)
+        args.value(draft.inputPath)
+        if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
+        if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if draft.dryRun { args.flag(F.dryRun) }
         if draft.json { args.flag(F.json) }
         return args.arguments
     }
