@@ -284,6 +284,27 @@ final class MarigoldV2Tests: XCTestCase {
         XCTAssertEqual(manifest.supports, [.relativeDepth])
     }
 
+    func testManagedValidationUsesPrecomputedConditioningInsteadOfTextComponents() throws {
+        let root = try makeInstallTree(mounted: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try MereRunModelManifest.template(for: .visionDepthMarigoldV2).write(to: root)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: MarigoldV2Repository.modelId
+        )
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+
+        let resources = MarigoldV2Resources(rootURL: root)
+        try FileManager.default.removeItem(at: resources.promptEmbedsURL)
+        let incomplete = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: MarigoldV2Repository.modelId
+        )
+        XCTAssertFalse(incomplete.isValid)
+        XCTAssertTrue(incomplete.errors.contains { $0.contains(resources.promptEmbedsURL.path) })
+    }
+
     // MARK: - Helpers
 
     private func makeInstallTree(mounted: Bool) throws -> URL {

@@ -2,6 +2,11 @@
 
 Single-step monocular depth on a frozen Qwen-Image-Edit-2509 transformer.
 
+This runtime is experimental. Native checkpoint runs produce valid artifacts,
+but the upstream church example has substantially weaker object boundaries than
+the reference at both the default and matched 1536-pixel inference edges. Output
+quality has not passed validation; the differences below need investigation.
+
 - `MarigoldV2Resources.swift`: repository identity, checkpoint variants, install
   layout, artifact pins, and validation.
 - `MarigoldV2ModelConfigs.swift`: the narrow base config this runtime needs.

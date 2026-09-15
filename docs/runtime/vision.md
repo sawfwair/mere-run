@@ -308,6 +308,10 @@ swift run mere.run model pull vision-depth-marigold-v2
 swift run mere.run vision depth ./photo.jpg --output ./photo-depth
 ```
 
+Treat this runtime as experimental. Initial native checks on the upstream church
+example produce blurred object boundaries compared with the reference, including
+at the same inference resolution. Output quality has not passed validation.
+
 Native Marigold V2 writes a depth EXR, a preview PNG, and a manifest JSON into
 the output directory (default `<stem>-depth` next to the input). Inference is a
 single rectified-flow step at a fixed timestep on a frozen, 4-bit quantized

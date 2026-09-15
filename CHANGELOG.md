@@ -6,7 +6,7 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-- Add single-image depth estimation through `vision depth`, backed by native
+- Add experimental single-image depth estimation through `vision depth`, backed by native
   Marigold V2 on a frozen, 4-bit quantized Qwen-Image-Edit-2509 transformer with
   rank-128 adapters and, where the checkpoint ships one, a fine-tuned VAE
   decoder. Inference is one rectified-flow step at a fixed timestep with no
