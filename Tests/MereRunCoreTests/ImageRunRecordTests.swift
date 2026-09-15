@@ -95,6 +95,30 @@ final class ImageRunRecordTests: XCTestCase {
         }
     }
 
+    func testCancelledExecutorErrorRetainsCancelledRunState() async throws {
+        let root = try temporaryDirectory()
+        let options = ImageGenerationOptions(prompt: "A camera", outputURL: root.appendingPathComponent("result.png"), seed: 42)
+        let plan = try ImageGenerationPlan.resolve(options, modelRoot: root, manifest: .init(id: "fixture", family: .zimage))
+        let directory = root.appendingPathComponent("cancelled")
+        let session = try ImageRunSession(directory: directory, requested: options, modelSelector: "fixture")
+        let task = Task {
+            try await ImageGenerationOperation.execute(plan, recording: session, executor: { _, _, _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+                throw URLError(.cancelled)
+            })
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        let record = try ImageRunRecord.inspect(at: directory)
+        XCTAssertEqual(record.state, .cancelled)
+        XCTAssertEqual(record.issue?.code, "cancelled")
+        XCTAssertTrue(record.artifacts.isEmpty)
+    }
+
     func testOutputFailureCannotCreateSuccessfulRecord() async throws {
         let root = try temporaryDirectory()
         let options = ImageGenerationOptions(prompt: "A camera", outputURL: root.appendingPathComponent("missing.png"), seed: 1)

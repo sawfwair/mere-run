@@ -22,10 +22,12 @@ extension APIServerContract {
 struct APIServerRequestContext: RequestContext, RemoteAddressRequestContext {
     var coreContext: CoreRequestContextStorage
     let remoteAddress: SocketAddress?
+    let channel: any Channel
 
     init(source: Source) {
         self.coreContext = CoreRequestContextStorage(source: source)
         self.remoteAddress = source.channel.remoteAddress
+        self.channel = source.channel
     }
 }
 
@@ -78,8 +80,17 @@ enum APIVFXArtifactRoutePolicy {
 enum APIVFXClientErrorPolicy {
     static func status(for error: Error) -> HTTPResponse.Status? {
         switch error {
-        case is MoGe2TokenGridError,
+        case VideoDepthAnythingGeneratorError.inputVideoNotFound,
+             DepthAnything3GeneratorError.imageNotFound,
+             DepthAnything3GeneratorError.cameraCountMismatch:
+            return .badRequest
+        case is InstantMeshGeneratorError,
+             is TripoSRGeneratorError,
+             is MoGe2TokenGridError,
+             is MoGe2GenerationError,
              is VideoDepthAnythingLimitError,
+             is VideoGenerationError,
+             is VideoGenerationIssue,
              is DepthAnything3LimitError,
              is MediaIOError,
              is VFXImageInputValidationError,
@@ -220,6 +231,7 @@ actor CodeGenServer {
 
     nonisolated func buildRouter() -> Router<APIServerRequestContext> {
         let router = Router(context: APIServerRequestContext.self)
+        router.middlewares.add(APIRequestCancellationMiddleware())
 
         // Health check
         router.get("/health") { _, _ in
@@ -614,16 +626,7 @@ actor CodeGenServer {
                 )
                 let outputURL = outputDirectory.appendingPathComponent("output.mp4")
                 do {
-                    let command = try VideoGenerate.parse(
-                        plan.commandArguments + ["--output", outputURL.path, "--quiet"]
-                    )
-                    try await command.run()
-                    guard FileManager.default.fileExists(atPath: outputURL.path) else {
-                        throw APIRequestValidationError.invalidField(
-                            "output",
-                            "video generation completed without an MP4 artifact"
-                        )
-                    }
+                    _ = try await APIVideoGeneration.generate(plan, outputURL: outputURL)
                     return try retainedArtifactJSONResponse(
                         APIServerContract.videoGenerationResponse(
                             outputURL: outputURL,
@@ -759,23 +762,16 @@ actor CodeGenServer {
                 )
                 defer { try? FileManager.default.removeItem(at: inputURL) }
                 let outputDirectory = try temporaryOutputDirectory(directoryName: "mere-run-api-geometry")
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = MoGe2Generator()
                 do {
-                    let result = try await generator.generate(
-                        imageURL: inputURL,
-                        outputDirectory: outputDirectory,
-                        model: nil,
-                        configuration: plan.configuration,
-                        progress: nil
+                    let result = try await MoGe2GenerationOperation.execute(
+                        plan.request(imageURL: inputURL, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.geometryResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
@@ -846,38 +842,20 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-geometry-multiview"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = DepthAnything3Generator()
                 do {
-                    let result = try await generator.generate(
-                        imageURLs: inputURLs,
-                        model: plan.modelID,
-                        knownCameras: plan.knownCameras,
-                        referenceViewStrategy: plan.referenceViewStrategy,
-                        processResolution: plan.processResolution,
-                        progress: nil
+                    let result = try await DepthAnything3GenerationOperation.execute(
+                        plan.request(imageURLs: inputURLs, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    let exportStart = Date()
-                    let export = try MultiViewGeometryExporter.export(
-                        run: result,
-                        outputDirectory: outputDirectory,
-                        configuration: try MultiViewGeometryExportConfiguration(
-                            confidencePercentile: plan.confidencePercentile,
-                            maximumPointCount: plan.maximumPointCount
-                        )
-                    )
-                    let exportSeconds = Date().timeIntervalSince(exportStart)
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.multiViewGeometryResponse(
-                            from: result,
-                            export: export,
-                            exportSeconds: exportSeconds
+                            from: result.run,
+                            export: result.export,
+                            exportSeconds: result.exportSeconds
                         ),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
@@ -947,26 +925,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-image-to-3d"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = TripoSRGenerator()
                 do {
-                    let result = try await generator.generate(
-                        imageURL: inputURL,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        foregroundPolicy: plan.foregroundPolicy,
-                        extractionResolution: plan.extractionResolution,
-                        densityThreshold: plan.densityThreshold,
-                        includeVertexColors: plan.includesVertexColors,
-                        progress: nil
+                    let result = try await TripoSRGenerationOperation.execute(
+                        plan.request(imageURL: inputURL, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.imageTo3DResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
@@ -1039,25 +1007,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-instantmesh"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = InstantMeshGenerator()
                 do {
-                    let result = try await generator.generate(
-                        viewURLs: inputURLs,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        cameras: plan.cameras,
-                        extractionResolution: plan.extractionResolution,
-                        includeVertexColors: plan.includesVertexColors,
-                        progress: nil
+                    let result = try await InstantMeshGenerationOperation.execute(
+                        plan.request(viewURLs: inputURLs, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.instantMeshResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
@@ -1127,24 +1086,16 @@ actor CodeGenServer {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-depth-video"
                 )
-                try MLXBundleSupport.ensureAvailable(quiet: true)
-                let generator = VideoDepthAnythingGenerator()
                 do {
-                    let result = try await generator.generate(
-                        videoURL: inputURL,
-                        outputDirectory: outputDirectory,
-                        model: plan.modelID,
-                        inputSize: plan.inputSize,
-                        maximumFrameCount: plan.maximumFrameCount,
-                        progress: nil
+                    let result = try await VideoDepthAnythingGenerationOperation.execute(
+                        plan.request(videoURL: inputURL, outputDirectory: outputDirectory),
+                        prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) }
                     )
-                    await generator.unload()
                     return try retainedArtifactJSONResponse(
                         APIServerContract.depthVideoResponse(from: result),
                         outputDirectory: outputDirectory
                     )
                 } catch {
-                    await generator.unload()
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
                 }
@@ -1188,7 +1139,11 @@ actor CodeGenServer {
             let plan = try APIServerContract.speechPlan(from: openaiRequest)
             return try await withRuntimeRequestAdmission(using: requestAdmission) {
                 let outputURL = try await synthesizeSpeech(plan)
+                defer { try? FileManager.default.removeItem(at: outputURL) }
                 let responseURL = try speechResponseURL(outputURL, responseFormat: plan.responseFormat)
+                defer {
+                    if responseURL != outputURL { try? FileManager.default.removeItem(at: responseURL) }
+                }
                 let data = try Data(contentsOf: responseURL)
                 let response = binaryResponse(
                     data,
@@ -1483,23 +1438,12 @@ actor CodeGenServer {
     }
 
     private func synthesizeSpeech(_ plan: APIServerContract.SpeechPlan) async throws -> URL {
+        let selection = try plan.modelSelection()
         try MLXBundleSupport.ensureAvailable(quiet: true)
-        let selection = try resolveSpeechModel(plan.modelID)
         let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-speech", extension: "wav")
-        let request = TTSRequest(
-            text: plan.input,
-            voiceDescription: plan.voiceDescription,
-            voiceMode: .style,
-            cloneReference: nil,
-            language: "auto",
-            speed: plan.speed,
-            temperature: plan.temperature,
-            outputURL: outputURL
-        )
         _ = try await sidecarPool.synthesizeSpeech(
-            modelID: selection.modelID,
-            modelPath: selection.modelPath,
-            request: request
+            selection: selection,
+            plan: plan.synthesisPlan(outputURL: outputURL)
         )
         return outputURL
     }
@@ -1512,7 +1456,12 @@ actor CodeGenServer {
             directoryName: "mere-run-api-speech",
             extension: responseFormat
         )
-        try MediaAudioIO.transcode(wavURL, to: outputURL, format: responseFormat)
+        do {
+            try MediaAudioIO.transcode(wavURL, to: outputURL, format: responseFormat)
+        } catch {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw error
+        }
         return outputURL
     }
 
@@ -1536,24 +1485,6 @@ actor CodeGenServer {
         let manifest = try MereRunModelManifest.loadRequired(from: root)
         if case .managed(let id) = selection { return (id.rawValue, root, manifest) }
         return (manifest.id, root, manifest)
-    }
-
-    private func resolveSpeechModel(
-        _ requestedModel: String
-    ) throws -> (modelID: String, modelPath: String?) {
-        let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let asPath = URL(fileURLWithPath: normalized).standardizedFileURL
-        if FileManager.default.fileExists(atPath: asPath.path) {
-            return (Qwen3TTSResources.defaultModelId, asPath.path)
-        }
-        if let spec = ManagedModelCatalog.spec(for: normalized),
-           spec.category == .speechTTS {
-            return (spec.id, nil)
-        }
-        throw APIRequestValidationError.invalidField(
-            "model",
-            "use a mere.run TTS model id or a local Qwen3-TTS model path"
-        )
     }
 
     private nonisolated func temporaryOutputURL(

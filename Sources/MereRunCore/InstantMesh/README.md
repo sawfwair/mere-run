@@ -18,3 +18,9 @@ reconstruction stage.
 
 The runtime uses its own clean-room isosurface implementation. NVIDIA's
 proprietary FlexiCubes source is not included or executed.
+
+`InstantMeshGenerationSettings` owns extraction and camera-row validation.
+`InstantMeshGenerationOperation` checks ordered views and camera counts before
+runtime construction, then awaits unloading after generation or failure. Native
+execution retains immutable snapshots; CLI and API retain model and transport
+policy. Preflight preserves the supplied view order without creating output.

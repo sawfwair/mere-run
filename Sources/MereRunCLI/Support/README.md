@@ -2,8 +2,21 @@
 
 Shared helpers and runtime adapters for the public command surface.
 
-- `APIServerContract.swift`: API wire types, model policy, and request/response contracts.
+- `APIServerContract.swift`: transport headers, JSON decoding, health, and validation errors.
+- `APIServerContract+Models.swift`: discovery and engine capability projections
+  from Core model profiles. Modality files own request translation and response
+  construction, with each vision response schema beside its constructor.
+- `APIServerContract+Fields.swift`: shared optional-field parsing and model-name
+  normalization. Modality files retain their aliases, defaults, and diagnostics.
+- `APIMultipartFormData.swift`: ordered multipart parsing and shared field checks.
+  Each route declares its allowed fields, diagnostics, and text-decoding policy.
 - `APIServer.swift`: HTTP routing, authentication, transport, and streaming ownership.
+- Geometry, reconstruction, and video-depth routes call their Core generation
+  operations for shared settings, execution, and awaited unloading. HTTP handlers
+  retain admission, upload and output cleanup, and artifact retention.
+- Speech API model aliases and voice descriptions belong to `APIServerContract`.
+  `APISidecarModelPool` retains admission and residency around the shared
+  `AudioCore.SpeechSynthesisOperation`.
 
 - `CLIModelStoreBootstrap.swift`: global model-root handling.
 - `CLIOutput.swift` and `CLIStderr.swift`: output channel discipline.
@@ -13,7 +26,18 @@ Shared helpers and runtime adapters for the public command surface.
 - `BuiltinTools.swift`: local tool authorization and execution policy.
 - `BoundedProcessRunner.swift`: concurrent output drainage, bounded capture,
   monotonic deadlines, and cancellation cleanup for approved shell tools and
-  code benchmark sandboxes.
+  code benchmark sandboxes, and workflow children. Throwing start and output
+  callbacks terminate and await the child group before errors propagate.
+- `WorkflowRunner.swift`: node scheduling, retry policy, and ordered events.
+- `WorkflowRunStore.swift`: exclusive run ownership, resume validation, manifests,
+  and synchronized event persistence.
+- `WorkflowArtifactStore.swift`: input localization, output verification, cache
+  storage, and digest checks for reuse.
+- `WorkflowProcessRunner.swift`: child registration, bounded stdout, streaming
+  callbacks, and workflow cancellation over the shared process runner.
+- `APIVideoGeneration.swift`: API video field and argument translation over the
+  shared Core operation. The HTTP route retains admission and artifact cleanup.
+  `CLIVideoGenerationPresentation.swift` formats Core video events for the CLI.
 - `APIImageGeneration.swift`: API v1 compatibility settings for the Core image
   operation. `ImageGenerationPreflight.swift` presents the same Core resolver's
   diagnostics as an observational report.
@@ -36,3 +60,6 @@ Shared helpers and runtime adapters for the public command surface.
 
 Keep stdout machine-readable when a command can be scripted; diagnostics and
 progress belong on stderr.
+
+Read [catalog and contract ownership](../../../docs/internals/catalog-contracts.md)
+before changing discovery, capability metadata, or API translation.

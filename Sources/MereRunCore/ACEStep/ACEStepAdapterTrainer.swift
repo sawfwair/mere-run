@@ -196,6 +196,7 @@ enum ACEStepAdapterTrainer {
         outputURL: URL,
         progress: (@Sendable (ACEStepAdapterTrainingProgress) -> Void)?
     ) throws -> ACEStepAdapterTrainingReport {
+        try Task.checkCancellation()
         try validate(configuration, examples: examples)
         MLXRandom.seed(configuration.seed)
 
@@ -254,7 +255,8 @@ enum ACEStepAdapterTrainer {
         }
 
         let prepared = try examples.map {
-            try prepare($0, pipeline: pipeline)
+            try Task.checkCancellation()
+            return try prepare($0, pipeline: pipeline)
         }
         let optimizer = AdamW(
             learningRate: configuration.learningRate,
@@ -296,6 +298,7 @@ enum ACEStepAdapterTrainer {
             ).timesteps
 
         for step in 0..<configuration.trainingSteps {
+            try Task.checkCancellation()
             let example = prepared[step % prepared.count]
             let noise = MLXRandom.normal(
                 example.cleanLatents.shape,
@@ -330,6 +333,7 @@ enum ACEStepAdapterTrainer {
             )
         }
 
+        try Task.checkCancellation()
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true

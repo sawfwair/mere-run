@@ -59,6 +59,11 @@ or replacing a view does not stop them. Stop in a chat targets its active turn.
 Branch uses the model, system instruction, and preset recorded at that turn,
 including an intentionally empty system instruction.
 
+Conversation retry applies the task's Command edits and validates the replacement
+before changing history. If validation fails, the previous reply and your unsent
+text remain available. Correct the Command values, then retry. Historical Library
+reruns retain their recorded arguments independently of current Command edits.
+
 Analyze checks the selected input against the recorded source. For newly
 recorded files, it also checks size and modification time. Replacing an input
 removes stale overlays, result text, and processed-video playback. When a run

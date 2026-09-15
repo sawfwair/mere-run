@@ -68,6 +68,28 @@ package final class StudioTaskSessions {
 
     package func rememberSelection(_ id: UUID?, for mode: StudioMode) {
         set(id, for: mode.task.rawValue + ".selection")
+        let focus = value(for: mode.task.rawValue + ".focus", default: Optional<StudioResultSelection>.none)
+        if let focus, focus.itemID != id { setFocus(nil, for: mode.task) }
+    }
+
+    package func focusedResult(for task: StudioTask, items: [StudioLibraryItem]) -> StudioResultSelection? {
+        let focus = value(for: task.rawValue + ".focus", default: Optional<StudioResultSelection>.none)
+        return focus.flatMap { selection in
+            items.contains { $0.id == selection.itemID && $0.allArtifactURLs.contains(selection.url) } ? selection : nil
+        }
+    }
+
+    package func setFocus(_ selection: StudioResultSelection?, for task: StudioTask) {
+        set(selection, for: task.rawValue + ".focus")
+    }
+
+    package func forgetLibraryItems(_ ids: Set<UUID>) {
+        for mode in StudioMode.allCases {
+            let selection = value(for: mode.task.rawValue + ".selection", default: Optional<UUID>.none)
+            if let selection, ids.contains(selection) { rememberSelection(nil, for: mode) }
+            let focus = value(for: mode.task.rawValue + ".focus", default: Optional<StudioResultSelection>.none)
+            if let focus, ids.contains(focus.itemID) { setFocus(nil, for: mode.task) }
+        }
     }
 
     package func selection(for mode: StudioMode, items: [StudioLibraryItem], preferredID: UUID?) -> Selection {
@@ -81,12 +103,21 @@ package final class StudioTaskSessions {
                          isExplicit: preferred != nil && preferredID != rememberedID)
     }
 
-    package func resolving(_ base: StudioRunRequest) -> StudioRunRequest {
-        let task = base.templateID.studioTask
+    private func commandState(for templateID: CommandTemplateID) -> StudioTaskCommandState? {
+        let task = templateID.studioTask
         let state = value(for: task.rawValue + ".commandOverride", default: Optional<StudioTaskCommandState>.none)
-        guard let state, state.templateID == base.templateID,
+        return state?.templateID == templateID ? state : nil
+    }
+
+    package func commandForm(for request: StudioRunRequest) -> StudioConsoleDraft {
+        commandState(for: request.templateID)?.resolved(source: request.template.arguments(from: request.draft))
+            ?? StudioConsoleCommand.seed(template: request.template, draft: request.draft)
+    }
+
+    package func resolving(_ base: StudioRunRequest) -> StudioRunRequest {
+        guard commandState(for: base.templateID) != nil,
               let launch = StudioConsoleRun(template: base.template,
-                  draft: state.resolved(source: base.template.arguments(from: base.draft)), seed: base.draft) else { return base }
+                  draft: commandForm(for: base), seed: base.draft) else { return base }
         return StudioRunRequest(id: base.id, mode: base.mode, templateID: base.templateID,
             template: base.template, draft: launch.commandDraft, createdAt: base.createdAt,
             conversationID: base.conversationID,

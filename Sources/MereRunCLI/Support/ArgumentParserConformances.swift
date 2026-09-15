@@ -1,3 +1,4 @@
+import AudioCore
 import ArgumentParser
 import MereRunContract
 import MereRunCore
@@ -20,8 +21,8 @@ extension ACEStepInferenceMethod: ExpressibleByArgument {}
 extension ACEStepSamplerMode: ExpressibleByArgument {}
 extension ACEStepGuidanceMode: ExpressibleByArgument {}
 extension ACEStepQualityPreset: ExpressibleByArgument {}
-extension ACEStepAudioFormat: ExpressibleByArgument {}
-extension ACEStepNormalizationMode: ExpressibleByArgument {}
+extension AudioWAVEncoding: ExpressibleByArgument {}
+extension AudioNormalizationMode: ExpressibleByArgument {}
 extension ACEStepAdapterKind: ExpressibleByArgument {}
 
 extension ModelResolver.ModelID: ExpressibleByArgument {

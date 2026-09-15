@@ -1409,6 +1409,11 @@ package struct CommandTemplate: Identifiable, Equatable {
             break
         }
 
+        if id == .textChat, let capability = id.capability {
+            return StudioConsoleCommand.validationMessage(
+                for: capability, draft: StudioConsoleCommand.seed(template: self, draft: draft)
+            )
+        }
         return nil
     }
 

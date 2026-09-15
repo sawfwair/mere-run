@@ -873,6 +873,9 @@ demonstrate this deterministic receptivity task, not broad downstream quality.
 - `Sources/MereRunCLI/Commands/TextAnonymizeCommand.swift`
 - `Sources/MereRunCLI/Commands/TextTrainLoRACommand.swift`
 
+Text training uses [shared options and execution](../internals/text-training-execution.md)
+in Core. The command owns output formatting and the optional dashboard.
+
 ### Chat families
 
 - `Sources/MereRunCore/Q35/`

@@ -442,6 +442,7 @@ package final class Job: ObservableObject, Identifiable {
     package var outputWatchTask: Task<Void, Never>?
     package var cancelRequested = false
 
+    private var confirmedArtifacts = ArtifactResolution.empty
     private var stdoutBuffer = ""
     private var stderrBuffer = ""
     /// Unbounded stdout accumulator for conversation turns (so a long reply is captured in full)
@@ -545,6 +546,12 @@ package final class Job: ObservableObject, Identifiable {
                     )
                 }
             } else if detectsArtifacts {
+                if let receipt = StudioRunReceipt.parse(stdout: stdoutBuffer), receipt.exit == 0,
+                   case .templated(let template, let draft) = request.command {
+                    confirmedArtifacts = resolver.resolve(
+                        template: template, draft: draft, expected: expectedOutput, stdout: stdoutBuffer
+                    )
+                }
                 refreshPrimaryArtifact(resolver: resolver)
             }
         case .stderr:
@@ -597,7 +604,11 @@ package final class Job: ObservableObject, Identifiable {
         // (a path-like substring in a reply must not become a bogus artifact or status). Raw
         // commands have no output contract to read either.
         let resolution: ArtifactResolution
-        if detectsArtifacts, case .templated(let template, let draft) = request.command {
+        if exitCode != 0 || confirmedArtifacts.source != .none {
+            // A file seen while running may be partial or predate this attempt.
+            // Only an explicit completed result survives an unsuccessful exit.
+            resolution = confirmedArtifacts
+        } else if detectsArtifacts, case .templated(let template, let draft) = request.command {
             resolution = resolver.resolve(
                 template: template,
                 draft: draft,
@@ -628,9 +639,7 @@ package final class Job: ObservableObject, Identifiable {
             )
         }
 
-        // A resident session (`video session`) reports its render over its own stdin protocol,
-        // so keep the live primary when nothing was resolved from the run's output.
-        let primary = detectedOutput ?? primaryArtifactURL
+        let primary = detectedOutput
         let sidecars = resolution.sidecars.filter { $0.url != primary }
         artifacts = (primary.map { [Artifact(url: $0, role: .primary)] } ?? []) + sidecars
         let artifactURLs = artifacts.map(\.url)
@@ -726,6 +735,7 @@ package final class Job: ObservableObject, Identifiable {
 
             if response.status == "result", let output = response.output {
                 let url = URL(fileURLWithPath: output)
+                confirmedArtifacts = ArtifactResolution(source: .residentResult, artifacts: [Artifact(url: url, role: .primary)])
                 setPrimaryArtifact(url)
                 status = "Generated: \(url.lastPathComponent)"
             } else if response.status == "error" {

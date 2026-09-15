@@ -347,6 +347,8 @@ final class APIServeCommandTests: XCTestCase {
     func testVFXClientInputAndResourceErrorsAreBadRequests() {
         let inputURL = URL(fileURLWithPath: "/tmp/client-input")
         let errors: [Error] = [
+            VideoGenerationError.invalidInput("missing input"),
+            VideoGenerationIssue(id: "duration_invalid", title: "Duration is invalid", message: "finite duration required"),
             MoGe2TokenGridError.tokenCountOutOfRange(
                 actual: 3_601,
                 minimum: 1,
@@ -1858,7 +1860,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(plan.width, 1_024)
         XCTAssertEqual(plan.height, 768)
         XCTAssertEqual(plan.numFrames, 97)
-        XCTAssertTrue(plan.commandArguments.contains("--num-generated-keyframes"))
+        XCTAssertTrue(plan.options.contains("--num-generated-keyframes"))
 
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             "mere-run-video-api-contract-\(UUID().uuidString)",

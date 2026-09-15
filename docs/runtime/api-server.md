@@ -90,6 +90,7 @@ lifecycle. API keys still cross the process boundary only through
 - `POST /v1/embeddings`
 - `POST /v1/images/generations`
 - `POST /v1/images/edits`
+- `POST /v1/videos/generations`
 - `POST /v1/vision/geometry`
 - `POST /v1/vision/geometry/multiview`
 - `POST /v1/vision/image-to-3d`
@@ -107,6 +108,46 @@ Qwen, Ornith, Laguna, Gemma 4, and Muse use their native templates to render
 Streaming responses send SSE keepalive comments during long generations, including
 buffered tool calls. Clients should ignore comment frames and wait for response
 data and the final usage chunk.
+
+## Generate a video
+
+Send video requests from the serving machine. This route is loopback-only
+because its response contains a server-local MP4 URL. The server retains the
+artifact for one hour and includes its byte count and SHA-256.
+
+With `video-ltx23-av-mlx` installed, send a bounded video-only request:
+
+```bash
+curl http://127.0.0.1:8080/v1/videos/generations \
+  -H "Content-Type: application/json" \
+  --data '{
+    "model": "video-ltx23-av-mlx",
+    "prompt": "A small wooden boat floats on calm water.",
+    "size": "512x320",
+    "num_frames": 9,
+    "fps": 24,
+    "seed": 42,
+    "output_mode": "video-only"
+  }'
+```
+
+If you omit `model`, the API selects `video-ltx25-distilled-bf16`. The default
+canvas is 768 × 512 at 24 fps. Use either `seconds` or `num_frames` to specify
+length. The selected model normalizes frame counts to its native cadence.
+
+The optional `options` array accepts additional `video generate` arguments,
+such as `["--ltx-preset", "hq"]` for a compatible full model. Typed request
+fields control the model, canvas, duration, frame rate, seed, quality, and
+output mode; you cannot replace those flags in `options`. `--skip-mp4` is
+unavailable because the response requires an MP4 artifact.
+
+CLI and API video generation use the same Core preparation and execution
+operation. Video runtimes load for each request; they do not join a resident
+sidecar pool. One API request slot encloses preparation, generation, and
+artifact publication. Invalid video arguments and native settings return HTTP 400. Failed
+requests remove partial output, and successful responses retain the artifact.
+The HTTP response contains JSON; CLI progress and receipt flags do not create
+an HTTP event stream or command output.
 
 ## What it is for
 
@@ -414,6 +455,11 @@ swift run mere.run api serve \
   queued client cancellations are removed from the FIFO instead of being
   admitted later. Explicit runtime model load/unload maintenance shares the
   same queue.
+- A disconnected client cancels request preparation and active work. Admission
+  remains held until the operation finishes its cleanup, so the next request
+  cannot start while that cleanup is still using the runtime. Streaming response
+  producers keep their existing cancellation lifecycle after response handoff.
+  Cancellation remains cooperative at the runtime's supported checkpoints.
 - Machine admission complements rather than replaces `--max-active-requests`:
   the server's local limit controls request and batching concurrency inside its
   weighted machine reservation.
@@ -811,6 +857,15 @@ whole-image conditioning rather than strict masked inpainting.
 The normalized input and voice instructions may total at most 32 KiB of UTF-8
 text.
 
+`temperature` defaults to 0.6 and must be finite and between 0 and 2. `speed`
+defaults to 1 and accepts finite values from 0.25 through 4 for compatibility.
+The current Qwen3-TTS generator does not apply speed changes.
+
+Speech requests use the same validation, native generation, and PCM16 WAV
+export as offline `speech synthesize`. The API retains its resident model and
+request admission. It removes temporary audio files after materializing the
+response body, including partial transcoding output on failure.
+
 `POST /v1/audio/transcriptions` accepts multipart form fields:
 
 - `file`: required audio file part
@@ -841,6 +896,19 @@ default model ID (depth video also accepts its metric variant).
 - `resolution_level`: integer 0 through 9; defaults to 9
 - `token_count`: optional integer 1 through 3,600
 - `max_points`: optional positive point-count cap
+
+This route and `vision geometry` use the same validated settings and native
+operation. The derived patch grid must fit within 3,600 tokens after rounding;
+the CLI dry-run checks this limit too. The API retains its single request slot
+and creates a MoGe-2 runtime for each request. It awaits unloading before
+publishing the artifact response. See the
+[shared single-image geometry operation](../internals/geometry-generation-operation.md).
+
+The multiview geometry, TripoSR, InstantMesh, and video-depth routes also share
+Core operations with their CLI commands. The operations await runtime cleanup
+within the API's existing admission slot. HTTP handlers retain upload cleanup,
+failed-output removal, and artifact retention. See
+[shared vision generation operations](../internals/vision-generation-operations.md).
 
 `POST /v1/vision/geometry/multiview` accepts:
 

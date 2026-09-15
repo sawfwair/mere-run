@@ -7,9 +7,7 @@ import AudioCore
 import AudioCodecs
 import MereRunCore
 
-/// Owns the public Qwen3 TTS entrypoints and loaded runtime state.
-/// Model loading and generation internals live in companion files so the
-/// speech flow reads from entrypoint to implementation in a predictable order.
+/// Owns Qwen model state and the shared native style/clone waveform path.
 public actor Qwen3TTSGenerator: TTSGenerator {
     var talker: Qwen3TTSTalkerForConditionalGeneration?
     var speechTokenizer: Qwen3TTSSpeechTokenizer?
@@ -18,6 +16,7 @@ public actor Qwen3TTSGenerator: TTSGenerator {
     var modelConfig: Qwen3TTSModelConfig?
     var loadedModelPath: String?
     let modelId: String
+    private let streams = Stream.Context()
 
     public init(modelId: String = Qwen3TTSResources.defaultModelId) {
         self.modelId = modelId
@@ -30,69 +29,27 @@ public actor Qwen3TTSGenerator: TTSGenerator {
         try await generate(request, modelPath: nil, progressHandler: progressHandler)
     }
 
+    /// Preserves the public file-generation entry point through shared PCM16 export.
     public func generate(
         _ request: TTSRequest,
         modelPath: String?,
         progressHandler: (@Sendable (TTSProgress) -> Void)? = nil
     ) async throws -> TTSResult {
-        let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
+        let plan = try SpeechSynthesisPlan(request: request)
+        return try await SpeechSynthesisOperation.execute(
+            plan, executor: Qwen3TTSSynthesisExecutor(generator: self, modelPath: modelPath),
+            progressHandler: progressHandler
+        ).result
+    }
 
-        if loadedModelPath != rootURL.path {
-            progressHandler?(TTSProgress(stage: .loadingModel, message: "Loading Qwen3-TTS model..."))
-            try await loadModels(from: rootURL, progressHandler: progressHandler)
-        }
-
-        guard let talker, let speechTokenizer, let tokenizer, let modelConfig else {
-            throw Qwen3TTSError.modelsNotLoaded
-        }
-
-        if request.voiceMode == .clone {
-            let cloneMissing = Qwen3TTSResources(rootURL: rootURL).validateCloneAssets()
-            if !cloneMissing.isEmpty && speakerEncoder == nil {
-                throw Qwen3TTSError.cloneAssetsMissing(cloneMissing.map { $0.lastPathComponent })
-            }
-        }
-
-        let audio: MLXArray
-        switch request.voiceMode {
-        case .style:
-            progressHandler?(TTSProgress(stage: .tokenizing, message: "Preparing inputs..."))
-            audio = try generateVoiceDesign(
-                text: request.text,
-                language: request.language,
-                instruct: request.voiceDescription,
-                speakerHintTokens: nil,
-                referencePromptTokens: nil,
-                talker: talker,
-                tokenizer: tokenizer,
-                speechTokenizer: speechTokenizer,
-                config: modelConfig,
-                temperature: request.temperature,
-                progressHandler: progressHandler
-            )
-        case .clone:
-            audio = try generateVoiceClone(
-                request: request,
-                talker: talker,
-                tokenizer: tokenizer,
-                speechTokenizer: speechTokenizer,
-                speakerEncoder: speakerEncoder,
-                config: modelConfig,
-                progressHandler: progressHandler
-            )
-        }
-
-        progressHandler?(TTSProgress(stage: .saving, message: "Saving audio..."))
-        try SNACAudioWriter.writeWAV(audio, to: request.outputURL, sampleRate: modelConfig.sampleRate)
-
-        let duration = TimeInterval(audio.size) / TimeInterval(modelConfig.sampleRate)
-        Memory.clearCache()
-
-        return TTSResult(
-            audioURL: request.outputURL,
-            duration: duration,
-            sampleRate: modelConfig.sampleRate
-        )
+    /// Returns evaluated host samples. The shared operation owns file publication.
+    public func generateAudio(
+        _ request: TTSRequest,
+        modelPath: String? = nil,
+        progressHandler: (@Sendable (TTSProgress) -> Void)? = nil
+    ) async throws -> AudioWaveform {
+        let plan = try SpeechSynthesisPlan(request: request)
+        return try await synthesizeAudio(plan, modelPath: modelPath, progressHandler: progressHandler, continuation: nil)
     }
 
     nonisolated public func generateStream(
@@ -102,122 +59,124 @@ public actor Qwen3TTSGenerator: TTSGenerator {
         generateStream(request, options: options, modelPath: nil)
     }
 
+    /// Preserves the public sample-event stream. Use SpeechSynthesisOperation to publish a WAV.
     nonisolated public func generateStream(
         _ request: TTSRequest,
         options: TTSStreamingOptions,
         modelPath: String? = nil
     ) -> AsyncThrowingStream<TTSStreamingEvent, Error> {
         AsyncThrowingStream { continuation in
-            Task { [self] in
+            let task = Task { [self] in
                 do {
-                    try await streamGenerate(
-                        request: request,
-                        options: options,
-                        modelPath: modelPath,
-                        continuation: continuation
-                    )
+                    let plan = try SpeechSynthesisPlan(request: request, streamingOptions: options)
+                    let audio = try await synthesizeAudio(plan, modelPath: modelPath, progressHandler: nil, continuation: continuation)
+                    try Task.checkCancellation()
+                    continuation.yield(.completed(result: TTSResult(
+                        audioURL: request.outputURL, duration: audio.duration, sampleRate: audio.sampleRate
+                    )))
+                    continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
+            continuation.onTermination = { @Sendable reason in
+                if case .cancelled = reason { task.cancel() }
+            }
         }
     }
 
-    func streamGenerate(
-        request: TTSRequest,
-        options: TTSStreamingOptions,
+    private func synthesizeAudio(
+        _ plan: SpeechSynthesisPlan,
         modelPath: String?,
-        continuation: AsyncThrowingStream<TTSStreamingEvent, Error>.Continuation
-    ) async throws {
-        guard options.chunkTokenInterval > 0 else {
-            throw ASRStreamingError.invalidInput("chunkTokenInterval must be > 0.")
+        progressHandler: (@Sendable (TTSProgress) -> Void)?,
+        continuation: AsyncThrowingStream<TTSStreamingEvent, Error>.Continuation?
+    ) async throws -> AudioWaveform {
+        try plan.validateForExecution()
+        return try await Stream.withDefaultStream(streams) {
+            defer {
+                streams.synchronize()
+                Memory.clearCache()
+            }
+            let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
+            try Task.checkCancellation()
+            if loadedModelPath != rootURL.path {
+                progressHandler?(TTSProgress(stage: .loadingModel, message: "Loading Qwen3-TTS model..."))
+                try await loadModels(from: rootURL, progressHandler: progressHandler)
+            }
+            try Task.checkCancellation()
+            return try generateLoadedAudio(plan, rootURL: rootURL, progressHandler: progressHandler, continuation: continuation)
         }
+    }
 
-        let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: nil)
-        if loadedModelPath != rootURL.path {
-            try await loadModels(from: rootURL, progressHandler: nil)
-        }
-
+    private func generateLoadedAudio(
+        _ plan: SpeechSynthesisPlan,
+        rootURL: URL,
+        progressHandler: (@Sendable (TTSProgress) -> Void)?,
+        continuation: AsyncThrowingStream<TTSStreamingEvent, Error>.Continuation?
+    ) throws -> AudioWaveform {
         guard let talker, let speechTokenizer, let tokenizer, let modelConfig else {
             throw Qwen3TTSError.modelsNotLoaded
         }
-
+        let request = plan.request
         if request.voiceMode == .clone {
-            let cloneMissing = Qwen3TTSResources(rootURL: rootURL).validateCloneAssets()
-            if !cloneMissing.isEmpty && speakerEncoder == nil {
-                throw Qwen3TTSError.cloneAssetsMissing(cloneMissing.map { $0.lastPathComponent })
+            let missing = Qwen3TTSResources(rootURL: rootURL).validateCloneAssets()
+            if !missing.isEmpty && speakerEncoder == nil {
+                throw Qwen3TTSError.cloneAssetsMissing(missing.map { $0.lastPathComponent })
             }
         }
-
-        let onToken: ((Int) -> Void)? = options.emitTokenEvents
-            ? { tokenId in continuation.yield(.token(id: tokenId)) }
+        let onToken: ((Int) -> Void)? = plan.streamingOptions?.emitTokenEvents == true
+            ? { token in continuation?.yield(.token(id: token)) }
             : nil
-        let onAudioDelta: ([Float]) -> Void = { samples in
-            guard !samples.isEmpty else { return }
-            continuation.yield(.audioChunk(samples: samples, sampleRate: modelConfig.sampleRate))
+        let onAudioDelta: (([Float]) -> Void)? = continuation.map { continuation in
+            { samples in
+                if !samples.isEmpty {
+                    continuation.yield(.audioChunk(samples: samples, sampleRate: modelConfig.sampleRate))
+                }
+            }
         }
-
         let audio: MLXArray
         switch request.voiceMode {
         case .style:
+            progressHandler?(TTSProgress(stage: .tokenizing, message: "Preparing inputs..."))
             audio = try generateVoiceDesign(
-                text: request.text,
-                language: request.language,
-                instruct: request.voiceDescription,
-                speakerHintTokens: nil,
-                referencePromptTokens: nil,
-                talker: talker,
-                tokenizer: tokenizer,
-                speechTokenizer: speechTokenizer,
-                config: modelConfig,
-                temperature: request.temperature,
-                progressHandler: nil,
-                streamingChunkTokenInterval: options.chunkTokenInterval,
-                onToken: onToken,
-                onAudioDelta: onAudioDelta
+                text: request.text, language: request.language, instruct: request.voiceDescription,
+                speakerHintTokens: nil, referencePromptTokens: nil,
+                talker: talker, tokenizer: tokenizer, speechTokenizer: speechTokenizer, config: modelConfig,
+                temperature: request.temperature, progressHandler: progressHandler,
+                streamingChunkTokenInterval: plan.streamingOptions?.chunkTokenInterval,
+                onToken: onToken, onAudioDelta: onAudioDelta
             )
         case .clone:
             audio = try generateVoiceClone(
-                request: request,
-                talker: talker,
-                tokenizer: tokenizer,
-                speechTokenizer: speechTokenizer,
-                speakerEncoder: speakerEncoder,
-                config: modelConfig,
-                progressHandler: nil,
-                streamingChunkTokenInterval: options.chunkTokenInterval,
-                onToken: onToken,
-                onAudioDelta: onAudioDelta
+                request: request, talker: talker, tokenizer: tokenizer, speechTokenizer: speechTokenizer,
+                speakerEncoder: speakerEncoder, config: modelConfig, progressHandler: progressHandler,
+                streamingChunkTokenInterval: plan.streamingOptions?.chunkTokenInterval,
+                onToken: onToken, onAudioDelta: onAudioDelta
             )
         }
-
-        let duration = TimeInterval(audio.size) / TimeInterval(modelConfig.sampleRate)
-        Memory.clearCache()
-
-        continuation.yield(
-            .completed(
-                result: TTSResult(
-                    audioURL: request.outputURL,
-                    duration: duration,
-                    sampleRate: modelConfig.sampleRate
-                )
-            )
-        )
-        continuation.finish()
+        try Task.checkCancellation()
+        MLX.eval(audio)
+        return try AudioWaveform(interleaved: audio.reshaped(-1).asArray(Float.self), channels: 1, sampleRate: modelConfig.sampleRate)
     }
 
     public func prepare(
         modelPath: String? = nil,
         progressHandler: (@Sendable (TTSProgress) -> Void)? = nil
     ) async throws {
-        let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
-        if loadedModelPath != rootURL.path {
-            progressHandler?(TTSProgress(stage: .loadingModel, message: "Loading Qwen3-TTS model..."))
-            try await loadModels(from: rootURL, progressHandler: progressHandler)
+        try Task.checkCancellation()
+        try await Stream.withDefaultStream(streams) {
+            defer { streams.synchronize() }
+            let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
+            try Task.checkCancellation()
+            if loadedModelPath != rootURL.path {
+                progressHandler?(TTSProgress(stage: .loadingModel, message: "Loading Qwen3-TTS model..."))
+                try await loadModels(from: rootURL, progressHandler: progressHandler)
+            }
         }
     }
 
     public func unload() {
+        streams.synchronize()
         talker = nil
         speechTokenizer = nil
         speakerEncoder = nil

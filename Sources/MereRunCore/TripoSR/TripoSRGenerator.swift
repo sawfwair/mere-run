@@ -119,11 +119,12 @@ public actor TripoSRGenerator {
         outputDirectory: URL,
         model requestedModel: String? = nil,
         foregroundPolicy: TripoSRForegroundPolicy = .automaticTransparentAlpha(),
-        extractionResolution: Int = 256,
+        extractionResolution: Int = TripoSRGenerationSettings.defaultResolution,
         densityThreshold: Float = TripoSRConfiguration.production.densityThreshold,
         includeVertexColors: Bool = true,
         progress: (@Sendable (TripoSRProgress) -> Void)? = nil
     ) async throws -> TripoSRRunResult {
+        try Task.checkCancellation()
         let inputURL = imageURL.standardizedFileURL
         guard FileManager.default.fileExists(atPath: inputURL.path) else {
             throw TripoSRGeneratorError.inputImageNotFound(inputURL.path)
@@ -134,12 +135,20 @@ public actor TripoSRGenerator {
         let admittedInput = try VFXImageInputSnapshotBatch.capture([inputURL])
         defer { admittedInput.cleanup() }
         let snapshotURL = admittedInput.snapshotURLs[0]
-        guard (2...512).contains(extractionResolution) else {
-            throw TripoSRGeneratorError.invalidExtractionResolution(extractionResolution)
+        let ratio: Float
+        let alreadyFramed: Bool
+        switch foregroundPolicy {
+        case .automaticTransparentAlpha(let value):
+            ratio = value
+            alreadyFramed = false
+        case .alreadyFramed:
+            ratio = TripoSRGenerationSettings.defaultForegroundRatio
+            alreadyFramed = true
         }
-        guard densityThreshold.isFinite else {
-            throw TripoSRGeneratorError.invalidDensityThreshold(densityThreshold)
-        }
+        _ = try TripoSRGenerationSettings(
+            extractionResolution: extractionResolution, densityThreshold: densityThreshold,
+            foregroundRatio: ratio, alreadyFramed: alreadyFramed, includesVertexColors: includeVertexColors
+        )
         let foregroundPolicyName: String
         let foregroundRatio: Float?
         switch foregroundPolicy {
@@ -174,17 +183,20 @@ public actor TripoSRGenerator {
         )
         let preprocessingSeconds = Date().timeIntervalSince(preprocessingStart)
 
+        try Task.checkCancellation()
         progress?(.loadingModel)
         let loadStart = Date()
         let nativeModel = try loadModelIfNeeded(checkpoint)
         let modelLoadSeconds = Date().timeIntervalSince(loadStart)
 
+        try Task.checkCancellation()
         progress?(.encodingScene)
         let encodingStart = Date()
         let sceneCode = nativeModel(prepared.image)
         MLX.eval(sceneCode.planes)
         let sceneEncodingSeconds = Date().timeIntervalSince(encodingStart)
 
+        try Task.checkCancellation()
         progress?(.extractingMesh)
         let extractionStart = Date()
         let mesh = try TripoSRIsosurfaceExtractor.extractMesh(
@@ -198,6 +210,7 @@ public actor TripoSRGenerator {
         )
         let meshExtractionSeconds = Date().timeIntervalSince(extractionStart)
 
+        try Task.checkCancellation()
         progress?(.exportingAssets)
         let exportStart = Date()
         let export = try TripoSRAssetExporter.export(

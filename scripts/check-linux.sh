@@ -83,6 +83,7 @@ check_linux_package_view() {
 
 bash ./scripts/check-evaluation-boundary.sh
 bash ./scripts/check-docs-examples.sh
+bash ./scripts/check-package-policy.sh
 
 if [[ "$manifest_only" == "1" ]]; then
   check_linux_package_view

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 /// Defaults are an entry-point compatibility policy. Explicit values take
 /// precedence independently; JSON output always suppresses thinking output.
@@ -97,12 +98,8 @@ public enum ChatRequestResolver {
         guard !request.messages.isEmpty else {
             throw ChatRequestIssue("messages", "must contain at least one message")
         }
-        let upperBound = min(request.maxContextTokens ?? Int(Int32.max), Int(Int32.max))
-        guard upperBound > 0 else {
-            throw ChatRequestIssue("context_size", "must be greater than zero")
-        }
-        guard (1...upperBound).contains(request.maxTokens) else {
-            throw ChatRequestIssue("max_tokens", "must be between 1 and \(upperBound)")
+        if let issue = TextChatTokenBudget.issue(maxTokens: request.maxTokens, contextSize: request.maxContextTokens) {
+            throw ChatRequestIssue(issue.field, issue.message)
         }
         for (field, value, range) in [
             ("temperature", request.temperature, 0.0...2.0),

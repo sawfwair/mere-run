@@ -134,9 +134,10 @@ public actor DepthAnything3Generator {
         model requestedModel: String? = nil,
         knownCameras: [DepthAnything3KnownCamera]? = nil,
         referenceViewStrategy: DepthAnything3ReferenceViewStrategy = .saddleBalanced,
-        processResolution: Int = 504,
+        processResolution: Int = DepthAnything3GenerationSettings.defaultProcessResolution,
         progress: (@Sendable (DepthAnything3Progress) -> Void)? = nil
     ) async throws -> DepthAnything3RunResult {
+        try Task.checkCancellation()
         guard !imageURLs.isEmpty else { throw DepthAnything3GeneratorError.noImages }
         try DepthAnything3Limits.validateRequest(
             viewCount: imageURLs.count,
@@ -165,29 +166,14 @@ public actor DepthAnything3Generator {
             (width: $0.width, height: $0.height)
         }
         try DepthAnything3Limits.validateSourceDimensions(sourceDimensions)
-        if let knownCameras {
-            for index in knownCameras.indices {
-                try DepthAnything3CameraValidation.validate(knownCameras[index], index: index)
-                let size = sourceDimensions[index]
-                let intrinsics = knownCameras[index].intrinsics
-                guard intrinsics.imageWidth == size.width,
-                      intrinsics.imageHeight == size.height else {
-                    throw DepthAnything3PreprocessingError.cameraImageDimensionMismatch(
-                        index: index,
-                        expectedWidth: size.width,
-                        expectedHeight: size.height,
-                        actualWidth: intrinsics.imageWidth,
-                        actualHeight: intrinsics.imageHeight
-                    )
-                }
-            }
-        }
+        try DepthAnything3CameraValidation.validate(knownCameras, sourceDimensions: sourceDimensions)
 
         progress?(.verifyingCheckpoint)
         let verificationStart = Date()
         let checkpoint = try await DepthAnything3Resources.resolve(requestedModel: requestedModel)
         let checkpointVerificationSeconds = Date().timeIntervalSince(verificationStart)
 
+        try Task.checkCancellation()
         progress?(.decodingImages)
         let decodingStart = Date()
         let inputIdentities = admittedInputs.inputRecords.map(DepthAnything3InputIdentity.init)
@@ -208,11 +194,13 @@ public actor DepthAnything3Generator {
         )
         let preprocessingSeconds = Date().timeIntervalSince(preprocessingStart)
 
+        try Task.checkCancellation()
         progress?(.loadingModel)
         let loadStart = Date()
         let nativeModel = try loadModelIfNeeded(checkpoint)
         let modelLoadSeconds = Date().timeIntervalSince(loadStart)
 
+        try Task.checkCancellation()
         progress?(.runningInference)
         let inferenceStart = Date()
         let raw = nativeModel(
@@ -230,6 +218,7 @@ public actor DepthAnything3Generator {
         )
         let inferenceSeconds = Date().timeIntervalSince(inferenceStart)
 
+        try Task.checkCancellation()
         progress?(.postprocessingGeometry)
         let postprocessingStart = Date()
         let processed = try DepthAnything3Postprocessor.process(

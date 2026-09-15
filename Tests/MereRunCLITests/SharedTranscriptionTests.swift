@@ -26,6 +26,30 @@ final class SharedTranscriptionTests: XCTestCase {
         }
     }
 
+    func testExplicitModelIDsNeverBorrowAnInstalledDefaultCheckpoint() throws {
+        let audio = try audioFixture()
+        let root = try temporaryDirectory()
+        MereRunModelPaths.setProcessModelsDirOverride(root)
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+        for (id, backend, otherID) in [
+            (Qwen3ASRResources.defaultModelId, ASRBackend.qwen, "fixture/custom-qwen-asr"),
+            (ParakeetResources.defaultModelId, ASRBackend.parakeet, "fixture/custom-parakeet-asr")
+        ] {
+            let installed = MereRunModelPaths.modelDir(id)
+            try FileManager.default.createDirectory(at: installed, withIntermediateDirectories: true)
+            try Data("{}".utf8).write(to: installed.appendingPathComponent("config.json"))
+            let builtIn = try SpeechTranscriptionResolver.resolve(
+                request: .init(audioURL: audio, language: "en"), preferredBackend: backend, modelOverride: id
+            )
+            XCTAssertEqual(builtIn.modelPath, installed.path)
+            let explicit = try SpeechTranscriptionResolver.resolve(
+                request: .init(audioURL: audio, language: "en"), preferredBackend: backend, modelOverride: otherID
+            )
+            XCTAssertEqual(explicit.modelID, otherID)
+            XCTAssertNil(explicit.modelPath, "An explicit model ID must reach native resolution instead of loading the default weights")
+        }
+    }
+
     func testTranslationSwitchesBothBackendAndBuiltInModelIdentity() throws {
         let audio = try audioFixture()
         let request = ASRRequest(audioURL: audio, language: "en", task: .translate)

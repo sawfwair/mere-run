@@ -1,3 +1,4 @@
+import AudioCore
 import Foundation
 import MLX
 import MLXNN
@@ -189,59 +190,12 @@ public enum SNACAudioTokenParser {
 
 // MARK: - Audio Utilities
 
+/// Compatibility entry point for callers that already hold an MLX waveform.
+/// Speech operations use AudioExportService directly after native decoding.
 public enum SNACAudioWriter {
-    /// Write audio samples to WAV file
-    /// - Parameters:
-    ///   - samples: Audio samples in range [-1, 1]
-    ///   - url: Output URL for WAV file
-    ///   - sampleRate: Sample rate (default 24000 for SNAC)
     public static func writeWAV(_ samples: MLXArray, to url: URL, sampleRate: Int = 24000) throws {
-        // Evaluate and get samples
         MLX.eval(samples)
-        let flatSamples = samples.reshaped(-1).asArray(Float.self)
-
-        // Convert to 16-bit PCM
-        let int16Samples = flatSamples.map { sample -> Int16 in
-            let clamped = max(-1.0, min(1.0, sample))
-            return Int16(clamped * 32767.0)
-        }
-
-        // Build WAV file
-        var data = Data()
-
-        // RIFF header
-        data.append(contentsOf: "RIFF".utf8)
-        let fileSize = UInt32(36 + int16Samples.count * 2)
-        data.append(contentsOf: withUnsafeBytes(of: fileSize.littleEndian) { Array($0) })
-        data.append(contentsOf: "WAVE".utf8)
-
-        // Format chunk
-        data.append(contentsOf: "fmt ".utf8)
-        let fmtSize = UInt32(16)
-        data.append(contentsOf: withUnsafeBytes(of: fmtSize.littleEndian) { Array($0) })
-        let audioFormat = UInt16(1)  // PCM
-        data.append(contentsOf: withUnsafeBytes(of: audioFormat.littleEndian) { Array($0) })
-        let numChannels = UInt16(1)  // Mono
-        data.append(contentsOf: withUnsafeBytes(of: numChannels.littleEndian) { Array($0) })
-        let sampleRateU32 = UInt32(sampleRate)
-        data.append(contentsOf: withUnsafeBytes(of: sampleRateU32.littleEndian) { Array($0) })
-        let byteRate = UInt32(sampleRate * 2)  // sampleRate * numChannels * bytesPerSample
-        data.append(contentsOf: withUnsafeBytes(of: byteRate.littleEndian) { Array($0) })
-        let blockAlign = UInt16(2)  // numChannels * bytesPerSample
-        data.append(contentsOf: withUnsafeBytes(of: blockAlign.littleEndian) { Array($0) })
-        let bitsPerSample = UInt16(16)
-        data.append(contentsOf: withUnsafeBytes(of: bitsPerSample.littleEndian) { Array($0) })
-
-        // Data chunk
-        data.append(contentsOf: "data".utf8)
-        let dataSize = UInt32(int16Samples.count * 2)
-        data.append(contentsOf: withUnsafeBytes(of: dataSize.littleEndian) { Array($0) })
-
-        // Audio samples
-        for sample in int16Samples {
-            data.append(contentsOf: withUnsafeBytes(of: sample.littleEndian) { Array($0) })
-        }
-
-        try data.write(to: url)
+        let waveform = try AudioWaveform(interleaved: samples.reshaped(-1).asArray(Float.self), channels: 1, sampleRate: sampleRate)
+        _ = try AudioExportService.write(waveform, plan: AudioExportPlan(options: .referencePCM16), to: url)
     }
 }

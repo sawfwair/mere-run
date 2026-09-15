@@ -21,7 +21,19 @@ For the broader documentation set, start at the
 If you want to understand what a command does end to end, start at the command
 file, and then use the table to open the family entry point.
 
+## Catalogs and contracts
+
+Read [catalog and contract ownership](./internals/catalog-contracts.md) before
+changing model discovery, shell capability metadata, or API translation. Model
+definitions and profiles stay in Core; capability schemas and definitions stay
+in Contract; API transport policy and response construction stay in the CLI.
+
 ## Durable operation history
+
+For macOS task state and request preparation, read
+[Studio prompt workspace ownership](./internals/studio-prompt-workspace.md).
+Studio's prompt controller consumes the CLI contract and submits through the
+existing job store.
 
 `MereRunExecution` owns run-directory leases, file fingerprints, atomic record
 writes, and terminal states. Core owns image records; AudioCore owns file
@@ -36,6 +48,13 @@ Read [shared chat execution](./internals/chat-execution.md) for request resoluti
 native runtime selection, and cleanup. Core owns the common request and
 generation path. CLI and API adapters own presentation, tool authorization,
 wire compatibility, and admission or model-residency scope.
+
+## Shared text training
+
+Read [shared text training](./internals/text-training-execution.md) for typed
+options, dataset preparation, native pipeline dispatch, and manifest publication.
+The CLI owns presentation and the optional dashboard; native trainers retain
+optimizer and checkpoint behavior.
 
 ## Shared autoregressive decoding
 
@@ -61,11 +80,38 @@ and cache implementations live in `Sources/MereRunGemmaModel`.
 
 ## H3 video and Laguna text models
 
+For `video generate`, start with `VideoGenerationOptions` and
+`VideoGenerationPlan` in Core. Core depends on `MereRunContract` for the existing
+public quality, output-mode, and variant enums. The plans own model selection, option validation,
+geometry, seed defaults, and native request construction for LTX, H3, and Wan.
+LTX and H3 preparation resolves adapter metadata and compatibility without
+loading tensors. CLI preflight uses these same owners. The CLI and video API
+call `VideoGenerationOperation` for preparation, native execution, unloading,
+and media output. Their adapters retain admission and presentation. See the
+[shared video generation operation](./internals/video-generation-operation.md).
+
 Read [H3 and Laguna runtime boundaries](./internals/h3-laguna-runtime-boundaries.md)
 for model ownership, generator stages, shared vocoder layers, and validation.
 H3 computation lives in `Sources/MereRunH3Model`; Laguna computation lives in
 `Sources/MereRunLagunaModel`. Their Core generator extensions own loading,
 request execution, conditioning or batching, and cleanup.
+
+## Single-image geometry
+
+`vision geometry` and its API route use Core's `MoGe2GenerationOperation` for
+validated settings, token-grid planning, execution, and awaited unloading.
+The native generator owns immutable input snapshots, pinned weights, model
+computation, and geometry export. Read the
+[shared single-image geometry operation](./internals/geometry-generation-operation.md)
+for caller admission, transport policy, cancellation, and validation boundaries.
+
+## Reconstruction and video depth
+
+TripoSR, InstantMesh, Depth Anything 3, and Video Depth Anything use Core
+operations for shared CLI/API settings, preparation, execution, and awaited
+cleanup. DA3 also owns scene export. Read the
+[shared vision generation operations](./internals/vision-generation-operations.md)
+for input snapshots, camera validation, transport policy, and acceptance boundaries.
 
 ## Image families
 
@@ -150,6 +196,9 @@ the dependency map. Qwen ASR, Qwen TTS, Parakeet, and Sortformer build independe
 
 Speech synthesis command path:
 
+- [Shared synthesis](./internals/speech-synthesis-operation.md): validated plans,
+  waveform execution, and WAV publication in `AudioCore`
+- Model selection and native adapter: `Sources/AudioTTS/Qwen3TTS/SpeechSynthesisModelSelection.swift`
 - CLI: `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
 - Runtime entry point: `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator.swift`
 - Read next:

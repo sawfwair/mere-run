@@ -182,6 +182,7 @@ public actor LFM2Generator: ChatGenerator {
     private var totalBatchedRows = 0
     private var maxObservedBatchSize = 0
     private var latestDSparkStats = LFM2DSparkStats()
+    private var availableStreamContexts: [MLX.Stream.Context] = []
 
     public init(
         modelId: String = LFM2Resources.defaultModelId,
@@ -207,7 +208,7 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String?,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        try await Stream.withNewDefaultStream {
+        try await withRequestStream {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -239,7 +240,7 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Stream.withNewDefaultStream {
+        try await withRequestStream {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -250,6 +251,19 @@ public actor LFM2Generator: ChatGenerator {
 
     public func unload() {
         beginResidencyTransition()
+    }
+
+    /// Each active request owns a context across actor suspensions. Reuse completed
+    /// contexts because MLX retains backend streams until the process exits.
+    func withRequestStream<Result>(
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        let context = availableStreamContexts.popLast() ?? MLX.Stream.Context()
+        defer {
+            context.synchronize()
+            availableStreamContexts.append(context)
+        }
+        return try await Stream.withDefaultStream(context, operation)
     }
 
     public func continuousBatchingStats() -> LFM2ContinuousBatchingStats {
@@ -607,6 +621,8 @@ public actor LFM2Generator: ChatGenerator {
         let tokenBudget = max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
+        let generationStream = LFM2GenerationStream(showThinking: request.showThinking, handler: progressHandler)
+        generationStream.accept(ChatProgress(stage: .generating, message: tokenizerAndTemplate.generationPromptSuffix))
         let decodeResult: LFM2DecodeResult
         if let dspark,
            let draftCache,
@@ -627,7 +643,7 @@ public actor LFM2Generator: ChatGenerator {
                 historySeedTokens: promptTokens,
                 decodeToken: { tokenizerAndTemplate.decode(token: $0) },
                 emitPiece: { _, piece in
-                    progressHandler?(ChatProgress(stage: .generating, message: piece))
+                    generationStream.accept(ChatProgress(stage: .generating, message: piece))
                 },
                 checkCancellation: { try Task.checkCancellation() }
             )
@@ -681,9 +697,11 @@ public actor LFM2Generator: ChatGenerator {
                 prefillTokenCount: promptTokens.count,
                 promptTokens: promptTokens,
                 residencyEpoch: residencyEpoch,
-                progressHandler: progressHandler
+                progressHandler: generationStream.accept
             )
         }
+
+        generationStream.finish()
 
         let decoded = tokenizerAndTemplate.decode(tokens: decodeResult.generatedTokens)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -693,7 +711,7 @@ public actor LFM2Generator: ChatGenerator {
         }() : nil
 
         return ChatResponse(
-            generatedText: decoded,
+            generatedText: tokenizerAndTemplate.generationPromptSuffix + decoded,
             tokensGenerated: decodeResult.generatedTokens.count,
             showThinking: request.showThinking,
             timing: ChatTiming(
@@ -711,6 +729,7 @@ public actor LFM2Generator: ChatGenerator {
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,
+            finishReason: decodeResult.generatedTokens.count >= tokenBudget ? .length : .stop,
             acceleration: decodeResult.acceleration
         )
     }

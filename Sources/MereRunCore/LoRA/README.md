@@ -7,3 +7,9 @@ This directory owns LoRA checkpoint loading, artifact management, and compatibil
 - compatibility helpers adapt external or legacy formats into mere.run's canonical shape
 
 This area is boundary-heavy. Prefer typed compatibility structs and narrow shims over pushing raw JSON dictionaries deeper into the runtime.
+
+`ImageLoRATrainingOptions` owns image recipe and training-option resolution.
+`ImageLoRATrainingPlan` prepares model metadata, datasets, and native trainer
+configurations. `ImageLoRATrainingOperation` owns dispatch and preview execution;
+callers own machine admission, dashboard tasks, and console output. See
+[shared image training execution](../../../docs/internals/image-training-execution.md).

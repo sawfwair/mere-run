@@ -50,11 +50,12 @@ public enum ImageGenerationOperation {
             try recording?.succeed(outcome)
             eventHandler?(.succeeded(outcome))
             return outcome
-        } catch is CancellationError {
-            try recording?.fail(CancellationError())
-            eventHandler?(.cancelled(id))
-            throw CancellationError()
         } catch {
+            if error is CancellationError || Task.isCancelled {
+                try recording?.fail(CancellationError())
+                eventHandler?(.cancelled(id))
+                throw CancellationError()
+            }
             try recording?.fail(error)
             let issue = error as? ImageGenerationIssue
                 ?? ImageGenerationIssue("generation_failed", error.localizedDescription)

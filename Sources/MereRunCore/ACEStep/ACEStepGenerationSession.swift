@@ -188,6 +188,7 @@ public final class ACEStepGenerationSession: @unchecked Sendable {
         var candidates: [ACEStepGeneratedCandidate] = []
         candidates.reserveCapacity(candidateCount)
         for index in 0..<candidateCount {
+            try Task.checkCancellation()
             let seed = baseSeed &+ UInt64(index)
             var candidateRequest = request
             candidateRequest.config.seed = seed

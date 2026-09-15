@@ -1,3 +1,4 @@
+import AudioCore
 import ArgumentParser
 import Foundation
 import Hummingbird
@@ -128,16 +129,12 @@ struct MusicServe: AsyncParsableCommand {
             "Loading resident ACE-Step \(variant.rawValue) session with planner \(lm.source)\n"
         )
         let resources = try await container.resources()
-        let pipeline = try ACEStepPipeline(
-            decoderResources: resources.decoderResources,
-            vaeResources: resources.vaeResources,
-            lmResources: resources.lmResources,
-            textEncoderResources: resources.textEncoderResources
-        )
-        let loadedAdapters = try loadAdapters(into: pipeline)
+        let runtime = ACEStepMusicRuntime(resources: resources, variant: variant)
+        let loadedAdapters = try await runtime.perform { operation in
+            try loadAdapters(into: operation.session.pipeline)
+        }
         let server = MusicAPIServer(
-            session: ACEStepGenerationSession(pipeline: pipeline),
-            pipeline: pipeline,
+            runtime: runtime,
             variant: variant,
             modelID: model,
             languageModelAvailable: true,
@@ -328,6 +325,63 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
     var vaeChunkSize: Int?
     var vaeOverlap: Int?
     var responseFormat: String?
+    var export: AudioExportOverrides?
+
+    func generationOptions() -> ACEStepGenerationOptions {
+        var options = ACEStepGenerationOptions(prompt: prompt)
+        options.lyrics = lyrics
+        options.instrumental = instrumental
+        options.instruction = instruction
+        options.durationSeconds = durationSeconds
+        options.quality = quality
+        options.task = task
+        options.seed = seed
+        options.retakeSeed = retakeSeed
+        options.retakeVariance = retakeVariance
+        options.candidates = candidates
+        options.steps = steps
+        options.shift = shift
+        options.inferMethod = inferMethod
+        options.guidanceScale = guidanceScale
+        options.guidanceMode = guidanceMode
+        options.cfgIntervalStart = cfgIntervalStart
+        options.cfgIntervalEnd = cfgIntervalEnd
+        options.velocityNormThreshold = velocityNormThreshold
+        options.velocityEMAFactor = velocityEMAFactor
+        options.sampler = sampler
+        options.useLanguageModel = useLanguageModel
+        options.lmTopK = lmTopK
+        options.lmTopP = lmTopP
+        options.lmTemperature = lmTemperature
+        options.lmRepetitionPenalty = lmRepetitionPenalty
+        options.lmCFGScale = lmCFGScale
+        options.lmNegativePrompt = lmNegativePrompt
+        options.bpm = bpm
+        options.keyscale = keyscale
+        options.metadataLanguage = metadataLanguage
+        options.timeSignature = timeSignature
+        options.vocalLanguage = vocalLanguage
+        options.sourceAudioPath = sourceAudioPath
+        options.referenceAudioPaths = referenceAudioPaths
+        options.audioCoverStrength = audioCoverStrength
+        options.coverNoiseStrength = coverNoiseStrength
+        options.sourceCaption = sourceCaption
+        options.sourceLyrics = sourceLyrics
+        options.flowEditNMin = flowEditNMin
+        options.flowEditNMax = flowEditNMax
+        options.flowEditNAverage = flowEditNAverage
+        options.trackName = trackName
+        options.completeTrackClasses = completeTrackClasses
+        options.repaintStartSeconds = repaintStartSeconds
+        options.repaintEndSeconds = repaintEndSeconds
+        options.chunkMaskMode = chunkMaskMode
+        options.repaintMode = repaintMode
+        options.repaintStrength = repaintStrength
+        options.useTiledVAEDecode = useTiledVAEDecode
+        options.vaeChunkSize = vaeChunkSize
+        options.vaeOverlap = vaeOverlap
+        return options
+    }
 
     enum CodingKeys: String, CodingKey {
         case model
@@ -384,6 +438,7 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
         case vaeChunkSize = "vae_chunk_size"
         case vaeOverlap = "vae_overlap"
         case responseFormat = "response_format"
+        case export
     }
 }
 
@@ -453,17 +508,8 @@ private struct MusicAPIBatchResponse: Codable {
     var data: [MusicAPIGenerationResponse]
 }
 
-private struct PreparedMusicAPIRequest {
-    var request: ACEStepSessionRequest
-    var quality: ACEStepQualityPreset
-    var task: ACEStepTask
-    var candidateCount: Int
-    var conditioningMetadata: ACEStepRecipeConditioningMetadata
-}
-
 private final class MusicAPIServer: @unchecked Sendable {
-    let session: ACEStepGenerationSession
-    let pipeline: ACEStepPipeline
+    let runtime: ACEStepMusicRuntime
     let variant: ACEStepCheckpointVariant
     let modelID: String
     let languageModelAvailable: Bool
@@ -472,8 +518,7 @@ private final class MusicAPIServer: @unchecked Sendable {
     let apiKey: String?
 
     init(
-        session: ACEStepGenerationSession,
-        pipeline: ACEStepPipeline,
+        runtime: ACEStepMusicRuntime,
         variant: ACEStepCheckpointVariant,
         modelID: String,
         languageModelAvailable: Bool,
@@ -481,8 +526,7 @@ private final class MusicAPIServer: @unchecked Sendable {
         adapters: [ACEStepAdapterDescriptor],
         apiKey: String?
     ) {
-        self.session = session
-        self.pipeline = pipeline
+        self.runtime = runtime
         self.variant = variant
         self.modelID = modelID
         self.languageModelAvailable = languageModelAvailable
@@ -537,25 +581,21 @@ private final class MusicAPIServer: @unchecked Sendable {
                 MusicAPIGenerationRequest.self,
                 from: request
             )
-            let prepared = try prepare(payload)
-            let ranked = try session.generateBest(
-                prepared.request,
-                candidateCount: prepared.candidateCount
-            )
-            if payload.responseFormat?.lowercased() == "wav" {
-                let data = try ACEStepWAVWriter.wavData(
-                    ranked.best.audio,
-                    sampleRate: 48_000
-                )
-                return Response(
-                    status: .ok,
-                    headers: [.contentType: "audio/wav"],
-                    body: .init(byteBuffer: ByteBuffer(bytes: data))
-                )
+            let exportPlan = try validateTransport(payload)
+            return try await runtime.perform { operation in
+                let prepared = try operation.prepare(payload.generationOptions())
+                let ranked = try operation.generate(prepared)
+                if payload.responseFormat?.lowercased() == "wav" {
+                    let data = try AudioExportService.data(
+                        MusicWaveformAdapter.aceStep(ranked.best.audio), plan: exportPlan
+                    ).data
+                    return Response(
+                        status: .ok, headers: [.contentType: "audio/wav"],
+                        body: .init(byteBuffer: ByteBuffer(bytes: data))
+                    )
+                }
+                return try jsonResponse(try response(for: ranked, prepared: prepared, exportPlan: exportPlan))
             }
-            return try jsonResponse(
-                try response(for: ranked, prepared: prepared)
-            )
         } catch {
             return errorResponse(
                 status: .badRequest,
@@ -580,15 +620,14 @@ private final class MusicAPIServer: @unchecked Sendable {
                     "Batch requests support response_format=json only."
                 )
             }
-            let prepared = try payload.requests.map(prepare)
-            let ranked = try session.generateBatch(
-                prepared.map(\.request),
-                candidateCounts: prepared.map(\.candidateCount)
-            )
-            let responses = try zip(ranked, prepared).map {
-                try response(for: $0.0, prepared: $0.1)
+            let exportPlans = try payload.requests.map(validateTransport)
+            return try await runtime.perform { operation in
+                let prepared = try payload.requests.map { try operation.prepare($0.generationOptions()) }
+                let responses = try zip(prepared, exportPlans).map { plan, exportPlan in
+                    try response(for: operation.generate(plan), prepared: plan, exportPlan: exportPlan)
+                }
+                return try jsonResponse(MusicAPIBatchResponse(data: responses))
             }
-            return try jsonResponse(MusicAPIBatchResponse(data: responses))
         } catch {
             return errorResponse(
                 status: .badRequest,
@@ -597,343 +636,39 @@ private final class MusicAPIServer: @unchecked Sendable {
         }
     }
 
-    private func prepare(
-        _ payload: MusicAPIGenerationRequest
-    ) throws -> PreparedMusicAPIRequest {
-        let prompt = payload.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty else {
-            throw ValidationError("prompt must not be empty.")
+    private func validateTransport(_ payload: MusicAPIGenerationRequest) throws -> AudioExportPlan {
+        if let requestedModel = payload.model, requestedModel != modelID {
+            throw ValidationError("Resident music API loaded '\(modelID)', not '\(requestedModel)'.")
         }
-        if let requestedModel = payload.model,
-           requestedModel != modelID
-        {
-            throw ValidationError(
-                "Resident music API loaded '\(modelID)', not "
-                    + "'\(requestedModel)'."
-            )
-        }
-        let task = payload.task ?? .textToMusic
-        try variant.validate(task)
-        let quality = payload.quality ?? .song
-        let defaults = quality.defaults(for: variant, task: task)
-        let candidates = payload.candidates ?? defaults.candidateCount
-        guard (1...16).contains(candidates) else {
-            throw ValidationError("candidates must be between 1 and 16.")
-        }
-        let steps = payload.steps ?? defaults.inferenceSteps
-        guard steps >= 1 else {
-            throw ValidationError("steps must be at least 1.")
-        }
-        let shift = payload.shift ?? defaults.shift
-        guard shift > 0 else {
-            throw ValidationError("shift must be greater than 0.")
-        }
-        let guidanceScale = payload.guidanceScale ?? defaults.guidanceScale
-        guard guidanceScale >= 1 else {
-            throw ValidationError("guidance_scale must be at least 1.")
-        }
-        let cfgIntervalStart = payload.cfgIntervalStart ?? 0
-        let cfgIntervalEnd = payload.cfgIntervalEnd ?? 1
-        guard (0...1).contains(cfgIntervalStart),
-              (0...1).contains(cfgIntervalEnd),
-              cfgIntervalStart <= cfgIntervalEnd
-        else {
-            throw ValidationError(
-                "CFG intervals require 0 <= cfg_interval_start "
-                    + "<= cfg_interval_end <= 1."
-            )
-        }
-        let velocityNormThreshold = payload.velocityNormThreshold
-            ?? defaults.velocityNormThreshold
-        guard velocityNormThreshold >= 0 else {
-            throw ValidationError(
-                "velocity_norm_threshold must be nonnegative."
-            )
-        }
-        let velocityEMAFactor = payload.velocityEMAFactor
-            ?? defaults.velocityEMAFactor
-        guard (0..<1).contains(velocityEMAFactor) else {
-            throw ValidationError(
-                "velocity_ema_factor must be in [0, 1)."
-            )
-        }
-        let audioCoverStrength = payload.audioCoverStrength ?? 1
-        guard (0...1).contains(audioCoverStrength) else {
-            throw ValidationError(
-                "audio_cover_strength must be between 0 and 1."
-            )
-        }
-        let coverNoiseStrength = payload.coverNoiseStrength ?? 0
-        guard (0...1).contains(coverNoiseStrength) else {
-            throw ValidationError(
-                "cover_noise_strength must be between 0 and 1."
-            )
-        }
-        let retakeVariance = payload.retakeVariance ?? 0
-        guard (0...1).contains(retakeVariance) else {
-            throw ValidationError(
-                "retake_variance must be between 0 and 1."
-            )
-        }
-        let repaintStart = payload.repaintStartSeconds ?? 0
-        let repaintEnd = payload.repaintEndSeconds ?? -1
-        guard repaintStart >= 0,
-              repaintEnd == -1 || repaintEnd > repaintStart
-        else {
-            throw ValidationError(
-                "repaint range requires a nonnegative start and an end "
-                    + "greater than the start, or -1."
-            )
-        }
-        let repaintStrength = payload.repaintStrength ?? 0.5
-        guard (0...1).contains(repaintStrength) else {
-            throw ValidationError(
-                "repaint_strength must be between 0 and 1."
-            )
-        }
-        let lmTopK = payload.lmTopK ?? 0
-        let lmTopP = payload.lmTopP ?? 0.9
-        let lmTemperature = payload.lmTemperature ?? 0.85
-        let lmRepetitionPenalty = payload.lmRepetitionPenalty ?? 1.0
-        let lmCFGScale = payload.lmCFGScale ?? 2.0
-        let lmNegativePrompt = payload.lmNegativePrompt ?? "NO USER INPUT"
-        guard lmTopK >= 0,
-              (0...1).contains(lmTopP),
-              (0...2).contains(lmTemperature),
-              lmRepetitionPenalty > 0,
-              lmCFGScale >= 1,
-              lmCFGScale.isFinite
-        else {
-            throw ValidationError(
-                "LM sampling requires lm_top_k >= 0, lm_top_p in [0, 1], "
-                    + "lm_temperature in [0, 2], lm_repetition_penalty > 0, "
-                    + "and lm_cfg_scale >= 1."
-            )
-        }
-        let effectiveLyrics: String
-        if payload.instrumental == true {
-            guard Self.nonEmpty(payload.lyrics) == nil else {
-                throw ValidationError(
-                    "instrumental cannot be combined with lyrics."
-                )
-            }
-            effectiveLyrics = "[Instrumental]"
-        } else {
-            effectiveLyrics = payload.lyrics ?? ""
-        }
-        let effectiveLMRepetitionPenalty = lmRepetitionPenalty == 1
-            ? nil
-            : lmRepetitionPenalty
-        let vaeChunkSize = payload.vaeChunkSize ?? 512
-        let vaeOverlap = payload.vaeOverlap ?? 64
-        guard vaeChunkSize > 0, vaeOverlap >= 0 else {
-            throw ValidationError(
-                "VAE tiling requires vae_chunk_size > 0 and vae_overlap >= 0."
-            )
-        }
-        let responseFormat = payload.responseFormat?.lowercased() ?? "json"
-        guard responseFormat == "json" || responseFormat == "wav" else {
-            throw ValidationError("response_format must be json or wav.")
-        }
-        let sourceAudio = try payload.sourceAudioPath.map {
-            try ACEStepCLIHelper.loadAudio48kHz($0, label: "Source audio")
-        }
-        let referenceAudio = try (payload.referenceAudioPaths ?? []).map {
-            try ACEStepCLIHelper.loadAudio48kHz(
-                $0,
-                label: "Reference audio"
-            )
-        }
-        let isFlowEdit = payload.sourceCaption != nil
-        if task.requiresSourceAudio, sourceAudio == nil {
-            throw ValidationError("source_audio_path is required for \(task.rawValue).")
-        }
-        if isFlowEdit, sourceAudio == nil {
-            throw ValidationError("source_audio_path is required with source_caption.")
-        }
-        var duration = task.locksDurationToSource || isFlowEdit
-            ? sourceAudio.map {
-                ACEStepCLIHelper.durationSeconds(
-                    of: $0,
-                    fallback: defaults.fallbackDurationSeconds
-                )
-            } ?? defaults.fallbackDurationSeconds
-            : payload.durationSeconds ?? defaults.fallbackDurationSeconds
-        guard (1...600).contains(duration) else {
+        if let duration = payload.durationSeconds, !(1...600).contains(duration) {
             throw ValidationError("duration_seconds must be between 1 and 600.")
         }
-        let useLM = !isFlowEdit
-            && !task.skipsLanguageModel
-            && languageModelAvailable
-            && (payload.useLanguageModel ?? defaults.usesLanguageModel)
-        let instruction = Self.nonEmpty(payload.instruction)
-            ?? task.instruction(
-                trackName: payload.trackName,
-                completeTrackClasses: payload.completeTrackClasses ?? []
-            )
-        let shouldPlanDuration = useLM
-            && payload.durationSeconds == nil
-            && defaults.automaticDuration
-            && !task.locksDurationToSource
-            && !isFlowEdit
-        var effectivePrompt = prompt
-        var lmCodeGenerationContext: ACEStepLMCodeGenerationContext?
-        let effectiveLanguage = ACEStepPlanningPolicy.effectiveLanguage(
-            vocalLanguage: payload.vocalLanguage,
-            metadataLanguage: payload.metadataLanguage
-        )
-        var metadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
-            bpm: payload.bpm.map(String.init),
-            caption: prompt,
-            duration: shouldPlanDuration
-                ? nil
-                : String(max(1, Int(duration.rounded()))),
-            keyscale: Self.nonEmpty(payload.keyscale),
-            language: effectiveLanguage,
-            timesignature: Self.nonEmpty(payload.timeSignature)
-        )
-        if useLM {
-            let plan = try session.planMusic(
-                caption: prompt,
-                lyrics: effectiveLyrics,
-                instruction: instruction,
-                userMetadata: .init(
-                    bpm: metadata.bpm,
-                    duration: shouldPlanDuration
-                        ? nil
-                        : metadata.duration,
-                    keyscale: metadata.keyscale,
-                    language: metadata.language,
-                    timesignature: metadata.timesignature
-                ),
-                lmConfig: .init(
-                    maxNewTokens: 1_024,
-                    temperature: lmTemperature,
-                    topK: lmTopK,
-                    topP: lmTopP,
-                    repetitionPenalty: effectiveLMRepetitionPenalty
-                )
-            )
-            lmCodeGenerationContext = plan.codeGenerationContext
-            effectivePrompt = Self.nonEmpty(plan.metadata.caption) ?? prompt
-            if shouldPlanDuration,
-               let plannedDuration = plan.metadata.durationSeconds
-            {
-                let upperBound: Float = quality == .song ? 240 : 600
-                duration = min(max(plannedDuration, 10), upperBound)
-            }
-            metadata = ACEStepPlanningPolicy.merge(
-                userMetadata: metadata,
-                plan: plan.metadata,
-                caption: effectivePrompt,
-                durationSeconds: duration
-            )
-            lmCodeGenerationContext = lmCodeGenerationContext?.applying(
-                userMetadata: metadata
-            )
+        let format = payload.responseFormat?.lowercased() ?? "json"
+        guard format == "json" || format == "wav" else {
+            throw ValidationError("response_format must be json or wav.")
         }
-        let config = ACEStepInferenceConfig(
-            durationSeconds: duration,
-            fixNFE: steps,
-            shift: shift,
-            coverNoiseStrength: coverNoiseStrength,
-            retakeSeed: payload.retakeSeed,
-            retakeVariance: retakeVariance,
-            inferMethod: payload.inferMethod ?? .ode,
-            samplerMode: payload.sampler ?? defaults.samplerMode,
-            guidanceScale: guidanceScale,
-            guidanceMode: payload.guidanceMode ?? .apg,
-            cfgIntervalStart: cfgIntervalStart,
-            cfgIntervalEnd: cfgIntervalEnd,
-            velocityNormThreshold: velocityNormThreshold,
-            velocityEMAFactor: velocityEMAFactor,
-            useTiledVaeDecode: payload.useTiledVAEDecode ?? true,
-            vaeChunkSize: vaeChunkSize,
-            vaeOverlap: vaeOverlap,
-            seed: payload.seed
-        )
-        let repaint = task == .repaint || task == .lego
-            ? ACEStepRepaintConfiguration(
-                startSeconds: repaintStart,
-                endSeconds: repaintEnd,
-                chunkMaskMode: payload.chunkMaskMode ?? .auto,
-                mode: payload.repaintMode ?? .balanced,
-                strength: repaintStrength
-            )
-            : nil
-        let flowEdit = payload.sourceCaption.map {
-            ACEStepFlowEditConfiguration(
-                sourceCaption: $0,
-                sourceLyrics: payload.sourceLyrics ?? "",
-                nMin: payload.flowEditNMin ?? 0,
-                nMax: payload.flowEditNMax ?? 1,
-                nAverage: payload.flowEditNAverage ?? 1,
-                retakeSeed: payload.retakeSeed
-            )
-        }
-        try flowEdit?.validate()
-        return PreparedMusicAPIRequest(
-            request: ACEStepSessionRequest(
-                caption: effectivePrompt,
-                lyrics: effectiveLyrics,
-                config: config,
-                lmConfig: .init(
-                    maxNewTokens: 4_096,
-                    temperature: lmTemperature,
-                    topK: lmTopK,
-                    topP: lmTopP,
-                    repetitionPenalty: effectiveLMRepetitionPenalty,
-                    cfgScale: lmCFGScale,
-                    negativePrompt: lmNegativePrompt
-                ),
-                lmUserMetadata: metadata,
-                lmCodeGenerationContext: lmCodeGenerationContext,
-                sourceAudio48kHz: sourceAudio,
-                referenceTimbreAudio48kHz:
-                    referenceAudio.isEmpty ? nil : referenceAudio,
-                audioCoverStrength: audioCoverStrength,
-                vocalLanguage: effectiveLanguage,
-                instruction: instruction,
-                task: task,
-                repaintConfiguration: repaint,
-                flowEditConfiguration: flowEdit,
-                useLanguageModel: useLM
-            ),
-            quality: quality,
-            task: task,
-            candidateCount: candidates,
-            conditioningMetadata: ACEStepRecipeConditioningMetadata(
-                metadata
-            )
-        )
-    }
-
-    private static func nonEmpty(_ value: String?) -> String? {
-        let trimmed = value?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
+        return try (payload.export ?? .init()).resolve(defaults: .music)
     }
 
     private func response(
         for ranked: ACEStepRankedGeneration,
-        prepared: PreparedMusicAPIRequest
+        prepared: ACEStepGenerationPlan,
+        exportPlan: AudioExportPlan
     ) throws -> MusicAPIGenerationResponse {
         MusicAPIGenerationResponse(
             model: modelID,
             quality: prepared.quality,
             task: prepared.task,
-            conditioningMetadata: prepared.conditioningMetadata,
+            conditioningMetadata: ACEStepRecipeConditioningMetadata(prepared.conditioningMetadata),
             candidates: try ranked.candidates.enumerated().map { rank, candidate in
                 MusicAPICandidateResponse(
                     rank: rank + 1,
                     seed: candidate.seed,
                     score: candidate.score,
                     metrics: candidate.metrics,
-                    audioBase64: try ACEStepWAVWriter.wavData(
-                        candidate.audio,
-                        sampleRate: 48_000
-                    ).base64EncodedString(),
+                    audioBase64: try AudioExportService.data(
+                        MusicWaveformAdapter.aceStep(candidate.audio), plan: exportPlan
+                    ).data.base64EncodedString(),
                     format: "wav",
                     sampleRate: 48_000,
                     selected: candidate.index == ranked.best.index

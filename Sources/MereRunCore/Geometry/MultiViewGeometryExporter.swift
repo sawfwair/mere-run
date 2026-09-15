@@ -95,12 +95,14 @@ public enum MultiViewGeometryExportConfigurationError: Error, Equatable, Localiz
 }
 
 public struct MultiViewGeometryExportConfiguration: Equatable, Sendable {
+    public static let defaultConfidencePercentile: Double = 40
+    public static let defaultMaximumPointCount = 1_000_000
     public let confidencePercentile: Double
     public let maximumPointCount: Int
 
     public init(
-        confidencePercentile: Double = 40,
-        maximumPointCount: Int = 1_000_000
+        confidencePercentile: Double = defaultConfidencePercentile,
+        maximumPointCount: Int = defaultMaximumPointCount
     ) throws {
         guard confidencePercentile.isFinite, (0...100).contains(confidencePercentile) else {
             throw MultiViewGeometryExportConfigurationError.invalidConfidencePercentile(

@@ -9,7 +9,7 @@ struct LoRATrainingPreflightInput {
     let excludePreviewImages: Bool
     let syntheticSamples: Int?
     let requiresKleinModel: Bool
-    let options: ImageTrainLoRA.ResolvedLoRATrainingOptions
+    let options: ImageLoRATrainingOptions.Resolved
     let trainingArgv: [String]
     let runPlan: LoRATrainingRunPlan
     let cwd: String

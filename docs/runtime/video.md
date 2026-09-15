@@ -17,6 +17,34 @@ resident to render multiple takes without reloading it.
 | `mere.run video session` | Keep an LTX 2.3 or LTX 2.5 runtime resident for JSONL generation requests. |
 | `mere.run video export-latents` | Run native Swift/MLX distilled LTX denoising and export final latents. |
 
+## Preview generation
+
+To inspect the selected model, inputs, and output settings before rendering,
+add `--preflight --json`:
+
+```bash
+mere.run video generate "A wooden boat floats on calm water" \
+  --model video-ltx23-av-mlx --num-frames 25 \
+  --output boat.mp4 --preflight --json
+```
+
+Preflight and generation share option validation and model-dependent defaults
+for LTX, Wan, and MiniMax-H3. Preflight reads installed model files and adapter
+headers without loading tensors, downloading assets, or creating output
+directories. Generation resolves the model and checks the inputs again before
+loading it.
+
+For HDR IC-LoRA, preflight preserves the requested canvas and reads the
+adapter's reference-scale metadata. For H3, it applies the native adapter step
+recipe and conditioning rules. Missing files remain blockers; a predicted
+configuration does not mean the model is installed or ready to run.
+
+Automatic LTX duration prediction leaves the resolved frame count unset until
+the duration model runs. For source-audio A2Vid, the previewed frame count is
+the configured limit; the available audio segment can shorten the result.
+Invalid nonfinite numeric arguments appear as `"Infinity"`, `"-Infinity"`, or
+`"NaN"` strings in a blocked JSON response so the diagnostic remains readable.
+
 ## macOS Studio
 
 The optional macOS app compiles against the same typed capability contract

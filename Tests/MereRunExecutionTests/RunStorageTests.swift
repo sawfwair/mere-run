@@ -62,8 +62,60 @@ final class RunStorageTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? Int, 0o600)
     }
 
+    func testReplacementKeepsOldReaderAndPublishesCompletePrivateArtifact() throws {
+        let file = try root().appendingPathComponent("record.json")
+        try RunRecordCodec.write(["value": "original"], to: file)
+        let original = try Data(contentsOf: file)
+        let reader = try FileHandle(forReadingFrom: file)
+        defer { try? reader.close() }
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: file.path)
+        let updated = ["value": String(repeating: "replacement", count: 100_000)]
+        let artifact = try RunRecordCodec.writeArtifact(updated, to: file)
+        XCTAssertEqual(try reader.readToEnd(), original)
+        XCTAssertEqual(try RunRecordCodec.decoder().decode([String: String].self, from: Data(contentsOf: file)), updated)
+        XCTAssertEqual(try RunArtifact.read(file), artifact)
+        let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+        XCTAssertEqual(attributes[.posixPermissions] as? Int, 0o600)
+#if canImport(Darwin)
+        let volume = try file.resourceValues(forKeys: [.volumeSupportsFileProtectionKey])
+        if volume.allValues[.volumeSupportsFileProtectionKey] as? Bool == true {
+            XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType, .completeUnlessOpen)
+        }
+#endif
+    }
+
+    func testFailedReplacementPreservesDestinationAndRemovesTemporaryFile() throws {
+        let directory = try root()
+        let destination = directory.appendingPathComponent("occupied")
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
+        let keep = destination.appendingPathComponent("keep.txt")
+        try Data("keep".utf8).write(to: keep)
+        XCTAssertThrowsError(try RunRecordCodec.write(["value": "replacement"], to: destination))
+        XCTAssertEqual(try Data(contentsOf: keep), Data("keep".utf8))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["occupied"])
+    }
+
+    func testUnreadableRecordExplainsRecoveryAndPreservesBytes() throws {
+        let file = try root().appendingPathComponent("record.json")
+        let original = Data("original".utf8)
+        try original.write(to: file)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: file.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path) }
+        XCTAssertThrowsError(try RunRecordCodec.readData(at: file)) { error in
+            XCTAssertEqual((error as? RunRecordReadIssue)?.url, file)
+            XCTAssertTrue(error.localizedDescription.contains("Unlock the device or check the file permissions"))
+        }
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        XCTAssertEqual(try RunRecordCodec.readData(at: file), original)
+        XCTAssertThrowsError(try RunRecordCodec.readData(at: file.appendingPathExtension("missing"))) { error in
+            XCTAssertFalse(error is RunRecordReadIssue)
+        }
+    }
+
     private func root() throws -> URL {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let base = ProcessInfo.processInfo.environment["MERERUN_TEST_STORAGE_ROOT"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? FileManager.default.temporaryDirectory
+        let root = base.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: root) }
         return root

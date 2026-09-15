@@ -196,6 +196,7 @@ public struct GraphRunManifest: Codable, Equatable, Sendable {
     public var nodes: [GraphRunNodeRecord]
     public var outputs: [GraphRunArtifact]
     public var error: String?
+    public var interruptedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case contractVersion = "contract_version"
@@ -212,6 +213,7 @@ public struct GraphRunManifest: Codable, Equatable, Sendable {
         case nodes
         case outputs
         case error
+        case interruptedAt = "interrupted_at"
     }
 
     public init(
@@ -228,7 +230,8 @@ public struct GraphRunManifest: Codable, Equatable, Sendable {
         executor: GraphRunExecutorRecord,
         nodes: [GraphRunNodeRecord],
         outputs: [GraphRunArtifact],
-        error: String?
+        error: String?,
+        interruptedAt: Date? = nil
     ) {
         self.contractVersion = contractVersion
         self.jobID = jobID
@@ -244,6 +247,7 @@ public struct GraphRunManifest: Codable, Equatable, Sendable {
         self.nodes = nodes
         self.outputs = outputs
         self.error = error
+        self.interruptedAt = interruptedAt
     }
 }
 

@@ -70,6 +70,7 @@ extension Qwen3TTSGenerator {
         let cache = talker.makeCache()
 
         func confirm(_ step: PipelinedTalkerStep) throws -> Bool {
+            try Task.checkCancellation()
             let tokenValue = step.token.item(Int.self)
             if tokenValue == eosTokenId {
                 return false
@@ -93,6 +94,7 @@ extension Qwen3TTSGenerator {
         }
 
         for step in 0..<effectiveMaxTokens {
+            try Task.checkCancellation()
             let (logits, hidden) = talker(inputEmbedsVar, cache: cache)
             let tokenArray = sampleTokenArrayTTS(logits: logits, context: samplerContext)
             samplerContext.appendHistory(tokenArray)

@@ -127,10 +127,47 @@ package enum StudioResultContinuation: String, CaseIterable, Identifiable {
 }
 
 package enum StudioFileExport {
+    package struct Report {
+        package let destinations: [URL]
+        package let failures: [URL]
+    }
+
+    package static func uniqueSources(_ sources: [URL]) -> [URL] {
+        var seen = Set<URL>()
+        return sources.filter { seen.insert($0.resolvingSymlinksInPath().standardizedFileURL).inserted }
+    }
+
+    /// Folder exports keep existing files and save each source once. Missing files remain in
+    /// the failure report instead of silently reducing the user's selection.
+    package static func copy(_ sources: [URL], into directory: URL, fileManager: FileManager = .default) -> Report {
+        var destinations: [URL] = []
+        var failures: [URL] = []
+        for source in uniqueSources(sources) {
+            var destination = directory.appendingPathComponent(source.lastPathComponent)
+            let stem = source.deletingPathExtension().lastPathComponent
+            let ext = source.pathExtension
+            var counter = 2
+            while fileManager.fileExists(atPath: destination.path) {
+                let name = ext.isEmpty ? "\(stem)-\(counter)" : "\(stem)-\(counter).\(ext)"
+                destination = directory.appendingPathComponent(name)
+                counter += 1
+            }
+            do {
+                // copyItem fails if another writer claims the name; it never replaces a file.
+                try fileManager.copyItem(at: source, to: destination)
+                destinations.append(destination)
+            } catch { failures.append(source) }
+        }
+        return Report(destinations: destinations, failures: failures)
+    }
+
     /// Copies before replacing the destination. Saving onto the source is a successful no-op.
     package static func copy(_ source: URL, to destination: URL, fileManager: FileManager = .default) throws {
-        guard source.resolvingSymlinksInPath().standardizedFileURL
-                != destination.resolvingSymlinksInPath().standardizedFileURL else { return }
+        if source.resolvingSymlinksInPath().standardizedFileURL
+            == destination.resolvingSymlinksInPath().standardizedFileURL {
+            _ = try fileManager.attributesOfItem(atPath: source.path)
+            return
+        }
         let temporary = destination.deletingLastPathComponent().appendingPathComponent(".mere-export-\(UUID())")
         try fileManager.copyItem(at: source, to: temporary)
         defer { try? fileManager.removeItem(at: temporary) }

@@ -252,18 +252,33 @@ overlap without changing dependency semantics. Every node is
 adapted to deterministic public CLI arguments and launched as an isolated
 `mere.run` child process. The runner captures structured stdout, preserves
 diagnostic stderr, records exit status, verifies every declared artifact, and
-honors a cooperative cancellation marker.
+honors a cooperative cancellation marker. Cancelling the caller also stops
+parallel child processes. Active nodes become `cancelled` before the run settles;
+finished nodes retain their verified outputs.
 
 Node execution policy supports bounded retries, hard subprocess timeouts, and a
 cross-run content-addressed cache. Cache keys include normalized arguments,
 provider identity, model provenance, and directly referenced artifact digests.
 `cache: refresh` recomputes and replaces an entry; `cache: never` bypasses it.
 
+Each run permits one active worker. A second worker cannot reset its
+cancellation marker or child registrations. Resume rejects changed graph or
+input fingerprints before modifying the previous run. If registered children
+are still running after an interruption, wait for them to stop before resuming.
+
+Workflow child stdout is limited to 16 MiB. Exceeding the limit fails the node;
+write larger results as declared artifacts. Cancellation, timeout, and output
+callback failures stop the child process group. See
+[workflow execution ownership](internals/workflow-execution.md) for storage and
+process boundaries.
+
 `--resume` reuses a finished node only when its provider pin, normalized
 arguments, exact model provenance, directly referenced upstream outputs, and
 every output digest still match. Unrelated branches do not invalidate each
 other. File, directory, collection, scalar, and JSON outputs retain their typed
-identity in the node run record.
+identity in the node run record. If a node must run again, its new attempt clears
+previous output references before preflight. A failed attempt does not advertise
+those old files as new results. The files remain available on disk.
 
 ## Run directories
 
@@ -289,6 +304,17 @@ are relative to the run directory.
 ```bash
 mere.run run inspect ./runs/job --json
 ```
+
+Inspection recovers an abandoned local or worker run only after acquiring its
+run lease and confirming that no registered child is active. The run becomes
+`failed`, with an `interrupted_at` timestamp and a `run_interrupted` event.
+Completed node outputs remain available for resume. Queued, assigned, and remote
+runs retain their executor's state.
+
+If interruption truncated the final event-log write, inspection or resume saves
+that fragment as `events-tail-<id>.fragment` before repairing `events.jsonl`.
+Complete records retain their order and sequence. Corruption inside the log or
+an unsupported run contract stops recovery without rewriting the record.
 
 ## Worker protocol
 

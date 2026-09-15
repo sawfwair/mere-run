@@ -37,6 +37,7 @@ bash ./scripts/agent_readiness_check.sh
 bash ./scripts/check-evaluation-boundary.sh
 bash ./scripts/check-docs-examples.sh
 bash ./scripts/check-model-boundaries.sh
+bash ./scripts/check-package-policy.sh
 swiftpm() {
   local subcommand="$1"
   shift

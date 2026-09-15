@@ -1,3 +1,4 @@
+import AudioCore
 import ArgumentParser
 import Foundation
 import Hummingbird
@@ -25,6 +26,27 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
     var numInferenceSteps: Int?
     var guidanceScale: Float?
     var sampleRate: Int?
+    var export: AudioExportOverrides?
+
+    func generationSettings() -> MiniMaxMusic3GenerationSettings {
+        var settings = MiniMaxMusic3GenerationSettings(caption: instructions, lyrics: input)
+        settings.seed = seed
+        settings.maxNewTokens = maxNewTokens
+        settings.audioDuration = audioDuration
+        settings.minimumAudioDuration = minimumAudioDuration
+        settings.minNewTokens = minNewTokens
+        settings.samplingTier = samplingTier
+        settings.flowStrategy = flowStrategy
+        settings.flowSolver = flowSolver
+        settings.autoregressiveGuidanceFrames = autoregressiveGuidanceFrames
+        settings.flowGuidanceEnd = flowGuidanceEnd
+        settings.seedStrategy = seedStrategy
+        settings.lyricPreflight = lyricPreflight
+        settings.numInferenceSteps = numInferenceSteps
+        settings.guidanceScale = guidanceScale
+        settings.sampleRate = sampleRate
+        return settings
+    }
 
     enum CodingKeys: String, CodingKey {
         case model
@@ -47,6 +69,7 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
         case numInferenceSteps = "num_inference_steps"
         case guidanceScale = "guidance_scale"
         case sampleRate = "sample_rate"
+        case export
     }
 }
 
@@ -74,183 +97,8 @@ private struct MiniMaxMusic3HealthResponse: Codable {
     }
 }
 
-private actor MiniMaxMusic3ServerSession {
-    private let pipeline: MiniMaxMusic3Pipeline
-
-    init(
-        resources: MiniMaxMusic3Resources,
-        loadingStrategy: MiniMaxMusic3LoadingStrategy,
-        performanceMode: MiniMaxMusic3PerformanceMode
-    ) throws {
-        self.pipeline = try MiniMaxMusic3Pipeline(
-            resources: resources,
-            loadingStrategy: loadingStrategy,
-            performanceMode: performanceMode
-        )
-    }
-
-    func generate(
-        _ request: MiniMaxMusic3SpeechRequest,
-        modelID: String
-    ) throws -> Data {
-        let options = try Self.options(from: request, modelID: modelID)
-        let result = try pipeline.generate(options: options.generation)
-        let waveform = try ACEStepWAVWriter.resample(
-            result.waveform.transposed(0, 2, 1),
-            from: result.sampleRate,
-            to: options.sampleRate
-        )
-        return try ACEStepWAVWriter.wavData(
-            waveform,
-            sampleRate: options.sampleRate,
-            options: .init(
-                format: .pcm16,
-                normalization: .none,
-                targetPeakDB: 0,
-                fadeInMilliseconds: 0,
-                fadeOutMilliseconds: 0,
-                dither: false
-            )
-        )
-    }
-
-    private static func options(
-        from request: MiniMaxMusic3SpeechRequest,
-        modelID: String
-    ) throws -> (generation: MiniMaxMusic3GenerationOptions, sampleRate: Int) {
-        if let requestedModel = request.model,
-           requestedModel != modelID,
-           requestedModel != MiniMaxMusic3Resources.repository
-        {
-            throw ValidationError(
-                "MiniMax Music 3 server loaded '\(modelID)', not '\(requestedModel)'."
-            )
-        }
-        let caption = request.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lyrics = request.input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !caption.isEmpty else {
-            throw ValidationError("instructions must contain a music description.")
-        }
-        guard !lyrics.isEmpty else {
-            throw ValidationError("input must contain lyrics or [Instrumental].")
-        }
-        guard request.responseFormat?.lowercased() ?? "wav" == "wav" else {
-            throw ValidationError("response_format must be wav.")
-        }
-        guard request.stream != true else {
-            throw ValidationError("MiniMax Music 3 supports stream=false only.")
-        }
-        let duration = request.audioDuration ?? 60
-        guard duration > 0, duration <= 360 else {
-            throw ValidationError("audio_duration must be greater than 0 and at most 360 seconds.")
-        }
-        let durationFrames = Int(duration * Float(MiniMaxMusic3Prompt.frameRate))
-        let durationFloorFrames = request.minimumAudioDuration.map {
-            MiniMaxMusic3Prompt.minimumFrameCount(forDurationSeconds: $0)
-        }
-        let minimumFrames = request.minNewTokens ?? durationFloorFrames
-        let maximumFrames = request.maxNewTokens
-            ?? (request.minimumAudioDuration == nil
-                ? durationFrames
-                : max(durationFrames, minimumFrames ?? 0))
-        guard (1...MiniMaxMusic3Prompt.maxAudioFrames).contains(maximumFrames) else {
-            throw ValidationError("max_new_tokens must be between 1 and 9000.")
-        }
-        if request.audioDuration != nil,
-           request.maxNewTokens != nil,
-           durationFrames != maximumFrames
-        {
-            throw ValidationError(
-                "audio_duration and max_new_tokens must describe the same 25 Hz frame limit."
-            )
-        }
-        if let minimumAudioDuration = request.minimumAudioDuration,
-           minimumAudioDuration <= 0 || minimumAudioDuration > 360
-        {
-            throw ValidationError(
-                "minimum_audio_duration must be greater than 0 and at most 360 seconds."
-            )
-        }
-        if request.audioDuration != nil,
-           let minimumAudioDuration = request.minimumAudioDuration,
-           minimumAudioDuration > duration
-        {
-            throw ValidationError(
-                "minimum_audio_duration cannot exceed audio_duration."
-            )
-        }
-        if let minimumFrames,
-           !(1...MiniMaxMusic3Prompt.maxAudioFrames).contains(minimumFrames)
-        {
-            throw ValidationError("min_new_tokens must be between 1 and 9000.")
-        }
-        if let durationFloorFrames, let requestedMinimum = request.minNewTokens,
-           durationFloorFrames != requestedMinimum
-        {
-            throw ValidationError(
-                "minimum_audio_duration and min_new_tokens must describe the same 25 Hz frame floor."
-            )
-        }
-        if let minimumFrames, minimumFrames > maximumFrames {
-            throw ValidationError("The requested duration floor cannot exceed the output upper bound.")
-        }
-        let steps = request.numInferenceSteps
-            ?? request.samplingTier?.inferenceSteps
-            ?? MiniMaxMusic3SamplingTier.quality.inferenceSteps
-        guard steps > 0 else {
-            throw ValidationError("num_inference_steps must be positive.")
-        }
-        let guidanceScale = request.guidanceScale ?? 1.7
-        guard guidanceScale >= 1, guidanceScale.isFinite else {
-            throw ValidationError("guidance_scale must be finite and at least 1.")
-        }
-        let sampleRate = request.sampleRate ?? 32_000
-        guard sampleRate == 32_000 || sampleRate == 44_100 else {
-            throw ValidationError("sample_rate must be 32000 or 44100.")
-        }
-        if let guidanceFrames = request.autoregressiveGuidanceFrames,
-           !(0...MiniMaxMusic3Prompt.maxAudioFrames).contains(guidanceFrames)
-        {
-            throw ValidationError("autoregressive_guidance_frames must be between 0 and 9000.")
-        }
-        let flowGuidanceEnd = request.flowGuidanceEnd ?? 1
-        guard (0...1).contains(flowGuidanceEnd) else {
-            throw ValidationError("flow_guidance_end must be between 0 and 1.")
-        }
-        let instrumental = lyrics.lowercased() == "[instrumental]"
-        if request.lyricPreflight == .strict {
-            let report = MiniMaxMusic3LyricPreflight.inspect(
-                lyrics: lyrics,
-                durationSeconds: duration,
-                instrumental: instrumental
-            )
-            if let issue = report.issues.first {
-                throw ValidationError("lyric preflight failed: \(issue.message)")
-            }
-        }
-        return (
-            MiniMaxMusic3GenerationOptions(
-                caption: caption,
-                lyrics: lyrics,
-                durationSeconds: duration,
-                minimumFrames: minimumFrames,
-                maximumFrames: maximumFrames,
-                inferenceSteps: steps,
-                seed: request.seed ?? 0,
-                guidanceScale: guidanceScale,
-                flowStrategy: request.flowStrategy ?? .sequential,
-                flowSolver: request.flowSolver ?? .euler,
-                autoregressiveGuidanceFrames: request.autoregressiveGuidanceFrames,
-                flowGuidanceEnd: flowGuidanceEnd,
-                seedStrategy: request.seedStrategy ?? .legacy
-            ),
-            sampleRate
-        )
-    }
-}
-
 final class MiniMaxMusic3APIServer: @unchecked Sendable {
-    private let session: MiniMaxMusic3ServerSession
+    private let session: MiniMaxMusic3GenerationOperation
     private let modelID: String
     private let loadingStrategy: MiniMaxMusic3LoadingStrategy
     private let performanceMode: MiniMaxMusic3PerformanceMode
@@ -263,7 +111,7 @@ final class MiniMaxMusic3APIServer: @unchecked Sendable {
         performanceMode: MiniMaxMusic3PerformanceMode,
         apiKey: String?
     ) throws {
-        self.session = try MiniMaxMusic3ServerSession(
+        self.session = MiniMaxMusic3GenerationOperation(
             resources: resources,
             loadingStrategy: loadingStrategy,
             performanceMode: performanceMode
@@ -275,6 +123,7 @@ final class MiniMaxMusic3APIServer: @unchecked Sendable {
     }
 
     func run(host: String, port: Int) async throws {
+        try await session.load()
         let app = Application(
             router: buildRouter(),
             configuration: .init(address: .hostname(host, port: port))
@@ -327,7 +176,21 @@ final class MiniMaxMusic3APIServer: @unchecked Sendable {
                 MiniMaxMusic3SpeechRequest.self,
                 from: Data(body.readableBytesView)
             )
-            let wav = try await session.generate(payload, modelID: modelID)
+            if let requestedModel = payload.model,
+               requestedModel != modelID, requestedModel != MiniMaxMusic3Resources.repository {
+                throw ValidationError("MiniMax Music 3 server loaded '\(modelID)', not '\(requestedModel)'.")
+            }
+            guard payload.responseFormat?.lowercased() ?? "wav" == "wav" else {
+                throw ValidationError("response_format must be wav.")
+            }
+            guard payload.stream != true else {
+                throw ValidationError("MiniMax Music 3 supports stream=false only.")
+            }
+            let plan = try payload.generationSettings().resolve(
+                exportPlan: (payload.export ?? .init()).resolve(defaults: .referencePCM16), defaultSampleRate: 32_000
+            )
+            let result = try await session.generate(plan)
+            let wav = try AudioExportService.data(result.waveform, plan: plan.export).data
             return Response(
                 status: .ok,
                 headers: [.contentType: "audio/wav"],

@@ -6,16 +6,6 @@ func videoMonotonicSeconds() -> Double {
     ProcessInfo.processInfo.systemUptime
 }
 
-struct LTXVideoTimingReport: Codable, Hashable, Sendable {
-    let mode: String
-    let modelRoot: String
-    let residentModelReused: Bool
-    let load: LTXLoadTimings
-    let generation: LTXGenerationTimings
-    let unloadSeconds: Double
-    let mp4WriteSeconds: Double
-    let totalSeconds: Double
-}
 
 func emitLTXVideoTimingReport(
     _ report: LTXVideoTimingReport,

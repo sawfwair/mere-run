@@ -33,6 +33,7 @@ extension Qwen3TTSGenerator {
         onToken: ((Int) -> Void)? = nil,
         onAudioDelta: (([Float]) -> Void)? = nil
     ) throws -> MLXArray {
+        try Task.checkCancellation()
         guard let reference = request.cloneReference else {
             throw Qwen3TTSError.invalidCloneReference("Missing clone reference. Provide --profile or --ref-audio.")
         }
@@ -48,6 +49,7 @@ extension Qwen3TTSGenerator {
             targetSampleRate: config.sampleRate
         )
 
+        try Task.checkCancellation()
         progressHandler?(TTSProgress(stage: .encodingReference, message: "Encoding speaker reference..."))
         guard speechTokenizer.hasEncoder else {
             throw Qwen3TTSError.cloneAssetsMissing(["speech tokenizer encoder"])
@@ -173,6 +175,7 @@ extension Qwen3TTSGenerator {
             var trailingIndex = 0
 
             for step in 0..<effectiveMaxTokens {
+                try Task.checkCancellation()
                 let (logits, hidden) = talker(inputEmbedsVar, cache: cache)
                 let nextToken = sampleToken(
                     logits: logits,
@@ -246,6 +249,7 @@ extension Qwen3TTSGenerator {
             )
         }
 
+        try Task.checkCancellation()
         progressHandler?(TTSProgress(stage: .decoding, message: "Decoding audio..."))
 
         let codes = MLX.stacked(generatedCodes, axis: 1)
@@ -330,6 +334,7 @@ extension Qwen3TTSGenerator {
             var trailingIndex = 0
 
             for step in 0..<effectiveMaxTokens {
+                try Task.checkCancellation()
                 let (logits, hidden) = talker(inputEmbedsVar, cache: cache)
                 let nextToken = sampleToken(
                     logits: logits,
@@ -403,6 +408,7 @@ extension Qwen3TTSGenerator {
             )
         }
 
+        try Task.checkCancellation()
         progressHandler?(TTSProgress(stage: .decoding, message: "Decoding audio..."))
 
         let generated = MLX.stacked(generatedCodes, axis: 1)

@@ -2,85 +2,10 @@ import AppKit
 import StudioKit
 import SwiftUI
 
-struct StudioModelCatalogMetadata: Decodable, Equatable {
-    let id: String
-    let title: String
-    let summary: String
-    let minimumUnifiedMemoryGB: Int
-    let recommendedUnifiedMemoryGB: Int
-    let supported: Bool
-    let reasons: [String]
-    let estimatedDownloadBytes: Int64?
-    let sourceRepository: String?
-    let publisher: String?
-}
-
-private struct StudioModelCapabilitiesOutput: Decodable {
-    let models: [StudioModelCatalogMetadata]
-}
-
-enum StudioModelCatalogParser {
-    static func metadataByID(from output: String) -> [String: StudioModelCatalogMetadata] {
-        guard let data = output.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(StudioModelCapabilitiesOutput.self, from: data) else {
-            return [:]
-        }
-        return Dictionary(uniqueKeysWithValues: payload.models.map { ($0.id, $0) })
-    }
-
-    static func applying(
-        _ metadataByID: [String: StudioModelCatalogMetadata],
-        to rows: [StudioModelInventoryRow]
-    ) -> [StudioModelInventoryRow] {
-        rows.map { row in
-            guard let metadata = metadataByID[row.id] else { return row }
-            return StudioModelInventoryRow(
-                id: row.id,
-                category: row.category,
-                status: row.status,
-                size: row.size,
-                usageTerms: row.usageTerms,
-                title: metadata.title,
-                summary: metadata.summary,
-                estimatedDownloadBytes: metadata.estimatedDownloadBytes,
-                minimumUnifiedMemoryGB: metadata.minimumUnifiedMemoryGB,
-                recommendedUnifiedMemoryGB: metadata.recommendedUnifiedMemoryGB,
-                supported: metadata.supported,
-                supportReasons: metadata.reasons,
-                sourceRepository: metadata.sourceRepository,
-                publisher: metadata.publisher,
-                referencedBytes: row.referencedBytes,
-                reclaimableBytes: row.reclaimableBytes,
-                sharedBytes: row.sharedBytes,
-                externalBytes: row.externalBytes,
-                contextWindow: row.contextWindow
-            )
-        }
-    }
-}
-
-enum StudioModelDownloadCommand {
-    static func arguments(modelID: String, acknowledgingUsageTerms: Bool) -> [String] {
-        var arguments = ["model", "pull", modelID]
-        if acknowledgingUsageTerms {
-            arguments.append("--accept-model-license")
-        }
-        return arguments
-    }
-
+enum StudioModelMaintenanceOutput {
     static func appendingOutput(_ chunk: String, to current: String, limit: Int = 32 * 1024) -> String {
         let normalized = chunk.replacingOccurrences(of: "\r", with: "\n")
         return String((current + normalized).suffix(limit))
-    }
-
-    static func latestProgress(in output: String) -> StudioRunProgress? {
-        output
-            .replacingOccurrences(of: "\r", with: "\n")
-            .components(separatedBy: .newlines)
-            .reversed()
-            .lazy
-            .compactMap(StudioProgressParser.parse)
-            .first
     }
 }
 
@@ -130,21 +55,6 @@ private struct StudioModelGarbageResult: Decodable {
     let reclaimedBytes: Int64
 }
 
-private struct StudioModelStorageReport: Decodable {
-    let applicationSupportBytes: Int64
-    let garbageCollectableBytes: Int64
-    let models: [StudioModelStorageUsage]
-}
-
-private struct StudioModelStorageUsage: Decodable {
-    let id: String
-    let installed: Bool
-    let referencedBytes: Int64
-    let reclaimableBytes: Int64
-    let sharedBytes: Int64
-    let externalBytes: Int64
-}
-
 struct StudioRuntimeSettings: Codable, Equatable {
     var alias: String?
     var pinned: Bool
@@ -192,91 +102,6 @@ struct StudioRuntimeSettings: Codable, Equatable {
     }
 }
 
-enum StudioModelInventoryParser {
-    private struct Document: Decodable {
-        struct Inventory: Decodable { let rows: [Row] }
-        struct Row: Decodable {
-            let id: String
-            let category: String
-            let status: String
-            let size: String?
-            let contextWindow: Int?
-        }
-        let inventory: Inventory
-        let usageTerms: [String]
-    }
-
-    static func rows(from output: String) -> [StudioModelInventoryRow] {
-        if output.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") {
-            guard let document = try? JSONDecoder().decode(Document.self, from: Data(output.utf8)) else { return [] }
-            let terms = usageTermsByID(from: document.usageTerms.joined(separator: "\n"))
-            return document.inventory.rows.map {
-                StudioModelInventoryRow(id: $0.id, category: $0.category, status: $0.status,
-                    size: $0.size ?? ($0.status == "installed" ? "not measured" : "—"),
-                    usageTerms: terms[$0.id], contextWindow: $0.contextWindow)
-            }
-        }
-        let usageTerms = usageTermsByID(from: output)
-        return output
-            .components(separatedBy: .newlines)
-            .compactMap { line -> StudioModelInventoryRow? in
-                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty,
-                      !trimmed.hasPrefix("-"),
-                      !trimmed.hasPrefix("ID "),
-                      !trimmed.hasPrefix("Usage restriction:"),
-                      !trimmed.hasPrefix("Usage terms:") else {
-                    return nil
-                }
-
-                let fields = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
-                guard fields.count >= 4 else { return nil }
-                return StudioModelInventoryRow(
-                    id: fields[0],
-                    category: fields[1],
-                    status: fields[2],
-                    size: fields.dropFirst(3).joined(separator: " "),
-                    usageTerms: usageTerms[fields[0]]
-                )
-            }
-    }
-
-    static func usageTermsByID(from output: String) -> [String: StudioModelUsageTerms] {
-        var result: [String: StudioModelUsageTerms] = [:]
-        for line in output.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            let marker = "Usage terms: "
-            guard trimmed.hasPrefix(marker) else { continue }
-            let payload = String(trimmed.dropFirst(marker.count))
-            guard let separator = payload.range(of: " - ") else { continue }
-            let id = String(payload[..<separator.lowerBound])
-            let summary = String(payload[separator.upperBound...])
-            let links = summary
-                .split(whereSeparator: \.isWhitespace)
-                .compactMap { token -> URL? in
-                    let candidate = token.trimmingCharacters(in: CharacterSet(charactersIn: "[];"))
-                    guard candidate.hasPrefix("https://") else { return nil }
-                    return URL(string: candidate)
-                }
-            result[id] = StudioModelUsageTerms(summary: summary, links: links)
-        }
-        return result
-    }
-
-    static func modelRoot(from output: String) -> URL? {
-        for line in output.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            let marker = "Model Root:"
-            guard trimmed.hasPrefix(marker) else { continue }
-            let path = trimmed.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !path.isEmpty else { return nil }
-            return URL(fileURLWithPath: path, isDirectory: true)
-        }
-        return nil
-    }
-}
-
-
 private enum ModelsMetrics {
     static let listWidth: CGFloat = 320
     static let rowHeight: CGFloat = 40
@@ -296,49 +121,42 @@ struct StudioModelsView: View {
     @EnvironmentObject private var library: StudioLibraryStore
     @EnvironmentObject private var navigation: NavigationModel
 
+    @ObservedObject var modelStore: StudioModelStore
     let onModelsChanged: () -> Void
-    /// Reports installed count and store size so the toolbar subtitle can show them.
-    let onInventoryChanged: (StudioModelInventorySummary) -> Void
     /// The domain an adapter is applied to ("Image" in "Use in Image").
     let adapterTargetTitle: String
     let onUseAdapter: (StudioAdapterRow) -> Void
     let onTrain: (CommandTemplateID) -> Void
 
     init(
+        modelStore: StudioModelStore,
         onModelsChanged: @escaping () -> Void,
-        onInventoryChanged: @escaping (StudioModelInventorySummary) -> Void = { _ in },
         adapterTargetTitle: String = "Image",
         onUseAdapter: @escaping (StudioAdapterRow) -> Void = { _ in },
         onTrain: @escaping (CommandTemplateID) -> Void = { _ in }
     ) {
         self.onModelsChanged = onModelsChanged
-        self.onInventoryChanged = onInventoryChanged
+        self.modelStore = modelStore
         self.adapterTargetTitle = adapterTargetTitle
         self.onUseAdapter = onUseAdapter
         self.onTrain = onTrain
     }
 
-    @State private var rows: [StudioModelInventoryRow] = []
+    private var rows: [StudioModelInventoryRow] { modelStore.rows }
     @State private var adapters: [StudioAdapterRow] = []
     @State private var selectedID: String?
+    @State private var showsCompactDetail = false
     @State private var detailText = ""
     @State private var statusMessage = ""
     @State private var searchText = ""
     @State private var selectedFamily: StudioModelFamily?
-    @State private var isRefreshing = false
     @State private var loadingInfoID: String?
     @State private var loadingRuntimeID: String?
-    @State private var downloadingID: String?
-    @State private var downloadCommandID: UUID?
-    @State private var downloadProgress: StudioRunProgress?
-    @State private var downloadProgressOutput = ""
-    @State private var cancellingDownloadID: String?
     @State private var removingID: String?
     @State private var optimizingID: String?
     @State private var optimizeCommandID: UUID?
     @State private var cleanupCommandID: UUID?
     @State private var pendingAlert: StudioModelsAlert?
-    @State private var storageReport: StudioModelStorageReport?
     @State private var isCleaningStorage = false
     @State private var infoFactsByID: [String: StudioModelInfoFacts] = [:]
     @State private var runtimeSettingsByID: [String: StudioRuntimeSettings] = [:]
@@ -352,27 +170,34 @@ struct StudioModelsView: View {
     @State private var runtimePinned = false
     @State private var showPullSheet = false
     @State private var showJobLog = false
+    @State private var showDownloadLog = false
     @State private var showRuntimeSettings = false
     @State private var showDetails = false
     @State private var jobLog = ""
+
+    private var isRefreshing: Bool { modelStore.isRefreshing }
+    private var downloadJob: Job? { modelStore.downloads.first { $0.request.draft?.model == selectedID } ?? modelStore.downloads.first }
+    private var downloadingID: String? { downloadJob?.request.draft?.model }
+    private var cancellingDownloadID: String? { downloadJob?.cancelRequested == true ? downloadingID : nil }
 
     private var installedRows: [StudioModelInventoryRow] {
         rows.filter(\.isInstalled)
     }
 
     private var missingRows: [StudioModelInventoryRow] {
-        rows.filter { !$0.isInstalled && $0.id != downloadingID }
+        rows.filter { !$0.isInstalled && !pullingIDs.contains($0.id) }
     }
 
-    /// The page's own job first; otherwise a composer-initiated pull from the Library.
+    /// Downloads share process identity with the composer and retain cancellation across navigation.
     private var activeJob: StudioModelsJob? {
         if let downloadingID {
             return StudioModelsJob(
                 kind: .pull,
                 modelID: downloadingID,
                 subject: displayName(for: downloadingID),
-                progress: downloadProgress,
-                isCancelling: cancellingDownloadID == downloadingID
+                progress: downloadJob?.progress,
+                isCancelling: cancellingDownloadID == downloadingID,
+                isQueued: downloadJob?.state.isQueued == true
             )
         }
         if let optimizingID {
@@ -381,25 +206,27 @@ struct StudioModelsView: View {
         if isCleaningStorage {
             return StudioModelsJob(kind: .cleanup, modelID: nil, subject: "model storage")
         }
-        return StudioModelsPresenter.libraryPullJob(
-            in: library.items,
-            rows: rows,
-            progressByRequestID: controller.progressByRequestID
-        )
+        return nil
     }
 
     private var pullingIDs: Set<String> {
-        guard let job = activeJob, job.kind == .pull, let modelID = job.modelID else { return [] }
-        return [modelID]
+        Set(modelStore.downloads.compactMap { $0.request.draft?.model })
+    }
+
+    private var listedDownloadIDs: Set<String> {
+        var ids = pullingIDs
+        if let completed = modelStore.lastCompletedDownload,
+           let modelID = completed.request.draft?.model { ids.insert(modelID) }
+        return ids
     }
 
     private var families: [StudioModelFamily] {
-        StudioModelsPresenter.families(in: StudioModelsPresenter.listRows(rows, pullingIDs: pullingIDs))
+        StudioModelsPresenter.families(in: StudioModelsPresenter.listRows(rows, downloadIDs: listedDownloadIDs))
     }
 
     private var visibleRows: [StudioModelInventoryRow] {
         StudioModelsPresenter.filter(
-            StudioModelsPresenter.listRows(rows, pullingIDs: pullingIDs),
+            StudioModelsPresenter.listRows(rows, downloadIDs: listedDownloadIDs),
             family: selectedFamily,
             query: searchText
         )
@@ -410,34 +237,63 @@ struct StudioModelsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                listColumn
-                    .frame(width: ModelsMetrics.listWidth)
-                    .overlay(alignment: .trailing) {
-                        Rectangle()
-                            .fill(MereRunTheme.border.opacity(0.4))
-                            .frame(width: 1)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                if geometry.size.width < 800 {
+                    if showsCompactDetail, selectedRow != nil {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button { showsCompactDetail = false } label: {
+                                Label("All models", systemImage: "chevron.left")
+                            }
+                            .buttonStyle(ModelsSecondaryButtonStyle())
+                            .keyboardShortcut(.cancelAction)
+                            .padding(14)
+                            detailColumn
+                            statusNotice
+                        }
+                    } else {
+                        listColumn
                     }
+                } else {
+                    HStack(spacing: 0) {
+                        listColumn
+                            .frame(width: ModelsMetrics.listWidth)
+                            .overlay(alignment: .trailing) {
+                                Rectangle()
+                                    .fill(MereRunTheme.border.opacity(0.4))
+                                    .frame(width: 1)
+                            }
+                        detailColumn
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
 
-                detailColumn
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-
-            if let job = activeJob {
-                StudioModelsJobBar(
-                    job: job,
-                    onCancel: { cancel(job) },
-                    onLog: { showJobLog.toggle() },
-                    showLog: $showJobLog,
-                    log: log(for: job)
-                )
+                if let job = activeJob {
+                    StudioModelsJobBar(
+                        job: job,
+                        onCancel: { cancel(job) },
+                        onLog: { showJobLog.toggle() },
+                        showLog: $showJobLog,
+                        log: log(for: job)
+                    )
+                }
             }
         }
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task {
             await refresh()
+        }
+        .onChange(of: modelStore.downloadMessage) { _, message in
+            if let message { statusMessage = message }
+        }
+        .onChange(of: selectedRow?.isInstalled) { wasInstalled, isInstalled in
+            if wasInstalled == false, isInstalled == true, let row = selectedRow {
+                select(row, showingDetail: false)
+            }
+        }
+        .onChange(of: modelStore.error) { _, error in
+            if let error { statusMessage = error }
         }
         .onChange(of: visibleRows.map(\.id)) { _, ids in
             if let selectedID, ids.contains(selectedID) { return }
@@ -446,7 +302,7 @@ struct StudioModelsView: View {
                 detailText = ""
                 return
             }
-            select(first)
+            select(first, showingDetail: false)
         }
         .sheet(isPresented: $showPullSheet) {
             StudioModelPullSheet(rows: missingRows) { row in
@@ -497,14 +353,15 @@ struct StudioModelsView: View {
             HStack(spacing: 8) {
                 StudioModelsSearchPill(
                     text: $searchText,
-                    placeholder: "Search \(installedRows.count) \(installedRows.count == 1 ? "model" : "models")"
+                    placeholder: modelStore.hasInventory
+                        ? "Search \(installedRows.count) \(installedRows.count == 1 ? "model" : "models")" : "Search models"
                 )
 
                 Button("Pull…") {
                     showPullSheet = true
                 }
                 .buttonStyle(ModelsPrimaryButtonStyle())
-                .disabled(isRefreshing)
+                .disabled(isRefreshing || !modelStore.hasInventory)
                 .help("Pull a model into managed storage")
             }
             .padding(EdgeInsets(top: 14, leading: 14, bottom: 8, trailing: 14))
@@ -533,6 +390,12 @@ struct StudioModelsView: View {
                 }
             }
 
+            statusNotice
+        }
+    }
+
+    private var statusNotice: some View {
+        VStack(alignment: .leading, spacing: 0) {
             if !statusMessage.isEmpty {
                 Text(statusMessage)
                     .font(.system(size: 11, weight: .medium))
@@ -540,8 +403,25 @@ struct StudioModelsView: View {
                     .lineLimit(2)
                     .padding(EdgeInsets(top: 6, leading: 14, bottom: 10, trailing: 14))
                     .accessibilityAddTraits(.updatesFrequently)
+                if modelStore.error != nil {
+                    Button("Refresh models") { Task { await refresh() } }
+                        .buttonStyle(ModelsSecondaryButtonStyle())
+                        .disabled(isRefreshing)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                }
+                if let download = modelStore.lastCompletedDownload, download.state.isTerminal {
+                    Button("Download log") { showDownloadLog.toggle() }
+                        .buttonStyle(ModelsSecondaryButtonStyle())
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                        .popover(isPresented: $showDownloadLog, arrowEdge: .leading) {
+                            StudioModelsLogView(text: downloadLog(download))
+                        }
+                }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var familyChips: some View {
@@ -576,6 +456,7 @@ struct StudioModelsView: View {
 
     private var emptyListMessage: String {
         if isRefreshing, rows.isEmpty { return "Loading models…" }
+        if !modelStore.hasInventory { return "Model inventory unavailable. Refresh to try again." }
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "No models match the search."
         }
@@ -985,7 +866,9 @@ struct StudioModelsView: View {
     private func pullPanel(_ row: StudioModelInventoryRow) -> some View {
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
             if let usageTerms = row.usageTerms {
-                Text("Third-party usage terms · acceptance required before pulling")
+                Text(modelStore.download(modelID: row.id)?.request.draft?.acceptModelLicense == true
+                    ? "Third-party usage terms · accepted for this download"
+                    : "Third-party usage terms · acceptance required before pulling")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.yellow)
                 Text(usageTerms.summary)
@@ -1014,7 +897,7 @@ struct StudioModelsView: View {
                     .buttonStyle(ModelsSecondaryButtonStyle())
                     .disabled(cancellingDownloadID == row.id)
                 } else if pullingIDs.contains(row.id) {
-                    Text("Pulling from the composer")
+                    Text("Download in progress")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                 } else {
@@ -1065,7 +948,10 @@ struct StudioModelsView: View {
     }
 
     private func status(of row: StudioModelInventoryRow) -> StudioModelRowStatus {
-        StudioModelsPresenter.status(of: row, job: activeJob)
+        if let download = modelStore.download(modelID: row.id) {
+            return .pulling(download.progress?.fractionCompleted)
+        }
+        return StudioModelsPresenter.status(of: row, job: activeJob)
     }
 
     private func detailBody(for row: StudioModelInventoryRow) -> String {
@@ -1075,19 +961,18 @@ struct StudioModelsView: View {
         return detailText
     }
 
+    private func downloadLog(_ job: Job) -> String {
+        job.displayCommand + "\n\n" + job.log.lines.filter { $0.text != job.displayCommand }.map(\.text).joined(separator: "\n")
+    }
+
     private func log(for job: StudioModelsJob) -> String {
-        if let itemID = job.libraryItemID {
-            let item = library.items.first { $0.id == itemID }
-            return item?.outputText ?? "Pull started from the composer. Its log is in the Library row."
+        if job.kind == .pull, let modelID = job.modelID, let download = modelStore.download(modelID: modelID) {
+            return downloadLog(download)
         }
         return jobLog.isEmpty ? "Waiting for output…" : jobLog
     }
 
     private func cancel(_ job: StudioModelsJob) {
-        if let itemID = job.libraryItemID {
-            _ = controller.cancel(requestID: itemID)
-            return
-        }
         switch job.kind {
         case .pull:
             cancelDownload()
@@ -1098,7 +983,8 @@ struct StudioModelsView: View {
         }
     }
 
-    private func select(_ row: StudioModelInventoryRow) {
+    private func select(_ row: StudioModelInventoryRow, showingDetail: Bool = true) {
+        if showingDetail { showsCompactDetail = true }
         selectedID = row.id
         detailText = ""
         guard row.isInstalled else { return }
@@ -1118,70 +1004,19 @@ struct StudioModelsView: View {
 
     @MainActor
     private func download(_ row: StudioModelInventoryRow, acknowledgingUsageTerms: Bool) async {
-        let modelID = row.id
-        downloadingID = modelID
-        cancellingDownloadID = nil
-        downloadProgress = nil
-        downloadProgressOutput = ""
-        jobLog = ""
-        let commandID = UUID()
-        downloadCommandID = commandID
+        guard let template = CommandCatalog.template(id: .modelPull) else { return }
+        var draft = template.defaultDraft()
+        draft.model = row.id
+        draft.acceptModelLicense = acknowledgingUsageTerms
+        select(row)
         statusMessage = ""
-        selectedID = modelID
-        detailText = ""
-
-        let result = await controller.utilityCommandResult(
-            args: StudioModelDownloadCommand.arguments(
-                modelID: modelID,
-                acknowledgingUsageTerms: acknowledgingUsageTerms
-            ),
-            commandID: commandID,
-            onOutput: { chunk in
-                downloadProgressOutput = StudioModelDownloadCommand.appendingOutput(
-                    chunk,
-                    to: downloadProgressOutput
-                )
-                if let progress = StudioModelDownloadCommand.latestProgress(in: downloadProgressOutput) {
-                    downloadProgress = progress
-                }
-                jobLog = StudioModelDownloadCommand.appendingOutput(chunk, to: jobLog)
-            }
-        )
-
-        let wasCancelled = cancellingDownloadID == modelID
-        downloadCommandID = nil
-        downloadingID = nil
-        cancellingDownloadID = nil
-        downloadProgress = nil
-        downloadProgressOutput = ""
-
-        if selectedID == modelID, !result.outputText.isEmpty {
-            detailText = result.outputText
-        }
-        if wasCancelled {
-            statusMessage = "Cancelled pull for \(displayName(for: modelID)). The partial payload resumes on the next pull."
-            return
-        }
-        guard result.exitCode == 0 else {
-            statusMessage = "Could not pull \(displayName(for: modelID))"
-            return
-        }
-
-        let keepSelection = selectedID == modelID
-        onModelsChanged()
-        await refresh()
-        if keepSelection, let installed = rows.first(where: { $0.id == modelID }) {
-            select(installed)
-        }
+        let request = StudioRunRequest(mode: .createImage, templateID: .modelPull, template: template, draft: draft)
+        if !modelStore.startPull(request) { statusMessage = controller.status }
     }
 
     private func cancelDownload() {
-        guard let commandID = downloadCommandID,
-              let modelID = downloadingID,
-              controller.cancelUtilityCommand(commandID) else {
-            return
-        }
-        cancellingDownloadID = modelID
+        guard let modelID = downloadingID else { return }
+        modelStore.cancelDownload(modelID: modelID)
     }
 
     private func downloadTermsMessage(_ row: StudioModelInventoryRow) -> String {
@@ -1196,50 +1031,20 @@ struct StudioModelsView: View {
 
     @MainActor
     private func refresh() async {
-        isRefreshing = true
-        let result = await controller.utilityCommandResult(args: ["model", "list", "--json"])
-
-        guard result.exitCode == 0 else {
-            isRefreshing = false
-            statusMessage = "Could not list models"
-            detailText = result.outputText
-            return
-        }
-
-        rows = StudioModelInventoryParser.rows(from: result.stdout)
-        let capabilitiesResult = await controller.utilityCommandResult(
-            args: ["model", "capabilities", "--all", "--json"]
-        )
-        if capabilitiesResult.exitCode == 0 {
-            rows = StudioModelCatalogParser.applying(
-                StudioModelCatalogParser.metadataByID(from: capabilitiesResult.stdout),
-                to: rows
-            )
-        }
-        let storageResult = await controller.utilityCommandResult(args: ["model", "storage", "--json"])
-        if storageResult.exitCode == 0,
-           let data = storageResult.stdout.data(using: .utf8),
-           let report = try? JSONDecoder().decode(StudioModelStorageReport.self, from: data) {
-            storageReport = report
-            applyStorageUsage(report)
-        }
+        await modelStore.refresh(includingStorage: true)
+        if let error = modelStore.error { statusMessage = error; return }
         let adapterResult = await controller.utilityCommandResult(args: ["adapter", "list", "--json"])
         if adapterResult.exitCode == 0,
            let data = StudioOperationsJSON.objectData(adapterResult.stdout),
            let payload = try? JSONDecoder().decode(StudioAdapterCatalogPayload.self, from: data) {
             adapters = payload.adapters
         }
-        isRefreshing = false
-        statusMessage = ""
-        onInventoryChanged(StudioModelInventorySummary(
-            installedCount: installedRows.count,
-            storageBytes: storageReport?.applicationSupportBytes
-        ))
+        statusMessage = modelStore.downloadMessage ?? ""
         if let selectedID, visibleRows.contains(where: { $0.id == selectedID }) {
             return
         }
         if let first = visibleRows.first {
-            select(first)
+            select(first, showingDetail: false)
         } else {
             selectedID = nil
             detailText = ""
@@ -1418,7 +1223,7 @@ struct StudioModelsView: View {
             args: StudioModelOptimizationCommand.arguments(modelID: row.id, replacing: replacing),
             commandID: commandID,
             onOutput: { chunk in
-                jobLog = StudioModelDownloadCommand.appendingOutput(chunk, to: jobLog)
+                jobLog = StudioModelMaintenanceOutput.appendingOutput(chunk, to: jobLog)
             }
         )
         optimizingID = nil
@@ -1465,7 +1270,7 @@ struct StudioModelsView: View {
             args: ["model", "gc", "--force", "--json"],
             commandID: commandID,
             onOutput: { chunk in
-                jobLog = StudioModelDownloadCommand.appendingOutput(chunk, to: jobLog)
+                jobLog = StudioModelMaintenanceOutput.appendingOutput(chunk, to: jobLog)
             }
         )
         isCleaningStorage = false
@@ -1481,34 +1286,6 @@ struct StudioModelsView: View {
         }
         statusMessage = "Reclaimed \(Self.bytes(result.reclaimedBytes))"
         await refresh()
-    }
-
-    private func applyStorageUsage(_ report: StudioModelStorageReport) {
-        let usageByID = Dictionary(uniqueKeysWithValues: report.models.map { ($0.id, $0) })
-        rows = rows.map { row in
-            guard let usage = usageByID[row.id], usage.installed else { return row }
-            return StudioModelInventoryRow(
-                id: row.id,
-                category: row.category,
-                status: row.status,
-                size: Self.bytes(usage.referencedBytes),
-                usageTerms: row.usageTerms,
-                title: row.title,
-                summary: row.summary,
-                estimatedDownloadBytes: row.estimatedDownloadBytes,
-                minimumUnifiedMemoryGB: row.minimumUnifiedMemoryGB,
-                recommendedUnifiedMemoryGB: row.recommendedUnifiedMemoryGB,
-                supported: row.supported,
-                supportReasons: row.supportReasons,
-                sourceRepository: row.sourceRepository,
-                publisher: row.publisher,
-                referencedBytes: usage.referencedBytes,
-                reclaimableBytes: usage.reclaimableBytes,
-                sharedBytes: usage.sharedBytes,
-                externalBytes: usage.externalBytes,
-                contextWindow: row.contextWindow
-            )
-        }
     }
 
     private func removalMessage(_ row: StudioModelInventoryRow) -> String {
@@ -1693,16 +1470,7 @@ private struct StudioModelsJobBar: View {
             Button("Log", action: onLog)
                 .buttonStyle(ModelsSecondaryButtonStyle())
                 .popover(isPresented: $showLog, arrowEdge: .bottom) {
-                    ScrollView {
-                        Text(log)
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .foregroundStyle(MereRunTheme.textSecondary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(12)
-                    }
-                    .frame(width: 520, height: 280)
-                    .background(MereRunTheme.surface)
+                    StudioModelsLogView(text: log)
                 }
         }
         .padding(.horizontal, 16)
@@ -1714,6 +1482,23 @@ private struct StudioModelsJobBar: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(job.label). \(job.detail ?? "")")
+    }
+}
+
+private struct StudioModelsLogView: View {
+    let text: String
+
+    var body: some View {
+        ScrollView {
+            Text(text)
+                .font(.system(size: 11.5, design: .monospaced))
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(12)
+        }
+        .frame(width: 520, height: 280)
+        .background(MereRunTheme.surface)
     }
 }
 

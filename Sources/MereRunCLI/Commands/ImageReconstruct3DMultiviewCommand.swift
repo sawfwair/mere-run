@@ -1,6 +1,5 @@
 import ArgumentParser
 import Foundation
-import MediaIO
 import MereRunCore
 
 struct InstantMeshCameraDocument: Codable, Equatable {
@@ -68,64 +67,66 @@ struct ImageReconstruct3DMultiview: AsyncParsableCommand {
         dryRun: Bool,
         json: Bool
     ) async throws {
-        guard views.count == 4 || views.count == 6 else {
-            throw ValidationError("Repeat --view exactly 4 or 6 times")
-        }
-        guard (2...256).contains(resolution) else {
-            throw ValidationError("--resolution must be between 2 and 256")
-        }
-        let inputURLs = views.map { URL(fileURLWithPath: $0).standardizedFileURL }
-        for inputURL in inputURLs where !FileManager.default.fileExists(atPath: inputURL.path) {
-            throw ValidationError("Input view not found: \(inputURL.path)")
-        }
-        do {
-            _ = try VFXImageInputValidator.inspectAndValidate(inputURLs)
-        } catch {
-            throw ValidationError(error.localizedDescription)
-        }
-        let cameraValues = try loadCameras(cameras, expectedCount: inputURLs.count)
-        let outputURL = resolveOutputURL(output, firstViewURL: inputURLs[0])
+        let request = try makeGenerationRequest(
+            views: views, output: output, model: model, cameras: cameras,
+            resolution: resolution, noVertexColors: noVertexColors
+        )
+        let sourceDimensions = try InstantMeshGenerationOperation.prepare(request)
+        let inputURLs = request.viewURLs
+        let outputURL = request.outputDirectory
 
         if dryRun {
             let checkpoint = try await InstantMeshResources.resolve(requestedModel: model)
-            let dimensions = try inputURLs.map { url in
-                let size = try MediaImageIO.size(of: url)
-                return InstantMeshSourceDimensions(width: size.width, height: size.height)
+            let dimensions = sourceDimensions.map {
+                InstantMeshSourceDimensions(width: $0.width, height: $0.height)
             }
             print(try jsonString(InstantMeshPlanPayload(
                 inputPaths: inputURLs.map(\.path),
                 sourceDimensions: dimensions,
                 outputDirectory: outputURL.path,
                 checkpoint: checkpoint,
-                usesSuppliedCameras: cameraValues != nil,
+                usesSuppliedCameras: request.settings.cameras != nil,
                 extractionResolution: resolution,
                 includesVertexColors: !noVertexColors
             )))
             return
         }
 
-        try MLXBundleSupport.ensureAvailable(quiet: true)
-        let generator = InstantMeshGenerator()
-        do {
-            let result = try await generator.generate(
-                viewURLs: inputURLs,
-                outputDirectory: outputURL,
-                model: model,
-                cameras: cameraValues,
-                extractionResolution: resolution,
-                includeVertexColors: !noVertexColors,
-                progress: { event in CLIStderr.write("[image-to-3d-multiview] \(event.message)\n") }
-            )
-            await generator.unload()
-            if json {
-                print(try jsonString(try InstantMeshRunPayload(result: result)))
-            } else {
-                print(result.runManifest.manifestURL.path)
-            }
-        } catch {
-            await generator.unload()
-            throw error
+        let result = try await InstantMeshGenerationOperation.execute(
+            request,
+            prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) },
+            progress: { event in CLIStderr.write("[image-to-3d-multiview] \(event.message)\n") }
+        )
+        if json {
+            print(try jsonString(try InstantMeshRunPayload(result: result)))
+        } else {
+            print(result.runManifest.manifestURL.path)
         }
+    }
+
+    static func makeGenerationRequest(
+        views: [String], output: String?, model: String?, cameras: String?,
+        resolution: Int, noVertexColors: Bool
+    ) throws -> InstantMeshGenerationRequest {
+        do {
+            try InstantMeshGenerationSettings.validateViewCount(views.count)
+        } catch {
+            throw ValidationError("Repeat --view exactly 4 or 6 times")
+        }
+        let settings: InstantMeshGenerationSettings
+        do {
+            settings = try InstantMeshGenerationSettings(
+                extractionResolution: resolution, includesVertexColors: !noVertexColors,
+                cameras: loadCameras(cameras, expectedCount: views.count)
+            )
+        } catch InstantMeshGeneratorError.invalidExtractionResolution {
+            throw ValidationError("--resolution must be between 2 and 256")
+        }
+        let inputURLs = views.map { URL(fileURLWithPath: $0).standardizedFileURL }
+        return InstantMeshGenerationRequest(
+            viewURLs: inputURLs, outputDirectory: resolveOutputURL(output, firstViewURL: inputURLs[0]),
+            model: model, settings: settings
+        )
     }
 
     static func resolveOutputURL(_ raw: String?, firstViewURL: URL) -> URL {
@@ -151,11 +152,11 @@ struct ImageReconstruct3DMultiview: AsyncParsableCommand {
         guard document.schemaVersion == 1 else {
             throw ValidationError("InstantMesh camera JSON schemaVersion must be 1")
         }
-        guard document.cameras.count == expectedCount else {
+        do {
+            try InstantMeshGenerationSettings(cameras: document.cameras).validate(viewCount: expectedCount)
+        } catch InstantMeshPreprocessingError.cameraCountMismatch {
             throw ValidationError("Camera JSON must contain exactly \(expectedCount) cameras")
-        }
-        for (index, camera) in document.cameras.enumerated()
-        where camera.count != 16 || !camera.allSatisfy(\.isFinite) {
+        } catch InstantMeshPreprocessingError.invalidCamera(let index) {
             throw ValidationError("Camera \(index) must contain 16 finite values")
         }
         return document.cameras

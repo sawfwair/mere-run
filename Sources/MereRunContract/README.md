@@ -5,10 +5,21 @@ CLI and its user-interface shells. It describes stable command identifiers,
 supported flags, typed choices, inputs, and outputs without importing a model
 runtime into the app.
 
-`CommandCapabilityContract.swift` owns the machine-readable catalog emitted by
-`mere.run catalog --json`. The CLI remains the runtime source of truth; shells
-use this module to build and validate commands instead of maintaining a second
-copy of the command surface.
+`CommandCapabilityContract.swift` defines the serialized schema and its decoding
+compatibility. `CommandCapabilityCatalog.swift` assembles the ordered catalog
+emitted by `mere.run catalog --json`. The CLI remains the runtime source of truth;
+shells use this module to build and validate commands instead of maintaining a
+second copy of the command surface.
+
+`TextChatTokenBudget` owns chat output/context token bounds shared by Core and
+Studio validation. Numeric capability ranges remain display hints; they do not
+replace runtime constraints.
+
+To change a capability, open its `CommandCapabilityCatalog+<family>.swift` file.
+Model benchmark definitions have their own file. Shared receipt and progress
+options belong to `CommandCapabilityCatalog+Options.swift`; typed text and video
+choices belong to `CommandCapabilityChoices.swift`. Preserve the assembly order
+and serialized fields when reorganizing definitions.
 
 Each option may carry additive shell metadata: `default_value` (the CLI's
 static ArgumentParser default, rendered as the CLI parses it), `group` (one of

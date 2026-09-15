@@ -1,8 +1,24 @@
 import Foundation
+import MereRunContract
 import XCTest
 @testable import MereRunCore
 
 final class ChatExecutionTests: XCTestCase {
+    func testTokenBudgetValidationMatchesShellContract() {
+        for (tokens, context) in [(0, 128), (-1, 128), (129, 128), (128, 0), (128, -1), (128, 128), (1, 1)] {
+            let issue = TextChatTokenBudget.issue(maxTokens: tokens, contextSize: context)
+            let request = ChatRequest(messages: [.init(role: .user, content: "Question")],
+                                      maxTokens: tokens, maxContextTokens: context)
+            if let issue {
+                XCTAssertThrowsError(try ChatRequestResolver.validate(request)) { error in
+                    XCTAssertEqual(error as? ChatRequestIssue, ChatRequestIssue(issue.field, issue.message))
+                }
+            } else {
+                XCTAssertNoThrow(try ChatRequestResolver.validate(request))
+            }
+        }
+    }
+
     func testCompatibilityDefaultsKeepCommandAndOpenAIBehavior() throws {
         let request = ChatRequest(messages: [.init(role: .user, content: "hello")])
         let fixtures: [(String, Double, Double, Int?, Double)] = [

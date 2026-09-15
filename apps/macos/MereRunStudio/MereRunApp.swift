@@ -45,6 +45,7 @@ struct MereRunRootView: View {
 struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
     @StateObject private var session = StudioAppSession()
+    @State private var isStudioOpen = false
     private var controller: MereRunController { session.controller }
     private var library: StudioLibraryStore { session.library }
     @StateObject private var navigation = NavigationModel()
@@ -62,7 +63,7 @@ struct MereRunApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "studio") {
             MereRunRootView()
                 .environmentObject(controller)
                 .environmentObject(library)
@@ -72,6 +73,7 @@ struct MereRunApp: App {
                     minHeight: StudioLayoutPolicy.minimumWindowHeight
                 )
                 .onAppear {
+                    isStudioOpen = true
                     crashReporter.applyStoredPreference()
                     appDelegate.onTerminate = { [weak controller] in
                         MainActor.assumeIsolated {
@@ -81,6 +83,7 @@ struct MereRunApp: App {
                         }
                     }
                 }
+                .onDisappear { isStudioOpen = false }
                 .task {
                     await controller.synchronizeCLIInstallationAfterLaunch()
                 }
@@ -95,7 +98,8 @@ struct MereRunApp: App {
             MereRunCommands(
                 controller: controller,
                 library: library,
-                updater: updaterController.updater
+                updater: updaterController.updater,
+                isStudioOpen: isStudioOpen
             )
         }
 

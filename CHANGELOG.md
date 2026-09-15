@@ -18,6 +18,116 @@ The format is based on Keep a Changelog.
   `vision-depth-marigold-v2`, and accepts a bare tensor written by
   `torch.save(tensor)` in the non-executing PyTorch state-dict reader.
 
+## 0.52.0 - 2026-09-14
+
+- Announce Studio reply progress, completion, cancellation, and prompt errors to
+  VoiceOver while preserving composer focus. Prevent Studio jobs from remaining
+  active after their subprocess exits and output has drained.
+
+- Reuse LFM2 runtime streams between completed API requests, and wait for
+  submitted work before reusing a cancelled request's streams. Overlapping
+  requests retain separate stream contexts.
+
+- Keep the Studio Command Console panes at the window's full height so command
+  fields remain accessible. Wrap Settings explanations and stored configuration
+  values instead of clipping them to one line.
+- Reopen Studio from the Window menu after closing its main window. Identify
+  user-stopped conversation replies separately from runtime failures, including
+  after relaunch or branching.
+
+- Validate Studio chat token budgets with the same bounds as the runtime before
+  sending or retrying. Invalid budgets preserve the previous reply and unsent draft.
+
+- Report LFM2 token-limited chat replies as `length` in the API. Preserve the
+  checkpoint's thinking prefix in streamed and completed output so a truncated
+  reasoning block stays hidden when thinking output is disabled.
+
+- Cancel queued and active API work when its client disconnects, and retain
+  request admission until cleanup finishes. Preserve HTTP keep-alive behavior.
+- Settle active workflow nodes on cancellation, stop parallel child processes
+  when the caller cancels, and recover abandoned local workers during inspection.
+  Preserve incomplete event-log tails before repair and reuse verified completed
+  outputs on resume without advertising stale outputs from a failed attempt.
+- Drain Studio process output before completion and stop owned descendants on
+  cancellation. Failed jobs and Library rows retain only confirmed outputs;
+  partial files remain on disk.
+
+- Share Studio model inventory and download jobs between the composer and Models.
+  Keep download progress and cancellation available across navigation, reject stale
+  inventory refreshes, and recheck the current model after a download completes.
+  Reconcile result focus with Library selection and honor confirmed Save destinations.
+  Folder exports keep existing files, deduplicate sources, and report partial failures.
+
+- Preserve the previous conversation reply and unsent draft when Studio rejects
+  a retry. Send and retry share Command overrides and validation. Prompt task
+  edits save through one state owner, and legacy draft import retains unvisited
+  tasks without replacing full saved settings.
+
+- Reject TripoSR foreground padding that exceeds the VFX image budget before
+  integer conversion or allocation, including extremely small positive ratios.
+
+- Share Depth Anything 3 view/camera validation, generation, scene-export settings,
+  and awaited cleanup between the multiview geometry CLI and API.
+
+- Share bounded video-depth settings, preflight, execution, and awaited unloading
+  between the CLI and API. Check cancellation between native temporal windows.
+
+- Share InstantMesh view and camera validation, reconstruction execution, and
+  awaited cleanup across the CLI and API while preserving ordered inputs.
+
+- Share TripoSR settings and execution between both reconstruction commands and
+  the API, with current-input checks and awaited cleanup before returning.
+
+- Share MoGe-2 geometry settings, execution, and awaited unloading between the
+  CLI and API. Make `vision geometry --dry-run` apply the native dimension and
+  derived token-grid limits before model loading, and recheck inputs at execution.
+
+- Share native video preparation, execution, unloading, and media output between
+  the CLI and video API through a Core operation. Preserve API defaults,
+  optional argument syntax, request admission, and artifact retention without
+  running the CLI command inside the HTTP handler.
+- Keep video API JSON fields literal, return HTTP 400 for invalid optional
+  arguments and native settings, and check cooperative cancellation before
+  video output and before reporting success.
+
+- Share speech synthesis validation, model selection, native waveform generation,
+  and WAV export between the CLI and resident API. Reject empty text and invalid
+  temperatures before model loading or clone preparation.
+- Finalize streaming speech WAV headers before publishing the file or receipt.
+  Preserve existing output on failure or cooperative cancellation, cancel the
+  producer when its stream consumer terminates, and retain float32 streaming
+  output alongside PCM16 offline output.
+- Emit streaming speech token progress with `--quiet --progress-json`.
+- Share `video generate` model selection, option validation, geometry, and
+  native request construction between preflight and execution in Core.
+  Preflight now applies H3 conditioning rules, reads HDR IC-LoRA canvas
+  metadata, and reports generation-only option conflicts before loading.
+- Reject nonfinite durations and frame-count overflow before model resolution.
+  Preserve timed-image conditioning strength when a CRF value is also supplied.
+- Share ACE-Step and MiniMax music preparation and execution between the CLI
+  and resident APIs. Keep loading and generation on retained CPU/GPU streams.
+- Share music WAV export in `AudioCore`, with validated settings, explicit
+  channel layouts, bounded encoding, atomic file replacement, and recipe
+  statistics. Both music APIs accept optional nested `export` settings while
+  preserving their existing export defaults.
+- Check the declared target, product, and re-export policy for macOS and both
+  Linux manifest variants in the repository validation gates.
+
+- Bound audio export fades to the waveform length before converting to frame
+  counts. Reject nonfinite peak targets and nonfinite or negative fades before
+  music generation instead of risking a crash during WAV export.
+- Write durable run records on Apple volumes without file protection support.
+  Keep private permissions and atomic replacement on every filesystem; apply
+  `completeUnlessOpen` on volumes that support it.
+- Share text LoRA option validation, dataset preparation, native execution, and
+  adapter-manifest publication in Core. Preserve CLI defaults and resume
+  formats, await dashboard shutdown, and prevent cancelled training from
+  publishing a successful manifest.
+- Record cancelled image execution as cancelled when the executor throws a
+  different error after task cancellation.
+- Preserve explicit speech model IDs during resolution instead of silently
+  loading an installed default checkpoint.
+
 - Share chat sampling resolution, numeric validation, native invocation, and
   cleanup between `text chat` and the API. `text chat` now range-checks sampling
   values that it previously passed straight to the generator, rejecting them

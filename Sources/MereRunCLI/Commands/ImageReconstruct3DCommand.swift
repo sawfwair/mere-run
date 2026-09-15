@@ -19,13 +19,13 @@ struct ImageReconstruct3D: AsyncParsableCommand {
     var model: String?
 
     @Option(name: [.long], help: "Native density-grid resolution from 2 through 512.")
-    var resolution: Int = 256
+    var resolution: Int = TripoSRGenerationSettings.defaultResolution
 
     @Option(name: [.long], help: "Activated-density isosurface threshold.")
     var densityThreshold: Float = TripoSRConfiguration.production.densityThreshold
 
     @Option(name: [.long], help: "Transparent foreground occupancy ratio in (0, 1].")
-    var foregroundRatio: Float = 0.85
+    var foregroundRatio: Float = TripoSRGenerationSettings.defaultForegroundRatio
 
     @Flag(name: [.long], help: "Skip transparent-foreground crop/pad and treat the image as already framed.")
     var alreadyFramed = false

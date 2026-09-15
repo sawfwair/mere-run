@@ -3,6 +3,50 @@ import XCTest
 @testable import MereRunCore
 
 final class ManagedModelCatalogTests: XCTestCase {
+    func testRepositoryAliasesKeepFirstPublishedModelPrecedence() {
+        let aliases = [
+            (" QWEN/QWEN-IMAGE-EDIT-2511\n", "image-qwen-edit-2511"),
+            ("google/gemma-4-31B-it", "text-chat-gemma4"),
+            ("google/gemma-4-12B-it", "text-chat-gemma4-12b"),
+            ("ACE-Step/Ace-Step1.5", "music-acestep"),
+            ("google/magenta-realtime-2", "music-magenta-rt2-small"),
+            ("dgrauet/ltx-2.3-mlx", "video-ltx23-av-mlx")
+        ]
+        for (alias, expectedID) in aliases {
+            XCTAssertEqual(ManagedModelCatalog.spec(for: alias)?.id, expectedID, alias)
+        }
+        XCTAssertEqual(
+            ManagedModelCatalog.spec(for: " VISION-CHAT-GEMMA4-12B\n")?.id,
+            "vision-chat-gemma4-12b"
+        )
+        XCTAssertNil(ManagedModelCatalog.spec(for: "unknown-catalog-model"))
+    }
+
+    func testMountedOnlyModelHasManagedDownloadSource() {
+        let spec = ManagedModelSpec(
+            id: "mounted-only-fixture",
+            category: .image,
+            installShape: .directoryRoot,
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "transformer",
+                    hubFallback: HubFallbackConfig(repoId: "fixture/model", patterns: ["transformer/*"])
+                )
+            ],
+            validationKind: .flux2Klein
+        )
+        XCTAssertTrue(spec.canBePulledWithoutConfiguration)
+        XCTAssertTrue(spec.hasAnyManagedDownloadSource())
+        let localOnly = ManagedModelSpec(
+            id: "local-only-fixture",
+            category: .image,
+            installShape: .directoryRoot,
+            validationKind: .flux2Klein
+        )
+        XCTAssertFalse(localOnly.canBePulledWithoutConfiguration)
+        XCTAssertFalse(localOnly.hasAnyManagedDownloadSource())
+    }
+
     func testEveryCanonicalManagedModelIDHasCatalogSpec() {
         for modelID in ModelResolver.ModelID.allCases {
             let spec = ManagedModelCatalog.spec(for: modelID.rawValue)

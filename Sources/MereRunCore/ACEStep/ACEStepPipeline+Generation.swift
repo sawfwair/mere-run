@@ -237,8 +237,9 @@ extension ACEStepPipeline {
         repaintMask: MLXArray? = nil,
         cleanSourceLatents: MLXArray? = nil,
         repaintInjectionRatio: Float = 0.5,
-        repaintCrossfadeFrames: Int = 10
-    ) -> MLXArray {
+        repaintCrossfadeFrames: Int = 10,
+        checkCancellation: () throws -> Void
+    ) rethrows -> MLXArray {
         precondition(!timesteps.isEmpty, "ACE-Step timesteps must not be empty.")
 
         let coverNoise = Self.prepareCoverNoiseSchedule(
@@ -343,6 +344,7 @@ extension ACEStepPipeline {
         }
 
         for i in 0..<activeTimesteps.count {
+            try checkCancellation()
             let t = activeTimesteps[i]
             let useNonCoverCondition = hasNonCoverCondition && i >= coverSteps
             let currentEncoderHiddenStates = useNonCoverCondition ? nonCoverEncoderHiddenStates! : encoderHiddenStates

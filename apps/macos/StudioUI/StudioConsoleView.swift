@@ -43,18 +43,19 @@ package struct StudioConsoleView: View {
     package var body: some View {
         HSplitView {
             StudioConsoleCatalog()
-                .frame(minWidth: 220, idealWidth: 268, maxWidth: 360)
+                .frame(minWidth: 220, idealWidth: 268, maxWidth: 360, maxHeight: .infinity)
 
             StudioConsoleForm(draft: $draft, run: run, stop: stop, canStop: job?.state.isActive == true)
-                .frame(minWidth: 420, idealWidth: 560, maxWidth: .infinity)
+                .frame(minWidth: 420, idealWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
                 .layoutPriority(1)
 
             Group {
                 if let job { StudioConsoleLog(job: job) }
                 else { ContentUnavailableView("Run output", systemImage: "terminal", description: Text("Your Console run will appear here.")) }
             }
-                .frame(minWidth: 320, idealWidth: 440, maxWidth: .infinity)
+                .frame(minWidth: 320, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxHeight: .infinity)
         .background(MereRunTheme.background.ignoresSafeArea())
         .foregroundStyle(MereRunTheme.textPrimary)
         .onAppear {

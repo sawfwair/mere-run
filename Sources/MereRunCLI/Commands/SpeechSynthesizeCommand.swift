@@ -8,18 +8,6 @@ import MereRunCore
 
 // MARK: - Speech Synthesize Command
 
-/// The one non-streaming synthesis call `speech synthesize` makes, so a test
-/// can substitute a fixture generator for Qwen3-TTS.
-protocol CLISpeechSynthesizing {
-    func generate(
-        _ request: TTSRequest,
-        modelPath: String?,
-        progressHandler: (@Sendable (TTSProgress) -> Void)?
-    ) async throws -> TTSResult
-}
-
-extension Qwen3TTSGenerator: CLISpeechSynthesizing {}
-
 enum TalkModeOption: String, ExpressibleByArgument {
     case style
     case clone
@@ -49,7 +37,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
     var model: String = Qwen3TTSResources.defaultModelId
 
     @Option(name: [.customShort("v"), .long], help: "Voice description for speech style.")
-    var voice: String = "A calm female voice with clear pronunciation"
+    var voice: String = TTSRequest.defaultVoiceDescription
 
     @Option(name: [.long], help: "Voice mode: style or clone.")
     var mode: TalkModeOption = .style
@@ -64,13 +52,13 @@ struct SpeechSynthesize: AsyncParsableCommand {
     var refText: String?
 
     @Option(name: [.long], help: "Language hint (default: auto).")
-    var language: String = "auto"
+    var language: String = TTSRequest.defaultLanguage
 
     @Option(name: [.long], help: "Save this reference as a reusable profile name.")
     var saveProfile: String?
 
     @Option(name: [.long], help: "Sampling temperature (default: 0.6).")
-    var temperature: Float = 0.6
+    var temperature: Float = TTSRequest.defaultTemperature
 
     @Flag(name: [.long], help: "Enable streaming TTS mode.")
     var stream: Bool = false
@@ -87,109 +75,89 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
     var receipt: Bool = false
 
-    /// Test seam: replaces the Qwen3-TTS generator on the non-streaming path so
-    /// the command's output contract can be exercised without a model. Setting
-    /// it also skips the Metal bundle check, which the fixture does not need.
-    /// Tests set and clear it around one `run()`; the CLI never touches it.
-    nonisolated(unsafe) static var synthesizerOverride: (any CLISpeechSynthesizing)?
+    /// Supplies fixture audio without loading a model. Tests restore it after each run.
+    nonisolated(unsafe) static var synthesizerOverride: (any SpeechSynthesisExecutor)?
 
-    private var synthesizer: (any CLISpeechSynthesizing)? { Self.synthesizerOverride }
+    private var streamingOptions: TTSStreamingOptions? {
+        stream ? TTSStreamingOptions(chunkTokenInterval: streamChunkTokens, emitTokenEvents: !quiet || progressJson) : nil
+    }
+
+    func synthesisPlan(outputURL: URL, cloneReference: TTSCloneReference? = nil) throws -> SpeechSynthesisPlan {
+        try SpeechSynthesisPlan(
+            request: TTSRequest(
+                text: text, voiceDescription: voice, voiceMode: mode == .clone ? .clone : .style,
+                cloneReference: cloneReference, language: normalizedLanguageOrAuto(language),
+                temperature: temperature, outputURL: outputURL
+            ),
+            streamingOptions: streamingOptions
+        )
+    }
 
     func run() async throws {
-        if stream {
-            guard streamChunkTokens > 0 else {
-                throw ValidationError("--stream-chunk-tokens must be > 0.")
-            }
-        }
-
-        if synthesizer == nil {
+        try SpeechSynthesisPlan.validateParameters(text: text, temperature: temperature, speed: TTSRequest.defaultSpeed)
+        try SpeechSynthesisPlan.validateStreamingOptions(streamingOptions)
+        let selection = try SpeechSynthesisModelSelection.resolve(model)
+        if Self.synthesizerOverride == nil {
             try MLXBundleSupport.ensureAvailable(quiet: quiet)
         }
         let outputURL = URL(fileURLWithPath: output).standardizedFileURL
-
-        // Ensure output directory exists
-        let outputDir = outputURL.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
-
-        let modelSelection = try resolveModelSelection()
-        let qwenGenerator = Qwen3TTSGenerator(modelId: modelSelection.modelId)
-        let profileStore = VoiceProfileStore()
-
-        let request = try await buildRequest(outputURL: outputURL, profileStore: profileStore)
-
-        if stream {
-            try await runStreaming(request: request, generator: qwenGenerator, modelPath: modelSelection.modelPath)
+        let reference = mode == .clone ? try await resolveCloneReference(profileStore: VoiceProfileStore()) : nil
+        let plan = try synthesisPlan(outputURL: outputURL, cloneReference: reference)
+        try plan.validateForExecution()
+        if let executor = Self.synthesizerOverride {
+            try await run(plan: plan, executor: executor)
             return
         }
-        let generator: any CLISpeechSynthesizing = synthesizer ?? qwenGenerator
+        let generator = selection.makeGenerator()
+        do {
+            try await run(plan: plan, executor: selection.executor(using: generator))
+            await generator.unload()
+        } catch {
+            await generator.unload()
+            throw error
+        }
+    }
 
+    private func run(plan: SpeechSynthesisPlan, executor: any SpeechSynthesisExecutor) async throws {
         if !quiet {
-            FileHandle.standardError.write(Data("Generating speech with native Qwen3-TTS...\n".utf8))
+            let suffix = plan.streamingOptions == nil ? "" : " (streaming)"
+            FileHandle.standardError.write(Data("Generating speech with native Qwen3-TTS\(suffix)...\n".utf8))
         }
-
-        let progressHandler: (@Sendable (TTSProgress) -> Void)?
-        if progressJson {
-            // Qwen3-TTS reports stage changes and a running token count with no
-            // known total, so every event is indeterminate (`total_steps: 0`).
-            let progressStream = JSONProgressStream()
-            progressHandler = { progress in
-                progressStream.report(stage: progress.stage.rawValue, step: progress.tokensGenerated, totalSteps: 0)
-            }
-        } else if quiet {
-            progressHandler = nil
+        let result: TTSResult
+        if plan.streamingOptions != nil {
+            result = try await runStreaming(plan: plan, executor: executor)
         } else {
-            progressHandler = { progress in
-                var message = "[\(progress.stage.rawValue)]"
-                if progress.tokensGenerated > 0 {
-                    message += " \(progress.tokensGenerated) tokens"
-                }
-                if let msg = progress.message {
-                    message += " \(msg)"
-                }
-                FileHandle.standardError.write(Data("\(message)\n".utf8))
-            }
+            result = try await SpeechSynthesisOperation.execute(plan, executor: executor, progressHandler: progressHandler()).result
         }
-
-        let result = try await generator.generate(
-            request,
-            modelPath: modelSelection.modelPath,
-            progressHandler: progressHandler
-        )
-
         if !quiet {
             let durationStr = String(format: "%.2f", result.duration)
             FileHandle.standardError.write(Data("Audio saved to: \(result.audioURL.path)\n".utf8))
             FileHandle.standardError.write(Data("Duration: \(durationStr)s @ \(result.sampleRate)Hz\n".utf8))
         }
-
         print(result.audioURL.path)
         try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: result.audioURL), enabled: receipt)
     }
 
-    private func runStreaming(
-        request: TTSRequest,
-        generator: Qwen3TTSGenerator,
-        modelPath: String?
-    ) async throws {
-        if !quiet {
-            FileHandle.standardError.write(Data("Generating speech with native Qwen3-TTS (streaming)...\n".utf8))
+    private func progressHandler() -> (@Sendable (TTSProgress) -> Void)? {
+        if progressJson {
+            let progressStream = JSONProgressStream()
+            return { progress in
+                progressStream.report(stage: progress.stage.rawValue, step: progress.tokensGenerated, totalSteps: 0)
+            }
         }
+        if quiet { return nil }
+        return { progress in
+            var message = "[\(progress.stage.rawValue)]"
+            if progress.tokensGenerated > 0 { message += " \(progress.tokensGenerated) tokens" }
+            if let detail = progress.message { message += " \(detail)" }
+            FileHandle.standardError.write(Data("\(message)\n".utf8))
+        }
+    }
 
-        let stream = generator.generateStream(
-            request,
-            options: TTSStreamingOptions(
-                chunkTokenInterval: streamChunkTokens,
-                emitTokenEvents: !quiet
-            ),
-            modelPath: modelPath
-        )
-
-        var writer: StreamingWAVWriter?
+    private func runStreaming(plan: SpeechSynthesisPlan, executor: any SpeechSynthesisExecutor) async throws -> TTSResult {
         var tokenCount = 0
-        var result: TTSResult?
         let progressStream = progressJson ? JSONProgressStream() : nil
-
-        for try await event in stream {
+        for try await event in try SpeechSynthesisOperation.stream(plan, executor: executor) {
             switch event {
             case .token:
                 tokenCount += 1
@@ -197,66 +165,17 @@ struct SpeechSynthesize: AsyncParsableCommand {
                     if let progressStream {
                         progressStream.report(stage: TTSStage.generating.rawValue, step: tokenCount, totalSteps: 0)
                     } else if !quiet {
-                        FileHandle.standardError.write(
-                            Data("[generating] \(tokenCount) tokens\n".utf8)
-                        )
+                        FileHandle.standardError.write(Data("[generating] \(tokenCount) tokens\n".utf8))
                     }
                 }
-
-            case .audioChunk(let samples, let sampleRate):
-                if writer == nil {
-                    writer = try StreamingWAVWriter(outputURL: request.outputURL, sampleRate: sampleRate)
-                }
-                try writer?.append(samples: samples)
-
-            case .completed(let completed):
-                result = completed
+            case .audioChunk:
+                break
+            case .completed(let result):
+                return result
             }
         }
-
-        guard let result else {
-            throw ValidationError("Streaming TTS completed without a final result.")
-        }
-
-        if !quiet {
-            let durationStr = String(format: "%.2f", result.duration)
-            FileHandle.standardError.write(Data("Audio saved to: \(result.audioURL.path)\n".utf8))
-            FileHandle.standardError.write(Data("Duration: \(durationStr)s @ \(result.sampleRate)Hz\n".utf8))
-        }
-
-        print(result.audioURL.path)
-        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: result.audioURL), enabled: receipt)
-    }
-
-    private func buildRequest(
-        outputURL: URL,
-        profileStore: VoiceProfileStore
-    ) async throws -> TTSRequest {
-        switch mode {
-        case .style:
-            return TTSRequest(
-                text: text,
-                voiceDescription: voice,
-                voiceMode: .style,
-                cloneReference: nil,
-                language: normalizedLanguageOrAuto(language),
-                speed: 1.0,
-                temperature: temperature,
-                outputURL: outputURL
-            )
-        case .clone:
-            let cloneReference = try await resolveCloneReference(profileStore: profileStore)
-            return TTSRequest(
-                text: text,
-                voiceDescription: voice,
-                voiceMode: .clone,
-                cloneReference: cloneReference,
-                language: normalizedLanguageOrAuto(language),
-                speed: 1.0,
-                temperature: temperature,
-                outputURL: outputURL
-            )
-        }
+        try Task.checkCancellation()
+        throw SpeechSynthesisError.invalidStream("Streaming TTS completed without a final result.")
     }
 
     private func resolveCloneReference(profileStore: VoiceProfileStore) async throws -> TTSCloneReference {
@@ -343,16 +262,6 @@ struct SpeechSynthesize: AsyncParsableCommand {
             throw ValidationError("Auto-transcription returned empty text. Use --ref-text.")
         }
         return transcript
-    }
-
-    private func resolveModelSelection() throws -> (modelId: String, modelPath: String?) {
-        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fm = FileManager.default
-        let asPath = URL(fileURLWithPath: trimmed).standardizedFileURL
-        if fm.fileExists(atPath: asPath.path) {
-            return (Qwen3TTSResources.defaultModelId, asPath.path)
-        }
-        return (trimmed.isEmpty ? Qwen3TTSResources.defaultModelId : trimmed, nil)
     }
 
     private func normalized(_ value: String?) -> String? {

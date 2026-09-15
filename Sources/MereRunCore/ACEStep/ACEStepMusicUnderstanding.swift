@@ -469,3 +469,54 @@ extension ACEStepPipeline {
         return prefix.isEmpty ? nil : Float(prefix)
     }
 }
+
+extension ACEStepPlanningPolicy {
+    public static func mergeMissing(
+        userMetadata metadata: ACEStep5HzLMConstrainedSampler.UserMetadata,
+        analysis: ACEStepMusicUnderstandingMetadata
+    ) -> (metadata: ACEStep5HzLMConstrainedSampler.UserMetadata, filledFields: [String]) {
+        var filledFields: [String] = []
+
+        let analyzedBPM = analysis.bpm.map(String.init)
+        let mergedBPM = fillMissing(metadata.bpm, with: analyzedBPM, field: "bpm", filledFields: &filledFields)
+        let mergedKeyscale = fillMissing(metadata.keyscale, with: analysis.keyscale, field: "keyscale", filledFields: &filledFields)
+        let mergedLanguage = fillMissing(metadata.language, with: analysis.language, field: "language", filledFields: &filledFields)
+        let mergedTimeSignature = fillMissing(
+            metadata.timesignature,
+            with: analysis.timesignature,
+            field: "timesignature",
+            filledFields: &filledFields
+        )
+
+        return (
+            ACEStep5HzLMConstrainedSampler.UserMetadata(
+                bpm: mergedBPM,
+                caption: metadata.caption,
+                duration: metadata.duration,
+                keyscale: mergedKeyscale,
+                language: mergedLanguage,
+                timesignature: mergedTimeSignature
+            ),
+            filledFields
+        )
+    }
+
+    private static func fillMissing(
+        _ existing: String?,
+        with analyzed: String?,
+        field: String,
+        filledFields: inout [String]
+    ) -> String? {
+        let trimmedExisting = existing?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedExisting.isEmpty {
+            return existing
+        }
+        let trimmedAnalyzed = analyzed?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmedAnalyzed.isEmpty else {
+            return existing
+        }
+        filledFields.append(field)
+        return trimmedAnalyzed
+    }
+
+}

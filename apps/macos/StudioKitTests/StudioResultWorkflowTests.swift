@@ -111,8 +111,60 @@ final class StudioResultWorkflowTests: XCTestCase {
         try StudioFileExport.copy(source, to: target)
         XCTAssertEqual(try Data(contentsOf: source), Data("original".utf8))
         XCTAssertEqual(try Data(contentsOf: target), Data("original".utf8))
-        XCTAssertThrowsError(try StudioFileExport.copy(directory.appendingPathComponent("missing"), to: target))
+        let missing = directory.appendingPathComponent("missing")
+        XCTAssertThrowsError(try StudioFileExport.copy(missing, to: target))
+        XCTAssertThrowsError(try StudioFileExport.copy(missing, to: missing))
         XCTAssertEqual(try Data(contentsOf: target), Data("original".utf8))
+    }
+
+    func testFolderExportPreservesCollisionsDeduplicatesSharedSourcesAndReportsMissingFiles() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("batch-export-\(UUID())")
+        let first = root.appendingPathComponent("a/result.png")
+        let second = root.appendingPathComponent("b/result.png")
+        let folder = root.appendingPathComponent("saved")
+        for directory in [first.deletingLastPathComponent(), second.deletingLastPathComponent(), folder] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("first".utf8).write(to: first)
+        try Data("second".utf8).write(to: second)
+        let existing = folder.appendingPathComponent("result.png")
+        try Data("keep".utf8).write(to: existing)
+        let missing = root.appendingPathComponent("missing.png")
+        let report = StudioFileExport.copy([first, first, second, missing], into: folder)
+        XCTAssertEqual(report.destinations.map(\.lastPathComponent), ["result-2.png", "result-3.png"])
+        XCTAssertEqual(report.failures, [missing])
+        XCTAssertEqual(try Data(contentsOf: existing), Data("keep".utf8))
+        XCTAssertEqual(try Data(contentsOf: first), Data("first".utf8))
+        XCTAssertEqual(try Data(contentsOf: report.destinations[1]), Data("second".utf8))
+        let failed = StudioFileExport.copy([first], into: root.appendingPathComponent("not-a-folder"))
+        XCTAssertEqual(failed.failures, [first])
+        XCTAssertTrue(failed.destinations.isEmpty)
+    }
+
+    func testResultFocusFollowsSelectionAndSurvivesRestartUntilItsRowIsDeleted() throws {
+        let store = library()
+        var first = try image(store)
+        first.outputURL = URL(fileURLWithPath: "/tmp/first.png")
+        var second = try image(store)
+        second.outputURL = URL(fileURLWithPath: "/tmp/second.png")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("focus-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let sessions = StudioTaskSessions(url: url)
+        let selection = StudioResultSelection(itemID: first.id, url: try XCTUnwrap(first.outputURL))
+        sessions.rememberSelection(first.id, for: .createImage)
+        sessions.setFocus(selection, for: .imageGenerate)
+        sessions.rememberSelection(UUID(), for: .chat)
+        XCTAssertEqual(sessions.focusedResult(for: .imageGenerate, items: [first, second]), selection)
+        sessions.flush()
+        let restored = StudioTaskSessions(url: url)
+        XCTAssertEqual(restored.focusedResult(for: .imageGenerate, items: [first, second]), selection)
+        restored.rememberSelection(second.id, for: .createImage)
+        XCTAssertNil(restored.focusedResult(for: .imageGenerate, items: [first, second]))
+        restored.setFocus(selection, for: .imageGenerate)
+        restored.forgetLibraryItems([first.id, second.id])
+        XCTAssertNil(restored.focusedResult(for: .imageGenerate, items: [first, second]))
+        XCTAssertNil(restored.selection(for: .createImage, items: [first, second], preferredID: nil).item)
     }
 
     func testHistoryRecordsBothCompletionsWithoutAnyViewAndObservingTwiceIsIdempotent() async throws {

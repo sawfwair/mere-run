@@ -1,6 +1,5 @@
 import ArgumentParser
 import Foundation
-import MediaIO
 import MereRunCore
 
 struct VisionGeometry: AsyncParsableCommand {
@@ -19,7 +18,7 @@ struct VisionGeometry: AsyncParsableCommand {
     var model: String?
 
     @Option(name: [.long], help: "Quality level from 0 through 9. (default: 9)")
-    var resolutionLevel: Int = 9
+    var resolutionLevel: Int = MoGe2GenerationSettings.defaultResolutionLevel
 
     @Option(name: [.long], help: "Override the DINO base-token count (1...3600).")
     var tokenCount: Int?
@@ -34,60 +33,45 @@ struct VisionGeometry: AsyncParsableCommand {
     var json = false
 
     mutating func run() async throws {
-        guard (0...9).contains(resolutionLevel) else {
-            throw ValidationError("--resolution-level must be between 0 and 9")
-        }
-        if let tokenCount,
-           (tokenCount < MoGe2InferenceConfiguration.minimumTokenCount
-            || tokenCount > MoGe2InferenceConfiguration.maximumTokenCount) {
-            throw ValidationError("--token-count must be between 1 and 3600")
-        }
-        if let maxPoints, maxPoints <= 0 { throw ValidationError("--max-points must be positive") }
-
-        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
-        guard FileManager.default.fileExists(atPath: inputURL.path) else {
-            throw ValidationError("Input image not found: \(inputURL.path)")
-        }
-        let outputURL = Self.resolveOutputURL(output, inputURL: inputURL)
-        let size = try MediaImageIO.size(of: inputURL)
-        let configuration = MoGe2InferenceConfiguration(
-            resolutionLevel: resolutionLevel,
-            tokenCount: tokenCount,
-            maximumPointCount: maxPoints
-        )
-        let plan = Self.makePlan(
-            inputURL: inputURL,
-            outputURL: outputURL,
-            imageWidth: size.width,
-            imageHeight: size.height,
-            model: model,
-            configuration: configuration
-        )
-        if dryRun {
-            print(try Self.jsonString(plan))
-            return
-        }
-
-        let generator = MoGe2Generator()
         do {
-            let result = try await generator.generate(
-                imageURL: inputURL,
-                outputDirectory: outputURL,
-                model: model,
-                configuration: configuration,
-                progress: { message in CLIStderr.write("[geometry] \(message)\n") }
+            let request = try makeGenerationRequest()
+            if dryRun {
+                let plan = try MoGe2GenerationOperation.prepare(request)
+                print(try Self.jsonString(Self.makePlan(plan)))
+                return
+            }
+            let result = try await MoGe2GenerationOperation.execute(
+                request, progress: { message in CLIStderr.write("[geometry] \(message)\n") }
             )
-            await generator.unload()
-            let payload = VisionGeometryRunPayload(result: result)
             if json {
-                print(try Self.jsonString(payload))
+                print(try Self.jsonString(VisionGeometryRunPayload(result: result)))
             } else {
                 print(result.export.manifestURL.path)
             }
-        } catch {
-            await generator.unload()
-            throw error
+        } catch let error as MoGe2GenerationError {
+            switch error {
+            case .invalidResolutionLevel:
+                throw ValidationError("--resolution-level must be between 0 and 9")
+            case .invalidTokenCount:
+                throw ValidationError("--token-count must be between 1 and 3600")
+            case .invalidMaximumPointCount:
+                throw ValidationError("--max-points must be positive")
+            case .inputNotFound:
+                throw ValidationError(error.localizedDescription)
+            }
         }
+    }
+
+    func makeGenerationRequest() throws -> MoGe2GenerationRequest {
+        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
+        return MoGe2GenerationRequest(
+            imageURL: inputURL,
+            outputDirectory: Self.resolveOutputURL(output, inputURL: inputURL),
+            model: model,
+            settings: try MoGe2GenerationSettings(
+                resolutionLevel: resolutionLevel, tokenCount: tokenCount, maximumPointCount: maxPoints
+            )
+        )
     }
 
     static func resolveOutputURL(_ raw: String?, inputURL: URL) -> URL {
@@ -100,34 +84,25 @@ struct VisionGeometry: AsyncParsableCommand {
         )
     }
 
-    static func makePlan(
-        inputURL: URL,
-        outputURL: URL,
-        imageWidth: Int,
-        imageHeight: Int,
-        model: String?,
-        configuration: MoGe2InferenceConfiguration
-    ) -> VisionGeometryPlanPayload {
-        let aspect = Double(imageWidth) / Double(imageHeight)
-        let tokens = configuration.effectiveTokenCount
-        let tokenRows = max(1, Int(round(sqrt(Double(tokens) / aspect))))
-        let tokenColumns = max(1, Int(round(sqrt(Double(tokens) * aspect))))
+    static func makePlan(_ plan: MoGe2GenerationPlan) -> VisionGeometryPlanPayload {
+        let request = plan.request
+        let tokenGrid = plan.tokenGrid
         let installed = ManagedModelResolver.resolveInstalledModel(
-            id: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue
+            id: MoGe2GenerationRequest.defaultModelID
         )
         return VisionGeometryPlanPayload(
             status: "planned",
-            inputPath: inputURL.path,
-            outputDirectory: outputURL.path,
-            model: model ?? ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+            inputPath: request.imageURL.path,
+            outputDirectory: request.outputDirectory.path,
+            model: request.model ?? MoGe2GenerationRequest.defaultModelID,
             managedModelInstalled: installed != nil,
-            imageWidth: imageWidth,
-            imageHeight: imageHeight,
-            tokenCount: tokens,
-            tokenRows: tokenRows,
-            tokenColumns: tokenColumns,
-            networkWidth: tokenColumns * 14,
-            networkHeight: tokenRows * 14,
+            imageWidth: plan.dimensions.width,
+            imageHeight: plan.dimensions.height,
+            tokenCount: request.settings.configuration.effectiveTokenCount,
+            tokenRows: tokenGrid.rows,
+            tokenColumns: tokenGrid.columns,
+            networkWidth: tokenGrid.columns * 14,
+            networkHeight: tokenGrid.rows * 14,
             outputKinds: [
                 "metric-depth-exr", "depth-preview-png", "normal-exr", "normal-preview-png",
                 "validity-mask-png", "camera-json", "point-cloud-ply", "manifest-json",

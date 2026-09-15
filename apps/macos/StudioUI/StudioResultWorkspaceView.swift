@@ -75,6 +75,7 @@ struct StudioResultWorkspaceView: View {
     private var back: some View {
         Button(action: onClose) { Label("Results", systemImage: "chevron.left") }
             .buttonStyle(.mereSecondary)
+            .keyboardShortcut(.cancelAction)
             .help("Return to your results and draft (Escape)")
     }
 

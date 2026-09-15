@@ -1,7 +1,6 @@
 # mere.run codebase map
 
-`mere.run` is a Swift package, CLI, and optional macOS GUI for local inference
-on Apple Silicon. `mere.run.app` runs the
+`mere.run` provides local inference on Apple Silicon. Its optional macOS GUI, `mere.run.app`, runs the
 CLI. `MereRunCore` owns inference; `MereRunModelKit` owns metadata and installed
 lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 `AudioTTS` own speech orchestration. `MereRunCLI` owns command presentation.
@@ -28,7 +27,7 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
 - `Sources/MereRunQwenModel/` and `Sources/MereRunGemmaModel/`: text/vision layers, caches, and draft state
 - `Sources/MereRunDecode/`: shared sampling, pipelined token decoding, streaming, and logprob diagnostics
 - `Sources/MereRunTensor/`, `Sources/MereRunTextEncoder/`, and `Sources/MereRunImageModels/`: checkpoint loading, tensor kernels, and image model layers
-- `Sources/MereRunCore/ImageGeneration*.swift` and `Sources/AudioCore/SpeechTranscriptionOperation.swift`: shared operation plans, validation, execution, and outcomes
+- `Sources/MereRunCore/*Generation*.swift` and `Sources/AudioCore/Speech*Operation.swift`: shared plans, validation, execution, and outcomes
 - `Sources/MereRunLTXModel/`: LTX transformers, VAEs, upsamplers, and model caches
 - `Sources/MereRunCore/LTX/`: video loading, conditioning, generation, and output
 - `Sources/MereRunH3Model/`, `Sources/MereRunLagunaModel/`, and `Sources/MereRunAudioModels/`: H3, Laguna, and shared vocoder computation
@@ -56,6 +55,8 @@ lookup. `AudioCore` and `AudioCodecs` own audio primitives; `AudioSTT` and
   hygiene checks, update the documentation and tests together.
 
 ## Editing rules
+
+- Follow [package policy](docs/internals/package-policy.md) when changing targets, products, dependencies, or re-exports.
 
 - Prefer typed decoding at configuration and tokenizer boundaries over
   `[String: Any]`.

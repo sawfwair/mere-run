@@ -23,18 +23,17 @@ final class VisionGeometryCommandTests: XCTestCase {
         XCTAssertTrue(command.json)
     }
 
-    func testDefaultOutputAndPlanAreDeterministic() {
+    func testDefaultOutputAndPlanAreDeterministic() throws {
         let input = URL(fileURLWithPath: "/tmp/shot.001.png")
         let output = VisionGeometry.resolveOutputURL(nil, inputURL: input)
         XCTAssertEqual(output.path, "/tmp/shot.001-geometry")
-        let plan = VisionGeometry.makePlan(
-            inputURL: input,
-            outputURL: output,
-            imageWidth: 1920,
-            imageHeight: 1080,
-            model: nil,
-            configuration: MoGe2InferenceConfiguration(resolutionLevel: 0)
+        let request = MoGe2GenerationRequest(
+            imageURL: input, outputDirectory: output,
+            settings: try MoGe2GenerationSettings(resolutionLevel: 0)
         )
+        let plan = VisionGeometry.makePlan(try MoGe2GenerationPlan(
+            request: request, imageWidth: 1920, imageHeight: 1080
+        ))
         XCTAssertEqual(plan.tokenCount, 1_200)
         XCTAssertEqual(plan.tokenRows, 26)
         XCTAssertEqual(plan.tokenColumns, 46)

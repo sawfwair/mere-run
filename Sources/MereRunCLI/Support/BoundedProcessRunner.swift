@@ -43,12 +43,15 @@ enum BoundedProcessRunner {
 
     static func run(
         _ process: Process,
-        timeout: TimeInterval,
+        timeout: TimeInterval? = nil,
         outputLimitBytes: Int = 256 * 1024,
         combineOutput: Bool = false,
-        isCancelled: () -> Bool = { Task.isCancelled }
+        isCancelled: () -> Bool = { Task.isCancelled },
+        onStarted: ((Int32) throws -> Void)? = nil,
+        stdoutHandler: ((Data) throws -> Void)? = nil,
+        stderrHandler: ((Data) throws -> Void)? = nil
     ) throws -> Result {
-        guard timeout.isFinite, timeout > 0, outputLimitBytes >= 0 else {
+        guard timeout.map({ $0.isFinite && $0 > 0 }) ?? true, outputLimitBytes >= 0 else {
             throw RunError.invalidLimits
         }
         let stdout = try Output(limitBytes: outputLimitBytes)
@@ -67,17 +70,18 @@ enum BoundedProcessRunner {
 
         var completion = Completion.exited
         do {
+            try onStarted?(process.processIdentifier)
             while true {
                 // One chunk per stream keeps a noisy stdout from starving stderr,
                 // cancellation, or the deadline. Reads themselves never block.
-                let readOutput = try stdout.drain()
-                let readError = try stderr?.drain() ?? false
+                let readOutput = try stdout.drain(handler: stdoutHandler)
+                let readError = try stderr?.drain(handler: stderrHandler) ?? false
                 if !process.isRunning, stdout.atEnd, stderr?.atEnd ?? true { break }
                 if isCancelled() {
                     completion = .cancelled
                     break
                 }
-                if ProcessInfo.processInfo.systemUptime - start >= timeout {
+                if let timeout, ProcessInfo.processInfo.systemUptime - start >= timeout {
                     completion = .timedOut
                     break
                 }
@@ -88,8 +92,8 @@ enum BoundedProcessRunner {
             // Retain available tail output after termination without waiting for
             // a deliberately detached descendant that still holds a pipe open.
             for _ in 0..<16 {
-                let readOutput = try stdout.drain()
-                let readError = try stderr?.drain() ?? false
+                let readOutput = try stdout.drain(handler: stdoutHandler)
+                let readError = try stderr?.drain(handler: stderrHandler) ?? false
                 if !readOutput, !readError { break }
             }
         } catch {
@@ -111,6 +115,7 @@ enum BoundedProcessRunner {
         // Linux. Signal the group even if its leader exited but a child retains
         // stdout/stderr; never signal the caller's group.
         let pid = process.processIdentifier
+        guard pid > 0, pid != getpgrp() else { return }
         kill(-pid, SIGTERM)
         if process.isRunning { process.terminate() }
         Thread.sleep(forTimeInterval: 0.2)
@@ -137,7 +142,7 @@ enum BoundedProcessRunner {
             }
         }
 
-        func drain() throws -> Bool {
+        func drain(handler: ((Data) throws -> Void)?) throws -> Bool {
             guard !atEnd else { return false }
             let count = buffer.withUnsafeMutableBytes {
                 read(pipe.fileHandleForReading.fileDescriptor, $0.baseAddress, $0.count)
@@ -151,6 +156,7 @@ enum BoundedProcessRunner {
                 if code == EAGAIN || code == EWOULDBLOCK || code == EINTR { return false }
                 throw RunError.outputIO(code)
             }
+            try handler?(Data(buffer.prefix(count)))
             let retained = min(count, limitBytes - bytes.count)
             bytes.append(contentsOf: buffer.prefix(retained))
             if retained < count { truncated = true }

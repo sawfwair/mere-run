@@ -169,11 +169,14 @@ mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFFT"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
+mereRunCoreDependencies.append("AudioCore")
 mereRunCoreDependencies.append("MereRunAudioModels")
 mereRunCoreDependencies.append("MereRunH3Model")
 mereRunCoreDependencies.append("MereRunLagunaModel")
 mereRunCoreDependencies.append("MereRunModelKit")
 mereRunCoreDependencies.append("MereRunExecution")
+// Shared video plans consume the public quality, output-mode, and variant enums.
+mereRunCoreDependencies.append("MereRunContract")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
 mereRunCoreDependencies.append("MereRunImageModels")
@@ -947,7 +950,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "MereRunCLITests",
-    dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO"],
+    dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO", "AudioCore"],
     path: "Tests/MereRunCLITests",
     resources: [
       .copy("Fixtures")
@@ -977,7 +980,8 @@ if !isLinuxPackage {
     .target(
       name: "StudioKit",
       dependencies: ["MereRunContract"],
-      path: "apps/macos/StudioKit"
+      path: "apps/macos/StudioKit",
+      exclude: ["README.md"]
     )
   )
   targets.append(
@@ -985,6 +989,7 @@ if !isLinuxPackage {
       name: "StudioUI",
       dependencies: ["StudioKit", "MereRunContract"],
       path: "apps/macos/StudioUI",
+      exclude: ["README.md"],
       resources: [
         // Caveat (OFL 1.1) for the sidebar wordmark; registered at launch by MereRunTheme.Brand.
         .copy("Resources/Fonts")
