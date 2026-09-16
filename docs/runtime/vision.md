@@ -331,7 +331,17 @@ selects a published variant — `log-stage2` (default) is the paper model, the
 `disparity-*` and `uniform-*` variants change the depth parameterization.
 Variants other than the default are not part of the managed install and need a
 local Marigold repository root passed to `--model`. `--dry-run` and `--json`
-behave as in `geometry`.
+behave as in `geometry`; `--receipt` prints the final result line naming the
+depth EXR, the preview PNG, and the manifest, and cannot be combined with
+`--dry-run`.
+
+`vision depth` is available from the CLI and Studio's Image depth task only.
+There is no API route: the depth API serves video depth, and the managed
+catalog declares `vision-depth-marigold-v2` CLI-only so API discovery never
+lists it. Machine admission treats every run as a large job from the catalog's
+64 GB minimum, because the BF16 base is loaded before quantization even though
+the download itself is smaller than the large-download threshold; two depth
+runs therefore do not share the machine.
 
 The native runtime uses MLX affine 4-bit weights and deterministic VAE encoding.
 It preserves the first image-modulation projection in full precision; quantizing

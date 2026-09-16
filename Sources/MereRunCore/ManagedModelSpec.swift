@@ -122,6 +122,15 @@ public enum ManagedModelAliasKind: String, Hashable, Sendable {
     case codegenGGUF
 }
 
+/// Whether `api serve` lists and routes a managed model.
+public enum ManagedModelAPIAvailability: String, Hashable, Sendable {
+    /// Served through its explicit profile or the category's companion profile.
+    case served
+    /// Runs only through its CLI command; API discovery never lists it and no
+    /// companion profile is derived from its category.
+    case cliOnly
+}
+
 public struct ManagedModelSpec: Hashable, Sendable {
     public let id: String
     public let category: ManagedModelCategory
@@ -139,6 +148,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
     public let estimatedDownloadBytes: Int64?
     public let defaultCLICommands: [String]
     public let companionModelIDs: [String]
+    public let apiAvailability: ManagedModelAPIAvailability
     public let apiProfile: ManagedModelAPIProfile?
 
     public init(
@@ -158,6 +168,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
         estimatedDownloadBytes: Int64? = nil,
         defaultCLICommands: [String] = [],
         companionModelIDs: [String] = [],
+        apiAvailability: ManagedModelAPIAvailability = .served,
         apiProfile: ManagedModelAPIProfile? = nil
     ) {
         self.id = id
@@ -176,10 +187,16 @@ public struct ManagedModelSpec: Hashable, Sendable {
         self.estimatedDownloadBytes = estimatedDownloadBytes
         self.defaultCLICommands = defaultCLICommands
         self.companionModelIDs = companionModelIDs
-        self.apiProfile = apiProfile ?? ManagedModelAPIProfile.companion(
-            modelID: id,
-            category: category
-        )
+        self.apiAvailability = apiAvailability
+        switch apiAvailability {
+        case .served:
+            self.apiProfile = apiProfile ?? ManagedModelAPIProfile.companion(
+                modelID: id,
+                category: category
+            )
+        case .cliOnly:
+            self.apiProfile = nil
+        }
     }
 }
 

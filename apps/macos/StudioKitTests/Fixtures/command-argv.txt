@@ -2139,25 +2139,25 @@ visionCaption	videoQuality=draft	vision caption 1 1 --model 1 --output-dir 1 --p
 visionCaption	videoQuality=final	vision caption 1 1 --model 1 --output-dir 1 --prompt 1 --prompt-file 1 --focus 1 --trigger-token 1 --max-tokens 97 --temperature 0.7 --top-p 1.4 1
 visionCaption	voiceMode=clone	vision caption 1 1 --model 1 --output-dir 1 --prompt 1 --prompt-file 1 --focus 1 --trigger-token 1 --max-tokens 97 --temperature 0.7 --top-p 1.4 1
 visionDepth	default	vision depth '' --output ~/Documents/mere.run/Vision/image-depth-<stamp> --model vision-depth-marigold-v2 --dry-run
-visionDepth	maximal	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	maximal-booleans-off	vision depth 1 --output 1 --model 1 1
-visionDepth	modelRoot=video-minimax-h3-ref2va	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	modelRoot=video-wan22-ti2v-5b-mlx	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	musicLMMode=disable	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	musicLMMode=use	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	musicTask=lego	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	musicTask=repaint	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	renderProfile=quality	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	responseFormat=json_object	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	responseFormat=text	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	thinkingMode=automatic	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	thinkingMode=hide	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	thinkingMode=show	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	videoOutputMode=audio-video	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	videoOutputMode=video-only	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	videoQuality=draft	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	videoQuality=final	vision depth 1 --output 1 --model 1 --dry-run --json 1
-visionDepth	voiceMode=clone	vision depth 1 --output 1 --model 1 --dry-run --json 1
+visionDepth	maximal	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	maximal-booleans-off	vision depth 1 --output 1 --model 1 --max-edge 1 --checkpoint 1 1
+visionDepth	modelRoot=video-minimax-h3-ref2va	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	modelRoot=video-wan22-ti2v-5b-mlx	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	musicLMMode=disable	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	musicLMMode=use	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	musicTask=lego	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	musicTask=repaint	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	renderProfile=quality	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	responseFormat=json_object	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	responseFormat=text	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	thinkingMode=automatic	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	thinkingMode=hide	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	thinkingMode=show	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	videoOutputMode=audio-video	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	videoOutputMode=video-only	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	videoQuality=draft	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	videoQuality=final	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
+visionDepth	voiceMode=clone	vision depth 1 --output 1 --model 1 --max-edge 1 --native --checkpoint 1 --dry-run --json 1
 visionDepthVideo	default	vision depth-video '' --output ~/Documents/mere.run/Vision/video-depth-<stamp> --model vision-depth-vda-small --input-size 518 --max-frames 240 --dry-run
 visionDepthVideo	maximal	vision depth-video 1 --output 1 --model 1 --input-size 519 --max-frames 241 --dry-run --json 1
 visionDepthVideo	maximal-booleans-off	vision depth-video 1 --output 1 --model 1 --input-size 519 --max-frames 241 1

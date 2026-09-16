@@ -43,6 +43,42 @@ final class CommandContractGuardTests: XCTestCase {
         )
     }
 
+    /// The reverse direction: every option the contract declares for a template's capability
+    /// must be spelled by at least one probe draft, or the app has a task that silently hides a
+    /// CLI option. Flags the CLI accepts but the builder intentionally never emits are listed in
+    /// `CommandDraftProbes.declaredButNeverEmitted` with the reason, per template.
+    func testEveryDeclaredOptionIsEmittedBySomeProbeDraft() throws {
+        var emitted: [CommandTemplateID: Set<String>] = [:]
+        var templates: [CommandTemplateID: CommandTemplate] = [:]
+        for emission in try CommandDraftProbes.emissions.get() {
+            templates[emission.template.id] = emission.template
+            emitted[emission.template.id, default: []].formUnion(emission.arguments.filter { $0.hasPrefix("--") })
+        }
+
+        var missing: [String] = []
+        for (templateID, template) in templates.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            guard CommandDraftProbes.bidirectionalTemplates.contains(templateID) else { continue }
+            let capabilityID = try XCTUnwrap(template.id.capabilityID)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            let exempt = CommandDraftProbes.runTimeFlags(for: capabilityID)
+                .union(CommandDraftProbes.declaredButNeverEmitted[templateID]?.keys.map { $0 } ?? [])
+            for option in capability.options
+            where !emitted[templateID, default: []].contains(option.flag) && !exempt.contains(option.flag) {
+                missing.append("\(templateID) never emits \(option.flag), which \(capabilityID) declares")
+            }
+        }
+
+        XCTAssertEqual(
+            missing,
+            [],
+            """
+            The contract declares options the app's task builder cannot spell. Emit each from the \
+            draft in the matching `CommandArguments` builder, or add it to \
+            `CommandDraftProbes.declaredButNeverEmitted` with the reason the task hides it.
+            """
+        )
+    }
+
     /// The maximal draft must move every field off its default. If this fails, `CommandDraft`
     /// gained a field whose type `CommandDraftProbes` cannot synthesize a value for.
     func testMaximalDraftSetsEveryField() throws {
@@ -144,6 +180,32 @@ enum CommandDraftProbes {
         "modelRoot": ["video-minimax-h3-ref2va", "video-wan22-ti2v-5b-mlx"]
     ]
 
+    /// Templates held to the reverse guard (`testEveryDeclaredOptionIsEmittedBySomeProbeDraft`).
+    ///
+    /// Checking every local template found 304 declared options across 42 templates that no
+    /// builder emits (mostly `video generate`, `music generate`, `video retake`, and the model
+    /// benchmarks). Until each is either emitted from the draft or listed in
+    /// `declaredButNeverEmitted` with its reason, the guard covers the templates added since
+    /// the shell consolidation. Add a template here when its builder is complete.
+    static let bidirectionalTemplates: Set<CommandTemplateID> = [.visionDepth]
+
+    /// Flags `StudioMachineOutputFlags` appends at run time from the contract's own lists, so no
+    /// builder spells them from the draft.
+    static func runTimeFlags(for capabilityID: String) -> Set<String> {
+        var flags: Set<String> = []
+        if MereRunCapabilityCatalog.receiptCapabilityIDs.contains(capabilityID) {
+            flags.insert(StudioMachineOutputFlags.receipt)
+        }
+        if MereRunCapabilityCatalog.progressJSONCapabilityIDs.contains(capabilityID) {
+            flags.insert(StudioMachineOutputFlags.progressJSON)
+        }
+        return flags
+    }
+
+    /// Declared options a template's builder never emits, each with the reason. An entry is a
+    /// deliberate gap between the CLI and the task, not a missing draft field.
+    static let declaredButNeverEmitted: [CommandTemplateID: [String: String]] = [:]
+
     static func probes(for template: CommandTemplate) throws -> [Probe] {
         let defaults = template.defaultDraft()
         var probes = [
@@ -199,7 +261,7 @@ enum CommandDraftProbes {
 
     private static func maximalJSONValue(for value: Any, booleans: Bool) -> Any? {
         switch value {
-        case let bool as Bool:
+        case is Bool:
             return booleans
         case let int as Int:
             return max(int, 0) + 1

@@ -312,14 +312,17 @@ package enum StudioMachineOutputFlags {
     package static let progressJSON = "--progress-json"
 
     /// The flags to append to `arguments` for one run, in a stable order. Empty when the
-    /// capability declares neither, when the run is a preflight, or when the app already passes
+    /// capability declares neither, when the run is a preflight or a dry run (neither produces
+    /// a result, and the CLI rejects `--receipt` with either), or when the app already passes
     /// the flag from the draft.
     package static func arguments(
         template: CommandTemplate,
         draft: CommandDraft,
         appendingTo arguments: [String]
     ) -> [String] {
-        guard !draft.preflight, !arguments.contains("--preflight") else { return [] }
+        guard !draft.preflight, !arguments.contains("--preflight"), !arguments.contains("--dry-run") else {
+            return []
+        }
         var flags: [String] = []
         if template.id.emitsRunReceipt, !arguments.contains(receipt) {
             flags.append(receipt)
@@ -766,6 +769,11 @@ package struct CommandDraft: Equatable, Codable {
     package var visionResolutionLevel = 9
     package var visionTokenCount = 0
     package var visionMaxPoints = 0
+    // Image depth. Optional preserves Library rows written before the task exposed these;
+    // nil, 0, and blank leave the CLI's own defaults in place.
+    package var visionMaxEdge: Int?
+    package var visionNative: Bool?
+    package var visionCheckpoint: String?
     package var visionProcessResolution = 504
     package var visionReferenceView = "saddle-balanced"
     package var visionConfidencePercentile = 40.0

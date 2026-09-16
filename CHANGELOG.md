@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Run `vision depth` through the shared single-image depth operation in Core: the
+  command parses into one request, `--dry-run` reports the observational plan, and
+  execution rechecks the input, snapshots it, and awaits unloading on success and
+  failure. Add `--receipt`, which names the depth EXR, preview PNG, and manifest and
+  is rejected with `--dry-run`. Admit every depth run as a large job from the managed
+  catalog's declared 64 GB minimum rather than a command list, and declare the model
+  CLI-only on its catalog entry instead of excluding it by name from API discovery.
+  Studio's Image depth task now exposes the checkpoint, maximum edge, and native
+  resolution options the contract declares, and the app's contract guard checks that
+  every declared option is emittable.
+
 - Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
   selection. Preserve exact dequantized values across incremental appends.
 

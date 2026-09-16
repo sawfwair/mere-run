@@ -714,6 +714,7 @@ extension CommandFlags {
         package static let checkpoint = "--checkpoint"
         package static let dryRun = "--dry-run"
         package static let json = "--json"
+        package static let receipt = "--receipt"
     }
 }
 

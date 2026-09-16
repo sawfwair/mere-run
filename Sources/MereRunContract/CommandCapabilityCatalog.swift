@@ -15,7 +15,7 @@ public enum MereRunCapabilityCatalog {
     /// The `--receipt` final stdout line. The first output is the primary
     /// artifact; sidecars follow with a `role`. It is printed only after a
     /// successful run, so `exit` is always `0`; `--receipt` is rejected
-    /// together with `--preflight`, which produces no result.
+    /// together with `--preflight` or `--dry-run`, which produce no result.
     public static let resultReceiptExample =
         #"{"event":"result","exit":0,"outputs":[{"kind":"image","path":"/abs/out.png"}]}"#
 
@@ -23,7 +23,7 @@ public enum MereRunCapabilityCatalog {
     public static let receiptCapabilityIDs: [String] = [
         "image.generate", "video.generate", "music.generate", "sfx.generate",
         "speech.synthesize", "speech.transcribe",
-        "vision.ground", "vision.segment", "vision.track"
+        "vision.ground", "vision.segment", "vision.track", "vision.depth"
     ]
 
     /// Capability ids whose commands stream `--progress-json` events.

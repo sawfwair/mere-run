@@ -78,6 +78,15 @@ enum CLIInferenceAdmissionClassifier {
             let large = subcommand == "train-lora"
             return MachineInferenceRequest(label: label, resourceClass: large ? .large : .standard)
         case "vision":
+            if subcommand == "depth" {
+                // Every `vision depth` run loads Marigold, including a local model
+                // root, so the managed catalog's declared minimum memory classifies
+                // the command instead of a fixed list.
+                return MachineInferenceRequest(
+                    label: label,
+                    resourceClass: managedModelClass(MarigoldV2GenerationRequest.defaultModelID)
+                )
+            }
             let large = [
                 "geometry",
                 "geometry-multiview",
@@ -142,7 +151,21 @@ enum CLIInferenceAdmissionClassifier {
     }
 
     private static func isLargeModel(_ identifier: String?) -> Bool {
-        .forModel(estimatedBytes: estimatedModelBytes(identifier)) == MachineInferenceClass.large
+        identifier.map(managedModelClass) == MachineInferenceClass.large
+    }
+
+    /// Classifies a managed model id, alias, or checkpoint path from its download
+    /// estimate and, for a managed model, the catalog's declared minimum memory.
+    private static func managedModelClass(_ identifier: String) -> MachineInferenceClass {
+        .forModel(
+            estimatedBytes: estimatedModelBytes(identifier),
+            declaredMinimumMemoryGB: declaredMinimumMemoryGB(identifier)
+        )
+    }
+
+    private static func declaredMinimumMemoryGB(_ identifier: String) -> Int? {
+        guard let spec = ManagedModelCatalog.spec(for: identifier) else { return nil }
+        return ManagedModelCapabilityCatalog.descriptor(for: spec.id)?.minimumUnifiedMemoryGB
     }
 
     private static func musicResourceClass(modelIdentifiers: [String]) -> MachineInferenceClass {

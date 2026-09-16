@@ -1,6 +1,5 @@
 import ArgumentParser
 import Foundation
-import MediaIO
 import MereRunCore
 
 struct VisionDepth: AsyncParsableCommand {
@@ -29,7 +28,7 @@ struct VisionDepth: AsyncParsableCommand {
 
     @Option(
         name: [.long],
-        help: "Depth checkpoint: \(MarigoldV2DepthCheckpoint.allCases.map(\.rawValue).joined(separator: ", "))."
+        help: "Depth checkpoint: \(MarigoldV2GenerationSettings.checkpointNames.joined(separator: ", "))."
     )
     var checkpoint: String?
 
@@ -39,73 +38,65 @@ struct VisionDepth: AsyncParsableCommand {
     @Flag(name: [.long], help: "Print the structured result on stdout.")
     var json = false
 
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt = false
+
     mutating func run() async throws {
-        if native && maxEdge != nil {
-            throw ValidationError("--native and --max-edge cannot be combined")
-        }
-        if let maxEdge, maxEdge < MarigoldV2InferenceConfiguration.alignment {
-            throw ValidationError(
-                "--max-edge must be at least \(MarigoldV2InferenceConfiguration.alignment)"
-            )
-        }
-        let resolvedCheckpoint = try Self.resolveCheckpoint(checkpoint)
-
-        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
-        guard FileManager.default.fileExists(atPath: inputURL.path) else {
-            throw ValidationError("Input image not found: \(inputURL.path)")
-        }
-        let outputURL = Self.resolveOutputURL(output, inputURL: inputURL)
-        let size = try MediaImageIO.size(of: inputURL)
-        let configuration = MarigoldV2InferenceConfiguration(
-            checkpoint: resolvedCheckpoint,
-            maximumEdge: native ? nil : (maxEdge ?? MarigoldV2InferenceConfiguration.defaultMaximumEdge)
-        )
-        let plan = Self.makePlan(
-            inputURL: inputURL,
-            outputURL: outputURL,
-            imageWidth: size.width,
-            imageHeight: size.height,
-            model: model,
-            configuration: configuration
-        )
-        if dryRun {
-            print(try Self.jsonString(plan))
-            return
-        }
-
-        let generator = MarigoldV2Generator()
+        try RunReceipt.validate(receipt: receipt, dryRun: dryRun)
         do {
-            let result = try await generator.generate(
-                imageURL: inputURL,
-                outputDirectory: outputURL,
-                model: model,
-                configuration: configuration,
+            let request = try makeGenerationRequest()
+            if dryRun {
+                let plan = try MarigoldV2GenerationOperation.prepare(request)
+                print(try Self.jsonString(Self.makePlan(plan)))
+                return
+            }
+            let result = try await MarigoldV2GenerationOperation.execute(
+                request,
+                prepareRuntime: { try MLXBundleSupport.ensureAvailable(quiet: true) },
                 progress: { message in CLIStderr.write("[depth] \(message)\n") }
             )
-            await generator.unload()
-            let payload = VisionDepthRunPayload(result: result)
             if json {
-                print(try Self.jsonString(payload))
+                print(try Self.jsonString(VisionDepthRunPayload(result: result)))
             } else {
                 print(result.export.manifestURL.path)
             }
-        } catch {
-            await generator.unload()
-            throw error
+            try RunReceipt.emit(
+                RunReceipt.depthOutputs(
+                    depth: result.export.depthURL,
+                    preview: result.export.previewURL,
+                    manifest: result.export.manifestURL
+                ),
+                enabled: receipt
+            )
+        } catch let error as MarigoldV2GenerationError {
+            switch error {
+            case .nativeResolutionConflictsWithMaximumEdge:
+                throw ValidationError("--native and --max-edge cannot be combined")
+            case .maximumEdgeBelowAlignment:
+                throw ValidationError(
+                    "--max-edge must be at least \(MarigoldV2GenerationSettings.minimumMaximumEdge)"
+                )
+            case .unknownCheckpoint(let name):
+                throw ValidationError(
+                    "Unknown --checkpoint '\(name)'. Expected one of: "
+                        + MarigoldV2GenerationSettings.checkpointNames.joined(separator: ", ")
+                )
+            case .inputNotFound:
+                throw ValidationError(error.localizedDescription)
+            }
         }
     }
 
-    static func resolveCheckpoint(_ raw: String?) throws -> MarigoldV2DepthCheckpoint {
-        guard let raw, !raw.isEmpty else {
-            return MarigoldV2Repository.installedCheckpoint
-        }
-        guard let checkpoint = MarigoldV2DepthCheckpoint(rawValue: raw.lowercased()) else {
-            throw ValidationError(
-                "Unknown --checkpoint '\(raw)'. Expected one of: "
-                    + MarigoldV2DepthCheckpoint.allCases.map(\.rawValue).joined(separator: ", ")
+    func makeGenerationRequest() throws -> MarigoldV2GenerationRequest {
+        let inputURL = URL(fileURLWithPath: input).standardizedFileURL
+        return MarigoldV2GenerationRequest(
+            imageURL: inputURL,
+            outputDirectory: Self.resolveOutputURL(output, inputURL: inputURL),
+            model: model,
+            settings: try MarigoldV2GenerationSettings(
+                checkpoint: checkpoint, maximumEdge: maxEdge, nativeResolution: native
             )
-        }
-        return checkpoint
+        )
     }
 
     static func resolveOutputURL(_ raw: String?, inputURL: URL) -> URL {
@@ -118,31 +109,22 @@ struct VisionDepth: AsyncParsableCommand {
         )
     }
 
-    static func makePlan(
-        inputURL: URL,
-        outputURL: URL,
-        imageWidth: Int,
-        imageHeight: Int,
-        model: String?,
-        configuration: MarigoldV2InferenceConfiguration
-    ) -> VisionDepthPlanPayload {
-        let inference = configuration.inferenceSize(width: imageWidth, height: imageHeight)
-        let installed = ManagedModelResolver.resolveInstalledModel(
-            id: ModelResolver.ModelID.visionDepthMarigoldV2.rawValue
-        )
+    static func makePlan(_ plan: MarigoldV2GenerationPlan) -> VisionDepthPlanPayload {
+        let request = plan.request
+        let checkpoint = request.settings.configuration.checkpoint
         return VisionDepthPlanPayload(
             status: "planned",
-            inputPath: inputURL.path,
-            outputDirectory: outputURL.path,
-            model: model ?? ModelResolver.ModelID.visionDepthMarigoldV2.rawValue,
-            managedModelInstalled: installed != nil,
-            checkpoint: configuration.checkpoint.rawValue,
-            parameterization: configuration.checkpoint.parameterization.rawValue,
-            seeThrough: configuration.checkpoint.isSeeThrough,
-            imageWidth: imageWidth,
-            imageHeight: imageHeight,
-            inferenceWidth: inference.width,
-            inferenceHeight: inference.height,
+            inputPath: request.imageURL.path,
+            outputDirectory: request.outputDirectory.path,
+            model: request.model ?? MarigoldV2GenerationRequest.defaultModelID,
+            managedModelInstalled: plan.managedModelInstalled,
+            checkpoint: checkpoint.rawValue,
+            parameterization: checkpoint.parameterization.rawValue,
+            seeThrough: checkpoint.isSeeThrough,
+            imageWidth: plan.dimensions.width,
+            imageHeight: plan.dimensions.height,
+            inferenceWidth: plan.inferenceWidth,
+            inferenceHeight: plan.inferenceHeight,
             semantics: DepthSemantics.affineRelative.rawValue,
             outputKinds: ["depth-exr", "depth-preview-png", "manifest-json"]
         )

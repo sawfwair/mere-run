@@ -1,8 +1,43 @@
+import MereRunCore
 import XCTest
 @testable import MereRunCLI
 
 final class MachineInferenceAdmissionTests: XCTestCase {
     private let gibibyte = UInt64(1_073_741_824)
+
+    /// Marigold's download sits under the 48 GiB estimate threshold, but the catalog
+    /// declares a 64 GB minimum because the BF16 base is loaded before quantization.
+    /// The declaration, not a command list, makes every `vision depth` run large.
+    func testSingleImageDepthAdmitsAsLargeFromTheCatalogMinimumMemory() throws {
+        let descriptor = try XCTUnwrap(ManagedModelCapabilityCatalog.descriptor(for: MarigoldV2Repository.modelId))
+        XCTAssertGreaterThanOrEqual(descriptor.minimumUnifiedMemoryGB, MachineInferenceClass.largeDeclaredMinimumMemoryGB)
+        XCTAssertLessThan(MarigoldV2Repository.estimatedDownloadBytes, Int64(48 * gibibyte))
+
+        let large = MachineInferenceRequest(label: "vision depth", resourceClass: .large)
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "vision", "depth", "photo.png"]),
+            large
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "vision", "depth", "photo.png", "--model", "vision-depth-marigold-v2"]
+            ),
+            large
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "vision", "depth", "photo.png", "--model", "/tmp/marigold-root", "--native"]
+            ),
+            large
+        )
+        XCTAssertNil(
+            CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "vision", "depth", "photo.png", "--dry-run"])
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "vision", "caption", "photo.png"]),
+            MachineInferenceRequest(label: "vision caption", resourceClass: .standard)
+        )
+    }
 
     func testSmallMusicModelsAdmitWithLessThanStandardHeadroom() async throws {
         for (offset, modelID) in ["music-acestep", "music-magenta-rt2-small"].enumerated() {
