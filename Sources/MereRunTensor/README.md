@@ -12,6 +12,9 @@ Checkpoint loading, quantized modules, and shared tensor kernels.
 - `FusedQuantizedProjection.swift` and `SmallBatchAffineGatherQMV.swift` share
   quantized projection fusion and expert-route kernels across model families.
 - `MLXCheckpoint.swift` owns gradient recomputation.
+- `MLXRequestStreams.swift` leases process-wide CPU/GPU execution contexts.
+  Completed contexts survive generator replacement; concurrent operations and
+  different selected default devices retain separate contexts.
 
 This library depends on MLX and ModelKit. It does not resolve or download models.
 Keep path selection and model-specific compatibility mappings in the caller.

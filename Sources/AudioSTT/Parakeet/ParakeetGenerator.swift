@@ -109,12 +109,13 @@ public actor ParakeetGenerator: ASRGenerator {
         language: String? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
     ) async throws -> ParakeetMeasuredTranscription {
-        try await Stream.withNewDefaultStream(isolation: self) {
+        try await withRequestStream {
             // Keep this closure genuinely asynchronous under -O. MLX's async overload
             // installs task-local CPU and GPU streams that survive executor hops; without
             // a suspension the optimizer can collapse the body onto the caller thread and
             // `.gpu` operations fall back to MLX's missing thread-local default stream.
             await Task.yield()
+            try Task.checkCancellation()
             guard let model, let audioPreprocessor, let modelConfig else {
                 throw ParakeetError.modelNotLoaded
             }
@@ -134,6 +135,7 @@ public actor ParakeetGenerator: ASRGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
     ) async throws {
+        try Task.checkCancellation()
         let root = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
         if loadedModelPath != root.path {
             progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading Parakeet model..."))
@@ -147,6 +149,14 @@ public actor ParakeetGenerator: ASRGenerator {
         modelConfig = nil
         loadedModelPath = nil
         Memory.clearCache()
+    }
+
+    /// Reuse completed CPU/GPU streams across generators. A suspended operation
+    /// keeps its lease, and both devices finish submitted work before reuse.
+    func withRequestStream<Result>(
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        try await MLXRequestStreams.withStream(isolation: self, operation)
     }
 
     public func supportedLanguageCodes(modelPath: String? = nil) async throws -> Set<String> {

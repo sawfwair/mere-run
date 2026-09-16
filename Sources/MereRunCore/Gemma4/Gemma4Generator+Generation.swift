@@ -255,6 +255,7 @@ extension Gemma4Generator {
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,
+            finishReason: generated.count >= tokenBudget ? .length : .stop,
             reasoningContent: reasoningSplit.reasoningContent,
             hasIncompleteReasoning: reasoningSplit.hasIncompleteReasoning
         )

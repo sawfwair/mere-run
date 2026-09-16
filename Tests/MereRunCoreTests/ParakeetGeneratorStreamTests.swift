@@ -59,6 +59,36 @@ final class ParakeetGeneratorStreamTests: MereRunCoreTestCase {
         XCTAssertGreaterThan(measured.timings.totalSeconds, 0)
     }
 
+    func testCancellationAtFrontendAndDecodeEntryAllowsRetry() async throws {
+        let config = makeConfig()
+        for provider: ParakeetExecutionProvider in [.mlx, .coreML(artifactURL: URL(fileURLWithPath: "/fixture"))] {
+            for stage: ASRStage in [.extractingFeatures, .transcribing] {
+                let generator = ParakeetGenerator(
+                    preparedModel: StreamCheckingParakeetModel(config: config),
+                    audioPreprocessor: try ParakeetAudioPreprocessor(config: config.preprocessor),
+                    modelConfig: config,
+                    executionProvider: provider
+                )
+                let cancelled = Task {
+                    try await generator.transcribePrepared(samples: Array(repeating: 0.1, count: 800)) { progress in
+                        if progress.stage == stage {
+                            withUnsafeCurrentTask { $0?.cancel() }
+                        }
+                    }
+                }
+                do {
+                    _ = try await cancelled.value
+                    XCTFail("Expected cancellation at \(stage)")
+                } catch is CancellationError {
+                    // Cancellation is triggered inside the actual stage callback.
+                }
+                let retry = try await generator.transcribePrepared(samples: Array(repeating: 0.1, count: 800))
+                XCTAssertEqual(retry.text, "stream safe")
+                await generator.unload()
+            }
+        }
+    }
+
     func testBaseModelUsesConfiguredExternalEncoder() throws {
         let model = ParakeetBaseModel(config: makeConfig())
         let externalEncoder = RecordingParakeetEncoder()
@@ -215,7 +245,9 @@ private final class StreamCheckingParakeetModel: ParakeetDecodingModel {
         let output = MLX.multiply(MLX.mean(mel), 2, stream: .gpu)
         MLX.eval(output)
         _ = output.item(Float.self)
-        return [ParakeetAlignedResult(text: "stream safe", sentences: [])]
+        return [ParakeetAlignment.sentencesToResult(ParakeetAlignment.tokensToSentences([
+            ParakeetAlignedToken(id: 0, text: "stream safe", start: 0, duration: 0.05),
+        ]))]
     }
 }
 

@@ -100,6 +100,7 @@ extension ParakeetGenerator {
                     stage: .extractingFeatures,
                     message: "Extracting log-mel features (window \(index + 1) of \(ranges.count))..."
                 ))
+                try Task.checkCancellation()
                 let featureStarted = ParakeetMonotonicClock.now()
                 let mel = audioPreprocessor.logMelSpectrogram(from: Array(samples[range]))
                 MLX.eval(mel)
@@ -114,8 +115,10 @@ extension ParakeetGenerator {
                     ? "Transcribing with Parakeet (window \(batchStart + 1) of \(ranges.count))..."
                     : "Transcribing with Parakeet (windows \(batchStart + 1)-\(batchEnd) of \(ranges.count))..."
             ))
+            try Task.checkCancellation()
             var modelTimings = ParakeetModelTimings()
             let decoded = try model.decodeWindows(mels, timings: &modelTimings)
+            try Task.checkCancellation()
             timings.encoderSeconds += modelTimings.encoderSeconds
             timings.decoderSeconds += modelTimings.decoderSeconds
             timings.alignmentSeconds += modelTimings.alignmentSeconds
@@ -169,6 +172,7 @@ extension ParakeetGenerator {
             stage: .extractingFeatures,
             message: "Extracting log-mel features\(windowSuffix)..."
         ))
+        try Task.checkCancellation()
         let featureStarted = ParakeetMonotonicClock.now()
         let mel = audioPreprocessor.logMelSpectrogram(from: samples)
         MLX.eval(mel)
@@ -180,8 +184,10 @@ extension ParakeetGenerator {
             stage: .transcribing,
             message: "Transcribing with Parakeet\(windowSuffix)..."
         ))
+        try Task.checkCancellation()
         var modelTimings = ParakeetModelTimings()
         let decoded = try model.decode(mel, timings: &modelTimings)
+        try Task.checkCancellation()
         timings.encoderSeconds += modelTimings.encoderSeconds
         timings.decoderSeconds += modelTimings.decoderSeconds
         timings.alignmentSeconds += modelTimings.alignmentSeconds

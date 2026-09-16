@@ -117,7 +117,7 @@ public actor Gemma4Generator: ChatGenerator {
         modelPath: String?,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        try await Stream.withNewDefaultStream {
+        try await withRequestStream {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -150,7 +150,7 @@ public actor Gemma4Generator: ChatGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Stream.withNewDefaultStream {
+        try await withRequestStream {
             let rootURL = try await resolveModelRoot(
                 modelPath: modelPath,
                 progressHandler: progressHandler
@@ -171,6 +171,15 @@ public actor Gemma4Generator: ChatGenerator {
         loadedConfig = nil
         lastMTPStats = Gemma4MTPStats()
         Memory.clearCache()
+    }
+
+    /// Keep each active operation on its own streams across actor suspensions.
+    /// MLX retains backend streams until process exit, so reuse completed leases
+    /// across generator replacement, including after model unload and preparation.
+    func withRequestStream<Result>(
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        try await MLXRequestStreams.withStream(isolation: self, operation)
     }
 
     func resetLoadedModel() {

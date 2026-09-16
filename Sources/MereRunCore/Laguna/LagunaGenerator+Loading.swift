@@ -6,6 +6,7 @@ extension LagunaGenerator {
         rootURL: URL,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws {
+        try Task.checkCancellation()
         let requestedDFlashPath = configuredDFlashPath.map {
             URL(fileURLWithPath: $0).standardizedFileURL.path
         }
@@ -22,6 +23,7 @@ extension LagunaGenerator {
         }
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Laguna config"))
+        try Task.checkCancellation()
         let configData = try Data(contentsOf: rootURL.appending(path: "config.json"))
         let config = try JSONDecoder().decode(LagunaConfig.self, from: configData)
         let weightsIndexURL = rootURL.appending(path: "model.safetensors.index.json")
@@ -31,12 +33,14 @@ extension LagunaGenerator {
         )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Laguna tokenizer"))
+        try Task.checkCancellation()
         let tokenizer = try await LagunaTokenizerAndTemplate.load(
             from: rootURL,
             maxLength: config.maxPositionEmbeddings
         )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Laguna weights"))
+        try Task.checkCancellation()
         let model = LagunaCausalLM(
             config: config,
             quantizedSharedExperts: LagunaResources.hasQuantizedSharedExperts(weightsIndex)
@@ -58,6 +62,7 @@ extension LagunaGenerator {
             MLX.eval(runtimeAccelerationArrays)
         }
 
+        try Task.checkCancellation()
         self.model = model
         self.tokenizerAndTemplate = tokenizer
         self.config = config

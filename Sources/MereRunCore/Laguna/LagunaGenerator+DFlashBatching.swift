@@ -34,11 +34,14 @@ extension LagunaGenerator {
         guard !dflashDecodeLoopRunning else { return }
         dflashDecodeLoopRunning = true
         Task {
-            await runDFlashDecodeLoop(
-                model: model,
-                dflash: dflash,
-                tokenizerAndTemplate: tokenizerAndTemplate
-            )
+            // The loop owns its lease independently of every participating request.
+            await withRequestStream {
+                await runDFlashDecodeLoop(
+                    model: model,
+                    dflash: dflash,
+                    tokenizerAndTemplate: tokenizerAndTemplate
+                )
+            }
         }
     }
 

@@ -49,7 +49,8 @@ extension ParakeetGenerator {
         from rootURL: URL,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws {
-        try await Stream.withNewDefaultStream(isolation: self) {
+        try await withRequestStream {
+            try Task.checkCancellation()
             try loadModelOnTaskSafeStream(
                 from: rootURL,
                 progressHandler: progressHandler
@@ -122,6 +123,7 @@ extension ParakeetGenerator {
         }
 
         progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading Parakeet weights..."))
+        try Task.checkCancellation()
 
         let quantization: ModelWeightsLoader.QuantizationParams?
         if let bits = config.quantizationBits, let group = config.quantizationGroupSize {
@@ -157,6 +159,7 @@ extension ParakeetGenerator {
         module.train(false)
 
         MLX.eval(module.parameters())
+        try Task.checkCancellation()
 
         self.model = model
         self.modelConfig = config

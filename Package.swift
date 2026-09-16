@@ -950,7 +950,7 @@ targets.append(
 targets.append(
   .testTarget(
     name: "MereRunCLITests",
-    dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO", "AudioCore"],
+    dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO", "AudioCore", "MereRunMLXTestSupport"],
     path: "Tests/MereRunCLITests",
     resources: [
       .copy("Fixtures")

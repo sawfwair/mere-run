@@ -24,6 +24,13 @@ loading, inference, and decoding behavior.
 
 Keep the task-safe MLX stream scopes around loading and prepared decoding.
 Core ML window batching, timing, and alignment remain provider-owned behavior.
+Loading and decoding share the process-wide `MLXRequestStreams` pool with
+Gemma4 and Laguna, including after model unload, serving eviction, and generator replacement.
+Suspended operations retain separate leases. Contexts are grouped by the selected
+default device, and both CPU and GPU work finish before a context returns.
+Preparation and decoding check cancellation at weight loading, feature extraction,
+and model decode boundaries. Cancellation waits for already submitted work;
+it does not interrupt a GPU kernel.
 
 Schema-v4 artifacts use ANE-compatible encoder masks and decoder selection.
 Use `scripts/model-conversion/inspect_parakeet_coreml.py --require-ane` and an
