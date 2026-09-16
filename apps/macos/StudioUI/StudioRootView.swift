@@ -457,6 +457,12 @@ private struct StudioWorkspaceView: View {
                 .padding(.top, MereRunTheme.Spacing.sm)
         }
 
+        if let storageNotice = controller.runtimeAPIKeyStorageNotice {
+            MereBanner(severity: .warning, text: storageNotice, systemImage: "key.slash")
+                .padding(.horizontal, MereRunTheme.Spacing.lg)
+                .padding(.top, MereRunTheme.Spacing.sm)
+        }
+
         if let outputFallbackNotice {
             MereBanner(
                 severity: .warning,

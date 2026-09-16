@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Store the macOS Studio runtime API key in the login Keychain instead of
+  `UserDefaults`, migrate an existing value on launch (removing it from defaults
+  only after the Keychain accepts it, and reporting a refused write with a
+  banner while the key stays in effect for the session), and pass it to the
+  `status --json` probe through `MERERUN_API_KEY` instead of `--api-key` on the
+  command line.
+
 - Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
   selection. Preserve exact dequantized values across incremental appends.
 

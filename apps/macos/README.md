@@ -444,7 +444,18 @@ CLI launch into a `JobRequest` for every lane, awaits utility and probe jobs on
 behalf of their callers (readiness results are evaluated against the request
 current at completion), mirrors the foreground inference job into the published
 compatibility fields some management views still read, and owns
-the template selection the console opens on and the persisted settings.
+the template selection the console opens on and the persisted settings. Those
+settings are `UserDefaults` keys (`mererun.app.cliPath`, `modelsRoot`,
+`hubCache`, `workingDirectory`, `runtimeHost`, `runtimePort`) except the
+Settings ▸ Server API key, which `StudioSecretStore` keeps as a generic
+password in the login Keychain (service `run.mere.app`, account
+`runtimeAPIKey`; `KeychainSecretStore` is the one Keychain owner in StudioKit).
+A key an earlier version saved under `mererun.app.runtimeAPIKey` is moved into
+the Keychain at launch and the defaults key is removed only after that write
+succeeds; if the Keychain refuses, the key still applies for the session, the
+defaults value stays for the next launch to retry, and a banner says so
+(`runtimeAPIKeyStorageNotice`). A save the Keychain refuses is never written to
+`UserDefaults` instead.
 
 ## Domains
 
@@ -625,10 +636,12 @@ install commands, confirms install or update, runs the plugin's fixed doctor
 verb, and rolls back to a retained signed bundle behind a confirmation. Plugin
 implementations stay out of process.
 
-Hugging Face tokens, API keys, and the Open WebUI admin password cross the
+Hugging Face tokens, API keys (including the Settings ▸ Server key the
+`status --json` probe sends), and the Open WebUI admin password cross the
 process boundary through environment variables (`MERERUN_API_KEY` and its
 siblings) instead of appearing in argv, in both the typed surfaces and the
-console.
+console; the command preview and Library rows show argv only, so the value
+never appears there either.
 
 ## Product boundaries
 

@@ -288,9 +288,15 @@ package final class MereRunController: ObservableObject {
     @Published package var runtimePort: Int {
         didSet { UserDefaults.standard.set(runtimePort, forKey: Keys.runtimePort) }
     }
+    /// The bearer token for the runtime server. Lives in the login Keychain through
+    /// `secretStore`, never in `UserDefaults`; a write the Keychain refuses keeps the value for
+    /// this session and reports through `runtimeAPIKeyStorageNotice`.
     @Published package var runtimeAPIKey: String {
-        didSet { UserDefaults.standard.set(runtimeAPIKey, forKey: Keys.runtimeAPIKey) }
+        didSet { persistRuntimeAPIKey() }
     }
+    /// Why the runtime API key is not in the Keychain, or nil once it is. Set when the launch
+    /// migration or a later save fails; the key still applies for the running session.
+    @Published package private(set) var runtimeAPIKeyStorageNotice: String?
     @Published package private(set) var liveOutputText = ""
     @Published package private(set) var currentProgress: StudioRunProgress?
     /// Live progress keyed by durable Studio request id. Unlike `currentProgress`, this covers
@@ -313,8 +319,14 @@ package final class MereRunController: ObservableObject {
         static let workingDirectory = "mererun.app.workingDirectory"
         static let runtimeHost = "mererun.app.runtimeHost"
         static let runtimePort = "mererun.app.runtimePort"
-        static let runtimeAPIKey = "mererun.app.runtimeAPIKey"
+        /// Where versions before the Keychain kept the key; read once to migrate, then removed.
+        static let legacyRuntimeAPIKey = "mererun.app.runtimeAPIKey"
     }
+
+    /// The Keychain account name of the runtime API key.
+    package static let runtimeAPIKeySecretName = "runtimeAPIKey"
+
+    private let secretStore: StudioSecretStore
 
     private let fileSystem: MereRunFileProbing
     private let cliResolve: (String) -> MereRunLaunch
@@ -388,6 +400,7 @@ package final class MereRunController: ObservableObject {
     }
 
     package init(
+        secretStore: StudioSecretStore = KeychainSecretStore(),
         processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner(),
         fileSystem: MereRunFileProbing = FileManager.default,
         cliResolver: @escaping (String) -> MereRunLaunch = { CLIResolver.resolve(customPath: $0) },
@@ -395,6 +408,7 @@ package final class MereRunController: ObservableObject {
         taskSessions: StudioTaskSessions? = nil
     ) {
         self.taskSessions = taskSessions ?? StudioTaskSessions()
+        self.secretStore = secretStore
         self.fileSystem = fileSystem
         self.cliResolve = cliResolver
         jobs = JobStore(processRunner: processRunner, fileSystem: fileSystem)
@@ -408,13 +422,81 @@ package final class MereRunController: ObservableObject {
             ?? FileManager.default.homeDirectoryForCurrentUser.path
         runtimeHost = UserDefaults.standard.string(forKey: Keys.runtimeHost) ?? "127.0.0.1"
         runtimePort = (UserDefaults.standard.object(forKey: Keys.runtimePort) as? Int) ?? 8080
-        runtimeAPIKey = UserDefaults.standard.string(forKey: Keys.runtimeAPIKey) ?? ""
+        let storedKey = Self.loadRuntimeAPIKey(from: secretStore, defaults: UserDefaults.standard)
+        runtimeAPIKey = storedKey.value
+        runtimeAPIKeyStorageNotice = storedKey.notice
         jobEventSubscription = jobs.events.sink { [weak self] event in
             self?.handle(event)
         }
         if resolvesCLIOnInit {
             refreshResolvedCLI()
         }
+    }
+
+    private struct StoredRuntimeAPIKey {
+        let value: String
+        let notice: String?
+    }
+
+    /// The Keychain value wins. A value an earlier version left in `UserDefaults` is moved into
+    /// the Keychain, and the defaults key is removed only after that write succeeds; a refused
+    /// write keeps the legacy value in memory and in defaults so the next launch tries again.
+    private static func loadRuntimeAPIKey(
+        from secretStore: StudioSecretStore,
+        defaults: UserDefaults
+    ) -> StoredRuntimeAPIKey {
+        let legacy = defaults.string(forKey: Keys.legacyRuntimeAPIKey)
+        do {
+            if let stored = try secretStore.secret(named: runtimeAPIKeySecretName) {
+                return StoredRuntimeAPIKey(value: stored, notice: nil)
+            }
+        } catch {
+            return StoredRuntimeAPIKey(
+                value: legacy ?? "",
+                notice: runtimeAPIKeyStorageNotice(for: error, action: "read from", recovery: retryAtNextLaunch)
+            )
+        }
+        guard let legacy else { return StoredRuntimeAPIKey(value: "", notice: nil) }
+        guard !legacy.isEmpty else {
+            defaults.removeObject(forKey: Keys.legacyRuntimeAPIKey)
+            return StoredRuntimeAPIKey(value: "", notice: nil)
+        }
+        do {
+            try secretStore.setSecret(legacy, named: runtimeAPIKeySecretName)
+        } catch {
+            return StoredRuntimeAPIKey(
+                value: legacy,
+                notice: runtimeAPIKeyStorageNotice(for: error, action: "moved to", recovery: retryAtNextLaunch)
+            )
+        }
+        defaults.removeObject(forKey: Keys.legacyRuntimeAPIKey)
+        return StoredRuntimeAPIKey(value: legacy, notice: nil)
+    }
+
+    private static let retryAtNextLaunch = "the app will try again at the next launch"
+
+    private static func runtimeAPIKeyStorageNotice(for error: Error, action: String, recovery: String) -> String {
+        "The runtime API key could not be \(action) the Keychain: \(error.localizedDescription) "
+            + "It applies for this session; \(recovery)."
+    }
+
+    /// Writes the key to the Keychain, or removes the item when the field is cleared. On failure
+    /// the in-memory value stands for the session and nothing is written to `UserDefaults`.
+    private func persistRuntimeAPIKey() {
+        do {
+            if runtimeAPIKey.isEmpty {
+                try secretStore.removeSecret(named: Self.runtimeAPIKeySecretName)
+            } else {
+                try secretStore.setSecret(runtimeAPIKey, named: Self.runtimeAPIKeySecretName)
+            }
+        } catch {
+            runtimeAPIKeyStorageNotice = Self.runtimeAPIKeyStorageNotice(
+                for: error, action: "saved to", recovery: "enter it again once the Keychain is available"
+            )
+            return
+        }
+        UserDefaults.standard.removeObject(forKey: Keys.legacyRuntimeAPIKey)
+        runtimeAPIKeyStorageNotice = nil
     }
 
     package func select(_ template: CommandTemplate) {
@@ -657,9 +739,14 @@ package final class MereRunController: ObservableObject {
     /// pill. Concurrent refreshes share one probe; a refresh superseded by a host/port change keeps
     /// the last snapshot until the replacement reports.
     package func refreshServerStatus() async {
-        var args = ["status", "--json", "--host", runtimeHost, "--port", String(runtimePort)]
-        if !runtimeAPIKey.isBlank { args += ["--api-key", runtimeAPIKey] }
-        let id = jobs.submit(rawRequest(args: args, probeKey: Self.serverStatusProbeKey))
+        let args = ["status", "--json", "--host", runtimeHost, "--port", String(runtimePort)]
+        // The key reaches `status` through MERERUN_API_KEY; argv is visible to every local process.
+        let key = runtimeAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let id = jobs.submit(rawRequest(
+            args: args,
+            environmentOverrides: key.isEmpty ? [:] : [CommandLaunchEnvironment.apiKeyEnvironmentKey: key],
+            probeKey: Self.serverStatusProbeKey
+        ))
         guard let result = await jobs.result(for: id) else { return }
         if case .cancelled = jobs.job(id)?.state { return }
         serverStatus = StudioServerStatus.parse(jsonStdout: result.standardOutput ?? "")

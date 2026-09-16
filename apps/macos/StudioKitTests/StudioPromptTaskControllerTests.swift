@@ -16,7 +16,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
             root = FileManager.default.temporaryDirectory.appendingPathComponent("prompt-task-\(UUID())")
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             runner = RecordingProcessRunner()
-            controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false,
+            controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false,
                 taskSessions: StudioTaskSessions(url: root.appendingPathComponent("sessions.json")))
             library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
             library.observe(controller: controller)
@@ -79,7 +79,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
             XCTAssertEqual(prompt.draft, drafts[mode])
         }
         controller.taskSessions.flush()
-        let restoredHost = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false,
+        let restoredHost = MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false,
             taskSessions: StudioTaskSessions(url: root.appendingPathComponent("sessions.json")))
         defer { restoredHost.terminateAllProcesses() }
         let restored = StudioPromptTaskController(controller: restoredHost, library: library)

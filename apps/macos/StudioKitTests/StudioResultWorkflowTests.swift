@@ -169,7 +169,7 @@ final class StudioResultWorkflowTests: XCTestCase {
 
     func testHistoryRecordsBothCompletionsWithoutAnyViewAndObservingTwiceIsIdempotent() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         defer { controller.terminateAllProcesses() }
         let store = library()
         store.observe(controller: controller)
