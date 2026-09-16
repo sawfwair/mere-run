@@ -79,9 +79,12 @@ final class Gemma4QuantizedTensorState {
     }
 
     func dequantized(tokenRange: Range<Int>) -> MLXArray {
-        let slicedWeight = weight[0..., 0..., tokenRange, 0...]
-        let slicedScales = scales[0..., 0..., tokenRange, 0...]
-        let slicedBiases = biases.map { $0[0..., 0..., tokenRange, 0...] }
+        // Capacity trimming and interior ranges leave gaps between heads. Copy all
+        // inputs before dequantization: the pinned Metal runtime's internal bias
+        // copy can overwrite buffers already bound for weights and scales.
+        let slicedWeight = MLX.contiguous(weight[0..., 0..., tokenRange, 0...])
+        let slicedScales = MLX.contiguous(scales[0..., 0..., tokenRange, 0...])
+        let slicedBiases = biases.map { MLX.contiguous($0[0..., 0..., tokenRange, 0...]) }
         return MLX.dequantized(
             slicedWeight,
             scales: slicedScales,

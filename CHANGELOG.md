@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
+  selection. Preserve exact dequantized values across incremental appends.
+
 - Reuse Gemma4, Parakeet, and Laguna execution streams across serving eviction and
   generator replacement. Keep simultaneous operations on separate streams and
   preserve the selected CPU or GPU device.

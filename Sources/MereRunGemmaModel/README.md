@@ -44,6 +44,10 @@ materialize dense quantized state.
 Cache forks isolate subsequent mutations. Batched caches preserve row identity,
 offsets, quantization settings, and valid token counts. Re-encoding keeps the
 total position offset. Quantized snapshots exclude spare allocation capacity.
+Make packed weights, scales, and biases contiguous before affine dequantization.
+Trimming capacity or selecting an interior token range can leave gaps between
+heads; the pinned Metal dequantizer can overwrite input bindings when it copies
+a strided bias array.
 
 Proportional RoPE uses the full head dimension to compute frequencies. Shared
 KV layers reuse the correct preceding attention type. Keep key-equals-value,
