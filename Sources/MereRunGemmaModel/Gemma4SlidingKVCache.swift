@@ -161,8 +161,9 @@ package final class Gemma4SlidingKVCache: Gemma4AttentionCache {
 
     package func fork() -> Gemma4AttentionCache {
         let copy = Gemma4SlidingKVCache(maxSize: maxSize)
-        copy.keys = keys
-        copy.values = values
+        // Ring writes must not rebind a saved prefix's array wrappers.
+        copy.keys = keys.map { $0.reshaped($0.shape) }
+        copy.values = values.map { $0.reshaped($0.shape) }
         copy.offset = offset
         copy.writeIndex = writeIndex
         return copy

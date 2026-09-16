@@ -31,7 +31,11 @@ extension Gemma4Generator {
         guard !decodeLoopRunning else { return }
         decodeLoopRunning = true
         Task {
-            await runDecodeLoop(model: model, tokenizerAndTemplate: tokenizerAndTemplate)
+            // The loop can outlive the request that starts it. Lease its own
+            // context instead of retaining that request's inherited streams.
+            await withRequestStream {
+                await runDecodeLoop(model: model, tokenizerAndTemplate: tokenizerAndTemplate)
+            }
         }
     }
 

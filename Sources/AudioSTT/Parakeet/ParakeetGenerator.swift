@@ -11,6 +11,7 @@ public actor ParakeetGenerator: ASRGenerator {
     var audioPreprocessor: ParakeetAudioPreprocessor?
     var modelConfig: ParakeetModelConfig?
     var loadedModelPath: String?
+    private var availableStreamContexts: [MLX.Stream.Context] = []
 
     let modelId: String
     let executionProvider: ParakeetExecutionProvider
@@ -109,7 +110,7 @@ public actor ParakeetGenerator: ASRGenerator {
         language: String? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
     ) async throws -> ParakeetMeasuredTranscription {
-        try await Stream.withNewDefaultStream(isolation: self) {
+        try await withRequestStream {
             // Keep this closure genuinely asynchronous under -O. MLX's async overload
             // installs task-local CPU and GPU streams that survive executor hops; without
             // a suspension the optimizer can collapse the body onto the caller thread and
@@ -147,6 +148,19 @@ public actor ParakeetGenerator: ASRGenerator {
         modelConfig = nil
         loadedModelPath = nil
         Memory.clearCache()
+    }
+
+    /// Reuse completed CPU/GPU streams for this generator. A suspended operation
+    /// keeps its lease, and both devices finish submitted work before reuse.
+    func withRequestStream<Result>(
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        let context = availableStreamContexts.popLast() ?? MLX.Stream.Context()
+        defer {
+            context.synchronize()
+            availableStreamContexts.append(context)
+        }
+        return try await Stream.withDefaultStream(context, isolation: self, operation)
     }
 
     public func supportedLanguageCodes(modelPath: String? = nil) async throws -> Set<String> {

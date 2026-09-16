@@ -27,6 +27,17 @@ templates, generation, and LoRA orchestration.
 Keep OpenAI-style tool/message adaptation typed before passing into tokenizer
 library boundaries.
 
+Chat, preparation, and the background batching loop lease separate execution
+contexts while active. Completed contexts remain reusable after model unload.
+The pool belongs to the generator; recreating generators creates more backend
+streams, which MLX retains until process exit. Keep the generator resident when
+serving repeated requests. Finish submitted work before returning a lease, and
+do not let background tasks retain a request's stream after that request ends.
+
+Prefix snapshots keep independent array wrappers so later prompts and cancelled
+requests cannot overwrite a retained prefix. Token-limited replies report
+`length`; replies that stop before the budget report `stop`.
+
 Canonical templates are applied only when the package template has the exact
 known-stale SHA-256 and the decoded model profile matches a released Gemma 4
 shape. Current or custom package templates remain authoritative.

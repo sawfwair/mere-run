@@ -24,6 +24,10 @@ loading, inference, and decoding behavior.
 
 Keep the task-safe MLX stream scopes around loading and prepared decoding.
 Core ML window batching, timing, and alignment remain provider-owned behavior.
+Loading and decoding reuse completed contexts owned by the generator, including
+after model unload. Suspended operations retain separate leases. Wait for both
+CPU and GPU work before returning a context. Recreating a generator creates a
+new pool; this does not bound backend streams across generator recreation.
 
 Schema-v4 artifacts use ANE-compatible encoder masks and decoder selection.
 Use `scripts/model-conversion/inspect_parakeet_coreml.py --require-ane` and an
