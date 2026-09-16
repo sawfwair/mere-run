@@ -45,6 +45,7 @@ App-to-CLI tests reject any emitted flag absent from `mere.run catalog --json`.
 - `music-acestep-lm-1.7b`
 - `music-acestep-lm-4b`
 - `music-minimax-music3`
+- `music-yue2` (experimental)
 - `music-magenta-rt2-small`
 - `music-magenta-rt2-base`
 - `music-muscriptor-small`
@@ -65,6 +66,7 @@ mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-acestep-xl-turbo
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 mere.run guide music generate --model music-minimax-music3
+mere.run guide music generate --model music-yue2
 mere.run guide music generate --model music-magenta-rt2-small
 mere.run guide music separate --model music-separate-bs-roformer-viperx-1297
 mere.run guide music separate --model music-separate-bs-roformer-4stem
@@ -76,6 +78,35 @@ mere.run guide music transcribe --model music-muscriptor-medium
 There is no separate `ace-step` guide topic. ACE-Step text-to-music, covers,
 style-transfer covers, and source-audio understanding are documented under
 `music generate` and `music analyze`, because those are the public CLI surfaces.
+
+## YuE2 score-conditioned songs
+
+YuE2 generates a score, semantic music tokens, and a 48 kHz stereo waveform
+with native Swift/MLX. Both model components use CC BY-NC 4.0. Review their
+terms before installing:
+
+```bash
+mere.run model pull music-yue2 --accept-model-license
+mere.run music generate "English piano pop, warm alto, soft drums" \
+  --model music-yue2 \
+  --lyrics-file ./lyrics.txt \
+  --duration 60 \
+  --output ./song.wav
+```
+
+The default full-score mode saves `song.abc` alongside the WAV and recipe.
+Use `--score-mode melody` for melody-only planning, or `--score-mode off` for
+direct generation. To supply an edited score, use `--abc-file ./score.abc`.
+Generation creates a complete recording; it does not edit regions of an input
+waveform. Audio-to-score transcription is outside this integration.
+
+This path is experimental. Local numerical fixtures cover the native math.
+The released checkpoints passed five bounded generation runs, including a
+36.08-second vocal track that ended naturally and a byte-identical seeded repeat.
+The vocal sample passed an owner listening review. Broader listening quality
+and long-song performance and memory remain unqualified.
+For controls, duration boundaries, and seed behavior, run
+`mere.run guide music generate --model music-yue2`.
 
 ## Typical workflow
 

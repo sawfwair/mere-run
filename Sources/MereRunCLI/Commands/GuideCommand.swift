@@ -450,6 +450,7 @@ enum GuideRegistry {
                 "music-acestep-xl-turbo",
                 "music-acestep-xl-turbo-lm4b",
                 "music-minimax-music3",
+                "music-yue2",
                 "music-magenta-rt2-small",
                 "music-magenta-rt2-base",
             ],
@@ -737,6 +738,9 @@ enum GuideRegistry {
     static func content(for topic: GuideTopic, model: String? = nil) throws -> String {
         let normalizedModel = model?.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
+        if topic.topic == "music-generate", normalizedModel == "music-yue2" {
+            return try resourceContent(named: "handbook-yue2.md")
+        }
         let resourceName = topic.topic == "music-generate"
             && normalizedModel == "music-minimax-music3"
             ? "music-generate-minimax-music3.md"

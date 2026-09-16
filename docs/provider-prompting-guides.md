@@ -522,6 +522,14 @@ Table 6 lists provider sources and local recipes for music and audio models.
       <td>2026-09-04</td>
     </tr>
     <tr>
+      <td>YuE2</td>
+      <td><code>music-yue2</code></td>
+      <td>Guide. <a href="https://github.com/multimodal-art-projection/YuE/blob/0edaf2f4053ef4731334b8329834b107977f9637/docs/generation.md">Provider generation guide</a></td>
+      <td>Style, lyrics, and optional ABC scores. Native numerical fixtures and bounded checkpoint generation are verified. One vocal sample passed an owner listening review; broader quality qualification is pending.</td>
+      <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-yue2.md">YuE2 guide (experimental)</a></td>
+      <td>2026-09-15</td>
+    </tr>
+    <tr>
       <td>Magenta RealTime 2 (Google)</td>
       <td><code>music-magenta-rt2-small</code>, <code>music-magenta-rt2-base</code></td>
       <td>Reference. <a href="https://huggingface.co/google/magenta-realtime-2">RealTime 2 model card</a></td>

@@ -26,6 +26,15 @@ The format is based on Keep a Changelog.
   `torch.save(tensor)` in the non-executing PyTorch state-dict reader. Keeps the
   first image-modulation projection unquantized to preserve depth structure.
 
+- Add experimental native YuE2 song generation with ABC score planning,
+  external score conditioning, semantic sampling, acoustic flow matching, and
+  48 kHz stereo output. Pin both CC BY-NC 4.0 model components and require
+  license acceptance. Validate the native implementation against upstream
+  numerical fixtures and five bounded checkpoint runs, including natural
+  end-of-song handling and a byte-identical seeded repeat. One vocal sample
+  passed an owner listening review; broader quality and long-song qualification
+  remain pending.
+
 ## 0.52.0 - 2026-09-14
 
 - Announce Studio reply progress, completion, cancellation, and prompt errors to

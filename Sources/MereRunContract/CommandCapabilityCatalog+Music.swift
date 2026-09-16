@@ -10,6 +10,16 @@ extension MereRunCapabilityCatalog {
             .init(name: "caption", label: "Music prompt", kind: .string, required: true)
         ],
         options: [
+            .init(flag: "--score-mode", label: "YuE2 score planning", kind: .choice,
+                  choices: ["full", "melody", "off"], group: Group.prompt, tier: .expert),
+            .init(flag: "--abc-file", label: "YuE2 input score", kind: .file, group: Group.inputs, tier: .expert),
+            .init(flag: "--abc-output", label: "YuE2 score output", kind: .file, group: Group.output, tier: .expert),
+            .init(flag: "--abc-max-tokens", label: "YuE2 score token budget", kind: .integer, group: Group.sampling, tier: .expert),
+            .init(flag: "--semantic-temperature", label: "YuE2 semantic temperature", kind: .number, group: Group.sampling, tier: .expert),
+            .init(flag: "--semantic-top-p", label: "YuE2 semantic top-p", kind: .number, group: Group.sampling, tier: .expert),
+            .init(flag: "--semantic-top-k", label: "YuE2 semantic top-k", kind: .integer, group: Group.sampling, tier: .expert),
+            .init(flag: "--semantic-repetition-penalty", label: "YuE2 semantic repetition penalty", kind: .number,
+                  group: Group.sampling, tier: .expert),
             .init(
                 flag: "--compose", label: "Compose with a chat model", kind: .boolean, group: Group.prompt, tier: .expert
             ),

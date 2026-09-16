@@ -156,6 +156,7 @@ public enum MereRunModelValidator {
             tokenizerDir = nil
         } else if spec?.validationKind == .aceStep
             || spec?.validationKind == .miniMaxMusic3
+            || spec?.validationKind == .yue2
             || spec?.validationKind == .roFormer
             || spec?.validationKind == .apBWE
             || spec?.validationKind == .univerSR
@@ -491,10 +492,11 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=ocr expects lighton-ocr or qwen3.5-hybrid-moe.")
             case .music where engine != .aceStep
                 && engine != .miniMaxMusic3
+                && engine != .yue2
                 && engine != .roFormer
                 && engine != .magentaRT2
                 && engine != .muScriptor:
-                warnings.append("Manifest engine mismatch: family=music expects ace-step, minimax-music3, bs-roformer, magenta-rt2, or muscriptor.")
+                warnings.append("Manifest engine mismatch: family=music expects ace-step, minimax-music3, yue2, bs-roformer, magenta-rt2, or muscriptor.")
             case .audio where engine != .apBWE && engine != .univerSR:
                 warnings.append("Manifest engine mismatch: family=audio expects ap-bwe or universr.")
             case .sfx where engine != .woosh && engine != .mmaudio:
@@ -579,7 +581,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .miniMaxMusic3?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
+            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .miniMaxMusic3?, .yue2?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .marigoldV2?, .tripoSR?, .instantMesh?, .trellis2?,
                  .insightFace?, .sortformer?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true

@@ -17,7 +17,7 @@ struct ModelInfo: ParsableCommand {
     )
     var json: Bool = false
 
-    @Flag(name: [.long], help: "Resolve and print component directories (tokenizer/text_encoder/transformer/vae/scheduler).")
+    @Flag(name: [.long], help: "Resolve and print model component paths.")
     var components: Bool = false
 
     func run() throws {
@@ -207,7 +207,11 @@ struct ModelInfo: ParsableCommand {
 
         if components {
             print("\nComponents")
-            if Self.usesLTX25Layout(manifest: manifest, expectedModelID: expectedModelID) {
+            if manifest?.engine == .yue2 || expectedModelID == YuE2Resources.modelID {
+                for line in Self.yue2ComponentLines(rootURL: rootURL, fileManager: fm) {
+                    print(line)
+                }
+            } else if Self.usesLTX25Layout(manifest: manifest, expectedModelID: expectedModelID) {
                 let id = expectedModelID ?? manifest?.id
                 for line in Self.ltx25ComponentLines(
                     rootURL: rootURL,
@@ -287,6 +291,18 @@ struct ModelInfo: ParsableCommand {
             } catch {
                 print("  \(component.manifestKey): (unresolved) \(error.localizedDescription)")
             }
+        }
+    }
+
+    static func yue2ComponentLines(rootURL: URL, fileManager: FileManager = .default) -> [String] {
+        let files = [
+            ("config", "config.json"), ("transformer", "model.safetensors"), ("tokenizer", "qwen.tiktoken"),
+            ("vae_config", "vae/config.json"), ("vae", "vae/model.safetensors"),
+        ]
+        return ["  layout: native YuE2 checkpoint files"] + files.map { label, path in
+            let url = rootURL.appendingPathComponent(path).standardizedFileURL
+            let suffix = fileManager.fileExists(atPath: url.path) ? "" : "  (missing)"
+            return "  \(label): \(url.path)\(suffix)"
         }
     }
 

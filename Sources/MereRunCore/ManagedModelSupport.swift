@@ -1031,6 +1031,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                ModelResolver.ModelID.yue2.rawValue,
+                "YuE2",
+                "Experimental native Swift/MLX song generation with ABC score planning and 48 kHz stereo decoding. Bounded checkpoint generation is verified; broader quality qualification is pending.",
+                minimum: 24,
+                recommended: 32
+            ),
+            descriptor(
                 ModelResolver.ModelID.miniMaxMusic3.rawValue,
                 "MiniMax Music 3",
                 "Generates complete lyric-driven 44.1 kHz stereo songs with the native staged Swift/MLX runtime.",

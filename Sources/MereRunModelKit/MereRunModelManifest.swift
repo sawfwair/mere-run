@@ -88,6 +88,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case aceStep = "ace-step"
         /// MiniMax Music 3 autoregressive and flow-matching music family.
         case miniMaxMusic3 = "minimax-music3"
+        /// YuE2 symbolic planning and acoustic flow-matching music family.
+        case yue2 = "yue2"
         /// Magenta RealTime 2 streaming music family.
         case magentaRT2 = "magenta-rt2"
         /// MuScriptor multi-instrument audio transcription family.

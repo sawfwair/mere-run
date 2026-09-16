@@ -1,0 +1,10 @@
+{
+  "source": "https://github.com/multimodal-art-projection/YuE",
+  "revision": "0edaf2f4053ef4731334b8329834b107977f9637",
+  "torch": "2.10.0",
+  "seed": 831001,
+  "trained_weights": false,
+  "decoder_halo": 12,
+  "decoder_length": 67136,
+  "max_tiled_difference": 0.0
+}

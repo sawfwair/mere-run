@@ -44,6 +44,8 @@ struct MusicGenerate: AsyncParsableCommand {
         """
     )
 
+    @OptionGroup var yue2Options: YuE2CLIOptions
+
     @Argument(help: "Caption prompt describing the target music.")
     var caption: String
 
@@ -53,7 +55,7 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("lyrics-file")], help: "Path to lyrics text file. Cannot be used with --lyrics.")
     var lyricsFile: String?
 
-    @Flag(name: [.customLong("instrumental")], help: "Use upstream's [Instrumental] lyric marker; cannot be combined with lyrics.")
+    @Flag(name: [.customLong("instrumental")], help: "Generate without vocals using the selected model's lyric convention; cannot be combined with lyrics.")
     var instrumental: Bool = false
 
     @Flag(
@@ -190,24 +192,24 @@ struct MusicGenerate: AsyncParsableCommand {
     )
     var analyzeSourceAudio: Bool = false
 
-    @Option(name: [.customLong("duration")], help: "Output upper bound in seconds (MiniMax defaults to 60; ACE-Step song/final may plan it when omitted).")
+    @Option(name: [.customLong("duration")], help: "Output upper bound in seconds (YuE2: 360; MiniMax: 60; ACE-Step song/final can plan it).")
     var durationSeconds: Float?
 
     @Option(
         name: [.customLong("minimum-duration")],
-        help: "MiniMax Music 3 minimum output duration in seconds; EOS is masked until this floor."
+        help: "YuE2 or MiniMax minimum output duration in seconds; EOS is masked until this floor."
     )
     var miniMaxMinimumDurationSeconds: Float?
 
     @Option(
         name: [.customLong("min-frames")],
-        help: "MiniMax Music 3 minimum 25 Hz acoustic frames (1...9000); must agree with --minimum-duration."
+        help: "YuE2 or MiniMax minimum 25 Hz acoustic frames (1...9000); must agree with --minimum-duration."
     )
     var miniMaxMinimumFrames: Int?
 
     @Option(
         name: [.customLong("max-frames")],
-        help: "MiniMax Music 3 exact 25 Hz acoustic-frame limit (1...9000); must agree with --duration when both are set."
+        help: "YuE2 or MiniMax 25 Hz frame limit (1...9000); must agree with --duration when both are set."
     )
     var miniMaxMaximumFrames: Int?
 
@@ -274,7 +276,7 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("quality")], help: "Adaptive ACE-Step quality: draft, song, final, or edit.")
     var quality: ACEStepQualityPreset?
 
-    @Option(name: [.customShort("s"), .long], help: "Denoise steps (MiniMax Music 3: 30; ACE-Step Turbo: 8; Base/SFT: 50).")
+    @Option(name: [.customShort("s"), .long], help: "Denoise steps (YuE2: 32 midpoint steps; MiniMax: 30; ACE-Step Turbo: 8; Base/SFT: 50).")
     var steps: Int?
 
     @Option(name: [.customLong("shift")], help: "Flow scheduler shift (default: Turbo 3; Base/SFT 1).")
@@ -286,7 +288,7 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("sampler")], help: "ODE sampler: euler or heun (default: euler).")
     var samplerMode: ACEStepSamplerMode?
 
-    @Option(name: [.customLong("guidance-scale")], help: "Flow guidance (MiniMax Music 3: 1.7; ACE-Step Base/SFT: 7; Turbo: 1).")
+    @Option(name: [.customLong("guidance-scale")], help: "Guidance (YuE2 semantic CFG: 1 with score, 1.01 without; MiniMax flow: 1.7; ACE-Step Base/SFT: 7; Turbo: 1).")
     var guidanceScale: Float?
 
     @Option(name: [.customLong("guidance-mode")], help: "Base/SFT guidance: apg, adg, or cfg (default: apg).")
@@ -492,6 +494,13 @@ struct MusicGenerate: AsyncParsableCommand {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         let explicitDurationSeconds = try resolvedExplicitDurationSeconds()
+        if isYuE2Request {
+            try await runYuE2(explicitDurationSeconds: explicitDurationSeconds, exportPlan: exportPlan)
+            return
+        }
+        if yue2Options.isSpecified {
+            throw ValidationError("Score and semantic sampling options require YuE2 (--model music-yue2).")
+        }
         if useLM && noLM {
             throw ValidationError("Pass either --use-lm or --no-lm, not both.")
         }
@@ -1488,8 +1497,12 @@ struct MusicGenerate: AsyncParsableCommand {
         if let resolvedMinimumFrames, resolvedMinimumFrames > resolvedMaximumFrames {
             throw ValidationError("MiniMax Music 3 minimum duration cannot exceed its output upper bound.")
         }
+        try validateStandaloneMusicOptions(modelName: "MiniMax Music 3")
+    }
+
+    func validateStandaloneMusicOptions(modelName: String) throws {
         if useLM || noLM || analyzeSourceAudio || lmModel != nil || lmSubdirectory != nil {
-            throw ValidationError("MiniMax Music 3 uses its built-in autoregressive stage; ACE-Step LM options do not apply.")
+            throw ValidationError("\(modelName) uses its built-in autoregressive stage; ACE-Step LM options do not apply.")
         }
         if taskType != .textToMusic
             || sourceAudio != nil
@@ -1499,10 +1512,10 @@ struct MusicGenerate: AsyncParsableCommand {
             || trackName != nil
             || completeTrackClasses != nil
         {
-            throw ValidationError("MiniMax Music 3 currently supports text-and-lyrics generation only.")
+            throw ValidationError("\(modelName) currently supports text-and-lyrics generation only.")
         }
         if !adapters.isEmpty || !adapterScales.isEmpty || stems != nil {
-            throw ValidationError("MiniMax Music 3 does not support ACE-Step adapters or stem extraction.")
+            throw ValidationError("\(modelName) does not support ACE-Step adapters or stem extraction.")
         }
         if shift != nil
             || inferMethod != nil
@@ -1514,14 +1527,14 @@ struct MusicGenerate: AsyncParsableCommand {
             || velocityEMAFactor != nil
         {
             throw ValidationError(
-                "ACE-Step scheduler controls do not apply to MiniMax Music 3; use --flow-solver and --flow-cfg-end for MiniMax experiments."
+                "ACE-Step scheduler controls do not apply to \(modelName)."
             )
         }
         if let candidateCount, candidateCount != 1 {
-            throw ValidationError("MiniMax Music 3 currently supports one candidate per invocation.")
+            throw ValidationError("\(modelName) currently supports one candidate per invocation.")
         }
         if keepCandidates || dawBundle != nil || lrcOutput != nil {
-            throw ValidationError("Candidate, DAW-bundle, and LRC export are not yet available for MiniMax Music 3.")
+            throw ValidationError("Candidate, DAW-bundle, and LRC export are not yet available for \(modelName).")
         }
         if checkpointsRoot != nil
             || turboSubdirectory != "acestep-v15-turbo"
@@ -1529,7 +1542,7 @@ struct MusicGenerate: AsyncParsableCommand {
             || textSubdirectory != nil
             || adapterKind != .auto
         {
-            throw ValidationError("ACE-Step component-layout options do not apply to MiniMax Music 3.")
+            throw ValidationError("ACE-Step component-layout options do not apply to \(modelName).")
         }
         if quality != nil
             || audioCoverStrength != 1
@@ -1539,7 +1552,7 @@ struct MusicGenerate: AsyncParsableCommand {
             || vocalLanguage != "en"
             || instruction != "Fill the audio semantic mask based on the given conditions:"
         {
-            throw ValidationError("ACE-Step quality, cover, retake, language, and instruction options do not apply to MiniMax Music 3.")
+            throw ValidationError("ACE-Step quality, cover, retake, language, and instruction options do not apply to \(modelName).")
         }
         if repaintStartSeconds != 0
             || repaintEndSeconds != -1
@@ -1552,7 +1565,7 @@ struct MusicGenerate: AsyncParsableCommand {
             || flowEditNMax != 1
             || flowEditNAverage != 1
         {
-            throw ValidationError("ACE-Step repaint and flow-edit controls do not apply to MiniMax Music 3.")
+            throw ValidationError("ACE-Step repaint and flow-edit controls do not apply to \(modelName).")
         }
         if bpm != nil
             || keyscale != nil
@@ -1567,7 +1580,7 @@ struct MusicGenerate: AsyncParsableCommand {
             || lmNegativePrompt != "NO USER INPUT"
             || noLMCaptionRewrite
         {
-            throw ValidationError("ACE-Step metadata aliases and LM sampling controls do not apply to MiniMax Music 3; put musical details in the caption.")
+            throw ValidationError("ACE-Step metadata aliases and LM sampling controls do not apply to \(modelName); put musical details in the caption.")
         }
         if noTiledVAE
             || vaeChunkSize != 512
@@ -1584,7 +1597,7 @@ struct MusicGenerate: AsyncParsableCommand {
             || magentaPrefillSilence
             || magentaPrefillDuration != 1.64
         {
-            throw ValidationError("ACE-Step VAE and Magenta RT2 controls do not apply to MiniMax Music 3.")
+            throw ValidationError("ACE-Step VAE and Magenta RT2 controls do not apply to \(modelName).")
         }
     }
 
@@ -1828,7 +1841,7 @@ struct MusicGenerate: AsyncParsableCommand {
         try ACEStepCLIHelper.loadAudio48kHz(path, label: label)
     }
 
-    private func resolveUserPath(_ path: String) -> URL {
+    func resolveUserPath(_ path: String) -> URL {
         ACEStepCLIHelper.resolveUserPath(path)
     }
 
