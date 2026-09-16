@@ -445,6 +445,11 @@ final class Gemma4KVQuantizationTests: MLXTestCase {
 
         XCTAssertEqual(state.tokenCount, tokens)
         XCTAssertGreaterThan(state.tokenCapacity, tokens)
+        XCTAssertTrue(MLX.arrayEqual(state.weight[0..., 0..., 0..<tokens, 0...], oneShot.weight).item(Bool.self))
+        XCTAssertTrue(MLX.arrayEqual(state.scales[0..., 0..., 0..<tokens, 0...], oneShot.scales).item(Bool.self))
+        let biases = try XCTUnwrap(state.biases)
+        let referenceBiases = try XCTUnwrap(oneShot.biases)
+        XCTAssertTrue(MLX.arrayEqual(biases[0..., 0..., 0..<tokens, 0...], referenceBiases).item(Bool.self))
         let incremental = state.dequantized()
         let reference = oneShot.dequantized()
         XCTAssertEqual(incremental.shape, [1, 2, tokens, 64])
