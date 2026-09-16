@@ -6,7 +6,7 @@ Guidance for AI coding agents working in this repo. For human contributor expect
 
 mere.run is a Swift package, CLI, and optional macOS GUI for local-first inference on Apple Silicon. The repo ships five things:
 
-- Swift package — `Package.swift`, `Sources/`, `Tests/`. Targets: `MereRunCLI` (the `mere.run` executable), `MereRunApp` (the optional `mere.run.app` executable) over the `StudioKit` and `StudioUI` libraries, `MereRunRelayKit` (the portable relay client library), `MereRunCore`, `AudioCore`, `AudioCodecs`, `AudioSTT`, `AudioTTS`.
+- Swift package — `Package.swift`, `Sources/`, `Tests/`. The targets are layered: `MereRunContract` (portable CLI capability and result contracts) → `MereRunModelKit`, `MereRunExecution`, `MereRunAdmission`, `MereRunResidency` (model identity, durable run storage, admission, residency) → runtime-family libraries (`MereRunGemmaModel`, `MereRunQwenModel`, `MereRunLTXModel`, `MereRunImageModels`, and their siblings) over the shared `MereRunTensor`, `MereRunDecode`, and `MereRunKVCache` → `MereRunCore` (orchestration and the compatibility facade) → `AudioCore`, `AudioCodecs`, `AudioSTT`, `AudioTTS` → `MereRunCLI` (the `mere.run` executable) and `MereRunApp` (the optional `mere.run.app`). `MereRunRelayKit` is the portable relay client. [`docs/repository-tour.md`](./docs/repository-tour.md) has the full target and product map.
 - macOS client — `apps/macos/` holds the optional Studio sources, tests, and assets, split into `StudioKit/` (no SwiftUI), `StudioUI/` (the views), and `MereRunStudio/` (the executable); its `MereRunApp` target builds `mere.run.app` and runs the public CLI.
 - iOS client — `apps/ios/` holds the XcodeGen-generated iOS Studio app, a relay client over `MereRunRelayKit`; see `docs/ios-studio.md`.
 - VitePress docs site — `package.json`, `pnpm-lock.yaml`, `docs/`. Used only to build and preview the public docs.
@@ -21,7 +21,7 @@ brew install swiftlint ripgrep            # required for ./scripts/check.sh
 brew install node pnpm gitleaks           # only when editing the docs site or mirroring the security scan
 ```
 
-Node ≥ 20. pnpm is pinned to 10.28.0 via `packageManager`.
+Node ≥ 20. pnpm is pinned via `packageManager` in `package.json`.
 
 ## Build, test, validate
 
@@ -57,6 +57,8 @@ If a hygiene scan fires, do not patch the offending pattern out of `check.sh`. R
 - When changing command parsing, model resolution, or compatibility behavior, update the closest test in `Tests/MereRunCLITests/` or `Tests/MereRunCoreTests/`.
 - Don't modify `vendor/` in a feature PR. If you must, update [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) in the same change.
 - Don't commit machine-local config, editor automation, or secrets.
+- A new SwiftPM target or product must be registered in `scripts/package-policy.json`; `./scripts/check.sh` runs `check-package-policy.sh`, which fails on an unregistered one. See [`docs/internals/package-policy.md`](./docs/internals/package-policy.md).
+- New model runtimes belong in an owned runtime target (`MereRunGemmaModel`, `MereRunLTXModel`, and their siblings), not in `MereRunCore`. Core is reserved for orchestration and the compatibility facade.
 - Update `README.md`, `docs/`, or `CHANGELOG.md` when you change public CLI behavior, setup, or security-sensitive defaults.
 
 ## Out of scope for this repo

@@ -278,6 +278,16 @@ The format is based on Keep a Changelog.
   other request diagnostics. They no longer reserve inference permits or exit
   through the execution admission gate before producing their report.
 
+- Publish the runtime libraries extracted from `MereRunCore`, `MereRunCLI`, and the
+  audio targets as importable SwiftPM products: `MereRunModelKit`,
+  `MereRunExecution`, `MereRunAdmission`, `MereRunResidency`, `MereRunTensor`,
+  `MereRunDecode`, `MereRunKVCache`, `MereRunTextEncoder`, `MereRunGemmaModel`,
+  `MereRunQwenModel`, `MereRunLagunaModel`, `MereRunLTXModel`, `MereRunH3Model`,
+  `MereRunImageModels`, `MereRunAudioModels`, `AudioParakeetModel`,
+  `AudioQwen3ASRModel`, `AudioQwen3TTSModel`, and `AudioSortformer`. Existing
+  imports of `MereRunCore`, `MereRunCLI`, `AudioSTT`, and `AudioTTS` keep
+  resolving these types through published re-exports.
+
 ## 0.51.1 - 2026-09-05
 
 - fixed a `gate --all-installed` issue that rechecked required models only in
