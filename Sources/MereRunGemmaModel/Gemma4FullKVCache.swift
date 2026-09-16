@@ -60,8 +60,10 @@ package final class Gemma4FullKVCache: Gemma4AttentionCache {
 
     package func fork() -> Gemma4AttentionCache {
         let copy = Gemma4FullKVCache()
-        copy.keys = keys
-        copy.values = values
+        // Indexed writes rebind the MLXArray wrapper. Give each branch its own
+        // wrapper while sharing immutable tensor storage until the next write.
+        copy.keys = keys.map { $0.reshaped($0.shape) }
+        copy.values = values.map { $0.reshaped($0.shape) }
         copy.offset = offset
         return copy
     }

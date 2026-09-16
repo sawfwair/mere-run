@@ -226,4 +226,39 @@ final class InferenceStreamQualificationTests: MereRunCoreTestCase {
         }
     }
 
+    func testInstalledGemmaPromptSwitchPreservesPrefixAndReportsTokenLimit() async throws {
+        let paths = try configuration()
+        let root = paths.models.appendingPathComponent("text-chat-gemma4-12b-4bit").path
+        let generator = Gemma4Generator(prefixKVCacheEnabled: true)
+        let request = ChatRequest(
+            messages: [
+                ChatMessage(role: .system, content: "Follow the requested output format."),
+                ChatMessage(
+                    role: .user,
+                    content: "Write consecutive integers starting at 1, one integer per line. Continue until stopped."
+                ),
+            ],
+            maxTokens: 128, temperature: 0, topP: 1, topK: 0,
+            showThinking: false, maxContextTokens: 2048
+        )
+        do {
+            let first = try await generator.chat(request, modelPath: root, progressHandler: nil)
+            var changed = request
+            changed.messages[1].content = "Write every integer from 1 through 500, one integer per line. Do not omit any integers."
+            changed.maxTokens = 1
+            let limited = try await generator.chat(changed, modelPath: root, progressHandler: nil)
+            XCTAssertEqual(limited.tokensGenerated, 1)
+            XCTAssertEqual(limited.finishReason, .length)
+            let restored = try await generator.chat(request, modelPath: root, progressHandler: nil)
+            XCTAssertEqual(first.response, restored.response)
+            XCTAssertEqual(first.tokensGenerated, restored.tokensGenerated)
+            XCTAssertEqual(first.finishReason, .stop)
+            XCTAssertEqual(restored.finishReason, .stop)
+            await generator.unload()
+        } catch {
+            await generator.unload()
+            throw error
+        }
+    }
+
 }

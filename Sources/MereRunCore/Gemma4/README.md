@@ -34,6 +34,10 @@ streams, which MLX retains until process exit. Keep the generator resident when
 serving repeated requests. Finish submitted work before returning a lease, and
 do not let background tasks retain a request's stream after that request ends.
 
+Prefix snapshots keep independent array wrappers so later prompts and cancelled
+requests cannot overwrite a retained prefix. Token-limited replies report
+`length`; replies that stop before the budget report `stop`.
+
 Canonical templates are applied only when the package template has the exact
 known-stale SHA-256 and the decoded model profile matches a released Gemma 4
 shape. Current or custom package templates remain authoritative.
