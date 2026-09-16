@@ -28,11 +28,13 @@ Keep OpenAI-style tool/message adaptation typed before passing into tokenizer
 library boundaries.
 
 Chat, preparation, and the background batching loop lease separate execution
-contexts while active. Completed contexts remain reusable after model unload.
-The pool belongs to the generator; recreating generators creates more backend
-streams, which MLX retains until process exit. Keep the generator resident when
-serving repeated requests. Finish submitted work before returning a lease, and
-do not let background tasks retain a request's stream after that request ends.
+contexts while active. `MLXRequestStreams` retains completed contexts across
+model unload, serving eviction, and generator replacement. Contexts are grouped
+by the selected default device and grow with peak concurrent leases, rather than
+request count. Finish submitted work before returning a lease, and do not let
+background tasks retain a request's stream after that request ends.
+Preparation checks cancellation before config, tokenizer, and weight loading,
+and before publishing the complete model state.
 
 Prefix snapshots keep independent array wrappers so later prompts and cancelled
 requests cannot overwrite a retained prefix. Token-limited replies report

@@ -87,7 +87,7 @@ public actor LagunaGenerator: ChatGenerator {
         dflashRouting: LagunaDFlashRoutingMode,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws -> ChatResponse {
-        try await Stream.withNewDefaultStream {
+        try await withRequestStream {
             let rootURL = URL(fileURLWithPath: modelPath).standardizedFileURL
             let loadStart = Date()
             let requestedLoRASignature = Self.loraSignature(request.lora)
@@ -123,7 +123,7 @@ public actor LagunaGenerator: ChatGenerator {
         modelPath: String,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        try await Stream.withNewDefaultStream {
+        try await withRequestStream {
             try await ensureLoaded(
                 rootURL: URL(fileURLWithPath: modelPath).standardizedFileURL,
                 progressHandler: progressHandler
@@ -135,8 +135,17 @@ public actor LagunaGenerator: ChatGenerator {
                 stage: .loadingModel,
                 message: "Warming Laguna inference"
             ))
+            try Task.checkCancellation()
             warmUp(model: model, dflash: dflashModel)
+            try Task.checkCancellation()
         }
+    }
+
+    /// Keep each active request on exclusive streams, including after eviction.
+    func withRequestStream<Result>(
+        _ operation: () async throws -> Result
+    ) async rethrows -> Result {
+        try await MLXRequestStreams.withStream(isolation: self, operation)
     }
 
     public func unload() {

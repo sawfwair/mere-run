@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Reuse Gemma4, Parakeet, and Laguna execution streams across serving eviction and
+  generator replacement. Keep simultaneous operations on separate streams and
+  preserve the selected CPU or GPU device.
+- Honor cancellation at Gemma4, Parakeet, and Laguna preparation boundaries and at
+  Parakeet feature extraction and decoding boundaries. Finish submitted GPU
+  work before returning a stream for reuse.
+
 ## 0.52.0 - 2026-09-14
 
 - Announce Studio reply progress, completion, cancellation, and prompt errors to

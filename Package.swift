@@ -305,6 +305,7 @@ if hasMediaIOTarget {
 }
 
 var mereRunCoreTestDependencies: [Target.Dependency] = [
+  "MereRunResidency",
   "MereRunLagunaModel",
   "MereRunH3Model",
   "MereRunAudioModels",

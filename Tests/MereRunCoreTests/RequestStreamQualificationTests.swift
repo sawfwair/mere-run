@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MereRunResidency
 import XCTest
 @testable import AudioSTT
 @testable import MereRunCore
@@ -11,6 +12,7 @@ private protocol QualifiedStreamOwner: Actor {
 
 extension Gemma4Generator: QualifiedStreamOwner {}
 extension ParakeetGenerator: QualifiedStreamOwner {}
+extension LagunaGenerator: QualifiedStreamOwner {}
 
 /// A reusable barrier proves that every lease is active before any operation can finish.
 private actor StreamLeaseBarrier {
@@ -67,6 +69,14 @@ final class RequestStreamQualificationTests: MereRunCoreTestCase {
         try await checkReuse(ParakeetGenerator(), name: "parakeet")
     }
 
+    func testLagunaSequentialAndOverlappingLeases() async throws {
+        try await checkReuse(LagunaGenerator(), name: "laguna")
+    }
+
+    func testLagunaCancellationErrorsAndUnload() async throws {
+        try await checkRecovery(LagunaGenerator())
+    }
+
     func testGemmaCancellationErrorsAndUnload() async throws {
         try await checkRecovery(Gemma4Generator())
     }
@@ -75,9 +85,10 @@ final class RequestStreamQualificationTests: MereRunCoreTestCase {
         try await checkRecovery(ParakeetGenerator())
     }
 
-    func testRecreatedOwnersHaveSeparatePools() async throws {
+    func testRecreatedOwnersReuseProcessStreams() async throws {
         var gemma: Set<Identity> = []
         var parakeet: Set<Identity> = []
+        var laguna: Set<Identity> = []
         for _ in 0..<10 {
             let chat = Gemma4Generator()
             gemma.insert(await chat.withRequestStream { Identity.current() })
@@ -85,12 +96,123 @@ final class RequestStreamQualificationTests: MereRunCoreTestCase {
             let asr = ParakeetGenerator()
             parakeet.insert(await asr.withRequestStream { Identity.current() })
             await asr.unload()
+            let nextChat = LagunaGenerator()
+            laguna.insert(await nextChat.withRequestStream { Identity.current() })
+            await nextChat.unload()
         }
-        // The pool belongs to its generator. This explicitly documents the lifetime
-        // boundary; recreation is not a process-wide bounded-stream guarantee.
-        XCTAssertEqual(gemma.count, 10)
-        XCTAssertEqual(parakeet.count, 10)
-        try record(["gemma": Array(gemma), "parakeet": Array(parakeet)], name: "recreated-owner-streams")
+        // Eviction can discard a generator. Sequential replacements must reuse
+        // backend streams, including when switching between runtime families.
+        XCTAssertEqual(gemma.count, 1)
+        XCTAssertEqual(parakeet.count, 1)
+        XCTAssertEqual(gemma, parakeet)
+        XCTAssertEqual(gemma, laguna)
+        try record(["gemma": Array(gemma), "parakeet": Array(parakeet), "laguna": Array(laguna)],
+                   name: "recreated-owner-streams")
+    }
+
+    func testConcurrentRecreatedOwnersKeepExclusiveStreams() async throws {
+        var all: Set<Identity> = []
+        for _ in 0..<20 {
+            let owners: [any QualifiedStreamOwner] = [
+                Gemma4Generator(), ParakeetGenerator(), LagunaGenerator(), LagunaGenerator(),
+            ]
+            let barrier = StreamLeaseBarrier(width: owners.count)
+            let identities = await withTaskGroup(of: Identity.self) { group in
+                for owner in owners {
+                    group.addTask {
+                        await owner.withRequestStream {
+                            let identity = Identity.current()
+                            let value = MLXArray([Float(9)]) * 3
+                            asyncEval(value)
+                            await barrier.arrive()
+                            XCTAssertEqual(Identity.current(), identity)
+                            XCTAssertEqual(value.asArray(Float.self), [27])
+                            return identity
+                        }
+                    }
+                }
+                var identities: Set<Identity> = []
+                for await identity in group { identities.insert(identity) }
+                return identities
+            }
+            XCTAssertEqual(identities.count, 4)
+            all.formUnion(identities)
+            XCTAssertEqual(all.count, 4)
+            for owner in owners { await owner.unload() }
+        }
+        try record(["peakFourOwners": Array(all)], name: "recreated-concurrent-streams")
+    }
+
+    func testSelectedDeviceSurvivesCrossOwnerReuse() async throws {
+        let chat = Gemma4Generator()
+        let asr = ParakeetGenerator()
+        var observed: [DeviceType: Set<Identity>] = [:]
+        for _ in 0..<10 {
+            for device in [DeviceType.cpu, .gpu] {
+                for owner: any QualifiedStreamOwner in [chat, asr] {
+                    let identity = await Device.withDefaultDevice(Device(device)) {
+                        await owner.withRequestStream {
+                            let identity = Identity.current()
+                            XCTAssertEqual(StreamOrDevice.default.stream.description,
+                                           device == .cpu ? identity.cpu : identity.gpu)
+                            await Task.yield()
+                            return identity
+                        }
+                    }
+                    observed[device, default: []].insert(identity)
+                }
+            }
+        }
+        XCTAssertEqual(observed[.cpu]?.count, 1)
+        XCTAssertEqual(observed[.gpu]?.count, 1)
+        XCTAssertNotEqual(observed[.cpu], observed[.gpu])
+    }
+
+    func testChatResidencyEvictionReusesStreamsAcrossGenerations() async throws {
+        let cache = ResidentRuntimeCache<String, Gemma4Generator>(unload: { await $0.unload() })
+        var identities: Set<Identity> = []
+        var generations: Set<UUID> = []
+        for _ in 0..<10 {
+            let lease = try await cache.acquire(for: "gemma", make: { Gemma4Generator() }, prepare: { owner in
+                await owner.withRequestStream { eval(MLXArray([Float(5)]) * 2) }
+            })
+            identities.insert(await lease.value.withRequestStream { Identity.current() })
+            await lease.release()
+            let snapshots = await cache.snapshots()
+            let snapshot = try XCTUnwrap(snapshots["gemma"])
+            generations.insert(snapshot.generation)
+            let evicted = await cache.evictIfIdle(
+                key: "gemma", generation: snapshot.generation, accessGeneration: snapshot.accessGeneration
+            )
+            XCTAssertTrue(evicted)
+        }
+        XCTAssertEqual(generations.count, 10)
+        XCTAssertEqual(identities.count, 1)
+        try record(["chatEviction": Array(identities)], name: "chat-eviction-streams")
+    }
+
+    func testASRResidencyReplacementAndEvictionReuseStreams() async throws {
+        let slot = ResidentRuntimeSlot<Int, ParakeetGenerator>()
+        var identities: Set<Identity> = []
+        for index in 0..<10 {
+            let identity = try await slot.withValue(
+                for: index,
+                make: { ParakeetGenerator() },
+                unload: { await $0.unload() },
+                operation: { owner in await owner.withRequestStream { Identity.current() } }
+            )
+            identities.insert(identity)
+            if index % 2 == 1 {
+                let evicted = await slot.evictIfIdle(expectedKey: index, reason: .ttl, using: { await $0.unload() })
+                XCTAssertTrue(evicted)
+            }
+        }
+        let state = await slot.state()
+        XCTAssertEqual(state.loadCount, 10)
+        XCTAssertEqual(state.replacementCount, 5)
+        XCTAssertEqual(state.evictionCount, 5)
+        XCTAssertEqual(identities.count, 1)
+        try record(["asrReplacementAndEviction": Array(identities)], name: "asr-eviction-streams")
     }
 
     private func checkReuse<Owner: QualifiedStreamOwner>(_ owner: Owner, name: String) async throws {

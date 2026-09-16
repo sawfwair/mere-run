@@ -92,7 +92,6 @@ public actor Gemma4Generator: ChatGenerator {
     var singleDecodeSteps = 0
     var totalBatchedRows = 0
     var maxObservedBatchSize = 0
-    private var availableStreamContexts: [MLX.Stream.Context] = []
 
     public init(
         modelId: String = Gemma4Resources.defaultModelId,
@@ -176,16 +175,11 @@ public actor Gemma4Generator: ChatGenerator {
 
     /// Keep each active operation on its own streams across actor suspensions.
     /// MLX retains backend streams until process exit, so reuse completed leases
-    /// for this generator, including after model unload and preparation.
+    /// across generator replacement, including after model unload and preparation.
     func withRequestStream<Result>(
         _ operation: () async throws -> Result
     ) async rethrows -> Result {
-        let context = availableStreamContexts.popLast() ?? MLX.Stream.Context()
-        defer {
-            context.synchronize()
-            availableStreamContexts.append(context)
-        }
-        return try await Stream.withDefaultStream(context, isolation: self, operation)
+        try await MLXRequestStreams.withStream(isolation: self, operation)
     }
 
     func resetLoadedModel() {

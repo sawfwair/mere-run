@@ -7,6 +7,7 @@ extension Gemma4Generator {
         rootURL: URL,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws {
+        try Task.checkCancellation()
         let normalizedRoot = Gemma4Resources.normalizedRootURL(rootURL)
         if loadedModelPath == normalizedRoot.path, model != nil, tokenizerAndTemplate != nil {
             return
@@ -20,30 +21,36 @@ extension Gemma4Generator {
         }
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 config"))
+        try Task.checkCancellation()
         let configData = try Data(contentsOf: resources.configURL)
         let config = try JSONDecoder().decode(Gemma4Config.self, from: configData)
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 tokenizer"))
+        try Task.checkCancellation()
         let tokenizer = try await Gemma4TokenizerAndTemplate.load(
             from: normalizedRoot,
             maxLengthOverride: min(Gemma4Resources.defaultContextLength, config.textConfig.maxPositionEmbeddings)
         )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 weights"))
+        try Task.checkCancellation()
+        let preparedModel: any Gemma4CausalModel
         if Gemma4Resources.supportsVision(modelSpec: modelId) {
             let unifiedModel = try Gemma4UnifiedCausalLM(config: config)
             try Gemma4UnifiedModelLoader.loadWeights(into: unifiedModel, from: resources)
-            model = unifiedModel
+            preparedModel = unifiedModel
         } else {
             let textModel = Gemma4TextCausalLM(config: config.textConfig)
             try loadWeights(into: textModel, from: resources, config: config)
-            model = textModel
+            preparedModel = textModel
         }
         let loadedMTP = try loadMTPAssistantIfAvailable(
             baseModelRoot: normalizedRoot,
             config: config,
             progressHandler: progressHandler
         )
+        try Task.checkCancellation()
+        model = preparedModel
         mtpModel = loadedMTP.model
         loadedMTPModelPath = loadedMTP.path
         tokenizerAndTemplate = tokenizer
@@ -210,6 +217,7 @@ extension Gemma4Generator {
         }
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 MTP assistant"))
+        try Task.checkCancellation()
         let configData = try Data(contentsOf: resources.configURL)
         let assistantConfig = try JSONDecoder().decode(Gemma4AssistantConfig.self, from: configData)
         guard assistantConfig.backboneHiddenSize == config.textConfig.hiddenSize else {

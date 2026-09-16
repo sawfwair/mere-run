@@ -28,7 +28,10 @@ extension LagunaGenerator {
         guard !decodeLoopRunning else { return }
         decodeLoopRunning = true
         Task {
-            await runDecodeLoop(model: model, tokenizerAndTemplate: tokenizerAndTemplate)
+            // The loop can outlive the request that starts it.
+            await withRequestStream {
+                await runDecodeLoop(model: model, tokenizerAndTemplate: tokenizerAndTemplate)
+            }
         }
     }
 

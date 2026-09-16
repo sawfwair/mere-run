@@ -41,6 +41,13 @@ Model configuration, layers, ragged caches, and DFlash verification live in
 - The `LagunaTextLoRA` files own training and adapter integration.
 - `LagunaToolParser.swift` converts checkpoint tool markup to typed output.
 
+Chat, preparation, and each background batching loop lease separate execution
+contexts from `MLXRequestStreams`. Completed contexts survive model unload and
+generator replacement. A batching loop keeps its own lease when a participating
+request finishes or cancels. Preparation checks cancellation at config, tokenizer,
+weight-loading, and warmup boundaries. Submitted device work finishes before a
+context returns to the pool.
+
 ## Supported boundary
 
 Pulling the target installs both immutable checkpoint revisions:

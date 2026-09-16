@@ -11,7 +11,6 @@ public actor ParakeetGenerator: ASRGenerator {
     var audioPreprocessor: ParakeetAudioPreprocessor?
     var modelConfig: ParakeetModelConfig?
     var loadedModelPath: String?
-    private var availableStreamContexts: [MLX.Stream.Context] = []
 
     let modelId: String
     let executionProvider: ParakeetExecutionProvider
@@ -116,6 +115,7 @@ public actor ParakeetGenerator: ASRGenerator {
             // a suspension the optimizer can collapse the body onto the caller thread and
             // `.gpu` operations fall back to MLX's missing thread-local default stream.
             await Task.yield()
+            try Task.checkCancellation()
             guard let model, let audioPreprocessor, let modelConfig else {
                 throw ParakeetError.modelNotLoaded
             }
@@ -135,6 +135,7 @@ public actor ParakeetGenerator: ASRGenerator {
         modelPath: String? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
     ) async throws {
+        try Task.checkCancellation()
         let root = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
         if loadedModelPath != root.path {
             progressHandler?(ASRProgress(stage: .loadingModel, message: "Loading Parakeet model..."))
@@ -150,17 +151,12 @@ public actor ParakeetGenerator: ASRGenerator {
         Memory.clearCache()
     }
 
-    /// Reuse completed CPU/GPU streams for this generator. A suspended operation
+    /// Reuse completed CPU/GPU streams across generators. A suspended operation
     /// keeps its lease, and both devices finish submitted work before reuse.
     func withRequestStream<Result>(
         _ operation: () async throws -> Result
     ) async rethrows -> Result {
-        let context = availableStreamContexts.popLast() ?? MLX.Stream.Context()
-        defer {
-            context.synchronize()
-            availableStreamContexts.append(context)
-        }
-        return try await Stream.withDefaultStream(context, isolation: self, operation)
+        try await MLXRequestStreams.withStream(isolation: self, operation)
     }
 
     public func supportedLanguageCodes(modelPath: String? = nil) async throws -> Set<String> {
