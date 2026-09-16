@@ -49,7 +49,7 @@ extension ParakeetGenerator {
         from rootURL: URL,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws {
-        try await Stream.withNewDefaultStream(isolation: self) {
+        try await withRequestStream {
             try loadModelOnTaskSafeStream(
                 from: rootURL,
                 progressHandler: progressHandler
