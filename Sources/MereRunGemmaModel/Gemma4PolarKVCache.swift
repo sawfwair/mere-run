@@ -136,8 +136,8 @@ final class Gemma4PolarKVCache: Gemma4AttentionCache {
         let copy = Gemma4PolarKVCache(configuration: configuration, maxSize: maxSize)
         copy.leadingKeys = leadingKeys
         copy.leadingValues = leadingValues
-        copy.polarKeys = polarKeys
-        copy.polarValues = polarValues
+        copy.polarKeys = polarKeys?.forked()
+        copy.polarValues = polarValues?.forked()
         copy.offset = offset
         return copy
     }

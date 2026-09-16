@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Keep forked Gemma 4 quantized and TurboQuant KV caches isolated, so prefix
+  caching with quantized KV no longer lets one request's tokens overwrite
+  another request's saved prompt.
+
 - Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
   selection. Preserve exact dequantized values across incremental appends.
 

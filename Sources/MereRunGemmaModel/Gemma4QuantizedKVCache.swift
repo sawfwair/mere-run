@@ -147,8 +147,8 @@ final class Gemma4QuantizedKVCache: Gemma4AttentionCache {
         let copy = Gemma4QuantizedKVCache(configuration: configuration, maxSize: maxSize)
         copy.leadingKeys = leadingKeys
         copy.leadingValues = leadingValues
-        copy.quantizedKeys = quantizedKeys
-        copy.quantizedValues = quantizedValues
+        copy.quantizedKeys = quantizedKeys?.forked()
+        copy.quantizedValues = quantizedValues?.forked()
         copy.offset = offset
         return copy
     }

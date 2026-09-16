@@ -74,6 +74,21 @@ final class Gemma4QuantizedTensorState {
         )
     }
 
+    func forked() -> Gemma4QuantizedTensorState {
+        // Indexed writes in `Gemma4KVTokenStorage.appended` rebind the MLXArray wrapper.
+        // Give each branch its own wrappers while sharing immutable tensor storage until
+        // the next write, so branches at the same tokenCount cannot overwrite each other.
+        Gemma4QuantizedTensorState(
+            weight: weight.reshaped(weight.shape),
+            scales: scales.reshaped(scales.shape),
+            biases: biases.map { $0.reshaped($0.shape) },
+            groupSize: groupSize,
+            bits: bits,
+            dtype: dtype,
+            tokenCount: tokenCount
+        )
+    }
+
     func dequantized() -> MLXArray {
         dequantized(tokenRange: 0..<tokenCount)
     }
