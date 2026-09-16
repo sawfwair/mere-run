@@ -818,7 +818,7 @@ struct VideoGenerate: AsyncParsableCommand {
         }
     }
 
-    private func generationActionArguments(outputURL: URL) -> [String] {
+    func generationActionArguments(outputURL: URL) -> [String] {
         var args = [
             "mere.run",
             "video",
@@ -887,6 +887,18 @@ struct VideoGenerate: AsyncParsableCommand {
         if ltxTransformerExecution != .eager {
             args += ["--ltx-transformer-execution", ltxTransformerExecution.rawValue]
         }
+        if ltxGuidanceProjectionCache != .disabled {
+            args += ["--ltx-guidance-projection-cache", ltxGuidanceProjectionCache.rawValue]
+        }
+        if ltxTeaCache {
+            args.append("--ltx-teacache")
+        }
+        if let ltxTeaCacheThreshold {
+            args += ["--ltx-teacache-threshold", String(ltxTeaCacheThreshold)]
+        }
+        if let ltxTeaCacheCalibrationOutput {
+            args += ["--ltx-teacache-calibration-output", ltxTeaCacheCalibrationOutput]
+        }
         if let hdrColorSpace {
             args += ["--hdr", hdrColorSpace.rawValue]
         }
@@ -911,6 +923,12 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         if let steps {
             args += ["--steps", String(steps)]
+        }
+        if guidanceScale != 5 {
+            args += ["--guidance-scale", String(guidanceScale)]
+        }
+        if shift != 5 {
+            args += ["--shift", String(shift)]
         }
         if let negativePrompt {
             args += ["--negative-prompt", negativePrompt]

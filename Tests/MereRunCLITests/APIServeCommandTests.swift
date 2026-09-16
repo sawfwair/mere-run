@@ -1897,6 +1897,97 @@ final class APIServeCommandTests: XCTestCase {
         }
     }
 
+    func testMultiViewUploadFailureRemovesEveryPartiallyWrittenView() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "api-multiview-partial-upload-\(UUID().uuidString)", isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let views = (0..<3).map { index in
+            MultipartFormData.Part(
+                name: "image[]", filename: "view\(index).png", contentType: "image/png",
+                body: Data("view \(index)".utf8)
+            )
+        }
+
+        var written: [URL] = []
+        XCTAssertThrowsError(try CodeGenServer.writeMultipartFiles(views) { part in
+            guard part.filename != "view1.png" else { throw POSIXError(.ENOSPC) }
+            let url = directory.appendingPathComponent(part.filename ?? "view")
+            try part.body.write(to: url)
+            written.append(url)
+            return url
+        }) { error in
+            XCTAssertEqual((error as? POSIXError)?.code, .ENOSPC)
+        }
+        XCTAssertEqual(written.map(\.lastPathComponent), ["view0.png"], "The first view is written before the second fails")
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: directory.path), [],
+            "A failed multi-view upload must leave no files behind"
+        )
+
+        let complete = try CodeGenServer.writeMultipartFiles(views) { part in
+            let url = directory.appendingPathComponent(part.filename ?? "view")
+            try part.body.write(to: url)
+            return url
+        }
+        XCTAssertEqual(complete.map(\.lastPathComponent), ["view0.png", "view1.png", "view2.png"])
+        XCTAssertEqual(
+            Set(try FileManager.default.contentsOfDirectory(atPath: directory.path)),
+            ["view0.png", "view1.png", "view2.png"]
+        )
+    }
+
+    func testVideoGenerationOptionsRejectServerPathAndCompatibilityFlags() {
+        let rejected = [
+            ("--model-root", "server-local path"),
+            ("--audio", "server-local path"),
+            ("--timings-output", "server-local path"),
+            ("--ltx-teacache-calibration-output", "server-local path"),
+            ("--variant", "typed request field"),
+        ]
+        for (flag, reason) in rejected {
+            for spelling in [[flag, "/tmp/value"], ["\(flag)=/tmp/value"]] {
+                XCTAssertThrowsError(
+                    try APIServerContract.videoGenerationPlan(
+                        from: OpenAIVideoGenerationRequest(prompt: "harbor", options: spelling)
+                    ),
+                    spelling.joined(separator: " ")
+                ) { error in
+                    XCTAssertTrue(error.localizedDescription.contains(flag), error.localizedDescription)
+                    XCTAssertTrue(error.localizedDescription.contains(reason), error.localizedDescription)
+                }
+            }
+        }
+        XCTAssertNoThrow(try APIServerContract.videoGenerationPlan(
+            from: OpenAIVideoGenerationRequest(
+                prompt: "harbor",
+                options: ["--ltx-teacache", "--ltx-teacache-threshold", "0.1", "--ltx-guidance-projection-cache", "enabled"]
+            )
+        ))
+    }
+
+    func testDefaultMaxTokensClampsToASmallerServerContext() throws {
+        let request = OpenAIChatRequest(model: "test-model", messages: [.init(role: "user", content: "hello")])
+        XCTAssertEqual(
+            try APIServerContract.chatRequest(from: request, fallbackLoraPath: nil, contextSize: 1_024).maxTokens,
+            1_024
+        )
+        XCTAssertEqual(
+            try APIServerContract.chatRequest(from: request, fallbackLoraPath: nil, contextSize: 4_096).maxTokens,
+            APIServerContract.defaultMaxTokens
+        )
+
+        var explicit = request
+        explicit.max_tokens = 4_096
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(from: explicit, fallbackLoraPath: nil, contextSize: 512)
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("max_tokens"), error.localizedDescription)
+            XCTAssertTrue(error.localizedDescription.contains("must be between 1 and 512"), error.localizedDescription)
+        }
+    }
+
     func testSidecarJSONDecodingMapsMalformedPayloadsToValidationErrors() {
         XCTAssertThrowsError(
             try APIServerContract.decodeImageGenerationRequest(

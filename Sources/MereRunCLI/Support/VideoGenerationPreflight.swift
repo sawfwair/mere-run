@@ -89,6 +89,13 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let references: [String]?
     let timings: Bool?
     let timingsOutput: String?
+    let guidanceScale: Float?
+    let shift: Float?
+    let ltxTransformerExecution: String?
+    let ltxGuidanceProjectionCache: String?
+    let ltxTeaCache: Bool?
+    let ltxTeaCacheThreshold: Float?
+    let ltxTeaCacheCalibrationOutput: String?
 
     enum CodingKeys: String, CodingKey {
         case prompt
@@ -175,6 +182,13 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case references
         case timings
         case timingsOutput = "timings_output"
+        case guidanceScale = "guidance_scale"
+        case shift
+        case ltxTransformerExecution = "ltx_transformer_execution"
+        case ltxGuidanceProjectionCache = "ltx_guidance_projection_cache"
+        case ltxTeaCache = "ltx_teacache"
+        case ltxTeaCacheThreshold = "ltx_teacache_threshold"
+        case ltxTeaCacheCalibrationOutput = "ltx_teacache_calibration_output"
     }
 }
 
@@ -532,7 +546,18 @@ struct VideoGenerationPreflightAnalyzer {
             detailingReferenceDownscaleFactor: input.detailingReferenceDownscaleFactor,
             references: input.references.isEmpty ? nil : input.references,
             timings: input.timings,
-            timingsOutput: input.timingsOutput
+            timingsOutput: input.timingsOutput,
+            guidanceScale: input.guidanceScale == 5 ? nil : input.guidanceScale,
+            shift: input.shift == 5 ? nil : input.shift,
+            ltxTransformerExecution: input.ltxTransformerExecution == .eager
+                ? nil
+                : input.ltxTransformerExecution.rawValue,
+            ltxGuidanceProjectionCache: input.ltxGuidanceProjectionCache == .disabled
+                ? nil
+                : input.ltxGuidanceProjectionCache.rawValue,
+            ltxTeaCache: input.ltxTeaCache ? true : nil,
+            ltxTeaCacheThreshold: input.ltxTeaCacheThreshold,
+            ltxTeaCacheCalibrationOutput: input.ltxTeaCacheCalibrationOutput
         )
     }
 

@@ -2358,6 +2358,131 @@ final class VideoCommandTests: XCTestCase {
         return url
     }
 
+    /// Every `video generate` flag is either replayed by the preflight action
+    /// argv or listed as a preflight-only flag, so adding a flag to the command
+    /// without adding it to `generationActionArguments` fails here.
+    func testPreflightActionReplaysEveryGenerationFlag() throws {
+        let output = makeTempOutput(name: "argv-round-trip.mp4")
+        let ltxArguments = [
+            "a fox crosses a creek",
+            "--model", ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
+            "--quality", "final", "--output-mode", "audio-video", "--variant", "unified-av",
+            "--width", "1024", "--height", "576", "--num-frames", "97", "--duration", "4",
+            "--auto-duration", "2", "6", "--fps", "25", "--seed", "7", "--steps", "12",
+            "--guidance-scale", "4.5", "--shift", "3",
+            "--video-decoder", "diffusion", "--ltx-transformer-execution", "compiled",
+            "--ltx-guidance-projection-cache", "enabled", "--ltx-teacache",
+            "--ltx-teacache-threshold", "0.15", "--ltx-teacache-calibration-output", "/tmp/teacache.json",
+            "--hdr", "acescg", "--hdr-transfer", "logc3", "--high-quality-hdr",
+            "--text-embeddings", "/tmp/embeddings.safetensors",
+            "--spatial-tile", "512", "--spatial-overlap", "128", "--skip-mp4",
+            "--negative-prompt", "blurry", "--enhance-prompt",
+            "--prompt-enhancer-model", "vision-chat-gemma4-12b", "--prompt-enhancer-model-root", "/tmp/gemma4",
+            "--audio", "/tmp/source.wav", "--audio-start-time", "1.5", "--audio-max-duration", "3",
+            "--a2v-guidance-scale", "2", "--video-cfg-guidance-scale", "4",
+            "--audio-cfg-guidance-scale", "6", "--v2a-guidance-scale", "2.5", "--a2v-steps", "20",
+            "--ltx-preset", "hq", "--ltx-pipeline", "keyframe-interpolation", "--ltx-sampler", "res2s",
+            "--ltx-sigmas", "1", "0.5", "0", "--ltx-stage-2-sigmas", "0.9", "0.3", "0",
+            "--distilled-lora-strength-stage-1", "0.2", "--distilled-lora-strength-stage-2", "0.6",
+            "--ltx-sampler-eta", "0.3",
+            "--video-stg-scale", "1.5", "--video-guidance-rescale", "0.5",
+            "--video-stg-block", "3", "--video-stg-block", "5", "--video-guidance-skip-step", "2",
+            "--audio-stg-scale", "1.2", "--audio-guidance-rescale", "0.4",
+            "--audio-stg-block", "4", "--audio-guidance-skip-step", "1",
+            "--no-res2s-bong-math", "--res2s-bong-max-iterations", "50", "--gradient-estimation-gamma", "1.5",
+            "--image", "/tmp/start.png", "--image-strength", "0.8",
+            "--end-image", "/tmp/end.png", "--end-image-strength", "0.7",
+            "--image-conditioning", "/tmp/mid.png:8:0.5",
+            "--num-generated-keyframes", "2", "--generated-keyframe", "8", "--generated-keyframe", "16",
+            "--lora", "/tmp/style.safetensors:0.8",
+            "--video-conditioning", "/tmp/reference.mp4:0.5", "--conditioning-attention-strength", "0.9",
+            "--conditioning-attention-mask", "/tmp/mask.png", "--skip-stage-2",
+            "--reference-downscale-factor", "2", "--reference-temporal-scale-factor", "4",
+            "--dfr", "--temporal-upsample-rounds", "1", "--detailing-lora", "/tmp/detail.safetensors",
+            "--detailing-reference-downscale-factor", "3",
+            "--timings", "--timings-output", "/tmp/timings.json", "--quiet",
+        ]
+        let h3Arguments = [
+            "a lantern festival",
+            "--model", ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue, "--model-root", "/tmp/h3-root",
+            "--width", "768", "--height", "512", "--fps", "24", "--seed", "3",
+            "--h3-weight-mode", "resident-bf16", "--h3-acceleration", "maximum",
+            "--h3-render-width", "512", "--h3-render-height", "320",
+            "--h3-adapter", "/tmp/adapter.safetensors", "--h3-adapter-strength", "0.5",
+            "--h3-frame", "image:/tmp/first.png", "--h3-window-frames", "49", "--h3-window-overlap", "9",
+            "--reference", "image:/tmp/reference.png", "--reference", "audio:/tmp/reference.wav",
+        ]
+
+        let helpFlags = Set(Self.flags(in: VideoGenerate.helpMessage()))
+        var exercised = Set<String>()
+        for arguments in [ltxArguments, h3Arguments] {
+            let command = try VideoGenerate.parse(arguments)
+            let argv = command.generationActionArguments(outputURL: output)
+            XCTAssertEqual(Array(argv.prefix(3)), ["mere.run", "video", "generate"])
+            for flag in argv.filter({ $0.hasPrefix("--") }) {
+                XCTAssertTrue(helpFlags.contains(flag), "\(flag) is not a video generate flag")
+            }
+            let replay = try VideoGenerate.parse(Array(argv.dropFirst(3)))
+            XCTAssertEqual(
+                replay.makeGenerationOptions(outputURL: output),
+                command.makeGenerationOptions(outputURL: output),
+                "The preflight action must rerun the generation that was preflighted"
+            )
+            XCTAssertEqual(replay.quiet, command.quiet)
+            exercised.formUnion(arguments.filter { $0.hasPrefix("--") })
+        }
+
+        let preflightOnly: Set<String> = [
+            "--help", "--output", "--preflight", "--json",
+            "--\(CLIGenerationProgressPrinter.flagName)", "--\(RunReceipt.flagName)",
+        ]
+        XCTAssertEqual(
+            helpFlags.subtracting(exercised).subtracting(preflightOnly), [],
+            "Add new video generate flags to this round trip and to generationActionArguments"
+        )
+    }
+
+    func testPreflightEchoesLTXCacheAndWanGuidanceSettings() throws {
+        let command = try VideoGenerate.parse([
+            "harbor",
+            "--ltx-transformer-execution", "compiled", "--ltx-guidance-projection-cache", "enabled",
+            "--ltx-teacache", "--ltx-teacache-threshold", "0.15",
+            "--ltx-teacache-calibration-output", "/tmp/teacache.json",
+            "--guidance-scale", "4.5", "--shift", "3",
+        ])
+        let envelope = command.makePreflightEnvelope(outputURL: makeTempOutput(name: "cache-echo.mp4"))
+        XCTAssertEqual(envelope.request.ltxTransformerExecution, "compiled")
+        XCTAssertEqual(envelope.request.ltxGuidanceProjectionCache, "enabled")
+        XCTAssertEqual(envelope.request.ltxTeaCache, true)
+        XCTAssertEqual(envelope.request.ltxTeaCacheThreshold, 0.15)
+        XCTAssertEqual(envelope.request.ltxTeaCacheCalibrationOutput, "/tmp/teacache.json")
+        XCTAssertEqual(envelope.request.guidanceScale, 4.5)
+        XCTAssertEqual(envelope.request.shift, 3)
+        let argv = envelope.actions.first { $0.id == "start-video-generation" }?.command?.argv ?? []
+        for flag in [
+            "--ltx-transformer-execution", "--ltx-guidance-projection-cache", "--ltx-teacache",
+            "--ltx-teacache-threshold", "--ltx-teacache-calibration-output", "--guidance-scale", "--shift",
+        ] {
+            XCTAssertTrue(argv.contains(flag), "\(flag) is missing from the start-video-generation action")
+        }
+
+        let defaults = try VideoGenerate.parse(["harbor"])
+            .makePreflightEnvelope(outputURL: makeTempOutput(name: "cache-echo-defaults.mp4"))
+        XCTAssertNil(defaults.request.ltxTransformerExecution)
+        XCTAssertNil(defaults.request.ltxGuidanceProjectionCache)
+        XCTAssertNil(defaults.request.ltxTeaCache)
+        XCTAssertNil(defaults.request.ltxTeaCacheThreshold)
+        XCTAssertNil(defaults.request.ltxTeaCacheCalibrationOutput)
+        XCTAssertNil(defaults.request.guidanceScale)
+        XCTAssertNil(defaults.request.shift)
+    }
+
+    private static func flags(in help: String) -> [String] {
+        help.split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "-" })
+            .map(String.init)
+            .filter { $0.hasPrefix("--") && $0.count > 2 }
+    }
+
     private func makeTempOutput(name: String) -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("VideoCommandTests.\(UUID().uuidString)", isDirectory: true)
