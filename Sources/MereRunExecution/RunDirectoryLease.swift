@@ -32,6 +32,17 @@ public final class RunDirectoryLease: @unchecked Sendable {
         return RunDirectoryLease(descriptor)
     }
 
+    /// A reader deciding whether an abandoned record can be recovered. A directory
+    /// that cannot hold a lock file leaves liveness unknown, so the caller reports
+    /// the record as written instead of failing the read.
+    public static func acquireForRecovery(in directory: URL, filename: String) throws -> RunDirectoryLease? {
+        do {
+            return try acquire(in: directory, filename: filename)
+        } catch let error as POSIXError where error.code == .EACCES || error.code == .EPERM || error.code == .EROFS {
+            return nil
+        }
+    }
+
     public func release() {
         mutex.withLock {
             guard descriptor >= 0 else { return }

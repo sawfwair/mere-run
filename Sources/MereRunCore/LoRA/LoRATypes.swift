@@ -29,6 +29,7 @@ public enum LoRAError: Error, LocalizedError {
     case fileNotFound(String)
     case invalidFormat(String)
     case noWeightPairs
+    case unsupportedRunManifestVersion(Int)
 
     public var errorDescription: String? {
         switch self {
@@ -38,6 +39,8 @@ public enum LoRAError: Error, LocalizedError {
             return "Invalid LoRA format: \(message)"
         case .noWeightPairs:
             return "No valid LoRA weight pairs found."
+        case .unsupportedRunManifestVersion(let version):
+            return "Unsupported LoRA training run manifest version: \(version)."
         }
     }
 }

@@ -45,18 +45,23 @@ public struct SpeechTranscriptionRunRecord: Codable, Equatable, Sendable {
         url.lastPathComponent == filename ? url : url.appendingPathComponent(filename)
     }
 
-    /// Recovers an abandoned run only while holding its process lease.
+    /// Recovers an abandoned run only while holding its process lease. Terminal
+    /// records are read without touching the directory, and a nonterminal record
+    /// in a directory that cannot hold the lock is reported as written.
     public static func inspect(at url: URL) throws -> Self {
         let recordURL = recordURL(at: url)
-        let lease = try RunDirectoryLease.acquire(in: recordURL.deletingLastPathComponent(), filename: lockFilename)
-        defer { lease?.release() }
+        let snapshot = try decode(RunRecordCodec.readData(at: recordURL))
+        guard !snapshot.state.isTerminal else { return snapshot }
+        guard let lease = try RunDirectoryLease.acquireForRecovery(
+            in: recordURL.deletingLastPathComponent(), filename: lockFilename
+        ) else { return snapshot }
+        defer { lease.release() }
         var record = try decode(RunRecordCodec.readData(at: recordURL))
-        if lease != nil, !record.state.isTerminal {
-            record.state = .interrupted
-            record.updatedAt = RunRecordCodec.timestamp()
-            record.issue = SpeechTranscriptionIssue("process_interrupted", "The transcription process stopped before recording a terminal result.")
-            try RunRecordCodec.write(record, to: recordURL)
-        }
+        guard !record.state.isTerminal else { return record }
+        record.state = .interrupted
+        record.updatedAt = RunRecordCodec.timestamp()
+        record.issue = SpeechTranscriptionIssue("process_interrupted", "The transcription process stopped before recording a terminal result.")
+        try RunRecordCodec.write(record, to: recordURL)
         return record
     }
 

@@ -60,6 +60,39 @@ private struct WorkflowProcessTimeoutError: LocalizedError {
     }
 }
 
+/// Identifies a process beyond its pid, which the kernel reuses after exit.
+enum WorkflowChildProcessIdentity {
+    /// Start time of a running process in host-specific units that stay fixed for
+    /// its lifetime. Nil when the process is gone or belongs to another user.
+    static func startTime(of processID: Int32) -> UInt64? {
+#if os(Linux)
+        guard let stat = try? String(contentsOfFile: "/proc/\(processID)/stat", encoding: .utf8),
+              let commandEnd = stat.lastIndex(of: ")") else {
+            return nil
+        }
+        // Fields after the parenthesised command start at field 3; starttime is field 22.
+        let fields = stat[stat.index(after: commandEnd)...].split(separator: " ")
+        guard fields.count > 19 else { return nil }
+        return UInt64(fields[19])
+#else
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(processID, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec
+#endif
+    }
+}
+
+/// One `<pid>.pid` entry. Entries written before identities were recorded carry
+/// no start time and are stale by definition.
+struct WorkflowChildProcessRegistration: Equatable {
+    let processID: Int32
+    let startTime: UInt64?
+}
+
+/// Tracks worker children so cancellation and recovery can find them after the
+/// worker dies. Liveness requires the recorded identity to match, so a pid reused
+/// by an unrelated process is neither signalled nor treated as an active child.
 enum WorkflowChildProcessRegistry {
     static let directoryName = "worker-child-pids"
     static let legacyFilename = "worker-child.pid"
@@ -70,13 +103,26 @@ enum WorkflowChildProcessRegistry {
         in runDirectory: URL,
         fileManager: FileManager = .default
     ) throws {
+        try register(
+            processID, startTime: WorkflowChildProcessIdentity.startTime(of: processID),
+            in: runDirectory, fileManager: fileManager
+        )
+    }
+
+    static func register(
+        _ processID: Int32,
+        startTime: UInt64?,
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) throws {
         lock.lock()
         defer { lock.unlock() }
         let directory = runDirectory.appendingPathComponent(directoryName, isDirectory: true)
         let entry = directory.appendingPathComponent("\(processID).pid")
+        let lines = [String(processID)] + (startTime.map { [String($0)] } ?? [])
         do {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-            try Data(String(processID).utf8).write(to: entry, options: .atomic)
+            try Data(lines.joined(separator: "\n").utf8).write(to: entry, options: .atomic)
             try Data(String(processID).utf8).write(
                 to: runDirectory.appendingPathComponent(legacyFilename),
                 options: .atomic
@@ -99,7 +145,7 @@ enum WorkflowChildProcessRegistry {
             .appendingPathComponent("\(processID).pid")
         try? fileManager.removeItem(at: entry)
         let legacy = runDirectory.appendingPathComponent(legacyFilename)
-        if readProcessID(at: legacy, fileManager: fileManager) == processID {
+        if readRegistration(at: legacy, fileManager: fileManager)?.processID == processID {
             try? fileManager.removeItem(at: legacy)
         }
     }
@@ -108,45 +154,69 @@ enum WorkflowChildProcessRegistry {
         in runDirectory: URL,
         fileManager: FileManager = .default
     ) -> [Int32] {
+        registrations(in: runDirectory, fileManager: fileManager).map(\.processID)
+    }
+
+    static func registrations(
+        in runDirectory: URL,
+        fileManager: FileManager = .default
+    ) -> [WorkflowChildProcessRegistration] {
         let directory = runDirectory.appendingPathComponent(directoryName, isDirectory: true)
         let entries = (try? fileManager.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
         )) ?? []
-        var processIDs = Set(entries.compactMap { entry -> Int32? in
+        var registrations: [Int32: WorkflowChildProcessRegistration] = [:]
+        for entry in entries {
             guard entry.pathExtension == "pid",
                   let values = try? entry.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
                   values.isRegularFile == true,
-                  values.isSymbolicLink != true else {
-                return nil
+                  values.isSymbolicLink != true,
+                  let registration = readRegistration(at: entry, fileManager: fileManager) else {
+                continue
             }
-            return readProcessID(at: entry, fileManager: fileManager)
-        })
-        if let legacy = readProcessID(
+            registrations[registration.processID] = registration
+        }
+        if let legacy = readRegistration(
             at: runDirectory.appendingPathComponent(legacyFilename),
             fileManager: fileManager
-        ) {
-            processIDs.insert(legacy)
+        ), registrations[legacy.processID] == nil {
+            registrations[legacy.processID] = legacy
         }
-        return processIDs.sorted()
+        return registrations.values.sorted { $0.processID < $1.processID }
     }
 
+    /// Children still running under the identity recorded at registration. Callers
+    /// hold the run lease, so no worker is registering while stale entries are pruned.
     static func activeProcessIDs(in runDirectory: URL, fileManager: FileManager = .default) -> [Int32] {
-        processIDs(in: runDirectory, fileManager: fileManager).filter { pid in
-            kill(pid, 0) == 0 || errno == EPERM
+        var active: [Int32] = []
+        for registration in registrations(in: runDirectory, fileManager: fileManager) {
+            if isLive(registration) {
+                active.append(registration.processID)
+            } else {
+                unregister(registration.processID, in: runDirectory, fileManager: fileManager)
+            }
         }
+        return active
     }
 
+    /// Signals only children whose recorded identity still matches. A reused pid or
+    /// an entry without an identity belongs to someone else and is left alone.
     @discardableResult
     static func terminateAll(
         in runDirectory: URL,
         fileManager: FileManager = .default
     ) -> [Int32] {
-        let processIDs = processIDs(in: runDirectory, fileManager: fileManager)
-        for processID in processIDs {
-            _ = kill(processID, SIGTERM)
+        let live = registrations(in: runDirectory, fileManager: fileManager).filter(isLive)
+        for registration in live {
+            _ = kill(registration.processID, SIGTERM)
         }
-        return processIDs
+        return live.map(\.processID)
+    }
+
+    private static func isLive(_ registration: WorkflowChildProcessRegistration) -> Bool {
+        guard let startTime = registration.startTime, kill(registration.processID, 0) == 0 else { return false }
+        return WorkflowChildProcessIdentity.startTime(of: registration.processID) == startTime
     }
 
     static func clear(
@@ -165,15 +235,15 @@ enum WorkflowChildProcessRegistry {
         }
     }
 
-    private static func readProcessID(at url: URL, fileManager: FileManager) -> Int32? {
+    /// Line one is the pid; line two, when present, is the start time recorded at registration.
+    private static func readRegistration(at url: URL, fileManager: FileManager) -> WorkflowChildProcessRegistration? {
         guard fileManager.fileExists(atPath: url.path),
-              let raw = try? String(contentsOf: url, encoding: .utf8)
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-              let processID = Int32(raw),
-              processID > 1 else {
+              let raw = try? String(contentsOf: url, encoding: .utf8) else {
             return nil
         }
-        return processID
+        let lines = raw.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let first = lines.first, let processID = Int32(first), processID > 1 else { return nil }
+        return WorkflowChildProcessRegistration(processID: processID, startTime: lines.dropFirst().first.flatMap { UInt64($0) })
     }
 }
 

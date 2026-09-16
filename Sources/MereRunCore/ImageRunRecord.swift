@@ -34,17 +34,22 @@ public struct ImageRunRecord: Codable, Equatable, Sendable {
 
     /// A lock held by the executing process is the source of liveness. Reading an
     /// abandoned nonterminal record persists an interrupted state, even after reboot.
+    /// Terminal records are read without touching the directory, and a nonterminal
+    /// record in a directory that cannot hold the lock is reported as written.
     public static func inspect(at url: URL) throws -> Self {
         let recordURL = recordURL(at: url)
-        let lease = try RunDirectoryLease.acquire(in: recordURL.deletingLastPathComponent(), filename: ".image-run.lock")
-        defer { lease?.release() }
+        let snapshot = try decode(RunRecordCodec.readData(at: recordURL))
+        guard !snapshot.state.isTerminal else { return snapshot }
+        guard let lease = try RunDirectoryLease.acquireForRecovery(
+            in: recordURL.deletingLastPathComponent(), filename: ".image-run.lock"
+        ) else { return snapshot }
+        defer { lease.release() }
         var record = try decode(RunRecordCodec.readData(at: recordURL))
-        if lease != nil, !record.state.isTerminal {
-            record.state = .interrupted
-            record.updatedAt = timestamp()
-            record.issue = ImageGenerationIssue("process_interrupted", "The image process stopped before recording a terminal result.")
-            try record.write(to: recordURL)
-        }
+        guard !record.state.isTerminal else { return record }
+        record.state = .interrupted
+        record.updatedAt = timestamp()
+        record.issue = ImageGenerationIssue("process_interrupted", "The image process stopped before recording a terminal result.")
+        try record.write(to: recordURL)
         return record
     }
 
