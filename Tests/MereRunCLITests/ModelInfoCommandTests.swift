@@ -14,6 +14,20 @@ final class ModelInfoCommandTests: XCTestCase {
         super.tearDown()
     }
 
+    func testYuE2ComponentLinesShowCheckpointFilesAndMissingVAE() throws {
+        let root = try makeTempDirectory()
+        for path in ["config.json", "model.safetensors", "qwen.tiktoken", "vae/config.json"] {
+            let url = root.appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: url)
+        }
+        let lines = ModelInfo.yue2ComponentLines(rootURL: root)
+        XCTAssertTrue(lines.contains { $0.contains("tokenizer:") && $0.contains("qwen.tiktoken") && !$0.contains("missing") })
+        XCTAssertTrue(lines.contains { $0.contains("transformer:") && $0.contains("model.safetensors") && !$0.contains("missing") })
+        XCTAssertTrue(lines.contains { $0.contains("vae/model.safetensors") && $0.contains("(missing)") })
+        XCTAssertFalse(lines.contains { $0.contains("text_encoder") || $0.contains("scheduler") })
+    }
+
     func testLTX23SplitComponentLinesShowActualFiles() throws {
         let root = try makeTempDirectory()
         for file in [

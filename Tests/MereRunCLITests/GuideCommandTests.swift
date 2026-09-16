@@ -221,6 +221,7 @@ final class GuideCommandTests: XCTestCase {
                 ModelResolver.ModelID.aceStepXLTurbo.rawValue,
                 ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
                 MiniMaxMusic3Resources.modelID,
+                YuE2Resources.modelID,
                 ModelResolver.ModelID.magentaRT2Small.rawValue,
                 ModelResolver.ModelID.magentaRT2Base.rawValue,
             ]

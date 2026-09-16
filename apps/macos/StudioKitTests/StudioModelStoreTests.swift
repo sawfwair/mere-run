@@ -23,103 +23,120 @@ final class StudioModelStoreTests: XCTestCase {
         """
     }
 
-    private func settle() async { try? await Task.sleep(for: .milliseconds(30)) }
+    private func waitUntil(
+        _ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line
+    ) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        _ = try XCTUnwrap(condition() ? true : nil, "Timed out waiting for model-store state", file: file, line: line)
+    }
 
-    func testFailedFirstRefreshIsUnknownUntilAnEmptyInventorySucceeds() async {
+    private func start(
+        _ index: Int, from runner: RecordingProcessRunner, file: StaticString = #filePath, line: UInt = #line
+    ) async throws -> RecordingStart {
+        try await waitUntil({ runner.starts.count > index }, file: file, line: line)
+        return try XCTUnwrap(runner.starts.dropFirst(index).first, file: file, line: line)
+    }
+
+    func testFailedFirstRefreshIsUnknownUntilAnEmptyInventorySucceeds() async throws {
         let runner = RecordingProcessRunner()
         let host = controller(runner)
         defer { host.terminateAllProcesses() }
         let store = host.modelStore
         XCTAssertFalse(store.hasInventory)
         let failed = Task { await store.refresh() }
-        await settle()
-        runner.starts[0].stdout("{broken"); runner.starts[0].termination(0)
+        let failedInventory = try await start(0, from: runner)
+        failedInventory.stdout("{broken"); failedInventory.termination(0)
         await failed.value
         XCTAssertFalse(store.hasInventory)
         XCTAssertNotNil(store.error)
         let recovered = Task { await store.refresh() }
-        await settle()
-        runner.starts[1].stdout("{\"inventory\":{\"rows\":[]},\"usageTerms\":[]}")
-        runner.starts[1].termination(0)
-        await settle()
-        runner.starts[2].stdout("{\"models\":[]}"); runner.starts[2].termination(0)
+        let recoveredInventory = try await start(1, from: runner)
+        recoveredInventory.stdout("{\"inventory\":{\"rows\":[]},\"usageTerms\":[]}")
+        recoveredInventory.termination(0)
+        let metadata = try await start(2, from: runner)
+        metadata.stdout("{\"models\":[]}"); metadata.termination(0)
         await recovered.value
         XCTAssertTrue(store.hasInventory)
         XCTAssertTrue(store.rows.isEmpty)
         XCTAssertNil(store.error)
     }
 
-    func testRefreshPublishesSharedSnapshotAndRetainsItAfterMalformedOrFailedResponses() async {
+    func testRefreshPublishesSharedSnapshotAndRetainsItAfterMalformedOrFailedResponses() async throws {
         let runner = RecordingProcessRunner()
         let host = controller(runner)
         defer { host.terminateAllProcesses() }
         let store = host.modelStore
         XCTAssertTrue(store === host.modelStore)
         let refresh = Task { await store.refresh() }
-        await settle()
-        runner.starts[0].stdout(inventory("image-zimage-nano")); runner.starts[0].termination(0)
-        await settle()
+        let initialInventory = try await start(0, from: runner)
+        initialInventory.stdout(inventory("image-zimage-nano")); initialInventory.termination(0)
+        let metadata = try await start(1, from: runner)
         XCTAssertTrue(store.rows.isEmpty, "Publish rows and metadata together")
-        runner.starts[1].stdout(capabilities("image-zimage-nano")); runner.starts[1].termination(0)
+        metadata.stdout(capabilities("image-zimage-nano")); metadata.termination(0)
         await refresh.value
         XCTAssertEqual(store.rows.first?.title, "Fixture")
         XCTAssertEqual(store.rows.first?.isInstalled, true)
 
         for (output, exitCode) in [("{broken", Int32(0)), ("CLI error", Int32(0)), (inventory("wrong"), Int32(1))] {
+            let index = runner.starts.count
             let refresh = Task { await store.refresh() }
-            await settle()
-            runner.starts.last?.stdout(output); runner.starts.last?.termination(exitCode)
+            let inventory = try await start(index, from: runner)
+            inventory.stdout(output); inventory.termination(exitCode)
             await refresh.value
             XCTAssertEqual(store.rows.map(\.id), ["image-zimage-nano"])
             XCTAssertTrue(store.hasInventory)
             XCTAssertNotNil(store.error)
             XCTAssertFalse(store.isRefreshing)
         }
+        let recoveredIndex = runner.starts.count
         let recovered = Task { await store.refresh() }
-        await settle()
-        runner.starts.last?.stdout(inventory("image-zimage-nano")); runner.starts.last?.termination(0)
+        let recoveredInventory = try await start(recoveredIndex, from: runner)
+        recoveredInventory.stdout(inventory("image-zimage-nano")); recoveredInventory.termination(0)
         await recovered.value
         XCTAssertNil(store.error)
         XCTAssertEqual(store.rows.first?.title, "Fixture")
 
     }
 
-    func testLateInventoryCannotReplaceANewerSnapshot() async {
+    func testLateInventoryCannotReplaceANewerSnapshot() async throws {
         let runner = RecordingProcessRunner()
         let host = controller(runner)
         defer { host.terminateAllProcesses() }
         let old = Task { await host.modelStore.refresh() }
-        await settle()
+        let oldInventory = try await start(0, from: runner)
         let new = Task { await host.modelStore.refresh() }
-        await settle()
-        runner.starts[1].stdout(inventory("new")); runner.starts[1].termination(0)
-        await settle()
-        runner.starts[2].stdout(capabilities("new")); runner.starts[2].termination(0)
+        let newInventory = try await start(1, from: runner)
+        newInventory.stdout(inventory("new")); newInventory.termination(0)
+        let metadata = try await start(2, from: runner)
+        metadata.stdout(capabilities("new")); metadata.termination(0)
         await new.value
-        runner.starts[0].stdout(inventory("old")); runner.starts[0].termination(0)
+        oldInventory.stdout(inventory("old")); oldInventory.termination(0)
         await old.value
         XCTAssertEqual(host.modelStore.rows.map(\.id), ["new"])
         XCTAssertNil(host.modelStore.error)
     }
 
-    func testChangingModelLocationRejectsOldResultsAndRefreshesFromNewLocation() async {
+    func testChangingModelLocationRejectsOldResultsAndRefreshesFromNewLocation() async throws {
         let runner = RecordingProcessRunner()
         let host = controller(runner)
         let original = host.modelsRoot
         defer { host.modelsRoot = original; host.terminateAllProcesses() }
         let old = Task { await host.modelStore.refresh() }
-        await settle()
+        let oldInventory = try await start(0, from: runner)
         host.modelsRoot = "/tmp/studio-new-model-location"
-        runner.starts[0].stdout(inventory("old")); runner.starts[0].termination(0)
+        oldInventory.stdout(inventory("old")); oldInventory.termination(0)
         await old.value
         XCTAssertTrue(host.modelStore.rows.isEmpty)
         XCTAssertFalse(host.modelStore.hasInventory)
         let new = Task { await host.modelStore.refresh() }
-        await settle()
-        XCTAssertTrue(runner.starts[1].configuration.arguments.contains(host.modelsRoot))
-        runner.starts[1].stdout(inventory("new")); runner.starts[1].termination(0)
-        await settle()
-        runner.starts[2].stdout(capabilities("new")); runner.starts[2].termination(0)
+        let newInventory = try await start(1, from: runner)
+        XCTAssertTrue(newInventory.configuration.arguments.contains(host.modelsRoot))
+        newInventory.stdout(inventory("new")); newInventory.termination(0)
+        let metadata = try await start(2, from: runner)
+        metadata.stdout(capabilities("new")); metadata.termination(0)
         await new.value
         XCTAssertEqual(host.modelStore.rows.map(\.id), ["new"])
     }
@@ -148,7 +165,7 @@ final class StudioModelStoreTests: XCTestCase {
         XCTAssertTrue(job.cancelRequested)
         runner.starts[0].stderr("Fixture download stopped.\n")
         runner.starts[0].termination(130)
-        await settle()
+        try await waitUntil { job.result != nil }
         XCTAssertTrue(host.modelStore.downloads.isEmpty)
         XCTAssertTrue(host.modelStore.lastCompletedDownload === job)
         XCTAssertTrue(job.log.lines.contains { $0.text == "Fixture download stopped." })
@@ -168,10 +185,10 @@ final class StudioModelStoreTests: XCTestCase {
         XCTAssertTrue(host.modelStore.startPull(first))
         XCTAssertTrue(host.modelStore.startPull(second))
         runner.starts[1].stderr("Second download failed.\n"); runner.starts[1].termination(1)
-        await settle()
+        try await waitUntil { host.modelStore.lastCompletedDownload?.request.requestID == second.id }
         XCTAssertEqual(host.modelStore.lastCompletedDownload?.request.requestID, second.id)
         runner.starts[0].stderr("First download failed later.\n"); runner.starts[0].termination(1)
-        await settle()
+        try await waitUntil { host.modelStore.lastCompletedDownload?.request.requestID == first.id }
         XCTAssertEqual(host.modelStore.lastCompletedDownload?.request.requestID, first.id)
         XCTAssertTrue(host.modelStore.lastCompletedDownload?.log.lines.contains { $0.text == "First download failed later." } == true)
     }
@@ -216,41 +233,44 @@ final class StudioModelStoreTests: XCTestCase {
         defer { host.terminateAllProcesses() }
         var draft = StudioDraft(); draft.reset(for: .createImage)
         host.checkReadiness(for: .createImage, draft: draft)
-        runner.starts[0].stdout(capabilities("image-zimage-nano")); runner.starts[0].termination(0)
-        await settle()
-        runner.starts[1].stdout("ID Category Status Size\nimage-zimage-nano image missing 1 GB\n")
-        runner.starts[1].termination(0)
-        await settle()
+        let initialMetadata = try await start(0, from: runner)
+        initialMetadata.stdout(capabilities("image-zimage-nano")); initialMetadata.termination(0)
+        let initialReadiness = try await start(1, from: runner)
+        initialReadiness.stdout("ID Category Status Size\nimage-zimage-nano image missing 1 GB\n")
+        initialReadiness.termination(0)
+        try await waitUntil { host.readinessByMode[.createImage] == .missingModel("image-zimage-nano") }
         XCTAssertTrue(host.modelStore.startPull(try pull("image-zimage-nano")))
         draft.model = "text-chat-gemma4-12b-4bit"
         host.checkReadiness(for: .createImage, draft: draft)
-        runner.starts[3].stdout(capabilities(draft.model)); runner.starts[3].termination(0)
-        await settle()
-        runner.starts[4].stdout("ID Category Status Size\ntext-chat-gemma4-12b-4bit text installed 1 GB\n")
-        runner.starts[4].termination(0)
-        await settle()
+        let updatedMetadata = try await start(3, from: runner)
+        updatedMetadata.stdout(capabilities(draft.model)); updatedMetadata.termination(0)
+        let updatedReadiness = try await start(4, from: runner)
+        updatedReadiness.stdout("ID Category Status Size\ntext-chat-gemma4-12b-4bit text installed 1 GB\n")
+        updatedReadiness.termination(0)
+        try await waitUntil { host.readinessByMode[.createImage] == .ready }
         XCTAssertEqual(host.readinessByMode[.createImage], .ready)
         runner.starts[2].termination(0)
-        await settle()
+        try await waitUntil { host.modelStore.downloadMessage == "Download complete." && runner.starts.count > 5 }
         let probe = try XCTUnwrap(runner.starts.last { Array($0.configuration.arguments.suffix(2)) == ["model", "list"] })
         probe.stdout("ID Category Status Size\nimage-zimage-nano image missing 1 GB\ntext-chat-gemma4-12b-4bit text installed 1 GB\n")
         probe.termination(0)
-        await settle()
+        try await waitUntil { host.readinessByMode[.createImage] == .ready }
         XCTAssertEqual(host.readinessByMode[.createImage], .ready)
         XCTAssertEqual(host.modelStore.downloadMessage, "Download complete.")
     }
 
-    func testFailedReadinessListCannotMarkPartialOutputReady() async {
+    func testFailedReadinessListCannotMarkPartialOutputReady() async throws {
         let runner = RecordingProcessRunner()
         let host = controller(runner)
         defer { host.terminateAllProcesses() }
         var draft = StudioDraft(); draft.reset(for: .createImage)
         host.checkReadiness(for: .createImage, draft: draft)
-        runner.starts[0].stdout(capabilities("image-zimage-nano")); runner.starts[0].termination(0)
-        await settle()
-        runner.starts[1].stdout("ID Category Status Size\nimage-zimage-nano image installed 1 GB\n")
-        runner.starts[1].termination(1)
-        await settle()
+        let metadata = try await start(0, from: runner)
+        metadata.stdout(capabilities("image-zimage-nano")); metadata.termination(0)
+        let readiness = try await start(1, from: runner)
+        readiness.stdout("ID Category Status Size\nimage-zimage-nano image installed 1 GB\n")
+        readiness.termination(1)
+        try await waitUntil { host.readinessByMode[.createImage] == .unknown("Could not list models. Check the CLI and model location.") }
         XCTAssertEqual(host.readinessByMode[.createImage], .unknown("Could not list models. Check the CLI and model location."))
     }
 }

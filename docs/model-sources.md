@@ -140,6 +140,7 @@ an effective overlay; they are not a second capability catalog.
 | `image-3d` | `image-3d-triposr` |
 | `image-3d` | `image-3d-instantmesh-base` |
 | `image-3d` | `image-3d-trellis2-4b` |
+| `music` | `music-yue2` |
 | `music` | `music-acestep` |
 | `music` | `music-acestep-xl-base` |
 | `music` | `music-acestep-xl-sft` |
@@ -1101,6 +1102,33 @@ planner in the selected checkpoint root, then reuse an installed standalone or
 `music-acestep` 1.7B planner, and finally pull `music-acestep-lm-1.7b` when LM
 planning is required. Override that resolution with `--lm-model` or the legacy
 same-root `--lm-subdirectory`.
+
+### `music-yue2`
+
+YuE2 combines `m-a-p/YuE2-3B` revision
+`29b3558dd46954a0cd9021dc76d5c91864a0f1c7` with the standard `m-a-p/YuE2-Vae`
+revision `9a94e1d0ea9f8087e98f77fa88df4a4068104d2a`. The managed pull mounts the
+VAE under `vae/` and downloads approximately 7.8 GB. Both components use
+CC BY-NC 4.0; installation requires `--accept-model-license`.
+
+The native runtime loads the BF16 transformer, its frozen `qwen.tiktoken`
+vocabulary, and the FP32 VAE decoder directly. It does not execute the source
+files distributed by the model repositories. Runtime code follows YuE2 source
+revision `0edaf2f4053ef4731334b8329834b107977f9637` under Apache 2.0, with MIT
+notices for Oobleck and SnakeBeta.
+
+`music generate --model music-yue2` supports full or melody-only ABC planning,
+external ABC score conditioning, and direct generation without a score. It
+exports 48 kHz stereo WAV, an optional score, and an effective recipe. The
+legacy benchmark VAE and SheetSage2 transcription are not included.
+
+Small random-weight upstream fixtures validate the native transformer,
+acoustic flow, and decoder. The released checkpoints passed five bounded native
+generation runs, including natural end-of-song handling and a byte-identical
+seeded repeat. The 36.08-second vocal sample passed an owner listening review;
+broader listening quality and long-song qualification remain pending.
+See the [music runtime](./runtime/music.md#yue2-score-conditioned-songs)
+and `mere.run guide --model music-yue2`.
 
 ### `music-minimax-music3`
 

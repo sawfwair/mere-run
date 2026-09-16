@@ -1756,6 +1756,13 @@ extension MereRunModelManifest {
                     : "ACE-Step/Ace-Step1.5",
                 createdAt: createdAt
             )
+        case .yue2:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .yue2, family: .music,
+                tier: .latest, variant: .standard, precision: .bf16,
+                defaults: Defaults(steps: 32, cfg: 1), supports: [.musicGeneration], components: nil,
+                upstreamRepoId: "\(YuE2Resources.repository)@\(YuE2Resources.revision)", createdAt: createdAt
+            )
         case .miniMaxMusic3:
             return MereRunModelManifest(
                 id: modelID.rawValue,

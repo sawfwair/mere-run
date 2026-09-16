@@ -3,6 +3,45 @@ import Foundation
 extension ManagedModelCatalog {
     static let musicSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: YuE2Resources.modelID,
+            category: .music,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: YuE2Resources.repository, revision: YuE2Resources.revision,
+                patterns: YuE2Resources.snapshotPatterns
+            ),
+            mountedHubFallbacks: [MountedHubFallbackConfig(
+                destinationPath: "vae",
+                hubFallback: HubFallbackConfig(
+                    repoId: YuE2Resources.vaeRepository, revision: YuE2Resources.vaeRevision,
+                    patterns: YuE2Resources.vaePatterns
+                )
+            )],
+            upstreamRepoId: YuE2Resources.repository,
+            upstreamRevision: YuE2Resources.revision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "YuE2-3B and its VAE weights use CC BY-NC 4.0 and require attribution and noncommercial use.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "YuE2-3B weights", license: "CC BY-NC 4.0",
+                        summary: "Attribution and noncommercial use are required.",
+                        sourceRepoId: YuE2Resources.repository, sourceRevision: YuE2Resources.revision,
+                        licenseURL: "https://huggingface.co/\(YuE2Resources.repository)/blob/\(YuE2Resources.revision)/LICENSE"
+                    ),
+                    ManagedModelUsageTerm(
+                        component: "YuE2 VAE weights", license: "CC BY-NC 4.0",
+                        summary: "Attribution and noncommercial use are required.",
+                        sourceRepoId: YuE2Resources.vaeRepository, sourceRevision: YuE2Resources.vaeRevision,
+                        licenseURL: "https://huggingface.co/\(YuE2Resources.vaeRepository)/blob/\(YuE2Resources.vaeRevision)/LICENSE"
+                    ),
+                ]
+            ),
+            validationKind: .yue2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: YuE2Resources.estimatedDownloadBytes,
+            defaultCLICommands: ["music generate"]
+        ),
+        ManagedModelSpec(
             id: "music-acestep",
             category: .music,
             installShape: .structuredRoot,

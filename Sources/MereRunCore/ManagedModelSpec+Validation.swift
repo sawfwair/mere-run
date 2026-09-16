@@ -275,6 +275,8 @@ public extension ManagedModelSpec {
             return ACEStep5HzLMResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .miniMaxMusic3:
             return MiniMaxMusic3Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .yue2:
+            return YuE2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(modelID: id, in: rootURL, fileManager: fileManager)
         case .muScriptor:

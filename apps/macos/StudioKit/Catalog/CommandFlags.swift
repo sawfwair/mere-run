@@ -872,6 +872,14 @@ extension CommandFlags {
             "--prefill-duration": "1.64"
         ]
 
+        package static let scoreMode = "--score-mode"
+        package static let abcFile = "--abc-file"
+        package static let abcOutput = "--abc-output"
+        package static let abcMaxTokens = "--abc-max-tokens"
+        package static let semanticTemperature = "--semantic-temperature"
+        package static let semanticTopP = "--semantic-top-p"
+        package static let semanticTopK = "--semantic-top-k"
+        package static let semanticRepetitionPenalty = "--semantic-repetition-penalty"
         package static let compose = "--compose"
         package static let composerModel = "--composer-model"
         package static let composerModelRoot = "--composer-model-root"

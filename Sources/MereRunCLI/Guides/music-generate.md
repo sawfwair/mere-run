@@ -26,6 +26,9 @@ Managed ids:
 - `music-acestep-lm-4b`: independently pullable optional 4B 5 Hz planner.
 - `music-minimax-music3`: MiniMax Music 3 language model, RVQ depth decoder,
   flow transformer, condition encoder, and stereo vocoder.
+- `music-yue2`: experimental native score planning, music token generation,
+  acoustic flow matching, and 48 kHz stereo decoding. Run
+  `mere.run guide music generate --model music-yue2` for its controls and validation limits.
 - `music-magenta-rt2-small`: Magenta RealTime 2 small exported runtime assets.
 - `music-magenta-rt2-base`: Magenta RealTime 2 base exported runtime assets.
 

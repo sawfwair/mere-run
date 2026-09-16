@@ -368,6 +368,29 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         }
     }
 
+    func testYuE2RootLayoutRequiresItsTransformerAndMountedVAE() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try MereRunModelManifest.template(for: .yue2, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        for path in ["config.json", "model.safetensors", "qwen.tiktoken", "LICENSE",
+                     "vae/config.json", "vae/model.safetensors", "vae/LICENSE"] {
+            try TestFileSystem.writeFile(root.appendingPathComponent(path))
+        }
+
+        for expectedID in [YuE2Resources.modelID, nil] {
+            let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: expectedID)
+            XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+            XCTAssertTrue(report.warnings.isEmpty, report.warnings.joined(separator: "\n"))
+            XCTAssertEqual(report.manifest?.engine, .yue2)
+        }
+
+        try FileManager.default.removeItem(at: root.appendingPathComponent("vae/model.safetensors"))
+        let missingVAE = MereRunModelValidator.validate(modelRoot: root, expectedModelID: YuE2Resources.modelID)
+        XCTAssertFalse(missingVAE.isValid)
+        XCTAssertTrue(missingVAE.errors.contains { $0.contains("vae/model.safetensors") })
+        XCTAssertFalse(missingVAE.errors.contains { $0.contains("text_encoder") || $0.contains("tokenizer") })
+    }
+
     func testMagentaRT2RootLayoutPassesValidation() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

@@ -118,6 +118,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case aceStepLM17B = "music-acestep-lm-1.7b"
     case aceStepLM4B = "music-acestep-lm-4b"
     case miniMaxMusic3 = "music-minimax-music3"
+    case yue2 = "music-yue2"
     case magentaRT2Small = "music-magenta-rt2-small"
     case magentaRT2Base = "music-magenta-rt2-base"
     case muScriptorSmall = "music-muscriptor-small"

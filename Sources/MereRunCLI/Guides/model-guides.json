@@ -458,6 +458,15 @@
     "resourceName": "handbook-ace-step.md"
   },
   {
+    "topic": "handbook-yue2",
+    "title": "YuE2",
+    "category": "Music and audio",
+    "models": [
+      "music-yue2"
+    ],
+    "resourceName": "handbook-yue2.md"
+  },
+  {
     "topic": "handbook-minimax-music3",
     "title": "MiniMax Music3 (MiniMax)",
     "category": "Music and audio",

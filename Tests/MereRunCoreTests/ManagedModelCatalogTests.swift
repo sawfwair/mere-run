@@ -226,6 +226,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             NemotronOmniResources.modelID,
             "image-3d-trellis2-4b",
             MiniMaxMusic3Resources.modelID,
+            YuE2Resources.modelID,
             "music-muscriptor-small",
             "music-muscriptor-medium",
             "music-muscriptor-large",

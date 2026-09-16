@@ -409,6 +409,10 @@ enum InstalledModelSmokePlans {
             return direct(spec, route: "music generate") { runner in
                 try await runner.installedMiniMaxMusic3Check(model: spec.id)
             }
+        case .yue2:
+            return direct(spec, route: "music generate") { runner in
+                try await runner.installedYuE2Check(model: spec.id)
+            }
 
         case .aceStepLM:
             return companion(
@@ -1387,6 +1391,16 @@ extension GateRunner {
             ],
             timeout: 3_600
         )
+        return try audioObservation(output, run: run)
+    }
+
+    func installedYuE2Check(model: String) async throws -> GateObservation {
+        let output = artifactURL(model, extension: "wav")
+        let run = try await exec([
+            "music", "generate", "A short soft electronic pulse.", "--model", model,
+            "--score-mode", "off", "--duration", "2", "--steps", "1", "--seed", "7",
+            "--no-recipe", "--output", output.path, "--quiet",
+        ], timeout: 3_600)
         return try audioObservation(output, run: run)
     }
 
