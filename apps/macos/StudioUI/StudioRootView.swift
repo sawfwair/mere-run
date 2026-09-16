@@ -451,6 +451,12 @@ private struct StudioWorkspaceView: View {
             .padding(.top, MereRunTheme.Spacing.sm)
         }
 
+        if let preservationNotice = library.preservationNotice {
+            MereBanner(severity: .warning, text: preservationNotice)
+                .padding(.horizontal, MereRunTheme.Spacing.lg)
+                .padding(.top, MereRunTheme.Spacing.sm)
+        }
+
         if let persistenceError = controller.taskSessions.lastPersistenceError {
             MereBanner(severity: .warning, text: persistenceError)
                 .padding(.horizontal, MereRunTheme.Spacing.lg)
