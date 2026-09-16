@@ -202,9 +202,11 @@ package enum StudioConsoleCommand {
                 }
             }
         }
-        if capability.id == "text.chat" {
-            let defaultMaxTokens = capability.options.first { $0.flag == "--max-tokens" }?.defaultValue
-            let maxTokens = Int(draft.text("--max-tokens")) ?? defaultMaxTokens.flatMap { Int($0) }
+        // Any command that declares a reply budget shares the runtime's bounds: Chat, Code, and
+        // the vision commands all reject a zero or negative budget, and Chat's context size caps
+        // it. Capabilities without `--context-size` read as unbounded above.
+        if let budget = capability.options.first(where: { $0.flag == "--max-tokens" }) {
+            let maxTokens = Int(draft.text("--max-tokens")) ?? budget.defaultValue.flatMap { Int($0) }
             if let issue = TextChatTokenBudget.issue(maxTokens: maxTokens, contextSize: Int(draft.text("--context-size"))) {
                 let flag = "--" + issue.field.replacingOccurrences(of: "_", with: "-")
                 let label = capability.options.first { $0.flag == flag }?.label ?? flag

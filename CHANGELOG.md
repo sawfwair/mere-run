@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Validate Studio Code reply budgets like Chat before regenerating, and apply the
+  model and readiness checks that guard sending to regeneration as well. A rejected
+  regenerate keeps the previous reply and unsent draft.
+
 - Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
   selection. Preserve exact dequantized values across incremental appends.
 

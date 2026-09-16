@@ -25,11 +25,9 @@ extension StudioPromptTaskController {
         if let message { throw ValidationError(message: message) }
     }
 
-    package func runPrompt(
-        inventory: [StudioModelInventoryRow],
-        prepareOutput: (CommandDraft) -> StudioOutputLocation.Preparation = { StudioOutputLocation.preparingDestination(of: $0) }
-    ) throws -> Submission? {
-        guard let mode = activatedMode else { return nil }
+    /// The model and readiness gates every submission clears before it may change history:
+    /// send and retry share them so a retry on a missing or unsupported model keeps its reply.
+    func ensureRunnable(mode: StudioMode, draft: StudioDraft) throws {
         switch StudioCommandAdapter.capabilityRequirement(for: mode, draft: draft) {
         case .unavailable(let message): throw ValidationError(message: message)
         case .managedModel(let modelID):
@@ -40,6 +38,14 @@ extension StudioPromptTaskController {
         }
         let readiness = controller.readinessByMode[mode] ?? .unknown("Readiness has not been checked yet.")
         if readiness.blocksRun { throw ValidationError(message: readiness.message) }
+    }
+
+    package func runPrompt(
+        inventory: [StudioModelInventoryRow],
+        prepareOutput: (CommandDraft) -> StudioOutputLocation.Preparation = { StudioOutputLocation.preparingDestination(of: $0) }
+    ) throws -> Submission? {
+        guard let mode = activatedMode else { return nil }
+        try ensureRunnable(mode: mode, draft: draft)
         if mode.isConversational {
             return try sendConversationTurn(inventory: inventory).map { Submission(request: $0, outputFallbackReason: nil) }
         }
