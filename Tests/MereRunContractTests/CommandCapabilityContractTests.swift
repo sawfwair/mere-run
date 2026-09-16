@@ -34,6 +34,7 @@ import Testing
         "vision.face.batch",
         "vision.pose",
         "vision.flow",
+        "vision.depth",
         "vision.depth-video",
         "vision.geometry",
         "vision.geometry-multiview",
@@ -135,7 +136,7 @@ import Testing
         "geo.tessera",
         "geo.olmoearth"
     ])
-    #expect(document.commands.count == 128)
+    #expect(document.commands.count == 129)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

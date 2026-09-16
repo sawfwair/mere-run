@@ -175,6 +175,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .moge2
             || spec?.validationKind == .videoDepthAnything
             || spec?.validationKind == .depthAnything3
+            || spec?.validationKind == .marigoldV2
             || spec?.validationKind == .tripoSR
             || spec?.validationKind == .instantMesh
             || spec?.validationKind == .trellis2
@@ -579,7 +580,7 @@ public enum MereRunModelValidator {
             }
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .miniMaxMusic3?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
-                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?,
+                 .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .marigoldV2?, .tripoSR?, .instantMesh?, .trellis2?,
                  .insightFace?, .sortformer?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true
             default:

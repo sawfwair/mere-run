@@ -54,6 +54,7 @@ package enum CommandArguments {
         case .visionFaceBatch: return visionFaceBatch(draft)
         case .visionPose: return visionPose(draft)
         case .visionFlow: return visionFlow(draft)
+        case .visionDepth: return visionDepth(draft)
         case .visionDepthVideo: return visionDepthVideo(draft)
         case .visionGeometry: return visionGeometry(draft)
         case .visionGeometryMultiview: return visionGeometryMultiview(draft)

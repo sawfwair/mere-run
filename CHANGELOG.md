@@ -13,6 +13,19 @@ The format is based on Keep a Changelog.
   Parakeet feature extraction and decoding boundaries. Finish submitted GPU
   work before returning a stream for reuse.
 
+- Add experimental single-image depth estimation through `vision depth`, backed by native
+  Marigold V2 on a frozen, 4-bit quantized Qwen-Image-Edit-2509 transformer with
+  rank-128 adapters and, where the checkpoint ships one, a fine-tuned VAE
+  decoder. Inference is one rectified-flow step at a fixed timestep with no
+  guidance, conditioned on the precomputed prompt embeddings, so the base text
+  encoder is neither loaded nor downloaded. Output is affine-invariant and
+  normalized per image; the run writes a depth EXR, a preview PNG, and a
+  manifest recording the applied mapping, and writes no camera or point cloud
+  because the model does not estimate them. Adds the managed model
+  `vision-depth-marigold-v2`, and accepts a bare tensor written by
+  `torch.save(tensor)` in the non-executing PyTorch state-dict reader. Keeps the
+  first image-modulation projection unquantized to preserve depth structure.
+
 ## 0.52.0 - 2026-09-14
 
 - Announce Studio reply progress, completion, cancellation, and prompt errors to

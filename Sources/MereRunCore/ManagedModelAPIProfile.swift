@@ -421,6 +421,9 @@ public extension ManagedModelAPIProfile {
                 outputModalities: [.geometry]
             )
         case .visionDepth:
+            // The depth API currently runs video depth. Marigold's still-image
+            // command has no API adapter and must not advertise video support.
+            guard modelID != MarigoldV2Repository.modelId else { return nil }
             return ManagedModelAPIProfile(
                 task: .visionDepth,
                 inputModalities: [.video],

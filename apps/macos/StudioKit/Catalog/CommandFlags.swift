@@ -700,6 +700,23 @@ extension CommandFlags {
     }
 }
 
+// MARK: - vision depth
+
+extension CommandFlags {
+    /// `mere.run vision depth` — Image depth
+    package enum VisionDepth: CommandFlagNamespace {
+        package static let command = ["vision", "depth"]
+
+        package static let output = "--output"
+        package static let model = "--model"
+        package static let maxEdge = "--max-edge"
+        package static let native = "--native"
+        package static let checkpoint = "--checkpoint"
+        package static let dryRun = "--dry-run"
+        package static let json = "--json"
+    }
+}
+
 // MARK: - vision depth-video
 
 extension CommandFlags {

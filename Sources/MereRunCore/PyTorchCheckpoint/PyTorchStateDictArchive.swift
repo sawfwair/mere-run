@@ -113,6 +113,10 @@ public final class PyTorchStateDictArchive: @unchecked Sendable {
     private let tensorByName: [String: PyTorchTensorDescriptor]
     public let tensors: [PyTorchTensorDescriptor]
 
+    /// Reserved name for the single tensor of an archive written by
+    /// `torch.save(tensor)`, which stores a bare tensor instead of a mapping.
+    public static let bareTensorName = "__tensor__"
+
     /// `verifyEntryChecksums` must remain enabled for arbitrary input. It may
     /// be disabled only when the caller has just verified a trusted whole-file
     /// digest, which supersedes the much slower per-entry CRC32 pass.
@@ -263,6 +267,18 @@ public final class PyTorchStateDictArchive: @unchecked Sendable {
         let source = MLXArray(try rawData(for: descriptor), descriptor.shape, dtype: descriptor.dataType.mlxDType)
         guard let dtype, dtype != source.dtype else { return source }
         return source.asType(dtype)
+    }
+
+    /// The one tensor of an archive written by `torch.save(tensor)`.
+    ///
+    /// Returns `nil` when the archive holds a mapping instead, so callers that
+    /// accept either shape can fall back to a named lookup.
+    public var bareTensor: PyTorchTensorDescriptor? {
+        guard tensors.count == 1, let only = tensors.first,
+              only.name == Self.bareTensorName else {
+            return nil
+        }
+        return only
     }
 
     public func loadArray(named name: String, dtype: DType? = nil) throws -> MLXArray {

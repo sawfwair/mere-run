@@ -31,7 +31,7 @@ extension CommandTemplateID {
         case .visionGround: return .visionFind
         case .visionSegment: return .visionSegment
         case .visionTrack: return .visionTrack
-        case .visionDepthVideo: return .visionDepth
+        case .visionDepth, .visionDepthVideo: return .visionDepth
         case .visionPose: return .visionPose
         case .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionFaceBatch: return .visionFaces
         case .visionFlow: return .visionFlow

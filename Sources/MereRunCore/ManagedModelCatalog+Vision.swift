@@ -243,6 +243,19 @@ extension ManagedModelCatalog {
             defaultCLICommands: ["vision geometry-multiview"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.visionDepthMarigoldV2.rawValue,
+            category: .visionDepth,
+            installShape: .structuredRoot,
+            hubFallback: MarigoldV2Repository.baseHubFallback,
+            mountedHubFallbacks: MarigoldV2Repository.mountedHubFallbacks,
+            upstreamRepoId: MarigoldV2Repository.upstreamRepoId,
+            upstreamRevision: MarigoldV2Repository.upstreamRevision,
+            validationKind: .marigoldV2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: MarigoldV2Repository.estimatedDownloadBytes,
+            defaultCLICommands: ["vision depth"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.image3DTripoSR.rawValue,
             category: .image3D,
             installShape: .directoryRoot,

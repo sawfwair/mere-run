@@ -79,6 +79,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case moge2
     case videoDepthAnything
     case depthAnything3
+    case marigoldV2
     case tripoSR
     case instantMesh
     case trellis2

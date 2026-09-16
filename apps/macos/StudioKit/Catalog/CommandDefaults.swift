@@ -112,6 +112,7 @@ package enum CommandDefaults {
             .contract(\.temperature, CommandFlags.VisionOCR.temperature),
             .contract(\.backend, CommandFlags.VisionOCR.backend)
         ]),
+        (.visionDepth, [.value(\.dryRun, true)]),
         (.visionDepthVideo, [.value(\.dryRun, true)]),
         (.visionGeometry, [.value(\.dryRun, true)]),
         (.visionGeometryMultiview, [.value(\.dryRun, true)]),

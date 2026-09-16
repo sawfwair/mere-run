@@ -70,6 +70,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case visionFaceBatch
     case visionPose
     case visionFlow
+    case visionDepth
     case visionDepthVideo
     case visionGeometry
     case visionGeometryMultiview
@@ -198,6 +199,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .visionFaceBatch: return "vision.face.batch"
         case .visionPose: return "vision.pose"
         case .visionFlow: return "vision.flow"
+        case .visionDepth: return "vision.depth"
         case .visionDepthVideo: return "vision.depth-video"
         case .visionGeometry: return "vision.geometry"
         case .visionGeometryMultiview: return "vision.geometry-multiview"
@@ -1487,6 +1489,7 @@ extension CommandTemplate {
              .visionFaceBatch,
              .visionPose,
              .visionFlow,
+             .visionDepth,
              .visionDepthVideo,
              .visionGeometry,
              .visionGeometryMultiview,

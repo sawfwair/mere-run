@@ -58,6 +58,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case videoDepthAnything = "video-depth-anything"
         /// Depth Anything 3 multi-view geometry family.
         case depthAnything3 = "depth-anything-3"
+        /// Marigold V2 single-step dense prediction family.
+        case marigoldV2 = "marigold-v2"
         /// TripoSR single-image object reconstruction family.
         case tripoSR = "triposr"
         /// InstantMesh multi-view object reconstruction family.
