@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.52.0 - 2026-09-16
+
 - Keep forked Gemma 4 quantized and TurboQuant KV caches isolated, so prefix
   caching with quantized KV no longer lets one request's tokens overwrite
   another request's saved prompt.
@@ -91,8 +93,6 @@ The format is based on Keep a Changelog.
   end-of-song handling and a byte-identical seeded repeat. One vocal sample
   passed an owner listening review; broader quality and long-song qualification
   remain pending.
-
-## 0.52.0 - 2026-09-14
 
 - Announce Studio reply progress, completion, cancellation, and prompt errors to
   VoiceOver while preserving composer focus. Prevent Studio jobs from remaining
