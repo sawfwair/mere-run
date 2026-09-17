@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Evaluate the first FLUX.2 Klein denoising step one transformer stage at a
+  time on Linux GPU hosts and report stages slower than one second on stderr,
+  so a cold CUDA kernel compile shows where it spends its time instead of
+  looking like a hang. `MERERUN_FLUX2_STAGED_FIRST_STEP` overrides the default
+  and `MERERUN_FLUX2_TIMING=1` prints every stage.
+- Materialize FLUX.2 Klein prompt conditioning before denoising so the text
+  encoder graph is never carried into the first transformer evaluation.
+- Store the packaged Linux CUDA launcher's compiled MLX kernels under the user
+  cache directory, scoped by package id, so a reboot does not force another
+  cold start and a different release never reuses stale kernels.
+
 ## 0.52.1 - 2026-09-16
 
 - Compile MLX affine quantized matrix-multiplication JIT kernels with CUDA 12.8

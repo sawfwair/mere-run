@@ -103,6 +103,68 @@ final class ImageModelNumericsTests: MLXTestCase {
         assertClose(batch[1..<2], expected, tolerance: 1e-4)
     }
 
+    func testFluxTransformerForwardStageHandlerObservesEveryStageWithoutChangingOutput() throws {
+        MLXRandom.seed(29)
+        let configuration = Flux2TransformerConfiguration(
+            hiddenSize: 16, numHeads: 2, headDim: 8, numLayers: 2,
+            numSingleLayers: 3, inChannels: 8, contextDim: 8, mlpRatio: 2,
+            axesDimsRope: [2, 2, 2, 2]
+        )
+        let transformer = Flux2Transformer2DModel(config: configuration)
+        let latents = MLXRandom.normal([1, 4, 8])
+        let prompt = MLXRandom.normal([1, 3, 8])
+        let timestep = MLXArray([Float(0.5)])
+        let imageIds = Flux2PosEmbed.prepareMultiImageIds(imageCount: 1, height: 2, width: 2, tCoords: [0])
+        let textIds = Flux2PosEmbed.prepareTextIds(seqLen: 3, numAxes: 4)
+        let expected = transformer(
+            hiddenStates: latents, encoderHiddenStates: prompt,
+            timestep: timestep, imgIds: imageIds, txtIds: textIds
+        )
+        MLX.eval(expected)
+
+        var observed: [Flux2TransformerForwardStage] = []
+        var observedShapes: [[[Int]]] = []
+        transformer.forwardStageHandler = { stage, arrays in
+            MLX.eval(arrays)
+            observed.append(stage)
+            observedShapes.append(arrays.map(\.shape))
+        }
+        let staged = transformer(
+            hiddenStates: latents, encoderHiddenStates: prompt,
+            timestep: timestep, imgIds: imageIds, txtIds: textIds
+        )
+        transformer.forwardStageHandler = nil
+
+        XCTAssertEqual(
+            observed,
+            [
+                Flux2TransformerForwardStage(kind: .embedding, index: 0, count: 1),
+                Flux2TransformerForwardStage(kind: .jointBlock, index: 0, count: 2),
+                Flux2TransformerForwardStage(kind: .jointBlock, index: 1, count: 2),
+                Flux2TransformerForwardStage(kind: .singleBlock, index: 0, count: 3),
+                Flux2TransformerForwardStage(kind: .singleBlock, index: 1, count: 3),
+                Flux2TransformerForwardStage(kind: .singleBlock, index: 2, count: 3),
+                Flux2TransformerForwardStage(kind: .output, index: 0, count: 1),
+            ]
+        )
+        XCTAssertEqual(observed.map(\.label), [
+            "embedding", "joint_block=1/2", "joint_block=2/2",
+            "single_block=1/3", "single_block=2/3", "single_block=3/3", "output",
+        ])
+        // Joint stages hand back (text, image); single stages the joint sequence.
+        XCTAssertEqual(observedShapes[1], [[1, 3, 16], [1, 4, 16]])
+        XCTAssertEqual(observedShapes[3], [[1, 7, 16]])
+        XCTAssertEqual(observedShapes[6], [[1, 4, 8]])
+        assertClose(staged, expected, tolerance: 1e-5)
+
+        let untouched = transformer(
+            hiddenStates: latents, encoderHiddenStates: prompt,
+            timestep: timestep, imgIds: imageIds, txtIds: textIds
+        )
+        XCTAssertEqual(observed.count, 7, "A cleared handler must not observe later forward passes.")
+        assertClose(untouched, expected, tolerance: 1e-5)
+    }
+
     func testZImageTransformerCheckpointReloadAndCacheResetParity() throws {
         MLXRandom.seed(29)
         let configuration = ZImageTurboTransformerConfig(

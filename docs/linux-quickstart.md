@@ -224,6 +224,43 @@ selected backend on stderr, and falls back to dense compatibility if the linked
 runtime rejects a kernel. Run `scripts/e2e_gb10.sh --quant-mode auto` after each
 CUDA package rebuild; `native` is the explicit fail-loud validation mode.
 
+### Cold CUDA start
+
+The first image request on a fresh CUDA host is slow before the model runs.
+MLX compiles its affine quantized matmul and fused elementwise kernels with
+NVRTC the first time each dtype, bit width, group size, and tile shape is used,
+and it builds a cuDNN attention plan for each new query, key, and value shape.
+Each compile takes seconds to minutes of single-threaded CPU time while the GPU
+sits idle, and the work repeats for every distinct kernel that the prompt
+encoder, the transformer, and the VAE introduce. Later requests in the same
+process reuse the compiled kernels; later processes reuse the PTX cache.
+
+To keep that start observable and bounded, the FLUX.2 Klein runtime evaluates
+the first denoising step one transformer stage at a time on Linux GPU hosts and
+prints any stage slower than one second on stderr:
+
+```text
+[Flux2KleinGenerator] first_step_stage=joint_block=1/5 stage_s=143.201 elapsed_s=151.873
+[Flux2KleinGenerator] first_step_s=162.410 staged=1
+```
+
+A long first `joint_block=1/5` followed by fast blocks is kernel compilation,
+not a hang. Uniformly slow blocks mean the compiled kernels themselves are
+slow, which is a runtime bug to report with the log. `MERERUN_FLUX2_TIMING=1`
+prints every stage plus `prompt_encode_s`, `denoise_time_s`, and
+`decode_save_s`. `MERERUN_FLUX2_STAGED_FIRST_STEP=0` restores the single-graph
+first step; `=1` forces staging on other backends.
+
+The packaged CUDA launcher stores compiled kernels under
+`${XDG_CACHE_HOME:-$HOME/.cache}/mere.run/mlx-ptx/<package id>` unless
+`MLX_PTX_CACHE_DIR` is already set, so a reboot or `/tmp` cleanup does not
+force another cold start and a different mere.run release never reuses stale
+kernels. Two MLX switches isolate a stall to one compile path when a smoke run
+still exceeds its ceiling: `MERERUN_MLX_CUDA_NATIVE_QUANT=dense` replaces the
+NVRTC quantized matmul with dequantized cuBLAS matmul at the cost of holding
+the dense weights, and `MLX_CUDA_USE_CUDNN_SDPA=0` replaces the cuDNN attention
+plan with MLX's unfused attention.
+
 ## Build from source on Linux
 
 Install the package layer first:

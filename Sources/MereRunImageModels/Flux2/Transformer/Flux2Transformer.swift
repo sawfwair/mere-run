@@ -787,6 +787,48 @@ final class Flux2AdaLNContinuous: Module {
     }
 }
 
+// MARK: - Forward Stage Observation
+
+/// One stage of a ``Flux2Transformer2DModel`` forward pass.
+public struct Flux2TransformerForwardStage: Sendable, Hashable {
+    public enum Kind: String, Sendable, Hashable {
+        /// Timestep, modulation, rotary, and input embeddings are ready.
+        case embedding
+        /// One joint (double-stream) transformer block finished.
+        case jointBlock
+        /// One single-stream transformer block finished.
+        case singleBlock
+        /// The final norm and output projection finished.
+        case output
+    }
+
+    public let kind: Kind
+    /// Zero-based index among stages of the same kind.
+    public let index: Int
+    /// Number of stages of this kind in one forward pass.
+    public let count: Int
+
+    public init(kind: Kind, index: Int, count: Int) {
+        self.kind = kind
+        self.index = index
+        self.count = count
+    }
+
+    /// Stable diagnostic label, for example `joint_block=2/5`.
+    public var label: String {
+        switch kind {
+        case .embedding:
+            return "embedding"
+        case .jointBlock:
+            return "joint_block=\(index + 1)/\(count)"
+        case .singleBlock:
+            return "single_block=\(index + 1)/\(count)"
+        case .output:
+            return "output"
+        }
+    }
+}
+
 // MARK: - Full Transformer
 
 public final class Flux2Transformer2DModel: Module {
@@ -811,6 +853,12 @@ public final class Flux2Transformer2DModel: Module {
     private var cachedTxtIdsId: ObjectIdentifier?
     private var cachedRotary: (MLXArray, MLXArray)?
     public var gradientCheckpointing = false
+    /// Receives every forward stage together with the arrays it produced.
+    /// Callers use it to evaluate the lazy graph in bounded pieces and to time
+    /// cold kernel compilation on backends that compile kernels on first use.
+    /// It is not invoked while the transformer runs under `MLX.compile` or
+    /// gradient checkpointing, where a mid-graph evaluation is not allowed.
+    public var forwardStageHandler: ((Flux2TransformerForwardStage, [MLXArray]) -> Void)?
     private static let compileEnabled: Bool = {
         guard let raw = ProcessInfo.processInfo.environment["MERERUN_FLUX2_COMPILE"]?.lowercased() else {
             return false
@@ -936,8 +984,14 @@ public final class Flux2Transformer2DModel: Module {
         let modImgParams = (doubleModImg[0][0], doubleModImg[1][0])
         let modTxtParams = (doubleModTxt[0][0], doubleModTxt[1][0])
 
+        let stageHandler = (Self.compileEnabled || gradientCheckpointing) ? nil : forwardStageHandler
+        stageHandler?(
+            Flux2TransformerForwardStage(kind: .embedding, index: 0, count: 1),
+            [img, txt, temb, concatRotary.0, concatRotary.1]
+        )
+
         // Joint transformer blocks
-        for block in transformerBlocks {
+        for (blockIndex, block) in transformerBlocks.enumerated() {
             if gradientCheckpointing {
                 (txt, img) = block.checkpointed(
                     hiddenStates: img,
@@ -955,6 +1009,10 @@ public final class Flux2Transformer2DModel: Module {
                     rotaryEmb: concatRotary
                 )
             }
+            stageHandler?(
+                Flux2TransformerForwardStage(kind: .jointBlock, index: blockIndex, count: transformerBlocks.count),
+                [txt, img]
+            )
         }
 
         // Concatenate for single stream: [txt, img] (text first, then image)
@@ -964,12 +1022,16 @@ public final class Flux2Transformer2DModel: Module {
         let singleModParams = singleMod[0][0]
 
         // Single transformer blocks
-        for block in singleTransformerBlocks {
+        for (blockIndex, block) in singleTransformerBlocks.enumerated() {
             if gradientCheckpointing {
                 combined = block.checkpointed(combined, mod: singleModParams, rotaryEmb: concatRotary)
             } else {
                 combined = block(combined, mod: singleModParams, rotaryEmb: concatRotary)
             }
+            stageHandler?(
+                Flux2TransformerForwardStage(kind: .singleBlock, index: blockIndex, count: singleTransformerBlocks.count),
+                [combined]
+            )
         }
 
         // Extract image part (text is first, image is after)
@@ -980,6 +1042,7 @@ public final class Flux2Transformer2DModel: Module {
         img = normOut(img, cond: temb)
         img = projOut(img)
 
+        stageHandler?(Flux2TransformerForwardStage(kind: .output, index: 0, count: 1), [img])
         return img
     }
 }

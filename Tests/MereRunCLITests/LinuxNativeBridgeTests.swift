@@ -119,6 +119,13 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(packageScript.contains("LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:$cuda_runtime_library\""))
         XCTAssertTrue(packageScript.contains("MERERUN_LLAMA_CLI"))
         XCTAssertTrue(packageScript.contains("$llama_prefix/bin/llama-cli"))
+        XCTAssertTrue(packageScript.contains(".mererun-package-id"))
+        XCTAssertTrue(packageScript.contains("if [[ -z \"${MLX_PTX_CACHE_DIR:-}\" ]]; then"))
+        XCTAssertTrue(
+            packageScript.contains(
+                "export MLX_PTX_CACHE_DIR=\"${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/mere.run/mlx-ptx/$mererun_package_id\""
+            )
+        )
         XCTAssertTrue(packageScript.contains("cuda_root/include/cccl"))
         XCTAssertTrue(packageScript.contains("cuda_root/targets/$cuda_target/include/cccl"))
         XCTAssertTrue(packageScript.contains("cuda-cccl-12-8 | libcu++-dev"))
@@ -167,6 +174,8 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(packageTest.contains("platform_arch=\"arm64\""))
         XCTAssertTrue(packageTest.contains("linux-${platform_arch}.tar.gz"))
         XCTAssertTrue(packageTest.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1"))
+        XCTAssertTrue(packageTest.contains("mere.run/mlx-ptx/mere-run-0.0.0+cuda-deps-fixture-linux-${platform_arch}-cuda"))
+        XCTAssertTrue(packageTest.contains("MLX_PTX_CACHE_DIR=/custom/ptx"))
     }
 
     func testMacOSPackageEmbedsTheStapledAppBeforeCreatingTheDMG() throws {

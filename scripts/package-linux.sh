@@ -471,6 +471,16 @@ if [[ -f "$payload_dir/.mererun-linux-cuda" ]]; then
   if [[ -z "${CUDA_PATH:-}" && -n "${CUDA_HOME:-}" ]]; then
     export CUDA_PATH="$CUDA_HOME"
   fi
+  if [[ -z "${MLX_PTX_CACHE_DIR:-}" ]]; then
+    # Keep MLX's compiled CUDA kernels across reboots and /tmp cleanups. The
+    # directory is scoped by package id so another mere.run release never
+    # loads kernels compiled from different sources.
+    mererun_package_id="$(cat "$payload_dir/.mererun-package-id" 2>/dev/null || true)"
+    if [[ -z "$mererun_package_id" ]]; then
+      mererun_package_id="$(basename "$payload_dir")"
+    fi
+    export MLX_PTX_CACHE_DIR="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/mere.run/mlx-ptx/$mererun_package_id"
+  fi
 fi
 if [[ -x "$payload_dir/llama-cli" && -z "${MERERUN_LLAMA_CLI:-}" ]]; then
   export MERERUN_LLAMA_CLI="$payload_dir/llama-cli"
@@ -527,6 +537,7 @@ fi
 exec "$payload_dir/mere.run-bin" "$@"
 WRAPPER
 chmod +x "$payload_dir/mere.run"
+printf '%s\n' "$payload_name" >"$payload_dir/.mererun-package-id"
 if [[ "$linux_accel" == "cuda" ]]; then
   touch "$payload_dir/.mererun-linux-cuda"
   if [[ ! -d "$mlx_cuda_jit_include_dir/cute" ||

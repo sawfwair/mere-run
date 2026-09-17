@@ -25,8 +25,23 @@ extension Flux2KleinGenerator {
         var latents = initialLatents
         // 5. Denoising loop
         let denoiseStart = timingEnabled ? CFAbsoluteTimeGetCurrent() : 0
+        // On backends that compile kernels on first use, the first step runs
+        // the transformer stage by stage so each lazy graph stays bounded and
+        // a slow stage is reported instead of looking like a hang.
+        let stagedFirstStep = Self.stagedFirstStepEvaluationEnabled(
+            environment: ProcessInfo.processInfo.environment,
+            runsOnLinuxGPU: Self.runsOnLinuxGPU,
+            compileEnabled: Self.compileEnabled
+        )
+        if stagedFirstStep {
+            transformer.forwardStageHandler = Self.makeStagedEvaluationHandler(
+                reportEveryStage: timingEnabled || debugLog != nil
+            )
+        }
+        defer { transformer.forwardStageHandler = nil }
         for step in 0..<steps {
             try Task.checkCancellation()
+            let stepStart = (stagedFirstStep && step == 0) ? CFAbsoluteTimeGetCurrent() : 0
             progressHandler?(GenerationProgress(stage: .denoising, stepIndex: step, totalSteps: steps))
 
             // mflux passes raw timestep (sigma * 1000), transformer handles scaling conditionally
@@ -117,6 +132,14 @@ extension Flux2KleinGenerator {
             }
             if !Self.compileEnabled {
                 MLX.eval(latents)
+            }
+            if stagedFirstStep && step == 0 {
+                // Later steps reuse the compiled kernels, so they run as one graph.
+                transformer.forwardStageHandler = nil
+                let firstStepSeconds = CFAbsoluteTimeGetCurrent() - stepStart
+                if timingEnabled || firstStepSeconds >= Self.slowForwardStageThreshold {
+                    FileHandle.standardError.write(Data((Self.firstStepReportLine(seconds: firstStepSeconds) + "\n").utf8))
+                }
             }
 
             if let debugLog {
