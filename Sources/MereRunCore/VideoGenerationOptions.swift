@@ -3,7 +3,7 @@ import MereRunContract
 
 /// User settings shared by video planning and execution. Core parses compound
 /// conditioning inputs before constructing the native request.
-public struct VideoGenerationOptions: Sendable {
+public struct VideoGenerationOptions: Equatable, Sendable {
     public let prompt: String
     public let outputURL: URL
     public let model: String

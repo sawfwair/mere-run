@@ -34,6 +34,21 @@ The format is based on Keep a Changelog.
 - Validate Studio Code reply budgets like Chat before regenerating, and apply the
   model and readiness checks that guard sending to regeneration as well. A rejected
   regenerate keeps the previous reply and unsent draft.
+- Replay `--ltx-teacache`, `--ltx-teacache-threshold`,
+  `--ltx-teacache-calibration-output`, `--ltx-guidance-projection-cache`,
+  `--guidance-scale`, and `--shift` in the `video generate --preflight`
+  start-video-generation action and echo them in the preflight request, so the
+  suggested command reruns the generation that was preflighted.
+- Reject `--model-root`, `--audio`, `--timings-output`,
+  `--ltx-teacache-calibration-output`, and `--variant` in the video generation
+  API `options` array.
+- Default the chat API token budget to the smaller of 2,048 and
+  `--context-size` when the request omits `max_tokens`, matching the CLI.
+  Explicit values above the context are still rejected.
+- Validate the MLX runtime before video generation resolves or downloads a
+  model and before prompt enhancement runs.
+- Remove every partially written view when a multi-view geometry or
+  InstantMesh upload fails midway.
 
 - Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
   selection. Preserve exact dequantized values across incremental appends.

@@ -138,7 +138,10 @@ extension APIServerContract {
         let protectedFlags: Set<String> = [
             "--output", "-o", "--model", "-m", "--width", "--height",
             "--duration", "--num-frames", "--fps", "--seed", "--quality",
-            "--output-mode", "--preflight", "--json",
+            "--output-mode", "--variant", "--preflight", "--json",
+        ]
+        let serverPathFlags: Set<String> = [
+            "--model-root", "--audio", "--timings-output", "--ltx-teacache-calibration-output",
         ]
         var totalBytes = 0
         for option in options {
@@ -160,6 +163,12 @@ extension APIServerContract {
                 throw APIRequestValidationError.invalidField(
                     "options",
                     "\(flag) is controlled by a typed request field"
+                )
+            }
+            if serverPathFlags.contains(flag) {
+                throw APIRequestValidationError.invalidField(
+                    "options",
+                    "\(flag) names a server-local path and is unavailable through this route"
                 )
             }
         }

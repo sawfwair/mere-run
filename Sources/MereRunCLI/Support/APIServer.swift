@@ -829,7 +829,7 @@ actor CodeGenServer {
                 let imageParts = form.parts.filter {
                     $0.filename != nil && ($0.name == "image" || $0.name == "image[]")
                 }
-                let inputURLs = try imageParts.map {
+                let inputURLs = try Self.writeMultipartFiles(imageParts) {
                     try writeMultipartFile(
                         $0,
                         directoryName: "mere-run-api-geometry-multiview-inputs",
@@ -992,7 +992,7 @@ actor CodeGenServer {
                 let uploads = form.parts
                     .filter { $0.filename != nil && ($0.name == "image" || $0.name == "image[]") }
                     .filter { !$0.body.isEmpty }
-                let inputURLs = try uploads.map {
+                let inputURLs = try Self.writeMultipartFiles(uploads) {
                     try writeMultipartFile(
                         $0,
                         directoryName: "mere-run-api-instantmesh-inputs",
@@ -1137,6 +1137,14 @@ actor CodeGenServer {
                 from: Data(body.readableBytesView)
             )
             let plan = try APIServerContract.speechPlan(from: openaiRequest)
+            // No observeClientDisconnect() here: Hummingbird itself does not
+            // cancel a handler when the client goes away, but the router's
+            // APIRequestCancellationMiddleware does. That cancellation releases
+            // this admission lease as cancelled and reaches
+            // SpeechSynthesisOperation through the resident speech slot, which
+            // awaits the operation inline. Chat routes observe disconnects
+            // themselves because their generation outlives the handler in a
+            // streaming body; this route returns only after synthesis finishes.
             return try await withRuntimeRequestAdmission(using: requestAdmission) {
                 let outputURL = try await synthesizeSpeech(plan)
                 defer { try? FileManager.default.removeItem(at: outputURL) }
@@ -1515,6 +1523,25 @@ actor CodeGenServer {
         let outputURL = try temporaryOutputURL(directoryName: directoryName, extension: pathExtension)
         try file.body.write(to: outputURL)
         return outputURL
+    }
+
+    /// Writes every upload or none. A failure on view k removes views 1...k-1
+    /// so an aborted multi-view upload leaves no files behind; the caller owns
+    /// the returned files once every write has succeeded.
+    nonisolated static func writeMultipartFiles(
+        _ parts: [MultipartFormData.Part],
+        write: (MultipartFormData.Part) throws -> URL
+    ) throws -> [URL] {
+        var written: [URL] = []
+        do {
+            for part in parts {
+                written.append(try write(part))
+            }
+        } catch {
+            for url in written { try? FileManager.default.removeItem(at: url) }
+            throw error
+        }
+        return written
     }
 
     private nonisolated func sanitizedPathExtension(from filename: String?) -> String? {

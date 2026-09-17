@@ -138,8 +138,11 @@ length. The selected model normalizes frame counts to its native cadence.
 The optional `options` array accepts additional `video generate` arguments,
 such as `["--ltx-preset", "hq"]` for a compatible full model. Typed request
 fields control the model, canvas, duration, frame rate, seed, quality, and
-output mode; you cannot replace those flags in `options`. `--skip-mp4` is
-unavailable because the response requires an MP4 artifact.
+output mode; you cannot replace those flags in `options`, and the `--variant`
+compatibility selector is rejected for the same reason. `--skip-mp4` is
+unavailable because the response requires an MP4 artifact. Flags that name a
+server-local path (`--model-root`, `--audio`, `--timings-output`, and
+`--ltx-teacache-calibration-output`) are rejected as well.
 
 CLI and API video generation use the same Core preparation and execution
 operation. Video runtimes load for each request; they do not join a resident
@@ -553,8 +556,11 @@ swift run mere.run api serve \
   form and text posts are rejected before the request body is processed.
 - Chat requests are validated before generation; `max_tokens`,
   `max_completion_tokens`, `temperature`, `top_p`, and the supported `min_p`
-  extension must stay within bounded ranges. `top_k` accepts nonnegative
-  integers on engines that support top-k sampling; `0` disables the cutoff.
+  extension must stay within bounded ranges. When neither `max_tokens` nor
+  `max_completion_tokens` is sent, the default budget is the smaller of 2,048
+  and `--context-size`, matching the CLI; an explicit value above the context
+  is still rejected. `top_k` accepts nonnegative integers on engines that
+  support top-k sampling; `0` disables the cutoff.
 - LoRA adapters are configured at server startup with `--lora`; request bodies
   cannot select local LoRA paths.
 - Streaming and JSON error paths are sanitized so the local server does not
