@@ -41,7 +41,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testReadinessCheckDoesNotStartDuplicateInFlightRequest() {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var draft = StudioDraft()
         draft.reset(for: .createImage)
@@ -58,7 +58,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testReadinessProbesRunInTheProbeLaneAndReuseTheInFlightProbeAcrossAModelChange() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var draft = StudioDraft()
         draft.reset(for: .createImage)
@@ -97,7 +97,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testReadinessSettingsChangeSupersedesTheInFlightProbeAndIgnoresItsResult() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         // Settings persist through UserDefaults; leave the test domain as it was found.
         let originalModelsRoot = controller.modelsRoot
@@ -137,7 +137,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testReadinessProbeIsCancelledWhenTheModeStopsNeedingAModel() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var draft = StudioDraft()
         draft.reset(for: .readImage)
@@ -161,7 +161,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testReadinessBlocksUnsupportedCapabilityBeforeModelList() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var draft = StudioDraft()
         draft.reset(for: .createImage)
@@ -187,7 +187,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testReadinessCapturesRecommendedModelsFromJSONCapabilities() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let chatTemplate = try XCTUnwrap(CommandCatalog.template(id: .textChat))
         controller.select(chatTemplate)
@@ -217,7 +217,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testReadImageAutoDownloadActionIsReadyWithoutStartingCLI() {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var draft = StudioDraft()
         draft.reset(for: .readImage)
@@ -233,7 +233,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testSavingHuggingFaceTokenKeepsSecretOutOfProcessArguments() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
 
         let task = Task { await controller.saveHuggingFaceToken(" hf_secret ") }
@@ -255,7 +255,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testFailedRunResultIncludesStderrWhenStdoutIsEmpty() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         controller.select(template)
@@ -273,7 +273,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testValidationFailurePublishesRunResultWithoutStartingProcess() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
         controller.select(template)
@@ -290,7 +290,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testOutputPreparationFailurePublishesRunResultWithoutStartingProcess() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
         let temp = FileManager.default.temporaryDirectory
@@ -314,7 +314,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testModelPullUsesDownloadingStatusWhileRunning() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .modelPull))
         controller.select(template)
@@ -332,7 +332,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testUtilityCommandCanBeCancelledByStableID() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let commandID = UUID()
 
@@ -356,7 +356,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testResidentVideoSessionKeepsInputOpenAndPublishesEachResult() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .videoSession))
         controller.select(template)
@@ -397,7 +397,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testRealtimeMusicKeepsInputOpenAndAcceptsTargetedLiveControls() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .musicRealtime))
         var draft = template.defaultDraft()
@@ -420,7 +420,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testServiceRunCanBeRediscoveredLoggedAndCancelledByRequestID() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .apiServe))
         var draft = template.defaultDraft()
@@ -449,7 +449,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testStudioRunsExecuteConcurrentlyUpToCapThenQueue() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         func request(_ arg: String, mode: StudioMode) -> StudioRunRequest {
@@ -489,7 +489,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testBackgroundStudioRunPublishesProgressByRequestID() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         func request(_ arg: String) -> StudioRunRequest {
@@ -519,7 +519,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testQueuedConversationTurnIsTrackedInFlightAtSubmission() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         func request(_ arg: String, _ conversationID: UUID) -> StudioRunRequest {
@@ -542,7 +542,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testConcurrentCompletionsAreAllDeliveredLosslessly() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         var received: [UUID] = []
@@ -573,7 +573,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testFailedConversationTurnReplyIsThinkStripped() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         var draft = template.defaultDraft()
@@ -596,7 +596,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testConversationIDFlowsToResultAndTracksInFlight() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         let conversationID = UUID()
@@ -620,7 +620,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testQueuedConversationTurnStillCarriesConversationID() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         func request(_ arg: String, _ conversationID: UUID) -> StudioRunRequest {
@@ -653,7 +653,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testConversationReplyKeepsFullOutputBeyondConsoleBuffer() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         var draft = template.defaultDraft()
@@ -683,7 +683,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testConversationReplyStripsThinkTagsLiveAndFinal() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         var draft = template.defaultDraft()
@@ -710,7 +710,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testConcurrentRunsKeepIsolatedOutputAndResults() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         func request(_ arg: String) -> StudioRunRequest {
@@ -742,7 +742,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testStudioRunDoesNotClobberEditingState() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
 
         // The user is editing a template/draft in the Advanced surface.
@@ -765,7 +765,7 @@ final class MereRunControllerTests: XCTestCase {
     }
 
     func testRuntimeEndpointIsOwnedNotDerivedFromDraft() {
-        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
         controller.runtimeHost = "example.local"
         controller.runtimePort = 9000
         controller.runtimeAPIKey = "secret"
@@ -780,7 +780,7 @@ final class MereRunControllerTests: XCTestCase {
     }
 
     func testRuntimeEndpointFallsBackAndOmitsEmptyAuth() {
-        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
         controller.runtimeHost = "   "
         controller.runtimeAPIKey = "  "
         XCTAssertEqual(controller.runtimeURL(path: "/x").host, "127.0.0.1")
@@ -788,7 +788,7 @@ final class MereRunControllerTests: XCTestCase {
     }
 
     func testAdvancedSurfaceFollowsStudioModeChanges() {
-        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
         var imageDraft = StudioDraft()
         imageDraft.reset(for: .createImage)
         imageDraft.prompt = "an image prompt"
@@ -816,6 +816,7 @@ final class MereRunControllerTests: XCTestCase {
         let probe = StubFileProbe()
         probe.existingPaths = ["/out/render.png"]
         let controller = MereRunController(
+            secretStore: InMemorySecretStore(),
             processRunner: RecordingProcessRunner(), fileSystem: probe, resolvesCLIOnInit: false
         )
         let detected = controller.detectOutputURL(expected: nil, stdout: "loading model\n/out/render.png\n")
@@ -826,6 +827,7 @@ final class MereRunControllerTests: XCTestCase {
         let probe = StubFileProbe()
         probe.existingPaths = ["/out/page.txt"]
         let controller = MereRunController(
+            secretStore: InMemorySecretStore(),
             processRunner: RecordingProcessRunner(), fileSystem: probe, resolvesCLIOnInit: false
         )
         // A whole "in -> out" line is never a path; only the contract parser resolves this.
@@ -837,6 +839,7 @@ final class MereRunControllerTests: XCTestCase {
         let probe = StubFileProbe()
         probe.existingPaths = ["/want/out.wav", "/other/x.wav"]
         let controller = MereRunController(
+            secretStore: InMemorySecretStore(),
             processRunner: RecordingProcessRunner(), fileSystem: probe, resolvesCLIOnInit: false
         )
         let detected = controller.detectOutputURL(
@@ -848,6 +851,7 @@ final class MereRunControllerTests: XCTestCase {
     func testCLIResolverInjectionIsUsedForResolution() {
         let stubLaunch = MereRunLaunch.executable(URL(fileURLWithPath: "/stub/mere.run"))
         let controller = MereRunController(
+            secretStore: InMemorySecretStore(),
             processRunner: RecordingProcessRunner(),
             cliResolver: { _ in stubLaunch },
             resolvesCLIOnInit: false
@@ -858,7 +862,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testRunningStudioRunPublishesOutputBeforeProcessExits() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
         let temp = FileManager.default.temporaryDirectory
@@ -885,7 +889,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testUtilityCommandCanStreamProgressWhileStillReturningCapturedOutput() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var streamed: [String] = []
 
@@ -913,7 +917,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testUtilityCommandCanStreamStandardOutputWithoutStandardError() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var streamed: [String] = []
 
@@ -936,7 +940,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testUtilityCommandIsAUtilityLaneJobThatNeverTouchesTheConsole() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var completions = 0
         let subscription = controller.runCompletions.sink { _ in completions += 1 }
@@ -979,7 +983,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testUtilityLaneQueuesAFifthCommandUntilASlotFrees() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
 
         let pending = (0..<5).map { index in
@@ -1008,7 +1012,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testCancellingAQueuedUtilityCommandResolvesTheAwaitingCaller() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let occupants = (0..<4).map { index in
             Task { await controller.utilityCommandResult(args: ["guide", "topic-\(index)"]) }
@@ -1032,7 +1036,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testServerStatusProbeDedupesConcurrentRefreshesAndParsesTheSnapshot() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let restoreRuntimeSettings = runtimeSettingsRestorer(for: controller)
         defer { restoreRuntimeSettings() }
@@ -1048,12 +1052,14 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(runner.starts.count, 1)
         XCTAssertEqual(controller.jobs.running(in: .probe).count, 1)
         XCTAssertEqual(
-            Array(runner.starts[0].configuration.arguments.suffix(8)),
-            ["status", "--json", "--host", "127.0.0.1", "--port", "8080", "--api-key", "secret-key"]
+            Array(runner.starts[0].configuration.arguments.suffix(6)),
+            ["status", "--json", "--host", "127.0.0.1", "--port", "8080"]
         )
+        XCTAssertFalse(runner.starts[0].configuration.arguments.contains("--api-key"))
+        XCTAssertEqual(runner.starts[0].configuration.environment["MERERUN_API_KEY"], "secret-key")
         XCTAssertEqual(
             controller.jobs.running(in: .probe).first?.displayCommand,
-            "/usr/bin/true status --json --host 127.0.0.1 --port 8080 --api-key '••••••••'"
+            "/usr/bin/true status --json --host 127.0.0.1 --port 8080"
         )
 
         runner.starts[0].stdout("probing...\n")
@@ -1074,7 +1080,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testSupersededServerStatusProbeKeepsTheLastSnapshot() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let restoreRuntimeSettings = runtimeSettingsRestorer(for: controller)
         defer { restoreRuntimeSettings() }
@@ -1107,7 +1113,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testTerminateAllProcessesStopsUtilityCommandsAndReadinessProbes() async {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var draft = StudioDraft()
         draft.reset(for: .createImage)
@@ -1131,7 +1137,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testStudioRunIsObservableAsAJobWhileTheFacadeMirrorsIt() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         var draft = template.defaultDraft()
@@ -1168,7 +1174,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testQueuedRunKeepsPreviousForegroundUntilItStarts() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         func request(_ arg: String) -> StudioRunRequest {
@@ -1203,7 +1209,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testNonInferenceJobsNeverTouchTheConsoleOrCompletionStream() async throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         var completions = 0
         let subscription = controller.runCompletions.sink { _ in completions += 1 }
@@ -1244,7 +1250,7 @@ final class MereRunControllerTests: XCTestCase {
 
     func testAdvancedRunRefusesWhenTheInferenceLaneIsFull() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         controller.select(template)
@@ -1260,7 +1266,7 @@ final class MereRunControllerTests: XCTestCase {
     }
 
     func testDiagnosticsOmitConsoleTextAndCommandArguments() {
-        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
         controller.logs = [
             LogLine(stream: .stdout, text: "generated private answer"),
             LogLine(stream: .stderr, text: "Bearer secret-token")

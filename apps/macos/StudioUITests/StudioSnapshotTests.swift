@@ -1,5 +1,6 @@
 @testable import StudioKit
 @testable import StudioUI
+import StudioTestSupport
 import AVFoundation
 import AppKit
 import Foundation
@@ -625,6 +626,7 @@ private final class SnapshotFixture {
         UserDefaults.standard.register(defaults: ["mererun.app.hasCompletedWelcome": true])
 
         controller = MereRunController(
+            secretStore: InMemorySecretStore(),
             processRunner: processRunner,
             cliResolver: { _ in .executable(URL(fileURLWithPath: "/usr/local/bin/mere.run")) },
             resolvesCLIOnInit: true

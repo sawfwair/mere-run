@@ -6,7 +6,7 @@ import XCTest
 @MainActor
 final class StudioModelStoreTests: XCTestCase {
     private func controller(_ runner: RecordingProcessRunner) -> MereRunController {
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         return controller
     }

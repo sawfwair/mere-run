@@ -13,7 +13,7 @@ final class StudioContinuityTests: XCTestCase {
 
     func testConsoleEditsLaunchFromAnEmptyComposerAndHistoryReplaysExactly() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         defer { controller.terminateAllProcesses() }
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
         var seed = template.defaultDraft()
@@ -50,7 +50,7 @@ final class StudioContinuityTests: XCTestCase {
         var launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: form, seed: template.defaultDraft()))
         XCTAssertNotNil(launch.validationMessage)
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         defer { controller.terminateAllProcesses() }
         XCTAssertFalse(controller.runConsole(template: template, draft: launch.commandDraft,
             arguments: launch.arguments, requestID: UUID()))
@@ -105,7 +105,7 @@ final class StudioContinuityTests: XCTestCase {
 
     func testStoppingAConversationDoesNotStopTheNewerImageJob() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         defer { controller.terminateAllProcesses() }
         let chat = try XCTUnwrap(CommandCatalog.template(id: .textChat))
         let image = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))

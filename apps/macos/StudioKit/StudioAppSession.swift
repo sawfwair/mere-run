@@ -8,7 +8,10 @@ package final class StudioAppSession: ObservableObject {
     package let library: StudioLibraryStore
 
     package init() {
-        controller = MereRunController(taskSessions: StudioTaskSessions(url: StudioTaskSessions.defaultURL))
+        controller = MereRunController(
+            secretStore: KeychainSecretStore(),
+            taskSessions: StudioTaskSessions(url: StudioTaskSessions.defaultURL)
+        )
         library = StudioLibraryStore()
         library.observe(controller: controller)
         controller.servingMonitor.start(controller: controller)

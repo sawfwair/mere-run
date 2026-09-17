@@ -271,7 +271,7 @@ final class ArtifactReceiptTests: XCTestCase {
 
     func testSubmittedRunCarriesTheFlagsWhileThePreviewStaysTheTypedCommand() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
         var draft = template.defaultDraft()

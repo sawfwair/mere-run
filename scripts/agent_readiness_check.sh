@@ -136,6 +136,9 @@ dynamic_boundary_files=(
   "Sources/MereRunCore/ZImageTurbo/Tokenizer/QwenTokenizer.swift"
   "Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator.swift"
   "Sources/MereRunRelayKit/RelayCredentialStorage.swift"
+  # The Security framework's SecItem API takes a CFDictionary of Any; the Studio Keychain
+  # store builds those queries and nothing else.
+  "apps/macos/StudioKit/StudioSecretStore.swift"
 )
 
 is_dynamic_boundary_file() {
