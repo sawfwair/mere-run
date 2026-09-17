@@ -242,7 +242,11 @@ final class MarigoldV2Tests: XCTestCase {
         XCTAssertEqual(spec.defaultCLICommands, ["vision depth"])
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertNotNil(ManagedModelCapabilityCatalog.descriptor(for: spec.id))
+        // Still-image depth has no API adapter; the spec declares that rather than
+        // the category profile excluding the model by name.
+        XCTAssertEqual(spec.apiAvailability, .cliOnly)
         XCTAssertNil(spec.apiProfile)
+        XCTAssertNil(ManagedModelCatalog.apiProfile(for: MarigoldV2Repository.modelId))
     }
 
     func testCatalogPullsTheFrozenBaseAndMountsTheAdapters() throws {

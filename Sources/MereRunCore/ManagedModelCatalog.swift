@@ -16,7 +16,10 @@ public enum ManagedModelCatalog {
             + geoExpansionSpecs
 
     public static func apiProfile(for modelID: String) -> ManagedModelAPIProfile? {
-        spec(for: modelID)?.apiProfile
+        if let spec = spec(for: modelID), spec.apiAvailability == .cliOnly {
+            return nil
+        }
+        return spec(for: modelID)?.apiProfile
             ?? ManagedModelAPIProfile.companion(modelID: modelID, category: nil)
     }
 

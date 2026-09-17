@@ -203,6 +203,7 @@ final class ArtifactReceiptTests: XCTestCase {
         for template in CommandCatalog.templates {
             var draft = template.defaultDraft()
             draft.preflight = false
+            draft.dryRun = false
             let arguments = template.arguments(from: draft)
             let flags = StudioMachineOutputFlags.arguments(
                 template: template,

@@ -106,6 +106,18 @@ final class ScopedAdmissionTests: XCTestCase {
         XCTAssertEqual(MachineInferenceRequest(label: "image", estimatedModelBytes: 1).resourceClass, .standard)
     }
 
+    func testDeclaredMinimumMemoryClassifiesLargeRegardlessOfDownloadSize() {
+        let threshold = MachineInferenceClass.largeDeclaredMinimumMemoryGB
+        XCTAssertEqual(threshold, 64)
+        XCTAssertEqual(MachineInferenceClass.forModel(estimatedBytes: 1, declaredMinimumMemoryGB: threshold), .large)
+        XCTAssertEqual(MachineInferenceClass.forModel(estimatedBytes: nil, declaredMinimumMemoryGB: threshold + 32), .large)
+        XCTAssertEqual(MachineInferenceClass.forModel(estimatedBytes: 1, declaredMinimumMemoryGB: threshold - 1), .standard)
+        XCTAssertEqual(
+            MachineInferenceClass.forModel(estimatedBytes: 1, declaredMinimumMemoryGB: 8, minimum: .small), .small
+        )
+        XCTAssertEqual(MachineInferenceClass.forModel(estimatedBytes: 1, declaredMinimumMemoryGB: nil), .standard)
+    }
+
     private func coordinator() throws -> MachineInferenceCoordinator {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

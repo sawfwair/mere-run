@@ -41,6 +41,8 @@ Core retains resource loading and generation for these families.
   compatibility shared by image, text, video, and evaluation adapters.
 - `VisionGeometry/MoGe2/MoGe2GenerationOperation.swift`: shared single-image
   geometry settings, observational plans, execution, and awaited unloading.
+- `MarigoldV2/MarigoldV2GenerationOperation.swift`: the same shape for
+  single-image depth; the command is CLI-only, so no API adapter calls it.
 - Family `*GenerationOperation.swift` files under `TripoSR/`, `InstantMesh/`,
   `DepthAnything3/`, and `VideoDepth/VDA/`: shared CLI/API settings, preparation,
   execution, and awaited per-request cleanup. DA3 also owns scene export.
