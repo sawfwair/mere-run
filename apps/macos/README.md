@@ -711,12 +711,23 @@ content out and hides those effects (the sidebar draws as a plain view), and the
 window keeps an opaque title bar because a transparent one blanks every
 offscreen `ScrollView`.
 
-The harness renders reliably but is not yet run-to-run reproducible: six boards
-— the composer, Realtime, Activity, Models, Plugins, and Subjects — draw elapsed
-time and relative dates, so re-rendering the same commit changes about twenty of
-the sixty-seven shots. Treat it as a tool for looking at a surface, not as a
-comparison gate; it cannot tell a real regression from the clock until those
-strings are frozen.
+Displayed time is frozen. Around each render `StudioSnapshotRenderer.render`
+sets `StudioDisplayClock.fixedDate` to its reference date and injects the same
+instant as the `studioReferenceDate` environment value, and the snapshot
+fixtures date their jobs, threads, library rows, and usage records relative to
+that reference. The elapsed counters on running rows read
+`referenceDate ?? context.date` inside their `TimelineView`, so the boards that
+show elapsed time or a relative date render the same strings on every run
+instead of following the wall clock, and generated file names use the same
+instant.
+
+What is not frozen is how long the harness waits. `render` pumps the main run
+loop for a fixed wall-clock budget (`settle`, 1.5 seconds by default, plus a
+0.3-second pass after the offscreen preparation) to let layout, `.task` work,
+and in-flight animations land, so a loaded machine can still capture a board
+mid-settle. Together with the offscreen substitutions above — lifted glass
+content, hidden scroll-edge effects, an opaque title bar — that makes the shots
+comparable by eye across runs, not a byte-for-byte pixel gate.
 
 ## Packaging, updates, and support
 
