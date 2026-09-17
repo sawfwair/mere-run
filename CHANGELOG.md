@@ -9,6 +9,12 @@ The format is based on Keep a Changelog.
 - Keep forked Gemma 4 quantized and TurboQuant KV caches isolated, so prefix
   caching with quantized KV no longer lets one request's tokens overwrite
   another request's saved prompt.
+- Keep Studio history entries written by a different version of mere.run instead
+  of dropping them on the next save. Rows the running build cannot read stay in
+  `library.json` untouched, a copy of the original file is written beside it
+  before the first rewrite, and the Library reports how many entries are kept
+  but not shown. Drafts saved before a field existed load with the current
+  default for that field.
 
 - Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
   selection. Preserve exact dequantized values across incremental appends.
