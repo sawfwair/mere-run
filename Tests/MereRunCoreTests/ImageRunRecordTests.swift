@@ -254,6 +254,42 @@ final class ImageRunRecordTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "broken")
     }
 
+    func testInspectionNeverLocksTerminalRecordsAndReadsReadOnlyDirectoriesAsWritten() throws {
+        let root = try temporaryDirectory()
+        let options = ImageGenerationOptions(prompt: "A camera", outputURL: root.appendingPathComponent("result.png"))
+        let finished = root.appendingPathComponent("finished")
+        let lock = finished.appendingPathComponent(".image-run.lock")
+        var session: ImageRunSession? = try ImageRunSession(directory: finished, requested: options, modelSelector: "fixture")
+        try XCTUnwrap(session).fail(ImageGenerationIssue("fixture", "failure"))
+        session = nil
+        try FileManager.default.removeItem(at: lock)
+        let terminal = try Data(contentsOf: ImageRunRecord.recordURL(at: finished))
+        XCTAssertEqual(try ImageRunRecord.inspect(at: finished).state, .failed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lock.path))
+        try makeReadOnly(finished)
+        XCTAssertEqual(try ImageRunRecord.inspect(at: finished).state, .failed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lock.path))
+        XCTAssertEqual(try Data(contentsOf: ImageRunRecord.recordURL(at: finished)), terminal)
+
+        let abandoned = root.appendingPathComponent("abandoned")
+        session = try ImageRunSession(directory: abandoned, requested: options, modelSelector: "fixture")
+        session = nil
+        try FileManager.default.removeItem(at: abandoned.appendingPathComponent(".image-run.lock"))
+        let original = try Data(contentsOf: ImageRunRecord.recordURL(at: abandoned))
+        try makeReadOnly(abandoned)
+        XCTAssertEqual(try ImageRunRecord.inspect(at: abandoned).state, .preparing)
+        XCTAssertEqual(try Data(contentsOf: ImageRunRecord.recordURL(at: abandoned)), original)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandoned.appendingPathComponent(".image-run.lock").path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: abandoned.path)
+        XCTAssertEqual(try ImageRunRecord.inspect(at: abandoned).state, .interrupted)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: abandoned.appendingPathComponent(".image-run.lock").path))
+    }
+
+    private func makeReadOnly(_ directory: URL) throws {
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
+    }
+
     private var fixtureExecutor: ImageGenerationOperation.Executor {
         { _, request, _ in
             try Data("fixture output".utf8).write(to: request.outputURL)

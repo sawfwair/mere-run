@@ -58,6 +58,47 @@ final class WorkflowOwnershipTests: XCTestCase {
         XCTAssertTrue(WorkflowChildProcessRegistry.processIDs(in: run).isEmpty)
     }
 
+    func testChildRegistryRequiresMatchingIdentityBeforeReportingOrSignallingAProcess() throws {
+        let root = try temporaryDirectory()
+        let run = root.appendingPathComponent("run")
+        try FileManager.default.createDirectory(at: run, withIntermediateDirectories: true)
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["30"]
+        try child.run()
+        defer { if child.isRunning { child.terminate(); child.waitUntilExit() } }
+        let pid = child.processIdentifier
+        let startTime = try XCTUnwrap(WorkflowChildProcessIdentity.startTime(of: pid))
+        let entry = run.appendingPathComponent(WorkflowChildProcessRegistry.directoryName).appendingPathComponent("\(pid).pid")
+
+        try WorkflowChildProcessRegistry.register(pid, startTime: startTime &+ 1, in: run)
+        XCTAssertEqual(WorkflowChildProcessRegistry.terminateAll(in: run), [])
+        XCTAssertTrue(child.isRunning)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: entry.path))
+        XCTAssertEqual(WorkflowChildProcessRegistry.activeProcessIDs(in: run), [])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: entry.path))
+        XCTAssertTrue(WorkflowChildProcessRegistry.processIDs(in: run).isEmpty)
+
+        try WorkflowChildProcessRegistry.register(pid, startTime: nil, in: run)
+        XCTAssertEqual(try String(contentsOf: entry, encoding: .utf8), String(pid))
+        XCTAssertEqual(WorkflowChildProcessRegistry.processIDs(in: run), [pid])
+        XCTAssertEqual(WorkflowChildProcessRegistry.terminateAll(in: run), [])
+        XCTAssertTrue(child.isRunning)
+        XCTAssertEqual(WorkflowChildProcessRegistry.activeProcessIDs(in: run), [])
+        XCTAssertTrue(WorkflowChildProcessRegistry.processIDs(in: run).isEmpty)
+
+        try WorkflowChildProcessRegistry.register(pid, in: run)
+        XCTAssertEqual(try String(contentsOf: entry, encoding: .utf8), "\(pid)\n\(startTime)")
+        XCTAssertEqual(WorkflowChildProcessRegistry.activeProcessIDs(in: run), [pid])
+        XCTAssertEqual(WorkflowChildProcessRegistry.terminateAll(in: run), [pid])
+        child.waitUntilExit()
+        XCTAssertEqual(child.terminationReason, .uncaughtSignal)
+        XCTAssertEqual(child.terminationStatus, SIGTERM)
+        XCTAssertNil(WorkflowChildProcessIdentity.startTime(of: pid))
+        XCTAssertEqual(WorkflowChildProcessRegistry.activeProcessIDs(in: run), [])
+        XCTAssertTrue(WorkflowChildProcessRegistry.processIDs(in: run).isEmpty)
+    }
+
     func testRunLeaseRejectsSecondOwnerWithoutClearingCancellationOrEvents() throws {
         let fixture = try bundleFixture()
         let run = fixture.root.appendingPathComponent("run")

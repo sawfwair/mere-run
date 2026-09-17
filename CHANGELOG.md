@@ -21,6 +21,16 @@ The format is based on Keep a Changelog.
   banner while the key stays in effect for the session), and pass it to the
   `status --json` probe through `MERERUN_API_KEY` instead of `--api-key` on the
   command line.
+- Read finished image and transcription run records in `run list` and `run inspect`
+  without creating lock files, so read-only archives list cleanly instead of
+  reporting every record as unreadable. Only an abandoned nonterminal record in
+  a writable directory is rewritten as interrupted.
+- Record each workflow child's process start time with its pid registration and
+  require the identity to match before `run cancel` signals a child or recovery
+  treats it as live. A reused pid is never signalled and no longer blocks
+  resume; stale entries are pruned under the run lease.
+- Reject a LoRA training run manifest whose `version` is unsupported before a
+  resume can read it.
 
 - Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
   selection. Preserve exact dequantized values across incremental appends.
