@@ -300,6 +300,38 @@ patch_mlx_cuda_jit_include_path() {
   echo "[prepare-linux-native] patched mlx-swift CUDA JIT include path in ${mlx_jit_module#$repo_root/}."
 }
 
+patch_mlx_cuda_subbyte_qmm_pointer_step() {
+  local mlx_qmm_naive="$1"
+  if [[ ! -f "$mlx_qmm_naive" ]]; then
+    return
+  fi
+  if grep -Fq "MERERUN_CUDA_SUBBYTE_QMM_POINTER_STEP" "$mlx_qmm_naive"; then
+    return
+  fi
+
+  local mlx_qmm_tmp
+  mlx_qmm_tmp="$(mktemp "${TMPDIR:-/tmp}/mererun-mlx-qmm.XXXXXX")"
+  if ! awk '
+    /gB\.data\(\) = recast_ptr<Quant>\(raw_pointer_cast\(gB\.data\(\)\) \+ gB\.layout\(\)\(0, k_residue, 0\) \* cuda::std::min\(8, sizeof_bits_v<Quant>\) \/ 8\);/ && !patched {
+      print "    // MERERUN_CUDA_SUBBYTE_QMM_POINTER_STEP: CUDA 12.8 NVRTC does not"
+      print "    // expose cuda::std::min through this generated kernel header set."
+      print "    gB.data() = recast_ptr<Quant>(raw_pointer_cast(gB.data()) +"
+      print "        gB.layout()(0, k_residue, 0) *"
+      print "        (sizeof_bits_v<Quant> < 8 ? sizeof_bits_v<Quant> : 8) / 8);"
+      patched=1
+      next
+    }
+    { print }
+    END { if (!patched) exit 42 }
+  ' "$mlx_qmm_naive" >"$mlx_qmm_tmp"; then
+    rm -f "$mlx_qmm_tmp"
+    echo "[prepare-linux-native] error: could not patch MLX CUDA sub-byte QMM pointer step in ${mlx_qmm_naive#$repo_root/}." >&2
+    exit 69
+  fi
+  mv "$mlx_qmm_tmp" "$mlx_qmm_naive"
+  echo "[prepare-linux-native] patched mlx-swift CUDA sub-byte QMM pointer step in ${mlx_qmm_naive#$repo_root/}."
+}
+
 patch_mlx_cuda_bf16_sigmoid() {
   local mlx_unary_ops="$1"
   if [[ ! -f "$mlx_unary_ops" ]]; then
@@ -656,6 +688,8 @@ patch_mlx_swift_for_linux() {
 
   if [[ "$linux_accel" == "cuda" ]]; then
     patch_mlx_cuda_jit_include_path "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
+    patch_mlx_cuda_subbyte_qmm_pointer_step \
+      "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/qmm_naive.cuh"
     patch_mlx_cuda_bf16_sigmoid "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/unary_ops.cuh"
     patch_mlx_cuda_bf16_power "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/binary_ops.cuh"
     echo "[prepare-linux-native] skipping mlx-swift SwiftPM package fix; CUDA builds use the CMake prebuilt bridge."
@@ -735,6 +769,12 @@ smoke_mlx_swift_cuda() {
   patch_mlx_cuda_jit_include_path "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/jit_module.cpp"
+  patch_mlx_cuda_subbyte_qmm_pointer_step \
+    "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/device/qmm_naive.cuh"
+  patch_mlx_cuda_subbyte_qmm_pointer_step \
+    "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/qmm_naive.cuh"
+  patch_mlx_cuda_subbyte_qmm_pointer_step \
+    "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/qmm_naive.cuh"
   patch_mlx_cpu_jit_f16c_probe "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cpu/jit_compiler.cpp"
   patch_mlx_cpu_jit_f16c_probe "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cpu/jit_compiler.cpp"
   patch_mlx_cpu_jit_f16c_probe "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cpu/jit_compiler.cpp"
@@ -848,6 +888,10 @@ smoke_mlx_swift_cuda() {
   cmake -S "$mlx_cmake_src" -B "$mlx_cmake_build" -G Ninja "${mlx_cmake_args[@]}"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/jit_module.cpp"
+  patch_mlx_cuda_subbyte_qmm_pointer_step \
+    "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/qmm_naive.cuh"
+  patch_mlx_cuda_subbyte_qmm_pointer_step \
+    "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/qmm_naive.cuh"
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/unary_ops.cuh"
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/unary_ops.cuh"
   patch_mlx_cuda_bf16_power "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/binary_ops.cuh"
