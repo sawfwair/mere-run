@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.52.2 - 2026-09-17
+
 - Evaluate the first FLUX.2 Klein denoising step one transformer stage at a
   time on Linux GPU hosts and report stages slower than one second on stderr,
   so a cold CUDA kernel compile shows where it spends its time instead of
