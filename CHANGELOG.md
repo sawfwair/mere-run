@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.52.1 - 2026-09-16
+
+- Compile MLX affine quantized matrix-multiplication JIT kernels with CUDA 12.8
+  by avoiding an unavailable `cuda::std::min` lookup in the generated sub-byte
+  pointer offset. This restores packaged Linux CUDA image inference.
+
 ## 0.52.0 - 2026-09-16
 
 - Keep forked Gemma 4 quantized and TurboQuant KV caches isolated, so prefix
