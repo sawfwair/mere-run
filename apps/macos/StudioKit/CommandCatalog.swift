@@ -1411,7 +1411,9 @@ package struct CommandTemplate: Identifiable, Equatable {
             break
         }
 
-        if id == .textChat, let capability = id.capability {
+        // Commands with a reply budget (Chat, Code, the vision prompts) validate the form's argv
+        // against the contract, so a budget the runtime would reject never replaces a reply.
+        if let capability = id.capability, capability.options.contains(where: { $0.flag == "--max-tokens" }) {
             return StudioConsoleCommand.validationMessage(
                 for: capability, draft: StudioConsoleCommand.seed(template: self, draft: draft)
             )
