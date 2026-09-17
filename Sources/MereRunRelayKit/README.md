@@ -15,9 +15,16 @@ iOS, and Linux, and never owns platform paths or process spawning:
   sandbox container.
 - Errors are `RelayClientError`. The CLI maps them onto its argument-parsing
   error at the command boundary so messages and exit codes are unchanged.
-- Job submission stays in `MereRunCLI`, which owns bundle materialization and
-  the local run-directory record; it reuses this module's `package`-visible
-  request layer. Extracting materialization is a follow-up, tracked in
+- Bundle materialization lives here. `WorkflowBundleMaterializer` in
+  `WorkflowBundleMaterialization.swift` builds the graph, inputs, asset
+  manifest, and job manifest, so `MereRunCLI`
+  (`Sources/MereRunCLI/Commands/GraphCommand.swift`) and the iOS Studio
+  (`apps/ios/MereRunStudio/App/RelayStore.swift`) produce byte-identical
+  bundles and submit through the same create/upload/commit path. Each caller
+  supplies a `WorkflowMaterializationEnvironment`: the CLI passes its managed
+  model catalog, per-command default models, and discovered plugin providers;
+  clients without a local runtime use `.portable` and pin models in the graph.
+  The CLI additionally owns the local run-directory record. See
   `docs/ios-studio.md`.
 
 Wire shapes here must stay in lockstep with the published schemas in

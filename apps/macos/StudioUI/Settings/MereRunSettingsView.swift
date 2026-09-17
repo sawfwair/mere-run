@@ -158,9 +158,15 @@ package struct MereRunSettingsView: View {
                     .padding(10)
                     .merePanel()
             }
-            Text("Where Models and Server send load/unload requests for the running runtime (`mere.run api serve`).")
+            Text("Where Models and Server send load/unload requests for the running runtime (`mere.run api serve`). The key is kept in your login Keychain.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
+            if let storageNotice = controller.runtimeAPIKeyStorageNotice {
+                Text(storageNotice)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

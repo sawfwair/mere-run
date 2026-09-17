@@ -757,6 +757,9 @@ swift run mere.run run list --root . --max-depth 5 --json
 swift run mere.run run list --root ./render.plan.json --json
 ```
 
+Listing and inspection read finished image and transcription records without
+creating lock files, so a read-only archive lists cleanly; only an abandoned
+nonterminal record in a writable directory is rewritten as interrupted.
 Each entry includes its kind, relative path, inspection status, run state where
 available, created/updated timestamps where known, command/format details,
 diagnostic counts, and declarative actions for `run inspect --json`. The

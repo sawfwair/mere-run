@@ -445,6 +445,13 @@ extension CommandArguments {
         args.value(draft.inputPath)
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
         if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if let maxEdge = draft.visionMaxEdge, maxEdge > 0 {
+            args.option(F.maxEdge, String(maxEdge))
+        }
+        if draft.visionNative == true { args.flag(F.native) }
+        if let checkpoint = draft.visionCheckpoint, !checkpoint.isBlank {
+            args.option(F.checkpoint, checkpoint)
+        }
         if draft.dryRun { args.flag(F.dryRun) }
         if draft.json { args.flag(F.json) }
         return args.arguments

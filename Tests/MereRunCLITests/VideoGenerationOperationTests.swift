@@ -236,7 +236,30 @@ final class VideoGenerationOperationTests: XCTestCase {
         XCTAssertNil(CLIVideoGenerationPresentation(quiet: true, progressJSON: false).eventHandler)
     }
 
-    private enum FixtureError: Error { case unexpected }
+    func testRuntimePreparationFailsBeforeModelResolutionAndPromptEnhancement() async throws {
+        let output = URL(fileURLWithPath: "/tmp/video-runtime-\(UUID().uuidString)/out.mp4")
+        let settings = try VideoGenerate.parse(["harbor", "--model-root", "/missing-video-model", "--enhance-prompt"])
+            .makeGenerationOptions(outputURL: output)
+        let observe: VideoGenerationOperation.EventHandler = { event in
+            if case .diagnostic(let message) = event, message.contains("Enhancing prompt") {
+                XCTFail("An unavailable runtime must block prompt enhancement")
+            }
+        }
+        do {
+            _ = try await VideoGenerationOperation.execute(
+                settings, allowAutoDownload: false,
+                prepareRuntime: { throw FixtureError.runtimeUnavailable },
+                eventHandler: observe,
+                executor: { _, _ in XCTFail("An unavailable runtime must block execution"); throw FixtureError.unexpected }
+            )
+            XCTFail("Expected the runtime failure")
+        } catch FixtureError.runtimeUnavailable {
+            // Model resolution and prompt enhancement never ran.
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.deletingLastPathComponent().path))
+    }
+
+    private enum FixtureError: Error { case unexpected, runtimeUnavailable }
 
     private func apiPlan(root: URL, numFrames: Int = 9, seed: Int = 42) throws -> APIServerContract.VideoGenerationPlan {
         try APIServerContract.videoGenerationPlan(from: OpenAIVideoGenerationRequest(

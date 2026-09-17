@@ -43,12 +43,21 @@ struct RunReceipt: Codable, Equatable {
     static let flagHelp = ArgumentHelp(flagHelpText)
     static let preflightConflictMessage =
         "--receipt cannot be combined with --preflight; preflight prints a report without producing a result."
+    static let dryRunConflictMessage =
+        "--receipt cannot be combined with --dry-run; a dry run prints a plan without producing a result."
 
     /// Rejects `--receipt --preflight`, which would otherwise exit 0 without
     /// ever printing a receipt.
     static func validate(receipt: Bool, preflight: Bool) throws {
         if receipt && preflight {
             throw ValidationError(preflightConflictMessage)
+        }
+    }
+
+    /// The same rule for commands whose no-result mode is `--dry-run`.
+    static func validate(receipt: Bool, dryRun: Bool) throws {
+        if receipt && dryRun {
+            throw ValidationError(dryRunConflictMessage)
         }
     }
 
@@ -127,6 +136,15 @@ extension RunReceipt {
             outputs.append(Output(url: masks, kind: .directory, role: "masks"))
         }
         return outputs
+    }
+
+    /// `vision depth`: the depth EXR, then the preview PNG and the manifest JSON.
+    static func depthOutputs(depth: URL, preview: URL, manifest: URL) -> [Output] {
+        [
+            Output(url: depth, kind: .image),
+            Output(url: preview, kind: .image, role: "preview"),
+            Output(url: manifest, kind: .json, role: "manifest"),
+        ]
     }
 
     /// `vision track`: annotated video, optional tracking JSON, optional mask directory.

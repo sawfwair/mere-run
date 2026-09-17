@@ -444,7 +444,18 @@ CLI launch into a `JobRequest` for every lane, awaits utility and probe jobs on
 behalf of their callers (readiness results are evaluated against the request
 current at completion), mirrors the foreground inference job into the published
 compatibility fields some management views still read, and owns
-the template selection the console opens on and the persisted settings.
+the template selection the console opens on and the persisted settings. Those
+settings are `UserDefaults` keys (`mererun.app.cliPath`, `modelsRoot`,
+`hubCache`, `workingDirectory`, `runtimeHost`, `runtimePort`) except the
+Settings ▸ Server API key, which `StudioSecretStore` keeps as a generic
+password in the login Keychain (service `run.mere.app`, account
+`runtimeAPIKey`; `KeychainSecretStore` is the one Keychain owner in StudioKit).
+A key an earlier version saved under `mererun.app.runtimeAPIKey` is moved into
+the Keychain at launch and the defaults key is removed only after that write
+succeeds; if the Keychain refuses, the key still applies for the session, the
+defaults value stays for the next launch to retry, and a banner says so
+(`runtimeAPIKeyStorageNotice`). A save the Keychain refuses is never written to
+`UserDefaults` instead.
 
 ## Domains
 
@@ -625,10 +636,12 @@ install commands, confirms install or update, runs the plugin's fixed doctor
 verb, and rolls back to a retained signed bundle behind a confirmation. Plugin
 implementations stay out of process.
 
-Hugging Face tokens, API keys, and the Open WebUI admin password cross the
+Hugging Face tokens, API keys (including the Settings ▸ Server key the
+`status --json` probe sends), and the Open WebUI admin password cross the
 process boundary through environment variables (`MERERUN_API_KEY` and its
 siblings) instead of appearing in argv, in both the typed surfaces and the
-console.
+console; the command preview and Library rows show argv only, so the value
+never appears there either.
 
 ## Product boundaries
 
@@ -711,12 +724,23 @@ content out and hides those effects (the sidebar draws as a plain view), and the
 window keeps an opaque title bar because a transparent one blanks every
 offscreen `ScrollView`.
 
-The harness renders reliably but is not yet run-to-run reproducible: six boards
-— the composer, Realtime, Activity, Models, Plugins, and Subjects — draw elapsed
-time and relative dates, so re-rendering the same commit changes about twenty of
-the sixty-seven shots. Treat it as a tool for looking at a surface, not as a
-comparison gate; it cannot tell a real regression from the clock until those
-strings are frozen.
+Displayed time is frozen. Around each render `StudioSnapshotRenderer.render`
+sets `StudioDisplayClock.fixedDate` to its reference date and injects the same
+instant as the `studioReferenceDate` environment value, and the snapshot
+fixtures date their jobs, threads, library rows, and usage records relative to
+that reference. The elapsed counters on running rows read
+`referenceDate ?? context.date` inside their `TimelineView`, so the boards that
+show elapsed time or a relative date render the same strings on every run
+instead of following the wall clock, and generated file names use the same
+instant.
+
+What is not frozen is how long the harness waits. `render` pumps the main run
+loop for a fixed wall-clock budget (`settle`, 1.5 seconds by default, plus a
+0.3-second pass after the offscreen preparation) to let layout, `.task` work,
+and in-flight animations land, so a loaded machine can still capture a board
+mid-settle. Together with the offscreen substitutions above — lifted glass
+content, hidden scroll-edge effects, an opaque title bar — that makes the shots
+comparable by eye across runs, not a byte-for-byte pixel gate.
 
 ## Packaging, updates, and support
 

@@ -401,7 +401,8 @@ extension MereRunCapabilityCatalog {
                 ]
             ),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
-            .init(flag: "--json", label: "Print JSON", kind: .boolean)
+            .init(flag: "--json", label: "Print JSON", kind: .boolean),
+            receiptOption
         ],
         output: .init(kind: .directory, flag: "--output")
     )

@@ -6,12 +6,20 @@ package final class StudioLibraryStore: ObservableObject {
     @Published package private(set) var items: [StudioLibraryItem] = []
     /// Last persistence failure, surfaced non-blockingly so silent history loss is detectable.
     @Published package private(set) var lastPersistenceError: String?
+    /// Rows in the library file this build cannot read: written by a different version, or
+    /// holding a field of an unexpected type. They ride through every save untouched and are
+    /// counted here so the UI can say history exists that is not shown.
+    @Published package private(set) var preservedRowCount = 0
 
     package let libraryURL: URL
     private let fileManager: FileManager
     private weak var observedController: MereRunController?
     private var subscriptions = Set<AnyCancellable>()
     private var completedRequests = Set<UUID>()
+    private var preservedRows: [StudioLibraryJSON] = []
+    /// The file is copied aside once per launch before the first rewrite that carries
+    /// preserved rows, so an untouched original always exists.
+    private var hasQuarantinedOriginal = false
     /// How a deleted row's files reach the Trash. Injected so tests can delete without a Trash.
     private let trashItem: (URL) throws -> Void
 
@@ -24,6 +32,18 @@ package final class StudioLibraryStore: ObservableObject {
         self.fileManager = fileManager
         self.trashItem = trashItem
         load()
+    }
+
+    /// What the UI shows when the file holds rows this build cannot read.
+    package var preservationNotice: String? {
+        switch preservedRowCount {
+        case 0:
+            return nil
+        case 1:
+            return "1 history entry can't be read by this version of mere.run. It's kept in the file but not shown."
+        default:
+            return "\(preservedRowCount) history entries can't be read by this version of mere.run. They're kept in the file but not shown."
+        }
     }
 
     package static func defaultLibraryURL() -> URL {
@@ -86,15 +106,26 @@ package final class StudioLibraryStore: ObservableObject {
         do {
             guard fileManager.fileExists(atPath: libraryURL.path) else {
                 items = []
+                setPreservedRows([])
                 return
             }
 
             let data = try Data(contentsOf: libraryURL)
-            // Decode leniently per row: one un-decodable entry (e.g. written by a newer/older
-            // build) must not discard the entire history. Only a top-level parse failure (not an
-            // array at all) falls through to corrupt-file recovery.
-            let rows = try JSONDecoder.mereRunApp.decode([FailableDecodable<StudioLibraryItem>].self, from: data)
-            items = rows.compactMap(\.value).sorted { $0.createdAt > $1.createdAt }
+            // Decode per row: an entry this build cannot read (written by a newer or older build)
+            // is kept as JSON rather than discarded, and never discards the rest of the history.
+            // Only a top-level parse failure (not an array at all) falls through to corrupt-file
+            // recovery.
+            let rows = try JSONDecoder.mereRunApp.decode([StudioLibraryRow].self, from: data)
+            var loaded: [StudioLibraryItem] = []
+            var preserved: [StudioLibraryJSON] = []
+            for row in rows {
+                switch row {
+                case .item(let item): loaded.append(item)
+                case .preserved(let json): preserved.append(json)
+                }
+            }
+            items = loaded.sorted { $0.createdAt > $1.createdAt }
+            setPreservedRows(preserved)
             var reconciled = false
             for index in items.indices where items[index].status == .running || items[index].status == .queued {
                 let item = items[index]
@@ -109,8 +140,14 @@ package final class StudioLibraryStore: ObservableObject {
             if reconciled { save() }
         } catch {
             items = []
+            setPreservedRows([])
             recoverCorruptLibrary()
         }
+    }
+
+    private func setPreservedRows(_ rows: [StudioLibraryJSON]) {
+        preservedRows = rows
+        preservedRowCount = rows.count
     }
 
     @discardableResult
@@ -473,7 +510,12 @@ package final class StudioLibraryStore: ObservableObject {
                 at: libraryURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            let data = try JSONEncoder.mereRunApp.encode(items)
+            if !preservedRows.isEmpty, !hasQuarantinedOriginal {
+                try quarantineOriginal()
+                hasQuarantinedOriginal = true
+            }
+            let rows = items.map(StudioLibraryRow.item) + preservedRows.map(StudioLibraryRow.preserved)
+            let data = try JSONEncoder.mereRunApp.encode(rows)
             try data.write(to: libraryURL, options: [.atomic])
             lastPersistenceError = nil
         } catch {
@@ -483,24 +525,25 @@ package final class StudioLibraryStore: ObservableObject {
         }
     }
 
+    /// Copies the file as this launch found it next to the library, named like a corrupt-file
+    /// recovery, before the first rewrite that carries rows this build cannot read. A launch in
+    /// the same second as the last backup finds the copy already there and keeps it.
+    private func quarantineOriginal() throws {
+        let backupURL = Self.siblingURL(of: libraryURL, tag: "preserved")
+        guard !fileManager.fileExists(atPath: backupURL.path) else { return }
+        try fileManager.copyItem(at: libraryURL, to: backupURL)
+    }
+
     private func recoverCorruptLibrary() {
         guard fileManager.fileExists(atPath: libraryURL.path) else { return }
-        let recoveryURL = libraryURL
-            .deletingPathExtension()
-            .appendingPathExtension("corrupt-\(DateFormatter.mereRunTimestamp.string(from: Date()))")
-            .appendingPathExtension("json")
-        try? fileManager.moveItem(at: libraryURL, to: recoveryURL)
+        try? fileManager.moveItem(at: libraryURL, to: Self.siblingURL(of: libraryURL, tag: "corrupt"))
     }
-}
 
-/// Decodes `T` if possible, otherwise resolves to nil instead of throwing — lets an array decode
-/// skip individual bad elements without losing the rest.
-private struct FailableDecodable<T: Decodable>: Decodable {
-    let value: T?
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        value = try? container.decode(T.self)
+    private static func siblingURL(of libraryURL: URL, tag: String) -> URL {
+        libraryURL
+            .deletingPathExtension()
+            .appendingPathExtension("\(tag)-\(DateFormatter.mereRunTimestamp.string(from: Date()))")
+            .appendingPathExtension("json")
     }
 }
 

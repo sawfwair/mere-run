@@ -6,6 +6,60 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Keep forked Gemma 4 quantized and TurboQuant KV caches isolated, so prefix
+  caching with quantized KV no longer lets one request's tokens overwrite
+  another request's saved prompt.
+- Keep Studio history entries written by a different version of mere.run instead
+  of dropping them on the next save. Rows the running build cannot read stay in
+  `library.json` untouched, a copy of the original file is written beside it
+  before the first rewrite, and the Library reports how many entries are kept
+  but not shown. Drafts saved before a field existed load with the current
+  default for that field.
+- Store the macOS Studio runtime API key in the login Keychain instead of
+  `UserDefaults`, migrate an existing value on launch (removing it from defaults
+  only after the Keychain accepts it, and reporting a refused write with a
+  banner while the key stays in effect for the session), and pass it to the
+  `status --json` probe through `MERERUN_API_KEY` instead of `--api-key` on the
+  command line.
+- Read finished image and transcription run records in `run list` and `run inspect`
+  without creating lock files, so read-only archives list cleanly instead of
+  reporting every record as unreadable. Only an abandoned nonterminal record in
+  a writable directory is rewritten as interrupted.
+- Record each workflow child's process start time with its pid registration and
+  require the identity to match before `run cancel` signals a child or recovery
+  treats it as live. A reused pid is never signalled and no longer blocks
+  resume; stale entries are pruned under the run lease.
+- Reject a LoRA training run manifest whose `version` is unsupported before a
+  resume can read it.
+- Validate Studio Code reply budgets like Chat before regenerating, and apply the
+  model and readiness checks that guard sending to regeneration as well. A rejected
+  regenerate keeps the previous reply and unsent draft.
+- Replay `--ltx-teacache`, `--ltx-teacache-threshold`,
+  `--ltx-teacache-calibration-output`, `--ltx-guidance-projection-cache`,
+  `--guidance-scale`, and `--shift` in the `video generate --preflight`
+  start-video-generation action and echo them in the preflight request, so the
+  suggested command reruns the generation that was preflighted.
+- Reject `--model-root`, `--audio`, `--timings-output`,
+  `--ltx-teacache-calibration-output`, and `--variant` in the video generation
+  API `options` array.
+- Default the chat API token budget to the smaller of 2,048 and
+  `--context-size` when the request omits `max_tokens`, matching the CLI.
+  Explicit values above the context are still rejected.
+- Validate the MLX runtime before video generation resolves or downloads a
+  model and before prompt enhancement runs.
+- Remove every partially written view when a multi-view geometry or
+  InstantMesh upload fails midway.
+- Run `vision depth` through the shared single-image depth operation in Core: the
+  command parses into one request, `--dry-run` reports the observational plan, and
+  execution rechecks the input, snapshots it, and awaits unloading on success and
+  failure. Add `--receipt`, which names the depth EXR, preview PNG, and manifest and
+  is rejected with `--dry-run`. Admit every depth run as a large job from the managed
+  catalog's declared 64 GB minimum rather than a command list, and declare the model
+  CLI-only on its catalog entry instead of excluding it by name from API discovery.
+  Studio's Image depth task now exposes the checkpoint, maximum edge, and native
+  resolution options the contract declares, and the app's contract guard checks that
+  every declared option is emittable.
+
 - Correct Gemma 4 affine KV-cache reads on Metal after cache growth or token-range
   selection. Preserve exact dequantized values across incremental appends.
 
@@ -277,6 +331,16 @@ The format is based on Keep a Changelog.
   disk headroom, and critical memory pressure as structured blockers alongside
   other request diagnostics. They no longer reserve inference permits or exit
   through the execution admission gate before producing their report.
+
+- Publish the runtime libraries extracted from `MereRunCore`, `MereRunCLI`, and the
+  audio targets as importable SwiftPM products: `MereRunModelKit`,
+  `MereRunExecution`, `MereRunAdmission`, `MereRunResidency`, `MereRunTensor`,
+  `MereRunDecode`, `MereRunKVCache`, `MereRunTextEncoder`, `MereRunGemmaModel`,
+  `MereRunQwenModel`, `MereRunLagunaModel`, `MereRunLTXModel`, `MereRunH3Model`,
+  `MereRunImageModels`, `MereRunAudioModels`, `AudioParakeetModel`,
+  `AudioQwen3ASRModel`, `AudioQwen3TTSModel`, and `AudioSortformer`. Existing
+  imports of `MereRunCore`, `MereRunCLI`, `AudioSTT`, and `AudioTTS` keep
+  resolving these types through published re-exports.
 
 ## 0.51.1 - 2026-09-05
 

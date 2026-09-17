@@ -1,3 +1,4 @@
+import AudioCore
 import Foundation
 import Hummingbird
 import NIOCore
@@ -132,36 +133,81 @@ final class APIRequestRecoveryTests: XCTestCase {
         }
     }
 
+    /// Mirrors the speech synthesis route: the body is collected, admission is
+    /// held, and the operation is awaited inline with no streaming body. The
+    /// router's cancellation middleware must reach the executor on disconnect.
+    func testDisconnectCancelsSpeechSynthesisAndReleasesAdmission() async throws {
+        let admission = RuntimeRequestAdmission(maxActiveRequests: 1)
+        let executor = APIRecoverySpeechExecutor()
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-recovery-speech-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("speech.wav")
+        defer { try? FileManager.default.removeItem(at: output.deletingLastPathComponent()) }
+        let plan = try SpeechSynthesisPlan(request: TTSRequest(text: "hold", outputURL: output))
+        try await withServer(configure: { router in
+            router.post("/speech") { request, _ in
+                _ = try await request.body.collect(upTo: 1_024)
+                return try await withRuntimeRequestAdmission(using: admission) {
+                    _ = try await SpeechSynthesisOperation.execute(plan, executor: executor)
+                    return "ok"
+                }
+            }
+        }) { port in
+            let client = try APIRecoverySocket(port: port)
+            try client.send("hold", path: "/speech")
+            let started = await waitUntil { executor.started }
+            XCTAssertTrue(started)
+            client.close()
+            let cancelled = await waitUntil { executor.cancelled }
+            XCTAssertTrue(cancelled, "The client disconnect did not reach the speech executor")
+            let released = await waitUntil { await admission.snapshot().activeRequests == 0 }
+            XCTAssertTrue(released, "The disconnected speech request still owns admission")
+            let snapshot = await admission.snapshot()
+            XCTAssertEqual(snapshot.totalCancelledRequests, 1)
+            XCTAssertEqual(snapshot.totalCompletedRequests, 0)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        }
+    }
+
     private func withServer(
         admission: RuntimeRequestAdmission,
         probe: APIRecoveryProbe,
         operation: (Int) async throws -> Void
     ) async throws {
-        let router = Router(context: APIServerRequestContext.self)
-        router.middlewares.add(APIRequestCancellationMiddleware())
-        router.post("/work") { request, _ in
-            let data = try await request.body.collect(upTo: 1_024)
-            let name = String(buffer: data)
-            return try await withRuntimeRequestAdmission(using: admission) {
-                probe.begin(name)
-                defer { probe.clean(name) }
-                do {
-                    if name == "hold" || name == "queued" || name == "hold-cleanup" {
-                        try await Task.sleep(for: .seconds(30))
+        try await withServer(configure: { router in
+            router.post("/work") { request, _ in
+                let data = try await request.body.collect(upTo: 1_024)
+                let name = String(buffer: data)
+                return try await withRuntimeRequestAdmission(using: admission) {
+                    probe.begin(name)
+                    defer { probe.clean(name) }
+                    do {
+                        if name == "hold" || name == "queued" || name == "hold-cleanup" {
+                            try await Task.sleep(for: .seconds(30))
+                        }
+                        if name == "fail" { throw HTTPError(.internalServerError) }
+                        return "ok:\(name)"
+                    } catch {
+                        if error is CancellationError { probe.cancel(name) }
+                        if name == "hold-cleanup" {
+                            await Task.detached {
+                                while !probe.cleanupReleased { try? await Task.sleep(for: .milliseconds(10)) }
+                            }.value
+                        }
+                        throw error
                     }
-                    if name == "fail" { throw HTTPError(.internalServerError) }
-                    return "ok:\(name)"
-                } catch {
-                    if error is CancellationError { probe.cancel(name) }
-                    if name == "hold-cleanup" {
-                        await Task.detached {
-                            while !probe.cleanupReleased { try? await Task.sleep(for: .milliseconds(10)) }
-                        }.value
-                    }
-                    throw error
                 }
             }
-        }
+        }, operation: operation)
+    }
+
+    private func withServer(
+        configure: (Router<APIServerRequestContext>) -> Void,
+        operation: (Int) async throws -> Void
+    ) async throws {
+        let router = Router(context: APIServerRequestContext.self)
+        router.middlewares.add(APIRequestCancellationMiddleware())
+        configure(router)
         let (ports, continuation) = AsyncStream<Int>.makeStream()
         let app = Application(
             router: router,
@@ -211,6 +257,28 @@ private final class APIRecoveryProbe: @unchecked Sendable {
     func clean(_ name: String) { _ = lock.withLock { cleanups.insert(name) } }
 }
 
+private final class APIRecoverySpeechExecutor: SpeechSynthesisExecutor, @unchecked Sendable {
+    private let lock = NSLock()
+    private var startedFlag = false
+    private var cancelledFlag = false
+    var started: Bool { lock.withLock { startedFlag } }
+    var cancelled: Bool { lock.withLock { cancelledFlag } }
+
+    func generate(
+        _ request: TTSRequest,
+        progressHandler: (@Sendable (TTSProgress) -> Void)?
+    ) async throws -> AudioWaveform {
+        lock.withLock { startedFlag = true }
+        do {
+            try await Task.sleep(for: .seconds(30))
+        } catch {
+            lock.withLock { cancelledFlag = true }
+            throw error
+        }
+        return try AudioWaveform(interleaved: [0], channels: 1, sampleRate: 24_000)
+    }
+}
+
 private final class APIRecoverySocket {
     private var descriptor: Int32
     private var buffered = Data()
@@ -241,8 +309,8 @@ private final class APIRecoverySocket {
 
     deinit { close() }
 
-    func send(_ name: String) throws {
-        let data = Data("POST /work HTTP/1.1\r\nHost: localhost\r\nContent-Length: \(name.utf8.count)\r\n\r\n\(name)".utf8)
+    func send(_ name: String, path: String = "/work") throws {
+        let data = Data("POST \(path) HTTP/1.1\r\nHost: localhost\r\nContent-Length: \(name.utf8.count)\r\n\r\n\(name)".utf8)
         let count = data.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
         guard count == data.count else { throw POSIXError(.EIO) }
     }

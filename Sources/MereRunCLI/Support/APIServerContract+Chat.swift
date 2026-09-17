@@ -29,6 +29,7 @@ extension APIServerContract {
         let maxTokens = try resolveMaxTokens(
             maxTokens: openaiRequest.max_tokens,
             maxCompletionTokens: openaiRequest.max_completion_tokens,
+            contextSize: contextSize,
             capabilities: capabilities
         )
         let tools = try toolDefinitions(from: openaiRequest, capabilities: capabilities)
@@ -548,6 +549,7 @@ extension APIServerContract {
     private static func resolveMaxTokens(
         maxTokens: Int?,
         maxCompletionTokens: Int?,
+        contextSize: Int,
         capabilities: APIEngineCapabilities
     ) throws -> Int {
         if maxCompletionTokens != nil, !capabilities.supportsMaxCompletionTokens {
@@ -562,7 +564,12 @@ extension APIServerContract {
                 "must match max_tokens when both are provided"
             )
         }
-        return maxCompletionTokens ?? maxTokens ?? defaultMaxTokens
+        // Match the CLI: clamp the default budget to a smaller server context
+        // instead of rejecting a field the client never sent. An explicit value
+        // above the context is still rejected by the resolver, and a non-positive
+        // context is left to the resolver so it reports that field.
+        let defaultBudget = contextSize > 0 ? min(defaultMaxTokens, contextSize) : defaultMaxTokens
+        return maxCompletionTokens ?? maxTokens ?? defaultBudget
     }
 
     private static func reasoningEffort(

@@ -257,7 +257,7 @@ final class StudioConsoleDraftTests: XCTestCase {
     @MainActor
     func testAConsoleRunLaunchesTheArgumentsItShows() throws {
         let runner = RecordingProcessRunner()
-        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         let template = try XCTUnwrap(CommandCatalog.template(id: .modelList))
         controller.select(template)
         let capability = try XCTUnwrap(template.id.capability)

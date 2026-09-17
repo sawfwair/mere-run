@@ -105,7 +105,9 @@ Recording is optional. It preserves normal transcript output and the existing
 `--receipt` format. An optional `--output` file must be outside the run directory.
 
 Records distinguish success, failure, cancellation, and process interruption.
-Inspection marks an abandoned nonterminal record as interrupted. Retry creates
+Inspection marks an abandoned nonterminal record as interrupted when its
+directory is writable, and reads finished records without creating lock files.
+Retry creates
 a new sibling directory with the original run ID recorded as its parent; it
 does not modify the original or resume a partially completed decoder.
 

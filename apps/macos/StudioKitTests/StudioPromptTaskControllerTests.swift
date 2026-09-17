@@ -16,7 +16,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
             root = FileManager.default.temporaryDirectory.appendingPathComponent("prompt-task-\(UUID())")
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             runner = RecordingProcessRunner()
-            controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false,
+            controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false,
                 taskSessions: StudioTaskSessions(url: root.appendingPathComponent("sessions.json")))
             library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
             library.observe(controller: controller)
@@ -79,7 +79,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
             XCTAssertEqual(prompt.draft, drafts[mode])
         }
         controller.taskSessions.flush()
-        let restoredHost = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false,
+        let restoredHost = MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false,
             taskSessions: StudioTaskSessions(url: root.appendingPathComponent("sessions.json")))
         defer { restoredHost.terminateAllProcesses() }
         let restored = StudioPromptTaskController(controller: restoredHost, library: library)
@@ -271,6 +271,66 @@ final class StudioPromptTaskControllerTests: XCTestCase {
             XCTAssertEqual(prompt.activeConversationID, id)
             XCTAssertTrue(controller.jobs.all.isEmpty)
             XCTAssertTrue(runner.starts.isEmpty)
+        }
+    }
+
+    func testRejectedCodeRetryPreservesReplyDraftSelectionAndStoredTranscript() throws {
+        let id = thread(mode: .code, reply: "Keep this function")
+        activate(.code, selected: id)
+        prompt.draft.prompt = "Unsent follow-up"
+        let base = try StudioCommandAdapter.makeRequest(mode: .code, draft: prompt.draft)
+        XCTAssertEqual(base.templateID, .textCode)
+        let original = try XCTUnwrap(library.items.first { $0.id == id })
+        let stored = try Data(contentsOf: library.libraryURL)
+        let draft = prompt.draft
+        for value in ["invalid", "0", "-1", "2147483648"] {
+            override(base, flag: "--max-tokens", value: value)
+            XCTAssertThrowsError(try prompt.retryLastTurn(inventory: []), value)
+            XCTAssertEqual(library.items.first { $0.id == id }, original)
+            XCTAssertEqual(try Data(contentsOf: library.libraryURL), stored)
+            XCTAssertEqual(prompt.draft, draft)
+            XCTAssertEqual(prompt.activeConversationID, id)
+            XCTAssertTrue(controller.jobs.all.isEmpty)
+            XCTAssertTrue(runner.starts.isEmpty)
+        }
+    }
+
+    func testCodeRetryUsesTheSameCommandResolutionAsSendWithoutConsumingUnsentText() throws {
+        let id = thread(mode: .code, reply: "Replace this function")
+        activate(.code, selected: id)
+        prompt.draft.prompt = "Do not send this follow-up yet"
+        let base = try StudioCommandAdapter.makeRequest(mode: .code, draft: prompt.draft)
+        override(base, flag: "--max-tokens", value: "128")
+        let originalDraft = prompt.draft
+        let request = try XCTUnwrap(prompt.retryLastTurn(inventory: []))
+        XCTAssertEqual(request.templateID, .textCode)
+        XCTAssertEqual(request.draft.maxTokens, 128)
+        XCTAssertEqual(request.conversationID, id)
+        XCTAssertTrue(request.draft.prompt.contains("First question"))
+        XCTAssertFalse(request.draft.prompt.contains(originalDraft.prompt))
+        XCTAssertEqual(prompt.draft, originalDraft)
+        XCTAssertEqual(library.items.first?.messages?.count, 1)
+        XCTAssertEqual(runner.starts.count, 1)
+    }
+
+    func testRetryBlockedByReadinessPreservesReplyAndDraftLikeSend() throws {
+        for mode in [StudioMode.chat, .code] {
+            let id = thread(mode: mode, reply: "Keep this answer")
+            activate(mode, selected: id)
+            prompt.draft.prompt = "Unsent follow-up"
+            let original = try XCTUnwrap(library.items.first { $0.id == id })
+            let draft = prompt.draft
+            for state in [ModelReadinessState.missingModel("Install the model first."),
+                          .unsupported("This model cannot run here."), .checking] {
+                controller.readinessByMode[mode] = state
+                XCTAssertThrowsError(try prompt.retryLastTurn(inventory: []), "\(mode) \(state)") { error in
+                    XCTAssertEqual(error.localizedDescription, state.message)
+                }
+                XCTAssertEqual(library.items.first { $0.id == id }, original)
+                XCTAssertEqual(prompt.draft, draft)
+                XCTAssertEqual(prompt.activeConversationID, id)
+                XCTAssertTrue(runner.starts.isEmpty)
+            }
         }
     }
 

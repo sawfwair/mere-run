@@ -253,7 +253,10 @@ extension ManagedModelCatalog {
             validationKind: .marigoldV2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: MarigoldV2Repository.estimatedDownloadBytes,
-            defaultCLICommands: ["vision depth"]
+            defaultCLICommands: ["vision depth"],
+            // The depth API serves video depth; the still-image runtime has no API
+            // adapter and must not advertise the category's video profile.
+            apiAvailability: .cliOnly
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.image3DTripoSR.rawValue,

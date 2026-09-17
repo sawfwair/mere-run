@@ -153,7 +153,11 @@ public struct LoRATrainingRunManifest: Codable, Sendable, Hashable {
                 debugDescription: "Unsupported run manifest date format: \(value)"
             )
         }
-        return try decoder.decode(LoRATrainingRunManifest.self, from: data)
+        let manifest = try decoder.decode(LoRATrainingRunManifest.self, from: data)
+        guard manifest.version == schemaVersion else {
+            throw LoRAError.unsupportedRunManifestVersion(manifest.version)
+        }
+        return manifest
     }
 
     public static func relativePath(

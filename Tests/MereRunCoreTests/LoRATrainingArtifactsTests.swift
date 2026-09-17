@@ -51,6 +51,32 @@ final class LoRATrainingArtifactsTests: MereRunCoreTestCase {
         XCTAssertEqual(loaded?.manifestFile, "artifact.manifest.json")
     }
 
+    func testRunManifestRejectsUnsupportedVersionBeforeResume() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let checkpointURL = directory.appendingPathComponent("adapter.safetensors")
+        let manifest = LoRATrainingRunManifest(
+            format: "mererun.zimage.lora", model: "z-image-turbo", isEdit: false, dataRoot: nil, dataRootRelative: nil,
+            dataFingerprint: nil, checkpointFiles: ["lora_adapter": checkpointURL.lastPathComponent], step: 8, totalSteps: 100,
+            seed: 123, rngState: nil, datasetFingerprint: nil, configFingerprint: nil, configSnapshot: nil
+        )
+        try manifest.write(nextTo: checkpointURL)
+        XCTAssertEqual(try LoRATrainingRunManifest.load(nextTo: checkpointURL)?.version, 1)
+        let manifestURL = LoRATrainingRunManifest.url(nextTo: checkpointURL)
+        let original = try String(contentsOf: manifestURL, encoding: .utf8)
+        let future = original.replacingOccurrences(of: "\"version\" : 1", with: "\"version\" : 2")
+        XCTAssertNotEqual(future, original)
+        try Data(future.utf8).write(to: manifestURL)
+        XCTAssertThrowsError(try LoRATrainingRunManifest.load(nextTo: checkpointURL)) { error in
+            guard case .unsupportedRunManifestVersion(2)? = error as? LoRAError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(error.localizedDescription, "Unsupported LoRA training run manifest version: 2.")
+        }
+        XCTAssertEqual(try String(contentsOf: manifestURL, encoding: .utf8), future)
+    }
+
     func testCheckpointStateCursorComputation() {
         let schedule: [LoRATrainingCheckpointState.Phase] = [
             .init(width: 1024, height: 1024, steps: 5, sampleCount: 10),

@@ -58,17 +58,22 @@ public enum VideoGenerationOperation {
         executor: Executor = generate
     ) async throws -> VideoGenerationOutcome {
         try Task.checkCancellation()
-        let request = try await prepare(options, allowAutoDownload: allowAutoDownload, eventHandler: eventHandler)
+        let request = try await prepare(
+            options, allowAutoDownload: allowAutoDownload, prepareRuntime: prepareRuntime, eventHandler: eventHandler
+        )
         try Task.checkCancellation()
-        try prepareRuntime()
         let outcome = try await executor(request, eventHandler)
         try Task.checkCancellation()
         return outcome
     }
 
+    /// `prepareRuntime` runs after static settings and input files are validated
+    /// and before model resolution can download or prompt enhancement runs Gemma
+    /// on MLX, so an unusable runtime fails before any expensive work.
     public static func prepare(
         _ options: VideoGenerationOptions,
         allowAutoDownload: Bool = true,
+        prepareRuntime: @Sendable () throws -> Void = {},
         eventHandler: EventHandler? = nil
     ) async throws -> VideoGenerationPreparedRequest {
         try Task.checkCancellation()
@@ -81,6 +86,8 @@ public enum VideoGenerationOperation {
         let sourceImage = try inputURL(options.image, name: "Image")
         let endImage = try inputURL(options.endImage, name: "End image")
         let sourceAudio = try inputURL(options.audio, name: "Audio")
+        try prepareRuntime()
+        try Task.checkCancellation()
         let root = try await VideoGenerationModelResolver.resolve(
             explicitModelRoot: options.modelRoot,
             requestedModel: options.resolvedRequestedModel,

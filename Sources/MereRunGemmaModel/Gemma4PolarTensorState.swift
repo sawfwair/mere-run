@@ -99,6 +99,25 @@ final class Gemma4PolarTensorState {
         )
     }
 
+    func forked() -> Gemma4PolarTensorState {
+        // Indexed writes in `Gemma4KVTokenStorage.appended` rebind the MLXArray wrapper.
+        // Give each branch its own wrappers over the appended tensors while sharing
+        // immutable storage until the next write. The rotation and codebook arrays are
+        // never written, so they stay shared.
+        Gemma4PolarTensorState(
+            packed: packed.reshaped(packed.shape),
+            norms: norms.reshaped(norms.shape),
+            bits: bits,
+            dtype: dtype,
+            headDim: headDim,
+            rotation: rotation,
+            rotationTransposed: rotationTransposed,
+            centroids: centroids,
+            innerBoundaries: innerBoundaries,
+            tokenCount: tokenCount
+        )
+    }
+
     func dequantized() -> MLXArray {
         dequantized(tokenRange: 0..<tokenCount)
     }

@@ -515,16 +515,22 @@ For the complete policies, see the [security policy](./SECURITY.md) and the
 
 ## Repository and documentation
 
-The following paths contain the implementation, tests, and documentation:
+These are the main entry points into the implementation, tests, and
+documentation. `Sources/` holds about thirty library targets in all; the
+[repository tour](./docs/repository-tour.md) names every one of them and the
+[source layout reference](./docs/internals/source-layout.md) gives each a
+purpose.
 
 | Path | Responsibility |
 | --- | --- |
 | `Sources/MereRunCLI` | Public `mere.run` command tree and local API server |
-| `Sources/MereRunCore` | Model resolution, manifests, native inference, and training |
+| `Sources/MereRunCore` | Runtime orchestration over the runtime libraries, model resolution, manifests, and training |
+| `Sources/MereRunGemmaModel`, `Sources/MereRunQwenModel`, `Sources/MereRunLTXModel`, and the other `*Model` targets | Per-family model computation, over the shared `MereRunTensor`, `MereRunDecode`, and `MereRunKVCache` |
+| `Sources/MereRunModelKit`, `Sources/MereRunExecution`, `Sources/MereRunAdmission`, `Sources/MereRunResidency` | Model identity and storage metadata, durable run records, inference admission, and runtime residency |
 | `Sources/AudioCore`, `Sources/AudioCodecs`, `Sources/AudioSTT`, `Sources/AudioTTS`, `Sources/MediaIO` | Audio and media primitives, codecs, speech runtimes, and media input and output |
 | `Sources/MereRunContract` | Typed command capability contract shared by the CLI and Studio |
 | `Sources/MereRunEvaluation` | External evaluation-pack schemas, hashing, and validation |
-| `Sources/MereRunRelayKit` | Portable relay client, executor profiles, and workflow contracts |
+| `Sources/MereRunRelayKit` | Portable relay client, executor profiles, workflow contracts, and bundle materialization |
 | `apps/macos`, `apps/ios` | Open-source Apple apps and tests |
 | `Tests`, `scripts` | Tests, quality checks, and packaging tools |
 | `docs` | VitePress documentation and runtime guides |

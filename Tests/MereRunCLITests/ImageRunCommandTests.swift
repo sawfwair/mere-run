@@ -85,6 +85,29 @@ final class ImageRunCommandTests: XCTestCase {
         XCTAssertEqual(list.result.entries.first?.status, .blocked)
     }
 
+    func testListingAndInspectingReadOnlyArchivesCreatesNoLockFiles() throws {
+        let root = try temporaryDirectory()
+        let directory = root.appendingPathComponent("archived")
+        let options = ImageGenerationOptions(prompt: "A camera", outputURL: root.appendingPathComponent("output.png"))
+        var session: ImageRunSession? = try ImageRunSession(directory: directory, requested: options, modelSelector: "fixture")
+        try XCTUnwrap(session).fail(ImageGenerationIssue("fixture_failure", "Fixture failed"))
+        session = nil
+        let lock = directory.appendingPathComponent(".image-run.lock")
+        try FileManager.default.removeItem(at: lock)
+        for path in [directory.path, root.path] {
+            try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: path)
+            addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: path) }
+        }
+        let inspection = try RunInspect.parse([directory.path, "--json"]).makeInspectionEnvelope()
+        XCTAssertEqual(inspection.status, .ok)
+        XCTAssertEqual(inspection.result.imageRun?.state, .failed)
+        let list = try RunList.parse(["--root", root.path, "--json"]).makeListEnvelope()
+        XCTAssertEqual(list.result.entryCount, 1)
+        XCTAssertEqual(list.result.entries.first?.status, .ok)
+        XCTAssertEqual(list.result.entries.first?.state, "failed")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lock.path))
+    }
+
     func testRetryUsesImageAdmissionClassForInstalledModelProfiles() {
         for id in ["image-zimage-nano", "image-klein-nano", "image-flux2-dev", "image-krea2"] {
             XCTAssertEqual(CLIInferenceAdmissionClassifier.imageGenerationRequest(modelID: id).resourceClass,

@@ -66,6 +66,7 @@ extension StudioPromptTaskController {
         runDraft.secondaryText = item.systemPrompt ?? ""
         runDraft.inputPath = messages.last?.imagePath ?? ""
         if let model = item.model, !model.isBlank { runDraft.model = model }
+        try ensureRunnable(mode: item.mode, draft: runDraft)
         let request = try conversationRequest(mode: item.mode, draft: runDraft, conversationID: conversationID,
             messages: messages, systemPrompt: item.systemPrompt, inventory: inventory)
         library.dropLastAssistant(conversationID: conversationID)

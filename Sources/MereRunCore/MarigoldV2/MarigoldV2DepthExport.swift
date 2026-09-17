@@ -61,12 +61,18 @@ public struct MarigoldV2DepthManifest: Codable, Equatable, Sendable {
     }
 }
 
+/// The three files one run writes, so callers report them without re-deriving paths
+/// from the manifest's relative entries.
 public struct MarigoldV2DepthExportResult: Equatable, Sendable {
     public let manifest: MarigoldV2DepthManifest
+    public let depthURL: URL
+    public let previewURL: URL
     public let manifestURL: URL
 
-    public init(manifest: MarigoldV2DepthManifest, manifestURL: URL) {
+    public init(manifest: MarigoldV2DepthManifest, depthURL: URL, previewURL: URL, manifestURL: URL) {
         self.manifest = manifest
+        self.depthURL = depthURL
+        self.previewURL = previewURL
         self.manifestURL = manifestURL
     }
 }
@@ -174,7 +180,9 @@ public enum MarigoldV2DepthArtifactExporter {
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(manifest).write(to: manifestURL, options: .atomic)
 
-        return MarigoldV2DepthExportResult(manifest: manifest, manifestURL: manifestURL)
+        return MarigoldV2DepthExportResult(
+            manifest: manifest, depthURL: depthURL, previewURL: previewURL, manifestURL: manifestURL
+        )
     }
 
     static func sanitize(_ stem: String) -> String {

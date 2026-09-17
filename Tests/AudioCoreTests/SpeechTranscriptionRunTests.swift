@@ -179,6 +179,44 @@ final class SpeechTranscriptionRunTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: recordURL), Data("broken".utf8))
     }
 
+    func testInspectionNeverLocksTerminalRecordsAndReadsReadOnlyDirectoriesAsWritten() throws {
+        let fixture = try fixture()
+        var session: SpeechTranscriptionRunSession? = try session(fixture)
+        let finished = try XCTUnwrap(session?.directory)
+        try XCTUnwrap(session).fail(SpeechTranscriptionIssue("fixture", "failure"))
+        session = nil
+        let lock = finished.appendingPathComponent(SpeechTranscriptionRunRecord.lockFilename)
+        try FileManager.default.removeItem(at: lock)
+        let terminal = try Data(contentsOf: SpeechTranscriptionRunRecord.recordURL(at: finished))
+        XCTAssertEqual(try SpeechTranscriptionRunRecord.inspect(at: finished).state, .failed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lock.path))
+        try makeReadOnly(finished)
+        XCTAssertEqual(try SpeechTranscriptionRunRecord.inspect(at: finished).state, .failed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lock.path))
+        XCTAssertEqual(try Data(contentsOf: SpeechTranscriptionRunRecord.recordURL(at: finished)), terminal)
+
+        let abandoned = fixture.root.appendingPathComponent("abandoned")
+        session = try SpeechTranscriptionRunSession(
+            directory: abandoned, requested: .init(request: fixture.plan.request, preferredBackend: .auto, provider: fixture.plan.provider)
+        )
+        session = nil
+        let abandonedLock = abandoned.appendingPathComponent(SpeechTranscriptionRunRecord.lockFilename)
+        try FileManager.default.removeItem(at: abandonedLock)
+        let original = try Data(contentsOf: SpeechTranscriptionRunRecord.recordURL(at: abandoned))
+        try makeReadOnly(abandoned)
+        XCTAssertEqual(try SpeechTranscriptionRunRecord.inspect(at: abandoned).state, .preparing)
+        XCTAssertEqual(try Data(contentsOf: SpeechTranscriptionRunRecord.recordURL(at: abandoned)), original)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandonedLock.path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: abandoned.path)
+        XCTAssertEqual(try SpeechTranscriptionRunRecord.inspect(at: abandoned).state, .interrupted)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: abandonedLock.path))
+    }
+
+    private func makeReadOnly(_ directory: URL) throws {
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+        addTeardownBlock { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
+    }
+
     private func fixture(
         backend: ASRResolvedBackend = .qwen, provider: ParakeetExecutionProvider = .mlx
     ) throws -> (root: URL, plan: SpeechTranscriptionPlan) {

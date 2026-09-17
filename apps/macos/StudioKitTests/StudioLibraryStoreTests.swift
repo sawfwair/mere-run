@@ -387,8 +387,133 @@ final class StudioLibraryStoreTests: XCTestCase {
         let store = StudioLibraryStore(libraryURL: url)
         XCTAssertEqual(store.items.count, 1)
         XCTAssertEqual(store.items.first?.prompt, "keep me")
+        XCTAssertEqual(store.preservedRowCount, 1)
         // The file is intact (not moved to corrupt-recovery) since the array itself parsed.
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    // MARK: - Rows written by another version
+
+    /// A draft written before a field existed loads as a real item with the current default.
+    func testOlderDraftRowLoadsWithMissingFieldsDefaulted() throws {
+        let url = try temporaryLibraryURL()
+        let keepID = UUID()
+        var olderDraft = try encodedDraft()
+        olderDraft.removeValue(forKey: "musicQuality")
+        olderDraft.removeValue(forKey: "seed")
+        var olderRow = rowJSON(id: UUID(), mode: "createImage", prompt: "Image with an earlier draft schema")
+        olderRow["commandDraft"] = olderDraft
+        try writeRows([rowJSON(id: keepID, mode: "chat", prompt: "Keep this conversation"), olderRow], to: url)
+
+        let store = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(store.items.count, 2)
+        XCTAssertEqual(store.preservedRowCount, 0)
+        XCTAssertNil(store.preservationNotice)
+        let older = try XCTUnwrap(store.items.first { $0.mode == .createImage })
+        XCTAssertEqual(older.commandDraft?.musicQuality, CommandDraft().musicQuality)
+        XCTAssertEqual(older.commandDraft?.seed, CommandDraft().seed)
+
+        store.markRunning(id: keepID)
+        XCTAssertEqual(try persistedRows(at: url).count, 2)
+        XCTAssertEqual(try backups(beside: url).count, 0)
+
+        let relaunched = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(relaunched.items.count, 2)
+        XCTAssertEqual(relaunched.items.first { $0.mode == .createImage }?.commandDraft?.musicQuality, CommandDraft().musicQuality)
+    }
+
+    /// A key present with the wrong type is not defaulted away: the row is kept but not shown.
+    func testDraftWithMismatchedTypeIsPreservedNotReinterpreted() throws {
+        var draft = try encodedDraft()
+        draft["prompt"] = 42
+        var row = rowJSON(id: UUID(), mode: "createImage", prompt: "Draft with a mistyped field")
+        row["commandDraft"] = draft
+        try assertRowIsPreservedAcrossRewrites(row)
+    }
+
+    /// A row a newer build wrote with a mode this build does not know rides along untouched.
+    func testFutureModeRowIsPreservedAcrossRewrites() throws {
+        try assertRowIsPreservedAcrossRewrites(
+            rowJSON(id: UUID(), mode: "futureTemplateDoesNotExist", prompt: "From a newer build")
+        )
+    }
+
+    /// Relaunch reconciliation rewrites the file on load; the rows it cannot read must survive it.
+    func testReconciliationOnLoadKeepsPreservedRows() throws {
+        let url = try temporaryLibraryURL()
+        let runningID = UUID()
+        var running = rowJSON(id: runningID, mode: "chat", prompt: "Was running at quit")
+        running["status"] = "running"
+        let future = rowJSON(id: UUID(), mode: "futureTemplateDoesNotExist", prompt: "From a newer build")
+        try writeRows([running, future], to: url)
+
+        let store = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(store.items.first { $0.id == runningID }?.status, .interrupted)
+        XCTAssertEqual(store.preservedRowCount, 1)
+
+        let persisted = try persistedRows(at: url)
+        XCTAssertEqual(persisted.count, 2)
+        XCTAssertEqual(persisted.first { $0["id"] as? String == runningID.uuidString }?["status"] as? String, "interrupted")
+        XCTAssertTrue(persisted.contains { NSDictionary(dictionary: $0).isEqual(to: future) })
+        XCTAssertEqual(try backups(beside: url).count, 1)
+
+        let relaunched = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(relaunched.items.count, 1)
+        XCTAssertEqual(relaunched.preservedRowCount, 1)
+    }
+
+    private func assertRowIsPreservedAcrossRewrites(_ row: [String: Any], file: StaticString = #filePath, line: UInt = #line) throws {
+        let url = try temporaryLibraryURL()
+        let keepID = UUID()
+        try writeRows([rowJSON(id: keepID, mode: "chat", prompt: "Keep this conversation"), row], to: url)
+        let original = try Data(contentsOf: url)
+
+        let store = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(store.items.count, 1, file: file, line: line)
+        XCTAssertEqual(store.preservedRowCount, 1, file: file, line: line)
+        XCTAssertNotNil(store.preservationNotice, file: file, line: line)
+        XCTAssertEqual(try backups(beside: url).count, 0, "no rewrite yet, so no backup", file: file, line: line)
+
+        store.markRunning(id: keepID)
+        store.setFavorite(id: keepID, isFavorite: true)
+        let persisted = try persistedRows(at: url)
+        XCTAssertEqual(persisted.count, 2, file: file, line: line)
+        XCTAssertTrue(persisted.contains { NSDictionary(dictionary: $0).isEqual(to: row) }, file: file, line: line)
+        let backups = try backups(beside: url)
+        XCTAssertEqual(backups.count, 1, "one untouched original per launch", file: file, line: line)
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(backups.first)), original, file: file, line: line)
+
+        let relaunched = StudioLibraryStore(libraryURL: url)
+        XCTAssertEqual(relaunched.items.count, 1, file: file, line: line)
+        XCTAssertEqual(relaunched.preservedRowCount, 1, file: file, line: line)
+        relaunched.setFavorite(id: keepID, isFavorite: false)
+        XCTAssertEqual(try persistedRows(at: url).count, 2, "preserved rows are not duplicated", file: file, line: line)
+        XCTAssertEqual(StudioLibraryStore(libraryURL: url).preservedRowCount, 1, file: file, line: line)
+    }
+
+    private func rowJSON(id: UUID, mode: String, prompt: String) -> [String: Any] {
+        [
+            "id": id.uuidString, "mode": mode, "prompt": prompt,
+            "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+            "status": "completed", "commandPreview": "mere.run text chat"
+        ]
+    }
+
+    private func encodedDraft() throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder.mereRunApp.encode(CommandDraft())) as? [String: Any])
+    }
+
+    private func writeRows(_ rows: [[String: Any]], to url: URL) throws {
+        try JSONSerialization.data(withJSONObject: rows).write(to: url)
+    }
+
+    private func persistedRows(at url: URL) throws -> [[String: Any]] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]])
+    }
+
+    private func backups(beside url: URL) throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(at: url.deletingLastPathComponent(), includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("library.preserved-") }
     }
 
     func testRaycastReceiptImportsPersistsAndDeduplicatesArtifact() throws {

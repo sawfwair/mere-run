@@ -14,6 +14,10 @@ with the reference has not been established.
 - `MarigoldV2VAEDecoder.swift`: the fine-tuned decoder some checkpoints ship.
 - `MarigoldV2PromptConditioning.swift`: precomputed prompt embeddings, which
   stand in for the base text encoder.
+- `MarigoldV2GenerationOperation.swift`: validated settings, the observational
+  plan, execution with awaited unloading, and the runtime seam tests replace.
+  The CLI parses into its request and presents its result; admission stays
+  with the caller.
 - `MarigoldV2Generator.swift`: encode, one rectified-flow step, decode, read out.
 - `MarigoldV2TransformerQuantization.swift`: quantization policy and validation
   of the excluded first image-modulation projection.
