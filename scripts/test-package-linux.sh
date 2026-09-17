@@ -51,6 +51,7 @@ if [[ "${1:-}" == "__print-env" ]]; then
   printf 'MERERUN_MLX_CUDA_JIT_INCLUDE_PATH=%s\n' "${MERERUN_MLX_CUDA_JIT_INCLUDE_PATH:-}"
   printf 'CPATH=%s\n' "${CPATH:-}"
   printf 'LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH:-}"
+  printf 'MLX_PTX_CACHE_DIR=%s\n' "${MLX_PTX_CACHE_DIR:-}"
   exit 0
 fi
 echo "mere.run package fixture"
@@ -144,6 +145,11 @@ if ! grep -q "^CPATH=$cuda_cccl_fixture" <<<"$wrapper_env_output"; then
   printf '%s\n' "$wrapper_env_output" >&2
   exit 1
 fi
+if ! grep -q "^MLX_PTX_CACHE_DIR=$" <<<"$wrapper_env_output"; then
+  echo "[test-package-linux] CPU launcher must not set an MLX PTX cache directory:" >&2
+  printf '%s\n' "$wrapper_env_output" >&2
+  exit 1
+fi
 
 echo "[test-package-linux] package runtime library symlink test passed."
 
@@ -184,6 +190,23 @@ if ! grep -q "$cuda_payload_dir/include" <<<"$cuda_wrapper_env_output" ||
    ! grep -q "$cuda_cccl_fixture" <<<"$cuda_wrapper_env_output"; then
   echo "[test-package-linux] launcher CPATH did not include both MLX JIT and CUDA CCCL headers:" >&2
   printf '%s\n' "$cuda_wrapper_env_output" >&2
+  exit 1
+fi
+cuda_ptx_cache_fixture="$fixture_root/xdg-cache"
+cuda_ptx_env_output="$(XDG_CACHE_HOME="$cuda_ptx_cache_fixture" CUDA_HOME="$cuda_home_fixture" "$cuda_payload_dir/mere.run" __print-env)"
+if ! grep -q "^MLX_PTX_CACHE_DIR=$cuda_ptx_cache_fixture/mere.run/mlx-ptx/mere-run-0.0.0+cuda-deps-fixture-linux-${platform_arch}-cuda$" <<<"$cuda_ptx_env_output"; then
+  echo "[test-package-linux] CUDA launcher did not scope the MLX PTX cache by package id:" >&2
+  printf '%s\n' "$cuda_ptx_env_output" >&2
+  exit 1
+fi
+cuda_ptx_override_output="$(MLX_PTX_CACHE_DIR=/custom/ptx CUDA_HOME="$cuda_home_fixture" "$cuda_payload_dir/mere.run" __print-env)"
+if ! grep -q "^MLX_PTX_CACHE_DIR=/custom/ptx$" <<<"$cuda_ptx_override_output"; then
+  echo "[test-package-linux] CUDA launcher overrode an explicit MLX_PTX_CACHE_DIR:" >&2
+  printf '%s\n' "$cuda_ptx_override_output" >&2
+  exit 1
+fi
+if ! grep -q "/.mererun-package-id$" "$cuda_tarball_listing"; then
+  echo "[test-package-linux] CUDA tarball did not carry the package id file" >&2
   exit 1
 fi
 if ! grep -q "^LD_LIBRARY_PATH=$cuda_payload_dir/lib" <<<"$cuda_wrapper_env_output" ||

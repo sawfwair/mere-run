@@ -655,6 +655,12 @@ to an independent forward if cache types or shapes do not prove compatibility.
 These are quiet by default and are intended for troubleshooting deeper runtime paths.
 
 - `MERERUN_FLUX2_DEBUG=1`
+- `MERERUN_FLUX2_TIMING=1` prints prompt encoding, per-stage first-step,
+  denoising, and decode timings for FLUX.2 Klein runs.
+- `MERERUN_FLUX2_STAGED_FIRST_STEP=0|1` overrides the Linux GPU default that
+  evaluates the first FLUX.2 Klein denoising step one transformer stage at a
+  time and reports stages slower than one second. See the cold CUDA start
+  notes in the [Linux quickstart](./linux-quickstart.md).
 - `MERERUN_ZIMAGE_DEBUG=1`
 - `MERERUN_OCR_DEBUG=1`
 - `MERERUN_LORA_DEBUG=1`

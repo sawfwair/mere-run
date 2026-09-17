@@ -43,6 +43,7 @@ extension Flux2KleinGenerator {
 
         // 1. Encode prompt (and negative prompt for CFG)
         progressHandler?(GenerationProgress(stage: .encodingText, stepIndex: 0, totalSteps: 1))
+        let promptEncodeStart = timingEnabled ? CFAbsoluteTimeGetCurrent() : 0
         let (promptEmbeds, _) = try encodePrompt(
             prompt: request.prompt,
             tokenizer: tokenizer,
@@ -88,6 +89,16 @@ extension Flux2KleinGenerator {
             negativePromptEmbeds = negEmbeds
         } else {
             negativePromptEmbeds = nil
+        }
+        // Materialize the conditioning here so the text encoder graph is never
+        // carried into the first transformer evaluation. On Linux CUDA that
+        // first evaluation already pays for kernel compilation; keeping the
+        // encoder out of it keeps the graph bounded and the timing honest.
+        MLX.eval([promptEmbeds] + (negativePromptEmbeds.map { [$0] } ?? []))
+        if timingEnabled {
+            let seconds = CFAbsoluteTimeGetCurrent() - promptEncodeStart
+            let message = String(format: "[Flux2KleinGenerator] prompt_encode_s=%.3f\n", seconds)
+            FileHandle.standardError.write(Data(message.utf8))
         }
         progressHandler?(GenerationProgress(stage: .encodingText, stepIndex: 1, totalSteps: 1))
 
@@ -225,12 +236,18 @@ extension Flux2KleinGenerator {
             timingEnabled: timingEnabled, debugLog: debugLog, progressHandler: progressHandler
         )
 
+        let decodeStart = timingEnabled ? CFAbsoluteTimeGetCurrent() : 0
         try decodeAndSave(
             latents: latents, vae: vae, numRefs: numRefs, seqLen: seqLen,
             patchedHeight: patchedHeight, patchedWidth: patchedWidth,
             bnMean: bnMean, bnVar: bnVar, outputURL: request.outputURL,
             debugLog: debugLog, progressHandler: progressHandler
         )
+        if timingEnabled {
+            let seconds = CFAbsoluteTimeGetCurrent() - decodeStart
+            let message = String(format: "[Flux2KleinGenerator] decode_save_s=%.3f\n", seconds)
+            FileHandle.standardError.write(Data(message.utf8))
+        }
 
         return GenerationResult(outputURL: request.outputURL, seed: seed)
     }
