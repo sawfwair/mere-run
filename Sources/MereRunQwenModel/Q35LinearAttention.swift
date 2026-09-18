@@ -738,6 +738,7 @@ final class Q35LinearAttention: Module {
     private let convKernelSize: Int
     private let qkNormWeightBF16: MLXArray
     private let isQwen4Exp: Bool
+    private let prismQKVZ = Q35PrismFusion()
     private var fusedInProjQKVZ: Linear?
     private var fusedInProjBA: Linear?
 
@@ -800,7 +801,10 @@ final class Q35LinearAttention: Module {
         if fusedInProjQKVZ == nil {
             fusedInProjQKVZ = q35FusedPortableQuantizedLinear(inProjQKV, inProjZ)
         }
-        if let fusedInProjQKVZ {
+        if let parts = prismQKVZ.callSplit(x, projections: [inProjQKV, inProjZ]) {
+            qkv = parts[0]
+            z = parts[1].reshaped(batch, sequence, numValueHeads, valueHeadDim)
+        } else if let fusedInProjQKVZ {
             let qkvz = fusedInProjQKVZ(x)
             qkv = qkvz[.ellipsis, 0..<convDim]
             z = qkvz[.ellipsis, convDim...].reshaped(batch, sequence, numValueHeads, valueHeadDim)

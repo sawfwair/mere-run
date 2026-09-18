@@ -37,6 +37,7 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38FlashNext4BitModelId = "vision-chat-q38-flash-next-4bit"
     public static let bonsai27B1BitModelId = "text-chat-bonsai-27b-1bit"
     public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
+    public static let bonsai2ModelId = "text-chat-bonsai-2-27b-2bit"
     public static let ornith9BModelId = "text-agent-ornith-9b"
     public static let ornith35BMLX4BitModelId = "text-agent-ornith-35b-mlx-4bit"
     public static let ornith35BMLX6BitModelId = "text-agent-ornith-35b-mlx-6bit"
@@ -61,7 +62,7 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static func isBonsai27BModelId(_ modelId: String) -> Bool {
-        modelId == bonsai27B1BitModelId || modelId == bonsai27B2BitModelId
+        modelId == bonsai27B1BitModelId || modelId == bonsai27B2BitModelId || modelId == bonsai2ModelId
     }
 
     /// Convert the public continuous reasoning control into the three native
@@ -159,6 +160,10 @@ public struct Q35Resources: Sendable, Hashable {
     public static let bonsai27B2BitUpstreamRevision = "70f75f3ad081ab840a42f3304c02c27e7f89bfb7"
     public static let bonsai27B2BitEstimatedDownloadBytes: Int64 = 8_521_085_419
     public static let bonsai27B2BitContextLength = 262_144
+    public static let bonsai2UpstreamRepoId = "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit"
+    public static let bonsai2UpstreamRevision = "3f926b415992eaa2ae9dd7b573706494d6bbf787"
+    public static let bonsai2EstimatedDownloadBytes: Int64 = 8_620_000_000
+    public static let bonsai2ContextLength = 262_144
     public static let ornith9BUpstreamRepoId = "sahilchachra/ornith-1.0-9b-optiq-5bpw-mlx"
     public static let ornith9BUpstreamRevision = "4f9f4fc2c10ec17cbeb9dae086a7f1272c904e86"
     public static let ornith9BEstimatedDownloadBytes: Int64 = 7 * 1_073_741_824
@@ -312,6 +317,15 @@ public struct Q35Resources: Sendable, Hashable {
             upstreamRepoId: bonsai27B2BitUpstreamRepoId,
             upstreamRevision: bonsai27B2BitUpstreamRevision
         ),
+        bonsai2ModelId: Profile(
+            modelId: bonsai2ModelId,
+            upstreamRepoId: bonsai2UpstreamRepoId,
+            upstreamRevision: bonsai2UpstreamRevision,
+            snapshotPatterns: snapshotPatterns + [
+                "hadamard.json", "generation_config.json", "preprocessor_config.json",
+                "README.md", "LICENSE", "NOTICE.txt", "PACK-RUNTIME.md",
+            ]
+        ),
         ornith9BModelId: Profile(
             modelId: ornith9BModelId,
             upstreamRepoId: ornith9BUpstreamRepoId,
@@ -390,6 +404,8 @@ public struct Q35Resources: Sendable, Hashable {
             bonsai27B1BitContextLength
         case bonsai27B2BitModelId:
             bonsai27B2BitContextLength
+        case bonsai2ModelId:
+            bonsai2ContextLength
         case ornith35BMLX4BitModelId,
              ornith35BMLX6BitModelId,
              ornith35BMLX8BitModelId,

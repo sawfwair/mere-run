@@ -76,6 +76,7 @@ This guide covers the following managed model IDs:
 
 - `text-chat-bonsai-27b-1bit`
 - `text-chat-bonsai-27b-2bit`
+- `text-chat-bonsai-2-27b-2bit`
 
 ## Sources and validation
 
@@ -92,3 +93,31 @@ documentation](https://github.com/sawfwair/mere-run/blob/main/docs/runtime/text.
 
 Source links require a network connection. The complete recipe and examples are
 bundled for offline reading.
+
+## Bonsai 2 MLX
+
+To use the pinned Bonsai 2 pack, run:
+
+```bash
+mere.run model pull text-chat-bonsai-2-27b-2bit
+mere.run text chat --model text-chat-bonsai-2-27b-2bit --context-size 8192 --prompt "Explain how a heat pump works."
+```
+
+The [Prism ML pack](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-mlx-2bit/tree/3f926b415992eaa2ae9dd7b573706494d6bbf787)
+contains packed 2-bit language weights, signed Hadamard transforms, and an FP16
+vision tower. The native loader applies the forward activation transform and
+inverse embedding transform. It does not run the bundled Python loader.
+The MLX weights occupy about 8.60 GB, separate from the smaller GGUF figures.
+
+Thinking is enabled by default. Use `--no-thinking` to disable it and `--image`
+to supply an image. The maximum context is 262,144 tokens; start with the bounded
+context in the example because KV memory grows with context length.
+The pack's generation configuration specifies token IDs but no sampling values,
+so this model uses the CLI sampling defaults. Existing Bonsai model IDs retain
+their own snapshots and sampling settings.
+
+A local M4 Max smoke evaluation passed eight grounded-chat cases, a short
+reasoning problem, five tests of a generated Python function, and a synthetic
+vision check for text and colored shapes. These short, greedy-decoding checks
+do not establish full tokenizer parity, long-context quality, or broad benchmark
+performance.

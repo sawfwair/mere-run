@@ -16,7 +16,7 @@ extension Q35VisionTower {
                 let shard = try SafetensorsStreamingLoader.loadArrays(
                     url: resources.rootURL.appendingPathComponent(filename),
                     where: { index.weightMap[$0] == filename && Self.mapVisionWeightKey($0) != nil },
-                    dtype: .bfloat16
+                    dtype: checkpointDType
                 )
                 selected.merge(shard) { _, replacement in replacement }
             }
@@ -25,7 +25,7 @@ extension Q35VisionTower {
             arrays = try SafetensorsStreamingLoader.loadArrays(
                 url: resources.modelWeightsURL,
                 where: { Self.mapVisionWeightKey($0) != nil },
-                dtype: .bfloat16
+                dtype: checkpointDType
             )
         }
         let mapped = Dictionary(uniqueKeysWithValues: arrays.flatMap { Self.mapVisionWeight($0.key, $0.value) })
