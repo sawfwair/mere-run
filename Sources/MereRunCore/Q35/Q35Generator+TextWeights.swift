@@ -7,12 +7,16 @@ import Darwin
 #endif
 
 extension Q35Generator {
-    func loadTextWeights(
+    nonisolated func loadTextWeights(
         into q35Model: Q35Model,
         from resources: Q35Resources,
         groupSize: Int,
         bits: Int
     ) throws {
+        if q35Model.config.modelType == "prism_hadamard_qwen35" {
+            try loadPrismTextWeights(into: q35Model, from: resources)
+            return
+        }
         let checkpointUsesZeroCenteredNorms = try Self.checkpointUsesZeroCenteredRMSNorm(from: resources)
         let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
             guard let mapped = Self.mapTextWeightKey(key) else { return [] }
@@ -104,6 +108,39 @@ extension Q35Generator {
                 batchSize: 32
             )
         }
+    }
+
+    private nonisolated func loadPrismTextWeights(into model: Q35Model, from resources: Q35Resources) throws {
+        let contract = try JSONDecoder().decode(
+            Q35PrismConfiguration.self, from: Data(contentsOf: resources.configURL)
+        )
+        let source = try MLX.loadArrays(url: resources.modelWeightsURL)
+        let mapped = Dictionary(uniqueKeysWithValues: source.compactMap { key, value -> (String, MLXArray)? in
+            guard let path = Self.mapTextWeightKey(key) else { return nil }
+            return (path, value)
+        })
+        let replacements = try contract.replacements(model: model, arrays: mapped)
+        let packedPaths = Set(replacements.map(\.0))
+        let expectedOrdinary = Set(contract.checkpointParameterNames(model: model).filter { key in
+            !packedPaths.contains(String(key.split(separator: ".").dropLast().joined(separator: ".")))
+        })
+        let suppliedOrdinary = Set(mapped.keys.filter { key in
+            !packedPaths.contains(String(key.split(separator: ".").dropLast().joined(separator: ".")))
+        })
+        guard expectedOrdinary == suppliedOrdinary else {
+            let missing = expectedOrdinary.subtracting(suppliedOrdinary).sorted().joined(separator: ", ")
+            let unexpected = suppliedOrdinary.subtracting(expectedOrdinary).sorted().joined(separator: ", ")
+            throw Q35Error.generationFailed(
+                "Bonsai 2 parameter mismatch. Missing: [\(missing)]. Unexpected: [\(unexpected)]."
+            )
+        }
+        model.update(modules: ModuleChildren.unflattened(replacements))
+        let ordinary = mapped.filter { key, _ in
+            !replacements.contains { key.hasPrefix($0.0 + ".") }
+        }.map { key, value in
+            (key, Self.isOffsetRMSNormWeight(key) ? value - MLXArray(1.0).asType(value.dtype) : value)
+        }
+        try model.update(parameters: ModuleParameters.unflattened(ordinary), verify: [.shapeMismatch])
     }
 
     func loadQ38NGramEmbeddings(

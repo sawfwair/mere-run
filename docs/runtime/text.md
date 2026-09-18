@@ -49,6 +49,7 @@ gate.
 - `vision-chat-q38-27b` (managed official Qwen3.8 27B BF16 vision-language snapshot)
 - `vision-chat-q38-27b-4bit` (managed MLX 4-bit target plus pinned MTP and official vision components)
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
+- `text-chat-bonsai-2-27b-2bit` (Bonsai 2 Qwen3.8 27B with native Hadamard 2-bit loading)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
 - `text-chat-lfm25-2.6b-qad-4bit` (managed QAD-trained LFM2.5 2.6B native MLX 4-bit conversion)

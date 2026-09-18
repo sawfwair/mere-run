@@ -53,6 +53,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case q38FlashNext4Bit = "vision-chat-q38-flash-next-4bit"
     case bonsai27B1Bit = "text-chat-bonsai-27b-1bit"
     case bonsai27B2Bit = "text-chat-bonsai-27b-2bit"
+    case bonsai2 = "text-chat-bonsai-2-27b-2bit"
     case lfm25A1B8Bit = "text-chat-lfm25-a1b-8bit"
     case lfm25A1BBF16 = "text-chat-lfm25-a1b-bf16"
     case lfm25Small1_2BBF16 = "text-chat-lfm25-1.2b-bf16"

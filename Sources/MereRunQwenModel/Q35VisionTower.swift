@@ -8,6 +8,7 @@ public final class Q35VisionTower: Module {
     @ModuleInfo(key: "visionTower") private var visionTower: QwenVisionTower
     @ModuleInfo(key: "vision_projection") private var visionProjection: Linear?
 
+    package let checkpointDType: DType
     public let patchSize: Int
     public let temporalPatchSize: Int
     public let spatialMergeSize: Int
@@ -17,6 +18,7 @@ public final class Q35VisionTower: Module {
         guard let vision = config.visionConfig else {
             preconditionFailure("Q35VisionTower requires a Q35 vision config.")
         }
+        self.checkpointDType = config.modelType == "prism_hadamard_qwen35" ? .float16 : .bfloat16
         let activation: QwenVisionConfiguration.Activation
         switch vision.hiddenAct?.lowercased() {
         case "gelu_pytorch_tanh", "gelu_tanh", "gelu":
@@ -27,7 +29,8 @@ public final class Q35VisionTower: Module {
 
         let spatialMerge = max(1, vision.spatialMergeSize ?? 2)
         let useLearnedPosEmbed = (vision.numPositionEmbeddings ?? 0) > 0
-        let inferredPatchEmbedBias = config.modelType.hasPrefix("qwen3_5") || config.textConfig.isQwen4Exp
+        let inferredPatchEmbedBias = config.modelType.hasPrefix("qwen3_5")
+            || config.modelType == "prism_hadamard_qwen35" || config.textConfig.isQwen4Exp
         let qwenVisionConfig = QwenVisionConfiguration(
             depth: vision.depth,
             embedDim: vision.hiddenSize,

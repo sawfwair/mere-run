@@ -211,7 +211,8 @@
     "category": "Text and multimodal",
     "models": [
       "text-chat-bonsai-27b-1bit",
-      "text-chat-bonsai-27b-2bit"
+      "text-chat-bonsai-27b-2bit",
+      "text-chat-bonsai-2-27b-2bit"
     ],
     "resourceName": "handbook-bonsai-text.md"
   },

@@ -21,6 +21,7 @@ final class Q35FullAttention: Module {
     /// whenever the source modules are replaced. MERERUN_Q35_FUSED_QKV=0
     /// falls back to separate projections. Trades a second resident copy of
     /// the attention projection weights for the fused matmul.
+    private let prismQKV = Q35PrismFusion()
     private var fusedQKV: FusedQuantizedProjection?
     private static let fusedQKVEnabled: Bool = {
         let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_FUSED_QKV"]?
@@ -119,7 +120,11 @@ final class Q35FullAttention: Module {
         let qFlat: MLXArray
         let kFlat: MLXArray
         let vFlat: MLXArray
-        if let fused = resolvedFusedQKV() {
+        if let parts = prismQKV.callSplit(x, projections: [qProj, kProj, vProj]) {
+            qFlat = parts[0]
+            kFlat = parts[1]
+            vFlat = parts[2]
+        } else if let fused = resolvedFusedQKV() {
             let parts = fused.callSplit(x)
             qFlat = parts[0]
             kFlat = parts[1]
