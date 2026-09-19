@@ -190,6 +190,9 @@ struct GuideTopic: Equatable {
 
 enum GuideRegistry {
     static let all: [GuideTopic] = [
+        GuideTopic(topic: "audio-edit", title: "AuK (Tencent Hunyuan)",
+            commandPaths: [["audio", "edit"]], models: ["audio-auk-base", "audio-auk-flash"],
+            resourceName: "handbook-auk.md"),
         GuideTopic(
             topic: "image-generate",
             title: "Image Generate",

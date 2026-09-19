@@ -79,9 +79,10 @@ Public tree:
   - `mere.run geo fire` — Run native TerraMind Fire tile inference with MLX on Apple Silicon.
   - `mere.run geo tessera` — Encode local Sentinel-1/2 time series with a native TESSERA v2 student.
   - `mere.run geo olmoearth` — Encode multisensor Earth observations with native OlmoEarth v1.2.
-- [`mere.run audio`](/runtime/audio) — Enhance general audio locally.
+- [`mere.run audio`](/runtime/audio) — Generate, edit, and enhance audio locally.
   - `mere.run audio generate` — Generate audio from text with the native LTX-2.5 audio-only model.
   - `mere.run audio enhance` — Extend speech or general-audio bandwidth to 48 kHz.
+  - `mere.run audio edit` — Generate or edit speech with native AuK instruction conditioning.
 - [`mere.run music`](/runtime/music) — Generate, analyze, transcribe, and separate music locally.
   - `mere.run music analyze` — Analyze source audio with ACE-Step audio understanding.
   - `mere.run music generate` — Generate audio from a music prompt.

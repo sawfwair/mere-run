@@ -4,6 +4,14 @@ agentOnboard	model	text-code-north-mini
 agentStart	prompt	Guide me through setting up mere.run on this machine. Start by summarizing what this Mac can run, then help me install only supported models.
 apiServe	contextSize	32768
 apiServe	model	text-chat-gemma4-12b-4bit
+audioEdit	audioGuidanceScale	Optional(2.0)
+audioEdit	durationSeconds	4.0
+audioEdit	model	audio-auk-base
+audioEdit	outputPath	~/Music/mere.run/Audio/auk-speech-editing-<stamp>.wav
+audioEdit	prompt	Say hello in a calm voice.
+audioEdit	seed	42
+audioEdit	steps	32
+audioEdit	useDuration	true
 audioEnhance	audioChunkSeconds	Optional(10)
 audioEnhance	audioDType	Optional("float32")
 audioEnhance	audioGuidanceScale	Optional(1.5)

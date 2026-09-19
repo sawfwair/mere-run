@@ -92,6 +92,8 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case roFormer
     case apBWE
     case univerSR
+    case auk
+    case aukThinker
     case woosh
     case wooshClap
     case wooshSynchformer

@@ -75,6 +75,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case visionGeometry
     case visionGeometryMultiview
     case audioEnhance
+    case audioEdit
     case audioGenerate
     case musicGenerate
     case musicAnalyze
@@ -204,6 +205,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .visionGeometry: return "vision.geometry"
         case .visionGeometryMultiview: return "vision.geometry-multiview"
         case .audioEnhance: return "audio.enhance"
+        case .audioEdit: return "audio.edit"
         case .audioGenerate: return "audio.generate"
         case .musicGenerate: return "music.generate"
         case .musicAnalyze: return "music.analyze"
@@ -1095,6 +1097,7 @@ package struct CommandTemplate: Identifiable, Equatable {
 
         let optionalInputs: Set<CommandTemplateID> = [
             .imageGenerate,
+            .audioEdit,
             .imageTrainLoRA,
             .videoGenerate,
             .musicTranscribe,
@@ -1338,6 +1341,16 @@ package struct CommandTemplate: Identifiable, Equatable {
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "MiniMax-H3 model id or local model path is required."
             }
+        case .audioEdit:
+            if draft.inputPath.isBlank && !draft.useDuration { return "Choose a duration or reference audio." }
+            if draft.useDuration && (!draft.durationSeconds.isFinite || draft.durationSeconds <= 0 || draft.durationSeconds > 300) {
+                return "Duration must be in (0, 300] seconds."
+            }
+            if !["audio-auk-base", "audio-auk-flash"].contains(draft.model) { return "Choose an AuK base or Flash model." }
+            if !(1...1000).contains(draft.steps) { return "Steps must be in 1...1000." }
+            if let guidance = draft.audioGuidanceScale, !guidance.isFinite || guidance < 0 {
+                return "Guidance must be finite and non-negative."
+            }
         case .audioEnhance:
             if let overlap = draft.audioOverlap, overlap <= 0 {
                 return "Overlap must be positive."
@@ -1478,7 +1491,7 @@ extension CommandTemplate {
             return .listen
         case .speechListen:
             return .listen
-        case .audioEnhance, .audioGenerate:
+        case .audioEnhance, .audioEdit, .audioGenerate:
             return .listen
 
         case .visionGround:

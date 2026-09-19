@@ -159,6 +159,9 @@ an effective overlay; they are not a second capability catalog.
 | `music` | `music-separate-bs-roformer-4stem` |
 | `music` | `music-separate-mel-roformer-dereverb` |
 | `music` | `music-separate-mel-roformer-denoise` |
+| `audio` | `audio-auk-base` |
+| `audio` | `audio-auk-flash` |
+| `audio` | `audio-auk-thinker` |
 | `audio` | `audio-enhance-ap-bwe-16kto48k` |
 | `audio` | `audio-enhance-universr-audio` |
 | `sfx` | `sfx-woosh-dflow` |
@@ -1757,6 +1760,18 @@ world sessions. It is never downloaded or converted automatically at runtime.
 
 See [Persistent world runtime](./runtime/world.md) for the server and request
 lifecycle.
+
+## AuK speech generation and editing
+
+`audio-auk-base` and `audio-auk-flash` use Tencent's original MIT-licensed
+AuK checkpoints. Both require `audio-auk-thinker`, the separate
+Qwen2.5-Omni-3B checkpoint, which retains its upstream license. The native
+Swift/MLX `audio edit` runtime reads safetensors directly and loads stages
+sequentially. The experimental FP32 path passed [trained-weight parity and
+16 bounded audio checks](benchmarks/auk-native-qualification-2026-09-18.md) on
+Apple Silicon. The encoder download includes the two original shards containing
+its text and audio tensors. Read the setup and qualification scope with
+`mere.run guide --model audio-auk-base`.
 
 ### Bonsai 2 MLX
 

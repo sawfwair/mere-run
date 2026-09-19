@@ -27,16 +27,18 @@ public struct RealFFTPlan {
         } else {
             self.acceleratePlan = nil
             let frequencyCount = (size / 2) + 1
-            let denominator = Float(size)
+            let denominator = Double(size)
             var realBasis: [Float] = []
             var imaginaryBasis: [Float] = []
             realBasis.reserveCapacity(frequencyCount * size)
             imaginaryBasis.reserveCapacity(frequencyCount * size)
             for frequency in 0..<frequencyCount {
                 for sampleIndex in 0..<size {
-                    let angle = -2 * Float.pi * Float(frequency * sampleIndex) / denominator
-                    realBasis.append(cos(angle))
-                    imaginaryBasis.append(sin(angle))
+                    // Large DFT phases lose enough precision in Float to leak energy
+                    // into quiet mel bins. Round the completed basis, not the angle.
+                    let angle = -2 * Double.pi * Double(frequency * sampleIndex) / denominator
+                    realBasis.append(Float(cos(angle)))
+                    imaginaryBasis.append(Float(sin(angle)))
                 }
             }
             self.dftRealBasis = realBasis

@@ -289,6 +289,14 @@ public extension ManagedModelSpec {
                 return resources.validate(fileManager: fileManager)
             }
             return [rootURL]
+        case .auk:
+            let checkpoint = id == "audio-auk-flash" ? "auk_flash.safetensors" : "auk_base.safetensors"
+            return [checkpoint, "vae.safetensors"].map { rootURL.appendingPathComponent($0) }
+                .filter { !fileManager.fileExists(atPath: $0.path) }
+        case .aukThinker:
+            return ["config.json", "tokenizer.json", "tokenizer_config.json", "model.safetensors.index.json",
+                    "model-00001-of-00003.safetensors", "model-00002-of-00003.safetensors"].map { rootURL.appendingPathComponent($0) }
+                .filter { !fileManager.fileExists(atPath: $0.path) }
         case .apBWE:
             return APBWEResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .univerSR:

@@ -1327,3 +1327,40 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Tencent Hunyuan AuK
+
+The native AuK model implementation under `Sources/MereRunAudioModels/AuK` and
+`Sources/MereRunCore/AuKGenerator.swift` adapts the original and MLX inference
+code from [Tencent-Hunyuan/AuK](https://github.com/Tencent-Hunyuan/AuK), revision
+`6943a1e967409e8c73139a7a345f2a611cfb3dd6`.
+
+Tencent is pleased to support the open source community by making Auk:  An Open-Source Foundational Model for Speech Generation and Editing available.
+
+Copyright (C) 2026 Tencent.  All rights reserved.
+
+Auk:  An Open-Source Foundational Model for Speech Generation and Editing is licensed under the MIT.
+
+For the avoidance of doubt, Auk:  An Open-Source Foundational Model for Speech Generation and Editing refers solely to training code, inference code, parameters, and weights made publicly available by Tencent in accordance with MIT.
+
+
+Terms of the MIT:
+--------------------------------------------------------------------
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

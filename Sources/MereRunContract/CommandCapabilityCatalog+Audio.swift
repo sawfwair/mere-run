@@ -1,6 +1,25 @@
 import Foundation
 
 extension MereRunCapabilityCatalog {
+    public static let audioEdit = MereRunCommandCapability(
+        id: "audio.edit", command: ["audio", "edit"], title: "Edit or generate AuK speech",
+        summary: "Generate or edit speech from instructions with experimental native AuK.",
+        arguments: [.init(name: "instruction", label: "Instruction", kind: .string, required: true)],
+        options: [
+            .init(flag: "--audio", label: "Reference audio", kind: .file),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model-path", label: "AuK checkpoint", kind: .directory),
+            .init(flag: "--thinker-path", label: "Qwen encoder", kind: .directory),
+            .init(flag: "--output", label: "Output WAV", kind: .file),
+            .init(flag: "--duration", label: "Duration", kind: .number),
+            .init(flag: "--steps", label: "Base steps", kind: .integer),
+            .init(flag: "--guidance", label: "Base guidance", kind: .number),
+            .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "wav", flag: "--output")
+    )
+
     public static let audioEnhance = MereRunCommandCapability(
         id: "audio.enhance",
         command: ["audio", "enhance"],

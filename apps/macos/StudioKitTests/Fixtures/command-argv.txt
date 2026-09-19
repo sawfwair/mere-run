@@ -138,6 +138,26 @@ apiServe	videoOutputMode=video-only	api serve --host 1 --port 8081 --engine 1 --
 apiServe	videoQuality=draft	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
 apiServe	videoQuality=final	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
 apiServe	voiceMode=clone	api serve --host 1 --port 8081 --engine 1 --model 1 --lora 1 --rate-limit-per-minute 61 --max-active-requests 2 --memory-guard 1 --context-size 32769 --memory-guard-custom-ceiling-gb 1 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --preflight --json 1
+audioEdit	default	audio edit 'Say hello in a calm voice.' --model audio-auk-base --output ~/Music/mere.run/Audio/auk-speech-editing-<stamp>.wav --duration 4 --steps 32 --guidance 2 --seed 42
+audioEdit	maximal	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	maximal-booleans-off	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --steps 33 --guidance 2.5 --seed 1 1
+audioEdit	modelRoot=video-minimax-h3-ref2va	audio edit 1 --model 1 --audio 1 --model-path video-minimax-h3-ref2va --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	modelRoot=video-wan22-ti2v-5b-mlx	audio edit 1 --model 1 --audio 1 --model-path video-wan22-ti2v-5b-mlx --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	musicLMMode=disable	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	musicLMMode=use	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	musicTask=lego	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	musicTask=repaint	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	renderProfile=quality	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	responseFormat=json_object	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	responseFormat=text	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	thinkingMode=automatic	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	thinkingMode=hide	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	thinkingMode=show	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	videoOutputMode=audio-video	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	videoOutputMode=video-only	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	videoQuality=draft	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	videoQuality=final	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
+audioEdit	voiceMode=clone	audio edit 1 --model 1 --audio 1 --model-path 1 --thinker-path 1 --output 1 --duration 4.5 --steps 33 --guidance 2.5 --seed 1 --quiet 1
 audioEnhance	default	audio enhance '' --model audio-enhance-ap-bwe-16kto48k --output ~/Music/mere.run/Audio/enhance-audio-<stamp>.wav --ode-method midpoint --ode-steps 4 --guidance-scale 1.5 --seed 42 --chunk-seconds 10 --dtype float32
 audioEnhance	maximal	audio enhance 1 --model 1 --model-path 1 --output 1 --overlap 1 --input-rate 1 --ode-method 1 --ode-steps 5 --guidance-scale 2 --seed 1 --chunk-seconds 11 --dtype 1 --quiet 1
 audioEnhance	maximal-booleans-off	audio enhance 1 --model 1 --model-path 1 --output 1 --overlap 1 --input-rate 1 --ode-method 1 --ode-steps 5 --guidance-scale 2 --seed 1 --chunk-seconds 11 --dtype 1 1

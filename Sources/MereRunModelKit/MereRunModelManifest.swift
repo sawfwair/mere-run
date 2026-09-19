@@ -99,6 +99,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         /// AP-BWE speech bandwidth-extension family.
         case apBWE = "ap-bwe"
         /// UniverSR flow-matching general-audio super-resolution family.
+        case auk = "auk"
         case univerSR = "universr"
         /// Sony Research Woosh sound-effect generation family.
         case woosh = "woosh"

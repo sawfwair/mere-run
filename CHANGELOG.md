@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add experimental native AuK base and Flash speech generation and editing through
+  `audio edit`, with a Qwen2.5-Omni encoder, direct safetensors loading, and
+  sequential runtime stages. Base and Flash pass trained-weight parity and a
+  bounded 16-case Apple Silicon audio qualification.
+
 ## 0.52.2 - 2026-09-17
 
 - Evaluate the first FLUX.2 Klein denoising step one transformer stage at a

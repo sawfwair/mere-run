@@ -128,6 +128,10 @@ package enum CommandDefaults {
     ]
 
     private static let media: [(CommandTemplateID, [DraftDefault])] = [
+        (.audioEdit, [
+            .value(\.useDuration, true), .value(\.durationSeconds, 4),
+            .value(\.steps, 32), .value(\.audioGuidanceScale, 2), .value(\.seed, "42")
+        ]),
         (.audioEnhance, [
             .value(\.audioODEMethod, "midpoint"),
             .value(\.audioODESteps, 4),
