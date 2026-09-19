@@ -564,6 +564,8 @@ final class Q35MLP: Module {
     @ModuleInfo(key: "up_proj") var upProj: Linear
     @ModuleInfo(key: "down_proj") var downProj: Linear
 
+    private let prismGateUp = Q35PrismFusion()
+
     init(hiddenSize: Int, intermediateSize: Int) {
         self._gateProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)
         self._upProj.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)
@@ -572,7 +574,10 @@ final class Q35MLP: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        downProj(q35Swiglu(gateProj(x), upProj(x)))
+        if let parts = prismGateUp.callSplit(x, projections: [gateProj, upProj]) {
+            return downProj(q35Swiglu(parts[0], parts[1]))
+        }
+        return downProj(q35Swiglu(gateProj(x), upProj(x)))
     }
 }
 
@@ -585,6 +590,7 @@ final class Q35FeedForward: Module {
     @ModuleInfo(key: "up_proj") var upProj: Linear?
     @ModuleInfo(key: "down_proj") var downProj: Linear?
 
+    private let prismGateUp = Q35PrismFusion()
     private let topK: Int
     private let normTopKProb: Bool
     private let usesMoE: Bool
@@ -684,6 +690,9 @@ final class Q35FeedForward: Module {
 
         guard let gateProj, let upProj, let downProj else {
             return x
+        }
+        if let parts = prismGateUp.callSplit(x, projections: [gateProj, upProj]) {
+            return downProj(q35Swiglu(parts[0], parts[1]))
         }
         return downProj(q35Swiglu(gateProj(x), upProj(x)))
     }

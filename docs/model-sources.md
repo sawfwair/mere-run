@@ -97,6 +97,7 @@ an effective overlay; they are not a second capability catalog.
 | `vision-chat` | `vision-chat-q38-flash-next-4bit` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
+| `text-chat` | `text-chat-bonsai-2-27b-2bit` |
 | `text-code` | `text-agent-ornith-9b` |
 | `vision-chat` | `text-agent-ornith-35b-mlx-4bit` |
 | `text-code` | `text-agent-ornith-35b-mlx-6bit` |
@@ -1771,3 +1772,17 @@ sequentially. The experimental FP32 path passed [trained-weight parity and
 Apple Silicon. The encoder download includes the two original shards containing
 its text and audio tensors. Read the setup and qualification scope with
 `mere.run guide --model audio-auk-base`.
+
+### Bonsai 2 MLX
+
+`text-chat-bonsai-2-27b-2bit` pins
+`prism-ml/Ternary-Bonsai-2-27B-mlx-2bit` at
+`3f926b415992eaa2ae9dd7b573706494d6bbf787` (Apache-2.0).
+Its 8.60 GB weight file contains Hadamard-transformed affine 2-bit language
+weights and an FP16 vision tower. The Swift Qwen runtime loads the schema-2
+module records and applies signed normalized transforms without expanding the
+full language model. The older Bonsai IDs remain separate models.
+
+The pack requires the matching native loader; ordinary affine loading omits
+required transforms. Short text and synthetic vision smoke checks passed locally; full-model parity
+and broad quality evaluation remain unverified.

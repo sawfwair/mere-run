@@ -27,6 +27,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4-12b-4bit (Gemma 4 12B MLX 4-bit, default on Apple Silicon)
           - text-chat-q36-nano (Qwen3.6-35B-A3B OptiQ 4-bit)
           - text-chat-bonsai-27b-1bit (Bonsai 27B packed 1-bit Qwen3.6 vision/reasoning model)
+          - text-chat-bonsai-2-27b-2bit (Bonsai 2 27B Hadamard 2-bit Qwen3.8 vision/reasoning model)
           - text-chat-bonsai-27b-2bit (Ternary Bonsai 27B packed 2-bit Qwen3.6 vision/reasoning model)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
           - text-agent-ornith-9b (Ornith 1.0 9B OptiQ, experimental coding-agent target)
