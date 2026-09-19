@@ -67,6 +67,7 @@ public enum MereRunCapabilityCatalog {
             visionGeometry,
             visionGeometryMultiview,
             audioEnhance,
+            audioEdit,
             audioGenerate,
             musicGenerate,
             musicAnalyze,

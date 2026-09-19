@@ -374,7 +374,7 @@ targets.append(
     name: "MereRunAudioModels",
     dependencies: mereRunAudioModelsDependencies,
     path: "Sources/MereRunAudioModels",
-    exclude: ["README.md"],
+    exclude: ["README.md", "AuK/README.md"],
     swiftSettings: commonSwiftSettings
   )
 )
@@ -800,6 +800,7 @@ targets.append(
     name: "H3RuntimeTests",
     dependencies: h3RuntimeTestsDependencies,
     path: "Tests/H3RuntimeTests",
+    exclude: ["Fixtures"],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
   )

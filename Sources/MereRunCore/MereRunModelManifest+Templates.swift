@@ -1841,6 +1841,13 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(APBWEResources.sourceRepository)@\(APBWEResources.sourceRevision)",
                 createdAt: createdAt
             )
+        case .aukBase, .aukFlash, .aukThinker:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .auk, family: .audio, tier: modelID == .aukBase ? .base : .small,
+                variant: .standard, precision: .fp32, defaults: nil, supports: [], components: nil,
+                upstreamRepoId: modelID == .aukThinker ? "Qwen/Qwen2.5-Omni-3B" : "Tencent-Hunyuan/AuK",
+                createdAt: createdAt
+            )
         case .univerSRAudio:
             return MereRunModelManifest(
                 id: modelID.rawValue,

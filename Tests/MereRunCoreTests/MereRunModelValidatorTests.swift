@@ -368,6 +368,28 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         }
     }
 
+    func testAuKManagedInstallsUseOriginalCheckpointLayout() throws {
+        for modelID: ModelResolver.ModelID in [.aukBase, .aukFlash, .aukThinker] {
+            let root = try TestFileSystem.makeTempDir()
+            defer { try? FileManager.default.removeItem(at: root) }
+            try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID.rawValue))
+            let required = spec.missingPaths(in: root)
+            XCTAssertFalse(required.isEmpty)
+            for path in required { try TestFileSystem.writeFile(path) }
+            for expectedID in [modelID.rawValue, nil] {
+                let report = MereRunModelValidator.validate(modelRoot: root, expectedModelID: expectedID)
+                XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+                XCTAssertTrue(report.warnings.isEmpty, report.warnings.joined(separator: "\n"))
+            }
+            let removed = try XCTUnwrap(required.first)
+            try FileManager.default.removeItem(at: removed)
+            let incomplete = MereRunModelValidator.validate(modelRoot: root, expectedModelID: modelID.rawValue)
+            XCTAssertFalse(incomplete.isValid)
+            XCTAssertTrue(incomplete.errors.contains { $0.contains(removed.lastPathComponent) })
+        }
+    }
+
     func testYuE2RootLayoutRequiresItsTransformerAndMountedVAE() throws {
         let root = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: root) }

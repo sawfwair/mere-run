@@ -39,6 +39,7 @@ import Testing
         "vision.geometry",
         "vision.geometry-multiview",
         "audio.enhance",
+        "audio.edit",
         "audio.generate",
         "music.generate",
         "music.analyze",
@@ -136,7 +137,7 @@ import Testing
         "geo.tessera",
         "geo.olmoearth"
     ])
-    #expect(document.commands.count == 129)
+    #expect(document.commands.count == 130)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

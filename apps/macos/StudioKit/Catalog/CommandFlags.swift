@@ -792,6 +792,26 @@ extension CommandFlags {
     }
 }
 
+// MARK: - audio edit
+
+extension CommandFlags {
+    /// `mere.run audio edit` — Edit or generate AuK speech
+    package enum AudioEdit: CommandFlagNamespace {
+        package static let command = ["audio", "edit"]
+
+        package static let audio = "--audio"
+        package static let model = "--model"
+        package static let modelPath = "--model-path"
+        package static let thinkerPath = "--thinker-path"
+        package static let output = "--output"
+        package static let duration = "--duration"
+        package static let steps = "--steps"
+        package static let guidance = "--guidance"
+        package static let seed = "--seed"
+        package static let quiet = "--quiet"
+    }
+}
+
 // MARK: - audio generate
 
 extension CommandFlags {

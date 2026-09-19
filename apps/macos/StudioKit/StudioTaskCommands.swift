@@ -39,7 +39,7 @@ extension CommandTemplateID {
         case .visionTrackLive: return .visionLive
         case .speechTranscribe: return .audioTranscribe
         case .speechDiarize: return .audioWhoSpoke
-        case .audioEnhance: return .audioEnhance
+        case .audioEnhance, .audioEdit: return .audioEnhance
         case .speechListen: return .audioLive
         case .textEmbed: return .textEmbeddings
         case .textAnonymize: return .textAnonymize

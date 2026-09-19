@@ -619,5 +619,16 @@
       "video-dreamx-world-5b-ar-mlx"
     ],
     "resourceName": "handbook-dreamx.md"
+  },
+  {
+    "topic": "handbook-auk",
+    "title": "AuK (Tencent Hunyuan)",
+    "category": "Audio",
+    "models": [
+      "audio-auk-base",
+      "audio-auk-flash",
+      "audio-auk-thinker"
+    ],
+    "resourceName": "handbook-auk.md"
   }
 ]

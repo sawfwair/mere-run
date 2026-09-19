@@ -105,6 +105,7 @@ public enum MereRunModelValidator {
             case .directoryRoot, .structuredRoot:
                 return spec.validationKind != .codegenGGUF
                     && spec.validationKind != .roFormer
+                    && spec.validationKind != .auk
                     && spec.validationKind != .apBWE
                     && spec.validationKind != .univerSR
                     && spec.validationKind != .deepseekV4FlashIMatrixGGUF
@@ -158,6 +159,8 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .miniMaxMusic3
             || spec?.validationKind == .yue2
             || spec?.validationKind == .roFormer
+            || spec?.validationKind == .auk
+            || spec?.validationKind == .aukThinker
             || spec?.validationKind == .apBWE
             || spec?.validationKind == .univerSR
             || spec?.validationKind == .sortformer
@@ -497,8 +500,8 @@ public enum MereRunModelValidator {
                 && engine != .magentaRT2
                 && engine != .muScriptor:
                 warnings.append("Manifest engine mismatch: family=music expects ace-step, minimax-music3, yue2, bs-roformer, magenta-rt2, or muscriptor.")
-            case .audio where engine != .apBWE && engine != .univerSR:
-                warnings.append("Manifest engine mismatch: family=audio expects ap-bwe or universr.")
+            case .audio where engine != .apBWE && engine != .univerSR && engine != .auk:
+                warnings.append("Manifest engine mismatch: family=audio expects ap-bwe, universr, or auk.")
             case .sfx where engine != .woosh && engine != .mmaudio:
                 warnings.append("Manifest engine mismatch: family=sfx expects woosh or mmaudio.")
             case .video where engine != .ltxVideo && engine != .wanVideo && engine != .miniMaxH3:
@@ -581,7 +584,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .miniMaxMusic3?, .yue2?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
+            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .miniMaxMusic3?, .yue2?, .magentaRT2?, .muScriptor?, .roFormer?, .auk?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .marigoldV2?, .tripoSR?, .instantMesh?, .trellis2?,
                  .insightFace?, .sortformer?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true

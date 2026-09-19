@@ -69,7 +69,7 @@ links to the page that owns that command.
 | [`mere.run speech`](/runtime/speech) | Synthesize, transcribe, diarize, and manage voice profiles. |
 | [`mere.run vision`](/runtime/vision) | Embed, caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media. |
 | [`mere.run geo`](/runtime/geo) | Run native geospatial inference models on local Earth-observation data. |
-| [`mere.run audio`](/runtime/audio) | Enhance general audio locally. |
+| [`mere.run audio`](/runtime/audio) | Generate, edit, and enhance audio locally. |
 | [`mere.run music`](/runtime/music) | Generate, analyze, transcribe, and separate music locally. |
 | [`mere.run sfx`](/runtime/sfx) | Generate sound effects locally. |
 | [`mere.run video`](/runtime/video) | Generate and understand video with native Swift/MLX pipelines. |

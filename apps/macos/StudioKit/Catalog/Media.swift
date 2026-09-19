@@ -5,6 +5,14 @@ import Foundation
 extension CommandCatalog {
     package static let mediaTemplates: [CommandTemplate] = [
         CommandTemplate(
+            id: .audioEdit, category: .media, title: "AuK speech editing",
+            subtitle: "Experimental instruction-based speech generation and editing",
+            systemImage: "waveform", promptLabel: "Instruction",
+            secondaryLabel: "Qwen encoder directory (optional)", inputKind: .audio,
+            outputKind: .file("wav"), defaultPrompt: "Say hello in a calm voice.",
+            defaultModel: "audio-auk-base"
+        ),
+        CommandTemplate(
             id: .audioEnhance,
             category: .media,
             title: "Enhance audio",
@@ -554,6 +562,23 @@ extension CommandArguments {
         var args = ArgumentBuilder(F.self)
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         if !draft.modelRoot.isBlank { args.option(F.modelRoot, draft.modelRoot) }
+        if draft.quiet { args.flag(F.quiet) }
+        return args.arguments
+    }
+
+    package static func audioEdit(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.AudioEdit
+        var args = ArgumentBuilder(F.self)
+        args.value(draft.prompt)
+        args.option(F.model, draft.model)
+        if !draft.inputPath.isBlank { args.option(F.audio, draft.inputPath) }
+        if !draft.modelRoot.isBlank { args.option(F.modelPath, draft.modelRoot) }
+        if !draft.secondaryText.isBlank { args.option(F.thinkerPath, draft.secondaryText) }
+        if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
+        if draft.useDuration { args.option(F.duration, format(draft.durationSeconds)) }
+        args.option(F.steps, String(draft.steps))
+        if let guidance = draft.audioGuidanceScale { args.option(F.guidance, format(guidance)) }
+        if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
         if draft.quiet { args.flag(F.quiet) }
         return args.arguments
     }

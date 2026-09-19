@@ -730,6 +730,19 @@ final class MediaIOTests: XCTestCase {
         }
     }
 
+    func testRealFFTPlanRejectsSpectralLeakageFromRoundedHighFrequencyPhases() throws {
+        let size = 400
+        let frequency = 173
+        let samples = (0..<size).map { index in
+            Float(cos(2 * Double.pi * Double(frequency * index) / Double(size)))
+        }
+        let spectrum = try RealFFTPlan(size: size).powerSpectrum(samples)
+        XCTAssertEqual(spectrum[frequency], 40_000, accuracy: 0.1)
+        for bin in spectrum.indices where bin != frequency {
+            XCTAssertLessThan(spectrum[bin], 1e-8, "Unexpected leakage into bin \(bin)")
+        }
+    }
+
     private func readUInt16LE(_ data: Data, offset: Int) -> UInt16 {
         let bytes = [UInt8](data[offset..<(offset + 2)])
         return UInt16(bytes[0]) | (UInt16(bytes[1]) << 8)

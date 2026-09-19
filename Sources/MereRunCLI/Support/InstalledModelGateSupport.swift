@@ -447,6 +447,15 @@ enum InstalledModelSmokePlans {
                 try await runner.installedMusicSeparationCheck(model: spec.id)
             }
 
+        case .auk:
+            return direct(spec, route: "audio edit (requires audio-auk-thinker)") { runner in
+                try await runner.installedAuKCheck(model: spec.id)
+            }
+        case .aukThinker:
+            return companion(spec, installedIDs: installedIDs,
+                candidates: ["audio-auk-base", "audio-auk-flash"], route: "consumed by AuK audio edit") { runner, primary in
+                try await runner.installedAuKCheck(model: primary)
+            }
         case .apBWE, .univerSR:
             return direct(spec, route: "audio enhance") { runner in
                 try await runner.installedAudioEnhancementCheck(model: spec.id)
@@ -1529,6 +1538,15 @@ extension GateRunner {
                 "unsupported music separation model in installed-model gate: \(model)"
             )
         }
+    }
+
+    func installedAuKCheck(model: String) async throws -> GateObservation {
+        let output = artifactURL(model, extension: "wav")
+        let run = try await exec([
+            "audio", "edit", "Say hello in a calm voice.", "--model", model,
+            "--duration", "2", "--output", output.path, "--quiet"
+        ], timeout: 3_600)
+        return try audioObservation(output, run: run)
     }
 
     func installedAudioEnhancementCheck(model: String) async throws -> GateObservation {

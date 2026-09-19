@@ -1114,6 +1114,15 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 8,
                 recommended: 16
             ),
+            descriptor("audio-auk-base", "AuK base (experimental)",
+                "Native instruction-conditioned speech generation and editing; requires audio-auk-thinker. Bounded FP32 checkpoint qualification passed on Apple Silicon.",
+                minimum: 24, recommended: 32),
+            descriptor("audio-auk-flash", "AuK Flash (experimental)",
+                "Native four-step speech generation and editing; requires audio-auk-thinker. Bounded FP32 checkpoint qualification passed on Apple Silicon.",
+                minimum: 24, recommended: 32),
+            descriptor("audio-auk-thinker", "AuK Qwen encoder",
+                "Qwen2.5-Omni-3B text/audio conditioning checkpoint for AuK; not a standalone audio generator.",
+                minimum: 24, recommended: 32),
             descriptor(
                 ModelResolver.ModelID.univerSRAudio.rawValue,
                 "UniverSR general audio",

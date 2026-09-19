@@ -62,6 +62,8 @@ enum CLIInferenceAdmissionClassifier {
         }
 
         switch topLevel {
+        case "audio" where subcommand == "edit":
+            return MachineInferenceRequest(label: label, resourceClass: managedModelClass("audio-auk-base"))
         case "speech", "audio":
             return MachineInferenceRequest(label: label, resourceClass: .small)
         case "image":

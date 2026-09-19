@@ -69,6 +69,7 @@ package enum CommandArguments {
         case .videoSession: return videoSession(draft)
         case .sfxGenerate: return sfxGenerate(draft)
         case .sfxVideo: return sfxVideo(draft)
+        case .audioEdit: return audioEdit(draft)
         case .audioEnhance: return audioEnhance(draft)
         case .audioGenerate: return audioGenerate(draft)
         case .musicAnalyze: return musicAnalyze(draft)

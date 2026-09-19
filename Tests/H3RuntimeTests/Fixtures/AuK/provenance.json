@@ -1,0 +1,6 @@
+{
+  "upstreamRevision": "6943a1e967409e8c73139a7a345f2a611cfb3dd6",
+  "mlx": "0.32.2",
+  "seed": 123,
+  "scope": "Random small-model component parity; not trained-checkpoint or speech-quality evidence."
+}
