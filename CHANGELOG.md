@@ -6,10 +6,19 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.53.0 - 2026-09-19
+
+- Add experimental native Bonsai 2 text and image chat for the pinned
+  `text-chat-bonsai-2-27b-2bit` checkpoint. Validate its packed projections,
+  signed Hadamard transforms, and FP16 vision tower during loading. Share the
+  transforms by default and fuse the 1,024-element transform on Metal. Bounded
+  M4 Max chat and vision checks passed; full-checkpoint logit parity,
+  sustained throughput, and long-context behavior remain unverified.
 - Add experimental native AuK base and Flash speech generation and editing through
   `audio edit`, with a Qwen2.5-Omni encoder, direct safetensors loading, and
   sequential runtime stages. Base and Flash pass trained-weight parity and a
-  bounded 16-case Apple Silicon audio qualification.
+  bounded 16-case Apple Silicon audio qualification. Quantized inference,
+  CUDA, longer outputs, and broader listening quality remain unqualified.
 
 ## 0.52.2 - 2026-09-17
 
