@@ -1,0 +1,126 @@
+{
+  "model": "image-qwen-21",
+  "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+  "cases": [
+    {
+      "id": "smoke-512",
+      "width": 512,
+      "height": 512,
+      "steps": 8,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 42
+    },
+    {
+      "id": "replay-512",
+      "width": 512,
+      "height": 512,
+      "steps": 8,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 42
+    },
+    {
+      "id": "quality-1024",
+      "width": 1024,
+      "height": 1024,
+      "steps": 40,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 42
+    },
+    {
+      "id": "rgba-1024",
+      "width": 1024,
+      "height": 1024,
+      "steps": 40,
+      "prompt": "RGBA image of a single ripe strawberry with green leaves, isolated on a fully transparent background, product photography, no ground, no shadow.",
+      "seed": 43
+    },
+    {
+      "id": "edit-single",
+      "width": 512,
+      "height": 512,
+      "steps": 20,
+      "prompt": "Change the red teapot to cobalt blue. Preserve the teapot shape, handle, spout, wooden table and lighting.",
+      "seed": 44,
+      "inputs": [
+        "quality-1024.png"
+      ]
+    },
+    {
+      "id": "edit-multi",
+      "width": 512,
+      "height": 512,
+      "steps": 20,
+      "prompt": "Place the strawberry from image 2 next to the teapot in image 1, on the same wooden table. Keep both objects recognizable.",
+      "seed": 45,
+      "inputs": [
+        "quality-1024.png",
+        "rgba-1024.png"
+      ]
+    },
+    {
+      "id": "cfg-512",
+      "width": 512,
+      "height": 512,
+      "steps": 8,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 42,
+      "cfg": 3,
+      "negative_prompt": "blurry, low quality, distorted"
+    },
+    {
+      "id": "memory-2048",
+      "width": 2048,
+      "height": 2048,
+      "steps": 2,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 42
+    },
+    {
+      "id": "quality-2048",
+      "width": 2048,
+      "height": 2048,
+      "steps": 40,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 42
+    },
+    {
+      "id": "aspect-768x512",
+      "width": 768,
+      "height": 512,
+      "steps": 8,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 46
+    },
+    {
+      "id": "references-10",
+      "width": 512,
+      "height": 512,
+      "steps": 2,
+      "prompt": "Arrange the teapots from these reference images on a wooden table.",
+      "seed": 47,
+      "inputs": [
+        "quality-1024.png",
+        "quality-1024.png",
+        "quality-1024.png",
+        "quality-1024.png",
+        "quality-1024.png",
+        "quality-1024.png",
+        "quality-1024.png",
+        "quality-1024.png",
+        "quality-1024.png",
+        "quality-1024.png"
+      ]
+    },
+    {
+      "id": "cfg-quality-512",
+      "width": 512,
+      "height": 512,
+      "steps": 40,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 42,
+      "cfg": 1.5,
+      "negative_prompt": "blurry, low quality, distorted"
+    }
+  ],
+  "note": "Run memory-2048 before quality-2048. Two-step 2048 and ten-reference cases qualify execution only; inspect 40-step outputs separately for quality."
+}

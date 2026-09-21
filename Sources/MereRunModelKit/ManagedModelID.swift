@@ -20,6 +20,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case senseNovaU15 = "image-sensenova-u1-5-8b-mot"
     case krea2Raw = "image-krea2-raw"
     case krea2Turbo = "image-krea2-turbo"
+    case qwenImage21 = "image-qwen-21"
     case qwenImageEdit2511 = "image-qwen-edit-2511"
     case qwenImageEdit2511Lightning = "image-qwen-edit-2511-lightning"
     case ideogram4SDNQUInt4 = "image-ideogram4-sdnq-uint4"

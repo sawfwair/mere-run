@@ -155,7 +155,8 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
-        } else if spec?.validationKind == .aceStep
+        } else if spec?.validationKind == .qwenImage21
+            || spec?.validationKind == .aceStep
             || spec?.validationKind == .miniMaxMusic3
             || spec?.validationKind == .yue2
             || spec?.validationKind == .roFormer
@@ -465,9 +466,9 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=liquid expects lfm2.")
             case .laguna where engine != .laguna:
                 warnings.append("Manifest engine mismatch: family=laguna expects laguna.")
-            case .qwen where engine != .qwen35HybridMoE && engine != .qwenImageEdit:
+            case .qwen where engine != .qwen35HybridMoE && engine != .qwenImageEdit && engine != .qwenImage21:
                 warnings.append(
-                    "Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe or qwen-image-edit."
+                    "Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe, qwen-image-edit, or qwen-image-21."
                 )
             case .sam where engine != .samSegmentation:
                 warnings.append("Manifest engine mismatch: family=sam expects sam-segmentation.")

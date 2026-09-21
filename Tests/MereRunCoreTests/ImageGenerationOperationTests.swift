@@ -9,7 +9,8 @@ final class ImageGenerationOperationTests: XCTestCase {
         let families: [(MereRunModelManifest.Family, MereRunModelManifest.Engine, ImageGenerationBackend)] = [
             (.flux1, .flux1, .flux1), (.klein, .flux2Klein, .flux2Klein), (.zimage, .zimageTurbo, .zImageTurbo),
             (.hidream, .hidreamO1, .hiDreamO1), (.senseNova, .senseNovaU15, .senseNovaU15),
-            (.krea, .krea2, .krea2), (.ideogram, .ideogram4, .ideogram4), (.qwen, .qwenImageEdit, .qwenImageEdit)
+            (.krea, .krea2, .krea2), (.ideogram, .ideogram4, .ideogram4), (.qwen, .qwenImageEdit, .qwenImageEdit),
+            (.qwen, .qwenImage21, .qwenImage21)
         ]
         for (family, engine, backend) in families {
             let manifest = MereRunModelManifest(id: "fixture", engine: engine, family: family, defaults: .init(steps: 27, cfg: 3, sigmaShift: 2))

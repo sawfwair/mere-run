@@ -1,0 +1,33 @@
+{
+  "base_dim": 2,
+  "decoder_base_dim": 2,
+  "z_dim": 2,
+  "dim_mult": [
+    1,
+    2,
+    4,
+    8,
+    8
+  ],
+  "num_res_blocks": 1,
+  "attn_scales": [],
+  "temperal_downsample": [
+    false,
+    true,
+    true,
+    true
+  ],
+  "in_channels": 4,
+  "out_channels": 4,
+  "is_residual": true,
+  "patch_size": null,
+  "scale_factor_spatial": 16,
+  "latents_mean": [
+    0.25,
+    -0.5
+  ],
+  "latents_std": [
+    1.5,
+    2.0
+  ]
+}

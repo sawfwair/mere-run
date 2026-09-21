@@ -133,6 +133,8 @@ public extension ManagedModelSpec {
             return SenseNovaU15Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .krea2:
             return Krea2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .qwenImage21:
+            return QwenImage21Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .qwenImageEdit:
             var missing = QwenImageEditResources(rootURL: rootURL).validate(fileManager: fileManager)
             if id == QwenImageEditRepository.lightning2511Id {

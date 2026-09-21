@@ -122,7 +122,7 @@ public struct ImageGenerationIssue: Codable, LocalizedError, Equatable, Sendable
 }
 
 public enum ImageGenerationBackend: String, CaseIterable, Codable, Sendable {
-    case flux1, flux2Klein, zImageTurbo, hiDreamO1, senseNovaU15, krea2, ideogram4, qwenImageEdit
+    case flux1, flux2Klein, zImageTurbo, hiDreamO1, senseNovaU15, krea2, ideogram4, qwenImageEdit, qwenImage21
 
     public init(manifest: MereRunModelManifest) throws {
         switch manifest.family {
@@ -133,6 +133,7 @@ public enum ImageGenerationBackend: String, CaseIterable, Codable, Sendable {
         case .senseNova: self = .senseNovaU15
         case .krea: self = .krea2
         case .ideogram: self = .ideogram4
+        case .qwen where manifest.engine == .qwenImage21: self = .qwenImage21
         case .qwen where manifest.engine == .qwenImageEdit: self = .qwenImageEdit
         default:
             throw ImageGenerationIssue("model_family_unsupported", "Unsupported image generation model: \(manifest.id).")

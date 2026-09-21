@@ -170,7 +170,7 @@ enum InstalledModelSmokePlans {
         installedIDs: Set<String>
     ) -> InstalledModelSmokePlan? {
         switch spec.validationKind {
-        case .flux1, .flux2Klein, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ:
+        case .flux1, .flux2Klein, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ, .qwenImage21:
             return direct(spec, route: "image generate") { runner in
                 try await runner.installedImageCheck(model: spec.id)
             }
@@ -740,7 +740,7 @@ extension GateRunner {
                 "--prompt", "A red cube on a clean neutral background.",
                 "--width", "512",
                 "--height", "512",
-                "--steps", "1",
+                "--steps", model == QwenImage21Resources.modelID ? "2" : "1",
                 "--seed", "7",
                 "--output", output.path,
                 "--quiet",

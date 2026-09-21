@@ -27,6 +27,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         /// Krea 2 text-to-image family.
         case krea2 = "krea-2"
         /// Qwen Image Edit native multi-reference editing family.
+        case qwenImage21 = "qwen-image-21"
         case qwenImageEdit = "qwen-image-edit"
         /// Ideogram 4 text-to-image family.
         case ideogram4 = "ideogram-4"

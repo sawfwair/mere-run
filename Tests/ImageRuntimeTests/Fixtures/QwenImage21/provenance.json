@@ -1,0 +1,8 @@
+{
+  "diffusers_revision": "8d3c30bfda9b511c00992f40cff4170a5502814d",
+  "seed": 21,
+  "torch": "2.14.0",
+  "scope": "tiny random CPU float32 models; no real checkpoint or quality claims",
+  "transformers": "5.17.0",
+  "checkpoint_header_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa"
+}

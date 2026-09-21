@@ -644,7 +644,7 @@ extension QwenEncoder {
     if tokenIds.dtype != .int32 {
       tokenIds = tokenIds.asType(.int32)
     }
-    return embedTokens(tokenIds).asType(.bfloat16)
+    return embedTokens(tokenIds).asType(configuration.useFloat32Activations ? .float32 : .bfloat16)
   }
 
   public func forwardCausal(
