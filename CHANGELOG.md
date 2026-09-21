@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add experimental native Qwen Image 2.1 generation and editing with up to ten
+  references, RGBA PNG output, Qwen3-VL conditioning, and prefix KV reuse.
+  `image-qwen-21` uses pinned dense weights and requires acceptance of Qwen's
+  research-only terms. Bounded M4 Max qualification covers real-checkpoint
+  generation, editing, transparency, and repeatability. Numerical and visual
+  limitations remain documented in the Qwen Image 2.1 qualification report.
+
 ## 0.53.0 - 2026-09-19
 
 - Add experimental native Bonsai 2 text and image chat for the pinned

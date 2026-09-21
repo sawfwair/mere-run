@@ -194,6 +194,7 @@ final class ManagedModelCatalogTests: XCTestCase {
 
     func testRestrictedModelInventoryIsCompleteAndCannotAutoDownload() throws {
         let expected = Set([
+            "image-qwen-21",
             "image-flux1-dev",
             "image-flux2-dev",
             "image-klein-9b",

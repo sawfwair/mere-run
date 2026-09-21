@@ -421,6 +421,21 @@ extension ManagedModelCatalog {
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
+            id: QwenImage21Resources.modelID,
+            category: .image, installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(repoId: QwenImage21Resources.repoID,
+                revision: QwenImage21Resources.revision, patterns: QwenImage21Resources.patterns),
+            upstreamRepoId: QwenImage21Resources.repoID, upstreamRevision: QwenImage21Resources.revision,
+            usageRestriction: usageRestriction(
+                summary: "Qwen Image 2.1 is restricted to non-commercial research and evaluation; commercial use requires a separate license.",
+                license: "Qwen Research License Agreement",
+                sourceRepoId: QwenImage21Resources.repoID, sourceRevision: QwenImage21Resources.revision,
+                licenseURL: "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/b3179ad355be050328e483a9dfdd9e60cd62adfa/LICENSE"
+            ),
+            validationKind: .qwenImage21, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 33_131_616_240, defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
             id: QwenImageEditRepository.model2511Id,
             category: .image,
             installShape: .directoryRoot,

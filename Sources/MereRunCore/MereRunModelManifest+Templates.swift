@@ -1305,6 +1305,16 @@ extension MereRunModelManifest {
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
+        case .qwenImage21:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .qwenImage21, family: .qwen,
+                tier: .latest, variant: .base, precision: .bf16,
+                defaults: Defaults(steps: 40, cfg: 1.0), supports: [.txt2img, .referenceEdit],
+                components: Components(tokenizer: .local(path: "processor"), textEncoder: .local(path: "text_encoder"),
+                    transformer: .local(path: "transformer"), vae: .local(path: "vae"), scheduler: .local(path: "scheduler")),
+                upstreamRepoId: "\(QwenImage21Resources.repoID)@\(QwenImage21Resources.revision)",
+                createdAt: createdAt
+            )
         case .qwenImageEdit2511:
             return MereRunModelManifest(
                 id: modelID.rawValue,

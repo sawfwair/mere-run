@@ -149,6 +149,8 @@ public enum ImageGenerationOperation {
             let generator = Ideogram4Generator()
             defer { generator.unload() }
             return try await generator.generate(request, progressHandler: progressHandler)
+        case .qwenImage21:
+            return try await QwenImage21Generator().generate(request, progressHandler: progressHandler)
         case .qwenImageEdit:
             let generator = QwenImageEditGenerator()
             return try await withCleanup {

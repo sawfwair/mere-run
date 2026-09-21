@@ -490,6 +490,7 @@ targets.append(
     exclude: [
       "README.md",
       "Flux2/Transformer/README.md",
+      "QwenImage21/README.md",
       "ZImage/README.md",
       "ZImage/Transformer/README.md",
       "VAE/README.md"
@@ -671,6 +672,7 @@ targets.append(
       "Quantization/README.md",
       "MarigoldV2/README.md",
       "QwenImageEdit/README.md",
+      "QwenImage21/README.md",
       "QwenImageEdit/Model/Transformer/README.md",
       "QwenImageEdit/Model/VAE/README.md",
       "SAM3/README.md",
@@ -862,6 +864,7 @@ targets.append(
     dependencies: ["MereRunTensor", "MereRunTextEncoder", "MereRunImageModels", "MereRunMLXTestSupport"]
       + mlxDependency("MLXRandom"),
     path: "Tests/ImageRuntimeTests",
+    exclude: ["Fixtures"],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings
   )

@@ -21,7 +21,7 @@ public struct ImageGenerationSampling: Sendable, Equatable {
         switch manifest?.family {
         case .klein: usesManifest = policy.kleinUsesManifestDefaults
         case .hidream, .senseNova, .krea, .ideogram, .flux1: usesManifest = true
-        case .qwen: usesManifest = manifest?.engine == .qwenImageEdit
+        case .qwen: usesManifest = manifest?.engine == .qwenImageEdit || manifest?.engine == .qwenImage21
         default: usesManifest = false
         }
         let defaultSteps = manifest == nil ? nil
@@ -240,6 +240,15 @@ public struct ImageGenerationPlan: Sendable {
             manifest.family == .senseNova && (!options.width.isMultiple(of: 32) || !options.height.isMultiple(of: 32)),
             "dimensions_invalid", "SenseNova image dimensions must be multiples of 32."
         )
+        if manifest.engine == .qwenImage21 {
+            let count = [options.inputImage].compactMap { $0 }.count + options.referenceImages.count
+            reject(count > 10, "reference_count_invalid", "Qwen Image 2.1 supports up to ten ordered reference images.")
+            reject(!options.width.isMultiple(of: 32) || !options.height.isMultiple(of: 32),
+                   "dimensions_invalid", "Qwen Image 2.1 dimensions must be multiples of 32.")
+            reject((sampling.steps ?? 40) < 2, "steps_invalid", "Qwen Image 2.1 requires at least two steps.")
+            reject(options.outputURL.pathExtension.lowercased() != "png", "output_format_invalid", "Qwen Image 2.1 requires PNG output to preserve alpha.")
+            reject(options.strength != nil, "strength_unsupported", "Qwen Image 2.1 uses reference conditioning rather than an image strength.")
+        }
         if manifest.engine == .qwenImageEdit {
             let count = Set(([options.inputImage].compactMap { $0 } + options.referenceImages).map { $0.standardizedFileURL }).count
             reject(count == 0, "edit_input_missing", "Qwen-Image-Edit requires at least one input or reference image.")

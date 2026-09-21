@@ -69,6 +69,7 @@ an effective overlay; they are not a second capability catalog.
 | `image` | `image-sensenova-u1-5-8b-mot` |
 | `image` | `image-krea2-raw` |
 | `image` | `image-krea2-turbo` |
+| `image` | `image-qwen-21` |
 | `image` | `image-qwen-edit-2511` |
 | `image` | `image-qwen-edit-2511-lightning` |
 | `image` | `image-ideogram4-sdnq-uint4` |
@@ -1786,3 +1787,33 @@ full language model. The older Bonsai IDs remain separate models.
 The pack requires the matching native loader; ordinary affine loading omits
 required transforms. Short text and synthetic vision smoke checks passed locally; full-model parity
 and broad quality evaluation remain unverified.
+
+## Qwen Image 2.1
+
+`image-qwen-21` pins `Qwen/Qwen-Image-2.1` to
+`b3179ad355be050328e483a9dfdd9e60cd62adfa`. The approximately 33.1 GB snapshot
+contains the single-stream transformer, Qwen3-VL encoder, RGBA VAE, processor,
+and flow scheduler. Inference runs in Swift/MLX with sequential component
+loading and separate positive and negative prefix caches.
+
+The Qwen Research License restricts the weights to non-commercial research and
+evaluation. Review the pinned license before using `--accept-license-terms`.
+
+```bash
+mere.run model pull image-qwen-21 --accept-license-terms
+mere.run image generate --model image-qwen-21 \
+  --prompt 'A ceramic teapot on a wooden table' \
+  --steps 40 --seed 42 --output teapot.png
+```
+
+Use `--input` and repeated `--ref-image` flags for up to ten ordered reference
+images. Output dimensions must be multiples of 32. PNG output preserves alpha;
+a transparency prompt controls what the model generates. The separate optional
+Qwen prompt rewriters are not loaded automatically.
+
+Tests compare native transformer, prefix-cache, VAE, and Qwen3-VL outputs
+against pinned reference libraries. The [bounded M4 Max qualification report](./benchmarks/qwen-image-21-native-qualification-2026-09-20.md)
+records trained-checkpoint generation, editing, transparency, repeatability,
+and numerical limitations. Only the tested 128 GiB host is qualified; catalog
+memory estimates do not establish support on smaller machines. Run
+`mere.run guide --model image-qwen-21` for controls and source revisions.

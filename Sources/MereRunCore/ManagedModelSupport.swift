@@ -337,6 +337,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                QwenImage21Resources.modelID,
+                "Image, Qwen 2.1 RGBA",
+                "Experimental native generation and editing with ten references and RGBA output. Bounded qualification used an M4 Max with 128 GiB; memory estimates for smaller hosts remain provisional.",
+                minimum: 48,
+                recommended: 96
+            ),
+            descriptor(
                 QwenImageEditRepository.model2511Id,
                 "Image edit, Qwen 2511 quality",
                 "Runs the pinned BF16 Qwen Image Edit 2511 stack for one-to-three-image editing with the 40-step guided recipe.",

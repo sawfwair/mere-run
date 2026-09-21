@@ -107,6 +107,7 @@ private enum APISidecarImageGenerator: @unchecked Sendable {
     case senseNovaU15(SenseNovaU15Generator)
     case krea2(Krea2Generator)
     case ideogram4(Ideogram4Generator)
+    case qwenImage21(QwenImage21Generator)
     case qwenImageEdit(QwenImageEditGenerator)
 }
 
@@ -242,6 +243,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         return .krea2(Krea2Generator())
                     case .ideogram4:
                         return .ideogram4(Ideogram4Generator())
+                    case .qwenImage21:
+                        return .qwenImage21(QwenImage21Generator())
                     case .qwenImageEdit:
                         return .qwenImageEdit(QwenImageEditGenerator())
                     }
@@ -262,6 +265,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         generator.unload()
                     case .ideogram4(let generator):
                         generator.unload()
+                    case .qwenImage21:
+                        break
                     case .qwenImageEdit(let generator):
                         await generator.clearCache()
                     }
@@ -281,6 +286,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     case .krea2(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .ideogram4(let generator):
+                        return try await generator.generate(request, progressHandler: nil)
+                    case .qwenImage21(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .qwenImageEdit(let generator):
                         return try await generator.generate(request, progressHandler: nil)
@@ -902,6 +909,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             generator.unload()
         case .ideogram4(let generator):
             generator.unload()
+        case .qwenImage21:
+            break
         case .qwenImageEdit(let generator):
             await generator.clearCache()
         }
@@ -946,7 +955,9 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         height: Int,
         residentNeedsLoad: Bool
     ) -> UInt64? {
-        let baseBytes = residentNeedsLoad
+        // Qwen Image 2.1 releases all weights at the end of every operation.
+        let needsWeights = residentNeedsLoad || kind == .qwenImage21
+        let baseBytes = needsWeights
             ? Self.imageBaseLoadBytes(for: kind)
             : 8 * Self.gibibyte
         let dimensions = Self.effectiveImageLoadDimensions(
@@ -959,7 +970,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             width: dimensions.width,
             height: dimensions.height
         )
-        guard residentNeedsLoad else {
+        guard needsWeights else {
             // Warm staged pipelines can temporarily reload components, but
             // their checkpoint is already resident/accounted for. Avoid an
             // unnecessary directory walk and project only activation/staging
@@ -992,7 +1003,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             return 10 * gibibyte
         case .zImageTurbo:
             return 12 * gibibyte
-        case .hiDreamO1, .krea2, .ideogram4, .qwenImageEdit:
+        case .hiDreamO1, .krea2, .ideogram4, .qwenImageEdit, .qwenImage21:
             return 16 * gibibyte
         case .senseNovaU15:
             return 48 * gibibyte
@@ -1011,7 +1022,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 height: height
             )
             return (resolution.width, resolution.height)
-        case .flux1, .flux2Klein, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit:
+        case .flux1, .flux2Klein, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit, .qwenImage21:
             return (width, height)
         }
     }

@@ -90,6 +90,13 @@
     "resourceName": "handbook-krea2.md"
   },
   {
+    "topic": "handbook-qwen-image-21",
+    "title": "Qwen Image 2.1 (Qwen)",
+    "category": "Image",
+    "models": ["image-qwen-21"],
+    "resourceName": "handbook-qwen-image-21.md"
+  },
+  {
     "topic": "handbook-qwen-image-edit",
     "title": "Qwen Image Edit 2511 (Qwen)",
     "category": "Image",

@@ -1,0 +1,4274 @@
+{
+  "model": "image-qwen-21",
+  "qualification_date": "2026-09-20",
+  "source_base": "d98fb81cdf4f56a585dea133f4667cbbcd5aee1b",
+  "source_state": "Uncommitted feature implementation; no release or hosted CI claim.",
+  "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+  "reference_diffusers_revision": "8d3c30bfda9b511c00992f40cff4170a5502814d",
+  "hardware": {
+    "chip": "Apple M4 Max",
+    "memory_gib": 128,
+    "model": "Mac16,6",
+    "os": "macOS 26.5.2"
+  },
+  "scope": "Bounded local CLI qualification, with numerical and visual limitations retained.",
+  "memory_note": "OS peak memory footprint includes GPU allocator caches; maximum resident size alone underreports this workload. Observed footprint is not a minimum hardware requirement.",
+  "verified_checkpoint_assets": [
+    {
+      "path": "text_encoder/model-00001-of-00004.safetensors",
+      "size": 4998056552,
+      "sha256": "dde00291b5f7fb92013895310a3da0ddba78674df9f10d505d375243dc01fc6f",
+      "verified_sha256": "dde00291b5f7fb92013895310a3da0ddba78674df9f10d505d375243dc01fc6f"
+    },
+    {
+      "path": "text_encoder/model-00002-of-00004.safetensors",
+      "size": 4915962464,
+      "sha256": "9047faccc0a6d98496a52d55f27be1c94a9c259d1e283fbea0128d054a948d42",
+      "verified_sha256": "9047faccc0a6d98496a52d55f27be1c94a9c259d1e283fbea0128d054a948d42"
+    },
+    {
+      "path": "text_encoder/model-00003-of-00004.safetensors",
+      "size": 4915962496,
+      "sha256": "8c54187654c0176b73ae73785bf791dc9a14c9df7fb4310083a09d42048cb57e",
+      "verified_sha256": "8c54187654c0176b73ae73785bf791dc9a14c9df7fb4310083a09d42048cb57e"
+    },
+    {
+      "path": "text_encoder/model-00004-of-00004.safetensors",
+      "size": 2704357976,
+      "sha256": "5311532aaaeae3259eb6a7b2c600636be1159adf7ded35f53579f7d0e7d43cdd",
+      "verified_sha256": "5311532aaaeae3259eb6a7b2c600636be1159adf7ded35f53579f7d0e7d43cdd"
+    },
+    {
+      "path": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors",
+      "size": 9968332504,
+      "sha256": "9e6bc2d641e67bf277895ea8777141044a38f3edb7101bc469b2961dd7c36b4b",
+      "verified_sha256": "9e6bc2d641e67bf277895ea8777141044a38f3edb7101bc469b2961dd7c36b4b"
+    },
+    {
+      "path": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors",
+      "size": 4261951904,
+      "sha256": "3aaf234dcbe128530479735854a346b5e3e66283b7c11db56f836bbd1c13ebaa",
+      "verified_sha256": "3aaf234dcbe128530479735854a346b5e3e66283b7c11db56f836bbd1c13ebaa"
+    },
+    {
+      "path": "vae/diffusion_pytorch_model.safetensors",
+      "size": 1350989512,
+      "sha256": "a07a1b7c4ee2966a1b3bdc37de9b4f983d56937e46619f709a80b6e490675417",
+      "verified_sha256": "a07a1b7c4ee2966a1b3bdc37de9b4f983d56937e46619f709a80b6e490675417"
+    }
+  ],
+  "local_gate": {
+    "command": "./scripts/check.sh",
+    "passed": true,
+    "xctest_total": 4531,
+    "xctest_skipped": 344,
+    "xctest_failures": 0,
+    "swift_testing_total": 51
+  },
+  "cases": [
+    {
+      "case": {
+        "id": "smoke-512",
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+        "seed": 42
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 26.782176708002225,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.9603720829982194,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.9603837499962538,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.7596710419966257,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 5.6217132919991855,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 5.622828958003083,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 8.78229016700061,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 10.641622124996502,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 13.087844249996124,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 15.655197166997823,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 18.294530207997013,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 20.78976212500129,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 23.172534874996927,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 25.431544874998508,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 25.49444054200285,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 25.49667125000269,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 26.584264666998934,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 26.759000917001686,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16507912192,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "391595cad93db9779bbe553da484a9289624f4273cf837c4ea4665fb97eb689d",
+      "pixel_sha256": "f8961318bbcf985f9c0c7fcbed35b0fd714047f966e311a4cf6f2d02b6a7967d",
+      "alpha_min": 254,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 71.05264318938106,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "One coherent red ceramic teapot, curved spout and round handle, on a pale wooden table; requested subject and materials present."
+      },
+      "peak_memory_footprint_bytes": 16709923200
+    },
+    {
+      "case": {
+        "id": "replay-512",
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+        "seed": 42
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 13.71330854199914,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.0540148340005544,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.05403266700159293,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.8618347919982625,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.034879999999248,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.0351644589973148,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2.4936295419975067,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 3.660739291997743,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 4.957683374996122,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 6.468892333999975,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 8.085599416997866,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 9.811083208995115,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 11.528228374998434,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 13.250799166999059,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 13.303485541997361,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 13.3042350839969,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 13.678291749994969,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 13.689954749999742,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16479469568,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "391595cad93db9779bbe553da484a9289624f4273cf837c4ea4665fb97eb689d",
+      "pixel_sha256": "f8961318bbcf985f9c0c7fcbed35b0fd714047f966e311a4cf6f2d02b6a7967d",
+      "alpha_min": 254,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 71.05264318938106,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "Byte-identical to the visually inspected smoke image."
+      },
+      "peak_memory_footprint_bytes": 16686182760
+    },
+    {
+      "case": {
+        "id": "quality-1024",
+        "width": 1024,
+        "height": 1024,
+        "steps": 40,
+        "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+        "seed": 42
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 358.91158116600127,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.05411416599963559,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.05412820800120244,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.8619854999997187,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.0368628329961211,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.037140124994039,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 9.05456629100081,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 16.61766704099864,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 24.398564165996504,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 31.8431383749994,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 39.20418845799577,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 46.58293337500072,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 53.90401987500081,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 61.86499487499532,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 69.6623593330005,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 9,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 76.9975377909941,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 10,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 84.57292949999828,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 11,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 92.06479954099632,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 12,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 100.12358304100053,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 13,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 108.55633408299764,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 14,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 117.30904212499445,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 15,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 126.20983200000046,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 16,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 135.4343119999976,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 17,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 144.96456949999993,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 18,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 154.35233212499588,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 19,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 164.22216233299696,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 20,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 174.19990162499744,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 21,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 184.44380224999622,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 22,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 193.94928362499923,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 23,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 204.55208783299895,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 24,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 215.37354829099786,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 25,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 225.19131108299916,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 26,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 234.12895145799848,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 27,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 243.37863929099694,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 28,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 252.64729675000126,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 29,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 262.3766613330008,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 30,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 271.74327645800076,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 31,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 280.9890012909964,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 32,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 290.6321037499947,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 33,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 299.9843567079952,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 34,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 309.12204850000126,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 35,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 318.1905969579966,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 36,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 327.6828649579984,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 37,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 336.8302869159961,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 38,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 345.8325346249985,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 39,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 356.91179554099654,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 40,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 357.02570095799456,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 357.0269673329967,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 358.749184332999,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 358.82135858299443,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16481337344,
+      "peak_memory_footprint_bytes": 21685077768,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "cf7b045006af8a54e99d7cc48f44f0b87c897598dd5729f4927838e272a496dd",
+      "pixel_sha256": "800ac030db9eabf082da20dfe2a26ecf4974fba3ae5c164315b3c427e08ba64d",
+      "alpha_min": 253,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 62.24439288187338,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "Coherent red ceramic teapot with spout, lid and round handle on a pale wooden tabletop. Plausible lighting and material texture; no obvious structural corruption."
+      }
+    },
+    {
+      "case": {
+        "id": "rgba-1024",
+        "width": 1024,
+        "height": 1024,
+        "steps": 40,
+        "prompt": "RGBA image of a single ripe strawberry with green leaves, isolated on a fully transparent background, product photography, no ground, no shadow.",
+        "seed": 43
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 362.80216237499553,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.05723129199759569,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.05724083400127711,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.8642597919970285,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.03173791700101,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.0319838750001509,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 10.04683666699566,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 18.137135917000705,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 26.095840666996082,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 34.15241524999874,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 41.990318459000264,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 49.72065408399794,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 57.36685604199738,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 65.07447329199931,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 72.82356187499681,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 9,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 81.21419170899753,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 10,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 88.99637233399699,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 11,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 96.8857889169958,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 12,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 104.8065687499984,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 13,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 113.02086812500056,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 14,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 121.87725124999997,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 15,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 129.95711229199514,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 16,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 138.20413116699638,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 17,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 146.43982508399495,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 18,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 154.75361070899817,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 19,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 163.18264749999798,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 20,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 171.92335083399666,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 21,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 180.55424274999677,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 22,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 189.3130688339952,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 23,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 200.24253674999636,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 24,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 211.04067754199787,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 25,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 221.32754783400014,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 26,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 230.5207099170002,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 27,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 240.01652337500127,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 28,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 249.3177467919959,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 29,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 258.60741174999566,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 30,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 268.107504708998,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 31,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 278.36831941700075,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 32,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 289.84386270899995,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 33,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 301.36689779199514,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 34,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 312.79280895899865,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 35,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 323.1451329170013,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 36,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 333.78244804199494,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 37,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 342.8884352499954,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 38,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 351.9449596669947,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 39,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 361.1153574169948,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 40,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 361.19177749999653,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 361.1929251249967,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 362.7318703339988,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 362.76262112499535,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16479764480,
+      "peak_memory_footprint_bytes": 21687043944,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1024
+      ],
+      "sha256": "9732210ad5ae9c83b2b95d0dbf3d3a033d4aee8d5f5b560c7a93e0c70a3caa25",
+      "pixel_sha256": "a4be2658375db6bbcc6201bcf4db39ba5d0ba001e0ada9ac28d4e1d5aac08336",
+      "alpha_min": 0,
+      "alpha_max": 255,
+      "transparent_fraction": 0.6721200942993164,
+      "opaque_fraction": 0.3178415298461914,
+      "rgb_standard_deviation": 76.66442392898573,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "Recognizable isolated strawberry with green leaves. Alpha-aware composition confirms a transparent background. Minor edge speckles and partially transparent outer-border pixels remain; this is not a clean production matte."
+      },
+      "alpha_aware_preview": "rgba-1024-checkerboard.png"
+    },
+    {
+      "case": {
+        "id": "edit-single",
+        "width": 512,
+        "height": 512,
+        "steps": 20,
+        "prompt": "Change the red teapot to cobalt blue. Preserve the teapot shape, handle, spout, wooden table and lighting.",
+        "seed": 44,
+        "inputs": [
+          "quality-1024.png"
+        ]
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {
+        "quality-1024.png": "cf7b045006af8a54e99d7cc48f44f0b87c897598dd5729f4927838e272a496dd"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 56.98352012500254,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.062170875004085246,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.0860568330026581,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.8887085830065189,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.0339637080032844,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.5184488750019227,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 1,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.5267373750029947,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 11.274239958002,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 13.589305041001353,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 15.823890750005376,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 18.08692320800037,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 20.237191708001774,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 22.510354458005168,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 24.689934958005324,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 26.98438891600381,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 29.220805125005427,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 9,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 31.463979915999516,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 10,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 34.214221583002654,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 11,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 36.59255608300009,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 12,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 38.86925045800308,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 13,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 41.17313441599981,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 14,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 43.40213158300321,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 15,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 45.761676500005706,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 16,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 47.930314916004136,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 17,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 50.833950333006214,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 18,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 53.708764125003654,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 19,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 56.36302520800382,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 20,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 56.47278220800217,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 56.47390508300305,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 56.920159749999584,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 56.93846845799999,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16513482752,
+      "peak_memory_footprint_bytes": 19244773520,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "aab79a91702edf2a0852fa0801e9395f339bdf523f11828d6075edaba7a1f0be",
+      "pixel_sha256": "333a763532eb128cb8a48f3594b3f811d02b400cef7c8026d2fb6c034b2b11b3",
+      "alpha_min": 251,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 65.7993119897375,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "Teapot changed from red to cobalt blue while preserving the recognizable shape, lid, spout, handle, pale wooden table and lighting. Output is 512 pixels versus the 1024-pixel reference."
+      }
+    },
+    {
+      "case": {
+        "id": "edit-multi",
+        "width": 512,
+        "height": 512,
+        "steps": 20,
+        "prompt": "Place the strawberry from image 2 next to the teapot in image 1, on the same wooden table. Keep both objects recognizable.",
+        "seed": 45,
+        "inputs": [
+          "quality-1024.png",
+          "rgba-1024.png"
+        ]
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {
+        "quality-1024.png": "cf7b045006af8a54e99d7cc48f44f0b87c897598dd5729f4927838e272a496dd",
+        "rgba-1024.png": "9732210ad5ae9c83b2b95d0dbf3d3a033d4aee8d5f5b560c7a93e0c70a3caa25"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 78.53709158299898,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.05371699999523116,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.09288591699441895,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.8944130829986534,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 4.4292212079963065,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 4.742669874998683,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 1,
+            "total_steps": 2
+          }
+        },
+        {
+          "elapsed_seconds": 4.992970667000918,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 2,
+            "total_steps": 2
+          }
+        },
+        {
+          "elapsed_seconds": 5.001033291999192,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 26.61804674999439,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 29.21216395800002,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 31.897805082997365,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 34.516515999996045,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 37.15371245799906,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 39.867659167000966,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 42.53301512499456,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 45.158966499999224,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 47.879527291996055,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 9,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 50.51483074999851,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 10,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 53.171436457996606,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 11,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 55.90026187499461,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 12,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 58.528392874999554,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 13,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 61.17815383299603,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 14,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 63.915263374998176,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 15,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 66.56745650000084,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 16,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 69.2127036249949,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 17,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 72.64528433299711,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 18,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 75.39961187500012,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 19,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 78.00946708300035,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 20,
+            "total_steps": 20
+          }
+        },
+        {
+          "elapsed_seconds": 78.0920957079943,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 78.09281999999803,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 78.49957608299883,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 78.51277670799755,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16547741696,
+      "peak_memory_footprint_bytes": 22538776768,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "e554907b850479d79d27a7f8ed46378be839f6d1704f05fcbf8399e1ddfc36a2",
+      "pixel_sha256": "30fa33d0408a419e7ebc602d2491729fd50d8ca86c5bd51d9b689a4a0db2b556",
+      "alpha_min": 253,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 68.64893505838918,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "Recognizable strawberry from the alpha-bearing second reference placed beside the teapot from the first reference, on the preserved wooden tabletop."
+      }
+    },
+    {
+      "case": {
+        "id": "cfg-512",
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+        "seed": 42,
+        "cfg": 3,
+        "negative_prompt": "blurry, low quality, distorted"
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 28.389380749998963,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.057529625002644025,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.057548083997971844,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.8916442920017289,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.1452276249983697,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.1455197090035654,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.956705584001611,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 6.526892084002611,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 9.780930291999539,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 13.401038625001092,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 17.03579558400088,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 20.68485683399922,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 24.30014779200428,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 27.93029241700424,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 28.00052933400002,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 28.001333667001745,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 28.357225209001626,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 28.367233042001317,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16482549760,
+      "peak_memory_footprint_bytes": 16786682312,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "3a7659bab33232e4906c80b6ffe586254d19ac0324d0b854b2d7121ac0f03473",
+      "pixel_sha256": "591b77837fb4d15d69a0e7e854036579a78f32a14ba29659575e204a54b340dd",
+      "alpha_min": 253,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 80.36504561789249,
+      "visual_inspection": {
+        "passed": false,
+        "notes": "Recognizable teapot, but the eight-step CFG 3 probe is overexposed and has a distorted/ghosted handle. Execution and both guidance branches completed; no quality pass is claimed."
+      },
+      "guidance_changes_output": true
+    },
+    {
+      "case": {
+        "id": "memory-2048",
+        "width": 2048,
+        "height": 2048,
+        "steps": 2,
+        "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+        "seed": 42
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 100.30021908399794,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.05256445900158724,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.052574166998965666,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.8619878340032301,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.0361967920034658,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.0364842499984661,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 48.16717529200105,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 2
+          }
+        },
+        {
+          "elapsed_seconds": 94.29127670900198,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 2
+          }
+        },
+        {
+          "elapsed_seconds": 94.38137537500006,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 94.38213395899947,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 99.9703378339982,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 100.06789445900358,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16483467264,
+      "peak_memory_footprint_bytes": 75520476720,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "90122a413bcde934fe64e80eb03579ae5d592f80641292e5d693a13ba9af13d2",
+      "pixel_sha256": "12710870307f48631f1595671814f0b24b499223674aecc219b1600975d9f92d",
+      "alpha_min": 120,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 0.9976804256439209,
+      "rgb_standard_deviation": 56.63816974618798,
+      "visual_inspection": {
+        "passed": false,
+        "scope": "execution only",
+        "notes": "Two-step output is a blurred red silhouette, not a quality result. Valid 2048x2048 RGBA artifact and completed runtime establish execution only."
+      }
+    },
+    {
+      "case": {
+        "id": "quality-2048",
+        "width": 2048,
+        "height": 2048,
+        "steps": 40,
+        "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+        "seed": 42
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 2486.029325083,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.05428987499908544,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.05429920800088439,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2.82669758299744,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.0005525829983526,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.0015946249986882,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 50.660806374995445,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 97.87878737499705,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 150.34645224999986,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 208.89922087499872,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 273.8198939159993,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 339.6409987079969,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 403.9102834160003,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 466.7622177500016,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 525.2595371659991,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 9,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 583.5512674580023,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 10,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 643.5331451660022,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 11,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 707.5502085830012,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 12,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 770.8974997909972,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 13,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 833.7941049579968,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 14,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 897.0869749159974,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 15,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 960.932800124996,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 16,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1026.1407238329994,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 17,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1089.912736665996,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 18,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1153.8573792909956,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 19,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1218.6028627909982,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 20,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1283.0018810830006,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 21,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1353.612023665999,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 22,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1416.1695817910004,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 23,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1481.684716124997,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 24,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1544.5782925000021,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 25,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1612.5217931660009,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 26,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1675.7765629159985,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 27,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1737.433862291,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 28,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1799.1538129999972,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 29,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1862.612303875001,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 30,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1923.227419666,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 31,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 1981.4761495409984,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 32,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2040.4598018749966,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 33,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2105.372032665997,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 34,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2165.1049431249994,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 35,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2224.5511717499976,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 36,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2291.3417722079976,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 37,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2355.6791066250007,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 38,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2414.5000808749974,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 39,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2477.0350874579963,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 40,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 2477.205475791001,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2477.2089894160017,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2484.8640665829953,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2485.1797416249974,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16480632832,
+      "peak_memory_footprint_bytes": 75528750736,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "2dd64ccd9429534906a7b1af202800baac07dfb1e3ff125b0a3ccb2d7483b277",
+      "pixel_sha256": "cc578a899861ba355692d6aad20e2631b3cac1cc554a43fd065cb3e2070f36e5",
+      "alpha_min": 253,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 52.7972015237975,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "Coherent red ceramic teapot on a pale wooden table, with detailed glaze, curved spout, lid and round handle. Requested subject and material present."
+      },
+      "timing_context": "Documentation build and repository gate ran concurrently during part of this case; elapsed time is an observation, not isolated throughput."
+    },
+    {
+      "case": {
+        "id": "aspect-768x512",
+        "width": 768,
+        "height": 512,
+        "steps": 8,
+        "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+        "seed": 46
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 27.175931958001456,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.05792445800034329,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.05793358299706597,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2.828614790996653,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.0040279579989146,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 3.005401916001574,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 6.2010436249984195,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 8.859935374995985,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 11.775857374996122,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 14.682711041001312,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 17.585087540996028,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 20.415123833001417,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 23.541458291001618,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 26.533121499996923,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 8
+          }
+        },
+        {
+          "elapsed_seconds": 26.598201250002603,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 26.599991540999326,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 27.14409912499832,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 27.15636345800158,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16479633408,
+      "peak_memory_footprint_bytes": 16686363008,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        768,
+        512
+      ],
+      "sha256": "8a43e842ed8953cbbe85e5ee4cf4da52ecc72f45136e555c2d9c2b4d7b5d39a8",
+      "pixel_sha256": "68ed1514a88672c673a1048dfefd7e08597599630088070f179db9b6823dce02",
+      "alpha_min": 254,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 69.88996486380769,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "Coherent red teapot in a 768x512 landscape composition; requested subject, lid, spout, handle and table present."
+      }
+    },
+    {
+      "case": {
+        "id": "references-10",
+        "width": 512,
+        "height": 512,
+        "steps": 2,
+        "prompt": "Arrange the teapots from these reference images on a wooden table.",
+        "seed": 47,
+        "inputs": [
+          "quality-1024.png",
+          "quality-1024.png",
+          "quality-1024.png",
+          "quality-1024.png",
+          "quality-1024.png",
+          "quality-1024.png",
+          "quality-1024.png",
+          "quality-1024.png",
+          "quality-1024.png",
+          "quality-1024.png"
+        ]
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {
+        "quality-1024.png": "cf7b045006af8a54e99d7cc48f44f0b87c897598dd5729f4927838e272a496dd"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 262.14422479100176,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.05546699999831617,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.2023375830031,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 1.0193117079979856,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 43.85039074999804,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 44.322859583000536,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 1,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 44.74130237499776,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 2,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 45.20215566600382,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 3,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 45.70129558299959,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 4,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 46.20029395799793,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 5,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 46.685320458003844,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 6,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 47.17494237500068,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 7,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 47.647808166002505,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 8,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 48.11679716600338,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 9,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 48.6232825410043,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 10,
+            "total_steps": 10
+          }
+        },
+        {
+          "elapsed_seconds": 48.641749041002186,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 253.15515625000262,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 2
+          }
+        },
+        {
+          "elapsed_seconds": 261.14189312500093,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 2
+          }
+        },
+        {
+          "elapsed_seconds": 261.5776939999996,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 261.5791596659983,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 262.06265820800036,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 262.0854157499998,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16805101568,
+      "peak_memory_footprint_bytes": 49399033976,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "489cf79fe7ea6c1ccfe9fcd0be575228bf91451013e60f18f982027ae7336865",
+      "pixel_sha256": "c546428a4c5d07132c75e4eb95afd9c39705abc899a1446523de7294a4f6ac30",
+      "alpha_min": 250,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 68.40199423564366,
+      "visual_inspection": {
+        "passed": false,
+        "scope": "execution only",
+        "notes": "Two-step output contains blurred red forms; valid PNG and successful ten-reference execution, not a composition-quality pass."
+      }
+    },
+    {
+      "case": {
+        "id": "cfg-quality-512",
+        "width": 512,
+        "height": 512,
+        "steps": 40,
+        "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+        "seed": 42,
+        "cfg": 1.5,
+        "negative_prompt": "blurry, low quality, distorted"
+      },
+      "preflight_status": "ok",
+      "binary_sha256": "93bf8d6ef442feabac79c571474dbecf71b853d4ca88acceca8bbbfcc665c288",
+      "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+      "input_sha256": {},
+      "exit_code": 0,
+      "elapsed_seconds": 168.13920562499698,
+      "progress_events": [
+        {
+          "elapsed_seconds": 0.05963129099836806,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingReferenceImages",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 0.059643332999257836,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingEncoder",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2.170322665995627,
+          "payload": {
+            "event": "progress",
+            "stage": "encodingText",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2.424527790994034,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 2.4248256659993785,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingTransformer",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 5.110435415997927,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 1,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 8.04199095799413,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 2,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 11.896089374997246,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 3,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 15.93659349999507,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 4,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 19.7601606659955,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 5,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 23.62508054099453,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 6,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 27.49956187499629,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 7,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 31.467998540996632,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 8,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 35.416368707999936,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 9,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 39.303030999995826,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 10,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 43.3281027080011,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 11,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 47.34159354099393,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 12,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 51.31881649999559,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 13,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 55.32450687499659,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 14,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 59.28324691599846,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 15,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 63.25168454099912,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 16,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 67.25775708299625,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 17,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 71.28363204099878,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 18,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 75.31547370799672,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 19,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 79.32612741599587,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 20,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 83.34383616600098,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 21,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 87.40336641599424,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 22,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 91.83091137500014,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 23,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 96.86300312499952,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 24,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 101.60235324999667,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 25,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 106.32625383299455,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 26,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 111.04909999999654,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 27,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 116.0673852079999,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 28,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 121.0102016249948,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 29,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 125.86599112499971,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 30,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 130.57620670799952,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 31,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 135.8889175000004,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 32,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 139.9523835,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 33,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 143.84860370800016,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 34,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 147.7946448750008,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 35,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 151.77853299999697,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 36,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 155.74902545799705,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 37,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 159.71907904099498,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 38,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 163.66095354099525,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 39,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 167.65284987499763,
+          "payload": {
+            "event": "progress",
+            "stage": "denoising",
+            "step": 40,
+            "total_steps": 40
+          }
+        },
+        {
+          "elapsed_seconds": 167.71229904099891,
+          "payload": {
+            "event": "progress",
+            "stage": "loadingVAE",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 167.7130527499976,
+          "payload": {
+            "event": "progress",
+            "stage": "decoding",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 168.10303108299559,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 0,
+            "total_steps": 1
+          }
+        },
+        {
+          "elapsed_seconds": 168.11689274999662,
+          "payload": {
+            "event": "progress",
+            "stage": "saving",
+            "step": 1,
+            "total_steps": 1
+          }
+        }
+      ],
+      "maximum_resident_bytes": 16486350848,
+      "peak_memory_footprint_bytes": 16790270408,
+      "format": "PNG",
+      "mode": "RGBA",
+      "size": [
+        512,
+        512
+      ],
+      "sha256": "ee8d94eb683e0dfe8d4e162f5abcb5e9623db619a6ea72b44a65d16599e19786",
+      "pixel_sha256": "b7afef162c8fe0bb6b5064f73983be568f835d9e5e3431f58fe9703a62fa10fa",
+      "alpha_min": 253,
+      "alpha_max": 255,
+      "transparent_fraction": 0.0,
+      "opaque_fraction": 1.0,
+      "rgb_standard_deviation": 74.61581852465572,
+      "visual_inspection": {
+        "passed": true,
+        "notes": "CFG 1.5 with 40 steps produces a coherent red teapot, lid, spout and handle on a wooden table without the overexposure or ghosted handle seen in the CFG 3 eight-step probe."
+      }
+    }
+  ],
+  "parity": {
+    "trained-fp32": {
+      "text_velocity": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 3.2817504234117223e-06,
+        "maximum_absolute": 1.3113021850585938e-05,
+        "tolerance": 0.0001,
+        "passed": true
+      },
+      "text_cached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 2.630544258863665e-06,
+        "maximum_absolute": 1.1444091796875e-05,
+        "tolerance": 0.0001,
+        "passed": true
+      },
+      "text_uncached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 2.630544258863665e-06,
+        "maximum_absolute": 1.1444091796875e-05,
+        "tolerance": 0.0001,
+        "passed": true
+      },
+      "image_velocity": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 1.7158701666630805e-05,
+        "maximum_absolute": 6.211549043655396e-05,
+        "tolerance": 0.0001,
+        "passed": true
+      },
+      "image_cached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 3.450977601460181e-06,
+        "maximum_absolute": 1.3470649719238281e-05,
+        "tolerance": 0.0001,
+        "passed": true
+      },
+      "image_uncached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 3.450977601460181e-06,
+        "maximum_absolute": 1.3470649719238281e-05,
+        "tolerance": 0.0001,
+        "passed": true
+      }
+    },
+    "trained-bf16-grid32": {
+      "text_velocity": {
+        "shape": [
+          1,
+          1024,
+          64
+        ],
+        "relative_l2": 0.0118562588468194,
+        "maximum_absolute": 0.10546875,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "text_cached": {
+        "shape": [
+          1,
+          1024,
+          64
+        ],
+        "relative_l2": 0.018486013635993004,
+        "maximum_absolute": 0.09375,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "text_uncached": {
+        "shape": [
+          1,
+          1024,
+          64
+        ],
+        "relative_l2": 0.018486013635993004,
+        "maximum_absolute": 0.09375,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_velocity": {
+        "shape": [
+          1,
+          1024,
+          64
+        ],
+        "relative_l2": 0.0242012906819582,
+        "maximum_absolute": 0.90234375,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_cached": {
+        "shape": [
+          1,
+          1024,
+          64
+        ],
+        "relative_l2": 0.019035933539271355,
+        "maximum_absolute": 0.09375,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_uncached": {
+        "shape": [
+          1,
+          1024,
+          64
+        ],
+        "relative_l2": 0.019035933539271355,
+        "maximum_absolute": 0.09375,
+        "tolerance": 0.05,
+        "passed": true
+      }
+    },
+    "trained-bf16-small-cpu": {
+      "decoded": {
+        "shape": [
+          1,
+          32,
+          32,
+          4
+        ],
+        "relative_l2": 0.018009450286626816,
+        "maximum_absolute": 0.38671875,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "encoded": {
+        "shape": [
+          1,
+          2,
+          2,
+          64
+        ],
+        "relative_l2": 0.005958922673016787,
+        "maximum_absolute": 0.01953125,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_cached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.02684812806546688,
+        "maximum_absolute": 0.1171875,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_conditioning": {
+        "shape": [
+          1,
+          25,
+          4096
+        ],
+        "relative_l2": 0.03497924283146858,
+        "maximum_absolute": 60.0,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_uncached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.027794284746050835,
+        "maximum_absolute": 0.109375,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_velocity": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.14748579263687134,
+        "maximum_absolute": 0.4296875,
+        "tolerance": 0.05,
+        "passed": false
+      },
+      "text_cached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.02228434942662716,
+        "maximum_absolute": 0.1015625,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "text_conditioning": {
+        "shape": [
+          1,
+          18,
+          4096
+        ],
+        "relative_l2": 0.03192446008324623,
+        "maximum_absolute": 66.0,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "text_uncached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.024551725015044212,
+        "maximum_absolute": 0.10546875,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "text_velocity": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.010759270749986172,
+        "maximum_absolute": 0.0390625,
+        "tolerance": 0.05,
+        "passed": true
+      }
+    },
+    "trained-bf16-small-mps": {
+      "text_velocity": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.015978602692484856,
+        "maximum_absolute": 0.06640625,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "text_cached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.026678357273340225,
+        "maximum_absolute": 0.12890625,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "text_uncached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.02147524058818817,
+        "maximum_absolute": 0.09375,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_velocity": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.14381761848926544,
+        "maximum_absolute": 0.43359375,
+        "tolerance": 0.05,
+        "passed": false
+      },
+      "image_cached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.026131046935915947,
+        "maximum_absolute": 0.125,
+        "tolerance": 0.05,
+        "passed": true
+      },
+      "image_uncached": {
+        "shape": [
+          1,
+          4,
+          64
+        ],
+        "relative_l2": 0.028018813580274582,
+        "maximum_absolute": 0.1031494140625,
+        "tolerance": 0.05,
+        "passed": true
+      }
+    }
+  },
+  "final_release_replay": {
+    "case": {
+      "id": "smoke-512",
+      "width": 512,
+      "height": 512,
+      "steps": 8,
+      "prompt": "A studio photograph of a red ceramic teapot with a curved spout and round handle on a pale wooden table, soft daylight, realistic material, clean composition.",
+      "seed": 42
+    },
+    "preflight_status": "ok",
+    "binary_sha256": "6b027ae79994e9bbc35b2e3bf8b01f7d65c9407c693dd85b5159ae8975cc5ec3",
+    "checkpoint_revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+    "input_sha256": {},
+    "exit_code": 0,
+    "elapsed_seconds": 11.122687291994225,
+    "progress_events": [
+      {
+        "elapsed_seconds": 0.08845033399848035,
+        "payload": {
+          "event": "progress",
+          "stage": "encodingReferenceImages",
+          "step": 0,
+          "total_steps": 1
+        }
+      },
+      {
+        "elapsed_seconds": 0.0884602919977624,
+        "payload": {
+          "event": "progress",
+          "stage": "loadingEncoder",
+          "step": 0,
+          "total_steps": 1
+        }
+      },
+      {
+        "elapsed_seconds": 0.9048005839940743,
+        "payload": {
+          "event": "progress",
+          "stage": "encodingText",
+          "step": 0,
+          "total_steps": 1
+        }
+      },
+      {
+        "elapsed_seconds": 1.0803237089930917,
+        "payload": {
+          "event": "progress",
+          "stage": "loadingVAE",
+          "step": 0,
+          "total_steps": 1
+        }
+      },
+      {
+        "elapsed_seconds": 1.080541124996671,
+        "payload": {
+          "event": "progress",
+          "stage": "loadingTransformer",
+          "step": 0,
+          "total_steps": 1
+        }
+      },
+      {
+        "elapsed_seconds": 2.5155758339969907,
+        "payload": {
+          "event": "progress",
+          "stage": "denoising",
+          "step": 1,
+          "total_steps": 8
+        }
+      },
+      {
+        "elapsed_seconds": 3.6822716249953373,
+        "payload": {
+          "event": "progress",
+          "stage": "denoising",
+          "step": 2,
+          "total_steps": 8
+        }
+      },
+      {
+        "elapsed_seconds": 4.830908500000078,
+        "payload": {
+          "event": "progress",
+          "stage": "denoising",
+          "step": 3,
+          "total_steps": 8
+        }
+      },
+      {
+        "elapsed_seconds": 5.962417791997723,
+        "payload": {
+          "event": "progress",
+          "stage": "denoising",
+          "step": 4,
+          "total_steps": 8
+        }
+      },
+      {
+        "elapsed_seconds": 7.100607249994937,
+        "payload": {
+          "event": "progress",
+          "stage": "denoising",
+          "step": 5,
+          "total_steps": 8
+        }
+      },
+      {
+        "elapsed_seconds": 8.299226874994929,
+        "payload": {
+          "event": "progress",
+          "stage": "denoising",
+          "step": 6,
+          "total_steps": 8
+        }
+      },
+      {
+        "elapsed_seconds": 9.544771374996344,
+        "payload": {
+          "event": "progress",
+          "stage": "denoising",
+          "step": 7,
+          "total_steps": 8
+        }
+      },
+      {
+        "elapsed_seconds": 10.740092791995266,
+        "payload": {
+          "event": "progress",
+          "stage": "denoising",
+          "step": 8,
+          "total_steps": 8
+        }
+      },
+      {
+        "elapsed_seconds": 10.784493874998589,
+        "payload": {
+          "event": "progress",
+          "stage": "loadingVAE",
+          "step": 0,
+          "total_steps": 1
+        }
+      },
+      {
+        "elapsed_seconds": 10.78526187499665,
+        "payload": {
+          "event": "progress",
+          "stage": "decoding",
+          "step": 0,
+          "total_steps": 1
+        }
+      },
+      {
+        "elapsed_seconds": 11.091545749994111,
+        "payload": {
+          "event": "progress",
+          "stage": "saving",
+          "step": 0,
+          "total_steps": 1
+        }
+      },
+      {
+        "elapsed_seconds": 11.10248229199351,
+        "payload": {
+          "event": "progress",
+          "stage": "saving",
+          "step": 1,
+          "total_steps": 1
+        }
+      }
+    ],
+    "maximum_resident_bytes": 16479633408,
+    "peak_memory_footprint_bytes": 16686133656,
+    "format": "PNG",
+    "mode": "RGBA",
+    "size": [
+      512,
+      512
+    ],
+    "sha256": "391595cad93db9779bbe553da484a9289624f4273cf837c4ea4665fb97eb689d",
+    "pixel_sha256": "f8961318bbcf985f9c0c7fcbed35b0fd714047f966e311a4cf6f2d02b6a7967d",
+    "alpha_min": 254,
+    "alpha_max": 255,
+    "transparent_fraction": 0.0,
+    "opaque_fraction": 1.0,
+    "rgb_standard_deviation": 71.05264318938106,
+    "visual_inspection": {
+      "passed": true,
+      "notes": "PNG and decoded RGBA bytes exactly match the visually inspected initial smoke case."
+    }
+  },
+  "final_verification_date": "2026-09-21",
+  "final_release_replay_matches_initial_png_and_pixels": true
+}
