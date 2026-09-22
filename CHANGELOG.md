@@ -6,10 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.55.0 - 2026-09-22
+
 - Add native Laya decisions through `text decide`, macOS Studio, and
   `/v1/text/decisions`. Support pinned English, multilingual, and typed-decision
   checkpoints, ordered questions, probability distributions, token-budget
-  preflight, calibration disclosure, and resident API model lifecycle.
+  preflight, calibration disclosure, and resident API model lifecycle. Bounded
+  M4 Max qualification covers all three real checkpoints, tokenizer parity,
+  CLI/API inference, resident reuse, and Studio rendering. Numerical parity
+  does not establish task accuracy or production confidence calibration.
 
 ## 0.54.0 - 2026-09-22
 
