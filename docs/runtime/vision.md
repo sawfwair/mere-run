@@ -217,6 +217,10 @@ per detection. `--preflight --json` validates the image, installed model,
 queries, and output plan without loading the model; `--quiet` prints only the
 annotated image path.
 
+Direct grounding and batched vision serving stop each query when the model emits
+its configured end-of-sequence token or the tokenizer's `<|end_of_query|>` token.
+Other batch queries continue until they stop or reach the requested token limit.
+
 Portable graphs expose the same runtime as the built-in `vision.ground` node.
 The node accepts an image plus a JSON array of queries and produces a verified
 annotated `image`, structured `detections` JSON, and a portable `masks`

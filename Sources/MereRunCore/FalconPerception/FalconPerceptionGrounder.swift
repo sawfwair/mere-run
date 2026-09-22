@@ -430,7 +430,7 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                     continue
                 }
                 let tokenID = tokenIDs[batchIndex]
-                if tokenID == config.eosID {
+                if state.tokenizer.isGenerationStopToken(tokenID, modelEosTokenID: config.eosID) {
                     stopped[batchIndex] = true
                     tokenIDs[batchIndex] = state.tokenizer.padTokenID
                     continue
@@ -703,8 +703,8 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
             }
             let tokenID = Int(MLX.argMax(lastLogits).item(Int32.self))
             trace("TRACE runtime token: \(tokenID) \(state.tokenizer.decode(token: tokenID))")
-            if tokenID == config.eosID {
-                trace("TRACE runtime hit_eos")
+            if state.tokenizer.isGenerationStopToken(tokenID, modelEosTokenID: config.eosID) {
+                trace("TRACE runtime hit_stop_token: \(tokenID)")
                 break
             }
 
