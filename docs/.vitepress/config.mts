@@ -108,6 +108,7 @@ export default defineConfig({
         items: [
           { text: 'Image runtime', link: '/runtime/image' },
           { text: 'Text runtime', link: '/runtime/text' },
+          { text: 'Laya decisions', link: '/runtime/laya' },
           { text: 'Speech runtime', link: '/runtime/speech' },
           { text: 'Vision runtime', link: '/runtime/vision' },
           { text: 'Geospatial runtime', link: '/runtime/geo' },

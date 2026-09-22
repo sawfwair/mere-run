@@ -222,6 +222,7 @@ extension StudioAnalyzeArchetype {
         ])
 
         // Text
+        add(.textDecide, .file, [.json], [.save("Save JSON", .json)])
         add(.textEmbeddings, .file, [.vectors, .json], [
             .save("Save JSON", .json)
         ])

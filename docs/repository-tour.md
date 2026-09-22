@@ -315,3 +315,7 @@ Start at the [mere.run documentation home](/) to navigate by audience.
    `Sources/AudioSTT`, or `Sources/AudioTTS`
 5. Use the runtime family documentation to follow the load, prepare, generate,
    decode, and output path.
+
+`MereRunLayaModel` owns native ModernBERT and Laya decision-head computation.
+`Sources/MereRunCore/Laya` owns checkpoint loading, tokenization, batching, and
+calibrated results. See [Laya decisions](./runtime/laya.md).

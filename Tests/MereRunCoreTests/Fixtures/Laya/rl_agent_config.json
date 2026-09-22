@@ -1,0 +1,17 @@
+{
+  "encoder": "synthetic-modernbert",
+  "head_layers": 2,
+  "max_len": 192,
+  "head_max_len": 64,
+  "act_costs": {
+    "escalate": 0.5
+  },
+  "temperature": [
+    1.6,
+    1.25,
+    1.98
+  ],
+  "temperature_by_options": {
+    "choice:11+": 0.1
+  }
+}

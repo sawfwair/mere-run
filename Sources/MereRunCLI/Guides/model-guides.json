@@ -93,7 +93,9 @@
     "topic": "handbook-qwen-image-21",
     "title": "Qwen Image 2.1 (Qwen)",
     "category": "Image",
-    "models": ["image-qwen-21"],
+    "models": [
+      "image-qwen-21"
+    ],
     "resourceName": "handbook-qwen-image-21.md"
   },
   {
@@ -638,5 +640,16 @@
       "audio-auk-thinker"
     ],
     "resourceName": "handbook-auk.md"
+  },
+  {
+    "topic": "handbook-laya",
+    "title": "Laya decisions",
+    "category": "Text and multimodal",
+    "models": [
+      "text-decide-laya",
+      "text-decide-laya-multilingual",
+      "text-decide-laya-typed-decisions"
+    ],
+    "resourceName": "handbook-laya.md"
   }
 ]

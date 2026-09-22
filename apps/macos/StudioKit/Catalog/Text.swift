@@ -49,6 +49,11 @@ extension CommandCatalog {
             defaultModel: "text-anonymize-privacy-filter"
         ),
         CommandTemplate(
+            id: .textDecide, category: .text, title: "Decisions",
+            subtitle: "Evaluate typed questions with Laya", systemImage: "list.bullet.clipboard",
+            inputKind: .file([.json]), outputKind: .file("json"), defaultModel: "text-decide-laya"
+        ),
+        CommandTemplate(
             id: .textTrainLoRA,
             category: .text,
             title: "Train text LoRA",
@@ -152,6 +157,17 @@ extension CommandArguments {
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
         if draft.all { args.flag(F.json) }
         if draft.force { args.flag(F.pretty) }
+        return args.arguments
+    }
+
+    package static func textDecide(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.TextDecide
+        var args = ArgumentBuilder(F.self)
+        args.option(F.input, draft.inputPath)
+        if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
+        if draft.force { args.flag(F.pretty) }
+        if draft.preflight { args.flag(F.preflight) }
         return args.arguments
     }
 

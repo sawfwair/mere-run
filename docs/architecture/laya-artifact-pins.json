@@ -1,0 +1,104 @@
+{
+  "repository": "convaiinnovations/laya",
+  "revision": "1c5edc17a7acd8701df6fc341c0d179f1c62c982",
+  "sdk_revision": "573e5b62696ba441230cd6be71d593331b5d23af",
+  "checkpoints": [
+    {
+      "subfolder": "",
+      "download_bytes": 846195574,
+      "artifacts": [
+        {
+          "path": "encoder/config.json",
+          "bytes": 2083,
+          "git_blob": "5881ba831f2db5ce0f606bbaa1f2668e1e6cb706"
+        },
+        {
+          "path": "rl_agent_config.json",
+          "bytes": 745,
+          "git_blob": "3e4fcbf12cf36164ce18a1398aa9f35f58375ae0"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 842609210,
+          "git_blob": "9bef25a12dcb807627a798837cfbb0ea73c0e38d",
+          "sha256": "891102d372688fc2a094dac56a384bc537b87c63f21f9f3dac0be2b7cbc8d86c"
+        },
+        {
+          "path": "tokenizer/tokenizer.json",
+          "bytes": 3583228,
+          "git_blob": "2f4d8583e507b7466d2490e2d6c045647a822698"
+        },
+        {
+          "path": "tokenizer/tokenizer_config.json",
+          "bytes": 308,
+          "git_blob": "9fd800115c5c92353220aa66addfce67a9135f32"
+        }
+      ]
+    },
+    {
+      "subfolder": "multilingual",
+      "download_bytes": 678201636,
+      "artifacts": [
+        {
+          "path": "multilingual/encoder/config.json",
+          "bytes": 1938,
+          "git_blob": "0de0e2d30638873790cf962def52e2acf4db3eef"
+        },
+        {
+          "path": "multilingual/rl_agent_config.json",
+          "bytes": 472,
+          "git_blob": "00e35f88bb731bb9126a914666ab1cdac8a204c8"
+        },
+        {
+          "path": "multilingual/model.safetensors",
+          "bytes": 643835514,
+          "git_blob": "b99c8bea239c53f6f6bce734557dc6c403fa6b3e",
+          "sha256": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204"
+        },
+        {
+          "path": "multilingual/tokenizer/tokenizer.json",
+          "bytes": 34363188,
+          "git_blob": "56d765858ed38eaabd35cd90759cbb1f89b0baa4",
+          "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f"
+        },
+        {
+          "path": "multilingual/tokenizer/tokenizer_config.json",
+          "bytes": 524,
+          "git_blob": "c255ac0c8cb34a37d066cd0dafe313fd769d27ae"
+        }
+      ]
+    },
+    {
+      "subfolder": "typed-decisions",
+      "download_bytes": 846195716,
+      "artifacts": [
+        {
+          "path": "typed-decisions/encoder/config.json",
+          "bytes": 2084,
+          "git_blob": "d4be4829750fb04c0aa8b9897c3ea827f76c0109"
+        },
+        {
+          "path": "typed-decisions/rl_agent_config.json",
+          "bytes": 847,
+          "git_blob": "5f0e1d5f2366fe8ba2ff330dffaeed53b469e97e"
+        },
+        {
+          "path": "typed-decisions/model.safetensors",
+          "bytes": 842609220,
+          "git_blob": "3fb9c9678050815e76d0c847115919d7871ace3e",
+          "sha256": "4fa56de72383a9d3efa9cfa78955733c81b9fc8067a587ca4beb82c78107a24e"
+        },
+        {
+          "path": "typed-decisions/tokenizer/tokenizer.json",
+          "bytes": 3583228,
+          "git_blob": "2f4d8583e507b7466d2490e2d6c045647a822698"
+        },
+        {
+          "path": "typed-decisions/tokenizer/tokenizer_config.json",
+          "bytes": 337,
+          "git_blob": "ed1ffabc2ce11120754705709569e365e46da71a"
+        }
+      ]
+    }
+  ]
+}

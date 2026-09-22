@@ -1701,6 +1701,17 @@ extension MereRunModelManifest {
                 upstreamRepoId: Qwen3VLEmbeddingCatalog.defaultRepoID,
                 createdAt: createdAt
             )
+        case .laya, .layaMultilingual, .layaTypedDecisions:
+            let prefix = LayaCatalog.subfolder(modelID: modelID.rawValue)
+            let path = prefix.isEmpty ? "." : prefix
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .laya, family: .laya, tier: .base,
+                variant: .standard, precision: .fp16, defaults: nil,
+                supports: [.textDecision],
+                components: Components(tokenizer: .local(path: prefix.isEmpty ? "tokenizer" : "\(prefix)/tokenizer"),
+                                       textEncoder: .local(path: path), transformer: .local(path: path)),
+                upstreamRepoId: LayaCatalog.repository, createdAt: createdAt
+            )
         case .privacyFilter:
             return MereRunModelManifest(
                 id: modelID.rawValue,

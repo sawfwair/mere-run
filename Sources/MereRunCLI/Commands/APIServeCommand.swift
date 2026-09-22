@@ -29,6 +29,7 @@ struct APIServe: AsyncParsableCommand {
           GET  /health              - Health check
           GET  /v1/models           - List available models
           POST /v1/chat/completions - Chat completions (streaming supported)
+          POST /v1/text/decisions   - Native Laya typed decisions
           POST /v1/embeddings       - Native Qwen3 text embeddings
           POST /v1/images/generations - Native image generation
           POST /v1/images/edits       - Native image editing

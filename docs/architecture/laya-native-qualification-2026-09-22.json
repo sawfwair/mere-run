@@ -1,0 +1,383 @@
+{
+  "sdk_revision": "573e5b62696ba441230cd6be71d593331b5d23af",
+  "native_executable": ".build/debug/mere.run-laya-qualified",
+  "native_binary_sha256": "bdaefeb5b163a10949e68b5aac2dcb888d673db1a1dcdf2b8a86aee36d5b83c2",
+  "cases": [
+    {
+      "checkpoint": "english",
+      "case": "english",
+      "maximum_output_error": 4.872645695631894e-05,
+      "input_tokens": 113,
+      "passed": true
+    },
+    {
+      "checkpoint": "english",
+      "case": "multilingual",
+      "maximum_output_error": 4.8213573009783794e-05,
+      "input_tokens": 344,
+      "passed": true
+    },
+    {
+      "checkpoint": "english",
+      "case": "single",
+      "maximum_output_error": 0.0,
+      "input_tokens": 18,
+      "passed": true
+    },
+    {
+      "checkpoint": "english",
+      "case": "calibration",
+      "maximum_output_error": 4.892859876237665e-05,
+      "input_tokens": 55,
+      "passed": true
+    },
+    {
+      "checkpoint": "english",
+      "case": "truncation",
+      "maximum_output_error": 4.3146566206242465e-05,
+      "input_tokens": 1536,
+      "passed": true
+    },
+    {
+      "checkpoint": "multilingual",
+      "case": "english",
+      "maximum_output_error": 4.591735007762566e-05,
+      "input_tokens": 116,
+      "passed": true
+    },
+    {
+      "checkpoint": "multilingual",
+      "case": "multilingual",
+      "maximum_output_error": 4.582110180261401e-05,
+      "input_tokens": 200,
+      "passed": true
+    },
+    {
+      "checkpoint": "multilingual",
+      "case": "single",
+      "maximum_output_error": 0.0,
+      "input_tokens": 18,
+      "passed": true
+    },
+    {
+      "checkpoint": "multilingual",
+      "case": "calibration",
+      "maximum_output_error": 4.479525802344314e-05,
+      "input_tokens": 70,
+      "passed": true
+    },
+    {
+      "checkpoint": "multilingual",
+      "case": "truncation",
+      "maximum_output_error": 4.13070412880745e-05,
+      "input_tokens": 3072,
+      "passed": true
+    },
+    {
+      "checkpoint": "typed-decisions",
+      "case": "english",
+      "maximum_output_error": 4.1441828674826375e-05,
+      "input_tokens": 113,
+      "passed": true
+    },
+    {
+      "checkpoint": "typed-decisions",
+      "case": "multilingual",
+      "maximum_output_error": 4.889799051321919e-05,
+      "input_tokens": 344,
+      "passed": true
+    },
+    {
+      "checkpoint": "typed-decisions",
+      "case": "single",
+      "maximum_output_error": 0.0,
+      "input_tokens": 18,
+      "passed": true
+    },
+    {
+      "checkpoint": "typed-decisions",
+      "case": "calibration",
+      "maximum_output_error": 4.87933861964265e-05,
+      "input_tokens": 55,
+      "passed": true
+    },
+    {
+      "checkpoint": "typed-decisions",
+      "case": "truncation",
+      "maximum_output_error": 4.561231494787377e-05,
+      "input_tokens": 3072,
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "native_executable_note": "Frozen source-built debug executable; SwiftPM build and test may relink the working executable. Compare source digests for this implementation.",
+  "schema_version": 1,
+  "date": "2026-09-22",
+  "model_revision": "1c5edc17a7acd8701df6fc341c0d179f1c62c982",
+  "base_revision": "0093ebb4a63e18e23307fe58213754c0dea5cff6",
+  "host": {
+    "chip": "Apple M4 Max",
+    "unified_memory_gib": 128,
+    "macos": "26.5.2",
+    "swift": "6.3",
+    "native_device": "MLX Metal",
+    "native_dtype": "float32",
+    "reference_device": "PyTorch CPU",
+    "torch": "2.14.0",
+    "transformers": "5.0.0"
+  },
+  "tolerances": {
+    "public_output_absolute": 0.0002,
+    "raw_decision_logits_absolute": 2e-05,
+    "raw_action_logits_relative": 2e-06,
+    "action_relative_denominator": "max(abs(reference),1)",
+    "token_ids_and_marker_positions": "exact"
+  },
+  "maximum_output_error": 4.892859876237665e-05,
+  "raw_tensor_errors": {
+    "english_logits": 5.00679e-06,
+    "english_action_logits": 0.004638672,
+    "typed-decisions_action_logits": 0.0014648438,
+    "multilingual_action_relative_error": 3.9418285e-07,
+    "multilingual_logits": 4.2915344e-06,
+    "typed-decisions_logits": 5.6028366e-06,
+    "typed-decisions_action_relative_error": 3.0598395e-07,
+    "multilingual_action_logits": 0.00061035156,
+    "english_action_relative_error": 1.3256154e-06
+  },
+  "api": {
+    "cases": [
+      {
+        "model": "text-decide-laya",
+        "two_identical_predictions": true,
+        "resident": {
+          "loadCount": 1,
+          "replacementCount": 0,
+          "completedRequests": 2,
+          "activeRequests": 0,
+          "queuedRequests": 0
+        }
+      },
+      {
+        "model": "text-decide-laya-multilingual",
+        "two_identical_predictions": true,
+        "resident": {
+          "loadCount": 2,
+          "replacementCount": 1,
+          "completedRequests": 4,
+          "activeRequests": 0,
+          "queuedRequests": 0
+        }
+      },
+      {
+        "model": "text-decide-laya-typed-decisions",
+        "two_identical_predictions": true,
+        "resident": {
+          "loadCount": 3,
+          "replacementCount": 2,
+          "completedRequests": 6,
+          "activeRequests": 0,
+          "queuedRequests": 0
+        }
+      }
+    ],
+    "errors": {
+      "missing_auth": 401,
+      "bad_content_type": 415,
+      "malformed_json": 400,
+      "wrong_model": 400,
+      "duplicate_ids": 400,
+      "impossible_budget": 400,
+      "oversize_body": 400
+    },
+    "concurrent_requests_passed": true,
+    "model_discovery_passed": true,
+    "final_resident": {
+      "loadCount": 3,
+      "replacementCount": 2,
+      "completedRequests": 8,
+      "failedRequests": 1,
+      "activeRequests": 0,
+      "queuedRequests": 0
+    },
+    "passed": true
+  },
+  "verification": {
+    "repository_gate": {
+      "command": "./scripts/check.sh",
+      "exit_code": 0,
+      "xctest": {
+        "executed": 4546,
+        "skipped": 346,
+        "failures": 0
+      },
+      "swift_testing": {
+        "executed": 51,
+        "failures": 0
+      }
+    },
+    "focused_contracts": {
+      "executed": 184,
+      "skipped": 2,
+      "failures": 0
+    },
+    "explicit_laya_gpu_and_studio": {
+      "executed": 10,
+      "skipped": 0,
+      "failures": 0
+    },
+    "managed_pulls": {
+      "model_ids": [
+        "text-decide-laya",
+        "text-decide-laya-multilingual",
+        "text-decide-laya-typed-decisions"
+      ],
+      "passed": true
+    },
+    "studio_renders": {
+      "widths_points": [
+        768,
+        1440
+      ],
+      "appearances": [
+        "light",
+        "dark"
+      ],
+      "count": 4,
+      "manual_visual_review": true,
+      "live_interaction_qualified": false
+    }
+  },
+  "reference_artifacts_sha256": {
+    "english-calibration-native.json": "50a23ef9d5f6a43451a2f1934075277f47c5fa9e7e69d04f3d2ec51b1c3db4ea",
+    "english-calibration-reference.json": "f9c577d76a38db158cd58ea44bb5c4766b48211a8f5b3557c6bdd9a012836bdd",
+    "english-calibration-request.json": "9d7f15bed43976c9696aec9ee5708ebd075f1d509ce1a368e489dad4ee3fcf32",
+    "english-calibration-tokens.json": "39f9bf276940502f1bb009ddcdbca55868bc0a2a25284ef129846d35bd97d1e0",
+    "english-english-native.json": "01e0bd3b4d1c8cf93385c3f8a176bc3d581251e7aa3ec6170b46385a004321e3",
+    "english-english-reference.json": "012afd3eaf65c5b0dac422caba6da5f02ad2813779f78b3b071b414e9be7dcf5",
+    "english-english-request.json": "e69c551053d958c1b300d9609da0014321fc2a920f112787f9d5e514e0db5229",
+    "english-english-tokens.json": "ef322ca54540bd28849375ccd424edc237b9477f34f9c89826683dd30ffdf107",
+    "english-multilingual-native.json": "5513ab09795fc9c74361174226112e9d464d1cb4a57c17c05a2b938560c7a64b",
+    "english-multilingual-reference.json": "9c41160e11221fa5af116fa3f4edfbfccee7bfe74833a79a3ba9942519ea80e0",
+    "english-multilingual-request.json": "e06609db47e824a4602336137f39acc9a08762f686d964258e23401f360d1e8e",
+    "english-multilingual-tokens.json": "65efb9f059cf62eec83d1a96fd48ef82f065e6db40dad8298308608471dd2c88",
+    "english-real-reference.safetensors": "c8dc0ffc4d960174e1f49fa8abf45f4f74edc4a886320a1b6dcf9cc30f5981a1",
+    "english-single-native.json": "da0f91776ca8b3cf4e7253e942e4f6ac229d755271248212dbef5b8ad5d5b817",
+    "english-single-reference.json": "c1fcb593d763f09f0d841c85312cdb28627b25a32ac5d6fbc37566d0c5b49a68",
+    "english-single-request.json": "383e17e0bffa61cd10ec7ba25c5812e1a3ab378cb641a3c366cf662038839464",
+    "english-single-tokens.json": "5c140afe41aec718c7c00fc120b9e2fee89c66127471dfeef00c76b5c99eb0b1",
+    "english-truncation-native.json": "53e455ca88780ae0b6c7c8842ec141d5222843e94ab0c89ba79dad3ad1eee560",
+    "english-truncation-reference.json": "f34a492de88ef5de185feef528394ab792f8c98bcc1b9fcc180feff91f9ea4a3",
+    "english-truncation-request.json": "aad936898c385876024af09c77f59c67636511e652405f74a7f24c83cb478310",
+    "english-truncation-tokens.json": "e267c38629c4ff89905609e49c815a80908910ac40a94b405618b39922c21765",
+    "multilingual-calibration-native.json": "d58ba0f9a4da05c9d70bc630a491fb6ff00732ab05eae9079c42963173c86edb",
+    "multilingual-calibration-reference.json": "a10b29cb60b3684b316986efc3248630515ac4af21d3ba82d228f6930c5eeb09",
+    "multilingual-calibration-request.json": "9d7f15bed43976c9696aec9ee5708ebd075f1d509ce1a368e489dad4ee3fcf32",
+    "multilingual-calibration-tokens.json": "28c75d04ed2caa3c018a70795538dbd86cf14d3988d17bd8a8262a6a4cb2c6e7",
+    "multilingual-english-native.json": "73c8f643374178da38fa495432f5c6060b35759a7de08605582b9b431551f441",
+    "multilingual-english-reference.json": "1a9d951facab1ace97d65981fd820456e1296d940cc5d529c73e7a1cd3c9ffb8",
+    "multilingual-english-request.json": "e69c551053d958c1b300d9609da0014321fc2a920f112787f9d5e514e0db5229",
+    "multilingual-english-tokens.json": "6824f0c1a81e727f3e4de89fb693de4c1f7cb6191fd6e7241618a8022bb4e8a4",
+    "multilingual-multilingual-native.json": "0dea118d3c782a4ee2370bd3dc243d975703e07b744da73b61d68dd99f1d37b9",
+    "multilingual-multilingual-reference.json": "37982afbae797105c890bcd75528d1233998788c939ea6b3f3ce85405c2e3f83",
+    "multilingual-multilingual-request.json": "e06609db47e824a4602336137f39acc9a08762f686d964258e23401f360d1e8e",
+    "multilingual-multilingual-tokens.json": "d7db3a6606048a49faf79a7382c5510e2db0d87eee5708ee4ea4c2de1dacedf4",
+    "multilingual-real-reference.safetensors": "d1e784cce59998b4bae05bc2a7231788143f607c3193013ca2b5210097a56333",
+    "multilingual-single-native.json": "809cfff3b9a358811c1f723b511cb9880b161f1fd9aa1cf807fa39ea77732651",
+    "multilingual-single-reference.json": "c1fcb593d763f09f0d841c85312cdb28627b25a32ac5d6fbc37566d0c5b49a68",
+    "multilingual-single-request.json": "383e17e0bffa61cd10ec7ba25c5812e1a3ab378cb641a3c366cf662038839464",
+    "multilingual-single-tokens.json": "e5072610c7958df692a27f540a18c0999b25f80d7f99322cdaa5553fa76f83dd",
+    "multilingual-truncation-native.json": "ca5cf33b9b9eb16d492fa81b6e209b2473e1f4a70abb1146bca3aaebc7c21f5a",
+    "multilingual-truncation-reference.json": "e5f307904317999f8639a2cca141188c83cff0c8a17d7532dd5280b933b73e2c",
+    "multilingual-truncation-request.json": "aad936898c385876024af09c77f59c67636511e652405f74a7f24c83cb478310",
+    "multilingual-truncation-tokens.json": "2e0a1b90ba7084ba4f7114434a7009ef6063234d73a0075afb61208d1b56a4fb",
+    "typed-decisions-calibration-native.json": "a425d4900ee2a28b7707032350fa71bb023a0e972c9463df008043fa8270a8c6",
+    "typed-decisions-calibration-reference.json": "ad03c50565a0d7c497e9570ee3e35daa6a4fd65fde21875d0569362d4bd0c03f",
+    "typed-decisions-calibration-request.json": "9d7f15bed43976c9696aec9ee5708ebd075f1d509ce1a368e489dad4ee3fcf32",
+    "typed-decisions-calibration-tokens.json": "39f9bf276940502f1bb009ddcdbca55868bc0a2a25284ef129846d35bd97d1e0",
+    "typed-decisions-english-native.json": "b0112bbfaec4191c135e4eab8579deb68a7519b8cc17de1bec03c685d017e3bb",
+    "typed-decisions-english-reference.json": "79f4985a2694670385bad5413ac895bb5737021c3ed2086b29490905352e8225",
+    "typed-decisions-english-request.json": "e69c551053d958c1b300d9609da0014321fc2a920f112787f9d5e514e0db5229",
+    "typed-decisions-english-tokens.json": "ef322ca54540bd28849375ccd424edc237b9477f34f9c89826683dd30ffdf107",
+    "typed-decisions-multilingual-native.json": "8e07edaed81812311ee90f4c839bc5a8fcc904004818a52f43c036e7bc0b1034",
+    "typed-decisions-multilingual-reference.json": "6114d6a7f479854bf93fc58fb38b9e121d6df99a56ae787836f1f6ab5d15a025",
+    "typed-decisions-multilingual-request.json": "e06609db47e824a4602336137f39acc9a08762f686d964258e23401f360d1e8e",
+    "typed-decisions-multilingual-tokens.json": "65efb9f059cf62eec83d1a96fd48ef82f065e6db40dad8298308608471dd2c88",
+    "typed-decisions-real-reference.safetensors": "49220d514c82ad6bf98532a04956ca0258427743c8c647fdac0223021b6166d5",
+    "typed-decisions-single-native.json": "1ee7bcadb2c021e89625070a06efef1d3e8252b779a023ccb5a7edb4db3a69de",
+    "typed-decisions-single-reference.json": "c1fcb593d763f09f0d841c85312cdb28627b25a32ac5d6fbc37566d0c5b49a68",
+    "typed-decisions-single-request.json": "383e17e0bffa61cd10ec7ba25c5812e1a3ab378cb641a3c366cf662038839464",
+    "typed-decisions-single-tokens.json": "5c140afe41aec718c7c00fc120b9e2fee89c66127471dfeef00c76b5c99eb0b1",
+    "typed-decisions-truncation-native.json": "030cc1071d14fe3aba3800b17eb3ffbd6ab96d0733eb9dc7a421501e75343f81",
+    "typed-decisions-truncation-reference.json": "23395d493ace1b07c422298fec693c6dde93ba44f8d515b1cf37868b838142c5",
+    "typed-decisions-truncation-request.json": "aad936898c385876024af09c77f59c67636511e652405f74a7f24c83cb478310",
+    "typed-decisions-truncation-tokens.json": "f279b8aee83c79a9280a3b19bac8727778460aa9336c73b6015f17f8b2d8f6cd"
+  },
+  "verification_logs_sha256": {
+    "full-gate-final.log": "60af2d96f75c62aee72854905966b3a63df2581617f630cd9db5e9031238f94b",
+    "focused-final.log": "c571d6e850925fe5f7191302b0e93245bc58bc4c3426d8011b66194be1acaa19",
+    "real-and-ui-final.log": "aade4782704059446da3cd9e25b746d1032a9b7bee5e8e7babe8d9e5d4fddc7c",
+    "qualification-final.log": "6e4b8bb266146cb7253fd76ee4f22bec3a6f2f6604724131f36ec6138db478c3"
+  },
+  "source_file_sha256": {
+    "Package.swift": "dd8777e939a64b3a7a4b21b6c552e069185c9f735baf84d86a44aa308bb7f2c8",
+    "Sources/MereRunCLI/Commands/APIServeCommand.swift": "1540b2975f753e9800dcb77c3798b236f073593bb180fe78ed87e3f706594da0",
+    "Sources/MereRunCLI/Commands/GuideCommand.swift": "c81caa4255f19e637d2d78b061a173d9a8cc6d6308fbdd02c2d14e5ab6143ada",
+    "Sources/MereRunCLI/Commands/TextCommand.swift": "f5d562c1bb20099fba10fc20f7a3105ad541f268d086f433434f583841a0c312",
+    "Sources/MereRunCLI/Commands/TextDecideCommand.swift": "5c7399eb8d670879ae901e3538644a8adb2701de13d40829171770375a6b3d17",
+    "Sources/MereRunCLI/Support/APIServer.swift": "be47946c4c55bc370b7167af6ff6d20598ab4e7565cca1e35cdd53f4cb3a6fce",
+    "Sources/MereRunCLI/Support/APIServerContract+Decisions.swift": "8d351fecdcb0082007673c6b03027bd8b5ac756d217a9bb7273c586b8ef04e24",
+    "Sources/MereRunCLI/Support/APIServerContract+Models.swift": "d19438f2343d96f680bcf6b5679e0425fd29c3adf1130498f1c1a41366d9384a",
+    "Sources/MereRunCLI/Support/APISidecarModelPool.swift": "f79715c18c5824c31fa2cc4718b53a2cd9176c9db33b9a36e26429bf35d2c7b2",
+    "Sources/MereRunCLI/Support/InstalledModelGateSupport.swift": "54b08144669942f37f0c7124b044e1da917293ee6b7f64918055d7a1b3ecb0e7",
+    "Sources/MereRunCLI/Support/MachineInferenceAdmission.swift": "fe47bfe97595f665855fe5c7e331becb047e97448b74813bf4c49e160a30f431",
+    "Sources/MereRunCLI/Support/RuntimeModelPool.swift": "94c5fe41d5542a5f2703b2f4dbf493d21bc45fc2da4af0247b44029cebc3287a",
+    "Sources/MereRunContract/CommandCapabilityCatalog+Text.swift": "539dd9810e4faa24744f388f6a66962e89c5130b78d0118086d0ed59f57efbe2",
+    "Sources/MereRunContract/CommandCapabilityCatalog.swift": "69e78f78cacbee097b737564bb5d5e12162f50790bf88b8585b9da09ad0ab96b",
+    "Sources/MereRunCore/Laya/LayaDecisionContract.swift": "d356791a3fa44bbb387fac90fede4c353dd26a51390d97b69ff10cae3b60913a",
+    "Sources/MereRunCore/Laya/LayaDecisionOperation.swift": "f9b449e78217e79c08e8d0ab0a40062602abb1e1e555d83c9b783021522aabfa",
+    "Sources/MereRunCore/Laya/LayaResources.swift": "c1c83611ac5a27f1dabe07901497351233626fbc3567695417e8c0d8cc02c2fb",
+    "Sources/MereRunCore/Laya/LayaTokenizer.swift": "da47fe0c26c3d61c22351c2ce8322157cffb69d45233c947cc2d1eee9e9a8f0e",
+    "Sources/MereRunCore/ManagedModelAPIProfile.swift": "f71de273eb410cb21b62f3520ae92b7666088a5c57801ff7665101c4d9da78c1",
+    "Sources/MereRunCore/ManagedModelCatalog+TextUtilities.swift": "7696066c865dcaca213d257277cc0176ef8cc43711f23533cd36222f6f1204f4",
+    "Sources/MereRunCore/ManagedModelSpec+Validation.swift": "3a759795904694462fa47615534b9e5dfc55240c48dd7c7f666e3cfc6fd27efd",
+    "Sources/MereRunCore/ManagedModelSpec.swift": "a3accf7b61be2a1b7ce3d0c0a6a53f2748ac717700618c73c908ed18c111e211",
+    "Sources/MereRunCore/ManagedModelSupport.swift": "1f373ecf54b3ba6449748dbe500db8b0ebdb005f55cddfb455ce2bf89a0ead37",
+    "Sources/MereRunCore/MereRunModelManifest+Templates.swift": "fad0639a72ee43c5cdc0f2c3124bc2dcaac1b5c1fa888b8d81e51394118c46d5",
+    "Sources/MereRunCore/MereRunModelValidator.swift": "2c8d7602136b65d877ab91196e7a5e6292c5e09f180386265a323a24e48c3458",
+    "Sources/MereRunCore/Quantization/QuantizedModelManifestWriter.swift": "f61021eddbe1252a3b158887d4a3d20802acb19eb0aba5bc743a507245d140c4",
+    "Sources/MereRunLayaModel/LayaConfiguration.swift": "6fb6b3bedf2bd06ef9fcadee3a97fd8557ca9b8b1cc352b9b153b60417fd6494",
+    "Sources/MereRunLayaModel/LayaEncoder.swift": "ab88e4b46907c1a88dbc4fdebc28ed49088f9d06675ecca12f6634f0f623a5cc",
+    "Sources/MereRunLayaModel/LayaNetwork.swift": "752e823ba9a38864fb5c4fe435d6b942a659ca00e76943bf3273802123b9d5fc",
+    "Sources/MereRunLayaModel/LayaWeights.swift": "c282f0c14851ed94501d39c4dcae77abd79116e01f397d11831908fa2b3a2855",
+    "Sources/MereRunModelKit/ManagedModelID.swift": "623507a30c2e60c37c1df96086ecc2451ae856f2d155c5a52e8e16c937419782",
+    "Sources/MereRunModelKit/MereRunModelManifest.swift": "faf3ccb52746d260a60f291f2b90d10cbb31ffe6daacb3f9e4606366a0ea742d",
+    "Tests/MereRunCLITests/APISidecarResidentSlotTests.swift": "9b9a50053060d34a3c3f9e4912b2248e375211e6e5e0e0d8539819055627c9f0",
+    "Tests/MereRunCLITests/TextAnonymizeCommandParsingTests.swift": "66cef186a1de6dc07afa7488a16304fbce1dc85a8f3bae39c7362b474194a31d",
+    "Tests/MereRunCLITests/TextDecideCommandTests.swift": "66d028d65e141a9d120d77bb2fa90a532dea38923205ad12f73eac112f761673",
+    "Tests/MereRunContractTests/CommandCapabilityContractTests.swift": "0618a4337597c28de06606635faa9449649eaed241ca464b96b2c88717f08b39",
+    "Tests/MereRunCoreTests/LayaTests.swift": "d50e5527ecf75f1f80fb023f255e6905a18329bc8325f1cc8fd6f1dff56eaed8",
+    "apps/macos/StudioKit/Catalog/CommandArguments.swift": "9307ac47db73b4a91336580009da94c4ca7a815ec14331e78cbf91de0cf0a8ae",
+    "apps/macos/StudioKit/Catalog/CommandFlags.swift": "9cae857a580bb5a30e3b1154837ecfb51cf1fb913bbece1e8abd1c0fedb16186",
+    "apps/macos/StudioKit/Catalog/Text.swift": "c87bd0188f0ca91ce95ea44a659e7bf7d39ec41b00172803fe9d624f0a029e86",
+    "apps/macos/StudioKit/CommandCatalog.swift": "c6c7221d85030e3c9bced08174d812b0f0bc3e850e03dd873b598ebb0e3a5737",
+    "apps/macos/StudioKit/StudioAnalyzeSchema.swift": "5ae77a32add774591cafa7d8357a02051eb88df9c8a9e673a3d6f6e92da0b6b3",
+    "apps/macos/StudioKit/StudioModelNaming.swift": "f6ef3f0293f9199e3973935e89411dcbaa339e7c52e962476041cc222f48ef5f",
+    "apps/macos/StudioKit/StudioNavigation.swift": "41e117f57642314595552aec84fe878806aca9b08b24bedf2b55b34ae2da7e27",
+    "apps/macos/StudioKit/StudioTaskCommands.swift": "3af9bdf081cf07fa8bb90d9cfffbc6144b5c66517aa42e112e481f73a02472fb",
+    "apps/macos/StudioKitTests/StudioLayaCommandTests.swift": "6a8effb14b04cbbc6df5b29f195a688784884f9e2ad33f15dddd560794c7b5be",
+    "apps/macos/StudioUI/StudioLayaDecisionView.swift": "7ebbaed35d4749165f07eae675a6e7a7c110f9137fb48bfc0c6d71767388ca5f",
+    "apps/macos/StudioUI/StudioRootView.swift": "a9f12f0534c4aaf7d6ba0a4dfdbec7cc78453781a25d6420ab134dd661afc9b9",
+    "apps/macos/StudioUITests/StudioAnalyzeTests.swift": "b95a8ae6935999248f8c7a52dcb3c1c09bdebe80788c98afb9793b69f84c4d18",
+    "apps/macos/StudioUITests/StudioSnapshotTests.swift": "e327397566f93c1fce538e164a92c176394651a9e6cb15e1ab8cc6ea27593927",
+    "scripts/laya-qualify.py": "ba001453083d2dda07b9c1b99a3156c1a9585ee39a7366f7d21475c45fb1a788",
+    "scripts/laya-reference.py": "3b8f7660d6b107ee64a1325432f6ad62e2665f456f1b8e5b5783992a6efc4678",
+    "scripts/package-policy.json": "82b6573b0b465dc89c89d0d3196af6d4dd81a27e38393411b616ecd221e38df2"
+  },
+  "limits": [
+    "No task-accuracy or confidence-calibration claim.",
+    "Action probabilities saturated at 1.0 in the evaluated cases.",
+    "Shared-host CLI timings are excluded from performance claims.",
+    "No lower-memory, extended-context stress, Linux/CUDA, iOS, signed-package, CI, or release qualification."
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "sdk_repository": "https://github.com/NandhaKishorM/laya",
+  "sdk_revision": "573e5b62696ba441230cd6be71d593331b5d23af",
+  "transformers": "5.0.0",
+  "torch": "2.14.0",
+  "seed": 173,
+  "purpose": "Synthetic full graph, local/global attention, uneven padding, all question types and single option parity"
+}

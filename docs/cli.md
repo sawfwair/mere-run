@@ -35,11 +35,12 @@ Public tree:
   - `mere.run image train-lora` — Train a local image LoRA adapter.
   - `mere.run image visualize-run` — Open a local LoRA training run viewer.
   - `mere.run image validate` — Run advanced deterministic validation for local image model families.
-- [`mere.run text`](/runtime/text) — Run local chat, code, embedding, and anonymization workflows.
+- [`mere.run text`](/runtime/text) — Run local chat, code, embedding, anonymization, and decision workflows.
   - `mere.run text chat` — Run local chat with text chat models.
   - `mere.run text code` — Run local code generation with GGUF models via llama.cpp.
   - `mere.run text embed` — Generate text embeddings using native Qwen3-Embedding-0.6B.
   - `mere.run text anonymize` — Detect and redact PII using OpenAI Privacy Filter.
+  - `mere.run text decide` — Evaluate typed questions with native Laya decision models.
   - `mere.run text train-lora` — Train a native text or image-conditioned LoRA adapter from chat-style SFT JSONL.
 - [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, diarize, and manage voice profiles.
   - `mere.run speech synthesize` — Generate speech from text using Qwen3-TTS.

@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add native Laya decisions through `text decide`, macOS Studio, and
+  `/v1/text/decisions`. Support pinned English, multilingual, and typed-decision
+  checkpoints, ordered questions, probability distributions, token-budget
+  preflight, calibration disclosure, and resident API model lifecycle.
+
 ## 0.54.0 - 2026-09-22
 
 - Add experimental native Qwen Image 2.1 generation and editing with up to ten
