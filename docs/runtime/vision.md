@@ -217,6 +217,11 @@ per detection. `--preflight --json` validates the image, installed model,
 queries, and output plan without loading the model; `--quiet` prints only the
 annotated image path.
 
+For local model roots, preflight applies the same manifest, checkpoint-file,
+and tokenizer-layout validation as execution. Missing or invalid manifests fail
+before the command reports readiness. These checks do not load tensor data or
+establish model accuracy.
+
 Portable graphs expose the same runtime as the built-in `vision.ground` node.
 The node accepts an image plus a JSON array of queries and produces a verified
 annotated `image`, structured `detections` JSON, and a portable `masks`
