@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.54.0 - 2026-09-22
+
 - Add experimental native Qwen Image 2.1 generation and editing with up to ten
   references, RGBA PNG output, Qwen3-VL conditioning, and prefix KV reuse.
   `image-qwen-21` uses pinned dense weights and requires acceptance of Qwen's
