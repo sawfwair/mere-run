@@ -78,6 +78,7 @@ enum RuntimeSidecarKind: String, Codable, Equatable, Sendable {
     case speech
     case transcription
     case embedding
+    case decision
 }
 
 struct RuntimeSidecarResidentSnapshot: Codable, Equatable, Sendable {

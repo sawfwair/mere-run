@@ -259,6 +259,8 @@ public extension ManagedModelSpec {
             return Qwen3EmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .qwen3VLEmbedding:
             return Qwen3VLEmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .laya:
+            return LayaCatalog.validate(root: rootURL, modelID: id, fileManager: fileManager)
         case .privacyFilter:
             return OpenAIPrivacyFilterResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .codegenGGUF:

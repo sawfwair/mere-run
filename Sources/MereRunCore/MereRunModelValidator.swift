@@ -104,6 +104,7 @@ public enum MereRunModelValidator {
                 return false
             case .directoryRoot, .structuredRoot:
                 return spec.validationKind != .codegenGGUF
+                    && spec.validationKind != .laya
                     && spec.validationKind != .roFormer
                     && spec.validationKind != .auk
                     && spec.validationKind != .apBWE
@@ -155,7 +156,8 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
-        } else if spec?.validationKind == .qwenImage21
+        } else if spec?.validationKind == .laya
+            || spec?.validationKind == .qwenImage21
             || spec?.validationKind == .aceStep
             || spec?.validationKind == .miniMaxMusic3
             || spec?.validationKind == .yue2

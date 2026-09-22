@@ -212,6 +212,7 @@ actor CodeGenServer {
         print("Starting server at http://\(host):\(port)")
         print("OpenAI-compatible base URL: http://\(host):\(port)/v1")
         print("Chat endpoint: http://\(host):\(port)/v1/chat/completions")
+        print("Decisions endpoint: http://\(host):\(port)/v1/text/decisions")
         print("Embeddings endpoint: http://\(host):\(port)/v1/embeddings")
         print("Images endpoint: http://\(host):\(port)/v1/images/generations")
         print("Image edits endpoint: http://\(host):\(port)/v1/images/edits")
@@ -256,7 +257,10 @@ actor CodeGenServer {
             return try await self.handleChatCompletions(request)
         }
 
-        // Embeddings
+        // Typed decisions and embeddings
+        router.post("/v1/text/decisions") { [self] request, _ in
+            try await handleTextDecisions(request)
+        }
         router.post("/v1/embeddings") { [self] request, _ in
             return try await self.handleEmbeddings(request)
         }
@@ -529,6 +533,55 @@ actor CodeGenServer {
                     embeddings: result.embeddings,
                     tokenCounts: result.tokenCounts
                 )
+                let encoded = try jsonResponse(response)
+                return encoded
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleTextDecisions(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be application/json.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 2 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
+        }
+
+        let openaiRequest: LayaAPIRequest
+        do {
+            openaiRequest = try JSONDecoder().decode(LayaAPIRequest.self, from: Data(body.readableBytesView))
+        } catch {
+            return makeErrorResponse(status: .badRequest, message: "Invalid request payload.", type: "invalid_request_error")
+        }
+
+        do {
+            return try await withRuntimeRequestAdmission(using: requestAdmission) {
+                try openaiRequest.validate()
+                let resolved = try await ManagedModelResolver.resolveForRuntime(
+                    requestedModel: openaiRequest.model, defaultModelID: LayaCatalog.modelID, progress: nil)
+                let root = LayaCatalog.checkpointRoot(resolved.url, modelID: resolved.spec.id)
+                let response = try await sidecarPool.decide(
+                    modelID: resolved.spec.id, modelPath: root.path, request: openaiRequest.request)
                 let encoded = try jsonResponse(response)
                 return encoded
             }

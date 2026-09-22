@@ -187,6 +187,8 @@ textCode	prompt	Write a tiny Swift function that formats byte counts.
 textCode	stream	true
 textCode	temperature	1.0
 textCode	topP	0.95
+textDecide	model	text-decide-laya
+textDecide	outputPath	~/Documents/mere.run/Text/decisions-<stamp>.json
 textEmbed	model	text-embed-qwen3-0.6b
 textEmbed	outputPath	~/Documents/mere.run/Text/embeddings-<stamp>.json
 textEmbed	prompt	semantic search query

@@ -81,6 +81,7 @@ public enum QuantizedModelManifestWriter {
             case .qwen3ASR, .parakeetASR: return .asr
             case .sortformer: return .asr
             case .qwen3Embedding: return .embed
+            case .laya: return .laya
             case .openAIPrivacyFilter: return .privacy
             case .qwen3Coder, .northMiniCode: return .code
             case .lightOnOCR: return .ocr
@@ -194,6 +195,8 @@ public enum QuantizedModelManifestWriter {
                     return [.textEmbedding]
                 case .openAIPrivacyFilter:
                     return [.textAnonymization]
+                case .laya:
+                    return [.textDecision]
                 case .qwen3Coder, .northMiniCode:
                     return [.chat, .codeGeneration]
                 case .lightOnOCR:
@@ -305,7 +308,7 @@ public enum QuantizedModelManifestWriter {
                  .videoDepthAnything, .depthAnything3, .marigoldV2,
                  .tripoSR, .instantMesh, .trellis2:
                 break
-            case .qwen3TTS, .qwen3ASR, .parakeetASR, .sortformer, .qwen3Embedding, .openAIPrivacyFilter,
+            case .laya, .qwen3TTS, .qwen3ASR, .parakeetASR, .sortformer, .qwen3Embedding, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor, .roFormer, .apBWE, .univerSR, .auk, .inkling:
                 break

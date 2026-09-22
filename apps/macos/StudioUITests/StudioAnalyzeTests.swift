@@ -317,7 +317,7 @@ final class StudioAnalyzeTests: XCTestCase {
             .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth, .visionPose,
             .visionFaces, .visionFlow, .visionGeometry, .visionLive,
             .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioSeparate,
-            .textEmbeddings, .textAnonymize,
+            .textEmbeddings, .textAnonymize, .textDecide,
             .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth,
             .soundScore, .soundCondition
         ]

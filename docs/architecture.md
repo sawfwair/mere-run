@@ -188,6 +188,13 @@ Shared text encoder stack used by image models:
   - `Sources/MereRunTextEncoder/TextEncoder+RoPE.swift`
   - `Sources/MereRunTextEncoder/TextEncoder+Blocks.swift`
 
+Laya typed decisions:
+
+- Command: `Sources/MereRunCLI/Commands/TextDecideCommand.swift`
+- Shared operation and tokenizer: `Sources/MereRunCore/Laya/`
+- Native ModernBERT encoder and decision heads: `Sources/MereRunLayaModel/`
+- [Usage and checkpoint selection](./runtime/laya.md)
+
 ## Speech stack
 
 Read [Speech runtime boundaries](./internals/speech-runtime-boundaries.md) for

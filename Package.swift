@@ -179,6 +179,7 @@ mereRunCoreDependencies.append("MereRunExecution")
 mereRunCoreDependencies.append("MereRunContract")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
+mereRunCoreDependencies.append("MereRunLayaModel")
 mereRunCoreDependencies.append("MereRunImageModels")
 mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("MereRunDecode")
@@ -315,6 +316,7 @@ var mereRunCoreTestDependencies: [Target.Dependency] = [
   "MereRunMLXTestSupport",
   "MereRunTensor",
   "MereRunTextEncoder",
+  "MereRunLayaModel",
   "MereRunImageModels",
   "MereRunCore",
   "AudioCore",
@@ -465,6 +467,16 @@ targets.append(
     dependencies: [.target(name: "MereRunModelKit")]
       + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/MereRunTensor",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunLayaModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunLayaModel",
     exclude: ["README.md"],
     swiftSettings: commonSwiftSettings
   )
@@ -662,6 +674,7 @@ targets.append(
       "MiniMaxMusic3/README.md",
       "YuE2/README.md",
       "PrivacyFilter/README.md",
+      "Laya/README.md",
       "RoFormer/README.md",
       "UniverSR/README.md",
       "Pose/README.md",

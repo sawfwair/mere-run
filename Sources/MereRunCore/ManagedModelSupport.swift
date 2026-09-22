@@ -811,6 +811,12 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 16,
                 recommended: 24
             ),
+            descriptor(LayaCatalog.modelID, "Laya English decisions",
+                       "Native ModernBERT choice, score, and boolean decisions; English checkpoint.", minimum: 8, recommended: 16),
+            descriptor(LayaCatalog.multilingualID, "Laya multilingual decisions",
+                       "Native mmBERT decisions for multilingual text.", minimum: 8, recommended: 16),
+            descriptor(LayaCatalog.typedDecisionsID, "Laya typed decisions",
+                       "Native English checkpoint fine-tuned on typed-decision workflows.", minimum: 8, recommended: 16),
             descriptor(
                 OpenAIPrivacyFilterCatalog.modelId,
                 "Text anonymization",

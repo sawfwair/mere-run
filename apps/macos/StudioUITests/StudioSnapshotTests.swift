@@ -528,6 +528,21 @@ final class StudioSnapshotTests: XCTestCase {
 
     }
 
+    func testLayaDecisionWorkspaceSnapshots() throws {
+        for width in [768.0, 1440.0] {
+            for appearance in StudioSnapshotAppearance.allCases {
+                let navigation = NavigationModel()
+                let view = StudioRootView()
+                    .environmentObject(fixture.controller)
+                    .environmentObject(fixture.library)
+                    .environmentObject(navigation)
+                try fixture.write(view, size: CGSize(width: width, height: 820), appearance: appearance,
+                                  name: "laya-decisions-\(Int(width))-\(appearance.rawValue)", settle: 1,
+                                  afterAppear: { navigation.open(task: .textDecide) })
+            }
+        }
+    }
+
     func testResultWorkspaceFocusAndComparisonSnapshots() throws {
         let fidelity = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup)
         defer { fidelity.tearDown() }

@@ -63,5 +63,15 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 2_826_861_317,
             defaultCLICommands: ["text anonymize"]
         ),
-    ]
+    ] + LayaCatalog.modelIDs.map { modelID in
+        ManagedModelSpec(
+            id: modelID, category: .textDecide, installShape: .structuredRoot,
+            hubFallback: LayaCatalog.hubFallback(modelID: modelID),
+            upstreamRepoId: LayaCatalog.repository, upstreamRevision: LayaCatalog.revision,
+            validationKind: .laya, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: modelID == LayaCatalog.multilingualID ? 678_201_636
+                : modelID == LayaCatalog.typedDecisionsID ? 846_195_716 : 846_195_574,
+            defaultCLICommands: ["text decide"]
+        )
+    }
 }

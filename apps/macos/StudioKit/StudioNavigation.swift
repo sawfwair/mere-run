@@ -77,7 +77,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
         case .chat: return "Local model · nothing leaves this Mac"
         case .vision: return "Images and video, understood locally"
         case .audio: return "Transcribe, identify, enhance, and separate"
-        case .text: return "Embeddings and anonymization"
+        case .text: return "Decisions, embeddings, and anonymization"
         case .earth: return "Native Earth-observation inference"
         case .models: return "Local models, locations, and health"
         case .server: return "The local API and resident engines"
@@ -154,7 +154,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
             self = .vision
         case .speechTranscribe, .speechDiarize, .speechListen, .audioEnhance, .audioEdit:
             self = .audio
-        case .textEmbed, .textAnonymize:
+        case .textEmbed, .textAnonymize, .textDecide:
             self = .text
         case .geoFlood, .geoFire, .geoTessera, .geoOlmoEarth:
             self = .earth
@@ -233,6 +233,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
 
     case textEmbeddings = "text.embeddings"
     case textAnonymize = "text.anonymize"
+    case textDecide = "text.decide"
 
     case earthFlood = "earth.flood"
     case earthFire = "earth.fire"
@@ -269,7 +270,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
              .visionFaces, .visionFlow, .visionGeometry, .visionLive:
             return .vision
         case .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioSeparate, .audioLive: return .audio
-        case .textEmbeddings, .textAnonymize: return .text
+        case .textEmbeddings, .textAnonymize, .textDecide: return .text
         case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth: return .earth
         case .modelsInstalled, .modelsLocations, .modelsHealth, .modelsBenchmarks, .modelsAdapters:
             return .models
@@ -313,6 +314,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .visionLive, .audioLive: return "Live"
         case .audioWhoSpoke: return "Who Spoke"
         case .audioEnhance: return "Enhance"
+        case .textDecide: return "Decisions"
         case .textEmbeddings: return "Embeddings"
         case .textAnonymize: return "Anonymize"
         case .earthFlood: return "Flood"

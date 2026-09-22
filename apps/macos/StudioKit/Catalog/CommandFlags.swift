@@ -120,6 +120,24 @@ extension CommandFlags {
     }
 }
 
+// MARK: - text decide
+
+extension CommandFlags {
+    /// `mere.run text decide` — Decisions
+    package enum TextDecide: CommandFlagNamespace {
+        package static let command = ["text", "decide"]
+        package static let defaultValues = [
+            "--model": "text-decide-laya"
+        ]
+
+        package static let input = "--input"
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let pretty = "--pretty"
+        package static let preflight = "--preflight"
+    }
+}
+
 // MARK: - text train-lora
 
 extension CommandFlags {

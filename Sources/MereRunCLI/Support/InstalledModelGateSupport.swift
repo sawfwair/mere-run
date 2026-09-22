@@ -170,6 +170,10 @@ enum InstalledModelSmokePlans {
         installedIDs: Set<String>
     ) -> InstalledModelSmokePlan? {
         switch spec.validationKind {
+        case .laya:
+            return direct(spec, route: "text decide") { runner in
+                try await runner.installedLayaCheck(model: spec.id)
+            }
         case .flux1, .flux2Klein, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ, .qwenImage21:
             return direct(spec, route: "image generate") { runner in
                 try await runner.installedImageCheck(model: spec.id)
@@ -970,6 +974,16 @@ extension GateRunner {
             decodeTps: nil,
             semanticFailure: nil
         )
+    }
+
+    func installedLayaCheck(model: String) async throws -> GateObservation {
+        let input = workDirectory.appending(path: "laya-request.json")
+        let request = LayaDecisionRequest(state: "The parcel arrived on time.", questions: [
+            LayaQuestion(id: "delivered", type: .noul, instructions: "Did the parcel arrive?")
+        ])
+        try JSONEncoder().encode(request).write(to: input, options: .atomic)
+        let run = try await exec(["text", "decide", "--model", model, "--input", input.path], timeout: 900)
+        return jsonStdoutObservation(run, label: "Laya decision JSON")
     }
 
     func installedPrivacyCheck(model: String) async throws -> GateObservation {

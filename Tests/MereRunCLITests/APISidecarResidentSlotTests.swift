@@ -127,8 +127,9 @@ final class APISidecarResidentSlotTests: XCTestCase {
         XCTAssertEqual(status.loadedCount, 0)
         XCTAssertEqual(status.activeRequests, 0)
         XCTAssertEqual(status.queuedRequests, 0)
-        XCTAssertEqual(status.residents.count, 4)
+        XCTAssertEqual(status.residents.count, 5)
         XCTAssertTrue(status.residents.contains { $0.kind == .embedding })
+        XCTAssertTrue(status.residents.contains { $0.kind == .decision })
         XCTAssertTrue(status.residents.allSatisfy { $0.ttlSeconds == 42 && !$0.loaded })
     }
 

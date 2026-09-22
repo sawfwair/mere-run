@@ -659,6 +659,8 @@ private struct StudioWorkspaceView: View {
             StudioVoiceView(task: voiceTaskBinding, tasks: [.diarize, .listen], initialDraft: draft)
         case .audioEnhance, .audioSeparate:
             StudioAudioToolsView(tool: audioToolBinding)
+        case .textDecide:
+            StudioLayaDecisionView()
         case .textEmbeddings, .textAnonymize:
             StudioUtilityLabView(
                 task: utilityTaskBinding,

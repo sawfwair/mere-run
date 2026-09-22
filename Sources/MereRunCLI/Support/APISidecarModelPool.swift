@@ -34,6 +34,7 @@ enum APISidecarLane: Int, CaseIterable, Hashable, Sendable {
     case speech
     case transcription
     case embedding
+    case decision
 }
 
 enum APISidecarModelPoolError: LocalizedError, Equatable {
@@ -129,6 +130,19 @@ private final class APISidecarEmbeddingRuntime: @unchecked Sendable {
     }
 }
 
+private final class APISidecarDecisionRuntime: @unchecked Sendable {
+    private(set) var model: LayaDecisionOperation?
+
+    init(model: LayaDecisionOperation) {
+        self.model = model
+    }
+
+    func unload() {
+        model = nil
+        Memory.clearCache()
+    }
+}
+
 struct APISidecarEmbeddingResult: Sendable {
     let embeddings: [[Float]]
     let tokenCounts: [Int]
@@ -146,6 +160,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
     private let speechSlot: APISidecarResidentSlot<APISidecarSpeechKey, Qwen3TTSGenerator>
     private let asrSlot: APISidecarResidentSlot<APISidecarASRKey, APISidecarASRGenerator>
     private let embeddingSlot: APISidecarResidentSlot<APISidecarEmbeddingKey, APISidecarEmbeddingRuntime>
+    private let decisionSlot: APISidecarResidentSlot<APISidecarEmbeddingKey, APISidecarDecisionRuntime>
     private let operationCoordinator: APISidecarOperationCoordinator
     private let settingsURL: URL
     private let memoryPressurePolicy: RuntimeMemoryPressurePolicy
@@ -176,6 +191,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         self.speechSlot = APISidecarResidentSlot(currentDate: currentDate)
         self.asrSlot = APISidecarResidentSlot(currentDate: currentDate)
         self.embeddingSlot = APISidecarResidentSlot(currentDate: currentDate)
+        self.decisionSlot = APISidecarResidentSlot(currentDate: currentDate)
         self.operationCoordinator = APISidecarOperationCoordinator()
     }
 
@@ -510,6 +526,63 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         }
     }
 
+    func decide(
+        modelID: String,
+        modelPath: String,
+        request: LayaDecisionRequest
+    ) async throws -> LayaDecisionResponse {
+        let key = APISidecarEmbeddingKey(
+            modelID: modelID,
+            modelPath: normalizedPath(modelPath)
+        )
+        return try await withSidecarPressureCoordination(excluding: [.decision]) {
+            let lifecycle = lifecycleSettings(modelID: modelID, settings: loadedSettings())
+            return try await decisionSlot.withValue(
+                for: key,
+                idleTTL: .seconds(lifecycle.ttlSeconds),
+                pinned: lifecycle.pinned,
+                currentIdlePolicy: { key in
+                    let current = lifecycleSettings(
+                        modelID: key.modelID,
+                        settings: loadedSettings()
+                    )
+                    return APISidecarResidentIdlePolicy(
+                        pinned: current.pinned,
+                        ttl: .seconds(current.ttlSeconds)
+                    )
+                },
+                operationCoordinator: operationCoordinator,
+                prepareForColdOperation: { _ in
+                    try await prepareForColdSidecarLoad(
+                        excluding: [.decision],
+                        estimatedLoadBytes: estimatedLoadBytes(
+                            modelID: modelID,
+                            modelPath: key.modelPath,
+                            minimumBytes: 3 * 1_073_741_824
+                        )
+                    )
+                },
+                make: {
+                    APISidecarDecisionRuntime(
+                        model: try LayaDecisionOperation(root: URL(fileURLWithPath: key.modelPath), modelID: modelID)
+                    )
+                },
+                unload: { runtime in runtime.unload() },
+                operation: { runtime in
+                    guard let model = runtime.model else {
+                        throw CancellationError()
+                    }
+                    do {
+                        _ = try model.prepare(request)
+                    } catch {
+                        throw APIRequestValidationError.invalidField("request", error.localizedDescription)
+                    }
+                    return try model.predict(request)
+                }
+            )
+        }
+    }
+
     func status(
         now: Date? = nil,
         memorySample: RuntimeMemorySample? = nil
@@ -535,6 +608,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         let speech: APISidecarResidentSlotState<APISidecarSpeechKey>
         let transcription: APISidecarResidentSlotState<APISidecarASRKey>
         let embedding: APISidecarResidentSlotState<APISidecarEmbeddingKey>
+        let decision: APISidecarResidentSlotState<APISidecarEmbeddingKey>
     }
 
     private func states() async -> SlotStates {
@@ -542,11 +616,12 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         async let speech = speechSlot.state()
         async let transcription = asrSlot.state()
         async let embedding = embeddingSlot.state()
+        async let decision = decisionSlot.state()
         return await SlotStates(
             image: image,
             speech: speech,
             transcription: transcription,
-            embedding: embedding
+            embedding: embedding, decision: decision
         )
     }
 
@@ -688,6 +763,13 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     reason: decision.reason,
                     using: { runtime in runtime.unload() }
                 )
+            case .decision:
+                guard let key = states.decision.residentKey else { continue }
+                _ = await decisionSlot.evictIfIdle(
+                    expectedKey: key,
+                    reason: decision.reason,
+                    using: { runtime in runtime.unload() }
+                )
             }
         }
     }
@@ -733,6 +815,13 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 reason: decision.reason,
                 using: { runtime in runtime.unload() }
             )
+        case .decision:
+            guard let key = states.decision.residentKey else { return false }
+            return await decisionSlot.evictIfIdle(
+                expectedKey: key,
+                reason: decision.reason,
+                using: { runtime in runtime.unload() }
+            )
         }
     }
 
@@ -754,6 +843,10 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         )
         let embeddingSettings = lifecycleSettings(
             modelID: states.embedding.residentKey?.modelID,
+            settings: settings
+        )
+        let decisionSettings = lifecycleSettings(
+            modelID: states.decision.residentKey?.modelID,
             settings: settings
         )
         return [
@@ -793,6 +886,15 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 pinned: embeddingSettings.pinned,
                 ttlSeconds: embeddingSettings.ttlSeconds
             ),
+            APISidecarEvictionCandidate(
+                lane: .decision,
+                loaded: states.decision.residentKey != nil,
+                lastAccess: states.decision.lastAccess,
+                activeRequests: states.decision.activeRequests,
+                queuedRequests: states.decision.queuedRequests,
+                pinned: decisionSettings.pinned,
+                ttlSeconds: decisionSettings.ttlSeconds
+            ),
         ]
     }
 
@@ -804,6 +906,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         let speechKey = states.speech.residentKey ?? states.speech.lastKey
         let transcriptionKey = states.transcription.residentKey ?? states.transcription.lastKey
         let embeddingKey = states.embedding.residentKey ?? states.embedding.lastKey
+        let decisionKey = states.decision.residentKey ?? states.decision.lastKey
         return [
             residentSnapshot(
                 kind: .image,
@@ -839,6 +942,15 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 variant: "qwen3-embedding",
                 loaded: states.embedding.residentKey != nil,
                 state: states.embedding,
+                settings: settings
+            ),
+            residentSnapshot(
+                kind: .decision,
+                modelID: decisionKey?.modelID,
+                modelPath: decisionKey?.modelPath,
+                variant: "laya",
+                loaded: states.decision.residentKey != nil,
+                state: states.decision,
                 settings: settings
             ),
         ]

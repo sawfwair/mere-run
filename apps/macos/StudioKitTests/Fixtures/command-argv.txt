@@ -1938,6 +1938,26 @@ textCode	videoOutputMode=video-only	text code --prompt 1 --system 1 --max-tokens
 textCode	videoQuality=draft	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
 textCode	videoQuality=final	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
 textCode	voiceMode=clone	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
+textDecide	default	text decide --input '' --model text-decide-laya --output ~/Documents/mere.run/Text/decisions-<stamp>.json
+textDecide	maximal	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	maximal-booleans-off	text decide --input 1 --model 1 --output 1 1
+textDecide	modelRoot=video-minimax-h3-ref2va	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	modelRoot=video-wan22-ti2v-5b-mlx	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	musicLMMode=disable	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	musicLMMode=use	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	musicTask=lego	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	musicTask=repaint	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	renderProfile=quality	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	responseFormat=json_object	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	responseFormat=text	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	thinkingMode=automatic	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	thinkingMode=hide	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	thinkingMode=show	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	videoOutputMode=audio-video	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	videoOutputMode=video-only	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	videoQuality=draft	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	videoQuality=final	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
+textDecide	voiceMode=clone	text decide --input 1 --model 1 --output 1 --pretty --preflight 1
 textEmbed	default	text embed 'semantic search query' --model text-embed-qwen3-0.6b --max-tokens 2048 --output ~/Documents/mere.run/Text/embeddings-<stamp>.json
 textEmbed	maximal	text embed 1 --model 1 --max-tokens 2049 --output 1 --pretty 1
 textEmbed	maximal-booleans-off	text embed 1 --model 1 --max-tokens 2049 --output 1 1

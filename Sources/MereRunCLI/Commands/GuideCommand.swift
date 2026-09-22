@@ -266,6 +266,10 @@ enum GuideRegistry {
             resourceName: "text-embed.md"
         ),
         GuideTopic(
+            topic: "text-decide", title: "Text Decide", commandPaths: [["text", "decide"]],
+            models: LayaCatalog.modelIDs, resourceName: "text-decide.md"
+        ),
+        GuideTopic(
             topic: "text-anonymize",
             title: "Text Anonymize",
             commandPaths: [["text", "anonymize"]],

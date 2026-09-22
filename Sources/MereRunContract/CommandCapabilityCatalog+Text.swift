@@ -197,6 +197,19 @@ extension MereRunCapabilityCatalog {
         output: .init(kind: .text, flag: "--output", optional: true)
     )
 
+    public static let textDecide = MereRunCommandCapability(
+        id: "text.decide", command: ["text", "decide"], title: "Decisions",
+        summary: "Evaluate choice, score, and boolean questions with native Laya.",
+        options: [
+            .init(flag: "--input", label: "JSON request", kind: .file),
+            .init(flag: "--model", label: "Model", kind: .string, defaultValue: "text-decide-laya"),
+            .init(flag: "--output", label: "JSON output", kind: .file),
+            .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean),
+            .init(flag: "--preflight", label: "Inspect token budgets", kind: .boolean)
+        ],
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
+    )
+
     public static let textTrainLoRA = MereRunCommandCapability(
         id: "text.train-lora",
         command: ["text", "train-lora"],

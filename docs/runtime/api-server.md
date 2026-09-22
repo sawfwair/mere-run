@@ -1318,3 +1318,29 @@ swift run mere.run status
   `/v1/models` needs `--api-key` or `MERERUN_API_KEY`.
 - A wrong loaded model usually means another server is already bound to that
   host and port.
+
+## Evaluate Laya decisions
+
+After installing a Laya model, send an authenticated JSON request to
+`POST /v1/text/decisions`. This mere.run extension uses the request described in
+[Laya decisions](./laya.md), with an additional top-level `model` field:
+
+```json
+{
+  "model": "text-decide-laya",
+  "state": "The parcel arrived on time.",
+  "questions": [
+    {"id": "delivered", "type": "noul", "instructions": "Did the parcel arrive?"}
+  ]
+}
+```
+
+The endpoint supports the three managed Laya IDs. It shares the server's bearer
+authentication, content-type validation, request admission, and rate limiter.
+Requests are limited to 2 MiB. Installed models appear in `/v1/models` with
+`text.decisions` as their task. The response contains the same typed answers,
+calibration metadata, and truncation plan as `text decide`.
+
+One Laya checkpoint can remain resident in the sidecar pool. Requests use an
+exclusive lease for that slot; idle TTL, pinning, cancellation, and memory
+pressure follow the shared sidecar lifecycle.

@@ -43,6 +43,7 @@ extension CommandTemplateID {
         case .speechListen: return .audioLive
         case .textEmbed: return .textEmbeddings
         case .textAnonymize: return .textAnonymize
+        case .textDecide: return .textDecide
         case .geoFlood: return .earthFlood
         case .geoFire: return .earthFire
         case .geoTessera: return .earthTessera
