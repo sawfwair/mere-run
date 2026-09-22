@@ -28,6 +28,7 @@ public final class FalconPerceptionTokenizer: @unchecked Sendable {
     public let padTokenID: Int
     public let eosTokenID: Int?
     public let maxLength: Int
+    let endOfQueryTokenID: Int?
 
     public init(
         tokenizer: Tokenizer,
@@ -39,6 +40,7 @@ public final class FalconPerceptionTokenizer: @unchecked Sendable {
         self.padTokenID = padTokenID
         self.eosTokenID = eosTokenID
         self.maxLength = maxLength
+        self.endOfQueryTokenID = tokenizer.convertTokenToId("<|end_of_query|>")
     }
 
     public static func load(
@@ -89,6 +91,11 @@ public final class FalconPerceptionTokenizer: @unchecked Sendable {
             eosTokenID: tokenizer.eosTokenId,
             maxLength: maxLength
         )
+    }
+
+    /// Match the model-configured EOS and the tokenizer's query terminator.
+    func isGenerationStopToken(_ tokenID: Int, modelEosTokenID: Int) -> Bool {
+        tokenID == modelEosTokenID || tokenID == endOfQueryTokenID
     }
 
     public func encode(_ text: String, addSpecialTokens: Bool = false) -> [Int] {

@@ -63,6 +63,70 @@ final class VisionGroundCommandParsingTests: XCTestCase {
         ]))
     }
 
+    func testPreflightRejectsLocalModelWithoutManifest() async throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let image = temp.appendingPathComponent("image.png")
+        let imageData = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK7sAAAAASUVORK5CYII="))
+        try imageData.write(to: image)
+        let modelRoot = temp.appendingPathComponent("model", isDirectory: true)
+        try writeMinimalFalconModel(at: modelRoot)
+        try FileManager.default.removeItem(at: MereRunModelManifest.url(in: modelRoot))
+        let command = try VisionGround.parse([
+            image.path, "--query", "person", "--model", modelRoot.path,
+            "--preflight", "--json",
+        ])
+
+        do {
+            try await command.run()
+            XCTFail("Preflight must reject a model that execution cannot validate.")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("Missing mererun_model.json"))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temp.appendingPathComponent("image_grounded.json").path))
+    }
+
+    func testPreflightRejectsMissingLocalWeights() async throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let image = temp.appendingPathComponent("image.png")
+        let imageData = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK7sAAAAASUVORK5CYII="))
+        try imageData.write(to: image)
+        let modelRoot = temp.appendingPathComponent("model", isDirectory: true)
+        try writeMinimalFalconModel(at: modelRoot)
+        try FileManager.default.removeItem(at: modelRoot.appendingPathComponent("model.safetensors"))
+        let command = try VisionGround.parse([
+            image.path, "--query", "person", "--model", modelRoot.path,
+            "--preflight", "--json",
+        ])
+
+        do {
+            try await command.run()
+            XCTFail("Preflight must reject missing weights.")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("safetensors"))
+        }
+    }
+
+    func testPreflightValidatesLayoutWithoutLoadingWeightsOrWritingOutputs() async throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let image = temp.appendingPathComponent("image.png")
+        let imageData = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK7sAAAAASUVORK5CYII="))
+        try imageData.write(to: image)
+        let modelRoot = temp.appendingPathComponent("model", isDirectory: true)
+        // Empty weight bytes establish that preflight does not load the checkpoint.
+        try writeMinimalFalconModel(at: modelRoot)
+        let command = try VisionGround.parse([
+            image.path, "--query", "person", "--model", modelRoot.path,
+            "--preflight", "--json",
+        ])
+
+        try await command.run()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temp.appendingPathComponent("image_grounded.png").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temp.appendingPathComponent("image_grounded.json").path))
+    }
+
     func testVisionGroundParsesPromptAliasAndOverrides() throws {
         let cmd = try VisionGround.parse([
             "/tmp/image.png",

@@ -235,7 +235,9 @@ final class FalconPerceptionAttention: Module {
         self.qSize = config.numAttentionHeads * config.headDim
         self.kvSize = config.numKeyValueHeads * config.headDim
         self.scale = 1.0 / sqrt(Float(max(1, config.headDim)))
-        self.eps = config.rmsNormEps
+        // Upstream functional RMS norms use the Float32 accumulation epsilon.
+        // The explicit model epsilon belongs to the final normalization only.
+        self.eps = Float.ulpOfOne
         self._wqkv.wrappedValue = Linear(config.hiddenSize, qSize + (2 * kvSize), bias: false)
         self._wo.wrappedValue = Linear(qSize, config.hiddenSize, bias: false)
         self._sinks.wrappedValue = MLX.zeros([config.numAttentionHeads], dtype: .float32)
@@ -400,7 +402,9 @@ final class FalconPerceptionMLP: Module {
 
     init(config: FalconPerceptionTextConfig) {
         self.hiddenDim = config.intermediateSize
-        self.eps = config.rmsNormEps
+        // Upstream functional RMS norms use the Float32 accumulation epsilon.
+        // The explicit model epsilon belongs to the final normalization only.
+        self.eps = Float.ulpOfOne
         self._w13.wrappedValue = Linear(config.hiddenSize, 2 * config.intermediateSize, bias: false)
         self._w2.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
         self._normW.wrappedValue = MLX.ones([config.hiddenSize], dtype: .float32)

@@ -89,6 +89,7 @@ extension LightOnOCRGenerator {
             lastPositionOnly: true
         )
         MLX.eval(logits)
+        Self.reclaimUnusedDecodeBuffers()
         log("[Gen] Prefill logits shape: \(logits.shape)")
         if logProgress {
             // Debug-only: full-vocabulary sort plus a GPU readback.
@@ -128,6 +129,7 @@ extension LightOnOCRGenerator {
                 generatedTokens.append(value)
             }
             pendingToken = tokenArray
+            Self.reclaimUnusedDecodeBuffers()
         }
         if let previous = pendingToken {
             let value = previous.item(Int.self)
