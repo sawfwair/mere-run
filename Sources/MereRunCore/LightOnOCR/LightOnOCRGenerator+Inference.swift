@@ -51,12 +51,13 @@ extension LightOnOCRGenerator {
     }
 
     func buildOCRPromptParts(tokenizer: QwenTokenizer) -> (pre: [Int], post: [Int]) {
-        let instruction = "Please transcribe the text in the image."
+        // The checkpoint's OCR example sends an image-only user message.
+        // Match chat_template.jinja rendered with Transformers' whitespace
+        // settings, including the empty system message for a user-first chat.
         let prompt =
             "<|im_start|>system<|im_end|>\n"
             + "<|im_start|>user\n"
-            + "<|image_pad|>" + instruction + "\n"
-            + "<|im_end|>\n"
+            + "<|image_pad|><|im_end|>\n"
             + "<|im_start|>assistant\n"
 
         let tokens = tokenizer.encodeText(prompt)
