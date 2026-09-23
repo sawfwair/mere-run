@@ -467,6 +467,16 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertEqual(decoded.visionInitFrame, 4)
     }
 
+    /// `vision track` seeds on `--init-frame` and tracks the whole clip up to `--end-frame`, so the
+    /// range Studio shows starts at 0 whatever frame the prompts are on.
+    func testTrackRangeDescriptionStartsAtFrameZero() {
+        let grid = StudioVideoFrameGrid(duration: 2, frameRate: 30)
+        XCTAssertEqual(grid.trackRangeDescription(promptFrame: 10, endFrame: 30), "Prompts on frame 10 · tracks frames 0–30")
+        XCTAssertEqual(grid.trackRangeDescription(promptFrame: 10, endFrame: nil), "Prompts on frame 10 · tracks all 60 frames")
+        XCTAssertEqual(grid.trackRangeDescription(promptFrame: 0, endFrame: nil), "Prompts on frame 0 · tracks all 60 frames")
+        XCTAssertEqual(grid.trackRangeDescription(promptFrame: 99, endFrame: 99), "Prompts on frame 59 · tracks frames 0–59")
+    }
+
     // MARK: - Subjects selectors
 
     /// Video ▸ Subjects keeps one box as `x1,y1,x2,y2` and point lists as `x,y; x,y`.

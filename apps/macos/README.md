@@ -368,10 +368,13 @@ kept in the file's stored pixels — the space the CLI decodes without the EXIF
 transform — with `StudioImageOrientation` mapping between the two for all eight
 orientations. Track shows its clip as a frame scrubber
 (`StudioUI/StudioTrackFrameEditor.swift`, frames decoded with
-`AVAssetImageGenerator`): "Start tracking here" seeds the tracker on the frame
-in view, where the prompts are drawn, and "End tracking here" sets the optional
-last frame (`--init-frame` / `--end-frame`). Once a tracked clip exists it plays
-in place, with "Adjust prompts and frames" bringing the scrubber back.
+`AVAssetImageGenerator`): "Draw prompts on this frame" makes the frame in view
+the prompt frame the tracker seeds on (`--init-frame`), and "End tracking here"
+sets the optional last frame (`--end-frame`). The CLI then tracks the whole
+clip from frame 0 through the end frame, not from the prompt frame, so the
+range reads "Prompts on frame 10 · tracks frames 0–30" and the scrubber shades
+that span. Once a tracked clip exists it plays in place, with "Adjust prompts
+and frames" bringing the scrubber back.
 
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
 steps — for twenty-two tasks, seventeen of which still render their own form

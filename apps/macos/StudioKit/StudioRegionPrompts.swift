@@ -675,6 +675,16 @@ package struct StudioVideoFrameGrid: Equatable, Sendable {
         return ((planTime * rate).rounded() + 0.5) / rate
     }
 
+    /// "Prompts on frame 10 · tracks frames 0–30": what `vision track --init-frame 10 --end-frame
+    /// 30` does. The tracker segments the prompts on the init frame, then propagates through the
+    /// whole clip from frame 0 to the end frame (`SAM31VideoTracker.track` walks both directions
+    /// from the seed), so the range never starts at the prompt frame.
+    package func trackRangeDescription(promptFrame: Int, endFrame: Int?) -> String {
+        let prompts = "Prompts on frame \(clamped(promptFrame))"
+        guard let endFrame else { return "\(prompts) · tracks all \(frameCount) frames" }
+        return "\(prompts) · tracks frames 0–\(clamped(endFrame))"
+    }
+
     /// "0:04.5" — the clock the scrubber shows beside the frame number.
     package func timeDescription(ofFrame frame: Int) -> String {
         let seconds = Double(clamped(frame)) / frameRate

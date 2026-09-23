@@ -3,8 +3,8 @@ import AppKit
 import StudioKit
 import SwiftUI
 
-// Picking frames on the clip instead of typing their numbers: Track's seed frame (where the
-// prompts are drawn) and its optional end frame, on a scrubber over the decoded frame.
+// Picking frames on the clip instead of typing their numbers: Track's prompt frame (the seed the
+// prompts are drawn on) and its optional end frame, on a scrubber over the decoded frame.
 
 /// Single frames of one clip, decoded on demand.
 ///
@@ -47,12 +47,14 @@ final class StudioVideoFrameLoader: @unchecked Sendable {
     }
 }
 
-/// Track's input: the clip's frames on a scrubber, the prompts drawn on the seed frame, and the
-/// buttons that make the shown frame the start or the end of tracking.
+/// Track's input: the clip's frames on a scrubber, the prompts drawn on the prompt frame, and the
+/// buttons that make the shown frame the prompt frame or the end of tracking.
 ///
-/// Prompts belong to the seed frame — that is the picture the tracker segments before following
-/// each object — so they are only editable there. Scrubbing elsewhere shows them faded, and
-/// "Start tracking here" moves the seed (prompts included) to the frame in view.
+/// Prompts belong to the prompt frame (`--init-frame`) — that is the picture the tracker segments
+/// before following each object — so they are only editable there. Scrubbing elsewhere shows them
+/// faded, and "Draw prompts on this frame" moves them to the frame in view. The tracker then
+/// covers the clip from frame 0 to the end frame whatever frame the prompts are on
+/// (`StudioVideoFrameGrid.trackRangeDescription`), so the scrubber shades that whole span.
 struct StudioTrackFrameEditor: View {
     let url: URL
     /// The clip's pixel size, which the prompts are in.
@@ -108,7 +110,7 @@ struct StudioTrackFrameEditor: View {
 
     private var hint: String {
         if onSeedFrame { return "Drag for a box, click for a point, Option-click for a negative point." }
-        return "Prompts are drawn on frame \(grid.clamped(initFrame)), where tracking starts."
+        return "Prompts are drawn on frame \(grid.clamped(initFrame)); tracking covers the range below."
     }
 
     // MARK: Frame
@@ -154,7 +156,7 @@ struct StudioTrackFrameEditor: View {
                 Image(systemName: "flag.fill")
                     .font(.system(size: 10, weight: .semibold))
             }
-            Text(onSeedFrame ? "Start frame \(currentFrame)" : "Frame \(currentFrame)")
+            Text(onSeedFrame ? "Prompt frame \(currentFrame)" : "Frame \(currentFrame)")
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
         }
         .foregroundStyle(onSeedFrame ? MereRunTheme.onAccent : Color.white)
@@ -180,7 +182,7 @@ struct StudioTrackFrameEditor: View {
                 grid: grid,
                 frame: Binding(get: { currentFrame }, set: { shownFrame = grid.clamped($0) }),
                 isScrubbing: $isScrubbing,
-                startFrame: grid.clamped(initFrame),
+                promptFrame: grid.clamped(initFrame),
                 endFrame: endFrame.map(grid.clamped)
             )
             Text("\(currentFrame) / \(grid.lastFrame) · \(grid.timeDescription(ofFrame: currentFrame))")
@@ -194,16 +196,16 @@ struct StudioTrackFrameEditor: View {
     private var markRow: some View {
         HStack(spacing: 6) {
             if onSeedFrame {
-                markState("Tracking starts here", systemImage: "flag.fill")
+                markState("Prompts on this frame", systemImage: "flag.fill")
             } else {
                 Button {
                     initFrame = currentFrame
                     if let endFrame, endFrame < currentFrame { self.endFrame = nil }
                 } label: {
-                    Label("Start tracking here", systemImage: "flag")
+                    Label("Draw prompts on this frame", systemImage: "flag")
                 }
                 .buttonStyle(.mereSecondary)
-                .help("Seed the tracker on this frame; prompts are drawn on it")
+                .help("Move the prompts to this frame; the tracker segments them here, then follows them through the whole range")
             }
 
             if endFrame == currentFrame {
@@ -219,7 +221,7 @@ struct StudioTrackFrameEditor: View {
                 .help(
                     canEndHere
                         ? "Stop tracking after this frame instead of at the end of the clip"
-                        : "Tracking cannot end before it starts; move the start frame here first"
+                        : "Tracking cannot end before the prompt frame; move the prompts here first"
                 )
             }
 
@@ -255,11 +257,7 @@ struct StudioTrackFrameEditor: View {
     }
 
     private var rangeDescription: String {
-        let start = grid.clamped(initFrame)
-        if let endFrame {
-            return "Frames \(start)–\(grid.clamped(endFrame)) of \(grid.frameCount)"
-        }
-        return start == 0 ? "The whole clip, \(grid.frameCount) frames" : "Frame \(start) to the end of the clip"
+        grid.trackRangeDescription(promptFrame: initFrame, endFrame: endFrame)
     }
 
     // MARK: Loading
@@ -285,14 +283,14 @@ struct StudioTrackFrameEditor: View {
     }
 }
 
-/// A frame slider: the clip as a track, the tracked span in accent from the start frame to the
-/// end frame (or the clip's end), and a knob for the frame in view. Arrow keys step a frame when
-/// it has focus. `isScrubbing` is true while the knob is being dragged.
+/// A frame slider: the clip as a track, the tracked span in accent from frame 0 to the end frame
+/// (or the clip's end) with a marker on the prompt frame, and a knob for the frame in view. Arrow
+/// keys step a frame when it has focus. `isScrubbing` is true while the knob is being dragged.
 struct StudioFrameScrubber: View {
     let grid: StudioVideoFrameGrid
     @Binding var frame: Int
     @Binding var isScrubbing: Bool
-    let startFrame: Int
+    let promptFrame: Int
     let endFrame: Int?
 
     @FocusState private var focused: Bool
@@ -318,8 +316,8 @@ struct StudioFrameScrubber: View {
                 Capsule()
                     .fill(MereRunTheme.accent.opacity(endFrame == nil ? 0.45 : 0.8))
                     .frame(width: spanWidth(usable: usable), height: Metrics.trackHeight)
-                    .offset(x: Metrics.knobDiameter / 2 + usable * fraction(of: startFrame))
-                marker(at: startFrame, usable: usable)
+                    .offset(x: Metrics.knobDiameter / 2)
+                marker(at: promptFrame, usable: usable)
                 if let endFrame { marker(at: endFrame, usable: usable) }
                 Circle()
                     .fill(MereRunTheme.surface)
@@ -374,8 +372,7 @@ struct StudioFrameScrubber: View {
     }
 
     private func spanWidth(usable: CGFloat) -> CGFloat {
-        let end = endFrame ?? grid.lastFrame
-        return max(0, usable * (fraction(of: end) - fraction(of: startFrame)))
+        usable * fraction(of: endFrame ?? grid.lastFrame)
     }
 
     private func marker(at frame: Int, usable: CGFloat) -> some View {
