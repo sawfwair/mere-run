@@ -43,6 +43,108 @@ The format is based on Keep a Changelog.
   after a relaunch cleared the runtime API key from the Keychain and could revert
   a host or port changed in Settings. Agent readiness is now read when the
   Agents section opens instead of every 16 seconds for the life of the app.
+- Build Laya decision requests in macOS Studio instead of supplying a JSON file:
+  enter the text and add choice, score, and yes-or-no questions, start from the
+  handbook example, and read each answer's probabilities, confidence, and
+  truncation as cards; **Check fit** shows token budgets before a run. Request
+  files still import and export.
+- When a run fails on a Studio specialist page, show why, its log, and **Get the
+  model** when its model is not installed, instead of pointing to a Library row
+  those pages do not have.
+- Fix Earth's input checklists for TESSERA (`S2`, `S2_DOY`, and at least one
+  complete Sentinel-1 pair) and OlmoEarth (`TIMESTAMPS` and at least one of
+  `S2L2A`, `S1RTC`, `LANDSAT`), read Sound ▸ Score from the CLAP JSON by name,
+  and draw disabled Studio buttons as disabled.
+- Show why a Chat turn failed: one line read from the run's stderr, Retry beside
+  it, and the run's last log lines behind Show log. A thread whose reply was cut
+  off when Studio closed gets the same row. None of it is replayed into a later
+  prompt.
+- Show a reply's reasoning in Chat when thinking is on, as a collapsed Thinking
+  disclosure above the answer that reads "Thinking…" live while the model is
+  still reasoning. The reasoning is kept beside the reply and never re-enters a
+  prompt; threads saved by earlier versions open unchanged.
+- Stop pinning the Chat transcript to the bottom while a reply streams: it
+  follows new output only while you are already there, and a "Jump to latest"
+  pill brings you back after you scroll up. Deleting a thread now asks first.
+- Draw box and point prompts on the picture in Vision ▸ Segment and Track
+  instead of typing pixel coordinates: drag for a box, click for a point,
+  Option-click for a negative point, with handles to resize, Delete to remove,
+  and a Box / Point / Negative / Clear toolbar. The drawing becomes the CLI's
+  `--box` and `--point` values, and a box or point counts as the prompt, so a
+  text prompt is no longer required.
+- Carry the boxes Find detected into Segment as drawn prompts when you choose
+  "Segment these".
+- Pick Track's start and end frames on a frame scrubber over the clip, with the
+  prompts drawn on the start frame, instead of typing frame numbers.
+- Choose the face for Vision ▸ Faces embedding and comparison by clicking it on
+  the image once Face detection has run on that picture; the index stepper stays
+  for pictures without a detection.
+- Draw Video ▸ Subjects' precise selectors and keyframe corrections on the
+  reference image or the driving frame at the plan's size, which is the space
+  the mask plan is written in, instead of typing them.
+- Build music training datasets in macOS Studio instead of writing a JSONL
+  manifest by hand: add audio files or a folder of clips (or drop them in),
+  caption each clip, add lyrics, play any clip, and see the trainer's checks
+  before a run. Start training writes the manifest beside the adapter; manifests
+  made elsewhere import, and the clip list exports.
+- Show Image ▸ Datasets' run plan as a report — steps, resolution, batch, rank,
+  learning rate, checkpoint and preview cadence, schedule, dataset counts, model,
+  and output — read from the CLI's typed preflight and materialize output, with
+  each file revealable, instead of a list of paths scraped from the JSON.
+- Pick Music ▸ Transcribe's expected instruments from the list the CLI prints
+  with `--list-instruments`, edit Vision's multi-view cameras and InstantMesh's
+  cameras as per-view fields checked the way the CLI checks them, enter Klein
+  per-target LoRA ranks as rows, and set Woosh renoise as a slider or a per-step
+  schedule; Studio writes the exact files and arguments each command reads.
+- Name models the same way everywhere in Studio: the model chip, the thread
+  list, the Adapters page, the Library, and the readiness card now print the
+  title the Models page prints, and fall back to a readable name only for ids
+  the inventory has not named.
+- Add "Use these settings" to Library rows and result cards, which opens the
+  run's task with its recorded prompt, model, and options in the composer to
+  tweak and run again; Run again and Edit command… stay for exact reruns.
+- Let Library search find runs by model name or id, and narrow by a whole
+  status word such as "failed" or "running" alongside the rest of the query.
+- Offer Compare from the Library: batch two finished image runs and the bar and
+  context menu open them side by side in the result workspace.
+- Let Models ▸ Installed make a model the default for a task ("Use for Chat by
+  default"); the task's composer moves onto it at once and fresh drafts start
+  from it.
+- Rewrite the readiness card in plain language and replace its Details button
+  with the next step: Get the model (with the publisher's terms sheet when there
+  is one), Choose another model, or Check again, keeping the CLI's last line as
+  a muted detail when a check fails. A run that failed because its model is not
+  on this Mac now says so on its card and offers Get the model.
+- Save every macOS Studio specialist page's output where Settings ▸ General
+  says. Vision, 3D, Sound, Voice, the Music tools, Train (adapters under the
+  domain they train for), Video ▸ Subjects, Text ▸ Decisions, the Image
+  utilities (validation and run plans under Image, embeddings and anonymization
+  under Text), and voice recordings now propose `<Domain>/<page>-<timestamp>`
+  under the per-media folders or the configured root, instead of
+  `~/Movies/MereRun` and its siblings. A page's run gets the same unwritable-
+  folder fallback a prompt run does, and two runs in one second no longer share
+  a name.
+- Render specialist results readably: Who Spoke draws its JSON timeline as
+  speaker lanes and turn rows with Save timeline…, Music ▸ Analyze shows tempo,
+  key, meter, language, caption, and lyrics, and Runs shows an inspected run's
+  state, timings, steps, and outputs with Reveal, each with the raw report behind
+  a disclosure.
+- Name Studio's own CLI reads plainly in the Activity popover and the menu bar
+  ("Checking models") and move the CLI path to the footer's tooltip. Head each
+  Command panel row with the option's name over its flag, make the Settings path
+  fields pickers with Reveal and Reset, and draw every specialist page's buttons
+  in the Studio styles.
+- Add still-image depth (Marigold V2) beside video depth in Vision ▸ Depth, pick
+  the live-tracking camera by name, choose TESSERA output dimensions from the
+  values the command accepts, and choose the model for a Models ▸ Locations
+  binding from the inventory.
+- Stop model inventory and lookup from hanging on a model location that does
+  not answer, such as a removable or network volume whose macOS access prompt
+  is unanswered. Each location gets a bounded directory check first, and
+  `status`, `model list`, and `/runtime/status` report locations they skipped
+  or were denied. `/runtime/status` now reads installed models from a
+  background-refreshed scan instead of scanning on every request. The macOS
+  app declares removable- and network-volume usage descriptions.
 
 ## 0.55.0 - 2026-09-22
 

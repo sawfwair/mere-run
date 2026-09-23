@@ -202,6 +202,31 @@ final class StudioSnapshotTests: XCTestCase {
         )
     }
 
+    /// The idle Activity popover when the inventory skipped a model drive that did not answer.
+    func testActivityPopoverSkippedModelLocationSnapshots() throws {
+        let status = StudioMachineStatus.ready(
+            installedModels: 88,
+            skippedLocations: [StudioSkippedModelLocation(path: "/Volumes/MODELS", problem: .unresponsive)]
+        )
+        let size = CGSize(width: StudioActivityPopover.width + 40, height: 360)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioActivityPopover(
+                jobs: fixture.controller.jobs,
+                status: status,
+                appVersion: "1.0",
+                cliVersion: "0.55.0",
+                modelsRoot: "~/Library/Application Support/MereRun/models",
+                resolvedCLI: "/Applications/MereRun.app/Contents/MacOS/mere.run",
+                onOpenServer: {},
+                onOpenModels: {}
+            )
+            .padding(20)
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .background(MereRunTheme.background)
+            try fixture.write(view, size: size, appearance: appearance, name: "activity-skipped-location-\(appearance.rawValue)")
+        }
+    }
+
     /// The menu bar extra's panel in each server state, light and dark: stopped; running with two
     /// resident text models, a speech sidecar, live traffic, and Studio work in flight; running
     /// outside Studio; and stopped unexpectedly. `/runtime/status` is answered by
@@ -562,6 +587,73 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Drawing prompts instead of typing them: the region editor over the 1024×1024 mug with two
+    /// boxes (the labeled one selected, showing its handles), a positive and a negative point,
+    /// light and dark; then Segment on the Analyze board with the same prompts drawn over a
+    /// seeded `vision segment` result, and Track's seed-frame scrubber over the in-test clip with
+    /// a box on frame 12 and tracking set to end at frame 40.
+    func testRegionPromptEditorSnapshots() throws {
+        let analyze = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .analyze,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { analyze.tearDown() }
+
+        let prompts = SnapshotFixture.regionPrompts
+        let image = try XCTUnwrap(
+            StudioImagePreviewLoader.downsampledImage(from: analyze.largeMugURL, maxPixelSize: 1_600)?.image
+        )
+        let editorSize = CGSize(width: 640, height: 620)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = RegionEditorPreview(image: image, prompts: prompts, selection: prompts[0].id)
+                .padding(24)
+                .frame(width: editorSize.width, height: editorSize.height)
+                .background(MereRunTheme.background)
+            try analyze.write(view, size: editorSize, appearance: appearance, name: "f6-region-editor-\(appearance.rawValue)")
+        }
+
+        var segment = StudioDraft()
+        segment.reset(for: .segment)
+        segment.prompt = ""
+        segment.inputPath = analyze.largeMugURL.path
+        segment.visionRegionPrompts = prompts
+
+        var track = StudioDraft()
+        track.reset(for: .track)
+        track.prompt = "the bright band"
+        track.inputPath = analyze.clipURL.path
+        track.visionRegionPrompts = [
+            .box(CGRect(x: 60, y: 40, width: 220, height: 150), label: "band"),
+            .point(CGPoint(x: 420, y: 300), isPositive: false)
+        ]
+        track.visionInitFrame = 12
+        track.visionEndFrame = 40
+
+        let renders: [(name: String, task: StudioTask, appearance: StudioSnapshotAppearance)] = [
+            ("f6-analyze-segment-light", .visionSegment, .light),
+            ("f6-analyze-segment-dark", .visionSegment, .dark),
+            ("f6-analyze-track-light", .visionTrack, .light),
+            ("f6-analyze-track-dark", .visionTrack, .dark)
+        ]
+        for render in renders {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.segment: segment, .track: track])
+                .environmentObject(analyze.controller)
+                .environmentObject(analyze.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try analyze.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: render.appearance,
+                name: render.name,
+                settle: 3.0,
+                afterAppear: { navigation.open(task: render.task) }
+            )
+        }
+    }
+
     /// Chat at the mockup size with the Converse board's threads: the thread list with four
     /// rows, the diffusion thread open (two user turns, a reply with a Python block, and a reply
     /// streaming in), the model and system chips, and the composer's Stop circle. `model list`
@@ -609,6 +701,79 @@ final class StudioSnapshotTests: XCTestCase {
             )
         }
         XCTAssertTrue(fixture.controller.runningConversationIDs.contains(SnapshotFixture.converseThreadID))
+    }
+
+    /// The transcript's turn states on their own, light and dark: a reply that thought first
+    /// (its "Thinking" disclosure collapsed above the answer), a reply the person stopped (its
+    /// note and regenerate icon, no reason row), then a turn that failed with its one-line
+    /// reason, Retry, and the run's log behind a collapsed "Show log"; and a second render of a
+    /// reply streaming in while the model is still inside its reasoning block.
+    func testConverseTurnStatesSnapshots() throws {
+        let asked = StudioSnapshotRenderer.referenceDate.addingTimeInterval(-240)
+        let model = SnapshotFixture.converseChatModelID
+        let thread = StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: "", inputURL: nil, outputURL: nil,
+            createdAt: asked, updatedAt: asked.addingTimeInterval(200), status: .failed, exitCode: 1,
+            commandPreview: "mere.run text chat", outputText: nil,
+            messages: [
+                StudioMessage(role: .user, content: "Why predict the noise instead of the image?", createdAt: asked),
+                StudioMessage(
+                    role: .assistant,
+                    content: """
+                    Predicting the noise gives the network a target with the same scale at every \
+                    step, so one set of weights serves the whole schedule. Predicting the clean \
+                    image makes the early, very noisy steps an almost impossible regression.
+                    """,
+                    createdAt: asked.addingTimeInterval(30), model: model, tokensPerSecond: 39,
+                    reasoning: """
+                    The question is about the parameterization. Two things matter: the target's \
+                    variance across timesteps, and how the loss weights the steps. Keep it short \
+                    and concrete.
+                    """
+                ),
+                StudioMessage(role: .user, content: "And the one-line version?", createdAt: asked.addingTimeInterval(90)),
+                StudioMessage(
+                    role: .assistant, content: "The noise target keeps the same variance at every step, so",
+                    createdAt: asked.addingTimeInterval(100), failed: true, cancelled: true, model: model
+                ),
+                StudioMessage(role: .user, content: "Show the sampling loop in Swift with MLX.", createdAt: asked.addingTimeInterval(180)),
+                StudioMessage(
+                    role: .assistant, content: "", createdAt: asked.addingTimeInterval(200), failed: true, model: model,
+                    failureReason: "Model 'text-chat-qwen3.6-4b' is not installed.",
+                    logTail: [
+                        "Loading text-chat-qwen3.6-4b…",
+                        "error: model 'text-chat-qwen3.6-4b' is not installed",
+                        "Exited with code 1.",
+                    ]
+                ),
+            ],
+            systemPrompt: nil, model: model
+        )
+        let size = CGSize(width: 900, height: 760)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let states = StudioConversationView(
+                item: thread, liveReply: nil, isRunning: false, mode: .chat,
+                onNewChat: {}, onCopy: { _ in }, onRetry: {}, onEdit: { _ in }, onBranch: { _ in }
+            )
+            .background(MereRunTheme.background)
+            try fixture.write(states, size: size, appearance: appearance, name: "chat-turn-states-\(appearance.rawValue)", settle: 1.5)
+
+            var streaming = thread
+            streaming.status = .running
+            streaming.messages = Array(thread.messages?.prefix(5) ?? [])
+            let live = StudioConversationView(
+                item: streaming,
+                liveReply: ConversationTranscript.Reply(
+                    answer: "",
+                    reasoning: "The user wants MLX, so the tensors are MLXArray and the scheduler step is explicit.",
+                    isThinking: true
+                ),
+                isRunning: true, mode: .chat,
+                onNewChat: {}, onCopy: { _ in }, onRetry: {}, onEdit: { _ in }, onBranch: { _ in }
+            )
+            .background(MereRunTheme.background)
+            try fixture.write(live, size: size, appearance: appearance, name: "chat-thinking-live-\(appearance.rawValue)", settle: 1.5)
+        }
     }
 
     /// Video ▸ Subjects in the Track stage: a three-subject plan whose masks were tracked (the
@@ -751,6 +916,206 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Music ▸ Train with three clips in the manifest editor — two captioned, one with lyrics, and
+    /// one still needing a caption so the row and the problem list show — light and dark.
+    func testMusicTrainingManifestEditorSnapshots() throws {
+        let clips = fixture.root.appendingPathComponent("clips", isDirectory: true)
+        try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
+        var manifest = StudioMusicTrainingManifest()
+        let rows: [(name: String, caption: String, lyrics: String)] = [
+            ("late-night-drive.wav", "warm analog synth pad over a slow four-on-the-floor kick, 92 bpm",
+             "city lights blur past the window\nwe don't say a word"),
+            ("brass-hit.wav", "short brass section stab, bright and dry", ""),
+            ("vocal-take.wav", "", ""),
+        ]
+        for row in rows {
+            let url = clips.appendingPathComponent(row.name)
+            try SnapshotFixture.writeSilentWAV(to: url, seconds: 2)
+            manifest.clips.append(.init(audioPath: url.path, caption: row.caption, lyrics: row.lyrics))
+        }
+        fixture.controller.taskSessions.set(manifest, for: StudioTask.musicTrain.rawValue + ".Training.musicManifest")
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+            try fixture.write(view, size: Self.fidelitySize, appearance: appearance,
+                              name: "music-train-manifest-\(appearance.rawValue)", settle: 1.5,
+                              afterAppear: { navigation.open(task: .musicTrain) })
+        }
+    }
+
+    /// Image ▸ Datasets ▸ Run plan after a training-plan preflight with one warning: the report's
+    /// sections in place of the old path list, light and dark.
+    func testImageRunPlanReportSnapshots() throws {
+        var item = StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: "Run plan",
+            inputURL: fixture.root.appendingPathComponent("plan.json"),
+            outputURL: nil,
+            createdAt: StudioSnapshotRenderer.referenceDate,
+            updatedAt: StudioSnapshotRenderer.referenceDate,
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run image run-plan plan.json --preflight --json",
+            outputText: Self.trainingPlanPreflight,
+            artifactURLs: []
+        )
+        item.templateID = .imageRunPlan
+        fixture.library.upsert(item)
+        let sessions = fixture.controller.taskSessions
+        sessions.set(Optional(item.id), for: StudioTask.imageDatasets.rawValue + ".requestID")
+        sessions.set(fixture.root.appendingPathComponent("plan.json").path, for: StudioTask.imageDatasets.rawValue + ".UtilityLab.planPath")
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioUtilityLabView(task: .constant(.runPlan), tasks: [.datasetDiscovery, .imageValidation, .runPlan], showsTaskPicker: true)
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, StudioTask.imageDatasets.rawValue)
+                .frame(width: 1_200, height: 820)
+            try fixture.write(view, size: CGSize(width: 1_200, height: 820), appearance: appearance,
+                              name: "image-run-plan-\(appearance.rawValue)", settle: 1.5)
+        }
+    }
+
+    /// The camera editors at the width of the 3D and Vision columns: InstantMesh with four views and
+    /// one camera short, and multi-view geometry with two views and one mirrored rotation, so the
+    /// per-view fields, the Match views button, and the CLI's checks all show, light and dark.
+    func testCameraEditorSnapshots() throws {
+        let instantMesh = StudioInstantMeshCameraDocument(cameras: (0..<3).map { _ in .example })
+        var mirrored = StudioGeometryCamera.identity()
+        mirrored.rotation = [-1, 0, 0, 0, 1, 0, 0, 0, 1]
+        let geometry = StudioGeometryCameraDocument(cameras: [.identity(width: 4_032, height: 3_024), mirrored])
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = VStack(alignment: .leading, spacing: 24) {
+                StudioInstantMeshCameraEditor(
+                    enabled: .constant(true), document: .constant(instantMesh),
+                    viewNames: ["front.png", "right.png", "back.png", "left.png"], message: .constant(nil)
+                )
+                Divider()
+                StudioGeometryCameraEditor(
+                    enabled: .constant(true), document: .constant(geometry),
+                    views: [
+                        StudioCameraView(name: "IMG_0412.heic", pixelSize: StudioPixelSize(width: 4_032, height: 3_024)),
+                        StudioCameraView(name: "IMG_0413.heic", pixelSize: StudioPixelSize(width: 4_032, height: 3_024)),
+                    ],
+                    message: .constant(nil)
+                )
+            }
+            .padding(18)
+            .frame(width: 520, alignment: .topLeading)
+            .background(MereRunTheme.background)
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .environmentObject(fixture.controller)
+            .environmentObject(fixture.library)
+            try fixture.write(view, size: CGSize(width: 520, height: 1_180), appearance: appearance,
+                              name: "camera-editors-\(appearance.rawValue)", settle: 1)
+        }
+    }
+
+    /// `image run-plan --preflight --json` for a training plan, as `LoRATrainingPreflightEnvelope`
+    /// prints it.
+    private static let trainingPlanPreflight = """
+    {"schema_version": 1, "mere_run_version": "0.55.0", "command": ["image", "train-lora"], "mode": "preflight",
+     "status": "warning", "created_at": "2026-09-23T10:00:00Z", "cwd": "/Users/nerd/Pictures/mere.run/Image",
+     "summary": "Ready to train on 48 usable pairs; 2 images have no caption and will be skipped.",
+     "request": {"data": "/Users/nerd/Pictures/datasets/ceramic-mugs", "output": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors",
+       "model": "image-krea2-raw", "recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16,
+       "alpha": 16, "learning_rate": 0.0001, "caption_dropout": 0.1},
+     "result": {
+       "dataset": {"directory": "/Users/nerd/Pictures/datasets/ceramic-mugs", "mode": "directory", "image_count": 50, "caption_count": 48,
+         "usable_pair_count": 48, "missing_caption_count": 2, "empty_caption_count": 0, "duplicate_caption_group_count": 0,
+         "duplicate_caption_count": 0, "excluded_preview_image_count": 0, "placeholder_caption_count": 0},
+       "model": {"requested": "image-krea2-raw", "kind": "managed", "installed": true,
+         "path": "/Users/nerd/Library/Application Support/MereRun/models/image-krea2-raw", "family": "krea2", "upstream_repo_id": "krea/krea-2-raw"},
+       "output": {"path": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors", "parent_directory": "/Users/nerd/Pictures/mere.run/Image",
+         "parent_exists": true, "parent_will_be_created": false, "exists": false, "extension_valid": true},
+       "plan": {"recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16, "alpha": 16,
+         "learning_rate": 0.0001, "caption_dropout": 0.1, "checkpoint_interval": 250, "expected_checkpoint_count": 4,
+         "max_resolution": 1536, "low_ram": false, "no_compile": false, "lr_warmup_steps": 100, "use_cosine_scheduler": true, "lr_min_factor": 0.1},
+       "run_plan": {"schema_version": 1, "kind": "image.train_lora", "command": ["image", "train-lora"],
+         "created_at": "2026-09-23T10:00:00Z", "cwd": "/Users/nerd/Pictures/mere.run/Image",
+         "arguments": {"data": "/Users/nerd/Pictures/datasets/ceramic-mugs", "output": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors",
+           "model": "image-krea2-raw", "source_recipe": "krea-fast-style", "width": 1024, "height": 1024, "training_steps": 1200,
+           "batch_size": 1, "learning_rate": 0.0001, "rank": 16, "alpha": 16, "max_text_length": 512, "scheduler_steps": 1000,
+           "caption_dropout": 0.1, "seed": 42, "lite": false, "exclude_preview_images": false, "checkpoint_interval": 250,
+           "max_resolution": 1536, "progressive": true, "low_ram": false, "no_compile": false, "gradient_checkpointing": false,
+           "benchmark_warmup_steps": 0, "sample_interval": 250, "sample_prompt": "a ceramic coffee mug in soft morning light",
+           "sample_steps": 20, "sample_cfg": 3.5, "sample_lora_scale": 1, "visualize": false, "visualize_port": 8765,
+           "lr_warmup_steps": 100, "no_cosine_scheduler": false, "lr_min_factor": 0.1, "quiet": false},
+         "resolved": {"recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16, "alpha": 16,
+           "learning_rate": 0.0001, "caption_dropout": 0.1, "checkpoint_interval": 250, "expected_checkpoint_count": 4,
+           "max_resolution": 1536, "low_ram": false, "no_compile": false, "lr_warmup_steps": 100, "use_cosine_scheduler": true, "lr_min_factor": 0.1}}},
+     "diagnostics": [{"id": "missing_captions", "severity": "warning", "title": "Missing captions",
+       "message": "2 images have no caption and will be skipped.", "locations": [], "suggested_action_ids": []}],
+     "actions": []}
+    """
+
+    /// Text ▸ Decisions with the handbook example in the editor and a finished run beside it:
+    /// a choice, a score, and a yes-or-no answer, one of them cut to fit.
+    func testLayaDecisionAnswersSnapshots() throws {
+        let run = fixture.root.appendingPathComponent("decisions-run", isDirectory: true)
+        try FileManager.default.createDirectory(at: run, withIntermediateDirectories: true)
+        let requestURL = run.appendingPathComponent("request.json")
+        let outputURL = run.appendingPathComponent("decisions.json")
+        try StudioDecisionDocument.example.requestJSON().write(to: requestURL)
+        try Data(Self.layaResult.utf8).write(to: outputURL)
+
+        var draft = CommandDraft()
+        draft.inputPath = requestURL.path
+        draft.outputPath = outputURL.path
+        draft.model = "text-decide-laya"
+        var item = StudioLibraryItem(
+            id: UUID(),
+            mode: .chat,
+            prompt: "Decisions",
+            inputURL: requestURL,
+            outputURL: outputURL,
+            createdAt: StudioSnapshotRenderer.referenceDate,
+            updatedAt: StudioSnapshotRenderer.referenceDate,
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run text decide --input request.json",
+            outputText: nil,
+            artifactURLs: [outputURL]
+        )
+        item.templateID = .textDecide
+        item.commandDraft = draft
+        fixture.library.upsert(item)
+        let sessions = fixture.controller.taskSessions
+        sessions.set(StudioDecisionDocument.example, for: StudioTask.textDecide.rawValue + ".Laya.document")
+        sessions.set(Optional(item.id), for: StudioTask.textDecide.rawValue + ".requestID")
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+            try fixture.write(view, size: CGSize(width: 1_440, height: 900), appearance: appearance,
+                              name: "laya-answers-\(appearance.rawValue)", settle: 1.5,
+                              afterAppear: { navigation.open(task: .textDecide) })
+        }
+    }
+
+    private static let layaResult = """
+    {"model": "text-decide-laya", "runtime": "mlx", "inputTokens": 131, "outputTokens": 0,
+     "plan": {"model": "text-decide-laya", "maxTokens": 512, "headMaxTokens": 192, "questions": [
+       {"id": "department", "inputTokens": 44, "stateTokens": 18, "stateTokensDropped": 0, "instructionTokensDropped": 0, "optionTokensDropped": [0, 0, 0], "optionCount": 3},
+       {"id": "urgency", "inputTokens": 45, "stateTokens": 18, "stateTokensDropped": 0, "instructionTokensDropped": 0, "optionTokensDropped": [0, 0, 0], "optionCount": 3},
+       {"id": "refund", "inputTokens": 42, "stateTokens": 18, "stateTokensDropped": 6, "instructionTokensDropped": 0, "optionTokensDropped": [0, 0], "optionCount": 2}]},
+     "answers": {
+       "department": {"type": "choice", "choice": "billing", "probabilities": {"billing": 0.91, "technical support": 0.06, "sales": 0.03}, "confidence": 0.78, "actProbability": 0.2, "rawTemperature": 0.9, "appliedTemperature": 0.9, "temperatureClamped": false},
+       "urgency": {"type": "score", "score": 1.24, "probabilities": {"0": 0.18, "1": 0.4, "2": 0.42}, "confidence": 0.31, "actProbability": 0.3, "rawTemperature": 1.1, "appliedTemperature": 1.1, "temperatureClamped": false},
+       "refund": {"type": "noul", "noul": 0.94, "probabilities": {"false": 0.06, "true": 0.94}, "confidence": 0.94, "actProbability": 0.7, "rawTemperature": 1.0, "appliedTemperature": 1.0, "temperatureClamped": false}
+     }}
+    """
+
     func testResultWorkspaceFocusAndComparisonSnapshots() throws {
         let fidelity = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup)
         defer { fidelity.tearDown() }
@@ -788,6 +1153,167 @@ final class StudioSnapshotTests: XCTestCase {
             name: "completion-compact-command", settle: 2, afterAppear: { navigation.toggleCommandColumn(for: .imageGenerate) })
     }
 
+    /// Compare, "Use these settings", and the readiness card's next steps, light and dark. First
+    /// the Library column with its two newest image rows batched, so the bar offers Compare. Then
+    /// the feed with a finished mockup run (its card carries the settings icon beside Vary), a
+    /// run that failed for want of its model (a plain reason and Get the model beside "Use these
+    /// settings" and Retry), and the readiness card for that model — Get the model and Choose
+    /// another model — followed by the same card before any check, when the Mac cannot run the
+    /// model, and when the check failed with the CLI's line kept as muted detail.
+    func testLibraryReuseAndReadinessSnapshots() throws {
+        let fidelity = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .mockup,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
+        )
+        defer { fidelity.tearDown() }
+
+        // The column first, while its two newest rows are both finished pictures.
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "a ceramic coffee mug in soft morning light"
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.createImage: draft])
+                .environmentObject(fidelity.controller)
+                .environmentObject(fidelity.library)
+                .environmentObject(navigation)
+                .environment(\.studioLibrarySeed, StudioLibrarySeed(viewMode: .list, batchCount: 2))
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fidelity.write(
+                view, size: Self.fidelitySize, appearance: appearance,
+                name: "library-compare-batch-\(appearance.rawValue)", settle: 3.0
+            )
+        }
+
+        try fidelity.seedFailedImageRun()
+        // The failed run's model is in the inventory but not on this Mac, with a title, so the
+        // failed card and the readiness card both name it "Z-Image Turbo" and offer the pull.
+        let inventory = StudioModelInventoryParser.rows(from: ModelsInventoryScript.modelList) + [
+            StudioModelInventoryRow(id: "image-zimage-turbo", category: "image", status: "missing", size: "—",
+                                    usageTerms: nil, title: "Z-Image Turbo", estimatedDownloadBytes: 6_300_000_000)
+        ]
+        let titles = StudioModelTitles(rows: inventory)
+
+        func feed(_ readiness: ModelReadinessState) -> some View {
+            let cards = StudioFeedCardBuilder.cards(items: fidelity.library.items, mode: .createImage) { _ in nil }
+            let shown = [cards.last { $0.kind == .generation }, cards.first { $0.item.status == .failed }].compactMap { $0 }
+            let noop: (StudioLibraryItem) -> Void = { _ in }
+            return StudioFeedCanvas(
+                mode: .createImage,
+                cards: shown,
+                readiness: readiness,
+                pullJob: nil,
+                highlightedID: nil,
+                newResultID: .constant(nil),
+                actions: StudioFeedActions(
+                    vary: noop, rerun: noop, useAsInput: { _ in }, saveTo: { _ in }, cancel: { _ in },
+                    remove: { _ in }, retry: noop, delete: noop, useSettings: noop, pullModel: { _ in },
+                    useExample: { _ in }, attach: {}
+                ),
+                readinessActions: StudioReadinessActions(
+                    mode: .createImage, model: .constant("image-zimage-turbo"), modelInventory: inventory,
+                    pullModel: {}, openModels: {}, recheck: {}
+                )
+            )
+            .environment(\.studioModelTitles, titles)
+            .frame(width: 900, height: 640)
+            .background(MereRunTheme.background)
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try fidelity.write(
+                feed(.missingModel("image-zimage-turbo")), size: CGSize(width: 900, height: 640),
+                appearance: appearance, name: "library-reuse-readiness-missing-\(appearance.rawValue)", settle: 2
+            )
+        }
+        let tooLarge = StudioModelCapability(
+            modelID: "image-zimage-turbo", isSupported: false, minimumUnifiedMemoryGB: 32,
+            recommendedUnifiedMemoryGB: 64, download: nil, reason: nil
+        )
+        let variants: [(name: String, readiness: ModelReadinessState)] = [
+            ("unchecked", .notChecked),
+            ("unsupported", .unsupported(try XCTUnwrap(tooLarge.unavailableMessage(titles: titles)))),
+            ("unknown", .unknown(MereRunController.modelListUnavailableMessage,
+                                 detail: "Models root /Volumes/Models is not mounted")),
+        ]
+        for variant in variants {
+            try fidelity.write(
+                feed(variant.readiness), size: CGSize(width: 900, height: 640),
+                appearance: .light, name: "library-reuse-readiness-\(variant.name)-light", settle: 2
+            )
+        }
+    }
+
+    /// Audio ▸ Who Spoke with a finished diarization: the recording, one lane per speaker over
+    /// its length, and every turn as the Analyze panel's rows with Save timeline…, light and dark.
+    func testWhoSpokeTimelineSnapshots() throws {
+        try fixture.seedDiarizationRun()
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fixture.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "who-spoke-\(appearance.rawValue)",
+                settle: 2.0,
+                afterAppear: { navigation.open(task: .audioWhoSpoke) }
+            )
+        }
+    }
+
+    /// Music ▸ Analyze with a finished ACE-Step analysis: tempo, key, meter, language, and how
+    /// much was analyzed as tiles, the caption and lyrics as prose, and the model's reply folded
+    /// away, light and dark.
+    func testMusicAnalysisSnapshots() throws {
+        try fixture.seedMusicAnalysisRun()
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fixture.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "music-analyze-\(appearance.rawValue)",
+                settle: 2.0,
+                afterAppear: { navigation.open(task: .musicAnalyze) }
+            )
+        }
+    }
+
+    /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
+    /// with its own state, the outputs with Reveal, and the raw report folded away. `executor
+    /// list`, `run list`, and `run inspect` are answered by a scripted runner; no CLI runs.
+    func testRunsInspectionSnapshots() throws {
+        let runs = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: RunsScript.responses)
+        )
+        defer { runs.tearDown() }
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioOperationsView(initialSelection: RunsScript.runPath)
+                .environmentObject(runs.controller)
+                .environmentObject(runs.library)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try runs.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "runs-inspect-\(appearance.rawValue)",
+                settle: 2.5
+            )
+        }
+    }
+
     private static func snapshotDirectory() -> URL? {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_STUDIO_SNAPSHOT_DIR"],
               !path.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -813,6 +1339,18 @@ private final class SnapshotFixture {
     private(set) var largeMugURL: URL!
     /// A short recording for the Transcribe board's waveform.
     private(set) var narrationURL: URL!
+    /// A 640×360 clip of 60 frames at 12 fps for Track's seed-frame scrubber.
+    private(set) var clipURL: URL!
+
+    /// The prompts the region-editor renders draw on the 1024×1024 mug: the cup's box (labeled,
+    /// selected in the shot), the saucer's, a positive point on the handle, a negative one on
+    /// the shadow.
+    static let regionPrompts: [StudioRegionPrompt] = [
+        .box(CGRect(x: 246, y: 307, width: 471, height: 451), label: "coffee cup"),
+        .box(CGRect(x: 82, y: 757, width: 184, height: 164)),
+        .point(CGPoint(x: 690, y: 520), isPositive: true),
+        .point(CGPoint(x: 880, y: 900), isPositive: false)
+    ]
     private let processRunner: MereRunProcessRunning
     /// The default runner's live-session seam; nil when the fixture was given a scripted runner.
     private var liveSessionRunner: SnapshotProcessRunner? { processRunner as? SnapshotProcessRunner }
@@ -1095,6 +1633,14 @@ private final class SnapshotFixture {
         let narration = directory.appendingPathComponent("narration.wav", isDirectory: false)
         try Self.writeSilentWAV(to: narration, seconds: 6)
         narrationURL = narration
+        let clip = directory.appendingPathComponent("band.mp4", isDirectory: false)
+        try Self.writeFixtureMP4(to: clip, size: CGSize(width: 640, height: 360), frames: 60)
+        clipURL = clip
+        let segmented = directory.appendingPathComponent("mug_segmented.png", isDirectory: false)
+        try Self.writeMugPNG(to: segmented, side: 1_024)
+        let segmentDocument = directory.appendingPathComponent("mug_segmented.json", isDirectory: false)
+        try Self.segmentDocument(input: mug, annotated: segmented, document: segmentDocument)
+            .write(to: segmentDocument, atomically: true, encoding: .utf8)
 
         var findDraft = groundTemplate.defaultDraft()
         findDraft.prompt = Self.analyzePrompt
@@ -1140,14 +1686,16 @@ private final class SnapshotFixture {
             StudioLibraryItem(
                 id: UUID(),
                 mode: .segment,
-                prompt: "the neon sign",
+                prompt: "the cup",
                 inputURL: mug,
-                outputURL: nil,
+                outputURL: segmented,
                 createdAt: findAt.addingTimeInterval(-60 * 60 * 24 * 5),
                 updatedAt: findAt.addingTimeInterval(-60 * 60 * 24 * 5 + 3),
                 status: .completed,
                 exitCode: 0,
-                commandPreview: "mere.run vision segment diner.png --prompt \"the neon sign\""
+                commandPreview: "mere.run vision segment mug.png --prompt \"the cup\"",
+                templateID: .visionSegment,
+                artifactURLs: [segmented, segmentDocument]
             ),
             StudioLibraryItem(
                 id: UUID(),
@@ -1202,6 +1750,32 @@ private final class SnapshotFixture {
           "modelID" : "vision-ground-falcon-perception",
           "queries" : [ "\(analyzePrompt)" ],
           "schemaVersion" : 1
+        }
+        """
+    }
+
+    /// One detection as `vision segment --json-output` writes it (`SAM31SegmentationMetadata`):
+    /// pixel xyxy boxes, camelCase keys, no mask sidecar so the Masks view shows its fallback.
+    private static func segmentDocument(input: URL, annotated: URL, document: URL) -> String {
+        """
+        {
+          "annotatedImagePath" : "\(annotated.path)",
+          "detections" : [
+            {
+              "box" : { "x1" : 250, "y1" : 312, "x2" : 712, "y2" : 752 },
+              "label" : "the cup",
+              "maskAreaPixels" : 148220,
+              "objectID" : "obj-1",
+              "promptKind" : "text",
+              "score" : 0.91
+            }
+          ],
+          "inputImagePath" : "\(input.path)",
+          "jsonOutputPath" : "\(document.path)",
+          "modelID" : "vision-segment-sam31",
+          "prompts" : [ "the cup" ],
+          "schemaVersion" : 1,
+          "threshold" : 0.05
         }
         """
     }
@@ -1339,6 +1913,37 @@ private final class SnapshotFixture {
         if let mug = library.items.last(where: { $0.mode == .createImage }) {
             library.setFavorite(id: mug.id, isFavorite: true)
         }
+    }
+
+    /// One Image ▸ Generate run that failed a few minutes ago with its command recorded, so the
+    /// feed's failed card offers "Use these settings" beside Retry.
+    func seedFailedImageRun() throws {
+        guard let template = CommandCatalog.template(id: .imageGenerate) else {
+            throw StudioSnapshotError.noContentView
+        }
+        var draft = template.defaultDraft()
+        draft.prompt = "a lighthouse keeper's desk, brass instruments, late afternoon"
+        draft.model = "image-zimage-turbo"
+        draft.width = 1_536
+        draft.height = 1_024
+        draft.steps = 9
+        draft.seed = "8181"
+        // Earlier than the mockup's finished runs, so the column's first two rows stay pictures.
+        library.upsert(StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: draft.prompt,
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: Self.mockupTime(hour: 8, minute: 40),
+            updatedAt: Self.mockupTime(hour: 8, minute: 41),
+            status: .failed,
+            exitCode: 1,
+            commandPreview: "mere.run " + template.arguments(from: draft).joined(separator: " "),
+            outputText: "error: image-zimage-turbo is not installed; run `mere.run model pull image-zimage-turbo`",
+            templateID: .imageGenerate,
+            commandDraft: draft
+        ))
     }
 
     /// Runs the Models detail column reads: image generations with the seeded default model
@@ -2021,8 +2626,141 @@ private final class SnapshotFixture {
         try data.write(to: url, options: .atomic)
     }
 
+    // MARK: Specialist results
+
+    /// A finished Who Spoke run: a stand-up recording and the timeline `speech diarize --format
+    /// json` wrote for it, made the page's current run the way a real run leaves it.
+    func seedDiarizationRun() throws {
+        guard let template = CommandCatalog.template(id: .speechDiarize) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let recording = root.appendingPathComponent("standup.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: recording, seconds: 20)
+        let timeline = root.appendingPathComponent("standup-speakers.json", isDirectory: false)
+        try Self.diarizationDocument(source: recording).write(to: timeline, atomically: true, encoding: .utf8)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = recording.path
+        draft.outputPath = timeline.path
+        draft.speechDiarizationFormat = "json"
+        let startedAt = Self.mockupTime(hour: 14, minute: 2)
+        let row = StudioLibraryItem(
+            id: UUID(),
+            mode: .listen,
+            prompt: "",
+            inputURL: recording,
+            outputURL: timeline,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(6.1),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run speech diarize standup.wav --format json --output standup-speakers.json",
+            outputText: nil,
+            templateID: .speechDiarize,
+            commandDraft: draft,
+            artifactURLs: [timeline]
+        )
+        library.upsert(row)
+        let scope = StudioTask.audioWhoSpoke.rawValue
+        controller.taskSessions.set(Optional(row.id), for: scope + ".requestID")
+        controller.taskSessions.set(draft, for: scope + ".Voice.diarizationDraft")
+    }
+
+    /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
+    /// as the row's output text the way the Library keeps stdout.
+    func seedMusicAnalysisRun() throws {
+        guard let template = CommandCatalog.template(id: .musicAnalyze) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let song = root.appendingPathComponent("harbor-lights.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: song, seconds: 20)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = song.path
+        draft.useDuration = true
+        draft.durationSeconds = 30
+        let startedAt = Self.mockupTime(hour: 11, minute: 48)
+        let row = StudioLibraryItem(
+            id: UUID(),
+            mode: .music,
+            prompt: "",
+            inputURL: song,
+            outputURL: nil,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(14),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run music analyze harbor-lights.wav --duration 30",
+            outputText: Self.musicAnalysisOutput(audio: song),
+            templateID: .musicAnalyze,
+            commandDraft: draft
+        )
+        library.upsert(row)
+        let scope = StudioTask.musicAnalyze.rawValue
+        controller.taskSessions.set(Optional(row.id), for: scope + ".requestID")
+        controller.taskSessions.set(draft, for: scope + ".MusicTools.analyzeDraft")
+    }
+
+    /// `SpeechDiarizationPayload` for a three-minute stand-up: three voices, sixteen turns.
+    private static func diarizationDocument(source: URL) -> String {
+        let turns: [(speaker: Int, start: Double, end: Double)] = [
+            (0, 0.4, 9.8), (1, 10.3, 24.1), (0, 24.6, 27.9), (1, 28.2, 41.0), (2, 41.7, 58.3),
+            (0, 58.9, 63.2), (2, 63.4, 79.8), (1, 80.5, 96.2), (0, 96.4, 99.1), (1, 99.3, 112.7),
+            (2, 113.5, 130.0), (0, 130.6, 148.9), (1, 149.2, 152.4), (0, 152.6, 171.3),
+            (2, 171.9, 183.0), (0, 183.4, 190.8),
+        ]
+        let segments = turns.map { turn in
+            String(
+                format: "    { \"speaker\" : \"speaker_%d\", \"speaker_index\" : %d, \"start_seconds\" : %.1f, \"end_seconds\" : %.1f, \"duration_seconds\" : %.1f }",
+                turn.speaker, turn.speaker, turn.start, turn.end, turn.end - turn.start
+            )
+        }.joined(separator: ",\n")
+        return """
+        {
+          "schema_version" : 1,
+          "model" : "speech-diarization-sortformer",
+          "source" : "\(source.path)",
+          "runtime" : "mlx",
+          "device" : "gpu",
+          "duration_seconds" : 192.4,
+          "speaker_count" : 3,
+          "processing_seconds" : 6.1,
+          "segments" : [
+        \(segments)
+          ]
+        }
+        """
+    }
+
+    /// `MusicAnalyzeOutput` for the harbor-lights demo, with the model's reply kept.
+    private static func musicAnalysisOutput(audio: URL) -> String {
+        """
+        {
+          "analyzedDurationSeconds" : 30,
+          "audio" : "\(audio.path)",
+          "checkpointsRoot" : "/Users/example/Library/Application Support/MereRun/models/music-acestep",
+          "inputDurationSeconds" : 214.6,
+          "languageModelRoot" : "/Users/example/Library/Application Support/MereRun/models/music-acestep/lm",
+          "languageModelSource" : "bundled",
+          "lmSubdirectory" : "acestep-5Hz-lm-1.7B",
+          "metadata" : {
+            "bpm" : 96,
+            "caption" : "Warm, unhurried indie folk: fingerpicked nylon guitar over a soft brushed kit, an upright bass walking underneath, and a close, breathy lead vocal with light harmonies on the chorus. Wide, roomy reverb; a late-evening, harbourside mood.",
+            "durationSeconds" : 214.6,
+            "keyscale" : "D major",
+            "language" : "en",
+            "lyrics" : "[verse]\\nHarbour lights are blinking slow\\nOn the water where the old boats go\\nI left my coat on the ferry rail\\nAnd watched the evening turn to pale\\n\\n[chorus]\\nStay a while, the tide is low\\nThere's nowhere else we have to go",
+            "timesignature" : "4/4"
+          },
+          "model" : "music-acestep",
+          "rawLMOutput" : "<bpm>96</bpm><keyscale>D major</keyscale><timesignature>4/4</timesignature><language>en</language><caption>Warm, unhurried indie folk…</caption>",
+          "turboSubdirectory" : "acestep-v15-turbo"
+        }
+        """
+    }
+
     /// A valid 16 kHz mono 16-bit PCM WAV of near-silence with a quiet tone so a waveform draws.
-    private static func writeSilentWAV(to url: URL, seconds: Int) throws {
+    static func writeSilentWAV(to url: URL, seconds: Int) throws {
         let sampleRate = 16_000
         let frames = sampleRate * seconds
         var samples = Data(capacity: frames * 2)
@@ -2217,6 +2955,74 @@ private enum ConverseScript {
                 stdout: ModelsInventoryScript.capabilities,
                 exitCode: 0
             ),
+        ]
+    }
+}
+
+/// What the Runs render's CLI reads answer: no Relay executors, one durable graph run under
+/// `~/runs`, and that run's manifest as `run inspect --json` prints it — failed at its render
+/// node on the second attempt, with the poster it managed to write.
+private enum RunsScript {
+    static let runPath = "/Users/example/runs/poster-2026-09-03"
+
+    static let list = """
+    {
+      "summary" : "1 durable run under /Users/example/runs",
+      "result" : {
+        "root" : "/Users/example/runs",
+        "scanned_directory_count" : 3,
+        "entries" : [
+          {
+            "id" : "poster-2026-09-03",
+            "kind" : "graph_run",
+            "path" : "\(runPath)",
+            "relative_path" : "poster-2026-09-03",
+            "status" : "failed",
+            "state" : "failed",
+            "summary" : "Graph poster failed at render",
+            "created_at" : "2026-09-03T12:00:00Z",
+            "updated_at" : "2026-09-03T12:00:41Z",
+            "event_count" : 12,
+            "artifact_count" : 1,
+            "diagnostic_count" : 1,
+            "blocker_count" : 1
+          }
+        ]
+      }
+    }
+
+    """
+
+    static let inspection = """
+    {
+      "attempt" : 1,
+      "contract_version" : "mere.run/graph-run.v1",
+      "created_at" : "2026-09-03T12:00:00Z",
+      "error" : "render: image generate exited with status 1 (model image-zimage-nano is not installed)",
+      "executor" : { "kind" : "local", "profile" : null, "job_reference" : null },
+      "graph_fingerprint" : "3f9c21",
+      "graph_name" : "poster",
+      "job_id" : "poster-2026-09-03",
+      "nodes" : [
+        { "artifacts" : [], "attempt" : 1, "completed_at" : "2026-09-03T12:00:01Z", "fingerprint" : "n0", "id" : "fetch-references", "kind" : "files.copy", "max_attempts" : 1, "models" : [], "outputs" : [], "started_at" : "2026-09-03T12:00:00Z", "state" : "finished" },
+        { "artifacts" : [], "attempt" : 1, "completed_at" : "2026-09-03T12:00:20Z", "fingerprint" : "n1", "id" : "write-tagline", "kind" : "text.chat", "max_attempts" : 1, "models" : [], "outputs" : [], "started_at" : "2026-09-03T12:00:02Z", "state" : "finished" },
+        { "artifacts" : [ { "content_type" : "image/png", "kind" : "image", "name" : "poster-draft", "path" : "\(runPath)/poster-draft.png", "sha256" : "cd", "size_bytes" : 1843200 } ], "attempt" : 2, "error" : "image generate exited with status 1", "fingerprint" : "n2", "id" : "render", "kind" : "image.generate", "max_attempts" : 3, "models" : [], "outputs" : [], "started_at" : "2026-09-03T12:00:20Z", "state" : "failed" },
+        { "artifacts" : [], "attempt" : 0, "fingerprint" : "n3", "id" : "publish", "kind" : "files.export", "max_attempts" : 1, "models" : [], "outputs" : [], "state" : "planned" }
+      ],
+      "outputs" : [
+        { "content_type" : "image/png", "kind" : "image", "name" : "poster-draft", "path" : "\(runPath)/poster-draft.png", "sha256" : "cd", "size_bytes" : 1843200 }
+      ],
+      "state" : "failed",
+      "updated_at" : "2026-09-03T12:00:41Z"
+    }
+
+    """
+
+    static var responses: [SnapshotProcessRunner.Response] {
+        [
+            .init(matches: { $0 == ["executor", "list", "--json"] }, stdout: "{\"profiles\": []}\n", exitCode: 0),
+            .init(matches: { $0.starts(with: ["run", "list"]) }, stdout: list, exitCode: 0),
+            .init(matches: { $0.starts(with: ["run", "inspect"]) }, stdout: inspection, exitCode: 0),
         ]
     }
 }
@@ -2432,4 +3238,37 @@ private final class SnapshotRuntimeEndpoint: URLProtocol {
       }
     }
     """
+}
+
+// MARK: - Region editor preview
+
+/// The region-prompt editor's building blocks with a chosen prompt already selected, so the
+/// render shows the handles a click reveals; `StudioRegionPromptEditor` itself starts with no
+/// selection.
+private struct RegionEditorPreview: View {
+    let image: NSImage
+    @State var prompts: [StudioRegionPrompt]
+    @State var selection: UUID?
+    @State private var tool = StudioRegionTool.box
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            StudioRegionToolbar(tool: $tool, prompts: $prompts, selection: $selection)
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .overlay {
+                    GeometryReader { geometry in
+                        StudioRegionPromptLayer(
+                            prompts: $prompts,
+                            imageSize: CGSize(width: 1_024, height: 1_024),
+                            fitted: CGRect(origin: .zero, size: geometry.size),
+                            tool: $tool,
+                            selection: $selection
+                        )
+                    }
+                }
+                .mereMediaFrame()
+        }
+    }
 }

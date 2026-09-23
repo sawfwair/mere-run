@@ -174,8 +174,47 @@ package final class StudioPromptTaskController {
         return true
     }
 
-    package func prepareAnalyzeHandoff(to task: StudioTask) {
-        pendingAnalyzeHandoff = StudioAnalyzeHandoff.make(to: task, inputPath: draft.inputPath, prompt: draft.prompt)
+    /// Library ▸ "Use these settings": makes the run's recorded command the task's draft, in
+    /// place of any Command view edits, so the composer shows exactly what ran. false when the
+    /// row has nothing to restore.
+    package func useSettings(from item: StudioLibraryItem) -> Bool {
+        let mode = item.mode
+        guard let next = StudioLibraryDraftRestoration.draft(from: item, baseline: freshDraft(for: mode)) else { return false }
+        sessions.set(next, for: mode.task.rawValue + ".draft")
+        sessions.set(Optional<StudioTaskCommandState>.none, for: mode.task.rawValue + ".commandOverride")
+        sessions.setFocus(nil, for: mode.task)
+        if mode == activatedMode { draft = next }
+        return true
+    }
+
+    /// Models ▸ "Use for … by default": records the choice and moves the task onto it now — its
+    /// parked draft, and the open composer when this is the active task — so the next run uses
+    /// it without a restart. A draft that was following the previous default follows the new
+    /// one; a model the user picked by hand stays, as does an open thread's. nil restores the
+    /// built-in default.
+    package func setPreferredModel(_ modelID: String?, for mode: StudioMode) {
+        let previous = freshDraft(for: mode).model
+        sessions.setPreferredModel(modelID, for: mode)
+        let next = freshDraft(for: mode).model
+        func followsDefault(_ model: String) -> Bool { model.isBlank || model == previous }
+        let key = mode.task.rawValue + ".draft"
+        if var parked = sessions.value(for: key, default: Optional<StudioDraft>.none), followsDefault(parked.model) {
+            parked.model = next
+            sessions.set(parked, for: key)
+        }
+        guard mode == activatedMode, !(mode.isConversational && activeConversationID != nil),
+              followsDefault(draft.model) else { return }
+        var current = draft
+        current.model = next
+        draft = current
+    }
+
+    /// - Parameter detections: what the current result found on the input, carried into the
+    ///   target as drawn box prompts when it takes them.
+    package func prepareAnalyzeHandoff(to task: StudioTask, detections: [StudioAnalyzeDetection] = []) {
+        pendingAnalyzeHandoff = StudioAnalyzeHandoff.make(
+            to: task, inputPath: draft.inputPath, prompt: draft.prompt, detections: detections
+        )
     }
 
     package func selectAnalyzeInput(from item: StudioLibraryItem) {
@@ -186,7 +225,7 @@ package final class StudioPromptTaskController {
 
     private static func applyAnalyzeInput(from item: StudioLibraryItem?, to draft: inout StudioDraft) {
         guard let item, let inputURL = item.inputURL else { return }
-        draft.inputPath = inputURL.path
+        draft.replaceInput(inputURL.path)
         if !item.prompt.isBlank { draft.prompt = item.prompt }
     }
 }

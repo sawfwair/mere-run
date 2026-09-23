@@ -106,33 +106,103 @@ package enum ConversationTranscript {
         message.content.count + 12
     }
 
-    /// Removes model reasoning blocks from an assistant reply. With `--stream` the CLI emits
+    /// An assistant reply split into what the model said and what it thought first. The answer is
+    /// what the thread stores in `StudioMessage.content` and replays; the reasoning is kept beside
+    /// it for display only.
+    package struct Reply: Equatable {
+        /// The reply with every reasoning block removed, trimmed.
+        package let answer: String
+        /// The reasoning blocks' text, a blank line between blocks; nil when the reply had none.
+        package let reasoning: String?
+        /// True while a streaming reply is still inside an unclosed reasoning block.
+        package let isThinking: Bool
+
+        package init(answer: String, reasoning: String?, isThinking: Bool) {
+            self.answer = answer
+            self.reasoning = reasoning
+            self.isThinking = isThinking
+        }
+
+        /// The same reply with its reasoning dropped, for a turn that runs with thinking hidden.
+        package var hidingReasoning: Reply {
+            Reply(answer: answer, reasoning: nil, isThinking: false)
+        }
+    }
+
+    /// Splits model reasoning out of an assistant reply. With `--stream` the CLI emits
     /// `<think>…</think>` reasoning inline (it only strips it on the non-stream path), so the app
-    /// must strip it before storing/replaying — otherwise reasoning leaks into the next turn's
+    /// must separate it before storing/replaying — otherwise reasoning leaks into the next turn's
     /// prompt.
     ///
-    /// Complete blocks are always removed, as is a leading orphan `</think>` (some models pre-fill
-    /// the opening tag and emit only the close). A trailing UNCLOSED block is only stripped while
-    /// `streaming` — that is reasoning still in progress. At finalize it is kept: a completed
-    /// reply's leftover `<think>` is almost certainly literal text (e.g. a code reply that
-    /// discusses the tag), and truncating it would lose real content.
-    package static func stripThinkTags(_ text: String, streaming: Bool = false) -> String {
-        var result = text.replacingOccurrences(
-            of: "<think>[\\s\\S]*?</think>",
-            with: "",
-            options: .regularExpression
+    /// Complete blocks always move to `reasoning`, as does the text before a leading orphan
+    /// `</think>` (some models pre-fill the opening tag and emit only the close). A trailing
+    /// UNCLOSED block is only split off while `streaming` — that is reasoning still in progress,
+    /// and `isThinking` says so. At finalize it stays in the answer: a completed reply's leftover
+    /// `<think>` is almost certainly literal text (e.g. a code reply that discusses the tag), and
+    /// truncating it would lose real content.
+    package static func splitThinking(_ text: String, streaming: Bool = false) -> Reply {
+        // One forward pass: this runs over the whole accumulated reply every few chunks.
+        let text = streaming ? withoutTrailingPartialTag(text) : text
+        var answer = ""
+        var blocks: [String] = []
+        var isThinking = false
+        var cursor = text.startIndex
+        while cursor < text.endIndex {
+            let rest = cursor..<text.endIndex
+            let nextOpen = text.range(of: openTag, range: rest)
+            let nextClose = text.range(of: closeTag, range: rest)
+            if let nextClose, nextOpen.map({ nextClose.lowerBound < $0.lowerBound }) ?? true {
+                // A close with no open before it: the model pre-filled the opening tag, so
+                // everything up to here was reasoning.
+                blocks.append(answer + String(text[cursor..<nextClose.lowerBound]))
+                answer = ""
+                cursor = nextClose.upperBound
+            } else if let nextOpen {
+                answer += text[cursor..<nextOpen.lowerBound]
+                let body = nextOpen.upperBound..<text.endIndex
+                if let close = text.range(of: closeTag, range: body) {
+                    blocks.append(String(text[nextOpen.upperBound..<close.lowerBound]))
+                    cursor = close.upperBound
+                } else if streaming {
+                    blocks.append(String(text[body]))
+                    isThinking = true
+                    cursor = text.endIndex
+                } else {
+                    answer += text[nextOpen.lowerBound...]
+                    cursor = text.endIndex
+                }
+            } else {
+                answer += text[rest]
+                cursor = text.endIndex
+            }
+        }
+        let reasoning = blocks
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        return Reply(
+            answer: answer.trimmingCharacters(in: .whitespacesAndNewlines),
+            reasoning: reasoning.isEmpty ? nil : reasoning,
+            isThinking: isThinking
         )
-        if !result.contains("<think>"), let close = result.range(of: "</think>") {
-            result = String(result[close.upperBound...])
-        }
-        if streaming {
-            result = result.replacingOccurrences(
-                of: "<think>[\\s\\S]*$",
-                with: "",
-                options: .regularExpression
-            )
-        }
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The reply without its reasoning: `splitThinking(_:streaming:)` keeping only the answer.
+    package static func stripThinkTags(_ text: String, streaming: Bool = false) -> String {
+        splitThinking(text, streaming: streaming).answer
+    }
+
+    private static let openTag = "<think>"
+    private static let closeTag = "</think>"
+
+    /// A tag can arrive split across chunks. While streaming, a trailing fragment of one ("<",
+    /// "</thin") is held back rather than shown literally until the rest lands.
+    private static func withoutTrailingPartialTag(_ text: String) -> String {
+        guard let start = text.lastIndex(of: "<") else { return text }
+        let fragment = text[start...]
+        let isFragment = (fragment.count < openTag.count && openTag.hasPrefix(fragment))
+            || (fragment.count < closeTag.count && closeTag.hasPrefix(fragment))
+        return isFragment ? String(text[..<start]) : text
     }
 
     /// The decode throughput from the CLI's `--stats` line

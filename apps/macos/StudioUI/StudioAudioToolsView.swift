@@ -95,8 +95,7 @@ struct StudioAudioToolsView: View {
                     Label("Run \(tool.title)", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
+                .buttonStyle(.merePrimary)
                 if let statusMessage {
                     Text(statusMessage)
                         .font(MereRunTheme.captionFont)

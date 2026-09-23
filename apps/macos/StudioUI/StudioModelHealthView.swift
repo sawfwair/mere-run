@@ -283,7 +283,6 @@ struct StudioModelHealthView: View {
                 Button("Repair") { confirmation = .repair }
                     .buttonStyle(.merePrimary)
                     .disabled((repairReport?.wroteCount ?? 0) == 0 || isAuditing || isRepairing)
-                    .opacity((repairReport?.wroteCount ?? 0) == 0 ? 0.45 : 1)
             }
 
             if isAuditing || isRepairing {

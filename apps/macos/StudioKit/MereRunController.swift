@@ -224,6 +224,11 @@ package struct MereRunUtilityCommandResult: Equatable {
 
 @MainActor
 package final class MereRunController: ObservableObject {
+    /// The instrument groups `music transcribe --list-instruments` printed, read once per launch
+    /// for Music ▸ Transcribe rather than every time its page is built. Not published: the picker
+    /// reads it when it appears.
+    package var cachedInstrumentNames: [String]?
+
     package let servingMonitor = StudioServingMonitor()
     /// This Mac's CPU, memory, and thermal load for the menu bar. `StudioAppSession` starts it.
     package let machineMonitor: StudioMachineMonitor
@@ -250,9 +255,10 @@ package final class MereRunController: ObservableObject {
     /// the foreground one) so the UI can disable a thread's composer and stream into the right
     /// thread even when a different conversation is in the foreground.
     @Published package private(set) var runningConversationIDs: Set<UUID> = []
-    /// Live, think-stripped assistant text per in-flight conversation, so a streaming bubble can
-    /// render even for a background conversation (the foreground-only liveOutputText cannot).
-    @Published package private(set) var conversationLiveText: [UUID: String] = [:]
+    /// The live reply per in-flight conversation — the answer so far, split from any reasoning —
+    /// so a streaming bubble can render even for a background conversation (the foreground-only
+    /// liveOutputText cannot).
+    @Published package private(set) var conversationLiveReplies: [UUID: ConversationTranscript.Reply] = [:]
     /// Latest parsed `status --json` snapshot for the Studio status pill (nil until first probe).
     @Published package private(set) var serverStatus: StudioServerStatus?
     @Published package private(set) var queuedRunCount = 0
@@ -299,6 +305,9 @@ package final class MereRunController: ObservableObject {
     /// Why the runtime API key is not in the Keychain, or nil once it is. Set when the launch
     /// migration or a later save fails; the key still applies for the running session.
     @Published package private(set) var runtimeAPIKeyStorageNotice: String?
+    /// Why the latest run had to move to App Outputs, for the shell's banner; the specialist
+    /// pages and the Command view report here since neither owns a banner of its own.
+    @Published package private(set) var outputFallbackReason: String?
     @Published package private(set) var liveOutputText = ""
     @Published package private(set) var currentProgress: StudioRunProgress?
     /// Live progress keyed by durable Studio request id. Unlike `currentProgress`, this covers
@@ -538,6 +547,10 @@ package final class MereRunController: ObservableObject {
         recommendedCodeModelID ?? StudioCodeDefaults.fallbackModelID
     }
 
+    /// Resolves the model a fresh draft starts with, weakest first: the template default, then
+    /// the CLI's recommendation for Chat and Code, then the model the user made this mode's
+    /// default on the Models page — unless the inventory no longer lists that model, in which
+    /// case the choice is ignored rather than left pointing at something that cannot run.
     package func applyRecommendedDefaults(to studioDraft: inout StudioDraft, for mode: StudioMode) {
         switch mode {
         case .chat:
@@ -552,6 +565,10 @@ package final class MereRunController: ObservableObject {
             }
         default:
             break
+        }
+        if let preferred = taskSessions.preferredModel(for: mode),
+           !modelStore.hasInventory || modelStore.rows.contains(where: { $0.id == preferred }) {
+            studioDraft.model = preferred
         }
     }
 
@@ -1017,6 +1034,10 @@ package final class MereRunController: ObservableObject {
     }
 
     @discardableResult
+    package func noteOutputFallback(_ reason: String) {
+        outputFallbackReason = reason
+    }
+
     package func run(studio request: StudioRunRequest) -> Bool {
         // Track the conversation as in-flight at SUBMISSION time, not at start, so a turn that
         // queues behind the concurrency cap still blocks a second send into the same thread and
@@ -1077,7 +1098,7 @@ package final class MereRunController: ObservableObject {
         readinessRequests[mode] = request
         readinessByMode[mode] = .checking
 
-        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
             cancelReadinessProbe(for: mode)
             readinessByMode[mode] = .unsupported(message)
             return
@@ -1121,18 +1142,22 @@ package final class MereRunController: ObservableObject {
         }
 
         guard let modelID = readinessRequests[mode]?.modelID else { return }
-        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
             readinessProbes[mode] = nil
             readinessByMode[mode] = .unsupported(message)
             return
         }
         if result.exitCode != 0, report.capabilitiesByID.isEmpty {
             readinessProbes[mode] = nil
-            let detail = (result.standardError ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            readinessByMode[mode] = .unknown(detail.isEmpty ? "Could not check model capabilities." : detail)
+            readinessByMode[mode] = .unknown(Self.capabilitiesUnavailableMessage, detail: Self.probeDetail(result))
             return
         }
         probeModelList(for: mode)
+    }
+
+    /// The CLI's last meaningful stderr line, for the readiness card's muted second line.
+    private static func probeDetail(_ result: JobResult) -> String? {
+        StudioFailureSummary.lastMeaningfulLine(in: result.standardError ?? "")
     }
 
     private func probeModelList(for mode: StudioMode) {
@@ -1142,20 +1167,28 @@ package final class MereRunController: ObservableObject {
             guard let self else { return }
             readinessProbes[mode] = nil
             guard let modelID = readinessRequests[mode]?.modelID else { return }
-            if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+            if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
                 readinessByMode[mode] = .unsupported(message)
                 return
             }
             guard result.exitCode == 0 else {
-                readinessByMode[mode] = .unknown("Could not list models. Check the CLI and model location.")
+                readinessByMode[mode] = .unknown(Self.modelListUnavailableMessage, detail: Self.probeDetail(result))
                 return
             }
             readinessByMode[mode] = ModelReadinessParser.state(
                 for: modelID,
-                modelListOutput: result.standardOutput ?? ""
+                modelListOutput: result.standardOutput ?? "",
+                titles: modelStore.titles
             )
         }
     }
+
+    /// What the readiness card says when a probe fails: the next step in plain words, with the
+    /// CLI's own last line kept as the card's muted detail rather than as the message.
+    nonisolated package static let capabilitiesUnavailableMessage =
+        "Couldn't check which models this Mac can run. Check again, or choose another model."
+    nonisolated package static let modelListUnavailableMessage =
+        "Couldn't read the model list. Check the mere.run install in Settings, then check again."
 
     /// Submits one readiness probe for `mode` and runs `completion` with its result unless a later
     /// probe replaced it. A submission the store deduplicated onto the probe already tracked for
@@ -1416,8 +1449,8 @@ package final class MereRunController: ObservableObject {
             progressByRequestID[requestID] = job.progress
         }
         if let conversationID = job.request.conversationID,
-           conversationLiveText[conversationID] != job.conversationLiveText {
-            conversationLiveText[conversationID] = job.conversationLiveText
+           conversationLiveReplies[conversationID] != job.conversationLiveReply {
+            conversationLiveReplies[conversationID] = job.conversationLiveReply
         }
     }
 
@@ -1449,7 +1482,7 @@ package final class MereRunController: ObservableObject {
             progressByRequestID[requestID] = nil
         }
         if let conversationID = job.request.conversationID {
-            conversationLiveText[conversationID] = nil
+            conversationLiveReplies[conversationID] = nil
             runningConversationIDs.remove(conversationID)
         }
         if job.startedAt != nil {

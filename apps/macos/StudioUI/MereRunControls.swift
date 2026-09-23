@@ -2,25 +2,41 @@ import StudioKit
 import SwiftUI
 
 /// The canonical primary action button: accent-tinted, prominent, theme-aware in light and dark.
+/// `tint` is the fill; a control that stops something in progress (Stop recording) uses `red`.
+/// Disabled, it fades, so an action that cannot run never looks like one that can.
 package struct MerePrimaryButtonStyle: ButtonStyle {
+    package var tint: Color = MereRunTheme.accent
+
     package func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(MereRunTheme.bodyFont.weight(.semibold))
-            .padding(.horizontal, MereRunTheme.Spacing.md)
-            .padding(.vertical, MereRunTheme.Spacing.xs)
-            .frame(minHeight: 28)
-            .background {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                    .fill(MereRunTheme.accent.opacity(configuration.isPressed ? 0.78 : 1))
-            }
-            .foregroundStyle(MereRunTheme.background)
-            .contentShape(Rectangle())
-            .opacity(configuration.isPressed ? 0.95 : 1)
+        MerePrimaryButtonBody(configuration: configuration, tint: tint)
+    }
+
+    private struct MerePrimaryButtonBody: View {
+        let configuration: Configuration
+        let tint: Color
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            configuration.label
+                .font(MereRunTheme.bodyFont.weight(.semibold))
+                .padding(.horizontal, MereRunTheme.Spacing.md)
+                .padding(.vertical, MereRunTheme.Spacing.xs)
+                .frame(minHeight: 28)
+                .background {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                        .fill(tint.opacity(configuration.isPressed ? 0.78 : 1))
+                }
+                .foregroundStyle(MereRunTheme.background)
+                .contentShape(Rectangle())
+                .opacity(isEnabled ? (configuration.isPressed ? 0.95 : 1) : 0.4)
+        }
     }
 }
 
 extension ButtonStyle where Self == MerePrimaryButtonStyle {
     package static var merePrimary: MerePrimaryButtonStyle { MerePrimaryButtonStyle() }
+
+    package static func merePrimary(tint: Color) -> MerePrimaryButtonStyle { MerePrimaryButtonStyle(tint: tint) }
 }
 
 /// A quiet secondary action, drawn as the design boards draw it: a 26pt `surfaceRaised` pill
@@ -34,28 +50,14 @@ package struct MereSecondaryButtonStyle: ButtonStyle {
 
     private struct MereSecondaryButtonBody: View {
         let configuration: Configuration
+        @Environment(\.isEnabled) private var isEnabled
         @State private var hovering = false
 
         var body: some View {
             configuration.label
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(MereRunTheme.textPrimary)
-                .padding(.horizontal, MereRunTheme.Spacing.sm)
-                .frame(minHeight: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                        .fill(MereRunTheme.surfaceRaised)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                                .fill(hovering ? MereRunTheme.hoverFill : .clear)
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                                .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
-                        }
-                }
-                .contentShape(Rectangle())
+                .modifier(MereSecondaryChrome(hovering: hovering))
                 .scaleEffect(configuration.isPressed ? 0.98 : 1)
+                .opacity(isEnabled ? 1 : 0.45)
                 .onHover { hovering = $0 }
                 .animation(MereRunTheme.Motion.quick, value: hovering)
                 .animation(MereRunTheme.Motion.quick, value: configuration.isPressed)
@@ -65,6 +67,54 @@ package struct MereSecondaryButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == MereSecondaryButtonStyle {
     package static var mereSecondary: MereSecondaryButtonStyle { MereSecondaryButtonStyle() }
+}
+
+/// The secondary control's face — type, padding, fill, hover wash, and border — shared by the
+/// button style and the menu label so the two cannot drift apart.
+private struct MereSecondaryChrome: ViewModifier {
+    let hovering: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .padding(.horizontal, MereRunTheme.Spacing.sm)
+            .frame(minHeight: 26)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                    .fill(MereRunTheme.surfaceRaised)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                            .fill(hovering ? MereRunTheme.hoverFill : .clear)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                            .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
+                    }
+            }
+            .contentShape(Rectangle())
+    }
+}
+
+/// The secondary button's chrome on a control that is not a `Button` — a `Menu`'s label — so a
+/// menu beside a secondary button reads as its sibling. The menu shows its own open state, so
+/// the label carries no press feedback; it does take the hover wash.
+package struct MereSecondaryMenuLabel: View {
+    let title: String
+    let systemImage: String
+    @State private var hovering = false
+
+    package init(_ title: String, systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    package var body: some View {
+        Label(title, systemImage: systemImage)
+            .modifier(MereSecondaryChrome(hovering: hovering))
+            .onHover { hovering = $0 }
+            .animation(MereRunTheme.Motion.quick, value: hovering)
+    }
 }
 
 /// Icon-only buttons that acknowledge the pointer: a soft fill on hover, a slight press dip.

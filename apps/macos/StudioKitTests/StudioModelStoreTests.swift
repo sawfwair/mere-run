@@ -130,6 +130,7 @@ final class StudioModelStoreTests: XCTestCase {
         oldInventory.stdout(inventory("old")); oldInventory.termination(0)
         await old.value
         XCTAssertTrue(host.modelStore.rows.isEmpty)
+        XCTAssertEqual(host.modelStore.titles, .none, "names from the old location go with its rows")
         XCTAssertFalse(host.modelStore.hasInventory)
         let new = Task { await host.modelStore.refresh() }
         let newInventory = try await start(1, from: runner)
@@ -270,7 +271,8 @@ final class StudioModelStoreTests: XCTestCase {
         let readiness = try await start(1, from: runner)
         readiness.stdout("ID Category Status Size\nimage-zimage-nano image installed 1 GB\n")
         readiness.termination(1)
-        try await waitUntil { host.readinessByMode[.createImage] == .unknown("Could not list models. Check the CLI and model location.") }
-        XCTAssertEqual(host.readinessByMode[.createImage], .unknown("Could not list models. Check the CLI and model location."))
+        try await waitUntil { host.readinessByMode[.createImage] == .unknown(MereRunController.modelListUnavailableMessage) }
+        XCTAssertEqual(host.readinessByMode[.createImage], .unknown(MereRunController.modelListUnavailableMessage))
+        XCTAssertEqual(host.readinessByMode[.createImage]?.title, "Couldn't check the model")
     }
 }

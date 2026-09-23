@@ -1,3 +1,4 @@
+import AVFoundation
 import AppKit
 import StudioKit
 import SwiftUI
@@ -12,6 +13,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
     case faceBatch = "Face batch"
     case pose = "Pose landmarks"
     case flow = "Optical flow"
+    case depth = "Image depth"
     case depthVideo = "Video depth"
     case geometry = "Metric geometry"
     case geometryMultiview = "Multi-view geometry"
@@ -27,6 +29,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
         case .faceBatch: .visionFaceBatch
         case .pose: .visionPose
         case .flow: .visionFlow
+        case .depth: .visionDepth
         case .depthVideo: .visionDepthVideo
         case .geometry: .visionGeometry
         case .geometryMultiview: .visionGeometryMultiview
@@ -42,6 +45,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
         case .faceBatch: "person.3.sequence"
         case .pose: "figure.stand"
         case .flow: "arrow.triangle.2.circlepath"
+        case .depth: "square.3.layers.3d.down.right"
         case .depthVideo: "square.3.layers.3d"
         case .geometry: "view.3d"
         case .geometryMultiview: "camera.metering.multispot"
@@ -57,6 +61,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
         case .faceBatch: "Warm-session JSONL analysis of many images"
         case .pose: "Native body, hand, and face landmarks"
         case .flow: "Dense per-pixel motion between equal-size frames"
+        case .depth: "Relative depth for one still image, with a preview to review"
         case .depthVideo: "Temporally consistent depth frames and review video"
         case .geometry: "Metric depth, normals, cameras, and point cloud"
         case .geometryMultiview: "Joint cameras, confidence, and point cloud"
@@ -65,7 +70,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
     }
 
     var needsPrimaryImage: Bool {
-        [.faceDetect, .faceEmbed, .faceCompare, .faceBatch, .pose, .flow, .geometry, .geometryMultiview]
+        [.faceDetect, .faceEmbed, .faceCompare, .faceBatch, .pose, .flow, .depth, .geometry, .geometryMultiview]
             .contains(self)
     }
 
@@ -75,7 +80,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
         case .faceDetect, .faceEmbed, .faceCompare, .faceBatch: .visionFaces
         case .pose: .visionPose
         case .flow: .visionFlow
-        case .depthVideo: .visionDepth
+        case .depth, .depthVideo: .visionDepth
         case .geometry, .geometryMultiview: .visionGeometry
         case .liveTrack: .visionLive
         }
@@ -89,7 +94,7 @@ extension StudioTask {
         case .visionFaces: .faceDetect
         case .visionPose: .pose
         case .visionFlow: .flow
-        case .visionDepth: .depthVideo
+        case .visionDepth: .depth
         case .visionGeometry: .geometry
         case .visionLive: .liveTrack
         default: nil
@@ -108,7 +113,7 @@ struct StudioVisionLabView: View {
     @StudioStoredValue("VisionLab.additionalInputs") private var additionalInputs: [String] = []
     @StudioStoredValue("VisionLab.inputListPath") private var inputListPath = ""
     @State private var outputDirectory = StudioSpecialistFiles
-        .timestampedDirectory(component: "Vision")
+        .outputDirectory(domain: .vision, name: "vision")
         .path
     @StudioStoredValue("VisionLab.model") private var model = ""
     @StudioStoredValue("VisionLab.faceThreshold") private var faceThreshold = 0.65
@@ -127,10 +132,21 @@ struct StudioVisionLabView: View {
     @StudioStoredValue("VisionLab.flowAccuracy") private var flowAccuracy = "high"
     @StudioStoredValue("VisionLab.inputSize") private var inputSize = 518
     @StudioStoredValue("VisionLab.maxFrames") private var maxFrames = 240
+    @StudioStoredValue("VisionLab.depthMaxEdge") private var depthMaxEdge = 1_024
+    @StudioStoredValue("VisionLab.depthNative") private var depthNative = false
+    @StudioStoredValue("VisionLab.depthCheckpoint") private var depthCheckpoint = ""
     @StudioStoredValue("VisionLab.resolutionLevel") private var resolutionLevel = 9
     @StudioStoredValue("VisionLab.tokenCount") private var tokenCount = 0
     @StudioStoredValue("VisionLab.maxPoints") private var maxPoints = 0
-    @StudioStoredValue("VisionLab.camerasPath") private var camerasPath = ""
+    /// A camera file chosen before the page edited cameras itself; read into `geometryCameras` once.
+    @StudioStoredValue("VisionLab.camerasPath") private var legacyCamerasPath = ""
+    @StudioStoredValue("VisionLab.suppliesCameras") private var suppliesCameras = false
+    @StudioStoredValue("VisionLab.geometryCameras") private var geometryCameras = StudioGeometryCameraDocument()
+    /// The saved copy of a valid camera document, for the Command view; empty when cameras are off
+    /// or do not match the views. Each run writes its own copy beside its output.
+    @State private var draftCamerasPath = ""
+    /// Each multi-view image's decoded size by path, read when the list changes.
+    @State private var viewSizes: [String: StudioPixelSize] = [:]
     @StudioStoredValue("VisionLab.processResolution") private var processResolution = 504
     @StudioStoredValue("VisionLab.referenceView") private var referenceView = "saddle-balanced"
     @StudioStoredValue("VisionLab.confidencePercentile") private var confidencePercentile = 40.0
@@ -146,6 +162,8 @@ struct StudioVisionLabView: View {
     @StudioStoredValue("VisionLab.dryRun") private var dryRun = false
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var errorMessage: String?
+    /// The cameras on this Mac, in the order the CLI numbers them.
+    @State private var cameras: [StudioCamera] = []
 
     private var currentItem: StudioLibraryItem? {
         guard let requestID else { return nil }
@@ -158,12 +176,31 @@ struct StudioVisionLabView: View {
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: task) { _, newTask in
-            outputDirectory = StudioSpecialistFiles.timestampedDirectory(component: "Vision").path
+            outputDirectory = StudioSpecialistFiles.outputDirectory(domain: .vision, name: "vision").path
             errorMessage = nil
         }
         .onAppear {
             if model.isBlank { model = CommandCatalog.template(id: task.templateID)?.defaultDraft().model ?? "" }
+            adoptLegacyCameras()
         }
+        .task(id: multiviewPaths) { refreshViewSizes() }
+        .task(id: cameraDraftKey) { await saveDraftCameras() }
+        .task(id: task) {
+            if task == .liveTrack { refreshCameras() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
+            if task == .liveTrack { refreshCameras() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
+            if task == .liveTrack { refreshCameras() }
+        }
+    }
+
+    /// Lists the cameras now attached; an index remembered for a camera that is gone falls back
+    /// to the first one, so the picker never shows an empty selection.
+    private func refreshCameras() {
+        cameras = StudioCamera.connected()
+        if !cameras.isEmpty, !cameras.contains(where: { $0.index == camera }) { camera = 0 }
     }
 
     private var configuration: some View {
@@ -191,7 +228,7 @@ struct StudioVisionLabView: View {
 
                 taskControls
 
-                if task == .depthVideo || task == .geometry || task == .geometryMultiview {
+                if task == .depth || task == .depthVideo || task == .geometry || task == .geometryMultiview {
                     Toggle("Preflight only", isOn: $dryRun)
                 }
 
@@ -207,9 +244,7 @@ struct StudioVisionLabView: View {
                     Label(dryRun ? "Run preflight" : "Run \(task.rawValue)", systemImage: task.icon)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
-                .controlSize(.large)
+                .buttonStyle(.merePrimary)
             }
             .padding(16)
         }
@@ -304,7 +339,7 @@ struct StudioVisionLabView: View {
             } label: {
                 Label("Add images…", systemImage: "photo.stack")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
         }
     }
 
@@ -328,6 +363,19 @@ struct StudioVisionLabView: View {
                 Text("High").tag("high")
                 Text("Very high").tag("very-high")
             }
+        case .depth:
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Run at the source resolution", isOn: $depthNative)
+                // `--max-edge` is rounded to a multiple of 16 and cannot go with `--native`.
+                Stepper("Longest edge \(depthMaxEdge)", value: $depthMaxEdge, in: 256...4_096, step: 16)
+                    .disabled(depthNative)
+                Picker("Checkpoint", selection: $depthCheckpoint) {
+                    Text("Default").tag("")
+                    ForEach(Self.depthCheckpoints, id: \.self) { checkpoint in
+                        Text(checkpoint).tag(checkpoint)
+                    }
+                }
+            }
         case .depthVideo:
             VStack(alignment: .leading, spacing: 10) {
                 Stepper("Input edge \(inputSize)", value: $inputSize, in: 128...1_536, step: 14)
@@ -341,11 +389,11 @@ struct StudioVisionLabView: View {
             }
         case .geometryMultiview:
             VStack(alignment: .leading, spacing: 10) {
-                StudioPathField(
-                    label: "Camera JSON (optional)",
-                    placeholder: "/path/to/cameras.json",
-                    path: $camerasPath,
-                    allowedContentTypes: [.json]
+                StudioGeometryCameraEditor(
+                    enabled: $suppliesCameras,
+                    document: $geometryCameras,
+                    views: multiviewViews,
+                    message: $errorMessage
                 )
                 Stepper("Process resolution \(processResolution)", value: $processResolution, in: 128...2_048, step: 14)
                 Picker("Reference view", selection: $referenceView) {
@@ -359,7 +407,16 @@ struct StudioVisionLabView: View {
             }
         case .liveTrack:
             VStack(alignment: .leading, spacing: 10) {
-                Stepper("Camera \(camera)", value: $camera, in: 0...16)
+                if cameras.isEmpty {
+                    Stepper("Camera \(camera)", value: $camera, in: 0...16)
+                } else {
+                    // The CLI numbers cameras the way AVFoundation lists them; this is that list.
+                    Picker("Camera", selection: $camera) {
+                        ForEach(cameras) { device in
+                            Text(device.name).tag(device.index)
+                        }
+                    }
+                }
                 valueSlider("Duration", value: $duration, range: 1...3_600, suffix: "s")
                 Stepper("Initial frame \(initFrame)", value: $initFrame, in: 0...10_000)
                 Stepper("Seed search \(seedSearchFrames)", value: $seedSearchFrames, in: 1...240)
@@ -384,10 +441,10 @@ struct StudioVisionLabView: View {
                 Toggle("Include embeddings", isOn: $includeEmbeddings)
             }
             if task == .faceEmbed {
-                Stepper("Face index \(faceIndex)", value: $faceIndex, in: 0...100)
+                facePicker(label: "Face to embed", selection: $faceIndex)
             }
             if task == .faceCompare {
-                Stepper("Reference face \(referenceFaceIndex)", value: $referenceFaceIndex, in: 0...100)
+                facePicker(label: "Reference face", selection: $referenceFaceIndex)
                 Stepper("Candidate face \(candidateFaceIndex)", value: $candidateFaceIndex, in: 0...100)
             }
             if task == .faceBatch {
@@ -435,6 +492,7 @@ struct StudioVisionLabView: View {
         case .faceDetect: "Boxes and five-point landmarks render over the source."
         case .pose: "Body, hand, and face points render in native image coordinates."
         case .flow: "Direction-colored vectors visualize the Middlebury flow field."
+        case .depth: "Review the depth preview; the depth map and manifest are beside it."
         case .depthVideo: "Review the depth video and per-frame EXR/PNG artifacts."
         case .geometry, .geometryMultiview: "Orbit the GLB/PLY point cloud and inspect depth/normal maps."
         case .liveTrack: "The annotated camera recording appears as soon as it is written."
@@ -445,6 +503,7 @@ struct StudioVisionLabView: View {
     private var resultPreferredKinds: [StudioOutputFileKind] {
         switch task {
         case .geometry, .geometryMultiview: [.model3D, .image, .text]
+        case .depth: [.image, .text]
         case .depthVideo, .liveTrack: [.video, .image, .text]
         default: [.image, .text, .video, .model3D]
         }
@@ -481,6 +540,60 @@ struct StudioVisionLabView: View {
 
     private func artifact(in item: StudioLibraryItem, extension pathExtension: String) -> URL? {
         item.allArtifactURLs.first { $0.pathExtension.lowercased() == pathExtension }
+    }
+
+    /// Which face `--face-index` means, chosen by clicking it on the primary image when a Face
+    /// detection run has drawn boxes on that image; the stepper stays for an image nobody has
+    /// detected faces in yet.
+    @ViewBuilder
+    private func facePicker(label: String, selection: Binding<Int>) -> some View {
+        if let document = faceDetectionDocument(for: primaryInput) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    Text(label)
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                    Spacer()
+                    Text("Face \(selection.wrappedValue)")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textSecondary)
+                }
+                StudioVisionOverlayPreview(
+                    imageURL: URL(fileURLWithPath: primaryInput),
+                    jsonURL: document,
+                    kind: .faces,
+                    selectedFaceIndex: selection
+                )
+                .frame(height: 200)
+                .background(MereRunTheme.surfaceRaised)
+                .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.md))
+                .overlay {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
+                        .strokeBorder(MereRunTheme.border, lineWidth: 1)
+                }
+                Text("Click a face to choose it.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+        } else {
+            Stepper("\(label) \(selection.wrappedValue)", value: selection, in: 0...100)
+            Text("Run Face detection on this image first to choose a face by clicking it.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+        }
+    }
+
+    /// The newest finished Face detection result for `path`, whose boxes the picker draws.
+    private func faceDetectionDocument(for path: String) -> URL? {
+        guard !path.isBlank else { return nil }
+        let input = URL(fileURLWithPath: path).standardizedFileURL
+        let detection = library.items
+            .filter {
+                $0.templateID == .visionFaceDetect && $0.status == .completed
+                    && $0.inputURL?.standardizedFileURL == input
+            }
+            .max { $0.createdAt < $1.createdAt }
+        return detection.flatMap { artifact(in: $0, extension: "json") }
     }
 
     private func labeledField(
@@ -539,10 +652,13 @@ struct StudioVisionLabView: View {
         draft.visionFlowAccuracy = flowAccuracy
         draft.visionInputSize = inputSize
         draft.visionMaxFrames = maxFrames
+        draft.visionMaxEdge = depthNative ? nil : depthMaxEdge
+        draft.visionNative = depthNative
+        draft.visionCheckpoint = depthCheckpoint.isEmpty ? nil : depthCheckpoint
         draft.visionResolutionLevel = resolutionLevel
         draft.visionTokenCount = tokenCount
         draft.visionMaxPoints = maxPoints
-        draft.camerasPath = camerasPath
+        draft.camerasPath = task == .geometryMultiview && suppliesCameras ? draftCamerasPath : ""
         draft.visionProcessResolution = processResolution
         draft.visionReferenceView = referenceView
         draft.visionConfidencePercentile = confidencePercentile
@@ -566,7 +682,7 @@ struct StudioVisionLabView: View {
         case .flow:
             draft.outputPath = root.appendingPathComponent("motion.flo").path
             draft.visionJSONOutputPath = root.appendingPathComponent("motion.json").path
-        case .depthVideo, .geometry, .geometryMultiview:
+        case .depth, .depthVideo, .geometry, .geometryMultiview:
             draft.outputPath = root.path
         case .liveTrack:
             draft.outputPath = root.appendingPathComponent("live-tracking.mp4").path
@@ -576,6 +692,12 @@ struct StudioVisionLabView: View {
         return draft
     }
 
+    /// `vision depth --checkpoint` names, as `MarigoldV2DepthCheckpoint` spells them.
+    private static let depthCheckpoints = [
+        "log-stage2", "log-stage1", "log-layered", "uniform-base", "uniform-layered",
+        "disparity-base", "disparity-layered",
+    ]
+
     private func run() {
         errorMessage = nil
         guard validate() else { return }
@@ -583,15 +705,90 @@ struct StudioVisionLabView: View {
             errorMessage = "The selected vision command is unavailable."
             return
         }
-
+        var draft = commandDraft
+        if task == .geometryMultiview, suppliesCameras {
+            // The camera file lives beside the run's output folder, which the command fills itself.
+            let camerasURL = StudioCameraDocuments.url(besideOutputDirectory: outputDirectory)
+            do {
+                try FileManager.default.createDirectory(at: camerasURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try geometryCameras.json().write(to: camerasURL, options: .atomic)
+            } catch {
+                errorMessage = "Studio could not write the camera file: \(error.localizedDescription)"
+                return
+            }
+            draft.camerasPath = camerasURL.path
+        }
 
         requestID = StudioSpecialistRunner.submit(
             templateID: task.templateID,
             mode: task == .liveTrack ? .track : .readImage,
-            draft: commandDraft,
+            draft: draft,
             controller: controller,
             library: library
         )
+    }
+
+    /// The images a multi-view run sends, in order.
+    private var multiviewPaths: [String] {
+        ([primaryInput] + additionalInputs).filter { !$0.isBlank }
+    }
+
+    /// Those images with their decoded sizes, for labelling and sizing cameras. Sizes come from
+    /// `viewSizes`, read once per change of the list rather than per render.
+    private var multiviewViews: [StudioCameraView] {
+        multiviewPaths.map { StudioCameraView(name: URL(fileURLWithPath: $0).lastPathComponent, pixelSize: viewSizes[$0]) }
+    }
+
+    private func refreshViewSizes() {
+        viewSizes = Dictionary(uniqueKeysWithValues: multiviewPaths.compactMap { path in
+            StudioPixelSize.of(URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)).map { (path, $0) }
+        })
+    }
+
+    private struct CameraDraftKey: Equatable {
+        let enabled: Bool
+        let document: StudioGeometryCameraDocument
+        let views: [StudioCameraView]
+    }
+
+    private var cameraDraftKey: CameraDraftKey {
+        CameraDraftKey(enabled: suppliesCameras, document: geometryCameras, views: multiviewViews)
+    }
+
+    /// Keeps the Command view's camera file current, a moment after editing stops; only a document
+    /// the CLI would accept is saved, under a name made from its content.
+    private func saveDraftCameras() async {
+        guard suppliesCameras, geometryCameras.problems(views: multiviewViews).isEmpty else {
+            draftCamerasPath = ""
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        do {
+            let url = try StudioCameraDocuments.storeDraft(page: "Vision Geometry", content: geometryCameras.json())
+            // Rows the Library still names (queued Command-view runs included) keep their files.
+            let referenced = Set(library.items.compactMap { $0.commandDraft?.camerasPath })
+            StudioCameraDocuments.pruneDrafts(page: "Vision Geometry", current: url, referenced: referenced)
+            draftCamerasPath = url.path
+        } catch {
+            draftCamerasPath = ""
+        }
+    }
+
+    /// A camera file chosen before this page edited cameras is read into the editor, once. A path
+    /// that no longer exists is forgotten quietly; one that will not read is reported once, then
+    /// forgotten.
+    private func adoptLegacyCameras() {
+        guard !legacyCamerasPath.isBlank else { return }
+        let url = URL(fileURLWithPath: NSString(string: legacyCamerasPath).expandingTildeInPath)
+        legacyCamerasPath = ""
+        guard geometryCameras.cameras.isEmpty, FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            geometryCameras = try StudioGeometryCameraDocument.importing(Data(contentsOf: url))
+            suppliesCameras = true
+        } catch {
+            errorMessage = "The camera file at \(url.lastPathComponent) could not be read into the editor: \(error.localizedDescription)"
+        }
     }
 
     private func validate() -> Bool {
@@ -625,11 +822,37 @@ struct StudioVisionLabView: View {
             errorMessage = "Add at least one additional ordered view."
             return false
         }
+        if task == .geometryMultiview, suppliesCameras,
+           let problem = geometryCameras.problems(views: multiviewViews).first {
+            errorMessage = problem
+            return false
+        }
         if task == .liveTrack && prompts.isBlank {
             errorMessage = "Enter at least one tracked prompt."
             return false
         }
         return true
+    }
+}
+
+/// A camera `vision track-live --camera <index>` can open. The CLI indexes
+/// `AVCaptureDevice.DiscoverySession` over the built-in, Continuity, and external cameras, so
+/// Studio lists the same session in the same order and shows names for its numbers.
+struct StudioCamera: Identifiable, Equatable {
+    let index: Int
+    let name: String
+
+    var id: Int { index }
+
+    static func connected() -> [StudioCamera] {
+        AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .continuityCamera, .external],
+            mediaType: .video,
+            position: .unspecified
+        )
+        .devices
+        .enumerated()
+        .map { StudioCamera(index: $0.offset, name: $0.element.localizedName) }
     }
 }
 
@@ -691,8 +914,13 @@ private struct StudioVisionOverlayPreview: View {
     let imageURL: URL
     let jsonURL: URL
     let kind: StudioVisionOverlayKind
+    /// When set, each face box is a button that picks its index, and the chosen one is drawn in
+    /// the accent.
+    var selectedFaceIndex: Binding<Int>?
 
     @State private var image: NSImage?
+    /// How the photo is turned to show upright; the documents' coordinates are in stored pixels.
+    @State private var orientation = StudioImageOrientation.up
     @State private var faces: StudioFaceOverlayResult?
     @State private var pose: StudioPoseOverlayResult?
     @State private var error: String?
@@ -713,7 +941,11 @@ private struct StudioVisionOverlayPreview: View {
                             drawPose(pose, in: rect, context: &context)
                         }
                     }
+                    if let selectedFaceIndex, let faces {
+                        faceButtons(faces, selection: selectedFaceIndex, in: aspectFitRect(imageSize: image.size, in: geometry.size))
+                    }
                 }
+                .frame(width: geometry.size.width, height: geometry.size.height)
             } else {
                 ContentUnavailableView(
                     error == nil ? "Loading overlay" : "Overlay unavailable",
@@ -726,7 +958,10 @@ private struct StudioVisionOverlayPreview: View {
     }
 
     private func load() {
-        image = NSImage(contentsOf: imageURL)
+        // The picture is shown upright; the face and pose documents place their boxes and
+        // landmarks in the stored pixels the CLI decoded, so they map through the orientation.
+        image = StudioImagePreviewLoader.downsampledImage(from: imageURL, maxPixelSize: 1_600)?.image
+        orientation = StudioImageMetadata.read(imageURL)?.orientation ?? .up
         do {
             let data = try Data(contentsOf: jsonURL)
             switch kind {
@@ -752,27 +987,60 @@ private struct StudioVisionOverlayPreview: View {
         )
     }
 
+    /// Where a stored-pixel point of a `storedSize` document lands in the fitted upright picture.
+    private func viewPoint(_ point: CGPoint, storedSize: CGSize, in rect: CGRect) -> CGPoint {
+        let shown = orientation.displaySize(ofStored: storedSize)
+        let upright = orientation.displayPoint(fromStored: point, storedSize: storedSize)
+        return CGPoint(
+            x: rect.minX + upright.x * rect.width / max(1, shown.width),
+            y: rect.minY + upright.y * rect.height / max(1, shown.height)
+        )
+    }
+
+    /// Where `face` lands in the fitted upright picture.
+    private func faceFrame(_ face: StudioFaceOverlayResult.Record, result: StudioFaceOverlayResult, in rect: CGRect) -> CGRect {
+        let storedSize = CGSize(width: max(1, result.width), height: max(1, result.height))
+        let box = face.detection.boundingBox
+        let start = viewPoint(CGPoint(x: box.x, y: box.y), storedSize: storedSize, in: rect)
+        let end = viewPoint(CGPoint(x: box.x + box.width, y: box.y + box.height), storedSize: storedSize, in: rect)
+        return StudioRegionGeometry.rect(from: start, to: end)
+    }
+
+    /// One transparent button per detected face, so a click picks it. The Canvas underneath
+    /// draws the chosen one in the accent.
+    private func faceButtons(_ result: StudioFaceOverlayResult, selection: Binding<Int>, in rect: CGRect) -> some View {
+        ForEach(result.faces, id: \.index) { face in
+            let frame = faceFrame(face, result: result, in: rect)
+            Button {
+                selection.wrappedValue = face.index
+            } label: {
+                Color.clear
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: max(frame.width, 8), height: max(frame.height, 8))
+            .position(x: frame.midX, y: frame.midY)
+            .help("Face \(face.index), \(Int(face.detection.score * 100))% confidence")
+            .accessibilityLabel("Face \(face.index), \(Int(face.detection.score * 100)) percent")
+            .accessibilityAddTraits(selection.wrappedValue == face.index ? .isSelected : [])
+        }
+    }
+
     private func drawFaces(
         _ result: StudioFaceOverlayResult,
         in rect: CGRect,
         context: inout GraphicsContext
     ) {
-        let scaleX = rect.width / CGFloat(max(1, result.width))
-        let scaleY = rect.height / CGFloat(max(1, result.height))
+        if let selectedFaceIndex {
+            drawSelectableFaces(result, selected: selectedFaceIndex.wrappedValue, in: rect, context: &context)
+            return
+        }
+        let storedSize = CGSize(width: max(1, result.width), height: max(1, result.height))
         for face in result.faces {
-            let box = face.detection.boundingBox
-            let frame = CGRect(
-                x: rect.minX + CGFloat(box.x) * scaleX,
-                y: rect.minY + CGFloat(box.y) * scaleY,
-                width: CGFloat(box.width) * scaleX,
-                height: CGFloat(box.height) * scaleY
-            )
+            let frame = faceFrame(face, result: result, in: rect)
             context.stroke(Path(frame), with: .color(.green), lineWidth: 2)
             for point in face.detection.landmarks {
-                let center = CGPoint(
-                    x: rect.minX + CGFloat(point.x) * scaleX,
-                    y: rect.minY + CGFloat(point.y) * scaleY
-                )
+                let center = viewPoint(CGPoint(x: point.x, y: point.y), storedSize: storedSize, in: rect)
                 context.fill(
                     Path(ellipseIn: CGRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6)),
                     with: .color(.yellow)
@@ -788,11 +1056,50 @@ private struct StudioVisionOverlayPreview: View {
         }
     }
 
+    /// The picker's rendering: the chosen face in the accent with a soft fill, the rest as quiet
+    /// white outlines, each numbered the way `--face-index` counts them.
+    private func drawSelectableFaces(
+        _ result: StudioFaceOverlayResult,
+        selected: Int,
+        in rect: CGRect,
+        context: inout GraphicsContext
+    ) {
+        for face in result.faces {
+            let frame = faceFrame(face, result: result, in: rect)
+            let isSelected = face.index == selected
+            let path = Path(roundedRect: frame, cornerRadius: 3)
+            if isSelected {
+                context.fill(path, with: .color(MereRunTheme.accent.opacity(0.18)))
+            }
+            context.stroke(
+                path,
+                with: .color(isSelected ? MereRunTheme.accent : Color.white.opacity(0.85)),
+                lineWidth: isSelected ? 2.5 : 1.5
+            )
+            let tag = Text("\(face.index)")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundColor(isSelected ? MereRunTheme.onAccent : Color.black.opacity(0.8))
+            let tagSize = context.resolve(tag).measure(in: CGSize(width: 60, height: 20))
+            let tagRect = CGRect(
+                x: frame.minX,
+                y: max(rect.minY, frame.minY - tagSize.height - 4),
+                width: tagSize.width + 8,
+                height: tagSize.height + 3
+            )
+            context.fill(
+                Path(roundedRect: tagRect, cornerRadius: 3),
+                with: .color(isSelected ? MereRunTheme.accent : Color.white.opacity(0.85))
+            )
+            context.draw(tag, at: CGPoint(x: tagRect.midX, y: tagRect.midY), anchor: .center)
+        }
+    }
+
     private func drawPose(
         _ result: StudioPoseOverlayResult,
         in rect: CGRect,
         context: inout GraphicsContext
     ) {
+        let storedSize = CGSize(width: max(1, result.imageWidth), height: max(1, result.imageHeight))
         for subject in result.subjects {
             let color: Color = switch subject.kind {
             case "body": .cyan
@@ -800,13 +1107,17 @@ private struct StudioVisionOverlayPreview: View {
             default: .pink
             }
             for point in subject.points {
-                let x = rect.minX + CGFloat(point.x) * rect.width
                 let normalizedY = result.coordinateSpace == "normalized-bottom-left"
                     ? 1 - point.y
                     : point.y
-                let y = rect.minY + CGFloat(normalizedY) * rect.height
+                // Normalized in the stored pixels, so scale up, turn upright, then fit.
+                let center = viewPoint(
+                    CGPoint(x: point.x * storedSize.width, y: normalizedY * storedSize.height),
+                    storedSize: storedSize,
+                    in: rect
+                )
                 context.fill(
-                    Path(ellipseIn: CGRect(x: x - 2.5, y: y - 2.5, width: 5, height: 5)),
+                    Path(ellipseIn: CGRect(x: center.x - 2.5, y: center.y - 2.5, width: 5, height: 5)),
                     with: .color(color.opacity(max(0.25, point.confidence)))
                 )
             }

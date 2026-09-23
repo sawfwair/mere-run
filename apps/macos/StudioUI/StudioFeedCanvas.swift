@@ -18,11 +18,26 @@ struct StudioFeedActions {
     let remove: (StudioFeedCard) -> Void
     let retry: (StudioLibraryItem) -> Void
     let delete: (StudioLibraryItem) -> Void
-    let pullModel: () -> Void
-    let showDetails: () -> Void
+    /// Put the run's recorded prompt, model, and options back in the composer to tweak.
+    let useSettings: (StudioLibraryItem) -> Void
+    /// Get the managed model a failed run needed, through the same path as the readiness card.
+    let pullModel: (String) -> Void
     let useExample: (String) -> Void
     let attach: () -> Void
     var focus: (StudioLibraryItem, URL) -> Void = { _, _ in }
+}
+
+/// What the readiness card needs to offer the next step itself. The model picker is the
+/// composer's own (same mode, same draft field, same inventory), so "Choose another model" is
+/// the chip's menu rather than a second one; the shell owns getting a model (with the terms
+/// sheet when the publisher asks for one), opening Models, and checking again.
+struct StudioReadinessActions {
+    let mode: StudioMode
+    let model: Binding<String>
+    let modelInventory: [StudioModelInventoryRow]
+    let pullModel: () -> Void
+    let openModels: () -> Void
+    let recheck: () -> Void
 }
 
 /// The feed of generations for a prompt mode: oldest at the top, the newest just above the
@@ -39,6 +54,7 @@ struct StudioFeedCanvas: View {
     /// A run that finished while its card was off-screen; cleared once the card is seen.
     @Binding var newResultID: UUID?
     let actions: StudioFeedActions
+    let readinessActions: StudioReadinessActions
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleCardIDs: Set<UUID> = []
@@ -110,8 +126,7 @@ struct StudioFeedCanvas: View {
                             StudioReadinessCard(
                                 readiness: readiness,
                                 pullJob: pullJob,
-                                onPullModel: actions.pullModel,
-                                onShowDetails: actions.showDetails,
+                                actions: readinessActions,
                                 onCancelPull: { job in actions.cancel(job) }
                             )
                             .id(StudioReadinessCard.feedID)
@@ -172,7 +187,8 @@ struct StudioFeedCanvas: View {
             } else {
                 // The store no longer has the job (a row from an earlier launch): it cannot be
                 // running any more, so offer the same recovery as a failure.
-                StudioFailureCard(item: card.item, job: nil, isHighlighted: highlighted, actions: actions)
+                StudioFailureCard(item: card.item, job: nil, isHighlighted: highlighted, actions: actions,
+                                  modelInventory: readinessActions.modelInventory)
             }
         case .queued:
             StudioQueuedRow(
@@ -183,7 +199,8 @@ struct StudioFeedCanvas: View {
                 actions.remove(card)
             }
         case .failed:
-            StudioFailureCard(item: card.item, job: card.job, isHighlighted: highlighted, actions: actions)
+            StudioFailureCard(item: card.item, job: card.job, isHighlighted: highlighted, actions: actions,
+                              modelInventory: readinessActions.modelInventory)
         }
     }
 }
@@ -231,6 +248,7 @@ private extension View {
 private struct StudioCardHeader: View {
     let item: StudioLibraryItem
     let when: String
+    @Environment(\.studioModelTitles) private var titles
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -248,7 +266,7 @@ private struct StudioCardHeader: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            let chips = StudioFeedChips.chips(for: item)
+            let chips = StudioFeedChips.chips(for: item, titles: titles)
             if !chips.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(chips, id: \.self) { chip in
@@ -294,7 +312,7 @@ enum StudioFeedTime {
 /// The parameter chips a card shows under its prompt, read from the run's own command draft so
 /// a card always says what actually ran.
 enum StudioFeedChips {
-    static func chips(for item: StudioLibraryItem) -> [String] {
+    static func chips(for item: StudioLibraryItem, titles: StudioModelTitles) -> [String] {
         guard let draft = item.commandDraft else { return [] }
         var chips: [String] = []
         switch item.mode {
@@ -328,7 +346,7 @@ enum StudioFeedChips {
             break
         }
         if !draft.model.isBlank {
-            chips.append(StudioModelNaming.displayName(draft.model))
+            chips.append(StudioModelNaming.displayName(draft.model, titles: titles))
         }
         return chips
     }
@@ -353,8 +371,13 @@ struct StudioGenerationCard: View {
     let item: StudioLibraryItem
     let isHighlighted: Bool
     let actions: StudioFeedActions
+    @Environment(\.studioModelTitles) private var titles
 
     @State private var copied = false
+
+    private var canRestoreSettings: Bool {
+        StudioLibraryDraftRestoration.canRestore(item)
+    }
 
     static let tileSide: CGFloat = 236
 
@@ -474,9 +497,15 @@ struct StudioGenerationCard: View {
             if item.commandDraft != nil, item.templateID != nil {
                 cardIcon("shuffle", help: "Vary with a new seed") { actions.vary(item) }
             }
+            if canRestoreSettings {
+                cardIcon("slider.horizontal.3", help: "Use these settings") { actions.useSettings(item) }
+            }
             Menu {
                 if item.commandDraft != nil, item.templateID != nil {
                     Button("Rerun with the same settings") { actions.rerun(item) }
+                }
+                if canRestoreSettings {
+                    Button("Use these settings") { actions.useSettings(item) }
                 }
                 if let primaryURL {
                     Button("Use as input") { actions.useAsInput(primaryURL) }.disabled(!canUseAsInput)
@@ -779,6 +808,8 @@ struct StudioFailureCard: View {
     let job: Job?
     let isHighlighted: Bool
     let actions: StudioFeedActions
+    /// Every row of `model list`, to tell a run that failed for want of its model.
+    let modelInventory: [StudioModelInventoryRow]
 
     @State private var showLog = false
 
@@ -787,14 +818,27 @@ struct StudioFailureCard: View {
         return (item.outputText ?? "").components(separatedBy: .newlines).filter { !$0.isBlank }
     }
 
-    private var summary: String {
-        if item.status == .interrupted { return "Interrupted when Studio closed. Retry to start a new run." }
-        if item.status == .cancelled { return "Cancelled. Your previous results are preserved." }
-        return StudioFailureSummary.summary(
+    /// The CLI's own account of the failure, the last meaningful line of what the run wrote.
+    private var failureLine: String {
+        StudioFailureSummary.summary(
             outputText: item.outputText,
             logLines: job?.log.lines.map(\.text) ?? [],
             exitCode: job?.exitCode ?? item.exitCode
         )
+    }
+
+    /// A managed model the run failed for want of. The CLI's error line says so in its own
+    /// words; the card says it plainly and offers the pull, like the readiness card.
+    private var missingModel: StudioModelInventoryRow? {
+        guard !wasCancelled else { return nil }
+        return StudioFailureSummary.missingModel(for: item, in: modelInventory, failureLine: failureLine)
+    }
+
+    private var summary: String {
+        if item.status == .interrupted { return "Interrupted when Studio closed. Retry to start a new run." }
+        if item.status == .cancelled { return "Cancelled. Your previous results are preserved." }
+        if let missingModel { return "\(StudioModelNaming.displayName(missingModel)) isn't on this Mac yet." }
+        return failureLine
     }
 
     private var wasCancelled: Bool {
@@ -853,6 +897,22 @@ struct StudioFailureCard: View {
                     }
                 }
                 Spacer(minLength: 8)
+                if let missingModel {
+                    Button {
+                        actions.pullModel(missingModel.id)
+                    } label: {
+                        Label("Get the model", systemImage: "arrow.down.circle.fill")
+                    }
+                    .buttonStyle(.merePrimary)
+                    .help("Download \(StudioModelNaming.displayName(missingModel)) to this Mac")
+                }
+                if StudioLibraryDraftRestoration.canRestore(item) {
+                    // A failed run is the one people most want to adjust, so the composer is a
+                    // click away beside the plain retry.
+                    Button("Use these settings") { actions.useSettings(item) }
+                        .buttonStyle(.mereSecondary)
+                        .help("Put this run's prompt, model, and options back in the composer")
+                }
                 if item.commandDraft != nil, item.templateID != nil {
                     Button("Retry") { actions.retry(item) }
                         .buttonStyle(.mereSecondary)
@@ -877,46 +937,43 @@ struct StudioFailureCard: View {
 // MARK: - Readiness card
 
 /// The bottom card while the mode cannot run: the model to get (with the pull's own progress
-/// once it is downloading), or what went wrong checking. Never covers earlier cards.
+/// once it is downloading), or what went wrong checking, each with its next step — get the
+/// model, open it in Models when its publisher asks for terms first, choose another model, or
+/// check again. Never covers earlier cards.
 struct StudioReadinessCard: View {
     let readiness: ModelReadinessState
     let pullJob: Job?
-    let onPullModel: () -> Void
-    let onShowDetails: () -> Void
+    let actions: StudioReadinessActions
     let onCancelPull: (Job) -> Void
+    @Environment(\.studioModelTitles) private var titles
 
     static let feedID = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: statusImage)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(statusColor)
-                    .frame(width: 32, height: 32)
-                    .background { Circle().fill(statusColor.opacity(0.12)) }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(pullJob == nil ? readiness.title : "Getting the model")
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(MereRunTheme.textPrimary)
-                    Text(readiness.message)
-                        .font(.callout)
-                        .foregroundStyle(MereRunTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                if pullJob == nil {
-                    if readiness.canPull {
-                        Button {
-                            onPullModel()
-                        } label: {
-                            Label("Get the model", systemImage: "arrow.down.circle.fill")
-                        }
-                        .buttonStyle(.merePrimary)
+            // Beside the text in the feed; under it in a narrow column such as the Analyze
+            // panel, where the buttons would otherwise crush the message to a word per line.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    statusIcon
+                    summary
+                        .frame(minWidth: 220, idealWidth: 280, maxWidth: .infinity, alignment: .leading)
+                    if pullJob == nil {
+                        HStack(spacing: 8) { nextSteps }
+                            .fixedSize()
                     }
-                    Button("Details", action: onShowDetails)
-                        .buttonStyle(.mereSecondary)
-                        .help("Show the command this task would run")
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 12) {
+                        statusIcon
+                        summary
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if pullJob == nil {
+                        HStack(spacing: 8) { nextSteps }
+                            .fixedSize()
+                            .padding(.leading, 44)
+                    }
                 }
             }
             if let pullJob {
@@ -927,17 +984,96 @@ struct StudioReadinessCard: View {
         .padding(.horizontal, 16)
         .feedPanel(borderColor: statusColor.opacity(0.4))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(readiness.title): \(readiness.message)")
+        .accessibilityLabel("\(readiness.title): \(readiness.message(titles: titles))")
+    }
+
+    private var statusIcon: some View {
+        Image(systemName: statusImage)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(statusColor)
+            .frame(width: 32, height: 32)
+            .background { Circle().fill(statusColor.opacity(0.12)) }
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(pullJob == nil ? readiness.title : "Getting the model")
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(MereRunTheme.textPrimary)
+            Text(readiness.message(titles: titles))
+                .font(.callout)
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let detail = readiness.detail {
+                // The CLI's own last line, kept small: it is what makes a wrong model
+                // location or a missing binary diagnosable.
+                Text(detail)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    /// The buttons for the state, most likely step first. A missing model is fetched here (the
+    /// shell shows the publisher's terms first when there are any); an unsupported one is
+    /// swapped; a failed check is retried or the model swapped; an unchecked one is checked.
+    @ViewBuilder private var nextSteps: some View {
+        switch readiness {
+        case .notChecked:
+            Button("Check the model", action: actions.recheck)
+                .buttonStyle(.merePrimary)
+                .help("Look for the model on this Mac")
+        case .missingModel:
+            Button {
+                actions.pullModel()
+            } label: {
+                Label("Get the model", systemImage: "arrow.down.circle.fill")
+            }
+            .buttonStyle(.merePrimary)
+            chooseModelMenu
+        case .unsupported:
+            chooseModelMenu
+            Button("Open in Models", action: actions.openModels)
+                .buttonStyle(.mereSecondary)
+                .help("See this model in Models")
+        case .unknown:
+            Button("Check again", action: actions.recheck)
+                .buttonStyle(.merePrimary)
+                .help("Look for the model again")
+            chooseModelMenu
+        case .checking, .ready:
+            EmptyView()
+        }
+    }
+
+    /// The composer's own picker under a plain title, so picking here is the same as picking on
+    /// the model chip and readiness re-checks the new choice.
+    private var chooseModelMenu: some View {
+        StudioModelPicker(
+            mode: actions.mode,
+            model: actions.model,
+            modelInventory: actions.modelInventory,
+            onShowModels: actions.openModels
+        ) {
+            MereSecondaryMenuLabel("Choose another model", systemImage: "chevron.up.chevron.down")
+        }
+        .fixedSize()
+        .help("Pick a different model for this task")
+        .accessibilityLabel("Choose another model")
     }
 
     private var statusImage: String {
         if pullJob != nil { return "arrow.down.circle" }
         if readiness.isChecking { return "hourglass" }
+        if readiness == .notChecked { return "questionmark.circle" }
         return readiness.canPull ? "arrow.down.circle" : "exclamationmark.triangle"
     }
 
     private var statusColor: Color {
-        if pullJob != nil || readiness.isChecking { return MereRunTheme.accent }
+        if pullJob != nil || readiness.isChecking || readiness == .notChecked { return MereRunTheme.accent }
         return readiness.canPull ? MereRunTheme.yellow : MereRunTheme.red
     }
 }

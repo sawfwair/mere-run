@@ -289,6 +289,39 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertEqual(item.messages?.first?.model, "text-chat-qwen3.6-4b")
     }
 
+    func testFailedTurnKeepsItsReasonAndLogTailAndReasoningPersistsBesideTheReply() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let conversationID = UUID()
+        store.appendUser(conversationID: conversationID, mode: .chat, model: "m", systemPrompt: nil, content: "first")
+        store.appendAssistant(conversationID: conversationID, content: "The answer.", exitCode: 0, reasoning: "Weigh both.")
+        store.appendUser(conversationID: conversationID, mode: .chat, model: "m", systemPrompt: nil, content: "second")
+        store.appendAssistant(
+            conversationID: conversationID, content: "", exitCode: 1,
+            failureReason: "Model 'm' is not installed.", logTail: ["mere.run text chat --model m", "error: model 'm' is not installed"]
+        )
+
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        let item = try XCTUnwrap(reloaded.items.first)
+        XCTAssertEqual(item.status, .failed)
+        let turns = try XCTUnwrap(item.messages)
+        XCTAssertEqual(turns[1].reasoning, "Weigh both.")
+        XCTAssertNil(turns[1].failureReason)
+        XCTAssertTrue(turns[3].failed)
+        XCTAssertEqual(turns[3].content, "")
+        XCTAssertEqual(turns[3].failureReason, "Model 'm' is not installed.")
+        XCTAssertEqual(turns[3].logTail?.count, 2)
+
+        // Display-only: none of it reaches the next prompt.
+        let prompt = ConversationTranscript.render(messages: turns + [StudioMessage(role: .user, content: "third")]).prompt
+        XCTAssertFalse(prompt.contains("Weigh both."))
+        XCTAssertFalse(prompt.contains("not installed"))
+
+        // A branch after the reasoning turn carries the reasoning along.
+        let branch = try XCTUnwrap(store.branch(conversationID: conversationID, at: turns[1].id, inclusive: true))
+        XCTAssertEqual(branch.messages?.last?.reasoning, "Weigh both.")
+    }
+
     func testPresetChangeOnAThreadIsRecordedWhenTheNextTurnIsSent() throws {
         let url = try temporaryLibraryURL()
         let store = StudioLibraryStore(libraryURL: url)
@@ -815,6 +848,8 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertEqual(thread.messages?.count, 2)
         XCTAssertEqual(thread.model, "gemma4-e4b")
         XCTAssertTrue(thread.messages?.allSatisfy { $0.cancelled == nil } == true)
+        // Written before turns kept reasoning or a failure's reason and log.
+        XCTAssertTrue(thread.messages?.allSatisfy { $0.reasoning == nil && $0.failureReason == nil && $0.logTail == nil } == true)
 
         let imported = try XCTUnwrap(store.items.first { $0.source == .raycast })
         XCTAssertEqual(imported.customTitle, "Raycast mug")

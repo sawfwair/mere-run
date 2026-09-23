@@ -143,9 +143,13 @@ enum StudioMachineStatus: Equatable {
     /// which says nothing about the server — that reading comes from the endpoint monitor.
     case cliNotResponding
     /// The CLI answered and the local server is idle — it starts on demand, so this is "ready".
-    case ready(installedModels: Int)
+    case ready(installedModels: Int, skippedLocations: [StudioSkippedModelLocation] = [])
     /// The CLI answered and the local server is up.
-    case serving(installedModels: Int, loadedModel: String?)
+    case serving(
+        installedModels: Int,
+        loadedModel: String?,
+        skippedLocations: [StudioSkippedModelLocation] = []
+    )
 
     /// The footer waits this long for a first answer before saying the CLI is not responding. The
     /// probe itself times out after about a second; two probe intervals cover a slow first launch.
@@ -162,10 +166,14 @@ enum StudioMachineStatus: Equatable {
         if isServing {
             self = .serving(
                 installedModels: serverStatus.installedCount,
-                loadedModel: loadedModel
+                loadedModel: loadedModel,
+                skippedLocations: serverStatus.skippedLocations
             )
         } else {
-            self = .ready(installedModels: serverStatus.installedCount)
+            self = .ready(
+                installedModels: serverStatus.installedCount,
+                skippedLocations: serverStatus.skippedLocations
+            )
         }
     }
 
@@ -176,7 +184,7 @@ enum StudioMachineStatus: Equatable {
             return "Checking…"
         case .cliNotResponding:
             return "CLI not responding"
-        case .ready(let count):
+        case .ready(let count, _):
             return "Ready · \(Self.modelCount(count))"
         case .serving:
             // The 212pt pill cannot also fit the model count; the popover's Models line has it.
@@ -204,10 +212,11 @@ enum StudioMachineStatus: Equatable {
         case .checking:
             return "Checking…"
         case .cliNotResponding:
-            return "The CLI did not answer `mere.run status`. Check the CLI path in Settings."
+            return "The CLI did not answer `mere.run status`. If macOS is asking to allow access "
+                + "to a drive, answer it; otherwise check the CLI path in Settings."
         case .ready:
             return "Not running — starts on demand"
-        case .serving(_, let loadedModel):
+        case .serving(_, let loadedModel, _):
             return loadedModel.map { "Up · \($0)" } ?? "Up"
         }
     }
@@ -217,16 +226,44 @@ enum StudioMachineStatus: Equatable {
         switch self {
         case .checking, .cliNotResponding:
             return "—"
-        case .ready(let count), .serving(let count, _):
+        case .ready(let count, _), .serving(let count, _, _):
             return "\(count) installed"
         }
+    }
+
+    /// Model locations the last inventory skipped.
+    var skippedLocations: [StudioSkippedModelLocation] {
+        switch self {
+        case .checking, .cliNotResponding:
+            return []
+        case .ready(_, let skipped), .serving(_, _, let skipped):
+            return skipped
+        }
+    }
+
+    /// The popover row for skipped model locations: a title and what to do about it.
+    var locationNotice: (title: String, detail: String)? {
+        let skipped = skippedLocations
+        guard let first = skipped.first else { return nil }
+        let drive = (first.path as NSString).abbreviatingWithTildeInPath
+        let others = skipped.count > 1 ? " and \(skipped.count - 1) more" : ""
+        if skipped.allSatisfy({ $0.problem == .denied }) {
+            return (
+                "Model drive access denied",
+                "macOS denied access to \(drive)\(others). Allow MereRun in Files & Folders."
+            )
+        }
+        return (
+            "Model drive not responding",
+            "\(drive)\(others) did not answer. macOS may be asking to allow access to it."
+        )
     }
 
     var dotColor: Color {
         switch self {
         case .checking: return MereRunTheme.yellow
         case .cliNotResponding: return MereRunTheme.red
-        case .ready, .serving: return MereRunTheme.green
+        case .ready, .serving: return skippedLocations.isEmpty ? MereRunTheme.green : MereRunTheme.yellow
         }
     }
 

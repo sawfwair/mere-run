@@ -78,7 +78,40 @@ package struct StudioLoadedImage: @unchecked Sendable {
     }
 }
 
+/// What an image file says about itself without decoding its pixels: the stored size and the
+/// EXIF orientation a viewer applies to show it upright.
+///
+/// The CLI decodes without that transform (`AppleMediaImageIO.decode`) and reads and reports
+/// coordinates in the stored pixels, so Studio keeps prompts and results in `storedSize` and maps
+/// them onto the upright picture with `orientation` (`StudioImageOrientation`).
+package struct StudioImageMetadata: Equatable, Sendable {
+    package let storedSize: CGSize
+    package let orientation: StudioImageOrientation
+
+    package init(storedSize: CGSize, orientation: StudioImageOrientation) {
+        self.storedSize = storedSize
+        self.orientation = orientation
+    }
+
+    /// The size the picture is shown at.
+    package var displaySize: CGSize { orientation.displaySize(ofStored: storedSize) }
+
+    package static func read(_ url: URL) -> StudioImageMetadata? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0 else {
+            return nil
+        }
+        let orientation = (properties[kCGImagePropertyOrientation] as? UInt32)
+            .flatMap { StudioImageOrientation(exif: Int($0)) } ?? .up
+        return StudioImageMetadata(storedSize: CGSize(width: width, height: height), orientation: orientation)
+    }
+}
+
 package enum StudioImagePreviewLoader {
+    /// The picture as a viewer shows it, with its EXIF orientation applied.
     package static func downsampledImage(from url: URL, maxPixelSize: CGFloat) -> StudioLoadedImage? {
         guard StudioOutputFileKind.classify(url) == .image else {
             return nil

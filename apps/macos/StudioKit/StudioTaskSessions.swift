@@ -83,6 +83,16 @@ package final class StudioTaskSessions {
         set(selection, for: task.rawValue + ".focus")
     }
 
+    /// The model the user made this mode's default on the Models page, or nil for the built-in
+    /// default. Kept with the task's other state, because it is what the task starts from.
+    package func preferredModel(for mode: StudioMode) -> String? {
+        value(for: mode.task.rawValue + ".preferredModel", default: Optional<String>.none)
+    }
+
+    package func setPreferredModel(_ modelID: String?, for mode: StudioMode) {
+        set(modelID, for: mode.task.rawValue + ".preferredModel")
+    }
+
     package func forgetLibraryItems(_ ids: Set<UUID>) {
         for mode in StudioMode.allCases {
             let selection = value(for: mode.task.rawValue + ".selection", default: Optional<UUID>.none)

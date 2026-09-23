@@ -44,10 +44,16 @@ public struct InstalledModelResolver {
 
     private let fileManager: FileManager
     private let locations: ModelLocationSnapshot
+    private let access: ModelLocationAccess
 
-    public init(fileManager: FileManager = .default, locations: ModelLocationSnapshot) {
+    public init(
+        fileManager: FileManager = .default,
+        locations: ModelLocationSnapshot,
+        access: ModelLocationAccess = .shared
+    ) {
         self.fileManager = fileManager
         self.locations = locations
+        self.access = access
     }
 
     public func resolve(
@@ -57,9 +63,11 @@ public struct InstalledModelResolver {
     ) throws -> Resolution {
         let requested = descriptor(modelID)
         let ids = [modelID] + (requested?.fallbackIDs ?? [])
+        let unresponsive = access.unresponsivePaths(in: locations)
         for id in ids {
             guard let spec = id == modelID ? requested : descriptor(id), spec.id == id else { continue }
-            for candidate in locations.candidates(for: id.rawValue) {
+            for candidate in locations.candidates(for: id.rawValue)
+            where !unresponsive.contains(candidate.locationRootURL.path) {
                 if accepts(candidate, descriptor: spec), validateRuntime(id, candidate.rootURL) {
                     return Resolution(requestedModelID: modelID, installedModelID: id, candidate: candidate)
                 }

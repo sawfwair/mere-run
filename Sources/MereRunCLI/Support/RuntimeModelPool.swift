@@ -71,6 +71,8 @@ struct RuntimeModelPoolStatus: Codable, Equatable, Sendable {
     var sidecars: RuntimeSidecarPoolStatus? = nil
     /// Additive process/device telemetry. Older servers omit it and older clients ignore it.
     var process: RuntimeProcessTelemetry? = nil
+    /// Model locations the last installed-model scan skipped. Older servers omit it.
+    var modelLocationIssues: [ModelLocationIssue]? = nil
 }
 
 enum RuntimeSidecarKind: String, Codable, Equatable, Sendable {
@@ -620,6 +622,7 @@ actor RuntimeModelPool {
     private let clearMLXCache: @Sendable () -> Void
 
     private let residency: ResidentRuntimeCache<String, RuntimeLoadedModel>
+    private let installedModels: RuntimeInstalledModelsCache
     private var states: [String: MutableState] = [:]
 
     init(
@@ -653,7 +656,8 @@ actor RuntimeModelPool {
         },
         clearMLXCache: @escaping @Sendable () -> Void = {
             Memory.clearCache()
-        }
+        },
+        installedModels: RuntimeInstalledModelsCache = RuntimeInstalledModelsCache()
     ) {
         self.defaultModelID = defaultModelID
         self.defaultEngine = defaultEngine
@@ -674,6 +678,7 @@ actor RuntimeModelPool {
         self.prepareLoadedModel = prepareLoadedModel
         self.residency = ResidentRuntimeCache(currentDate: currentDate, unload: unloadLoadedModel)
         self.clearMLXCache = clearMLXCache
+        self.installedModels = installedModels
     }
 
     func preloadDefault(warmup: Bool = false) async throws {
@@ -804,8 +809,8 @@ actor RuntimeModelPool {
         let memorySample = currentMemorySample()
         let memoryLimits = memoryPressurePolicy.limits(for: memorySample)
         let settings = (try? settingsStore.load())?.models ?? [:]
-        let installed = installedServableCatalogIDs()
-        var ids = Set<String>(installed)
+        let installed = await installedModels.models()
+        var ids = Set<String>(installed.installPaths.keys)
         let residents = await residency.snapshots()
         ids.formUnion(residents.keys)
         ids.formUnion(states.keys)
@@ -835,6 +840,7 @@ actor RuntimeModelPool {
                 for: id,
                 resident: residents[id],
                 settings: settings,
+                installPaths: installed.installPaths,
                 prefixKVCache: prefixStats[id],
                 continuousBatching: batchingStats[id],
                 mtp: mtpStats[id]
@@ -882,7 +888,8 @@ actor RuntimeModelPool {
                     $0.completedRequests > 0 || $0.failedRequests > 0
                 }
             ),
-            sidecars: sidecars
+            sidecars: sidecars,
+            modelLocationIssues: installed.locationIssues
         )
     }
 
@@ -1310,21 +1317,17 @@ actor RuntimeModelPool {
         }
     }
 
-    private func installedServableCatalogIDs() -> [String] {
-        ManagedModelCatalog.allSpecs.compactMap { spec in
-            guard spec.isAPIServableRuntimeModel else { return nil }
-            if spec.id == defaultModelID {
-                return spec.id
-            }
-            return spec.managedRuntimeURL() == nil ? nil : spec.id
-        }
-    }
-
     private func snapshot(idOrAlias: String) async throws -> RuntimeModelPoolEntrySnapshot {
         let resolved = try resolveModel(idOrAlias, requireInstalled: false)
         let settings = try settingsStore.load().models
         let residents = await residency.snapshots()
-        guard let snapshot = snapshot(for: resolved.id, resident: residents[resolved.id], settings: settings) else {
+        let installPaths = await installedModels.models().installPaths
+        guard let snapshot = snapshot(
+            for: resolved.id,
+            resident: residents[resolved.id],
+            settings: settings,
+            installPaths: installPaths
+        ) else {
             throw RuntimeModelPoolError.unknownModel(idOrAlias)
         }
         return snapshot
@@ -1334,6 +1337,7 @@ actor RuntimeModelPool {
         for id: String,
         resident: ResidentRuntimeSnapshot<RuntimeLoadedModel>?,
         settings: [String: RuntimeModelSettings],
+        installPaths: [String: String],
         prefixKVCache: PrefixKVCacheStats? = nil,
         continuousBatching: RuntimeDecodeBatchingStats? = nil,
         mtp: Gemma4MTPStats? = nil
@@ -1351,7 +1355,7 @@ actor RuntimeModelPool {
         if id == defaultModelID, let startupModelPath {
             installPath = startupModelPath
         } else {
-            installPath = spec?.managedRuntimeURL()?.path
+            installPath = installPaths[id]
         }
         var snapshot = RuntimeModelPoolEntrySnapshot(
             id: id,

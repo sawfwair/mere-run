@@ -272,6 +272,13 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var readImageAction: StudioReadImageAction = .inspect
     /// Mask confidence floor for Segment and Track (the CLI `--threshold`); Find has none.
     package var visionThreshold = 0.05
+    /// The boxes and points drawn on the Segment or Track input, in its own pixels (the CLI's
+    /// `--box` / `--point`). Optional preserves saved Studio drafts from before drawn prompts.
+    package var visionRegionPrompts: [StudioRegionPrompt]?
+    /// Track's seed frame, where the prompts are drawn (`--init-frame`), and the optional last
+    /// frame (`--end-frame`). Optional for the same reason; nil reads as frame 0 and the whole clip.
+    package var visionInitFrame: Int?
+    package var visionEndFrame: Int?
     // Speak voice cloning (Studio surface). "style" uses the voice description; "clone" uses a
     // saved profile or reference audio.
     package var voiceMode = "style"
@@ -398,6 +405,9 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         durationSeconds = 10
         readImageAction = .inspect
         visionThreshold = base?.visionThreshold ?? 0.05
+        visionRegionPrompts = nil
+        visionInitFrame = nil
+        visionEndFrame = nil
         voiceMode = "style"
         voiceProfile = ""
         refAudioPath = ""
@@ -728,6 +738,17 @@ package enum StudioCommandAdapter {
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.visionThreshold = studioDraft.visionThreshold
+            // What was drawn on the picture becomes the CLI's `--box` / `--point` text; Find takes
+            // neither. Track's seed and end frames come from the frame scrubber.
+            if mode != .findObjects {
+                let region = studioDraft.visionRegionPrompts ?? []
+                draft.visionBoxPrompts = StudioRegionPromptText.boxText(region)
+                draft.visionPointPrompts = StudioRegionPromptText.pointText(region)
+            }
+            if mode == .track {
+                draft.visionInitFrame = studioDraft.visionInitFrame ?? 0
+                draft.visionEndFrame = studioDraft.visionEndFrame.map(String.init) ?? ""
+            }
             // Studio renders these results natively, so it always asks for the structured
             // document beside the annotated output. Masks are per-detection PNG sidecars; a
             // tracked clip writes one set per frame, so only the still tasks request them.
@@ -909,17 +930,25 @@ package enum StudioCommandAdapter {
             promptRequired = false
         case .readImage:
             promptRequired = templateID != .visionOCR
+        case .segment, .track:
+            // A box or point drawn on the picture is a prompt in its own right.
+            promptRequired = (draft.visionRegionPrompts ?? []).isEmpty
         default:
             promptRequired = true
         }
 
         if promptRequired && prompt.isEmpty {
-            throw StudioCommandError.missingPrompt("Prompt")
+            throw StudioCommandError.missingPrompt(
+                mode == .segment || mode == .track ? "A prompt or a drawn box or point" : "Prompt"
+            )
+        }
+        if mode == .track, let end = draft.visionEndFrame, end < (draft.visionInitFrame ?? 0) {
+            throw StudioCommandError.missingPrompt("An end frame at or after the start frame")
         }
     }
 }
 
-package enum StudioLibraryStatus: String, Codable, Equatable {
+package enum StudioLibraryStatus: String, Codable, Equatable, CaseIterable {
     case queued
     case running
     case completed
@@ -957,6 +986,17 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
     package var tokensPerSecond: Double?
     /// Effective settings at this turn; optional for legacy history.
     package var preset: StudioMode?
+    /// The model's reasoning for this assistant turn, when the turn ran with thinking shown.
+    /// Display only: `ConversationTranscript.render` replays `content`, so reasoning never
+    /// re-enters a later prompt. nil when thinking was hidden and in threads persisted before it
+    /// was kept.
+    package var reasoning: String?
+    /// Why a failed assistant turn failed, in one line, read from the run's stderr when it exited.
+    /// Display only, like `logTail` (a failed turn is never replayed at all).
+    package var failureReason: String?
+    /// The last lines a failed run wrote to stderr, secrets masked, and its exit note, for the
+    /// turn's "Show log" disclosure. Never the launched command line, which carries the prompt.
+    package var logTail: [String]?
 
     package init(
         id: UUID = UUID(),
@@ -969,7 +1009,10 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         model: String? = nil,
         systemPrompt: String? = nil,
         tokensPerSecond: Double? = nil,
-        preset: StudioMode? = nil
+        preset: StudioMode? = nil,
+        reasoning: String? = nil,
+        failureReason: String? = nil,
+        logTail: [String]? = nil
     ) {
         self.id = id
         self.role = role
@@ -982,6 +1025,9 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         self.systemPrompt = systemPrompt
         self.tokensPerSecond = tokensPerSecond
         self.preset = preset
+        self.reasoning = reasoning
+        self.failureReason = failureReason
+        self.logTail = logTail
     }
 }
 
@@ -1031,6 +1077,25 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
 
     package var isStarred: Bool { isFavorite == true }
 
+    /// The model this row ran with: a thread records it directly, a run carries it in its draft,
+    /// and a row from before drafts were recorded still names it in its `--model` argument.
+    package var recordedModelID: String? {
+        if let model, !model.isBlank { return model }
+        if let model = commandDraft?.model, !model.isBlank { return model }
+        return Self.modelFlagValue(in: commandPreview)
+    }
+
+    /// The value after `--model` (or `-m`, or `--model=`) in a command line, if any.
+    package static func modelFlagValue(in commandPreview: String) -> String? {
+        let tokens = commandPreview.split(whereSeparator: \.isWhitespace).map(String.init)
+        if let flag = tokens.firstIndex(where: { $0 == "--model" || $0 == "-m" }), flag + 1 < tokens.count {
+            return tokens[flag + 1]
+        }
+        return tokens.lazy.compactMap { token in
+            token.hasPrefix("--model=") ? String(token.dropFirst("--model=".count)) : nil
+        }.first
+    }
+
     package var displayTitle: String {
         if let customTitle, !customTitle.isBlank { return customTitle }
         if let firstUser = messages?.first(where: { $0.role == .user })?.content,
@@ -1079,17 +1144,22 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
 }
 
 package enum ModelReadinessState: Equatable {
+    /// No check has run for this mode yet. Distinct from `.unknown` so the card before the first
+    /// probe never reads as a failure.
+    case notChecked
     case checking
     case ready
     case missingModel(String)
     case unsupported(String)
-    case unknown(String)
+    /// The check itself failed. `detail` is the CLI's own last meaningful line, kept beside the
+    /// plain message because a wrong model location or missing binary is undiagnosable without it.
+    case unknown(String, detail: String? = nil)
 
     package var blocksRun: Bool {
         switch self {
-        case .checking, .missingModel, .unsupported, .unknown:
+        case .notChecked, .checking, .missingModel, .unsupported, .unknown:
             return true
-        default:
+        case .ready:
             return false
         }
     }
@@ -1108,29 +1178,41 @@ package enum ModelReadinessState: Equatable {
         return false
     }
 
+    /// The readiness card's heading. Plain words: the card is the first thing a new user meets.
     package var title: String {
         switch self {
-        case .checking: return "Checking"
+        case .notChecked: return "Not checked yet"
+        case .checking: return "Checking the model"
         case .ready: return "Ready"
         case .missingModel: return "Model needed"
-        case .unsupported: return "Unsupported"
-        case .unknown: return "Not checked"
+        case .unsupported: return "Can't run on this Mac"
+        case .unknown: return "Couldn't check the model"
         }
     }
 
-    package var message: String {
+    /// One sentence under the heading. Models are named the way the Models page names them
+    /// (`titles`); the id stays in the model chip's tooltip.
+    package func message(titles: StudioModelTitles) -> String {
         switch self {
+        case .notChecked:
+            return "The model hasn't been checked yet."
         case .checking:
-            return "Checking local model availability."
+            return "Checking whether the model is on this Mac…"
         case .ready:
-            return "This mode is ready to run locally."
+            return "Ready to run on this Mac."
         case .missingModel(let model):
-            return "Download \(model) before running this mode."
+            return "\(StudioModelNaming.displayName(model, titles: titles)) isn't on this Mac yet. Get it once and it stays."
         case .unsupported(let reason):
             return reason
-        case .unknown(let reason):
+        case .unknown(let reason, _):
             return reason
         }
+    }
+
+    /// The CLI's own words behind a failed check, for the card's muted second line.
+    package var detail: String? {
+        if case .unknown(_, let detail) = self { return detail }
+        return nil
     }
 }
 
@@ -1142,15 +1224,16 @@ package struct StudioModelCapability: Equatable {
     package let download: String?
     package let reason: String?
 
-    package var unavailableMessage: String? {
+    package func unavailableMessage(titles: StudioModelTitles) -> String? {
         guard !isSupported else { return nil }
         if let reason, !reason.isBlank {
             return reason
         }
+        let name = StudioModelNaming.displayName(modelID, titles: titles)
         if let minimumUnifiedMemoryGB {
-            return "Requires at least \(minimumUnifiedMemoryGB) GB unified memory."
+            return "\(name) needs at least \(minimumUnifiedMemoryGB) GB of unified memory."
         }
-        return "\(modelID) is not supported on this Mac."
+        return "\(name) can't run on this Mac."
     }
 }
 
@@ -1877,7 +1960,11 @@ package enum StudioArtifactDiscovery {
 }
 
 package enum ModelReadinessParser {
-    package static func state(for modelID: String, modelListOutput: String) -> ModelReadinessState {
+    package static func state(
+        for modelID: String,
+        modelListOutput: String,
+        titles: StudioModelTitles = .none
+    ) -> ModelReadinessState {
         guard !modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .ready
         }
@@ -1893,7 +1980,7 @@ package enum ModelReadinessParser {
 
             let normalized = row.lowercased()
             if normalized.contains("unsupported") {
-                return .unsupported("\(modelID) is listed as unsupported on this Mac.")
+                return .unsupported("\(StudioModelNaming.displayName(modelID, titles: titles)) can't run on this Mac.")
             }
             if normalized.contains("installed") || normalized.contains("ready") || normalized.contains("present") {
                 return .ready
@@ -1901,7 +1988,27 @@ package enum ModelReadinessParser {
             return .missingModel(modelID)
         }
 
-        return .unknown("Run model capabilities or configure model sources to check \(modelID).")
+        return .unknown(
+            "\(StudioModelNaming.displayName(modelID, titles: titles)) isn't in the model list. "
+                + "Check the model location in Settings, or choose another model."
+        )
+    }
+}
+
+/// A model location the CLI's inventory skipped: a drive that did not answer in time (often
+/// because macOS is waiting on its removable- or network-volume access prompt) or one macOS denied.
+package struct StudioSkippedModelLocation: Equatable {
+    package enum Problem: String, Decodable {
+        case unresponsive
+        case denied
+    }
+
+    package let path: String
+    package let problem: Problem
+
+    package init(path: String, problem: Problem) {
+        self.path = path
+        self.problem = problem
     }
 }
 
@@ -1910,6 +2017,8 @@ package struct StudioServerStatus: Equatable {
     package let health: String
     package let loadedModels: [String]
     package let installedCount: Int
+    /// Older CLIs omit the field and never skip a location.
+    package var skippedLocations: [StudioSkippedModelLocation] = []
 
     package var isReachable: Bool {
         let normalized = health.lowercased()
@@ -1929,14 +2038,22 @@ package struct StudioServerStatus: Equatable {
                 package let loadedModels: [String]?
             }
             package struct InstalledModel: Decodable { let id: String }
+            package struct LocationIssue: Decodable {
+                let path: String
+                let problem: StudioSkippedModelLocation.Problem
+            }
             package let server: Server?
             package let installedModels: [InstalledModel]?
+            package let modelLocationIssues: [LocationIssue]?
         }
         guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return nil }
         return StudioServerStatus(
             health: snapshot.server?.health ?? "unknown",
             loadedModels: snapshot.server?.loadedModels ?? [],
-            installedCount: snapshot.installedModels?.count ?? 0
+            installedCount: snapshot.installedModels?.count ?? 0,
+            skippedLocations: (snapshot.modelLocationIssues ?? []).map {
+                StudioSkippedModelLocation(path: $0.path, problem: $0.problem)
+            }
         )
     }
 

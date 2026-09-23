@@ -282,25 +282,51 @@ final class StudioComposerSchemaTests: XCTestCase {
     }
 
     func testDisplayModelNameDropsCategoryPrefixes() {
-        XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano"), "Zimage Nano")
-        XCTAssertEqual(StudioModelNaming.displayName("vision-ground-falcon-perception"), "Falcon Perception")
-        XCTAssertEqual(StudioModelNaming.displayName("speech-tts-qwen3-nano"), "Qwen3 Nano")
-        XCTAssertEqual(StudioModelNaming.displayName("text-agent-deepseek-v4-flash"), "Deepseek V4 Flash")
+        XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano", titles: .none), "Zimage Nano")
+        XCTAssertEqual(StudioModelNaming.displayName("vision-ground-falcon-perception", titles: .none), "Falcon Perception")
+        XCTAssertEqual(StudioModelNaming.displayName("speech-tts-qwen3-nano", titles: .none), "Qwen3 Nano")
+        XCTAssertEqual(StudioModelNaming.displayName("text-agent-deepseek-v4-flash", titles: .none), "Deepseek V4 Flash")
     }
 
     /// One helper serves the chip, the picker, the thread list, the Models page and the Activity
     /// popover, so a model that the cards print as "Qwen3.6-VL 4B" never reads "Qwen3.6 Vl 4b".
     func testDisplayModelNameKeepsTheCasingModelCardsPrint() {
-        XCTAssertEqual(StudioModelNaming.displayName("vision-chat-qwen3.6-vl-4b"), "Qwen3.6-VL 4B")
-        XCTAssertEqual(StudioModelNaming.displayName("text-chat-qwen3.6-4b"), "Qwen3.6 4B")
-        XCTAssertEqual(StudioModelNaming.displayName("speech-asr-parakeet-tdt"), "Parakeet TDT")
-        XCTAssertEqual(StudioModelNaming.displayName("music-magenta-rt2-medium"), "Magenta RT2 Medium")
-        XCTAssertEqual(StudioModelNaming.displayName("video-ltx2-fast"), "LTX-2 Fast")
-        XCTAssertEqual(StudioModelNaming.displayName("speech-tts-kokoro-82m"), "Kokoro 82M")
-        XCTAssertEqual(StudioModelNaming.displayName("text-chat-q38-mtp"), "Q38 MTP")
-        XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano-lora"), "Zimage Nano LoRA")
+        XCTAssertEqual(StudioModelNaming.displayName("vision-chat-qwen3.6-vl-4b", titles: .none), "Qwen3.6-VL 4B")
+        XCTAssertEqual(StudioModelNaming.displayName("text-chat-qwen3.6-4b", titles: .none), "Qwen3.6 4B")
+        XCTAssertEqual(StudioModelNaming.displayName("speech-asr-parakeet-tdt", titles: .none), "Parakeet TDT")
+        XCTAssertEqual(StudioModelNaming.displayName("music-magenta-rt2-medium", titles: .none), "Magenta RT2 Medium")
+        XCTAssertEqual(StudioModelNaming.displayName("video-ltx2-fast", titles: .none), "LTX-2 Fast")
+        XCTAssertEqual(StudioModelNaming.displayName("speech-tts-kokoro-82m", titles: .none), "Kokoro 82M")
+        XCTAssertEqual(StudioModelNaming.displayName("text-chat-q38-mtp", titles: .none), "Q38 MTP")
+        XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano-lora", titles: .none), "Zimage Nano LoRA")
         // A repository-qualified id keeps only its leaf, and an unknown token still title-cases.
-        XCTAssertEqual(StudioModelNaming.displayName("mere-run/image-zimage-turbo"), "Zimage Turbo")
+        XCTAssertEqual(StudioModelNaming.displayName("mere-run/image-zimage-turbo", titles: .none), "Zimage Turbo")
+    }
+
+    /// The inventory's title wins wherever it is known, so the Library chip, the picker, and
+    /// the readiness card print what the Models page prints; ids the inventory has not named
+    /// keep the formatted fallback. Titles are a value the caller holds, so nothing here can
+    /// leak into another test or another window.
+    func testDisplayModelNamePrefersTheInventoryTitleWhenKnown() {
+        let titled = StudioModelInventoryRow(
+            id: "image-zimage-nano", category: "image", status: "installed", size: "2.1 GB",
+            usageTerms: nil, title: "Z-Image Nano (4-bit)"
+        )
+        let untitled = StudioModelInventoryRow(
+            id: "video-ltx2-fast", category: "video", status: "installed", size: "9 GB", usageTerms: nil
+        )
+        let titles = StudioModelTitles(rows: [titled, untitled])
+        XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano", titles: titles), "Z-Image Nano (4-bit)")
+        XCTAssertEqual(StudioModelNaming.displayName(titled), "Z-Image Nano (4-bit)")
+        XCTAssertEqual(StudioModelNaming.displayName("video-ltx2-fast", titles: titles), "LTX-2 Fast")
+        XCTAssertEqual(StudioModelNaming.displayName(untitled), "LTX-2 Fast")
+        XCTAssertEqual(StudioModelNaming.displayLabel(for: .createImage, model: "image-zimage-nano", titles: titles), "Z-Image Nano (4-bit)")
+        XCTAssertEqual(
+            ModelReadinessState.missingModel("image-zimage-nano").message(titles: titles),
+            "Z-Image Nano (4-bit) isn't on this Mac yet. Get it once and it stays."
+        )
+        XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano", titles: .none), "Zimage Nano")
+        XCTAssertEqual(StudioModelTitles(rows: [untitled]), .none, "rows without titles add nothing")
     }
 
     // MARK: - Helpers

@@ -59,12 +59,17 @@ enum StudioGeoTool: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// The tensors the input safetensors file must carry for the run to succeed.
-    var requiredTensors: [String] {
+    /// The tensors the input safetensors file must carry, as each command checks them
+    /// (`GeoFloodCommand`, `GeoFireCommand`, `GeoTESSERACommand`, `GeoOlmoEarthCommand`).
+    var tensorRequirement: StudioGeoTensorRequirement {
         switch self {
-        case .flood, .fire: ["S2L2A", "S1RTC", "DEM"]
-        case .tessera: ["S2", "S1", "DOY"]
-        case .olmoEarth: ["TIMESTAMPS"]
+        case .flood, .fire:
+            return .init(required: ["S2L2A", "S1RTC", "DEM"])
+        case .tessera:
+            // Sentinel-1 comes in complete pairs: bands with their day of year.
+            return .init(required: ["S2", "S2_DOY"], oneOf: ["S1_ASC + S1_ASC_DOY", "S1_DESC + S1_DESC_DOY"])
+        case .olmoEarth:
+            return .init(required: ["TIMESTAMPS"], oneOf: ["S2L2A", "S1RTC", "LANDSAT"])
         }
     }
 }
@@ -114,7 +119,16 @@ struct StudioGeoLabView: View {
         .onChange(of: tool) { _, _ in
             statusMessage = nil
         }
+        .onAppear {
+            // A value typed before the picker existed that the command would refuse reads as
+            // the checkpoint default.
+            let dimensions = binding(\.geoDimensions)
+            if !Self.tesseraDimensions.contains(dimensions.wrappedValue) { dimensions.wrappedValue = "" }
+        }
     }
+
+    /// What `geo tessera --dimensions` accepts, plus blank for the checkpoint's own width.
+    private static let tesseraDimensions = ["", "16", "32", "64", "128", "1024"]
 
     private var controls: some View {
         ScrollView {
@@ -159,8 +173,7 @@ struct StudioGeoLabView: View {
                     Label("Run \(tool.title)", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
+                .buttonStyle(.merePrimary)
 
                 if let statusMessage {
                     Text(statusMessage)
@@ -176,12 +189,22 @@ struct StudioGeoLabView: View {
     /// Names the tensors the CLI will look for, so a malformed bundle is caught by the
     /// operator before a run rather than by a ValidationError afterwards.
     private var requiredTensorsHint: some View {
+        let requirement = tool.tensorRequirement
+        return VStack(alignment: .leading, spacing: 8) {
+            tensorGroup("Required tensors", requirement.required)
+            if !requirement.oneOf.isEmpty {
+                tensorGroup("And at least one of", requirement.oneOf)
+            }
+        }
+    }
+
+    private func tensorGroup(_ title: String, _ names: [String]) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("Required tensors")
+            Text(title)
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
             HStack(spacing: 6) {
-                ForEach(tool.requiredTensors, id: \.self) { name in
+                ForEach(names, id: \.self) { name in
                     Text(name)
                         .font(MereRunTheme.monoFont)
                         .padding(.horizontal, 8)
@@ -192,9 +215,7 @@ struct StudioGeoLabView: View {
             }
             // Read as one phrase rather than a run of unrelated mono tokens.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(
-                "Required tensors: \(tool.requiredTensors.joined(separator: ", "))"
-            )
+            .accessibilityLabel("\(title): \(names.joined(separator: ", "))")
         }
     }
 
@@ -202,11 +223,13 @@ struct StudioGeoLabView: View {
     private var toolControls: some View {
         switch tool {
         case .tessera:
-            labeledTextField(
-                "Output dimensions",
-                placeholder: "Students: 16, 32, 64, or 128. Teacher: 1024. Blank uses the checkpoint default.",
-                text: binding(\.geoDimensions)
-            )
+            // The only values `geo tessera --dimensions` accepts: the student widths, or 1024 for
+            // the teacher checkpoint. Blank lets the checkpoint choose.
+            Picker("Output dimensions", selection: binding(\.geoDimensions)) {
+                Text("Checkpoint default").tag("")
+                ForEach(["16", "32", "64", "128"], id: \.self) { Text($0).tag($0) }
+                Text("1024 (teacher)").tag("1024")
+            }
         case .olmoEarth:
             Picker("Spatial patch size", selection: binding(\.geoPatchSize)) {
                 Text("1 px").tag(1)
@@ -298,4 +321,12 @@ struct StudioGeoLabView: View {
             ? "\(tool.title) preflight submitted."
             : "\(tool.title) submitted."
     }
+}
+
+/// What an Earth command's input bundle must hold: every required tensor, and at least one of
+/// the `oneOf` entries when there are any. An entry joined with "+" is a pair that must be
+/// present together.
+struct StudioGeoTensorRequirement: Equatable {
+    var required: [String]
+    var oneOf: [String] = []
 }

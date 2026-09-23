@@ -47,14 +47,23 @@ package enum StudioSpecialistFiles {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
+    /// A fresh directory for a specialist run, in `domain`'s folder wherever Settings ▸ General
+    /// says generations go, stamped with the display clock so the snapshot boards render a
+    /// stable path.
     @MainActor
-    static func timestampedDirectory(component: String) -> URL {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Movies/MereRun", isDirectory: true)
-            .appendingPathComponent(component, isDirectory: true)
-            .appendingPathComponent(formatter.string(from: StudioDisplayClock.now), isDirectory: true)
+    static func outputDirectory(domain: StudioDomain, name: String) -> URL {
+        StudioOutputLocation.specialistDirectory(domain: domain, name: name, now: StudioDisplayClock.now)
+    }
+
+    /// One output file for a specialist run, filed the same way as `outputDirectory`.
+    @MainActor
+    static func outputFile(domain: StudioDomain, name: String, fileExtension: String) -> URL {
+        StudioOutputLocation.specialistFile(
+            domain: domain,
+            name: name,
+            fileExtension: fileExtension,
+            now: StudioDisplayClock.now
+        )
     }
 }
 
@@ -90,7 +99,7 @@ struct StudioPathField: View {
                         }
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.mereSecondary)
             }
         }
     }
@@ -172,13 +181,13 @@ struct StudioSpecialistResultView: View {
                         } label: {
                             Label("Quick Look", systemImage: "eye")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.mereSecondary)
                         Button {
                             NSWorkspace.shared.activateFileViewerSelecting([activeURL])
                         } label: {
                             Label("Reveal", systemImage: "folder")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.mereSecondary)
                     }
                 }
 
@@ -188,16 +197,25 @@ struct StudioSpecialistResultView: View {
                     .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
 
                 if artifacts.count > 1 {
+                    // Which file the preview shows: a segmented row, the way every other
+                    // either-or choice in Studio is drawn.
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 7) {
+                        HStack(spacing: 2) {
                             ForEach(artifacts, id: \.self) { url in
-                                Button(url.lastPathComponent) { selection = url }
-                                    .buttonStyle(.bordered)
-                                    .tint(activeURL == url ? MereRunTheme.accent : nil)
-                                    .help(url.path)
+                                MereSegment(title: url.lastPathComponent, isSelected: activeURL == url) {
+                                    selection = url
+                                }
+                                .help(url.path)
                             }
                         }
+                        .padding(2)
+                        .background {
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(MereRunTheme.surfaceRaised)
+                        }
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Result files")
                 }
             } else {
                 ContentUnavailableView(
@@ -211,7 +229,9 @@ struct StudioSpecialistResultView: View {
 
     @ViewBuilder
     private var preview: some View {
-        if let url = activeURL {
+        if let item, item.status == .failed || item.status == .interrupted {
+            StudioSpecialistFailureView(item: item, models: controller.modelStore)
+        } else if let url = activeURL {
             switch StudioOutputFileKind.classify(url) {
             case .image:
                 StudioAsyncImagePreview(
@@ -242,9 +262,9 @@ struct StudioSpecialistResultView: View {
             }
         } else {
             ContentUnavailableView(
-                item?.status == .failed ? "Run failed" : "Working",
-                systemImage: item?.status == .failed ? "exclamationmark.triangle" : "hourglass",
-                description: Text(item?.status == .failed ? "Open the Library row for diagnostics." : "The first artifact will appear here.")
+                "Working",
+                systemImage: "hourglass",
+                description: Text("The first artifact will appear here.")
             )
         }
     }
@@ -291,7 +311,11 @@ enum StudioSpecialistRunner {
             template: template,
             draft: draft
         )
-        let request = controller.taskSessions.resolving(base)
+        // The same destination preparation a prompt task gets: the folder is created, or the run
+        // moves to App Outputs and the shell says why.
+        let prepared = StudioOutputLocation.preparing(controller.taskSessions.resolving(base))
+        if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
+        let request = prepared.request
         let preview = controller.commandPreview(arguments: request.execution?.arguments ?? template.arguments(from: request.draft), masksSecrets: true)
         let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
             ? .queued
@@ -299,5 +323,164 @@ enum StudioSpecialistRunner {
         library.start(request: request, commandPreview: preview, status: status)
         _ = controller.run(studio: request)
         return request.id
+    }
+}
+
+/// What a specialist page shows when its run failed: why, in one line; the log behind it; and,
+/// when the run's model is not on this Mac, the way to get it. Specialist pages have no Library
+/// column, so this is where the diagnosis has to be.
+struct StudioSpecialistFailureView: View {
+    @EnvironmentObject private var controller: MereRunController
+    @EnvironmentObject private var navigation: NavigationModel
+    @ObservedObject private var models: StudioModelStore
+    let item: StudioLibraryItem
+    @State private var showLog = false
+    @State private var pullProblem: String?
+
+    init(item: StudioLibraryItem, models: StudioModelStore) {
+        self.item = item
+        _models = ObservedObject(wrappedValue: models)
+    }
+
+    private var job: Job? { controller.jobs.job(requestID: item.id) }
+
+    private var logLines: [String] {
+        if let job, !job.log.isEmpty { return job.log.lines.map(\.text) }
+        return (item.outputText ?? "").components(separatedBy: .newlines).filter { !$0.isBlank }
+    }
+
+    private var summary: String {
+        if item.status == .interrupted { return "Interrupted when Studio closed. Run it again to start over." }
+        return StudioFailureSummary.summary(
+            outputText: item.outputText,
+            logLines: job?.log.lines.map(\.text) ?? [],
+            exitCode: job?.exitCode ?? item.exitCode
+        )
+    }
+
+    /// The model the run used: the one it was given, or its command's default.
+    private var modelID: String? {
+        let chosen = item.commandDraft?.model.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !chosen.isEmpty { return chosen }
+        return item.templateID.flatMap { CommandCatalog.template(id: $0)?.defaultModel }
+    }
+
+    /// A managed model id rather than a path to a converted model.
+    private var usesManagedModel: Bool {
+        guard let modelID else { return false }
+        return !modelID.contains("/") && !modelID.hasPrefix("~") && !modelID.hasPrefix(".")
+    }
+
+    /// The inventory row of a managed model that is not installed — the likeliest reason for the
+    /// failure, and one Studio can fix. Local paths and installed models return nil.
+    private var missingModel: StudioModelInventoryRow? {
+        guard let modelID else { return nil }
+        return models.rows.first { $0.id == modelID && !$0.isInstalled }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(MereRunTheme.red)
+                    .padding(.top, 1)
+                Text(summary)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let missing = missingModel {
+                missingModelRow(missing)
+            }
+            if let pullProblem {
+                Text(pullProblem)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !logLines.isEmpty {
+                Button {
+                    withAnimation(MereRunTheme.Motion.quick) { showLog.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: showLog ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(showLog ? "Hide log" : "Show log")
+                            .font(.caption.weight(.medium))
+                    }
+                    .foregroundStyle(MereRunTheme.textMuted)
+                }
+                .buttonStyle(.plain)
+                if showLog {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 3) {
+                            ForEach(Array(logLines.suffix(120).enumerated()), id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(MereRunTheme.textMuted)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 260)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // The inventory says whether a managed model is missing; read it once, not per failure.
+        .task(id: item.id) {
+            guard usesManagedModel, !models.hasInventory, !models.isRefreshing, models.error == nil else { return }
+            await models.refresh()
+        }
+    }
+
+    @ViewBuilder
+    private func missingModelRow(_ row: StudioModelInventoryRow) -> some View {
+        let name = StudioModelNaming.displayName(row)
+        HStack(spacing: 10) {
+            if let pull = models.download(modelID: row.id) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(pull.progress?.label ?? "Getting \(name)…")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+            } else {
+                Text("\(name) isn't on this Mac yet.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                Spacer(minLength: 8)
+                if row.usageTerms == nil {
+                    Button {
+                        getModel(row.id)
+                    } label: {
+                        Label("Get the model", systemImage: "arrow.down.circle.fill")
+                    }
+                    .buttonStyle(.merePrimary)
+                } else {
+                    // Models with usage terms are accepted on the Models page, where the terms are.
+                    Button("Open in Models") { navigation.open(task: .modelsInstalled) }
+                        .buttonStyle(.mereSecondary)
+                }
+            }
+        }
+        .padding(10)
+        .background {
+            RoundedRectangle(cornerRadius: MereRunTheme.Radius.base)
+                .fill(MereRunTheme.surfaceRaised.opacity(0.6))
+        }
+    }
+
+    private func getModel(_ modelID: String) {
+        guard let template = CommandCatalog.template(id: .modelPull) else { return }
+        var draft = template.defaultDraft()
+        draft.model = modelID
+        let started = models.startPull(StudioRunRequest(mode: item.mode, templateID: .modelPull, template: template, draft: draft))
+        // A refused submission explains itself in the controller's status.
+        let reason = controller.status
+        pullProblem = started ? nil : (reason.isBlank || reason == "Idle" ? "Studio could not start the download." : reason)
     }
 }

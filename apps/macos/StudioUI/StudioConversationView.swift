@@ -7,7 +7,8 @@ import SwiftUI
 struct StudioConverseView: View {
     let mode: StudioMode
     let item: StudioLibraryItem?
-    let liveText: String?
+    /// The reply streaming in, split into its answer and reasoning; nil while no turn runs.
+    let liveReply: ConversationTranscript.Reply?
     let isRunning: Bool
     let readiness: ModelReadinessState
     let error: String?
@@ -18,10 +19,10 @@ struct StudioConverseView: View {
     /// that turn; earlier turns keep what they ran with.
     @Binding var model: String
     @Binding var systemPrompt: String
-    let onPullModel: () -> Void
-    let onShowDetails: () -> Void
+    let readinessActions: StudioReadinessActions
     let onShowModels: () -> Void
     let onCopy: (String) -> Void
+    @Environment(\.studioModelTitles) private var titles
     let onRetry: () -> Void
     let onEdit: (UUID) -> Void
     let onBranch: (UUID) -> Void
@@ -53,8 +54,7 @@ struct StudioConverseView: View {
                     StudioReadinessCard(
                         readiness: readiness,
                         pullJob: nil,
-                        onPullModel: onPullModel,
-                        onShowDetails: onShowDetails,
+                        actions: readinessActions,
                         onCancelPull: { _ in }
                     )
                     .frame(maxWidth: StudioThreadHeader.maxWidth)
@@ -64,7 +64,7 @@ struct StudioConverseView: View {
             }
             StudioConversationView(
                 item: item,
-                liveText: liveText,
+                liveReply: liveReply,
                 isRunning: isRunning,
                 mode: mode,
                 onNewChat: {},
@@ -84,13 +84,13 @@ struct StudioConverseView: View {
             Image(systemName: error == nil ? "arrow.down.circle" : "exclamationmark.triangle")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(error == nil ? MereRunTheme.accent : MereRunTheme.red)
-            Text(error ?? readiness.message)
+            Text(error ?? readiness.message(titles: titles))
                 .font(.system(size: 12))
                 .foregroundStyle(MereRunTheme.textPrimary)
                 .lineLimit(2)
             Spacer(minLength: 8)
             if error == nil, readiness.canPull {
-                Button("Get the model", action: onPullModel)
+                Button("Get the model", action: readinessActions.pullModel)
                     .buttonStyle(.mereSecondary)
             }
         }
@@ -197,11 +197,16 @@ struct StudioThreadHeader: View {
 /// The transcript: user turns as warm bubbles on the right, assistant turns as unboxed Markdown
 /// behind a chat glyph on the left, a live streaming turn while a reply is in flight, all
 /// bottom-aligned in a 760pt column. The composer lives in the shared prompt bar below.
+///
+/// New output is followed only while the reader is at the bottom. Scrolling up stops the
+/// following and shows a "Jump to latest" pill; scrolling back down, or the pill, resumes it.
 struct StudioConversationView: View {
     let item: StudioLibraryItem?
-    let liveText: String?
+    /// The reply streaming in, split into its answer and reasoning; nil while no turn runs.
+    let liveReply: ConversationTranscript.Reply?
     let isRunning: Bool
     let mode: StudioMode
+    @Environment(\.studioModelTitles) private var titles
     /// Unused by the Converse surface (the thread list owns "new thread"); kept for the
     /// canvas call site until the Main board drops its conversation branch.
     let onNewChat: () -> Void
@@ -214,20 +219,44 @@ struct StudioConversationView: View {
     var onBranch: ((UUID) -> Void)?
     var budgetChars: Int = ConversationTranscript.defaultBudgetChars
 
+    /// Whether the transcript scrolls to keep new output in view. True until the reader scrolls
+    /// away from the bottom; true again once they are back there.
+    @State private var followsLatest = true
+    /// Bookkeeping that never drives a render, so writing it never re-evaluates the transcript.
+    @State private var scratch = TranscriptScratch()
+
     private static let streamingBubbleID = "studio.conversation.streaming"
+    private static let interruptedRowID = "studio.conversation.interrupted"
     static let columnWidth: CGFloat = 760
+    /// How far above the end the transcript can rest and still count as at the bottom.
+    private static let bottomTolerance: CGFloat = 32
 
     private var messages: [StudioMessage] { item?.messages ?? [] }
 
+    /// A thread whose reply never arrived because Studio closed mid-turn: the last turn is the
+    /// person's, nothing runs, and the row was reconciled to interrupted on launch.
+    private var awaitsInterruptedReply: Bool {
+        !isRunning && item?.status == .interrupted && messages.last?.role == .user
+    }
+
     /// How many earlier turns the next prompt would drop to fit the budget — surfaced so the
-    /// trimming is never silent.
+    /// trimming is never silent. Rendering the whole thread is not free, so the count is kept
+    /// until the thread, its length, or the budget changes.
     private var droppedFromContext: Int {
         guard !messages.isEmpty else { return 0 }
-        return ConversationTranscript.render(
-            messages: messages,
-            systemPrompt: item?.systemPrompt,
-            budgetChars: budgetChars
-        ).droppedCount
+        let key = TranscriptScratch.TrimKey(
+            item: item?.id, count: messages.count, last: messages.last?.id,
+            systemPromptLength: item?.systemPrompt?.count ?? 0, budget: budgetChars
+        )
+        if scratch.trimKey != key {
+            scratch.trimKey = key
+            scratch.trimDropped = ConversationTranscript.render(
+                messages: messages,
+                systemPrompt: item?.systemPrompt,
+                budgetChars: budgetChars
+            ).droppedCount
+        }
+        return scratch.trimDropped
     }
 
     var body: some View {
@@ -264,10 +293,21 @@ struct StudioConversationView: View {
                             if isRunning {
                                 StudioTurnView(
                                     role: .assistant,
-                                    content: liveText ?? "",
+                                    content: liveReply?.answer ?? "",
+                                    reasoning: liveReply?.reasoning,
+                                    isThinking: liveReply?.isThinking == true,
                                     isStreaming: true
                                 )
                                 .id(Self.streamingBubbleID)
+                            } else if awaitsInterruptedReply {
+                                StudioTurnView(
+                                    role: .assistant,
+                                    content: "",
+                                    failed: true,
+                                    failureReason: "Interrupted when Studio closed.",
+                                    onRetry: onRetry
+                                )
+                                .id(Self.interruptedRowID)
                             }
                         }
                         .padding(EdgeInsets(top: 22, leading: 24, bottom: 8, trailing: 24))
@@ -275,12 +315,44 @@ struct StudioConversationView: View {
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: geometry.size.height, alignment: .bottom)
                     }
+                    .onScrollPhaseChange { previous, phase in
+                        // A scroll the reader made has come to rest: follow again only if it
+                        // ended at the bottom. A programmatic scroll settling never changes the
+                        // decision, and it clears its mark only once it has settled.
+                        let readerScrollEnded = phase == .idle && isReaderDriven(previous)
+                        if phase == .idle { scratch.programmaticScroll = false }
+                        scratch.readerScrolling = isReaderDriven(phase)
+                        if readerScrollEnded {
+                            setFollowsLatest(scratch.distanceFromBottom <= Self.bottomTolerance)
+                        }
+                    }
+                    .onScrollGeometryChange(for: CGFloat.self) { scroll in
+                        scroll.contentSize.height - scroll.visibleRect.maxY
+                    } action: { _, distance in
+                        scratch.distanceFromBottom = distance
+                        if scratch.readerScrolling { setFollowsLatest(distance <= Self.bottomTolerance) }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if !followsLatest { jumpToLatest(proxy) }
+                    }
+                    .animation(MereRunTheme.Motion.quick, value: followsLatest)
                 }
-                .onChange(of: item?.id) { _, _ in scrollToEnd(proxy) }
-                .onChange(of: messages.count) { _, _ in scrollToEnd(proxy) }
-                .onChange(of: liveText) { _, _ in scrollToEnd(proxy) }
-                .onChange(of: isRunning) { _, _ in scrollToEnd(proxy) }
-                .onAppear { scrollToEnd(proxy) }
+                .onChange(of: item?.id) { _, _ in
+                    followsLatest = true
+                    scrollToEnd(proxy)
+                }
+                .onChange(of: messages.count) { _, _ in
+                    // A turn the reader just sent always comes into view; a reply landing while
+                    // they read earlier turns does not pull them away from it.
+                    if messages.last?.role == .user { followsLatest = true }
+                    scrollToEndIfFollowing(proxy)
+                }
+                .onChange(of: liveReply) { _, _ in scrollToEndIfFollowing(proxy) }
+                .onChange(of: isRunning) { _, _ in scrollToEndIfFollowing(proxy) }
+                .onAppear {
+                    followsLatest = true
+                    scrollToEnd(proxy)
+                }
             }
         }
     }
@@ -289,8 +361,11 @@ struct StudioConversationView: View {
         StudioTurnView(
             role: message.role,
             content: message.content,
+            reasoning: message.reasoning,
             failed: message.failed,
             cancelled: message.cancelled == true,
+            failureReason: message.failureReason,
+            logTail: message.logTail ?? [],
             meta: message.role == .assistant ? meta(for: message) : nil,
             onCopy: message.content.isEmpty ? nil : { onCopy(message.content) },
             onRetry: retryAction(for: message),
@@ -306,7 +381,7 @@ struct StudioConversationView: View {
         var parts: [String] = []
         let modelID = message.model ?? item?.model ?? ""
         if !modelID.isBlank {
-            parts.append(StudioModelNaming.displayName(modelID))
+            parts.append(StudioModelNaming.displayName(modelID, titles: titles))
         }
         if let tokensPerSecond = message.tokensPerSecond, tokensPerSecond > 0 {
             parts.append("\(Int(tokensPerSecond.rounded())) tok/s")
@@ -343,10 +418,60 @@ struct StudioConversationView: View {
         return { onBranch(message.id) }
     }
 
+    /// The pill that takes a reader who scrolled up back to the newest output and resumes
+    /// following it.
+    private func jumpToLatest(_ proxy: ScrollViewProxy) -> some View {
+        Button {
+            followsLatest = true
+            scrollToEnd(proxy)
+        } label: {
+            Label("Jump to latest", systemImage: "arrow.down")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(MereRunTheme.textPrimary)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .background {
+                    Capsule()
+                        .fill(MereRunTheme.surface)
+                        .overlay {
+                            Capsule().strokeBorder(MereRunTheme.border.opacity(0.8), lineWidth: 1)
+                        }
+                }
+                .mereShadow(radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+        .help("Scroll to the newest message")
+        .accessibilityLabel("Jump to latest")
+        .padding(.bottom, 12)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
+    /// The phases in which the reader, not the transcript, is moving the scroll position. The
+    /// keyboard (Page Down, arrows, End) scrolls in `.animating`, the same phase as
+    /// `scrollToEnd`, so that phase counts as the reader's unless a `scrollToEnd` is in flight.
+    private func isReaderDriven(_ phase: ScrollPhase) -> Bool {
+        phase == .tracking || phase == .interacting || phase == .decelerating
+            || (phase == .animating && !scratch.programmaticScroll)
+    }
+
+    private func setFollowsLatest(_ follows: Bool) {
+        if followsLatest != follows { followsLatest = follows }
+    }
+
+    private func scrollToEndIfFollowing(_ proxy: ScrollViewProxy) {
+        guard followsLatest else { return }
+        scrollToEnd(proxy)
+    }
+
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        // Only a scroll with somewhere to go marks itself: one that has nothing to move never
+        // reaches `.idle` to clear the mark.
+        if scratch.distanceFromBottom > 1 { scratch.programmaticScroll = true }
         withAnimation(MereRunTheme.Motion.quick) {
             if isRunning {
                 proxy.scrollTo(Self.streamingBubbleID, anchor: .bottom)
+            } else if awaitsInterruptedReply {
+                proxy.scrollTo(Self.interruptedRowID, anchor: .bottom)
             } else if let last = messages.last {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
@@ -354,15 +479,46 @@ struct StudioConversationView: View {
     }
 }
 
+/// The transcript's per-frame scroll figures and its context-trim memo. A class held in
+/// `@State` so writing it, which happens on every scrolled frame, never invalidates the view.
+private final class TranscriptScratch {
+    struct TrimKey: Equatable {
+        let item: UUID?
+        let count: Int
+        let last: UUID?
+        let systemPromptLength: Int
+        let budget: Int
+    }
+
+    var distanceFromBottom: CGFloat = 0
+    /// True from the moment the reader starts scrolling until that scroll comes to rest, so an
+    /// offset change caused by content landing never counts as the reader leaving the bottom.
+    var readerScrolling = false
+    /// True from a `scrollToEnd` until the scroll it started settles.
+    var programmaticScroll = false
+    var trimKey: TrimKey?
+    var trimDropped = 0
+}
+
 /// One conversation turn. User turns read as authored notes (warm bubble, right side);
 /// assistant turns read as the document itself (unboxed Markdown behind the chat glyph) with a
-/// row of actions and the turn's provenance underneath.
+/// row of actions and the turn's provenance underneath. An assistant turn that thought first
+/// carries its reasoning in a collapsed "Thinking" disclosure above the answer; one that failed
+/// says why on one line, with the run's log behind "Show log".
 private struct StudioTurnView: View {
     let role: StudioMessageRole
     let content: String
+    /// The model's reasoning, shown collapsed above the answer; nil when the turn had none.
+    var reasoning: String?
+    /// True while a streaming reply is still inside its reasoning block.
+    var isThinking = false
     var failed = false
     var cancelled = false
     var isStreaming = false
+    /// Why a failed turn failed, in one line.
+    var failureReason: String?
+    /// The last lines a failed run wrote, behind "Show log".
+    var logTail: [String] = []
     /// "Model · speed · time" under an assistant turn.
     var meta: String?
     var onCopy: (() -> Void)?
@@ -373,8 +529,14 @@ private struct StudioTurnView: View {
     var actionsEnabled = true
 
     @State private var hovering = false
+    @State private var showsReasoning = false
+    @State private var showsLog = false
 
     private var isUser: Bool { role == .user }
+    private var hasReasoning: Bool { isThinking || !(reasoning ?? "").isEmpty }
+    /// A stopped reply is not a failure: it keeps its "Reply stopped" note and its regenerate
+    /// icon, and never the reason row.
+    private var showsFailureRow: Bool { failed && !cancelled }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -481,16 +643,15 @@ private struct StudioTurnView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 10) {
+                if hasReasoning { reasoningDisclosure }
                 assistantBody
 
                 if cancelled {
                     Label("Reply stopped", systemImage: "stop.circle")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
-                } else if failed {
-                    Label("This turn failed", systemImage: "exclamationmark.triangle")
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.red)
+                } else if showsFailureRow {
+                    failure
                 }
 
                 if !isStreaming { assistantActions }
@@ -502,8 +663,10 @@ private struct StudioTurnView: View {
     @ViewBuilder
     private var assistantBody: some View {
         if isStreaming && content.isEmpty {
-            StudioThinkingIndicator()
-        } else {
+            // Before the first word: the dots, unless the reasoning header already says the
+            // model is thinking.
+            if !isThinking { StudioThinkingIndicator() }
+        } else if !content.isEmpty {
             StudioMarkdownText(
                 content: content,
                 bodyFont: .system(size: 14),
@@ -513,13 +676,118 @@ private struct StudioTurnView: View {
         }
     }
 
-    /// Copy, Retry, Branch as 28pt icon buttons, then the turn's provenance.
+    /// "Thinking" above the answer: collapsed by default, live (with the dots) while the model
+    /// is still inside its reasoning block. The text is plain, not Markdown, and reads quieter
+    /// than the answer.
+    private var reasoningDisclosure: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            disclosureToggle(
+                isThinking ? "Thinking…" : "Thinking",
+                isExpanded: $showsReasoning,
+                accessibilityLabel: isThinking ? "Thinking, in progress" : "Thinking",
+                hint: "the model's reasoning",
+                pulsing: isThinking
+            )
+            if showsReasoning, let reasoning, !reasoning.isEmpty {
+                Text(reasoning)
+                    .font(.system(size: 12.5))
+                    .lineSpacing(3.5)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 12)
+                    .overlay(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(MereRunTheme.border)
+                            .frame(width: 2)
+                    }
+            }
+        }
+    }
+
+    /// Why the turn failed, Retry when this is the turn Retry acts on, and the run's log behind
+    /// "Show log".
+    private var failure: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label {
+                    Text(failureReason ?? "This turn failed")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.red)
+                .accessibilityLabel("Failed: \(failureReason ?? "this turn failed")")
+                if let onRetry {
+                    Button("Retry", action: onRetry)
+                        .buttonStyle(.mereSecondary)
+                        .disabled(!actionsEnabled)
+                        .help("Run this turn again")
+                }
+            }
+            if !logTail.isEmpty {
+                disclosureToggle(
+                    showsLog ? "Hide log" : "Show log",
+                    isExpanded: $showsLog,
+                    accessibilityLabel: showsLog ? "Hide log" : "Show log",
+                    hint: "what the run wrote"
+                )
+                if showsLog {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(logTail.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(MereRunTheme.textMuted)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .merePanel(cornerRadius: MereRunTheme.Radius.sm)
+                }
+            }
+        }
+    }
+
+    /// The chevron-and-caption toggle the failure card uses for its log, shared by the turn's
+    /// two disclosures. `pulsing` adds the dots while the model is still thinking.
+    private func disclosureToggle(
+        _ title: String,
+        isExpanded: Binding<Bool>,
+        accessibilityLabel: String,
+        hint: String,
+        pulsing: Bool = false
+    ) -> some View {
+        Button {
+            withAnimation(MereRunTheme.Motion.quick) { isExpanded.wrappedValue.toggle() }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 9)
+                if pulsing { StudioPulsingDots() }
+                Text(title)
+                    .font(MereRunTheme.captionFont)
+            }
+            .foregroundStyle(MereRunTheme.textMuted)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(isExpanded.wrappedValue ? "Expanded" : "Collapsed")
+        .accessibilityHint(isExpanded.wrappedValue ? "Hides \(hint)" : "Shows \(hint)")
+    }
+
+    /// Copy, Retry, Branch as 28pt icon buttons, then the turn's provenance. A failed turn's
+    /// Retry sits beside its reason instead.
     private var assistantActions: some View {
         HStack(spacing: 2) {
             if let onCopy {
                 iconAction("Copy message", systemImage: "doc.on.doc", action: onCopy)
             }
-            if let onRetry {
+            if let onRetry, !showsFailureRow {
                 iconAction("Regenerate this reply", systemImage: "arrow.clockwise", action: onRetry)
                     .disabled(!actionsEnabled)
             }
@@ -556,12 +824,29 @@ private struct StudioTurnView: View {
         if let onBranch, actionsEnabled { Button("Branch from here") { onBranch() } }
     }
 
+    /// The turn is one VoiceOver element, so what its disclosures show when open is read here.
     private var accessibilityText: String {
         let speaker = isUser ? "You" : "Assistant"
-        if isStreaming && content.isEmpty { return "\(speaker) is generating a reply" }
-        let suffix = cancelled ? " (reply stopped)" : (failed ? " (this turn failed)" : "")
+        if isStreaming && content.isEmpty && !(isThinking && showsReasoning) {
+            return isThinking ? "\(speaker) is thinking" : "\(speaker) is generating a reply"
+        }
+        let suffix: String
+        if cancelled {
+            suffix = " (reply stopped)"
+        } else if failed {
+            suffix = " (failed: \(failureReason ?? "this turn failed"))"
+        } else {
+            suffix = ""
+        }
         let provenance = meta.map { ", \($0)" } ?? ""
-        return "\(speaker): \(content)\(suffix)\(provenance)"
+        var text = "\(speaker): \(content)\(suffix)\(provenance)"
+        if showsReasoning, let reasoning, !reasoning.isEmpty {
+            text += ". Reasoning: \(reasoning)"
+        }
+        if showsLog, showsFailureRow, !logTail.isEmpty {
+            text += ". Run log: \(logTail.joined(separator: ". "))"
+        }
+        return text
     }
 }
 
@@ -569,23 +854,31 @@ private struct StudioTurnView: View {
 private struct StudioThinkingIndicator: View {
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(MereRunTheme.accent)
-                        .frame(width: 6, height: 6)
-                        .phaseAnimator([0, 1, 2]) { view, phase in
-                            view.opacity(phase == Double(index) ? 1 : 0.28)
-                        } animation: { _ in
-                            .easeInOut(duration: 0.38)
-                        }
-                }
-            }
+            StudioPulsingDots()
             Text("Thinking…")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
         }
         .padding(.vertical, 4)
         .accessibilityLabel("Generating a reply")
+    }
+}
+
+/// The dots themselves, shared by the indicator and a live "Thinking…" disclosure.
+private struct StudioPulsingDots: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(MereRunTheme.accent)
+                    .frame(width: 6, height: 6)
+                    .phaseAnimator([0, 1, 2]) { view, phase in
+                        view.opacity(phase == Double(index) ? 1 : 0.28)
+                    } animation: { _ in
+                        .easeInOut(duration: 0.38)
+                    }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

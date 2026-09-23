@@ -133,6 +133,10 @@ struct StudioSFXLabView: View {
     @StudioStoredValue("SFXLab.decodeDraft") private var decodeDraft: CommandDraft = CommandDraft()
     @StudioStoredValue("SFXLab.scoreDraft") private var scoreDraft: CommandDraft = CommandDraft()
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
+    /// How each generation draft's renoise is entered, kept beside the draft so "Per step" survives
+    /// an empty field and a rebuilt page.
+    @StudioStoredValue("SFXLab.generateRenoiseMode") private var generateRenoiseMode = StudioRenoise.Mode.automatic
+    @StudioStoredValue("SFXLab.videoRenoiseMode") private var videoRenoiseMode = StudioRenoise.Mode.automatic
     @State private var statusMessage: String?
 
     init(task: Binding<StudioSFXTask>, tasks: [StudioSFXTask], initialDraft: StudioDraft) {
@@ -262,10 +266,12 @@ struct StudioSFXLabView: View {
                 .foregroundStyle(MereRunTheme.textMuted)
             Slider(value: draft.cfgScale, in: 0...20, step: 0.25)
         }
-        HStack {
-            labeledTextField("Seed", placeholder: "Random", text: draft.seed)
-            labeledTextField("Renoise", placeholder: "auto", text: draft.sfxRenoise)
-        }
+        labeledTextField("Seed", placeholder: "Random", text: draft.seed)
+        StudioRenoiseControl(
+            value: draft.sfxRenoise,
+            mode: videoConditioned ? $videoRenoiseMode : $generateRenoiseMode,
+            steps: draft.wrappedValue.steps
+        )
 
         if videoConditioned {
             Divider().overlay(MereRunTheme.border.opacity(0.5))
@@ -419,8 +425,7 @@ struct StudioSFXLabView: View {
 
     private var clapScore: Double? {
         guard task == .score, let text = item?.outputText else { return nil }
-        let tokens = text.split { $0.isWhitespace || $0 == ":" || $0 == "=" }
-        return tokens.reversed().compactMap { Double($0) }.first
+        return StudioCLAPScore.parse(text)
     }
 
     private func clapScoreView(_ score: Double) -> some View {
@@ -469,9 +474,9 @@ struct StudioSFXLabView: View {
             }
             HStack {
                 Button("Quick Look") { QuickLookCoordinator.shared.preview(url) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
                 Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
             }
             Spacer()
         }
@@ -501,8 +506,7 @@ struct StudioSFXLabView: View {
             Label(title, systemImage: task.symbol)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(MereRunTheme.accent)
+        .buttonStyle(.merePrimary)
     }
 
     private func submit() {
@@ -519,6 +523,13 @@ struct StudioSFXLabView: View {
         if task != .score, draft.outputPath.isBlank {
             statusMessage = "Choose an output path."
             return
+        }
+        if [.generate, .video].contains(task) {
+            let mode = task == .video ? videoRenoiseMode : generateRenoiseMode
+            if let problem = StudioRenoise(mode: mode, argument: draft.sfxRenoise).problems(steps: draft.steps).first {
+                statusMessage = problem
+                return
+            }
         }
         requestID = StudioSpecialistRunner.submit(
             templateID: task.templateID,
@@ -590,15 +601,7 @@ struct StudioSFXLabView: View {
     }
 
     private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Music/MereRun/Sound FX", isDirectory: true)
-            .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).\(pathExtension)",
-                isDirectory: false
-            )
-            .path
+        StudioSpecialistFiles.outputFile(domain: .sound, name: prefix, fileExtension: pathExtension).path
     }
 }
 
@@ -630,5 +633,17 @@ private struct StudioSFXSyncReview: View {
                 .merePanel()
             }
         }
+    }
+}
+
+/// `mere.run sfx clap` prints one JSON object (`score`, `prompt`, `audio`, `model`); the score is
+/// read from it by name, from the last line that decodes, rather than guessed from the text.
+enum StudioCLAPScore {
+    private struct Output: Decodable { let score: Double }
+
+    static func parse(_ text: String) -> Double? {
+        text.components(separatedBy: .newlines).reversed().lazy.compactMap { line in
+            try? JSONDecoder().decode(Output.self, from: Data(line.utf8)).score
+        }.first
     }
 }

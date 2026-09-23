@@ -184,6 +184,11 @@ public struct ModelLocationCandidate: Hashable, Sendable {
         self.catalogRootURL = catalogRootURL?.standardizedFileURL
         self.usageTermsAcknowledged = usageTermsAcknowledged
     }
+
+    /// The configured location this candidate lives under: its store or search root, or the binding itself.
+    public var locationRootURL: URL {
+        catalogRootURL ?? rootURL
+    }
 }
 
 public struct ModelLocationSnapshot: Equatable, Sendable {
@@ -199,6 +204,13 @@ public struct ModelLocationSnapshot: Equatable, Sendable {
         self.primaryRoot = primaryRoot.standardizedFileURL
         self.searchRoots = searchRoots.map(\.standardizedFileURL)
         self.bindings = bindings
+    }
+
+    /// Every configured location: the primary store, each binding, and each search root.
+    public var locationRoots: [URL] {
+        [primaryRoot]
+            + bindings.map { URL(fileURLWithPath: $0.path, isDirectory: true).standardizedFileURL }
+            + searchRoots
     }
 
     public func candidates(for modelID: String) -> [ModelLocationCandidate] {

@@ -19,6 +19,7 @@ struct StudioInspector: View {
     let baseline: StudioDraft
     let modelInventory: [StudioModelInventoryRow]
     let readiness: ModelReadinessState
+    @Environment(\.studioModelTitles) private var titles
     let lastSeed: String?
     let onShowModels: () -> Void
     let onShowAdapters: () -> Void
@@ -232,7 +233,7 @@ struct StudioInspector: View {
                 selection: $draft.readImageAction,
                 accessibilityLabel: "Read task"
             ) { $0.title }
-        case .attachment:
+        case .attachment, .regionPrompts:
             EmptyView()
         }
     }
@@ -247,7 +248,7 @@ struct StudioInspector: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(MereRunTheme.accent)
                 }
-                Text(StudioModelNaming.displayLabel(for: mode, model: draft.model))
+                Text(StudioModelNaming.displayLabel(for: mode, model: draft.model, titles: titles))
                     .font(.callout)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)
@@ -262,7 +263,7 @@ struct StudioInspector: View {
             .background { StudioInspectorFieldChrome() }
             .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         }
-        .help(readiness.blocksRun ? readiness.message : "Model")
+        .help(readiness.blocksRun ? readiness.message(titles: titles) : "Model")
         .accessibilityLabel("Model")
         .accessibilityValue(StudioModelNaming.resolvedModelID(for: mode, model: draft.model))
     }
@@ -271,7 +272,7 @@ struct StudioInspector: View {
         switch readiness {
         case .missingModel: return "arrow.down.circle"
         case .unsupported: return "exclamationmark.triangle"
-        case .checking, .ready, .unknown: return nil
+        case .notChecked, .checking, .ready, .unknown: return nil
         }
     }
 

@@ -34,7 +34,7 @@ struct Studio3DCreationView: View {
     @StudioStoredValue("3DCreation.sourcePath") private var sourcePath = ""
     @StudioStoredValue("3DCreation.orderedViews") private var orderedViews: [String] = []
     @StudioStoredValue("3DCreation.outputDirectory") private var outputDirectory = StudioSpecialistFiles
-        .timestampedDirectory(component: "3D")
+        .outputDirectory(domain: .threeD, name: "3d-asset")
         .path
     @StudioStoredValue("3DCreation.model") private var model = ""
     @StudioStoredValue("3DCreation.resolution") private var resolution = 256
@@ -48,7 +48,13 @@ struct Studio3DCreationView: View {
     @StudioStoredValue("3DCreation.remesh") private var remesh = true
     @StudioStoredValue("3DCreation.remeshBand") private var remeshBand = 1.0
     @StudioStoredValue("3DCreation.sealRadius") private var sealRadius = 12
-    @StudioStoredValue("3DCreation.camerasPath") private var camerasPath = ""
+    /// A camera file chosen before the page edited cameras itself; read into `cameras` once.
+    @StudioStoredValue("3DCreation.camerasPath") private var legacyCamerasPath = ""
+    @StudioStoredValue("3DCreation.suppliesCameras") private var suppliesCameras = false
+    @StudioStoredValue("3DCreation.cameras") private var cameras = StudioInstantMeshCameraDocument()
+    /// The saved copy of a valid camera document, for the Command view; empty when cameras are off
+    /// or do not match the views. Each run writes its own copy beside its output.
+    @State private var draftCamerasPath = ""
     @StudioStoredValue("3DCreation.preflight") private var preflight = false
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var errorMessage: String?
@@ -77,9 +83,11 @@ struct Studio3DCreationView: View {
         .studioTaskCommand(engine.templateID, draft: commandDraft)
         .onChange(of: engine) { _, _ in
             model = ""
-            outputDirectory = StudioSpecialistFiles.timestampedDirectory(component: "3D").path
+            outputDirectory = StudioSpecialistFiles.outputDirectory(domain: .threeD, name: "3d-asset").path
             errorMessage = nil
         }
+        .onAppear(perform: adoptLegacyCameras)
+        .task(id: cameraDraftKey) { await saveDraftCameras() }
     }
 
     private var configuration: some View {
@@ -137,11 +145,11 @@ struct Studio3DCreationView: View {
                         case .instantMesh:
                             Stepper("Grid resolution: \(resolution)", value: $resolution, in: 2...256)
                             Toggle("Export vertex colors", isOn: $vertexColors)
-                            StudioPathField(
-                                label: "Camera JSON (optional)",
-                                placeholder: "/path/to/cameras.json",
-                                path: $camerasPath,
-                                allowedContentTypes: [.json]
+                            StudioInstantMeshCameraEditor(
+                                enabled: $suppliesCameras,
+                                document: $cameras,
+                                viewNames: orderedViews.map { URL(fileURLWithPath: $0).lastPathComponent },
+                                message: $errorMessage
                             )
                         }
                     }
@@ -163,9 +171,7 @@ struct Studio3DCreationView: View {
                     Label(preflight ? "Run preflight" : "Create 3D asset", systemImage: "cube.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
-                .controlSize(.large)
+                .buttonStyle(.merePrimary)
             }
             .padding(18)
         }
@@ -229,7 +235,7 @@ struct Studio3DCreationView: View {
             } label: {
                 Label("Add views…", systemImage: "photo.stack")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
             .disabled(orderedViews.count >= 6)
         }
     }
@@ -300,7 +306,7 @@ struct Studio3DCreationView: View {
         draft.trellisNoRemesh = !remesh
         draft.trellisRemeshBand = remesh ? remeshBand : nil
         draft.trellisSealRadius = remesh ? sealRadius : nil
-        draft.camerasPath = camerasPath
+        draft.camerasPath = engine == .instantMesh && suppliesCameras ? draftCamerasPath : ""
         draft.dryRun = preflight
         draft.json = preflight
         return draft
@@ -318,10 +324,27 @@ struct Studio3DCreationView: View {
             errorMessage = "Choose a new or empty output directory so this asset remains immutable in Library."
             return
         }
+        var draft = commandDraft
         if engine == .instantMesh {
             guard orderedViews.count == 4 || orderedViews.count == 6 else {
                 errorMessage = "InstantMesh needs exactly four or six ordered views."
                 return
+            }
+            if suppliesCameras {
+                if let problem = cameras.problems(viewCount: orderedViews.count).first {
+                    errorMessage = problem
+                    return
+                }
+                // The camera file lives beside the run's output folder, which the command fills itself.
+                let camerasURL = StudioCameraDocuments.url(besideOutputDirectory: outputDirectory)
+                do {
+                    try FileManager.default.createDirectory(at: camerasURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try cameras.json().write(to: camerasURL, options: .atomic)
+                } catch {
+                    errorMessage = "Studio could not write the camera file: \(error.localizedDescription)"
+                    return
+                }
+                draft.camerasPath = camerasURL.path
             }
         } else if sourcePath.isBlank {
             errorMessage = "Choose a source image."
@@ -331,10 +354,57 @@ struct Studio3DCreationView: View {
         requestID = StudioSpecialistRunner.submit(
             templateID: engine.templateID,
             mode: .createImage,
-            draft: commandDraft,
+            draft: draft,
             controller: controller,
             library: library
         )
+    }
+
+    private struct CameraDraftKey: Equatable {
+        let engine: Studio3DEngine
+        let enabled: Bool
+        let document: StudioInstantMeshCameraDocument
+        let viewCount: Int
+    }
+
+    private var cameraDraftKey: CameraDraftKey {
+        CameraDraftKey(engine: engine, enabled: suppliesCameras, document: cameras, viewCount: orderedViews.count)
+    }
+
+    /// Keeps the Command view's camera file current, a moment after editing stops; only a document
+    /// the CLI would accept is saved, under a name made from its content.
+    private func saveDraftCameras() async {
+        guard engine == .instantMesh, suppliesCameras, cameras.problems(viewCount: orderedViews.count).isEmpty else {
+            draftCamerasPath = ""
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        do {
+            let url = try StudioCameraDocuments.storeDraft(page: "3D Creation", content: cameras.json())
+            // Rows the Library still names (queued Command-view runs included) keep their files.
+            let referenced = Set(library.items.compactMap { $0.commandDraft?.camerasPath })
+            StudioCameraDocuments.pruneDrafts(page: "3D Creation", current: url, referenced: referenced)
+            draftCamerasPath = url.path
+        } catch {
+            draftCamerasPath = ""
+        }
+    }
+
+    /// A camera file chosen before this page edited cameras is read into the editor, once. A path
+    /// that no longer exists is forgotten quietly; one that will not read is reported once, then
+    /// forgotten.
+    private func adoptLegacyCameras() {
+        guard !legacyCamerasPath.isBlank else { return }
+        let url = URL(fileURLWithPath: NSString(string: legacyCamerasPath).expandingTildeInPath)
+        legacyCamerasPath = ""
+        guard cameras.cameras.isEmpty, FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            cameras = try StudioInstantMeshCameraDocument.importing(Data(contentsOf: url))
+            suppliesCameras = true
+        } catch {
+            errorMessage = "The camera file at \(url.lastPathComponent) could not be read into the editor: \(error.localizedDescription)"
+        }
     }
 }
 

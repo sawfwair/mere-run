@@ -67,21 +67,24 @@ public struct ModelResolver {
 
     private let fileManager: FileManager
     private let locations: ModelLocationSnapshot
+    private let access: ModelLocationAccess
 
     public init(
         fileManager: FileManager = .default,
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        locations: ModelLocationSnapshot? = nil
+        locations: ModelLocationSnapshot? = nil,
+        access: ModelLocationAccess = .shared
     ) {
         self.fileManager = fileManager
         self.locations = locations ?? MereRunModelLocations.snapshot(
             fileManager: fileManager,
             environment: environment
         )
+        self.access = access
     }
 
     public func resolve(_ modelID: ModelID) throws -> Resolution {
-        let resolver = InstalledModelResolver(fileManager: fileManager, locations: locations)
+        let resolver = InstalledModelResolver(fileManager: fileManager, locations: locations, access: access)
         do {
             let result = try resolver.resolve(
                 modelID,
@@ -112,6 +115,11 @@ public struct ModelResolver {
     /// The writable primary store precedes explicit bindings and registered roots.
     public func locationCandidates(for modelID: ModelID) -> [ModelLocationCandidate] {
         locations.candidates(for: modelID.rawValue)
+    }
+
+    /// Configured locations that did not answer a bounded directory read.
+    public func locationIssues() -> [ModelLocationIssue] {
+        access.issues(in: locations)
     }
 
     private func source(for kind: ModelLocationKind) -> Source {

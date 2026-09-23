@@ -159,8 +159,14 @@ line while jobs are in flight. It opens the **Activity popover**
 (`StudioUI/StudioActivity.swift`), a 340pt panel the shell draws over the window from the
 bottom-left: one row per running or queued job in the inference and utility
 lanes (never a probe) with its progress and a stop control, over the app↔CLI
-version handshake and a link into the Server page. With nothing running the same
-panel shows the local server, the models root, and the resolved CLI path. It
+version handshake and a link into the Server page. A row for one of Studio's own
+CLI reads names the work ("System · Checking models"), never the subcommand.
+With nothing running the same panel shows the local server and the models root;
+the resolved CLI path is the footer's tooltip. When `status --json` reports
+`modelLocationIssues` (a registered drive that did not answer in time, usually
+because macOS is waiting on its removable- or network-volume access prompt, or
+one macOS denied), the pill's dot turns yellow and the panel adds a row naming
+the drive that opens Privacy & Security ▸ Files & Folders. It
 reads the `JobStore` directly — the lanes for which rows exist, each `Job` for
 its own progress — so nothing about the work in flight is mirrored on the
 controller.
@@ -222,10 +228,30 @@ Rows carry a hover star (`StudioLibraryItem.isFavorite`, an additive optional
 written as `nil` when unstarred), rename in place, and drag out to Finder or any
 app. ⌘ and ⇧ click build a batch (`StudioLibrarySelection`) with a bar for
 Reveal, Save to…, and Delete; Delete asks first and offers to move the run's
-files to the Trash. Filtering and day-grouping live in `StudioLibraryPresenter`,
-so both are testable without a view. The view mode, kind, and favorites filter
-persist per window under `studio.libraryView`, `studio.libraryKind`, and
+files to the Trash. A batch of exactly two finished image runs adds **Compare**
+to the bar and the context menu, which opens the older run in the result
+workspace with the newer beside it. Search matches a run's title, kind, prompt,
+model (the name the app shows or the exact id, from the thread, the recorded
+draft, or a legacy row's `--model` argument); a whole status word ("failed",
+"running") narrows to that status and the rest of the query must still match,
+so "failed harbor" is the failed harbor runs, and a fragment like "ed" matches
+nothing.
+Filtering and day-grouping live in `StudioLibraryPresenter`, so both are
+testable without a view. The view mode, kind, and favorites filter persist per
+window under `studio.libraryView`, `studio.libraryKind`, and
 `studio.libraryFavorites`.
+
+A row's context menu offers **Use these settings** (also on a finished card's
+icon row and beside Retry on a failed card): the run's task opens with its
+recorded prompt, model, and options in the composer, ready to tweak and run
+again. `StudioLibraryDraftRestoration` reads the recorded command back through
+the same contract bindings the Command view uses, replaces the task's parked
+draft and any Command view override, and records the run as the draft's parent.
+Only options a page control binds come back; a Command view extra with no
+control (an option the composer never shows) is not restored, and a row whose
+command the composer does not build (an upscale or edit run from the Console)
+does not offer the action at all (`StudioLibraryDraftRestoration.canRestore`).
+Run again and Edit command… stay for an exact rerun or a raw edit.
 
 Each task retains its full draft and selected run through `StudioTaskSessions`.
 Prompt modes preserve model, seed, dimensions, attachments, and sampling values;
@@ -242,7 +268,8 @@ Open Last Output (⇧⌘O), and Reveal Last Output in Finder (⇧⌘R), acting o
 current composer; Window ▸ Open Studio and Command Console (⇧⌘C); Help ▸
 mere.run Guide (⌘?), the mere.run link, and Export Diagnostics…. ⌥⌘C is always
 the task's Command view, disabled on the few tasks without one. Settings has
-General, Models, Server, and Advanced tabs; the Server tab's endpoint and key
+General, Models, Server, and Advanced tabs; its path settings are pickers with
+Choose…, Reveal, and Reset, and the Server tab's endpoint and key
 apply on Apply or Return, not per keystroke. First run shows the Image empty state with its "Get the model"
 path and a one-time dismissible banner; there is no Welcome sheet.
 
@@ -260,9 +287,16 @@ prompt, a **chip strip** shows up to four essentials (size, length, steps, seed,
 threshold, task, voice mode, thinking) as menus with popover editors for custom
 values; some modes show only the model chip. The **model chip** is the only
 model control: it lists `model list` rows filtered to the mode's category,
-installed first, with "Auto" for the mode's default. The chips and the inspector
-bind the same `StudioDraft`, so a value changed in one shows in the other. ⌘↩
-runs; while a conversation turn streams, the send circle becomes Stop.
+installed first, with "Auto" for the mode's default. A fresh draft starts on the
+model the user made the task's default in Models ▸ Installed ("Use for Chat by
+default", kept per task in `StudioTaskSessions`), else the CLI's recommendation
+for Chat and Code, else the template default. Every surface names a model
+through `StudioModelNaming`: the inventory's title when `StudioModelStore` has
+published one (`StudioModelTitles`, set in the environment by each window root
+and passed to presenters explicitly), else a name formatted from the id, with
+the exact id in the tooltip. The chips and the inspector bind the same `StudioDraft`, so a value
+changed in one shows in the other. ⌘↩ runs; while a conversation turn streams,
+the send circle becomes Stop.
 
 The **feed** above the composer (`StudioUI/StudioFeedCanvas.swift`, cards derived in
 `StudioKit/StudioFeedCards.swift`) lists the mode's runs oldest first, newest beside the
@@ -277,8 +311,18 @@ row with Remove; both come from `JobStore`, not from a controller mirror. A
 failed run leads with the last meaningful stderr line, keeps the log behind
 "Show log", and offers Retry. Validation errors ("Prompt is required.") render
 as a banner under the composer; readiness (missing model, missing CLI) is a card
-at the bottom of the feed with "Get the model" and the pull's own progress, so
-it never hides earlier work. Completion never moves the Library selection; a
+at the bottom of the feed, so it never hides earlier work. The card speaks
+plainly ("LTX-2 Fast isn't on this Mac yet.") and carries the next step for its
+state: **Get the model** with the pull's own progress (a publisher's terms are
+acknowledged in a sheet first, the same one the composer uses), beside
+**Choose another model**, the composer's own picker; the picker with **Open in
+Models** when the Mac cannot run the model; **Check again** and the picker when
+the check itself failed, with the CLI's last line kept as a muted detail so a
+wrong model location stays diagnosable; and **Check the model** before the first
+check, which has its own neutral state (`ModelReadinessState.notChecked`,
+`StudioReadinessActions`). A run that failed because its model is not on this
+Mac says so plainly and offers **Get the model** on its card instead of the
+CLI's error line. Completion never moves the Library selection; a
 result that finishes off-screen shows a "New result ↓" pill. Picking a Library
 row scrolls to its card and outlines it briefly.
 
@@ -303,8 +347,31 @@ annotated output. A run in flight, a queue, a failure, and readiness use the
 feed's own cards above the result column, and earlier runs stay one click away
 in the Library column, which also puts their input back in the composer. The
 next steps open the sibling task carrying the input when the target accepts it
-(Find ▸ "Segment these" keeps the picture; "Track in video" keeps only the
-prompt, because Track needs a clip).
+(Find ▸ "Segment these" keeps the picture and draws what Find found as Segment's
+box prompts; "Track in video" keeps only the prompt, because Track needs a clip).
+
+Segment and Track take their prompts on the picture rather than as typed
+coordinates (`StudioUI/StudioRegionPromptEditor.swift`, the geometry and the CLI
+text in `StudioKit/StudioRegionPrompts.swift`). Over the input, a drag draws a
+box, a click adds a point, and Option-click adds a negative point; a Box /
+Point / Negative / Clear toolbar picks what a click does, the selected box shows
+corner handles, drags move a prompt, and Delete removes the selection. Each
+prompt is a VoiceOver element ("Box 1, coffee cup, 120 by 80 at 40, 30"). The
+prompts live on the draft (`StudioDraft.visionRegionPrompts`) in the input's own
+pixels and become the command's `--box` / `--point` values, so the composer, the
+Command view, and the run all read one set (a `--box` typed in the Command view
+appears on the picture through the same binding table); a drawn prompt
+satisfies the task's prompt requirement. Replacing the input, by any route,
+clears the prompts and frames drawn on the previous one. A photo is shown
+upright, as the well shows it, while its prompts and the CLI's result boxes are
+kept in the file's stored pixels — the space the CLI decodes without the EXIF
+transform — with `StudioImageOrientation` mapping between the two for all eight
+orientations. Track shows its clip as a frame scrubber
+(`StudioUI/StudioTrackFrameEditor.swift`, frames decoded with
+`AVAssetImageGenerator`): "Start tracking here" seeds the tracker on the frame
+in view, where the prompts are drawn, and "End tracking here" sets the optional
+last frame (`--init-frame` / `--end-frame`). Once a tracked clip exists it plays
+in place, with "Adjust prompts and frames" bringing the scrubber back.
 
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
 steps — for twenty-two tasks, seventeen of which still render their own form
@@ -332,6 +399,21 @@ turn used (`mode`). The transcript budget derives from the model's context
 window when the inventory reports one (or an explicit context size), else stays
 at 48k characters; a banner reports any turns trimmed from the next prompt.
 
+With the thinking chip on, a reply's reasoning is kept beside the answer
+(`StudioMessage.reasoning`) and shown as a collapsed **Thinking** disclosure
+above it; while the model is still inside its reasoning block the disclosure
+reads "Thinking…" live. A turn that failed says why on one line — the last
+meaningful line of the run's stderr, or the preflight message when the run
+never started (`StudioMessage.failureReason`, via `StudioFailureSummary`) — with
+Retry beside it and the run's last stderr lines behind **Show log**
+(`StudioMessage.logTail`). A thread whose reply was cut off when Studio closed
+shows the same row. Reasoning, reason, and log are display-only: the transcript
+renders only `content`, and a failed turn is never replayed at all, so none of
+it reaches the next prompt. The transcript follows new output only while the
+reader is at the bottom; scrolling up stops the following and a **Jump to
+latest** pill brings it back. Deleting a thread from its context menu asks
+first, naming the thread.
+
 ## Inspector, Command view, and Command Console
 
 The **inspector** (⌥⌘I, the header's Inspector toggle, remembered per task under
@@ -358,11 +440,17 @@ defaults.
 The inspector shows only the flags the binding table maps to a draft field, so
 no control can look live and change nothing. That makes it thin where the table
 is thin: Read, Find, Segment, Track, and Code bind between one and five flags,
-and the rest of their options are reached in the Command Console.
+and the rest of their options are reached in the Command Console. Segment and
+Track also bind `--box`, `--point`, `--init-frame`, and `--end-frame`, but as an
+external override like the attachment well: the canvas is their editor, so the
+inspector never shows them as text while a Command-view edit still flows back
+into the drawing.
 
 The **Command** panel (⌥⌘C or the header toggle) exposes the current task's
 complete editable contract. It replaces the inspector and uses a 440-point
-column when space permits, otherwise an overlay. The preview, validation, and
+column when space permits, otherwise an overlay. Each row is headed by the
+option's label with its flag beneath in small monospace, over the same typed
+controls the Console draws. The preview, validation, and
 run use the edited arguments, including options absent from the simple controls.
 Prompt controls and their mapped Command fields synchronize. Specialist Run
 buttons retain Command edits while accepting later edits from their own forms.
@@ -399,7 +487,9 @@ Studio window.
 ## Focus, compare, and continue
 
 Click an image or **Focus** on its result card to inspect it in the workspace.
-**Compare** selects another result and links zoom and pan. The settings area
+**Compare** selects another result and links zoom and pan; batching two image
+rows in the Library and choosing Compare lands in the same view with the pair
+already side by side. The settings area
 shows differences between the recorded commands. **Continue with…** opens a
 new draft for editing, reference guidance, video, image understanding, or
 segmentation. The resulting run records its parent; the original stays in Library.
@@ -467,7 +557,19 @@ pictures and clips, `~/Music/mere.run/<Domain>` for audio,
 `<slug-of-prompt>-<seed-or-short-id>.<ext>` with a numeric suffix on collision.
 The suffix is derived, not random, so the path the Command view previews is the
 path the run writes. Settings ▸ General takes one root that overrides all three
-(`mererun.app.outputRoot`). Nothing is migrated: Library rows keep the paths
+(`mererun.app.outputRoot`). The specialist pages — Vision, 3D, Sound, Voice,
+Music ▸ Analyze, Transcribe, and Realtime, Train (an adapter is filed under the
+domain it trains for), Video ▸ Subjects, Text ▸ Decisions, the Image utilities
+(validation and run plans under Image; embeddings and anonymization under
+Text), and the Voice recorder — propose their destinations from the same rule
+(`StudioOutputLocation.specialistDirectory` and `specialistFile`):
+`<Domain>/<page>-<timestamp>` under the same roots, so a run started from a page
+and one started from the Command Console file side by side. A specialist or
+Command view run is prepared the same way a prompt run is
+(`StudioOutputLocation.preparing`): the folder is created, or the run moves to
+`App Outputs` and the shell's banner says why; a path a submitted run holds is
+reserved, so the next proposal in the same second steps aside. Nothing is migrated:
+Library rows keep the paths
 they recorded, Application Support holds metadata only, and a destination that
 cannot be created sends the run back to `App Outputs` with its sidecars and one
 banner saying why.
@@ -497,8 +599,14 @@ discovery, durable plans and dashboards. Image ▸ Generate includes
 multi-reference editing, structured prompts, LoRA catalog IDs or local adapters,
 Krea tuning, and preflight. Image ▸ Train adds dataset previews, preflight,
 launch and resume, loss metrics, samples, checkpoints, and run comparison for
-Krea 2 and FLUX.2 Klein. Image ▸ Datasets renders validation artifacts,
-candidate dataset diagnostics, and materialized plan paths.
+Krea 2 and FLUX.2 Klein; Klein's per-target ranks are rows of module suffix and
+rank rather than a typed `suffix=rank` list. Image ▸ Datasets renders validation
+artifacts, candidate dataset diagnostics, and the run plan as a report
+(`StudioKit/StudioRunPlanReport.swift`, `StudioUI/StudioRunPlanReportView.swift`):
+a preflight's steps, resolution, batch, rank, learning rate, checkpoint and
+preview cadence, schedule, memory switches, dataset counts, model, and output,
+read from the CLI's typed envelope, or a materialized run's files, each
+revealable in Finder.
 
 **Video** ▸ Generate uses model-family-aware controls: LTX uses `--quality` and
 `--output-mode`, while native MiniMax-H3 exposes its exact `17n+5` frame
@@ -512,25 +620,43 @@ and the driving clip, subject rows, and stats read only from the CLI's manifest,
 tracking, and quality reports. It keeps multi-subject reference and selector
 authoring, preview and full-video SAM tracking, immutable keyframe corrections,
 the continuity and profile controls under each stage's "More" row, `plan.json`
-persistence, and durable Library jobs with a job bar for the running stage. The
+persistence, and durable Library jobs with a job bar for the running stage. A
+subject's precise selectors and each keyframe correction are drawn with the same
+region editor Segment uses (`StudioUI/StudioSubjectSelectorEditor.swift`): the
+reference selector on the reference image in its own pixels, and the driving
+selector or correction on the driving frame center-cropped to the plan's
+width × height, which is the space `video prepare-masks` segments in; the
+drawing is written back to the plan's box and point text. The
 guided SCAIL-2, Cosmos3, mask-preparation, latent-export, and resident-session
 commands live in the Command Console.
 
 **Music** is a production surface, not a prompt-only wrapper: quality planning,
 covers, repaint and flow edits, source and timbre-reference audio, candidate
 ranking, LM planning, adapter stacks, stems, LRC, recipes, and DAW delivery.
-Music ▸ Analyze adds standalone ACE-Step understanding with structured results;
+Music ▸ Analyze adds standalone ACE-Step understanding, read from the command's
+JSON as tempo, key, meter, language, caption, and lyrics, with the model's reply
+and audio codes folded away when a run kept them;
 Music ▸ Transcribe adds MuScriptor transcription with an embedded MIDI piano
-roll; Music ▸ Separate shares the restoration surface with Audio. Music ▸
+roll, and picks expected instruments from the list the CLI prints with
+`--list-instruments` (a plain field when the list cannot be read); Music ▸
+Separate shares the restoration surface with Audio. Music ▸
 Realtime is the Magenta RT2 session: a transport with the live clock, the
 recording's waveform, Prompt A/B steering with a blend slider, temperature,
 top-k, and guidance sent over the CLI's stdin protocol as you release each
 control, the session log, and a job bar with Cancel and Log; it re-attaches to a
 running session when you navigate back to it. Music ▸ Train is the shared
-LoRA/LoKr trainer with dataset audio previews and live loss events. The resident
-ACE-Step server's health and lifecycle live under Server ▸ Music server.
+LoRA/LoKr trainer with live loss events; its dataset is a clip list
+(`StudioUI/StudioMusicManifestEditor.swift`, `StudioKit/StudioMusicTrainingManifest.swift`)
+rather than a hand-written manifest: add audio files or a folder of clips with
+matching `.txt` captions (or drop them in), caption each clip, add lyrics where
+they matter, play any clip, and see the trainer's own checks in the page's words.
+Start training writes `<adapter>.dataset.jsonl` beside the adapter, one record
+per line the way `music train-adapter --dataset` reads it; manifests made
+elsewhere import, and the clip list exports. The resident ACE-Step server's
+health and lifecycle live under Server ▸ Music server.
 
-**Sound** ▸ Generate and Video Foley produce effects; Condition, Encode, Decode,
+**Sound** ▸ Generate and Video Foley produce effects, with Woosh renoise as the
+model's default, one amount on a slider, or one amount per step; Condition, Encode, Decode,
 and Score cover conditioning, AE encode and decode, CLAP scoring, waveform
 review, NPY metadata, and durable artifacts.
 
@@ -540,7 +666,12 @@ profiles, reference recording, streaming feedback, and A/B playback.
 **3D** is the domain for TripoSR, native TRELLIS.2 PBR reconstruction, and
 ordered 4- and 6-view InstantMesh. It has engine-specific controls, immutable
 output directories, embedded orbitable Quick Look models, manifest statistics,
-and the shared progress and Library lifecycle. It runs the `image reconstruct-3d`
+and the shared progress and Library lifecycle. InstantMesh's optional calibrated
+cameras are edited per view (`StudioUI/StudioCameraEditor.swift`,
+`StudioKit/StudioCameraDocuments.swift`) — a 3 × 4 camera-to-world pose and
+`fx, fy, cx, cy` — checked as the CLI checks them and written as
+`<output>.cameras.json` beside the run's output folder; camera files import and
+export. It runs the `image reconstruct-3d`
 family; the `vision image-to-3d` aliases stay CLI-only rather than being
 duplicated under Vision.
 
@@ -554,18 +685,31 @@ unembedding training defaults.
 
 **Vision** covers the whole VLM and VFX family: multi-image captioning,
 LightOn/GLM/Infinity OCR, grounding, text/box/point segmentation and tracking,
-camera capture, Buffalo-L face analysis, native pose and optical flow, video
-depth, MoGe geometry, and DA3 ordered multiview reconstruction. Read, Find,
+camera capture, Buffalo-L face analysis, native pose and optical flow, still
+(Marigold V2) and video depth, MoGe geometry, and DA3 ordered multiview
+reconstruction. Read, Find,
 Segment, and Track are the Analyze tasks; Depth, Pose, Faces, Flow, Geometry,
 and Live host the lab form that renders face and pose overlays and dense optical
 flow vectors, plays live tracking and depth review video, embeds geometry point
 clouds, and preserves every JSON, EXR, mask, camera, and 3D sidecar as a durable
-Library artifact. Coordinates stay typed, ordered CLI arguments; machine-readable
-results and mask directories use explicit output pickers.
+Library artifact. Live lists this Mac's cameras by name in the order the CLI
+numbers them. Faces ▸ embedding and comparison choose their face by clicking it
+on the picture once a Face detection run has drawn boxes on that image (the
+index stepper remains for an image nobody has detected faces in). Coordinates
+reach the CLI as typed, ordered arguments; machine-readable results and mask
+directories use explicit output pickers. Geometry's multi-view task edits
+optional calibrated cameras per view — image size, normalized focal length and
+center, and a world-to-camera rotation and translation — with the CLI's own
+checks (positive size and focal length, a proper rotation, and an image size
+equal to the image's decoded size, which new cameras take from the image), and
+writes `<output>.cameras.json` beside the run's output folder; camera files
+import and export.
 
 **Audio** ▸ Transcribe is the Analyze task over `speech transcribe`. Who Spoke
 is native Sortformer diarization with JSON and RTTM timelines and
-segment-tuning controls. Enhance and Separate are the restoration surface for
+segment-tuning controls; a JSON timeline is drawn as one lane per speaker over
+the recording (`StudioUI/StudioSpeakerTimeline.swift`) and as the Analyze
+panel's turn rows, with Save timeline…. Enhance and Separate are the restoration surface for
 native AP-BWE and UniverSR enhancement plus ViperX two-stem, four-stem,
 dereverb, and denoise RoFormer workflows, with model-specific compute and chunk
 controls, source and output previews, and every generated stem kept in the
@@ -577,12 +721,22 @@ microphone usage description and audio-input entitlement those capture paths
 require.
 
 **Text** ▸ Embeddings adds vector norms and cosine-similarity inspection;
-Text ▸ Anonymize shows original and protected PII spans.
+Text ▸ Anonymize shows original and protected PII spans. Text ▸ Decisions
+(`StudioUI/StudioLayaDecisionView.swift`, `StudioKit/StudioDecisions.swift`) builds
+the Laya request instead of asking for one: the text to judge, then ordered
+choice, score (levels lowest first), and yes-or-no questions, with optional
+option descriptions and editable ids derived from each question. It checks the
+request the way `text decide` does, writes it beside the run's output in the Text
+folder, and reads the result back as each question's answer, probabilities, and
+confidence, with what was cut to fit; **Check fit** runs `--preflight` and shows
+each question's token fit. The handbook example loads with one click, and request
+JSON imports and exports.
 
 **Earth** is native Earth-observation inference, with Flood, Fire, TESSERA, and
 OlmoEarth tasks. It covers TerraMind flood and fire tile inference and the
 TESSERA v2 and OlmoEarth v1.2 encoders, names the tensors each input bundle must
-carry before a run rather than after it, exposes engine-specific controls
+carry before a run rather than after it (required and at-least-one-of, as each
+command checks them), exposes engine-specific controls
 (TESSERA output dimensions; OlmoEarth patch size, ground sample distance, and
 space-time tokens), and preserves every produced safetensors file as a durable
 Library artifact.
@@ -603,7 +757,14 @@ Run gate and Benchmark… routing to those tasks), a Performance panel (last run
 length, unified-memory needs, latest benchmark), the adapters whose base model it
 is (Use in `<domain>` applies one to the composer, Train new… opens the
 trainer), and the runtime-settings editor and raw `model info` output under two
-folds. Rows whose data the CLI or Library does not have are omitted rather than
+folds. The header's tags name the tasks the model runs by default ("Default for
+Image" for a template default, "Your default for Code" for a choice), and the
+More menu offers **Use for `<task>` by default** for each task whose model chip
+lists the model; turning one on moves that task's composer onto the model at
+once (a model the user picked by hand in a parked draft stays), turning it off
+returns the task to the built-in default, and a choice whose model has since
+left the inventory is ignored rather than left pointing at nothing. Rows whose data
+the CLI or Library does not have are omitted rather than
 faked. A job bar at the page bottom reports a pull, MiniMax-H3 optimize or
 rebuild, or storage clean-up in flight with Cancel and Log. Downloads started
 from either the composer or Models use the same job, including queued downloads.
@@ -619,7 +780,8 @@ and clean-up stay on the page.
 
 **Models ▸ Locations** is the store editor over `model location`. It shows the
 writable store, read-only search roots, and explicit per-model bindings with
-live availability, adds roots and bindings through a directory picker, reveals
+live availability, adds roots and bindings through a directory picker (the
+bound model is chosen from the inventory), reveals
 any of them in Finder, and confirms before removing a root or a binding — so a
 model kept on an external volume is registered without leaving the app.
 
@@ -677,7 +839,12 @@ Console.
 **Runs** is the domain over the public `executor` and `run` contracts. It
 discovers local durable reports, lists Relay jobs, polls typed inspection state,
 shows artifact inventories, reveals local runs, and exposes verified fetch,
-cancellation, and immutable Relay retry. Client-side Relay profile setup and
+cancellation, and immutable Relay retry. `run inspect --json` answers in one of
+three shapes (a Relay job, a local graph run, or the inspection envelope around
+an image run, a transcription run, a training directory, a report, or a plan);
+`StudioKit/StudioSpecialistResults.swift` decodes each and the page shows the
+state, what went wrong, the facts, each step with its state, and the outputs
+with Reveal, with the raw report behind a disclosure. Client-side Relay profile setup and
 device sign-in also go through the CLI; Studio streams the approval URL but
 never handles the credential itself.
 
@@ -747,6 +914,9 @@ composer with the boards' sample prompt and an in-test image attached
 (Image ▸ Generate and Vision ▸ Find), the Analyze board (Vision ▸ Find over a
 1024×1024 in-test image with a seeded `vision ground` document, and
 Audio ▸ Transcribe with a synthesized recording and a timestamped transcript),
+the region-prompt editor with boxes and points drawn on that image and Segment
+and Track on the Analyze board with prompts drawn and Track's frame scrubber
+over an in-test clip,
 Chat with the boards' sample thread, Music ▸ Realtime mid-session (a run the
 process seam holds open, fed the CLI's frame progress and steering echoes, with
 its recording synthesized on disk), Video ▸ Subjects at each stage of a seeded

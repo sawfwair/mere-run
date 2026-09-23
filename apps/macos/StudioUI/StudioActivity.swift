@@ -16,19 +16,25 @@ struct StudioActivityRow: Identifiable, Equatable {
 /// each row and the header carry. Pure functions over the store and one job, so every string the
 /// popover shows is testable without a view.
 enum StudioActivity {
+    /// System Settings ▸ Privacy & Security ▸ Files & Folders, where removable- and
+    /// network-volume access for MereRun is granted.
+    static let filesAndFoldersSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
+    )!
+
     /// The lanes whose jobs are the user's work. `.probe` is deliberately absent.
     static let lanes: [JobLane] = [.inference, .utility]
 
     /// Running jobs first (lane order, then start order), then the queue in FIFO order — the order
     /// the work will actually finish in.
     @MainActor
-    static func rows(in store: JobStore) -> [StudioActivityRow] {
+    static func rows(in store: JobStore, titles: StudioModelTitles) -> [StudioActivityRow] {
         let running = lanes.flatMap { store.running(in: $0) }
         let queued = lanes.flatMap { store.queued(in: $0) }
         return running.map {
-            StudioActivityRow(id: $0.id, title: title(for: $0), isRunning: true, isNextInQueue: false)
+            StudioActivityRow(id: $0.id, title: title(for: $0, titles: titles), isRunning: true, isNextInQueue: false)
         } + queued.enumerated().map { index, job in
-            StudioActivityRow(id: job.id, title: title(for: job), isRunning: false, isNextInQueue: index == 0)
+            StudioActivityRow(id: job.id, title: title(for: job, titles: titles), isRunning: false, isNextInQueue: index == 0)
         }
     }
 
@@ -42,9 +48,9 @@ enum StudioActivity {
     /// The domain and task a job belongs to, so a row names the work rather than the command.
     /// A raw utility read or write has no template, so it names its own CLI subcommand.
     @MainActor
-    static func title(for job: Job) -> String {
+    static func title(for job: Job, titles: StudioModelTitles) -> String {
         guard let templateID = job.request.templateID else { return rawTitle(for: job) }
-        return "\(StudioDomain(templateID: templateID).title) · \(task(for: job))"
+        return "\(StudioDomain(templateID: templateID).title) · \(task(for: job, titles: titles))"
     }
 
     /// The line under the title: step progress and elapsed time for a run, transferred bytes and
@@ -90,13 +96,13 @@ enum StudioActivity {
     // MARK: - Private
 
     @MainActor
-    private static func task(for job: Job) -> String {
+    private static func task(for job: Job, titles: StudioModelTitles) -> String {
         guard let template = job.request.template else { return rawTitle(for: job) }
         if template.id == .modelPull {
             let model = (job.request.draft?.model ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             // The same friendly name the composer's model chip shows, so one model reads the same
             // way wherever it appears.
-            return model.isEmpty ? "Pull model" : "Pull \(StudioModelNaming.displayName(model))"
+            return model.isEmpty ? "Pull model" : "Pull \(StudioModelNaming.displayName(model, titles: titles))"
         }
         // A prompt task names itself the way the task control does ("Generate", "Transcribe");
         // everything else falls back to the template's own title.
@@ -106,13 +112,49 @@ enum StudioActivity {
         return template.title
     }
 
-    /// A raw-argument job (`model list`, `config set`) is named by the CLI subcommand it runs:
-    /// "System · model list". Nothing else describes it, and the user did start it.
+    /// A raw-argument job (`model list`, `config set`) has no template to name it, so it is named
+    /// by what Studio is doing with it — "System · Checking models" — never by the argv.
     @MainActor
     private static func rawTitle(for job: Job) -> String {
-        let words = (job.request.rawArguments ?? []).prefix { !$0.hasPrefix("-") }
-        let subcommand = words.joined(separator: " ")
-        return subcommand.isEmpty ? "System · Command" : "System · \(subcommand)"
+        "System · \(taskName(for: job.request.rawArguments ?? []))"
+    }
+
+    /// The plain name of the hand-built CLI read or write behind `arguments`: what the Activity
+    /// row and the menu bar show while it runs.
+    static func taskName(for arguments: [String]) -> String {
+        let words = arguments.prefix { !$0.hasPrefix("-") }.map { $0.lowercased() }
+        switch (words.first, words.dropFirst().first, words.dropFirst(2).first) {
+        case ("model", "list", _), ("model", "capabilities", _): return "Checking models"
+        case ("model", "info", _): return "Reading model details"
+        case ("model", "storage", _): return "Measuring model storage"
+        case ("model", "gc", _): return "Cleaning up model storage"
+        case ("model", "runtime", "get"): return "Reading runtime settings"
+        case ("model", "runtime", _): return "Saving runtime settings"
+        case ("model", "remove", _): return "Removing a model"
+        case ("model", "pull", _): return "Getting a model"
+        case ("model", "location", _): return "Updating model locations"
+        case ("model", _, _): return "Checking models"
+        case ("adapter", _, _): return "Checking adapters"
+        case ("config", "path", _), ("config", "list", _), ("config", "get", _): return "Reading settings"
+        case ("config", _, _): return "Saving settings"
+        case ("guide", _, _): return "Loading the guide"
+        case ("gate", _, _): return "Checking quality gates"
+        case ("executor", _, _): return "Checking executors"
+        case ("run", "inspect", _): return "Inspecting a run"
+        case ("run", "list", _): return "Finding runs"
+        case ("run", "fetch", _): return "Fetching run outputs"
+        case ("run", "cancel", _): return "Cancelling a run"
+        case ("run", "retry", _): return "Retrying a run"
+        case ("run", _, _): return "Checking runs"
+        case ("agent", _, _): return "Checking agents"
+        case ("speech", "profile", _): return "Loading voices"
+        case ("speech", "listen", _) where arguments.contains("--list-devices"): return "Finding microphones"
+        case ("music", "realtime", _) where arguments.contains("--list-midi-inputs"): return "Finding MIDI inputs"
+        case ("plugin", _, _): return "Running a plugin"
+        case (nil, _, _) where arguments.contains("--version"): return "Checking the CLI version"
+        case (nil, _, _): return "Working"
+        case (let first?, _, _): return "Running \(first)"
+        }
     }
 
     /// "1.2 GB / 4.8 GB" → "1.2 of 4.8 GB" (one unit when both sides agree, both when they differ).
@@ -158,6 +200,7 @@ struct StudioActivityPopover: View {
     let resolvedCLI: String
     let onOpenServer: () -> Void
     let onOpenModels: () -> Void
+    @Environment(\.studioModelTitles) private var titles
 
     /// Bumped whenever a job starts or finishes: lane membership is not itself published, so the
     /// row list is re-derived from the store's own event stream.
@@ -169,7 +212,7 @@ struct StudioActivityPopover: View {
     var body: some View {
         // Reading `generation` here is what ties the row list to the store's start/finish events.
         _ = generation
-        let rows = StudioActivity.rows(in: jobs)
+        let rows = StudioActivity.rows(in: jobs, titles: titles)
         return VStack(alignment: .leading, spacing: 0) {
             header(rows)
             if rows.isEmpty {
@@ -221,8 +264,9 @@ struct StudioActivityPopover: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// What the popover says when no job is in flight: the same three facts the machine-status
-    /// details carried, drawn as Activity rows.
+    /// What the popover says when no job is in flight: the local server and the models, drawn as
+    /// Activity rows. The CLI's path is a diagnostic, so it is the footer's tooltip rather than a
+    /// row.
     private var machineDetails: some View {
         VStack(alignment: .leading, spacing: 0) {
             detailRow(dot: status.dotColor, title: "Local server", detail: status.serverDetail)
@@ -231,7 +275,15 @@ struct StudioActivityPopover: View {
             }
             .buttonStyle(.plain)
             .help("Open Models ▸ Installed")
-            detailRow(dot: nil, title: "CLI", detail: resolvedCLI.isBlank ? "Not resolved" : resolvedCLI)
+            if let notice = status.locationNotice {
+                Button {
+                    NSWorkspace.shared.open(StudioActivity.filesAndFoldersSettingsURL)
+                } label: {
+                    detailRow(dot: MereRunTheme.yellow, title: notice.title, detail: notice.detail)
+                }
+                .buttonStyle(.plain)
+                .help("Open Privacy & Security ▸ Files & Folders")
+            }
         }
     }
 
@@ -273,6 +325,7 @@ struct StudioActivityPopover: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(MereRunTheme.textMuted)
                 .lineLimit(1)
+                .help(resolvedCLI.isBlank ? "The mere.run command line was not found" : "Command line: \(resolvedCLI)")
             Spacer(minLength: 12)
             Button("Open Server", action: onOpenServer)
                 .buttonStyle(.plain)

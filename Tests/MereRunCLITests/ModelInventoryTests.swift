@@ -79,6 +79,45 @@ final class ModelInventoryTests: XCTestCase {
         XCTAssertTrue(snapshot.installedModelIDs.isEmpty)
     }
 
+    func testFastInventorySkipsAStalledLocationAndReportsIt() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-stalled-inventory-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let modelID = ModelResolver.ModelID.ornith35BMLX
+        let bindingRoot = root.appendingPathComponent("external-volume", isDirectory: true)
+        try FileManager.default.createDirectory(at: bindingRoot, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
+            .write(to: bindingRoot)
+
+        // The binding's reads block until released, like a volume behind an unanswered
+        // consent prompt; the scan must finish at the deadline without touching it.
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let access = ModelLocationAccess(deadline: 0.2) { url in
+            if url.path == bindingRoot.standardizedFileURL.path {
+                release.wait()
+            }
+            return nil
+        }
+        let snapshot = ModelInventory.snapshot(
+            mode: .fast,
+            locations: ModelLocationSnapshot(
+                primaryRoot: root.appendingPathComponent("primary", isDirectory: true),
+                bindings: [.init(modelID: modelID.rawValue, path: bindingRoot.path)]
+            ),
+            access: access
+        )
+        let row = try XCTUnwrap(snapshot.rows.first { $0.id == modelID.rawValue })
+
+        XCTAssertEqual(row.status, "offline")
+        XCTAssertFalse(snapshot.complete)
+        XCTAssertEqual(snapshot.locationIssues, [
+            ModelLocationIssue(path: bindingRoot.standardizedFileURL.path, problem: .unresponsive),
+        ])
+        XCTAssertLessThan(snapshot.durationMs, 5_000)
+    }
+
     func testVerifiedInstalledIDsIncludeBindingsAndSearchRoots() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-external-inventory-\(UUID().uuidString)", isDirectory: true)

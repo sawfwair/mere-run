@@ -156,6 +156,10 @@ struct StudioOperationsView: View {
     @State private var remoteRuns: [StudioRemoteRunJob] = []
     @State private var selectedReference: String?
     @State private var detailText = "Select a run to inspect its durable report."
+    /// The typed reading of `run inspect --json` for the selected run; nil while the raw text is
+    /// all there is (an older CLI, an error, a command other than inspect).
+    @State private var inspection: StudioRunInspection?
+    @State private var showsRawInspection = false
     @State private var fetchDirectory = FileManager.default.urls(
         for: .downloadsDirectory,
         in: .userDomainMask
@@ -171,6 +175,12 @@ struct StudioOperationsView: View {
     @State private var relayAuthenticated = false
     @State private var relayProgress = ""
     @State private var relayApprovalURL: URL?
+
+    /// `initialSelection` opens the page on one run, the way a Library link or a snapshot would;
+    /// it is inspected as soon as the list has loaded.
+    init(initialSelection: String? = nil) {
+        _selectedReference = State(initialValue: initialSelection)
+    }
 
     private var selectedLocalRun: StudioLocalRunEntry? {
         localRuns.first { $0.reference == selectedReference }
@@ -202,6 +212,10 @@ struct StudioOperationsView: View {
         .task {
             await loadProfiles()
             await refresh()
+            // A run the page opened on is inspected once, the way a click would.
+            if let selectedReference, inspection == nil {
+                await inspect(selectedReference)
+            }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
                 if autoRefresh, busyAction == nil {
@@ -212,6 +226,7 @@ struct StudioOperationsView: View {
         .onChange(of: scope) {
             selectedReference = nil
             detailText = "Select a run to inspect its durable report."
+            inspection = nil
             Task { await refresh() }
         }
         .onChange(of: selectedExecutor) {
@@ -520,16 +535,21 @@ struct StudioOperationsView: View {
                     }
                 }
 
-                Text("Inspection")
-                    .font(MereRunTheme.sectionFont)
                 ScrollView {
-                    Text(detailText)
-                        .font(.system(size: 11.5, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let inspection {
+                            StudioRunInspectionView(presentation: inspection.presentation, stateColor: stateColor)
+                            StudioRunInspectionDisclosure(title: "Raw report", isExpanded: $showsRawInspection) {
+                                rawInspection
+                            }
+                        } else {
+                            Text("Inspection")
+                                .font(MereRunTheme.sectionFont)
+                            rawInspection
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .merePanel()
             } else {
                 ContentUnavailableView(
                     "Select a run",
@@ -541,6 +561,15 @@ struct StudioOperationsView: View {
         }
         .padding(MereRunTheme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var rawInspection: some View {
+        Text(detailText)
+            .font(.system(size: 11.5, design: .monospaced))
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .merePanel()
     }
 
     private func actionButtons(_ reference: String) -> some View {
@@ -651,6 +680,7 @@ struct StudioOperationsView: View {
         defer { if announce { busyAction = nil } }
         let result = await controller.utilityCommandResult(args: ["run", "inspect", reference, "--json"])
         detailText = result.outputText.isEmpty ? "No inspection output." : result.outputText
+        inspection = StudioRunInspection.decode(result.stdout)
     }
 
     private func perform(_ args: [String], label: String) async {
@@ -658,8 +688,11 @@ struct StudioOperationsView: View {
         defer { busyAction = nil }
         let result = await controller.utilityCommandResult(args: args)
         detailText = result.outputText
+        inspection = nil
         statusMessage = result.exitCode == 0 ? "\(label) completed" : "\(label) failed"
         await refresh()
+        // The run's state just changed; show it, not the command's own output.
+        if let selectedReference { await inspect(selectedReference, announce: false) }
     }
 
     private func chooseRoot() {
@@ -797,5 +830,164 @@ enum StudioOperationsJSON {
             }
         }
         return nil
+    }
+}
+
+/// The readable form of one `run inspect` answer: its state, the facts worth a tile, the steps a
+/// graph ran, the files it left with Reveal, and what went wrong.
+private struct StudioRunInspectionView: View {
+    let presentation: StudioRunInspection.Presentation
+    let stateColor: (String) -> Color
+
+    private static let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(stateColor(presentation.state))
+                    .frame(width: 8, height: 8)
+                Text(presentation.state.replacingOccurrences(of: "_", with: " ").capitalized)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(stateColor(presentation.state))
+                Text(presentation.title)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(2)
+            }
+            .accessibilityElement(children: .combine)
+
+            if !presentation.problems.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(presentation.problems, id: \.self) { problem in
+                        Label(problem, systemImage: "exclamationmark.triangle.fill")
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+
+            if !presentation.facts.isEmpty {
+                LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 10) {
+                    ForEach(presentation.facts) { fact in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(fact.label.uppercased())
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .kerning(0.5)
+                                .foregroundStyle(MereRunTheme.textMuted)
+                            Text(fact.value)
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .merePanel()
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+
+            if !presentation.steps.isEmpty {
+                section("Steps") {
+                    ForEach(presentation.steps) { step in
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(stateColor(step.state))
+                                .frame(width: 8, height: 8)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(step.title)
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                Text(step.detail)
+                                    .font(MereRunTheme.captionFont)
+                                    .foregroundStyle(MereRunTheme.textMuted)
+                            }
+                            Spacer()
+                            Text(step.state.capitalized)
+                                .font(.system(size: 10.5, weight: .medium))
+                                .foregroundStyle(stateColor(step.state))
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+
+            if !presentation.outputs.isEmpty {
+                section("Outputs") {
+                    ForEach(presentation.outputs) { output in
+                        HStack(spacing: 10) {
+                            Image(systemName: "doc")
+                                .foregroundStyle(MereRunTheme.textMuted)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(output.name)
+                                    .font(.system(size: 12.5, weight: .medium))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Text(output.exists ? output.detail : "Missing · \(output.detail)")
+                                    .font(MereRunTheme.captionFont)
+                                    .foregroundStyle(output.exists ? MereRunTheme.textMuted : MereRunTheme.yellow)
+                            }
+                            .help(output.path)
+                            Spacer()
+                            // Relay artifacts are named relative to a job the Fetch button brings
+                            // down; only a file on this Mac can be revealed.
+                            if output.exists, output.path.hasPrefix("/") {
+                                Button("Reveal") {
+                                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: output.path)])
+                                }
+                                .buttonStyle(.mereSecondary)
+                                .accessibilityLabel("Reveal \(output.name)")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Inspection")
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(MereRunTheme.sectionFont)
+            VStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .merePanel()
+        }
+    }
+}
+
+/// The raw JSON behind the readable report, folded away by default.
+private struct StudioRunInspectionDisclosure<Content: View>: View {
+    let title: String
+    @Binding var isExpanded: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(MereRunTheme.Motion.quick) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text(title)
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(MereRunTheme.textMuted)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "Hide \(title.lowercased())" : "Show \(title.lowercased())")
+            if isExpanded {
+                content()
+            }
+        }
     }
 }

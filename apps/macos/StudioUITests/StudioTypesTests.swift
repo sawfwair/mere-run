@@ -962,6 +962,20 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(status?.isReachable, true)
     }
 
+    func testStudioServerStatusParsesSkippedModelLocations() {
+        let json = """
+        {"server":{"health":"down","loadedModels":[]},"installedModels":[],\
+        "modelLocationIssues":[{"path":"/Volumes/MODELS","problem":"unresponsive"},\
+        {"path":"/Volumes/Home/models","problem":"denied"}]}
+        """
+        XCTAssertEqual(StudioServerStatus.parse(jsonStdout: json)?.skippedLocations, [
+            StudioSkippedModelLocation(path: "/Volumes/MODELS", problem: .unresponsive),
+            StudioSkippedModelLocation(path: "/Volumes/Home/models", problem: .denied),
+        ])
+        let older = #"{"server":{"health":"down","loadedModels":[]},"installedModels":[]}"#
+        XCTAssertEqual(StudioServerStatus.parse(jsonStdout: older)?.skippedLocations, [])
+    }
+
     func testStudioServerStatusReturnsNilForNonJSON() {
         XCTAssertNil(StudioServerStatus.parse(jsonStdout: "connection refused"))
     }
@@ -2191,13 +2205,64 @@ final class StudioTypesTests: XCTestCase {
         )
         XCTAssertEqual(
             ModelReadinessParser.state(for: "vision-segment-sam31", modelListOutput: output),
-            .unsupported("vision-segment-sam31 is listed as unsupported on this Mac.")
+            .unsupported("Sam31 can't run on this Mac.")
         )
 
         if case .unknown = ModelReadinessParser.state(for: "missing", modelListOutput: output) {
             // expected
         } else {
             XCTFail("Expected unknown readiness for a model absent from the list.")
+        }
+    }
+
+    /// The readiness card is the first thing a new user meets, so its copy names the model the
+    /// way the Models page does and says what to do next, never a CLI verb.
+    func testReadinessMessagesSpeakPlainlyAndNameTheModel() {
+        XCTAssertEqual(ModelReadinessState.missingModel("video-ltx2-fast").title, "Model needed")
+        XCTAssertEqual(
+            ModelReadinessState.missingModel("video-ltx2-fast").message(titles: .none),
+            "LTX-2 Fast isn't on this Mac yet. Get it once and it stays."
+        )
+        XCTAssertEqual(ModelReadinessState.unsupported("x").title, "Can't run on this Mac")
+        XCTAssertEqual(ModelReadinessState.unknown("x").title, "Couldn't check the model")
+        XCTAssertEqual(ModelReadinessState.checking.message(titles: .none), "Checking whether the model is on this Mac…")
+        XCTAssertEqual(ModelReadinessState.ready.message(titles: .none), "Ready to run on this Mac.")
+
+        // Before the first probe the state is its own, never a failure: a neutral heading, and
+        // the run stays blocked until the check answers.
+        XCTAssertEqual(ModelReadinessState.notChecked.title, "Not checked yet")
+        XCTAssertEqual(ModelReadinessState.notChecked.message(titles: .none), "The model hasn't been checked yet.")
+        XCTAssertTrue(ModelReadinessState.notChecked.blocksRun)
+        XCTAssertNotEqual(ModelReadinessState.notChecked, .unknown("Not checked yet."))
+
+        // A failed check keeps the CLI's last meaningful line as detail beside the plain message.
+        let failed = ModelReadinessState.unknown(MereRunController.modelListUnavailableMessage,
+                                                 detail: "models root /Volumes/Models is not mounted")
+        XCTAssertEqual(failed.message(titles: .none), MereRunController.modelListUnavailableMessage)
+        XCTAssertEqual(failed.detail, "models root /Volumes/Models is not mounted")
+        XCTAssertNil(ModelReadinessState.unknown("x").detail)
+        XCTAssertEqual(StudioFailureSummary.lastMeaningfulLine(in: "warning: slow disk\nerror: no such root\n"), "No such root")
+        XCTAssertNil(StudioFailureSummary.lastMeaningfulLine(in: "\n  \n"))
+
+        let absent = ModelReadinessParser.state(for: "vision-segment-sam31", modelListOutput: "ID Category Status\n")
+        XCTAssertEqual(
+            absent,
+            .unknown("Sam31 isn't in the model list. Check the model location in Settings, or choose another model.")
+        )
+
+        let memory = StudioModelCapability(
+            modelID: "video-ltx2-fast", isSupported: false, minimumUnifiedMemoryGB: 32,
+            recommendedUnifiedMemoryGB: 64, download: nil, reason: nil
+        )
+        XCTAssertEqual(memory.unavailableMessage(titles: .none), "LTX-2 Fast needs at least 32 GB of unified memory.")
+        let unsupported = StudioModelCapability(
+            modelID: "video-ltx2-fast", isSupported: false, minimumUnifiedMemoryGB: nil,
+            recommendedUnifiedMemoryGB: nil, download: nil, reason: nil
+        )
+        XCTAssertEqual(unsupported.unavailableMessage(titles: .none), "LTX-2 Fast can't run on this Mac.")
+        for message in [MereRunController.capabilitiesUnavailableMessage, MereRunController.modelListUnavailableMessage] {
+            XCTAssertFalse(message.contains("CLI"), message)
+            XCTAssertFalse(message.contains("capabilities"), message)
         }
     }
 
@@ -2228,12 +2293,12 @@ final class StudioTypesTests: XCTestCase {
 
         XCTAssertTrue(nano.isSupported)
         XCTAssertEqual(nano.minimumUnifiedMemoryGB, 12)
-        XCTAssertNil(nano.unavailableMessage)
+        XCTAssertNil(nano.unavailableMessage(titles: .none))
         XCTAssertFalse(max.isSupported)
         XCTAssertEqual(max.minimumUnifiedMemoryGB, 48)
         XCTAssertEqual(max.recommendedUnifiedMemoryGB, 64)
         XCTAssertEqual(
-            max.unavailableMessage,
+            max.unavailableMessage(titles: .none),
             "Requires at least 48 GB unified memory; detected 32 GB."
         )
     }
@@ -2280,7 +2345,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(gemma.isSupported)
         XCTAssertEqual(gemma.minimumUnifiedMemoryGB, 48)
         XCTAssertEqual(
-            gemma.unavailableMessage,
+            gemma.unavailableMessage(titles: .none),
             "Requires at least 48 GB unified memory; detected 32 GB."
         )
     }

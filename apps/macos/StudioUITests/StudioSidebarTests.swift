@@ -65,6 +65,34 @@ final class StudioSidebarTests: XCTestCase {
         XCTAssertEqual(StudioMachineStatus.ready(installedModels: 2).modelsDetail, "2 installed")
     }
 
+    func testSkippedModelLocationsTurnTheDotYellowAndExplainThePrompt() {
+        let stalled = StudioSkippedModelLocation(path: "/Volumes/MODELS", problem: .unresponsive)
+        let denied = StudioSkippedModelLocation(path: "/Volumes/Home/models", problem: .denied)
+        let status = StudioServerStatus(
+            health: "down", loadedModels: [], installedCount: 90, skippedLocations: [stalled, denied]
+        )
+        let machine = StudioMachineStatus(serverStatus: status, probeTimedOut: false, isServing: false)
+
+        XCTAssertEqual(machine, .ready(installedModels: 90, skippedLocations: [stalled, denied]))
+        XCTAssertEqual(machine.summary, "Ready · 90 models")
+        XCTAssertEqual(machine.dotColor, MereRunTheme.yellow)
+        XCTAssertEqual(machine.locationNotice?.title, "Model drive not responding")
+        XCTAssertEqual(
+            machine.locationNotice?.detail,
+            "/Volumes/MODELS and 1 more did not answer. macOS may be asking to allow access to it."
+        )
+
+        let deniedOnly = StudioMachineStatus.serving(installedModels: 3, loadedModel: nil, skippedLocations: [denied])
+        XCTAssertEqual(deniedOnly.locationNotice?.title, "Model drive access denied")
+        XCTAssertEqual(
+            deniedOnly.locationNotice?.detail,
+            "macOS denied access to /Volumes/Home/models. Allow MereRun in Files & Folders."
+        )
+
+        XCTAssertNil(StudioMachineStatus.ready(installedModels: 90).locationNotice)
+        XCTAssertEqual(StudioMachineStatus.ready(installedModels: 90).dotColor, MereRunTheme.green)
+    }
+
     func testCheckingGracePeriodOutlastsTheProbeTimeout() {
         // The controller's status probe gives the CLI about a second; the footer must wait longer
         // than one probe before calling the server unreachable, and not so long that it feels stuck.

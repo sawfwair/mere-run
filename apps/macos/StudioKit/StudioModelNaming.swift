@@ -1,13 +1,19 @@
 import Foundation
 
 /// How a model id reads to a person. One place, so the composer chip, the Converse thread
-/// header, the inspector, the Models page, and the Activity popover all print the same name for
-/// the same id. The exact id stays in tooltips and in the Command view, so the friendly name
-/// never hides what the CLI actually expects.
+/// header, the inspector, the Models page, the Adapters page, the readiness card, and the
+/// Activity popover all print the same name for the same id: the title the model inventory
+/// reports when it is known, else a name formatted from the id. The exact id stays in tooltips
+/// and in the Command view, so the friendly name never hides what the CLI actually expects.
 package enum StudioModelNaming {
     /// The mode's template default, shown as "Auto".
     package static func defaultModelID(for mode: StudioMode) -> String {
         CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
+    }
+
+    /// The name for an inventory row: its own title, else the id formatted.
+    package static func displayName(_ row: StudioModelInventoryRow) -> String {
+        row.title ?? formattedName(row.id)
     }
 
     /// The model id a draft actually runs with: its explicit model, else the mode's template
@@ -19,16 +25,22 @@ package enum StudioModelNaming {
 
     /// What a picker shows for a draft: the resolved model's name, or "Auto" when the mode has
     /// no default.
-    package static func displayLabel(for mode: StudioMode, model: String) -> String {
+    package static func displayLabel(for mode: StudioMode, model: String, titles: StudioModelTitles) -> String {
         let resolved = resolvedModelID(for: mode, model: model)
-        return resolved.isEmpty ? "Auto" : displayName(resolved)
+        return resolved.isEmpty ? "Auto" : displayName(resolved, titles: titles)
     }
 
-    /// A human-facing label for a model id: drop the modality/category prefix and title-case the
-    /// distinctive remainder, keeping the casing the model cards print
-    /// ("text-agent-deepseek-v4-flash" → "Deepseek V4 Flash", "text-chat-qwen3.6-4b" →
-    /// "Qwen3.6 4B", "vision-chat-qwen3.6-vl-4b" → "Qwen3.6-VL 4B").
-    package static func displayName(_ id: String) -> String {
+    /// A human-facing label for a model id: the inventory's title when `titles` has one, else the
+    /// id with its modality/category prefix dropped and the distinctive remainder title-cased,
+    /// keeping the casing the model cards print ("text-agent-deepseek-v4-flash" → "Deepseek V4
+    /// Flash", "text-chat-qwen3.6-4b" → "Qwen3.6 4B", "vision-chat-qwen3.6-vl-4b" → "Qwen3.6-VL
+    /// 4B"). Callers pass the titles rather than reading a shared table, so a surface re-renders
+    /// when the inventory it observes changes and a presenter stays a pure function.
+    package static func displayName(_ id: String, titles: StudioModelTitles) -> String {
+        titles[id] ?? formattedName(id)
+    }
+
+    private static func formattedName(_ id: String) -> String {
         let leaf = id.components(separatedBy: "/").last ?? id
         var core = leaf
         for prefix in categoryPrefixes where core.hasPrefix(prefix) {
@@ -86,6 +98,25 @@ package enum StudioModelNaming {
         guard token.count >= 2, let last = token.last, last == "b" || last == "m" else { return false }
         let digits = token.dropLast()
         return !digits.isEmpty && digits.allSatisfy { $0.isNumber || $0 == "." } && digits.contains { $0.isNumber }
+    }
+}
+
+/// The titles the model inventory reports, keyed by id: the one source every surface names a
+/// model from. `StudioModelStore` publishes a value with each inventory snapshot; views read it
+/// from the environment and presenters take it as a parameter, so nothing names a model from a
+/// table that could be stale or shared across windows and tests.
+package struct StudioModelTitles: Equatable, Sendable {
+    /// No inventory yet: every name falls back to the formatted id.
+    package static let none = StudioModelTitles()
+
+    private let byID: [String: String]
+
+    package init(rows: [StudioModelInventoryRow] = []) {
+        byID = Dictionary(rows.compactMap { row in row.title.map { (row.id, $0) } }, uniquingKeysWith: { first, _ in first })
+    }
+
+    package subscript(id: String) -> String? {
+        byID[id]
     }
 }
 
@@ -168,6 +199,12 @@ package struct StudioModelInventoryRow: Identifiable, Equatable {
 
     package var isInstalled: Bool {
         status.lowercased() == "installed"
+    }
+
+    /// Not on this Mac at all, as opposed to present but invalid, offline, or awaiting
+    /// conversion — the one status a pull answers.
+    package var isMissing: Bool {
+        status.lowercased() == "missing"
     }
 
     package var displayedSize: String {

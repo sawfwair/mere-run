@@ -98,6 +98,28 @@ package enum StudioFailureSummary {
         return "The run failed."
     }
 
+    /// The last meaningful line of some captured text, cleaned, or nil when nothing in it says
+    /// anything: what a readiness card keeps from a probe's stderr under its plain heading.
+    package static func lastMeaningfulLine(in text: String) -> String? {
+        text.components(separatedBy: .newlines).reversed().first(where: isMeaningful).map(cleaned)
+    }
+
+    /// The managed model a failed run is missing, when that is what the failure was about: the
+    /// run failed (not cancelled or interrupted), the inventory lists its model as missing —
+    /// not invalid, offline, or awaiting conversion, which a pull would not fix — and the
+    /// failure line itself names the model, so a model removed after an unrelated failure keeps
+    /// the CLI's own reason.
+    package static func missingModel(
+        for item: StudioLibraryItem,
+        in inventory: [StudioModelInventoryRow],
+        failureLine: String
+    ) -> StudioModelInventoryRow? {
+        guard item.status == .failed, let modelID = item.recordedModelID,
+              let row = inventory.first(where: { $0.id == modelID }), row.isMissing,
+              failureLine.range(of: modelID, options: .caseInsensitive) != nil else { return nil }
+        return row
+    }
+
     package static func isMeaningful(_ rawLine: String) -> Bool {
         let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard line.count > 3 else { return false }

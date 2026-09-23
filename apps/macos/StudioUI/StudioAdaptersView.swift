@@ -27,6 +27,7 @@ struct StudioAdapterRow: Decodable, Equatable, Identifiable {
 struct StudioAdaptersView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
+    @Environment(\.studioModelTitles) private var titles
 
     let activeModelID: String
     let onUse: (StudioAdapterRow) -> Void
@@ -100,7 +101,7 @@ struct StudioAdaptersView: View {
             } label: {
                 Label("Store", systemImage: "folder")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
             .disabled(payload == nil)
 
             Button {
@@ -108,14 +109,14 @@ struct StudioAdaptersView: View {
             } label: {
                 Label("Use local…", systemImage: "doc.badge.plus")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
 
             Button {
                 Task { await refresh() }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
             .disabled(isRefreshing)
         }
         .padding(.horizontal, 18)
@@ -184,10 +185,11 @@ struct StudioAdaptersView: View {
                                             .font(.system(size: 12.5, weight: .semibold))
                                             .foregroundStyle(MereRunTheme.textPrimary)
                                             .lineLimit(1)
-                                        Text(row.baseModelID)
+                                        Text(StudioModelNaming.displayName(row.baseModelID, titles: titles))
                                             .font(MereRunTheme.captionFont)
                                             .foregroundStyle(MereRunTheme.textMuted)
                                             .lineLimit(1)
+                                            .help("Base model: \(row.baseModelID)")
                                     }
                                     Spacer()
                                 }
@@ -255,7 +257,7 @@ struct StudioAdaptersView: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
 
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
-                detailRow("Base model", row.baseModelID)
+                detailRow("Base model", StudioModelNaming.displayName(row.baseModelID, titles: titles))
                 detailRow("Format", row.format)
                 detailRow("License", row.license)
                 detailRow("Size", ByteCountFormatter.string(fromByteCount: row.byteCount, countStyle: .file))
@@ -263,9 +265,11 @@ struct StudioAdaptersView: View {
 
             if !activeModelID.isBlank, activeModelID != row.baseModelID {
                 Label(
-                    "The active model is \(activeModelID). This adapter targets \(row.baseModelID).",
+                    "The active model is \(StudioModelNaming.displayName(activeModelID, titles: titles)). "
+                        + "This adapter targets \(StudioModelNaming.displayName(row.baseModelID, titles: titles)).",
                     systemImage: "exclamationmark.triangle.fill"
                 )
+                .help("Active: \(activeModelID) · Adapter base: \(row.baseModelID)")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.yellow)
             }
@@ -277,23 +281,21 @@ struct StudioAdaptersView: View {
                     } label: {
                         Label("Use in Studio", systemImage: "checkmark.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MereRunTheme.accent)
+                    .buttonStyle(.merePrimary)
 
                     Button {
                         reveal(row)
                     } label: {
                         Label("Reveal", systemImage: "magnifyingglass")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
                 } else {
                     Button {
                         pull(row)
                     } label: {
                         Label(pullingID == row.id ? "Queued" : "Download", systemImage: "arrow.down.circle")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MereRunTheme.accent)
+                    .buttonStyle(.merePrimary)
                     .disabled(pullingID != nil)
                 }
             }
@@ -363,22 +365,18 @@ struct StudioAdaptersView: View {
                                 Button(selectedTrainingID == item.id ? "Hide" : "Inspect") {
                                     selectedTrainingID = selectedTrainingID == item.id ? nil : item.id
                                 }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
+                                .buttonStyle(.mereSecondary)
                                 if let output = adapterOutput(for: item) {
                                     Button("Use") {
                                         onUseLocal(output.path)
                                     }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(MereRunTheme.accent)
-                                    .controlSize(.small)
+                                    .buttonStyle(.merePrimary)
                                 }
                                 if let output = item.outputURL {
                                     Button("Reveal") {
                                         NSWorkspace.shared.activateFileViewerSelecting([output])
                                     }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
+                                    .buttonStyle(.mereSecondary)
                                 }
                             }
                             if selectedTrainingID == item.id {
@@ -404,7 +402,7 @@ struct StudioAdaptersView: View {
             Label(title, systemImage: symbol)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.mereSecondary)
     }
 
     @MainActor

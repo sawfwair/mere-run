@@ -18,7 +18,9 @@ package struct StudioRootView: View {
     }
 
     package var body: some View {
-        StudioWorkspaceView(controller: controller, library: library, navigation: navigation, seededDrafts: seededDrafts)
+        StudioModelTitlesScope(store: controller.modelStore) {
+            StudioWorkspaceView(controller: controller, library: library, navigation: navigation, seededDrafts: seededDrafts)
+        }
     }
 }
 
@@ -74,6 +76,15 @@ private struct StudioWorkspaceView: View {
     /// A run whose user-visible destination could not be created, explained once per launch.
     @State private var outputFallbackNotice: String?
     @State private var outputFallbackAnnounced = false
+    /// The "B" side Library ▸ Compare asked for, handed to the focused result once it opens.
+    @State private var pendingComparison: StudioResultSelection?
+
+    /// Once per session: the first run that moved says so; later ones would only repeat it.
+    private func announceOutputFallback(_ reason: String) {
+        guard !outputFallbackAnnounced else { return }
+        outputFallbackAnnounced = true
+        outputFallbackNotice = StudioOutputLocation.fallbackNotice(reason)
+    }
     @ObservedObject private var models: StudioModelStore
     private var modelInventory: [StudioModelInventoryRow] { models.rows }
     private var modelInventorySummary: StudioModelInventorySummary? {
@@ -179,9 +190,9 @@ private struct StudioWorkspaceView: View {
         return library.items.first { $0.id == activeConversationID && $0.isConversation }
     }
 
-    private var activeConversationLiveText: String? {
+    private var activeConversationLiveReply: ConversationTranscript.Reply? {
         guard let activeConversationID else { return nil }
-        return controller.conversationLiveText[activeConversationID]
+        return controller.conversationLiveReplies[activeConversationID]
     }
 
     private var activeConversationRunning: Bool {
@@ -190,7 +201,21 @@ private struct StudioWorkspaceView: View {
     }
 
     private var readiness: ModelReadinessState {
-        controller.readinessByMode[mode] ?? .unknown("Readiness has not been checked yet.")
+        controller.readinessByMode[mode] ?? .notChecked
+    }
+
+    /// The readiness card's next steps for the current mode: the composer's model field and
+    /// inventory (so "Choose another model" is the chip's menu), whether the required model's
+    /// terms send the user to Models first, and the shell's pull, navigate, and recheck.
+    private var readinessActions: StudioReadinessActions {
+        StudioReadinessActions(
+            mode: mode,
+            model: $prompt.draft.model,
+            modelInventory: modelInventory,
+            pullModel: pullModel,
+            openModels: { navigation.open(task: .modelsInstalled) },
+            recheck: refreshReadiness
+        )
     }
 
     /// The seed the mode's most recent run was queued with, for the seed chip's "Reuse last".
@@ -199,26 +224,6 @@ private struct StudioWorkspaceView: View {
             .filter { $0.mode == mode }
             .compactMap { $0.commandDraft?.seed.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
-    }
-
-    private var selectedCapabilityRequirement: StudioCapabilityRequirement? {
-        StudioCommandAdapter.capabilityRequirement(for: mode, draft: draft)
-    }
-
-    private var selectedCapability: StudioModelCapability? {
-        guard let selectedCapabilityRequirement,
-              case .managedModel(let modelID) = selectedCapabilityRequirement else {
-            return nil
-        }
-        return controller.modelCapabilitiesByID[modelID]
-    }
-
-    private var selectedUnavailableCapabilityMessage: String? {
-        guard let selectedCapabilityRequirement,
-              case .unavailable(let message) = selectedCapabilityRequirement else {
-            return nil
-        }
-        return message
     }
 
     /// Domains whose default task needs a managed model this machine cannot run.
@@ -231,7 +236,7 @@ private struct StudioWorkspaceView: View {
             let requirement = StudioCommandAdapter.capabilityRequirement(for: candidate, draft: candidateDraft)
             guard let requirement,
                   case .managedModel(let modelID) = requirement,
-                  let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage else {
+                  let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage(titles: models.titles) else {
                 continue
             }
             messages[domain] = message
@@ -531,6 +536,8 @@ private struct StudioWorkspaceView: View {
             onExport: exportLibraryItems,
             onRetry: retryLibraryItem,
             onEdit: editLibraryItem,
+            onUseSettings: useLibraryItemSettings,
+            onCompare: compareLibraryItems,
             leadingInset: windowChromeInset
         )
     }
@@ -695,7 +702,8 @@ private struct StudioWorkspaceView: View {
                 onModelsChanged: refreshReadiness,
                 adapterTargetTitle: mode.destination.domain.title,
                 onUseAdapter: applyAdapter,
-                onTrain: openTraining
+                onTrain: openTraining,
+                onSetDefaultModel: setDefaultModel
             )
         case .modelsLocations:
             StudioModelLocationsView(onLocationsChanged: {
@@ -855,7 +863,8 @@ private struct StudioWorkspaceView: View {
         VStack(spacing: 0) {
             if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
                 StudioResultWorkspaceView(item: item, url: selection.url, items: library.items,
-                    onClose: { focusedResult = nil; promptFocused = true }, onVary: varyLibraryItem,
+                    initialComparison: pendingComparison,
+                    onClose: { focusedResult = nil; pendingComparison = nil; promptFocused = true }, onVary: varyLibraryItem,
                     onSave: saveOutput, onContinue: continueResult)
             } else if mode.isConversational {
                 converseSurface
@@ -917,7 +926,7 @@ private struct StudioWorkspaceView: View {
         if showsConversation {
             StudioConversationView(
                 item: activeConversationItem,
-                liveText: activeConversationLiveText,
+                liveReply: activeConversationLiveReply,
                 isRunning: activeConversationRunning,
                 mode: mode,
                 onNewChat: startNewConversation,
@@ -937,7 +946,9 @@ private struct StudioWorkspaceView: View {
                 readiness: readiness,
                 pullJob: activePullJob,
                 actions: feedActions,
-                analyze: analyzeActions
+                readinessActions: readinessActions,
+                analyze: analyzeActions,
+                editing: analyzePromptEditing
             )
         } else {
             StudioFeedCanvas(
@@ -947,7 +958,8 @@ private struct StudioWorkspaceView: View {
                 pullJob: activePullJob,
                 highlightedID: highlightedCardID,
                 newResultID: $newResultID,
-                actions: feedActions
+                actions: feedActions,
+                readinessActions: readinessActions
             )
         }
     }
@@ -968,6 +980,7 @@ private struct StudioWorkspaceView: View {
         }
         navigation.selectedLibraryID = item.id
         controller.taskSessions.rememberSelection(item.id, for: mode)
+        pendingComparison = nil
         focusedResult = StudioResultSelection(itemID: item.id, url: url)
     }
 
@@ -978,11 +991,79 @@ private struct StudioWorkspaceView: View {
         promptFocused = true
     }
 
+    /// Library ▸ "Use these settings": the run's task opens on its recorded prompt, model, and
+    /// options, ready to tweak. Another task's run switches there first; `activateMode` then
+    /// reads the parked draft this wrote.
+    private func useLibraryItemSettings(_ item: StudioLibraryItem) {
+        guard prompt.useSettings(from: item) else {
+            studioError = "This run's command can't be loaded into the composer. Use Edit command… to change it."
+            return
+        }
+        studioError = nil
+        libraryOverlay = false
+        navigation.selectedLibraryID = item.id
+        controller.taskSessions.rememberSelection(item.id, for: item.mode)
+        if item.mode != mode || !showsPromptWorkspace {
+            navigation.open(destination: item.mode.destination)
+        } else {
+            refreshReadiness()
+        }
+        promptFocused = true
+    }
+
+    /// Library ▸ Compare on two finished image runs: focuses the first with the second beside
+    /// it, the same view Focus ▸ Compare reaches, so the pair is one click from the column.
+    private func compareLibraryItems(_ first: StudioLibraryItem, _ second: StudioLibraryItem) {
+        func picture(of item: StudioLibraryItem) -> URL? {
+            item.allArtifactURLs.first { StudioOutputFileKind.classify($0) == .image && FileManager.default.fileExists(atPath: $0.path) }
+        }
+        guard let firstURL = picture(of: first), let secondURL = picture(of: second) else {
+            studioError = "Compare needs two image results that are still on disk."
+            return
+        }
+        studioError = nil
+        libraryOverlay = false
+        navigation.selectedLibraryID = first.id
+        controller.taskSessions.rememberSelection(first.id, for: first.mode)
+        pendingComparison = StudioResultSelection(itemID: second.id, url: secondURL)
+        controller.taskSessions.setFocus(StudioResultSelection(itemID: first.id, url: firstURL), for: first.mode.task)
+        if first.mode != mode || !showsPromptWorkspace {
+            navigation.open(destination: first.mode.destination)
+        }
+    }
+
+    /// Models ▸ "Use for … by default": records the choice and moves the mode's composer onto
+    /// it now, then re-checks readiness for the model that will actually run.
+    private func setDefaultModel(_ modelID: String?, for defaultMode: StudioMode) {
+        prompt.setPreferredModel(modelID, for: defaultMode)
+        if defaultMode == mode { refreshReadiness() }
+    }
+
     private var analyzeActions: StudioAnalyzeActions {
         StudioAnalyzeActions(
             replaceInput: chooseAttachment,
             openTask: openSiblingTask,
             save: saveAnalyzeResult
+        )
+    }
+
+    /// Segment and Track draw their prompts and pick their frames on the draft itself, so the
+    /// canvas, the composer's validation, and the Command view all read one set of fields.
+    private var analyzePromptEditing: StudioAnalyzePromptEditing? {
+        guard destination.task.drawsRegionPrompts else { return nil }
+        return StudioAnalyzePromptEditing(
+            regionPrompts: Binding(
+                get: { draft.visionRegionPrompts ?? [] },
+                set: { draft.visionRegionPrompts = $0.isEmpty ? nil : $0 }
+            ),
+            initFrame: Binding(
+                get: { draft.visionInitFrame ?? 0 },
+                set: { draft.visionInitFrame = $0 == 0 ? nil : $0 }
+            ),
+            endFrame: Binding(
+                get: { draft.visionEndFrame },
+                set: { draft.visionEndFrame = $0 }
+            )
         )
     }
 
@@ -996,10 +1077,8 @@ private struct StudioWorkspaceView: View {
             remove: removeQueued,
             retry: retryLibraryItem,
             delete: { deleteLibraryItem($0.id) },
+            useSettings: useLibraryItemSettings,
             pullModel: pullModel,
-            showDetails: {
-                if !navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
-            },
             useExample: useExamplePrompt,
             attach: chooseAttachment,
             focus: focusResult
@@ -1011,7 +1090,7 @@ private struct StudioWorkspaceView: View {
         StudioConverseView(
             mode: mode,
             item: activeConversationItem,
-            liveText: activeConversationLiveText,
+            liveReply: activeConversationLiveReply,
             isRunning: activeConversationRunning,
             readiness: readiness,
             error: studioError,
@@ -1019,8 +1098,7 @@ private struct StudioWorkspaceView: View {
             modelInventory: modelInventory,
             model: $prompt.draft.model,
             systemPrompt: $prompt.draft.secondaryText,
-            onPullModel: pullModel,
-            onShowDetails: { openConsole() },
+            readinessActions: readinessActions,
             onShowModels: { navigation.open(task: .modelsInstalled) },
             onCopy: copyToClipboard,
             onRetry: retryLastTurn,
@@ -1496,10 +1574,7 @@ private struct StudioWorkspaceView: View {
                 return
             }
             guard let submission = try prompt.runPrompt(inventory: modelInventory) else { return }
-            if let reason = submission.outputFallbackReason, !outputFallbackAnnounced {
-                outputFallbackAnnounced = true
-                outputFallbackNotice = "\(reason) Saving to \(StudioOutputLocation.abbreviate(StudioOutputLocation.appOutputsRoot())) instead."
-            }
+            if let reason = submission.outputFallbackReason { announceOutputFallback(reason) }
             navigation.selectedLibraryID = submission.request.conversationID ?? submission.request.id
         } catch {
             studioError = error.localizedDescription
@@ -1555,10 +1630,11 @@ private struct StudioWorkspaceView: View {
     }
 
     /// A contextual next step on an Analyze result: opens the sibling task with this run's input
-    /// and prompt carried over, so "Segment these" continues from the same picture.
-    private func openSiblingTask(_ task: StudioTask) {
+    /// and prompt carried over, so "Segment these" continues from the same picture — with what
+    /// Find found already drawn as its box prompts.
+    private func openSiblingTask(_ task: StudioTask, detections: [StudioAnalyzeDetection]) {
         if task.mode != nil {
-            prompt.prepareAnalyzeHandoff(to: task)
+            prompt.prepareAnalyzeHandoff(to: task, detections: detections)
             navigation.selectedLibraryID = nil
         }
         // A task without a composer reads this same draft, so its input is already carried.
@@ -1789,26 +1865,43 @@ private struct StudioWorkspaceView: View {
 
     // MARK: - Readiness and models
 
+    /// The readiness card's Get the model: the model this mode's composer needs.
     private func pullModel() {
+        pull(modelID: nil)
+    }
+
+    /// A failed card's Get the model: the model that run needed, whatever the composer holds now.
+    private func pullModel(_ modelID: String) {
+        pull(modelID: modelID)
+    }
+
+    /// One pull path for both, so a model whose publisher asks for terms first gets the same
+    /// acknowledgement sheet wherever the pull starts.
+    private func pull(modelID: String?) {
         studioError = nil
+        var target = draft
+        if let modelID { target.model = modelID }
 
-        if let message = selectedUnavailableCapabilityMessage {
+        switch StudioCommandAdapter.capabilityRequirement(for: mode, draft: target) {
+        case .unavailable(let message):
             studioError = message
             return
+        case .managedModel(let required):
+            if let message = controller.modelCapabilitiesByID[required]?.unavailableMessage(titles: models.titles) {
+                studioError = message
+                return
+            }
+        case nil:
+            break
         }
 
-        if let message = selectedCapability?.unavailableMessage {
-            studioError = message
-            return
-        }
-
-        guard readiness.canPull else {
-            studioError = readiness.message
+        if modelID == nil, !readiness.canPull {
+            studioError = readiness.message(titles: models.titles)
             return
         }
 
         do {
-            guard let request = try StudioCommandAdapter.pullRequest(for: mode, draft: draft) else {
+            guard let request = try StudioCommandAdapter.pullRequest(for: mode, draft: target) else {
                 studioError = "This mode does not need a managed model."
                 return
             }
@@ -1861,7 +1954,9 @@ private struct StudioWorkspaceView: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = mode.acceptedTypes.isEmpty ? [.item] : mode.acceptedTypes
         if panel.runModal() == .OK, let url = panel.url {
-            draft.inputPath = url.path
+            var next = draft
+            next.replaceInput(url.path)
+            draft = next
             studioError = nil
         }
     }

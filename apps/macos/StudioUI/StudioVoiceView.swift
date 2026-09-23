@@ -208,16 +208,16 @@ final class StudioVoiceRecorder: NSObject, ObservableObject {
             return
         }
 
-        let directory = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Music/MereRun/Recordings", isDirectory: true)
+        // A reference recording is filed with the voice it will drive, wherever Settings sends
+        // Voice work.
+        let proposed = StudioOutputLocation.specialistFile(
+            domain: .voice,
+            name: "voice-reference",
+            fileExtension: "wav",
+            now: StudioDisplayClock.now
+        )
         do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyyMMdd-HHmmss"
-            let url = directory.appendingPathComponent(
-                "voice-reference-\(formatter.string(from: StudioDisplayClock.now)).wav",
-                isDirectory: false
-            )
+            let url = Self.recordingURL(proposed)
             let settings: [String: Any] = [
                 AVFormatIDKey: Int(kAudioFormatLinearPCM),
                 AVSampleRateKey: 48_000,
@@ -238,6 +238,21 @@ final class StudioVoiceRecorder: NSObject, ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             isRecording = false
+        }
+    }
+
+    /// The proposed path once its folder exists — or, when that folder cannot be made (an
+    /// unplugged drive chosen in Settings), the same file name under App Outputs, so a
+    /// recording never fails for want of somewhere to go.
+    private static func recordingURL(_ proposed: URL) -> URL {
+        let fileManager = FileManager.default
+        do {
+            try fileManager.createDirectory(at: proposed.deletingLastPathComponent(), withIntermediateDirectories: true)
+            return proposed
+        } catch {
+            let fallback = StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
+            try? fileManager.createDirectory(at: fallback, withIntermediateDirectories: true)
+            return fallback.appendingPathComponent(proposed.lastPathComponent, isDirectory: false)
         }
     }
 
@@ -273,6 +288,8 @@ struct StudioVoiceView: View {
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @StudioStoredValue("Voice.transcriptText") private var transcriptText = ""
     @StudioStoredValue("Voice.transcriptURL") private var transcriptURL: URL? = nil
+    /// The speaker timeline of the current diarization run, read back from the JSON it wrote.
+    @State private var diarization: (url: URL, document: StudioDiarizationDocument)?
     @State private var statusMessage: String?
     @StudioStoredValue("Voice.comparisonA") private var comparisonA: UUID? = nil
     @StudioStoredValue("Voice.comparisonB") private var comparisonB: UUID? = nil
@@ -294,12 +311,12 @@ struct StudioVoiceView: View {
         synthesis.model = initialDraft.model.localizedCaseInsensitiveContains("speech")
             ? initialDraft.model
             : synthesis.model
-        synthesis.outputPath = Self.timestampedOutput(prefix: "voice", extension: "wav")
+        synthesis.outputPath = Self.timestampedOutput(domain: .voice, prefix: "voice", extension: "wav")
         _synthesisDraft = StudioStoredValue(initialValue: synthesis, "Voice.synthesisDraft")
 
         var transcription = CommandCatalog.template(id: .speechTranscribe)?.defaultDraft() ?? CommandDraft()
         transcription.inputPath = initialDraft.inputPath
-        transcription.outputPath = Self.timestampedOutput(prefix: "transcript", extension: "txt")
+        transcription.outputPath = Self.timestampedOutput(domain: .audio, prefix: "transcript", extension: "txt")
         _transcriptionDraft = StudioStoredValue(initialValue: transcription, "Voice.transcriptionDraft")
 
         _listenDraft = StudioStoredValue(
@@ -307,7 +324,7 @@ struct StudioVoiceView: View {
 
         var diarization = CommandCatalog.template(id: .speechDiarize)?.defaultDraft() ?? CommandDraft()
         diarization.inputPath = initialDraft.inputPath
-        diarization.outputPath = Self.timestampedOutput(prefix: "speakers", extension: "json")
+        diarization.outputPath = Self.timestampedOutput(domain: .audio, prefix: "speakers", extension: "json")
         _diarizationDraft = StudioStoredValue(initialValue: diarization, "Voice.diarizationDraft")
 
         let profile = CommandCatalog.template(id: .speechProfileCreate)?.defaultDraft() ?? CommandDraft()
@@ -335,6 +352,7 @@ struct StudioVoiceView: View {
         .foregroundStyle(MereRunTheme.textPrimary)
         .studioTaskCommand(taskCommand.0, draft: taskCommand.1)
         .task { refreshProfiles() }
+        .task(id: requestID) { loadDiarizationFromCurrentRun() }
         .onReceive(recorderTicker) { _ in
             if recorder.isRecording {
                 recorder.refresh()
@@ -350,6 +368,9 @@ struct StudioVoiceView: View {
             ].contains(result.templateID) else { return }
             if result.templateID == .speechTranscribe, result.exitCode == 0 {
                 loadTranscriptFromCurrentRun()
+            }
+            if result.templateID == .speechDiarize, result.exitCode == 0 {
+                loadDiarizationFromCurrentRun()
             }
             if result.templateID == .speechProfileCreate || result.templateID == .speechProfileDelete {
                 refreshProfiles()
@@ -397,8 +418,7 @@ struct StudioVoiceView: View {
                 )
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(recorder.isRecording ? MereRunTheme.red : MereRunTheme.accent)
+            .buttonStyle(.merePrimary(tint: recorder.isRecording ? MereRunTheme.red : MereRunTheme.accent))
             if recorder.isRecording {
                 Label(
                     StudioTimeFormat.string(recorder.duration),
@@ -534,7 +554,7 @@ struct StudioVoiceView: View {
                 Button("Use latest recording") {
                     transcriptionDraft.inputPath = url.path
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.mereSecondary)
             }
 
             sectionTitle("Transcription")
@@ -599,7 +619,7 @@ struct StudioVoiceView: View {
                 Button("Use latest recording") {
                     diarizationDraft.inputPath = url.path
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.mereSecondary)
             }
 
             sectionTitle("Speaker detection")
@@ -773,8 +793,7 @@ struct StudioVoiceView: View {
                 Spacer()
                 if let transcriptURL {
                     Button("Save edits") { saveTranscript(to: transcriptURL) }
-                        .buttonStyle(.borderedProminent)
-                        .tint(MereRunTheme.accent)
+                        .buttonStyle(.merePrimary)
                 }
             }
             if !transcriptionDraft.inputPath.isBlank {
@@ -801,7 +820,7 @@ struct StudioVoiceView: View {
                 Text("Speaker timeline")
                     .font(MereRunTheme.sectionFont)
                 Spacer()
-                Text("Sortformer · local on this Mac")
+                Text(diarization?.document.summary ?? "Sortformer · local on this Mac")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }
@@ -810,7 +829,16 @@ struct StudioVoiceView: View {
                     .frame(height: 150)
                     .merePanel()
             }
-            StudioSpecialistResultView(requestID: requestID, preferredKinds: [.text, .audio])
+            if let diarization, let requestID, let item = library.items.first(where: { $0.id == requestID }) {
+                ScrollView {
+                    StudioSpeakerTimelineView(item: item, document: diarization.document) {
+                        saveDiarization(from: diarization.url)
+                    }
+                }
+            } else {
+                // An RTTM timeline, a run still going, or a failure: the file and the log.
+                StudioSpecialistResultView(requestID: requestID, preferredKinds: [.text, .audio])
+            }
         }
         .padding(18)
     }
@@ -833,7 +861,7 @@ struct StudioVoiceView: View {
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
                 }
                 StudioAudioPlayerView(url: profile.referenceAudioURL)
                     .frame(height: 230)
@@ -941,7 +969,7 @@ struct StudioVoiceView: View {
             library: library
         )
         statusMessage = "Voice render submitted."
-        synthesisDraft.outputPath = Self.timestampedOutput(prefix: "voice", extension: "wav")
+        synthesisDraft.outputPath = Self.timestampedOutput(domain: .voice, prefix: "voice", extension: "wav")
         refreshComparisons()
     }
 
@@ -1056,6 +1084,39 @@ struct StudioVoiceView: View {
         transcriptText = text
     }
 
+    /// Reads the JSON timeline of the current run once it exists; nothing to read for any other
+    /// run, an RTTM timeline, or a run that has not finished.
+    private func loadDiarizationFromCurrentRun() {
+        guard let requestID,
+              let item = library.items.first(where: { $0.id == requestID }),
+              item.templateID == .speechDiarize,
+              item.status == .completed else {
+            diarization = nil
+            return
+        }
+        let url = item.allArtifactURLs.first { $0.pathExtension.lowercased() == "json" }
+            ?? URL(fileURLWithPath: item.commandDraft?.outputPath ?? diarizationDraft.outputPath)
+        diarization = StudioDiarizationDocument.load(from: url).map { (url, $0) }
+    }
+
+    private func saveDiarization(from url: URL) {
+        guard let destination = StudioSpecialistFiles.saveFile(
+            title: "Save speaker timeline",
+            suggestedName: url.lastPathComponent,
+            allowedContentTypes: [.json]
+        ), destination != url else { return }
+        do {
+            // The save panel has already asked about replacing whatever is there.
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: url, to: destination)
+            statusMessage = "Saved \(destination.lastPathComponent)."
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
     private func saveTranscript(to url: URL) {
         do {
             try transcriptText.write(to: url, atomically: true, encoding: .utf8)
@@ -1132,8 +1193,7 @@ struct StudioVoiceView: View {
                 )
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(isListening ? MereRunTheme.red : MereRunTheme.accent)
+            .buttonStyle(.merePrimary(tint: isListening ? MereRunTheme.red : MereRunTheme.accent))
         }
         .task {
             if listenDevices.isEmpty { await refreshListenDevices() }
@@ -1263,7 +1323,7 @@ struct StudioVoiceView: View {
     }
 
     private func saveLiveTranscript() {
-        let suggested = URL(fileURLWithPath: Self.timestampedOutput(prefix: "live-transcript", extension: "txt"))
+        let suggested = URL(fileURLWithPath: Self.timestampedOutput(domain: .audio, prefix: "live-transcript", extension: "txt"))
         guard let url = StudioSpecialistFiles.saveFile(
             title: "Save live transcript",
             suggestedName: suggested.lastPathComponent,
@@ -1305,20 +1365,13 @@ struct StudioVoiceView: View {
             Label(title, systemImage: symbol)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(MereRunTheme.accent)
+        .buttonStyle(.merePrimary)
     }
 
-    private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Music/MereRun/Voice", isDirectory: true)
-            .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).\(pathExtension)",
-                isDirectory: false
-            )
-            .path
+    /// Speech synthesis is Voice work; transcripts and speaker timelines are Audio work, so each
+    /// lands in the folder its domain owns.
+    private static func timestampedOutput(domain: StudioDomain, prefix: String, extension pathExtension: String) -> String {
+        StudioSpecialistFiles.outputFile(domain: domain, name: prefix, fileExtension: pathExtension).path
     }
 
     nonisolated private static func replacingExtension(_ path: String, with pathExtension: String) -> String {
