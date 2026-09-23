@@ -59,10 +59,18 @@ package struct ArgumentBuilder {
         arguments.append(isEnabled ? enabled : disabled)
     }
 
-    /// Appends `--flag value`.
+    /// Appends `--flag value`, or `--flag=value` when the value starts with a dash.
+    ///
+    /// ArgumentParser reads a separate `-1` after an option as the next option and fails with
+    /// "Missing value", so a negative number (a peak of -1 dBFS, a MIDI transposition of -12)
+    /// only reaches the CLI in the joined form.
     package mutating func option(_ flag: String, _ value: String) {
-        arguments.append(flag)
-        arguments.append(value)
+        if value.hasPrefix("-") {
+            arguments.append("\(flag)=\(value)")
+        } else {
+            arguments.append(flag)
+            arguments.append(value)
+        }
     }
 
     /// Appends `--flag value` once per value, for the options the contract marks repeatable.
