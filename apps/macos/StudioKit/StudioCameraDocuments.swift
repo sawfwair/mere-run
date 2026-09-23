@@ -313,17 +313,15 @@ package enum StudioCameraDocuments {
     }
 
     /// Where a page keeps the camera file it is editing, so the Command view's Run has a real file to
-    /// pass as `--cameras`. The name carries a hash of the content, so a command the Library recorded
-    /// keeps pointing at the cameras it ran with while the page moves on; `pruneDrafts` keeps the
-    /// folder from growing without bound.
-    package static func draftURL(page: String, content: Data, fileManager: FileManager = .default) -> URL {
-        draftFolder(page: page, fileManager: fileManager)
-            .appendingPathComponent("cameras-\(StudioOutputLocation.shortIdentifier(for: String(decoding: content, as: UTF8.self))).json")
+    /// pass as `--cameras`: `StudioDraftFiles.store`, under the page's folder, named by content.
+    package static func storeDraft(page: String, content: Data, fileManager: FileManager = .default) throws -> URL {
+        try StudioDraftFiles.store(content, in: draftFolder(page: page, fileManager: fileManager), prefix: "cameras-", fileExtension: "json", fileManager: fileManager)
     }
 
-    /// Removes all but the newest `keeping` camera drafts for `page`, never the one at `current`.
-    package static func pruneDrafts(page: String, current: URL, keeping: Int = 8, fileManager: FileManager = .default) {
-        StudioDraftFiles.prune(in: draftFolder(page: page, fileManager: fileManager), matching: "cameras-", current: current, keeping: keeping, fileManager: fileManager)
+    /// Removes old camera drafts for `page`, keeping `current` and every path in `referenced` (the
+    /// camera files the Library's rows still name).
+    package static func pruneDrafts(page: String, current: URL, referenced: Set<String>, keeping: Int = 8, fileManager: FileManager = .default) {
+        StudioDraftFiles.prune(in: draftFolder(page: page, fileManager: fileManager), prefix: "cameras-", current: current, referenced: referenced, keeping: keeping, fileManager: fileManager)
     }
 
     private static func draftFolder(page: String, fileManager: FileManager) -> URL {
@@ -333,17 +331,39 @@ package enum StudioCameraDocuments {
     }
 }
 
-/// Draft files a page writes for the Command view, named by content so recorded commands stay
-/// reproducible, and pruned so the folder stays small.
+/// Draft files a page writes for the Command view. A draft is named by a hash of its content, so a
+/// command the Library recorded keeps pointing at the bytes it ran with while the page moves on; a
+/// hash the folder already holds is reused only when the bytes match. Pruning keeps the newest few
+/// and never touches a file a Library row still names, so a queued or finished run's command stays
+/// reproducible.
 package enum StudioDraftFiles {
-    static func prune(in folder: URL, matching prefix: String, current: URL, keeping: Int, fileManager: FileManager) {
+    /// Writes `content` under `folder` as `<prefix><hash>.<ext>`, returning the file to reference.
+    /// An existing file with the same bytes is reused; a different file with that name (a hash
+    /// collision) makes way for `-2`, `-3`… so no recorded command ever changes meaning.
+    package static func store(_ content: Data, in folder: URL, prefix: String, fileExtension: String, fileManager: FileManager = .default) throws -> URL {
+        try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        let stem = prefix + StudioOutputLocation.shortIdentifier(for: String(decoding: content, as: UTF8.self))
+        let name = StudioOutputLocation.uniqueFileName(stem: stem, identifier: "", fileExtension: fileExtension, exists: { candidate in
+            let url = folder.appendingPathComponent(candidate)
+            guard fileManager.fileExists(atPath: url.path) else { return false }
+            return (try? Data(contentsOf: url)) != content
+        })
+        let url = folder.appendingPathComponent(name)
+        if !fileManager.fileExists(atPath: url.path) {
+            try content.write(to: url, options: .atomic)
+        }
+        return url
+    }
+
+    package static func prune(in folder: URL, prefix: String, current: URL, referenced: Set<String>, keeping: Int, fileManager: FileManager = .default) {
+        let protected = Set(referenced.map { URL(fileURLWithPath: $0).standardizedFileURL.path } + [current.standardizedFileURL.path])
         let urls = (try? fileManager.contentsOfDirectory(
             at: folder,
             includingPropertiesForKeys: [.contentModificationDateKey],
             options: [.skipsHiddenFiles]
         )) ?? []
         let drafts = urls
-            .filter { $0.lastPathComponent.hasPrefix(prefix) && $0.standardizedFileURL != current.standardizedFileURL }
+            .filter { $0.lastPathComponent.hasPrefix(prefix) && !protected.contains($0.standardizedFileURL.path) }
             .sorted {
                 let lhs = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
                 let rhs = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast

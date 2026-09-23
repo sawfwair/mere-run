@@ -25,7 +25,7 @@ struct StudioMusicManifestEditor: View {
         let rowProblems = draft.clips.map { draft.clipProblems($0, fileExists: fileExists) }
         let readyCount = rowProblems.filter(\.isEmpty).count
         let problems = draft.problems(fileExists: fileExists)
-        let numbers = Dictionary(uniqueKeysWithValues: draft.clips.enumerated().map { ($1.id, $0 + 1) })
+        let numbers = Dictionary(draft.clips.enumerated().map { ($1.id, $0 + 1) }, uniquingKeysWith: { first, _ in first })
         VStack(alignment: .leading, spacing: 10) {
             header(readyCount: readyCount)
             if draft.clips.isEmpty {
@@ -79,6 +79,10 @@ struct StudioMusicManifestEditor: View {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
             manifest = draft
+        }
+        .onDisappear {
+            // Leaving the page inside the debounce window must not lose the last edits.
+            if draft != manifest { manifest = draft }
         }
     }
 

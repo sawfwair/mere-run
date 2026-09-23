@@ -183,8 +183,13 @@ final class StudioStructuredInputsTests: XCTestCase {
         XCTAssertEqual(StudioRenoise.inferredMode(argument: ""), .automatic)
         XCTAssertEqual(StudioRenoise.inferredMode(argument: "0.35"), .amount)
         XCTAssertEqual(StudioRenoise.inferredMode(argument: "0.1, 0.2,0.3"), .schedule)
-        XCTAssertEqual(StudioRenoise(mode: .amount, argument: "0.35"), .amount(0.35))
-        XCTAssertEqual(StudioRenoise(mode: .amount, argument: "junk"), .amount(0.5))
+        XCTAssertEqual(StudioRenoise(mode: .amount, argument: "0.35").amountValue, 0.35)
+        XCTAssertNil(StudioRenoise(mode: .amount, argument: "junk").amountValue)
+        XCTAssertEqual(StudioRenoise(mode: .amount, argument: "junk").argument, "junk", "nothing typed is replaced")
+        XCTAssertEqual(
+            StudioRenoise(mode: .amount, argument: "junk").problems(steps: 3),
+            ["Renoise must be a number between 0 and 1, with a point for decimals."]
+        )
         XCTAssertEqual(StudioRenoise.amount(0.35).argument, "0.35")
         XCTAssertEqual(StudioRenoise.schedule(" 0.1, 0.25,1 ").argument, "0.1,0.25,1")
         XCTAssertEqual(StudioRenoise.amount(1.5).problems(steps: 3), ["Renoise must be between 0 and 1."])
@@ -216,6 +221,60 @@ final class StudioStructuredInputsTests: XCTestCase {
         )
     }
 
+    /// The page shows the mode the draft's argument reads as and keeps the argument across mode
+    /// changes: a schedule under a stored Automatic (a Library rerun, a draft from before the page
+    /// kept a mode) is shown and kept as a schedule; a schedule under a stored Fixed amount is shown
+    /// as a schedule rather than a 0.5 slider over a hidden schedule; and switching to Fixed amount
+    /// keeps a value that already is one number.
+    func testRenoiseModeFollowsTheArgumentAndSwitchingKeepsWhatReads() {
+        let schedule = "0.1,0.2,0.3"
+
+        XCTAssertEqual(StudioRenoise.resolvedMode(stored: .automatic, argument: schedule), .schedule)
+        XCTAssertEqual(StudioRenoise.argument(switching: schedule, to: .schedule), schedule, "resolving the mode must not clear the draft")
+        XCTAssertEqual(StudioRenoise.resolvedMode(stored: .amount, argument: schedule), .schedule)
+        XCTAssertEqual(StudioRenoise.resolvedMode(stored: .automatic, argument: "0.35"), .amount)
+        XCTAssertEqual(StudioRenoise.resolvedMode(stored: .amount, argument: "junk"), .amount, "one bad token stays an amount, reported")
+        XCTAssertEqual(StudioRenoise.resolvedMode(stored: .schedule, argument: "0.3"), .schedule, "a one-step schedule stays a schedule")
+        XCTAssertEqual(StudioRenoise.resolvedMode(stored: .schedule, argument: ""), .schedule, "Per step with nothing typed stays Per step")
+        XCTAssertEqual(StudioRenoise.resolvedMode(stored: .amount, argument: ""), .amount)
+
+        XCTAssertEqual(StudioRenoise.argument(switching: "0.35", to: .amount), "0.35")
+        XCTAssertEqual(StudioRenoise.argument(switching: schedule, to: .amount), "0.5")
+        XCTAssertEqual(StudioRenoise.argument(switching: "", to: .amount), "0.5")
+        XCTAssertEqual(StudioRenoise.argument(switching: "0.35", to: .schedule), "0.35")
+        XCTAssertEqual(StudioRenoise.argument(switching: schedule, to: .automatic), "")
+    }
+
+    /// Drafts are named by content, reused only when the bytes match, and pruning never removes the
+    /// current draft or a file a Library row still names.
+    func testDraftFilesAreNamedByContentComparedAndPrunedAroundReferences() throws {
+        let folder = root.appendingPathComponent("drafts", isDirectory: true)
+        let a = try StudioDraftFiles.store(Data("a".utf8), in: folder, prefix: "dataset-", fileExtension: "jsonl")
+        let aAgain = try StudioDraftFiles.store(Data("a".utf8), in: folder, prefix: "dataset-", fileExtension: "jsonl")
+        try Data("stale".utf8).write(to: folder.appendingPathComponent(a.lastPathComponent), options: .atomic)
+        let collided = try StudioDraftFiles.store(Data("a".utf8), in: folder, prefix: "dataset-", fileExtension: "jsonl")
+
+        XCTAssertEqual(a, aAgain)
+        XCTAssertEqual(collided.lastPathComponent, a.deletingPathExtension().lastPathComponent + "-2.jsonl")
+        XCTAssertEqual(try Data(contentsOf: collided), Data("a".utf8))
+
+        let pruned = root.appendingPathComponent("pruned", isDirectory: true)
+        var stored: [URL] = []
+        for index in 0..<6 {
+            stored.append(try StudioDraftFiles.store(Data("clip \(index)".utf8), in: pruned, prefix: "dataset-", fileExtension: "jsonl"))
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: Double(index))], ofItemAtPath: stored[index].path)
+        }
+        let current = stored[5]
+        StudioDraftFiles.prune(in: pruned, prefix: "dataset-", current: current, referenced: [stored[0].path], keeping: 2)
+
+        let remaining = Set(try FileManager.default.contentsOfDirectory(atPath: pruned.path))
+        XCTAssertTrue(remaining.contains(current.lastPathComponent))
+        XCTAssertTrue(remaining.contains(stored[0].lastPathComponent), "a referenced draft survives")
+        XCTAssertTrue(remaining.contains(stored[4].lastPathComponent), "the newest other draft survives")
+        XCTAssertFalse(remaining.contains(stored[1].lastPathComponent))
+        XCTAssertFalse(remaining.contains(stored[3].lastPathComponent))
+    }
+
     /// Line separators `JSONEncoder` does not escape would split a record when the trainer splits
     /// the file on newlines; they are written as `\n`.
     func testLyricsWithUnicodeLineSeparatorsStayOneRecord() throws {
@@ -230,13 +289,7 @@ final class StudioStructuredInputsTests: XCTestCase {
         XCTAssertEqual(records[0].lyrics, "one\ntwo\nthree\nfour\nfive")
     }
 
-    func testDraftNamesCarryTheirContentAndRunFilesNeverOverwrite() throws {
-        let a = try StudioMusicTrainingManifest(clips: [.init(audioPath: "/a.wav", caption: "a")]).jsonl()
-        let b = try StudioMusicTrainingManifest(clips: [.init(audioPath: "/a.wav", caption: "b")]).jsonl()
-
-        XCTAssertEqual(StudioMusicTrainingManifest.draftManifestURL(content: a), StudioMusicTrainingManifest.draftManifestURL(content: a))
-        XCTAssertNotEqual(StudioMusicTrainingManifest.draftManifestURL(content: a), StudioMusicTrainingManifest.draftManifestURL(content: b))
-        XCTAssertTrue(StudioMusicTrainingManifest.isDraftURL(StudioMusicTrainingManifest.draftManifestURL(content: a)))
+    func testRunFilesBesideAnOutputNeverOverwrite() throws {
         XCTAssertFalse(StudioMusicTrainingManifest.isDraftURL(root.appendingPathComponent("dataset.jsonl")))
 
         try Data([0]).write(to: root.appendingPathComponent("adapter.dataset.jsonl"))

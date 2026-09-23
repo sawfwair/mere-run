@@ -654,28 +654,27 @@ struct StudioVisionLabView: View {
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
         do {
-            let content = try geometryCameras.json()
-            let url = StudioCameraDocuments.draftURL(page: "Vision Geometry", content: content)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if !FileManager.default.fileExists(atPath: url.path) {
-                try content.write(to: url, options: .atomic)
-            }
-            StudioCameraDocuments.pruneDrafts(page: "Vision Geometry", current: url)
+            let url = try StudioCameraDocuments.storeDraft(page: "Vision Geometry", content: geometryCameras.json())
+            // Rows the Library still names (queued Command-view runs included) keep their files.
+            let referenced = Set(library.items.compactMap { $0.commandDraft?.camerasPath })
+            StudioCameraDocuments.pruneDrafts(page: "Vision Geometry", current: url, referenced: referenced)
             draftCamerasPath = url.path
         } catch {
             draftCamerasPath = ""
         }
     }
 
-    /// A camera file chosen before this page edited cameras is read into the editor, once; the
-    /// path is forgotten only once its cameras are in, otherwise the page says why they are not.
+    /// A camera file chosen before this page edited cameras is read into the editor, once. A path
+    /// that no longer exists is forgotten quietly; one that will not read is reported once, then
+    /// forgotten.
     private func adoptLegacyCameras() {
-        guard !legacyCamerasPath.isBlank, geometryCameras.cameras.isEmpty else { return }
+        guard !legacyCamerasPath.isBlank else { return }
         let url = URL(fileURLWithPath: NSString(string: legacyCamerasPath).expandingTildeInPath)
+        legacyCamerasPath = ""
+        guard geometryCameras.cameras.isEmpty, FileManager.default.fileExists(atPath: url.path) else { return }
         do {
             geometryCameras = try StudioGeometryCameraDocument.importing(Data(contentsOf: url))
             suppliesCameras = true
-            legacyCamerasPath = ""
         } catch {
             errorMessage = "The camera file at \(url.lastPathComponent) could not be read into the editor: \(error.localizedDescription)"
         }

@@ -151,22 +151,26 @@ package struct StudioMusicTrainingManifest: Codable, Equatable {
     }
 
     /// Where the page keeps the manifest it is editing, so the Command view's Run has a real file to
-    /// pass as `--dataset`. The name carries a hash of the content, so a command the Library recorded
-    /// keeps pointing at the clips it ran with while the page moves on; `pruneDrafts` keeps the folder
-    /// small. Each Start training writes its own copy beside its adapter.
-    package static func draftManifestURL(content: Data, fileManager: FileManager = .default) -> URL {
-        draftFolder(fileManager: fileManager)
-            .appendingPathComponent("dataset-\(StudioOutputLocation.shortIdentifier(for: String(decoding: content, as: UTF8.self))).jsonl")
+    /// pass as `--dataset`: `StudioDraftFiles.store`, named by content. Each Start training writes
+    /// its own copy beside its adapter.
+    package static func storeDraft(content: Data, fileManager: FileManager = .default) throws -> URL {
+        try StudioDraftFiles.store(content, in: draftFolder(fileManager: fileManager), prefix: "dataset-", fileExtension: "jsonl", fileManager: fileManager)
     }
 
-    /// Removes all but the newest `keeping` manifest drafts, never the one at `current`.
-    package static func pruneDrafts(current: URL, keeping: Int = 8, fileManager: FileManager = .default) {
-        StudioDraftFiles.prune(in: draftFolder(fileManager: fileManager), matching: "dataset-", current: current, keeping: keeping, fileManager: fileManager)
+    /// Removes old manifest drafts, keeping `current` and every path in `referenced` (the manifests
+    /// the Library's rows still name).
+    package static func pruneDrafts(current: URL, referenced: Set<String>, keeping: Int = 8, fileManager: FileManager = .default) {
+        StudioDraftFiles.prune(in: draftFolder(fileManager: fileManager), prefix: "dataset-", current: current, referenced: referenced, keeping: keeping, fileManager: fileManager)
     }
 
     /// Whether `url` is one of this page's drafts rather than a manifest the user chose.
     package static func isDraftURL(_ url: URL, fileManager: FileManager = .default) -> Bool {
         url.standardizedFileURL.deletingLastPathComponent() == draftFolder(fileManager: fileManager).standardizedFileURL
+    }
+
+    /// The folder the page's drafts live in.
+    package static func draftFolderURL(fileManager: FileManager = .default) -> URL {
+        draftFolder(fileManager: fileManager)
     }
 
     private static func draftFolder(fileManager: FileManager) -> URL {

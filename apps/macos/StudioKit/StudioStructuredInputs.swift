@@ -94,12 +94,14 @@ package struct StudioTargetRank: Codable, Equatable, Identifiable {
 
 /// `sfx generate --renoise` for Woosh models: blank for the model's default, one amount in 0…1, or
 /// one amount per denoising step. Mirrors `parseRenoiseSchedule` in `MereRunCLI`. The page keeps the
-/// mode it chose beside the argument, so "Per step" with nothing typed yet stays "Per step".
+/// mode it chose beside the argument; the rules for reconciling the two live here so they are
+/// tested: an argument that plainly reads as another mode wins, and switching modes keeps a value
+/// that already reads as the new mode.
 package enum StudioRenoise: Equatable {
     case automatic
-    case amount(Double)
-    /// The schedule as typed, so a token that is not a number stays visible and is reported rather
-    /// than dropped.
+    /// The amount as typed or slid; text that is not a number is kept and reported, not replaced.
+    case amount(String)
+    /// The schedule as typed, so a token that is not a number stays visible and is reported.
     case schedule(String)
 
     package enum Mode: String, CaseIterable, Codable, Identifiable {
@@ -118,22 +120,56 @@ package enum StudioRenoise: Equatable {
         }
     }
 
-    /// The argument read in the page's chosen mode. An amount that does not parse becomes 0.5.
+    package static let defaultAmount = 0.5
+
     package init(mode: Mode, argument: String) {
         switch mode {
         case .automatic: self = .automatic
-        case .amount: self = .amount(Double(argument.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0.5)
+        case .amount: self = .amount(argument)
         case .schedule: self = .schedule(argument)
         }
     }
 
-    /// The mode an argument written elsewhere implies, for a page that has not chosen one yet:
-    /// blank is automatic, one number is an amount, anything else is a schedule.
+    /// An amount from a slider, written with a `.` decimal point whatever the user's locale, since
+    /// the CLI reads it with `Float(_:)`.
+    package static func amount(_ value: Double) -> StudioRenoise {
+        .amount(CommandArguments.format(value))
+    }
+
+    /// The mode an argument implies on its own: blank is automatic, one number is an amount,
+    /// anything else is a schedule.
     package static func inferredMode(argument: String) -> Mode {
         let tokens = Self.tokens(argument)
         if tokens.isEmpty { return .automatic }
         if tokens.count == 1, Double(tokens[0]) != nil { return .amount }
         return .schedule
+    }
+
+    /// The mode the page shows for a stored mode and the draft's argument. A blank argument keeps
+    /// the stored mode ("Per step" with nothing typed yet). Otherwise the argument wins where it
+    /// plainly reads as another mode: a value under Automatic (a draft from before the page kept a
+    /// mode, a Library rerun), or several tokens under Fixed amount. A single token under Per step
+    /// stays a one-step schedule.
+    package static func resolvedMode(stored: Mode, argument: String) -> Mode {
+        let tokens = Self.tokens(argument)
+        guard !tokens.isEmpty else { return stored }
+        switch stored {
+        case .schedule: return .schedule
+        case .amount: return tokens.count > 1 ? .schedule : .amount
+        case .automatic: return inferredMode(argument: argument)
+        }
+    }
+
+    /// The argument to keep when the page switches modes: automatic drops it; an amount keeps a
+    /// value that already is one number, else starts at the default; a schedule keeps whatever was
+    /// there, since one number is a valid one-step schedule.
+    package static func argument(switching argument: String, to mode: Mode) -> String {
+        let tokens = Self.tokens(argument)
+        switch mode {
+        case .automatic: return ""
+        case .amount: return tokens.count == 1 && Double(tokens[0]) != nil ? tokens[0] : CommandArguments.format(defaultAmount)
+        case .schedule: return argument
+        }
     }
 
     package var mode: Mode {
@@ -144,12 +180,18 @@ package enum StudioRenoise: Equatable {
         }
     }
 
-    /// The `--renoise` value, always with a `.` decimal point whatever the user's locale, since the
-    /// CLI reads it with `Float(_:)`; empty for automatic, which the page omits.
+    /// The amount as a number, or nil while the text is not one.
+    package var amountValue: Double? {
+        guard case .amount(let text) = self else { return nil }
+        return Double(text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// The `--renoise` value; empty for automatic, which the page omits. Text that does not parse is
+    /// passed through unchanged so nothing typed is lost; `problems` blocks the run until it does.
     package var argument: String {
         switch self {
         case .automatic: return ""
-        case .amount(let amount): return CommandArguments.format(amount)
+        case .amount(let text): return text.trimmingCharacters(in: .whitespacesAndNewlines)
         case .schedule(let text): return Self.tokens(text).joined(separator: ",")
         }
     }
@@ -167,7 +209,8 @@ package enum StudioRenoise: Equatable {
         switch self {
         case .automatic:
             return []
-        case .amount(let amount):
+        case .amount:
+            guard let amount = amountValue else { return ["Renoise must be a number between 0 and 1, with a point for decimals."] }
             return (0...1).contains(amount) ? [] : ["Renoise must be between 0 and 1."]
         case .schedule(let text):
             let tokens = Self.tokens(text)

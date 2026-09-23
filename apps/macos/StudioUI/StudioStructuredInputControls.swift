@@ -244,15 +244,16 @@ struct StudioRenoiseControl: View {
                     .foregroundStyle(MereRunTheme.textMuted)
             case .amount:
                 let amount = Binding<Double>(
-                    get: { if case .amount(let amount) = renoise { return amount } else { return 0.5 } },
+                    get: { renoise.amountValue ?? StudioRenoise.defaultAmount },
                     set: { value = StudioRenoise.amount(($0 * 100).rounded() / 100).argument }
                 )
                 HStack {
                     Slider(value: amount, in: 0...1, step: 0.01)
-                    Text(amount.wrappedValue.formatted(.number.precision(.fractionLength(2))))
+                    Text(renoise.amountValue.map { $0.formatted(.number.precision(.fractionLength(2))) } ?? value)
                         .font(MereRunTheme.captionFont)
                         .monospacedDigit()
-                        .frame(width: 34, alignment: .trailing)
+                        .lineLimit(1)
+                        .frame(minWidth: 34, alignment: .trailing)
                 }
                 .accessibilityLabel("Renoise amount")
             case .schedule:
@@ -267,18 +268,14 @@ struct StudioRenoiseControl: View {
             }
         }
         .onAppear {
-            // A draft written before the page kept a mode: read the mode the argument implies.
-            if mode == .automatic, !value.isBlank { mode = StudioRenoise.inferredMode(argument: value) }
+            // The draft's argument may have come from elsewhere (a Library rerun, a draft written
+            // before the page kept a mode): show the mode it reads as, keeping its value.
+            let resolved = StudioRenoise.resolvedMode(stored: mode, argument: value)
+            if resolved != mode { mode = resolved }
         }
-        .onChange(of: mode) { previous, mode in
-            switch mode {
-            case .automatic:
-                value = ""
-            case .amount:
-                if Double(value.trimmingCharacters(in: .whitespacesAndNewlines)) == nil { value = StudioRenoise.amount(0.5).argument }
-            case .schedule:
-                if previous == .automatic { value = "" }
-            }
+        .onChange(of: mode) { _, mode in
+            let kept = StudioRenoise.argument(switching: value, to: mode)
+            if kept != value { value = kept }
         }
     }
 }

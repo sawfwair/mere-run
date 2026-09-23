@@ -78,7 +78,7 @@ struct StudioTrainingDatasetSnapshot: Equatable {
     static func inspect(manifest: StudioMusicTrainingManifest) -> StudioTrainingDatasetSnapshot {
         let ready = manifest.readyClipCount()
         return .init(
-            source: StudioMusicTrainingManifest.draftManifestURL(content: (try? manifest.jsonl()) ?? Data()),
+            source: StudioMusicTrainingManifest.draftFolderURL(),
             totalRecords: manifest.clips.count,
             usableRecords: ready,
             previews: [],
@@ -1189,31 +1189,25 @@ struct StudioTrainingView: View {
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
         do {
-            let content = try musicManifest.jsonl()
-            let url = StudioMusicTrainingManifest.draftManifestURL(content: content)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if !FileManager.default.fileExists(atPath: url.path) {
-                try content.write(to: url, options: .atomic)
-            }
-            StudioMusicTrainingManifest.pruneDrafts(current: url)
+            let url = try StudioMusicTrainingManifest.storeDraft(content: musicManifest.jsonl())
+            // Rows the Library still names (queued Command-view runs included) keep their files.
+            let referenced = Set(library.items.compactMap { $0.commandDraft?.inputPath })
+            StudioMusicTrainingManifest.pruneDrafts(current: url, referenced: referenced)
             draftManifestPath = url.path
         } catch {
             draftManifestPath = ""
         }
     }
 
-    /// A manifest chosen before this page built its own is read into the clips, once; the path is
-    /// forgotten only once its clips are in, otherwise the page says why they are not.
+    /// A manifest chosen before this page built its own is read into the clips, once. A path that
+    /// no longer exists is forgotten quietly; one that will not read is reported once, then forgotten.
     private func adoptExistingMusicManifest() {
         guard kind == .music, musicManifest.clips.isEmpty, !musicDraft.inputPath.isBlank else { return }
         let url = URL(fileURLWithPath: NSString(string: musicDraft.inputPath).expandingTildeInPath).standardizedFileURL
-        if StudioMusicTrainingManifest.isDraftURL(url) {
-            musicDraft.inputPath = ""
-            return
-        }
+        musicDraft.inputPath = ""
+        guard !StudioMusicTrainingManifest.isDraftURL(url), FileManager.default.fileExists(atPath: url.path) else { return }
         do {
             musicManifest = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
-            musicDraft.inputPath = ""
         } catch {
             statusMessage = "The manifest at \(url.lastPathComponent) could not be read into the clip list: \(error.localizedDescription)"
         }
