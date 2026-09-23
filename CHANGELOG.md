@@ -34,6 +34,8 @@ The format is based on Keep a Changelog.
 - Let mere.run live in the menu bar: it leaves the Dock while no window is open,
   can start the API server when it opens, and can open at login. A server that
   stops on its own posts a notification while mere.run is in the background.
+- Treat an API server that answers `/health` but not `/runtime/status` as up,
+  and poll its status every 30 seconds instead of every 2 until it answers.
 - Run `world serve` and servers started from the Command Console in the service
   lane too, and refresh the sidebar's status probe only when the model inventory
   or CLI settings change instead of every 20 seconds.

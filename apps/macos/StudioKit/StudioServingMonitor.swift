@@ -18,6 +18,11 @@ package final class StudioServingMonitor: ObservableObject {
     /// sparkline. It reads 0 while the server is idle and empties when the server goes away.
     @Published package internal(set) var throughputHistory: [Double] = []
     private var lastTokenCount: (tokens: Int, at: Date)?
+    /// Consecutive `/runtime/status` polls that timed out on a server whose `/health` answered.
+    /// Each such request stays open on the server, so while this is nonzero the monitor checks
+    /// liveness through `/health` and asks for status only every `slowStatusRetryInterval` polls.
+    private(set) var slowStatusPolls = 0
+    static let slowStatusRetryInterval = 15
 
     private var pollingTask: Task<Void, Never>?
     /// The `/runtime/status` request in flight. A poll that finds one waits for its answer
@@ -131,6 +136,16 @@ package final class StudioServingMonitor: ObservableObject {
     }
 
     private func pollRuntime(controller: MereRunController) async {
+        if slowStatusPolls > 0, !slowStatusPolls.isMultiple(of: Self.slowStatusRetryInterval) {
+            slowStatusPolls += 1
+            let sentAt = Date()
+            if await healthAnswers(controller: controller) {
+                lastAnsweredAt = sentAt
+            } else {
+                markUnreachable(detail: "Runtime is not reachable")
+            }
+            return
+        }
         var request = URLRequest(url: controller.runtimeURL(path: "/runtime/status"))
         request.timeoutInterval = 3
         if let authorization = controller.runtimeAuthorizationHeader {
@@ -157,6 +172,7 @@ package final class StudioServingMonitor: ObservableObject {
             }
 
             let decoded = try JSONDecoder().decode(StudioRuntimeSnapshot.self, from: data)
+            slowStatusPolls = 0
             let previous = runtime
             let wasReachable = isReachable
             runtime = decoded
@@ -170,16 +186,41 @@ package final class StudioServingMonitor: ObservableObject {
                 append(StudioServiceActivityDiff.events(previous: nil, current: decoded))
             }
         } catch {
-            let wasReachable = isReachable
-            isReachable = false
-            lastAnsweredAt = nil
-            lastTokenCount = nil
-            throughputHistory = []
-            connectionDetail = "Runtime is not reachable"
-            if wasReachable {
-                append([.init(level: .warning, title: "Runtime disconnected", detail: error.localizedDescription)])
+            // A status request that times out may be a server that is up but stuck gathering its
+            // status (a model volume that stalls, say). `/health` tells the two apart.
+            if (error as? URLError)?.code == .timedOut, await healthAnswers(controller: controller) {
+                if slowStatusPolls == 0 {
+                    note("Runtime is slow to report status", detail: "The server answers /health but not /runtime/status", level: .warning)
+                }
+                slowStatusPolls += 1
+                lastAnsweredAt = Date()
+                isReachable = false
+                connectionDetail = "Up, but not reporting its status"
+                return
             }
+            markUnreachable(detail: error.localizedDescription)
         }
+    }
+
+    private func markUnreachable(detail: String) {
+        let wasReachable = isReachable || slowStatusPolls > 0
+        isReachable = false
+        lastAnsweredAt = nil
+        lastTokenCount = nil
+        throughputHistory = []
+        slowStatusPolls = 0
+        connectionDetail = "Runtime is not reachable"
+        if wasReachable {
+            append([.init(level: .warning, title: "Runtime disconnected", detail: detail)])
+        }
+    }
+
+    /// Whether `/health` answers within two seconds: the server is up, whatever its status says.
+    private func healthAnswers(controller: MereRunController) async -> Bool {
+        var request = URLRequest(url: controller.runtimeURL(path: "/health"))
+        request.timeoutInterval = 2
+        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }
+        return ((response as? HTTPURLResponse)?.statusCode ?? 0) > 0
     }
 
     /// Appends the generation rate since the previous poll. A counter that went backwards is a

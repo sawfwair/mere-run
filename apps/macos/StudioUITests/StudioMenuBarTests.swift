@@ -110,7 +110,7 @@ final class StudioMenuBarTests: XCTestCase {
 
         XCTAssertTrue(serving.isTemplate)
         XCTAssertTrue(idle.isTemplate)
-        XCTAssertEqual(serving.size, NSSize(width: 22, height: 16))
+        XCTAssertEqual(serving.size, NSSize(width: 22, height: 22))
         XCTAssertGreaterThan(try inkCoverage(serving), try inkCoverage(idle), "the filled period adds ink")
     }
 

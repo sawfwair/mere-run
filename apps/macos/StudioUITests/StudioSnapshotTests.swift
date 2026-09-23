@@ -251,6 +251,23 @@ final class StudioSnapshotTests: XCTestCase {
             }
         }
 
+        // The status item glyph itself, at 8× so its period can be judged: lit and idle.
+        for isServing in [true, false] {
+            let image = StudioMenuBarIcon.image(isServing: isServing)
+            let rep = try XCTUnwrap(NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: 176, pixelsHigh: 176, bitsPerSample: 8, samplesPerPixel: 4,
+                hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+            ))
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            NSColor.white.setFill()
+            NSRect(x: 0, y: 0, width: 176, height: 176).fill()
+            image.draw(in: NSRect(x: 0, y: 0, width: 176, height: 176))
+            NSGraphicsContext.restoreGraphicsState()
+            let data = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+            try data.write(to: fixture.outputDirectory.appendingPathComponent("menu-bar-icon-\(isServing ? "serving" : "idle").png"))
+        }
+
         let stopped = try SnapshotFixture(outputDirectory: fixture.outputDirectory, machineMonitor: Self.scriptedMachine())
         defer { stopped.tearDown() }
         try render("stopped", fixture: stopped, answer: .unreachable)

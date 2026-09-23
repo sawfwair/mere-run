@@ -39,10 +39,12 @@ package enum StudioMenuBarIcon {
     }
 
     private static func draw(isServing: Bool) -> NSImage {
-        let image = NSImage(size: NSSize(width: 22, height: 16), flipped: false) { _ in
-            let font = glyphFont(size: 22)
+        // Drawn at the menu bar's own 22pt height: a shorter image is scaled up to fill the bar and
+        // the status item clips the period off its right edge.
+        let image = NSImage(size: NSSize(width: 22, height: 22), flipped: false) { _ in
+            let font = glyphFont(size: 25)
             let glyph = NSAttributedString(string: "m", attributes: [.font: font, .foregroundColor: NSColor.black])
-            let baseline: CGFloat = 3.5
+            let baseline: CGFloat = 6
             glyph.draw(at: NSPoint(x: 0, y: baseline + font.descender))
             // Caveat's "m" ends in an exit stroke past its advance; the period sits clear of it.
             let dot = NSRect(x: glyph.size().width + 1.4, y: baseline - 0.1, width: 4.4, height: 4.4)

@@ -156,6 +156,18 @@ struct MereRunApp: App {
         userDriverDelegate: nil
     )
 
+    /// The extra's visibility. SwiftUI writes this binding back as it updates the scene; a write
+    /// of the value it already holds must not reach `@AppStorage`, or every write republishes the
+    /// App body and re-renders every window, forever.
+    private var menuBarExtraInserted: Binding<Bool> {
+        Binding(
+            get: { showsMenuBarExtra },
+            set: { inserted in
+                if inserted != showsMenuBarExtra { showsMenuBarExtra = inserted }
+            }
+        )
+    }
+
     init() {
         // The wordmark's face must be registered before the first window draws; a missing bundle
         // degrades to the system serif rather than failing launch.
@@ -207,7 +219,7 @@ struct MereRunApp: App {
         .windowResizability(.contentMinSize)
 
         // The server outlives the Studio window, so its control does too.
-        MenuBarExtra(isInserted: $showsMenuBarExtra) {
+        MenuBarExtra(isInserted: menuBarExtraInserted) {
             MereRunMenuBarContent(controller: controller, navigation: navigation, isStudioOpen: isStudioOpen)
         } label: {
             StudioMenuBarLabel(server: controller.localServer)
