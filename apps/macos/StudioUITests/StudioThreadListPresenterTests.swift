@@ -55,18 +55,18 @@ final class StudioThreadListPresenterTests: XCTestCase {
 
     func testMetaNamesPresetModelAndActivity() {
         let chat = thread(title: "chat", updatedAgo: 3_600, now: noon, model: "text-chat-qwen3.6-4b")
-        let chatMeta = StudioThreadListPresenter.meta(for: chat, now: noon, calendar: calendar)
+        let chatMeta = StudioThreadListPresenter.meta(for: chat, now: noon, calendar: calendar, titles: .none)
         XCTAssertTrue(chatMeta.hasPrefix("Qwen3.6 4B · "), chatMeta)
         XCTAssertFalse(chatMeta.hasPrefix("Code"))
 
         let code = thread(title: "code", mode: .code, updatedAgo: 86_400, now: noon, model: "text-code-gemma-4")
         XCTAssertEqual(
-            StudioThreadListPresenter.meta(for: code, now: noon, calendar: calendar),
+            StudioThreadListPresenter.meta(for: code, now: noon, calendar: calendar, titles: .none),
             "Code · Gemma 4 · Yesterday"
         )
 
         let old = thread(title: "old", updatedAgo: 86_400 * 4, now: noon, model: "text-chat-qwen3.6-4b")
-        let oldMeta = StudioThreadListPresenter.meta(for: old, now: noon, calendar: calendar)
+        let oldMeta = StudioThreadListPresenter.meta(for: old, now: noon, calendar: calendar, titles: .none)
         XCTAssertFalse(oldMeta.hasSuffix("Yesterday"), oldMeta)
         XCTAssertTrue(oldMeta.hasPrefix("Qwen3.6 4B · "), oldMeta)
     }
@@ -76,7 +76,7 @@ final class StudioThreadListPresenterTests: XCTestCase {
         let expected = StudioModelNaming.resolvedModelID(for: .code, model: "")
         XCTAssertFalse(expected.isEmpty)
         XCTAssertEqual(
-            StudioThreadListPresenter.modelLabel(for: untitled),
+            StudioThreadListPresenter.modelLabel(for: untitled, titles: .none),
             StudioModelNaming.displayName(expected, titles: .none)
         )
     }

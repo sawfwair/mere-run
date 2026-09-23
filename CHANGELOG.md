@@ -50,8 +50,8 @@ The format is based on Keep a Changelog.
 - Add "Use these settings" to Library rows and result cards, which opens the
   run's task with its recorded prompt, model, and options in the composer to
   tweak and run again; Run again and Edit command… stay for exact reruns.
-- Let Library search find runs by model name or id and by a whole status word,
-  such as "failed" or "running".
+- Let Library search find runs by model name or id, and narrow by a whole
+  status word such as "failed" or "running" alongside the rest of the query.
 - Offer Compare from the Library: batch two finished image runs and the bar and
   context menu open them side by side in the result workspace.
 - Let Models ▸ Installed make a model the default for a task ("Use for Chat by

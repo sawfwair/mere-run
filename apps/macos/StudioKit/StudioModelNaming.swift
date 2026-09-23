@@ -201,6 +201,12 @@ package struct StudioModelInventoryRow: Identifiable, Equatable {
         status.lowercased() == "installed"
     }
 
+    /// Not on this Mac at all, as opposed to present but invalid, offline, or awaiting
+    /// conversion — the one status a pull answers.
+    package var isMissing: Bool {
+        status.lowercased() == "missing"
+    }
+
     package var displayedSize: String {
         guard !isInstalled, let estimatedDownloadBytes else {
             return size

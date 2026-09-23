@@ -26,7 +26,7 @@ final class StudioLibraryPresentationTests: XCTestCase {
 
         func matching(_ kind: StudioLibraryKind) -> [UUID] {
             StudioLibraryPresenter.filter(
-                items, with: StudioLibraryFilter(scope: .all, kind: kind)
+                items, with: StudioLibraryFilter(scope: .all, kind: kind), titles: .none
             ).map(\.id)
         }
 
@@ -43,7 +43,7 @@ final class StudioLibraryPresentationTests: XCTestCase {
         let plain = item(mode: .createImage, templateID: .imageGenerate, output: "plate.png")
 
         let filtered = StudioLibraryPresenter.filter(
-            [starred, plain], with: StudioLibraryFilter(scope: .all, favoritesOnly: true)
+            [starred, plain], with: StudioLibraryFilter(scope: .all, favoritesOnly: true), titles: .none
         )
         XCTAssertEqual(filtered.map(\.id), [starred.id])
         XCTAssertTrue(starred.isStarred)
@@ -64,11 +64,12 @@ final class StudioLibraryPresentationTests: XCTestCase {
         let filter = StudioLibraryFilter(
             scope: .domain, domain: .image, kind: .images, favoritesOnly: true, query: "COFFEE"
         )
-        XCTAssertEqual(StudioLibraryPresenter.filter([starred, other], with: filter).map(\.id), [starred.id])
+        XCTAssertEqual(StudioLibraryPresenter.filter([starred, other], with: filter, titles: .none).map(\.id), [starred.id])
         XCTAssertTrue(
             StudioLibraryPresenter.filter(
                 [starred, other],
-                with: StudioLibraryFilter(scope: .all, query: "nothing here")
+                with: StudioLibraryFilter(scope: .all, query: "nothing here"),
+                titles: .none
             ).isEmpty
         )
     }
@@ -98,7 +99,10 @@ final class StudioLibraryPresentationTests: XCTestCase {
         )])
         XCTAssertEqual(ids("little owl", titles: titled), [drafted.id], "the inventory's title, when the app shows one")
         XCTAssertEqual(ids("failed"), [failed.id])
-        XCTAssertEqual(ids("harbor failed"), [failed.id], "a status word composes with the rest of the query")
+        XCTAssertEqual(ids("harbor failed"), [failed.id], "a status word narrows; the rest of the query must still match")
+        XCTAssertTrue(ids("failed qwen").isEmpty, "the failed run is not a Qwen run, and the Qwen run did not fail")
+        XCTAssertEqual(ids("completed qwen"), [drafted.id])
+        XCTAssertEqual(ids("completed"), [drafted.id, legacy.id])
         // Fragments that occur only inside status words: none of them may pull in a row, or
         // "ai" would list every failed run and "ing" every running one.
         XCTAssertTrue(ids("ai").isEmpty, "a fragment of a status word matches nothing")

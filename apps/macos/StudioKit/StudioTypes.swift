@@ -919,7 +919,7 @@ package enum StudioCommandAdapter {
     }
 }
 
-package enum StudioLibraryStatus: String, Codable, Equatable {
+package enum StudioLibraryStatus: String, Codable, Equatable, CaseIterable {
     case queued
     case running
     case completed

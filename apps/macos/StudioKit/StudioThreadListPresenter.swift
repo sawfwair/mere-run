@@ -51,7 +51,7 @@ package enum StudioThreadListPresenter {
         for thread: StudioLibraryItem,
         now: Date = Date(),
         calendar: Calendar = .current,
-        titles: StudioModelTitles = .none
+        titles: StudioModelTitles
     ) -> String {
         var parts: [String] = []
         if thread.mode == .code { parts.append("Code") }
@@ -61,7 +61,7 @@ package enum StudioThreadListPresenter {
     }
 
     /// The friendly name of the model the thread last ran with, or the preset's default.
-    package static func modelLabel(for thread: StudioLibraryItem, titles: StudioModelTitles = .none) -> String {
+    package static func modelLabel(for thread: StudioLibraryItem, titles: StudioModelTitles) -> String {
         let identity = StudioModelNaming.resolvedModelID(for: thread.mode, model: thread.model ?? "")
         return identity.isEmpty ? "Auto" : StudioModelNaming.displayName(identity, titles: titles)
     }

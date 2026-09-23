@@ -92,13 +92,48 @@ final class StudioFeedCardTests: XCTestCase {
         draft.model = "image-zimage-nano"
         var item = row(id: UUID(), prompt: "p", status: .completed, createdAt: Date())
         item.commandDraft = draft
-        XCTAssertEqual(StudioFeedChips.chips(for: item), ["1024×1024", "4 steps", "seed 8812", "Zimage Nano"])
+        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none), ["1024×1024", "4 steps", "seed 8812", "Zimage Nano"])
 
         draft.seed = ""
         item.commandDraft = draft
-        XCTAssertEqual(StudioFeedChips.chips(for: item)[2], "seed random")
+        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none)[2], "seed random")
         item.commandDraft = nil
-        XCTAssertEqual(StudioFeedChips.chips(for: item), [])
+        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none), [])
+    }
+
+    /// A failed card offers Get the model only when that is what went wrong: the run's model
+    /// is one the inventory lists as missing (not invalid, offline, or awaiting conversion,
+    /// which a pull would not fix) and the failure line names it. A model removed after an
+    /// unrelated failure keeps the CLI's own reason.
+    func testFailureCardOffersTheModelOnlyWhenTheRunFailedForWantOfIt() throws {
+        var draft = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate)).defaultDraft()
+        draft.model = "image-zimage-turbo"
+        var failed = row(id: UUID(), prompt: "p", status: .failed, createdAt: Date())
+        failed.commandDraft = draft
+        func inventory(_ status: String) -> [StudioModelInventoryRow] {
+            [StudioModelInventoryRow(id: "image-zimage-turbo", category: "image", status: status, size: "—", usageTerms: nil)]
+        }
+        let aboutTheModel = "Image-zimage-turbo is not installed. Run `mere.run model pull image-zimage-turbo`."
+        let unrelated = "Out of memory"
+
+        XCTAssertEqual(
+            StudioFailureSummary.missingModel(for: failed, in: inventory("missing"), failureLine: aboutTheModel)?.id,
+            "image-zimage-turbo"
+        )
+        for status in ["invalid", "offline", "conversion-required", "installed"] {
+            XCTAssertNil(StudioFailureSummary.missingModel(for: failed, in: inventory(status), failureLine: aboutTheModel), status)
+        }
+        XCTAssertNil(
+            StudioFailureSummary.missingModel(for: failed, in: inventory("missing"), failureLine: unrelated),
+            "a model removed after an unrelated failure keeps the CLI's reason"
+        )
+        XCTAssertNil(StudioFailureSummary.missingModel(for: failed, in: [], failureLine: aboutTheModel), "a model the inventory does not list")
+
+        var cancelled = failed
+        cancelled.status = .cancelled
+        XCTAssertNil(StudioFailureSummary.missingModel(for: cancelled, in: inventory("missing"), failureLine: aboutTheModel))
+        failed.commandDraft = nil
+        XCTAssertNil(StudioFailureSummary.missingModel(for: failed, in: inventory("missing"), failureLine: aboutTheModel), "no recorded model")
     }
 
     func testFeedTimeShowsClockTodayAndDayOtherwise() {

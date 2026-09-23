@@ -226,8 +226,10 @@ files to the Trash. A batch of exactly two finished image runs adds **Compare**
 to the bar and the context menu, which opens the older run in the result
 workspace with the newer beside it. Search matches a run's title, kind, prompt,
 model (the name the app shows or the exact id, from the thread, the recorded
-draft, or a legacy row's `--model` argument), and a whole status word ("failed",
-"running"; a fragment like "ed" matches nothing).
+draft, or a legacy row's `--model` argument); a whole status word ("failed",
+"running") narrows to that status and the rest of the query must still match,
+so "failed harbor" is the failed harbor runs, and a fragment like "ed" matches
+nothing.
 Filtering and day-grouping live in `StudioLibraryPresenter`, so both are
 testable without a view. The view mode, kind, and favorites filter persist per
 window under `studio.libraryView`, `studio.libraryKind`, and

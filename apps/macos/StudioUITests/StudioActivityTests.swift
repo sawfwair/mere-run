@@ -19,7 +19,7 @@ final class StudioActivityTests: XCTestCase {
         let utility = store.submit(try makeRequest(lane: .utility, templateID: .modelList))
         _ = store.submit(try makeRequest(lane: .probe, templateID: .modelCapabilities, dedupeKey: "readiness"))
 
-        let rows = StudioActivity.rows(in: store)
+        let rows = StudioActivity.rows(in: store, titles: .none)
 
         XCTAssertEqual(rows.map(\.id), [first, second, utility, queued, alsoQueued])
         XCTAssertEqual(rows.map(\.isRunning), [true, true, true, false, false])
@@ -38,15 +38,15 @@ final class StudioActivityTests: XCTestCase {
         })
         let gate = store.submit(try makeRequest(lane: .utility, templateID: .qualityGate))
 
-        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(generate))), "Image · Generate")
-        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(transcribe))), "Audio · Transcribe")
+        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(generate)), titles: .none), "Image · Generate")
+        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(transcribe)), titles: .none), "Audio · Transcribe")
         XCTAssertEqual(
-            StudioActivity.title(for: try XCTUnwrap(store.job(pull))),
+            StudioActivity.title(for: try XCTUnwrap(store.job(pull)), titles: .none),
             "Models · Pull Qwen3.6-VL 4B",
             "a pull names its model the way the composer's model chip does"
         )
         // A job with no task of its own falls back to the template's title.
-        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(gate))), "Models · Quality gate")
+        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(gate)), titles: .none), "Models · Quality gate")
     }
 
     func testQueuedRowsSayWhereTheyAreInTheQueue() throws {
@@ -138,19 +138,19 @@ final class StudioActivityTests: XCTestCase {
         let queued = store.submit(try makeRequest(templateID: .imageGenerate))
 
         // The row id is the job id, so the popover's stop button cancels exactly its own job.
-        let queuedRow = try XCTUnwrap(StudioActivity.rows(in: store).first { !$0.isRunning })
+        let queuedRow = try XCTUnwrap(StudioActivity.rows(in: store, titles: .none).first { !$0.isRunning })
         XCTAssertEqual(queuedRow.id, queued)
         XCTAssertTrue(store.cancel(queuedRow.id))
-        XCTAssertFalse(StudioActivity.rows(in: store).contains { $0.id == queued })
+        XCTAssertFalse(StudioActivity.rows(in: store, titles: .none).contains { $0.id == queued })
 
-        let runningRow = try XCTUnwrap(StudioActivity.rows(in: store).first { $0.id == running })
+        let runningRow = try XCTUnwrap(StudioActivity.rows(in: store, titles: .none).first { $0.id == running })
         XCTAssertTrue(runningRow.isRunning)
         XCTAssertTrue(store.cancel(runningRow.id))
         XCTAssertEqual(runner.processes[1].terminateCallCount, 1)
 
         runner.starts[1].termination(15)
         await settle()
-        XCTAssertFalse(StudioActivity.rows(in: store).contains { $0.id == running })
+        XCTAssertFalse(StudioActivity.rows(in: store, titles: .none).contains { $0.id == running })
     }
 
     func testFooterReportsTheVersionHandshake() {

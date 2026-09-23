@@ -22,7 +22,7 @@ enum StudioActivity {
     /// Running jobs first (lane order, then start order), then the queue in FIFO order — the order
     /// the work will actually finish in.
     @MainActor
-    static func rows(in store: JobStore, titles: StudioModelTitles = .none) -> [StudioActivityRow] {
+    static func rows(in store: JobStore, titles: StudioModelTitles) -> [StudioActivityRow] {
         let running = lanes.flatMap { store.running(in: $0) }
         let queued = lanes.flatMap { store.queued(in: $0) }
         return running.map {
@@ -42,7 +42,7 @@ enum StudioActivity {
     /// The domain and task a job belongs to, so a row names the work rather than the command.
     /// A raw utility read or write has no template, so it names its own CLI subcommand.
     @MainActor
-    static func title(for job: Job, titles: StudioModelTitles = .none) -> String {
+    static func title(for job: Job, titles: StudioModelTitles) -> String {
         guard let templateID = job.request.templateID else { return rawTitle(for: job) }
         return "\(StudioDomain(templateID: templateID).title) · \(task(for: job, titles: titles))"
     }

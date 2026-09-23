@@ -312,7 +312,7 @@ enum StudioFeedTime {
 /// The parameter chips a card shows under its prompt, read from the run's own command draft so
 /// a card always says what actually ran.
 enum StudioFeedChips {
-    static func chips(for item: StudioLibraryItem, titles: StudioModelTitles = .none) -> [String] {
+    static func chips(for item: StudioLibraryItem, titles: StudioModelTitles) -> [String] {
         guard let draft = item.commandDraft else { return [] }
         var chips: [String] = []
         switch item.mode {
@@ -818,23 +818,27 @@ struct StudioFailureCard: View {
         return (item.outputText ?? "").components(separatedBy: .newlines).filter { !$0.isBlank }
     }
 
-    /// A managed model the run needed that this Mac does not have. The CLI's error line says so
-    /// in its own words; the card says it plainly and offers the pull, like the readiness card.
+    /// The CLI's own account of the failure, the last meaningful line of what the run wrote.
+    private var failureLine: String {
+        StudioFailureSummary.summary(
+            outputText: item.outputText,
+            logLines: job?.log.lines.map(\.text) ?? [],
+            exitCode: job?.exitCode ?? item.exitCode
+        )
+    }
+
+    /// A managed model the run failed for want of. The CLI's error line says so in its own
+    /// words; the card says it plainly and offers the pull, like the readiness card.
     private var missingModel: StudioModelInventoryRow? {
-        guard !wasCancelled, item.status != .interrupted, let modelID = item.recordedModelID,
-              let row = modelInventory.first(where: { $0.id == modelID }), !row.isInstalled else { return nil }
-        return row
+        guard !wasCancelled else { return nil }
+        return StudioFailureSummary.missingModel(for: item, in: modelInventory, failureLine: failureLine)
     }
 
     private var summary: String {
         if item.status == .interrupted { return "Interrupted when Studio closed. Retry to start a new run." }
         if item.status == .cancelled { return "Cancelled. Your previous results are preserved." }
         if let missingModel { return "\(StudioModelNaming.displayName(missingModel)) isn't on this Mac yet." }
-        return StudioFailureSummary.summary(
-            outputText: item.outputText,
-            logLines: job?.log.lines.map(\.text) ?? [],
-            exitCode: job?.exitCode ?? item.exitCode
-        )
+        return failureLine
     }
 
     private var wasCancelled: Bool {
