@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Stop model inventory and lookup from hanging on a model location that does
+  not answer, such as a removable or network volume whose macOS access prompt
+  is unanswered. Each location gets a bounded directory check first, and
+  `status`, `model list`, and `/runtime/status` report locations they skipped
+  or were denied. `/runtime/status` now reads installed models from a
+  background-refreshed scan instead of scanning on every request. The macOS
+  app declares removable- and network-volume usage descriptions.
+
 ## 0.55.0 - 2026-09-22
 
 - Add native Laya decisions through `text decide`, macOS Studio, and

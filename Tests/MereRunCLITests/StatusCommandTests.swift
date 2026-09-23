@@ -127,6 +127,47 @@ final class StatusCommandTests: XCTestCase {
         XCTAssertEqual(installed["runtimeAvailable"] as? Bool, true)
     }
 
+    func testFormatterAndJSONReportSkippedModelLocations() throws {
+        var snapshot = StatusSnapshot(
+            server: StatusServerSnapshot(
+                url: "http://127.0.0.1:8080",
+                health: "down",
+                detail: nil,
+                loadedModels: [],
+                modelsDetail: nil,
+                runtime: nil,
+                runtimeDetail: nil
+            ),
+            modelStore: StatusModelStoreSnapshot(
+                path: "/tmp/models",
+                source: "default",
+                configuredPath: nil,
+                isFallbackToDefault: false
+            ),
+            knownModelCount: 1,
+            installedModels: [],
+            inventoryComplete: false
+        )
+        snapshot.modelLocationIssues = [
+            ModelLocationIssue(path: "/Volumes/MODELS", problem: .unresponsive),
+            ModelLocationIssue(path: "/Volumes/Home/models", problem: .denied),
+        ]
+
+        let output = StatusFormatter.text(snapshot)
+        XCTAssertTrue(output.contains("model inventory: fast, incomplete, 0 ms"))
+        XCTAssertTrue(output.contains("skipped /Volumes/MODELS: not responding"))
+        XCTAssertTrue(output.contains("skipped /Volumes/Home/models: access denied"))
+
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any]
+        )
+        let issues = try XCTUnwrap(object["modelLocationIssues"] as? [[String: String]])
+        XCTAssertEqual(issues, [
+            ["path": "/Volumes/MODELS", "problem": "unresponsive"],
+            ["path": "/Volumes/Home/models", "problem": "denied"],
+        ])
+    }
+
     func testFormatterShowsUnavailableLoadedModels() {
         let snapshot = StatusSnapshot(
             server: StatusServerSnapshot(

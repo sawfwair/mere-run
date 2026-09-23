@@ -17,6 +17,8 @@ struct ModelInventorySnapshot: Equatable, Encodable {
     let mode: ModelInventoryMode
     let complete: Bool
     let durationMs: Int
+    /// Locations the scan skipped because they denied access or did not answer in time.
+    var locationIssues: [ModelLocationIssue] = []
 
     var installedModelIDs: Set<String> {
         Set(rows.lazy.filter(\.isInstalled).map(\.id))
@@ -38,6 +40,20 @@ struct ModelInventoryRow: Equatable, Encodable {
     }
 }
 
+extension ModelLocationIssue {
+    /// One diagnostic line naming the skipped location and what to check.
+    var diagnostic: String {
+        switch problem {
+        case .unresponsive:
+            return "skipped \(path): not responding (check for a macOS volume-access prompt, "
+                + "or a sleeping or disconnected disk)"
+        case .denied:
+            return "skipped \(path): access denied "
+                + "(System Settings > Privacy & Security > Files & Folders)"
+        }
+    }
+}
+
 enum ModelInventory {
     /// Compatibility entry point for callers that explicitly expect measured sizes.
     static func rows(fileManager: FileManager = .default) -> [ModelInventoryRow] {
@@ -47,14 +63,19 @@ enum ModelInventory {
     static func snapshot(
         mode: ModelInventoryMode,
         fileManager: FileManager = .default,
-        locations: ModelLocationSnapshot? = nil
+        locations: ModelLocationSnapshot? = nil,
+        access: ModelLocationAccess = .shared
     ) -> ModelInventorySnapshot {
         let startedAt = Date()
-        let resolver = ModelResolver(fileManager: fileManager, locations: locations)
+        let usesDefaultLocations = locations == nil
+        let locations = locations ?? MereRunModelLocations.snapshot(fileManager: fileManager)
+        let resolver = ModelResolver(fileManager: fileManager, locations: locations, access: access)
         let specs = ManagedModelCatalog.allSpecs
         let knownSpecs = Dictionary(uniqueKeysWithValues: specs.map { ($0.id, $0) })
         let idsInOrder = specs.map(\.id)
-        var complete = true
+        let locationIssues = resolver.locationIssues()
+        let unresponsive = Set(locationIssues.filter { $0.problem == .unresponsive }.map(\.path))
+        var complete = locationIssues.isEmpty
 
         let rows = idsInOrder.map { id in
             let spec = knownSpecs[id]
@@ -63,6 +84,7 @@ enum ModelInventory {
                     id: id,
                     spec: spec,
                     resolver: resolver,
+                    unresponsive: unresponsive,
                     fileManager: fileManager
                 )
                 complete = complete && result.complete
@@ -73,7 +95,9 @@ enum ModelInventory {
                 spec: spec,
                 resolver: resolver,
                 measureSize: mode == .measured,
-                usesDefaultLocations: locations == nil,
+                usesDefaultLocations: usesDefaultLocations,
+                primaryStoreResponsive: !unresponsive.contains(locations.primaryRoot.path),
+                unresponsive: unresponsive,
                 fileManager: fileManager
             )
         }
@@ -83,7 +107,8 @@ enum ModelInventory {
             rows: rows,
             mode: mode,
             complete: complete,
-            durationMs: durationMs
+            durationMs: durationMs,
+            locationIssues: locationIssues
         )
     }
 
@@ -91,6 +116,7 @@ enum ModelInventory {
         id: String,
         spec: ManagedModelSpec?,
         resolver: ModelResolver,
+        unresponsive: Set<String>,
         fileManager: FileManager
     ) -> (row: ModelInventoryRow, complete: Bool) {
         let candidateIDs = [id] + (spec?.resolutionFallbackIDs ?? [])
@@ -104,6 +130,10 @@ enum ModelInventory {
             for candidate in resolver.locationCandidates(for: modelID) {
                 if candidate.kind == .registeredBinding {
                     registeredBindingExists = true
+                }
+                guard !unresponsive.contains(candidate.locationRootURL.path) else {
+                    complete = false
+                    continue
                 }
 
                 switch shallowDirectoryState(candidate.rootURL, fileManager: fileManager) {
@@ -183,6 +213,8 @@ enum ModelInventory {
         resolver: ModelResolver,
         measureSize: Bool,
         usesDefaultLocations: Bool,
+        primaryStoreResponsive: Bool,
+        unresponsive: Set<String>,
         fileManager: FileManager
     ) -> ModelInventoryRow {
         let status: String
@@ -192,23 +224,28 @@ enum ModelInventory {
         let resolvedViaResolver = modelID.flatMap { resolver.resolveIfPresent($0) }
         let registeredBindings = (modelID.map { resolver.locationCandidates(for: $0) } ?? [])
             .filter { $0.kind == .registeredBinding }
+        let readableBindings = registeredBindings.filter { !unresponsive.contains($0.locationRootURL.path) }
 
         let flatDir = modelID.flatMap { modelID in
             resolver.locationCandidates(for: modelID)
                 .first { $0.kind == .primaryStore }?
                 .rootURL
         } ?? MereRunModelPaths.modelDir(id)
-        let flatInstalled = isNonEmptyDirectory(flatDir, fileManager: fileManager)
-        let hasManagedManifest = fileManager.fileExists(
+        // An unresponsive primary store is only checked through the resolver, which skips it.
+        let flatInstalled = primaryStoreResponsive && isNonEmptyDirectory(flatDir, fileManager: fileManager)
+        let hasManagedManifest = primaryStoreResponsive && fileManager.fileExists(
             atPath: flatDir.appendingPathComponent(MereRunModelManifest.filename).path
         )
-        let gemmaAliasInstall = gemmaAliasInstallURL(for: id, fileManager: fileManager)
+        let gemmaAliasInstall = primaryStoreResponsive
+            ? gemmaAliasInstallURL(for: id, fileManager: fileManager)
+            : nil
 
         if let spec, spec.usesPinnedGeometryArtifacts {
             if let resolution = resolvedViaResolver {
                 status = "installed"
                 measuredRoot = resolution.rootURL
-            } else if spec.requiresManagedConversion,
+            } else if primaryStoreResponsive,
+                      spec.requiresManagedConversion,
                       ManagedModelResolver.isManagedInstallComplete(
                           spec: spec,
                           at: flatDir,
@@ -229,7 +266,8 @@ enum ModelInventory {
         } else if let gemmaAliasInstall {
             status = "installed"
             measuredRoot = gemmaAliasInstall
-        } else if let spec,
+        } else if primaryStoreResponsive,
+                  let spec,
                   ManagedModelResolver.isManagedInstallComplete(
                       spec: spec,
                       at: flatDir,
@@ -243,7 +281,7 @@ enum ModelInventory {
             status = hasManagedManifest ? "invalid" : "installed"
             measuredRoot = flatDir
         } else if !registeredBindings.isEmpty {
-            let availableBinding = registeredBindings.first {
+            let availableBinding = readableBindings.first {
                 isNonEmptyDirectory($0.rootURL, fileManager: fileManager)
             }
             status = availableBinding == nil ? "offline" : "invalid"
