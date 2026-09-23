@@ -2,8 +2,8 @@
 
 Read text aloud, clone a voice from a short reference clip and save it for
 reuse, transcribe either a file or a live microphone, and identify who spoke
-when in a recording. Two automatic speech recognition (ASR) backends and one
-speaker-diarization backend are available. These operations run locally, so
+when in a recording. Two automatic speech recognition (ASR) backends and two
+speaker-diarization backends are available. These operations run locally, so
 the audio does not leave the machine.
 
 ## Commands
@@ -12,7 +12,8 @@ the audio does not leave the machine.
 | --- | --- |
 | `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS. |
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
-| `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX Sortformer. |
+| `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
+| `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
 | `mere.run speech listen` | Transcribe a macOS microphone with live Qwen ASR. |
 | `mere.run speech profile create` | Create a reusable voice profile from reference audio. |
 | `mere.run speech profile list` | List saved speech voice profiles. |
@@ -33,6 +34,7 @@ the audio does not leave the machine.
 ### Speaker diarization
 
 - `speech-diarization-sortformer` (NVIDIA Streaming Sortformer v2.1, up to four speakers)
+- `speech-diarization-nemotron3` (NVIDIA Nemotron 3 Diarization, up to eight speakers)
 
 ## macOS Studio
 
@@ -45,15 +47,63 @@ renders, and backend, task, and language selection.
 **Audio ▸ Transcribe** shows the timestamped transcript beside the recording's
 waveform, with a Timeline and a raw JSON view, and saves the transcript as a
 durable artifact. **Audio ▸ Who Spoke** is `speech diarize`, with an audio
-picker, the managed Sortformer default, JSON and RTTM timelines, and
-segment-tuning controls. **Audio ▸ Live** is `speech listen`: it enumerates
-capture devices through the CLI and streams partial transcripts as the
-recognizer emits them, with an operator-owned stop. Every run uses the public
+picker, managed Sortformer and Nemotron 3 selection, JSON and RTTM timelines, and
+segment-tuning controls. **Audio ▸ Live** offers `speech listen` transcription
+and `speech diarize-live` speaker activity. It enumerates capture devices
+through the CLI and streams results as they arrive, with an operator-owned
+stop. Every run uses the public
 CLI contract and stays in the Library.
 
 The packaged app declares `NSMicrophoneUsageDescription` and signs both the app
 and embedded CLI with the audio-input entitlement. Recording is local; granting
 microphone access does not enable a network upload path.
+
+### Diarize a conversation
+
+Pull the released Nemotron 3 checkpoint after reviewing its OpenMDW-1.1 terms:
+
+```bash
+mere.run model pull speech-diarization-nemotron3 --accept-model-license
+mere.run speech diarize ./meeting.wav --model speech-diarization-nemotron3 \
+  --format json --output ./meeting-speakers.json
+```
+
+The native MLX runtime accepts a 16 kHz mono waveform after CLI decoding and
+returns anonymous speaker time ranges. It preserves overlapping speakers and
+uses cache-aware chunks, so long recordings are not limited to one attention
+window. `--latency offline` uses a 30.4-second input buffer. For the released
+model's smaller buffer settings, choose `--latency 1.04`, `0.64`, or `0.32`.
+These values describe buffered audio, not total processing time. The existing
+four-speaker Sortformer remains the command default; `--latency` applies only
+to Nemotron 3.
+
+### Diarize live audio
+
+`diarize-live` keeps the speaker cache and recent context across incoming audio
+chunks. It emits `schema_version: 1` JSON Lines events (`ready`, `activity`, and
+`final`) before the input ends. Each `activity` event covers a nonoverlapping
+time range and includes zero or more anonymous speaker segments. Adjacent
+chunks may contain segments from the same continuous turn.
+
+```bash
+mere.run speech diarize-live --model speech-diarization-nemotron3 \
+  --latency 1.04
+```
+
+Use `--device <core-audio-uid>` to choose a microphone or `--list-devices` to
+list UIDs. For an external 16 kHz mono PCM source, pass signed 16-bit
+little-endian samples on stdin:
+
+```bash
+ffmpeg -re -i ./meeting.wav -ar 16000 -ac 1 -f s16le - |
+  mere.run speech diarize-live --stdin --latency 1.04
+```
+
+The 1.04-second input buffer is the live default. `--latency 0.64` and `0.32`
+reduce buffered audio and can reduce speaker consistency. These durations
+exclude capture, computation, and output transport. The file command continues
+to return a complete timeline after processing the input; choose `diarize-live`
+when results must arrive during capture.
 
 ## Typical workflows
 

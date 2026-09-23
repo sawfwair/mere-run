@@ -173,7 +173,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         ]))
 
         let speechNames = Set(Speech.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(speechNames, Set(["synthesize", "transcribe", "diarize", "listen", "profile"]))
+        XCTAssertEqual(speechNames, Set(["synthesize", "transcribe", "diarize", "diarize-live", "listen", "profile"]))
 
         let visionNames = Set(Vision.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(visionNames, Set([

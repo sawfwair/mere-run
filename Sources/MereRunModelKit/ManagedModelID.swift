@@ -83,6 +83,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case qwen3ASR = "speech-asr-qwen3"
     case parakeetASR = "speech-asr-parakeet"
     case sortformerDiarization = "speech-diarization-sortformer"
+    case nemotron3Diarization = "speech-diarization-nemotron3"
     case qwen3Code = "text-code-qwen3"
     case qwen3Embedding = "text-embed-qwen3-0.6b"
     case privacyFilter = "text-anonymize-privacy-filter"

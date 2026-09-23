@@ -4,6 +4,7 @@ import MLX
 public enum SortformerDiarizationError: LocalizedError, Sendable {
     case emptyAudio
     case unsupportedSampleRate(actual: Int, expected: Int)
+    case invalidConfiguration
 
     public var errorDescription: String? {
         switch self {
@@ -11,6 +12,8 @@ public enum SortformerDiarizationError: LocalizedError, Sendable {
             return "Speaker diarization requires non-empty audio."
         case .unsupportedSampleRate(let actual, let expected):
             return "Speaker diarization requires \(expected) Hz mono audio; received \(actual) Hz."
+        case .invalidConfiguration:
+            return "Speaker diarization requires positive chunk and cache lengths with nonnegative context."
         }
     }
 }

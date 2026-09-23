@@ -1719,25 +1719,45 @@ sfxVideo	videoQuality=draft	sfx video generate 1 1 --negative-prompt 1 --output 
 sfxVideo	videoQuality=final	sfx video generate 1 1 --negative-prompt 1 --output 1 --model 1 --duration 8.5 --steps 5 --cfg 3.5 --seed 1 --renoise 1 --synchformer-model 1 --sync-batch-size 2 --clip-batch-size 5 --preflight --json --quiet 1
 sfxVideo	voiceMode=clone	sfx video generate 1 1 --negative-prompt 1 --output 1 --model 1 --duration 8.5 --steps 5 --cfg 3.5 --seed 1 --renoise 1 --synchformer-model 1 --sync-batch-size 2 --clip-batch-size 5 --preflight --json --quiet 1
 speechDiarize	default	speech diarize '' --model speech-diarization-sortformer --format json --output ~/Documents/mere.run/Audio/diarize-speakers-<stamp>.json --threshold 0.5 --min-duration 0.25 --merge-gap 0.25 --quiet
-speechDiarize	maximal	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	maximal-booleans-off	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 1
-speechDiarize	modelRoot=video-minimax-h3-ref2va	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	modelRoot=video-wan22-ti2v-5b-mlx	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	musicLMMode=disable	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	musicLMMode=use	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	musicTask=lego	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	musicTask=repaint	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	renderProfile=quality	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	responseFormat=json_object	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	responseFormat=text	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	thinkingMode=automatic	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	thinkingMode=hide	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	thinkingMode=show	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	videoOutputMode=audio-video	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	videoOutputMode=video-only	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	videoQuality=draft	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	videoQuality=final	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
-speechDiarize	voiceMode=clone	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --quiet 1
+speechDiarize	maximal	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	maximal-booleans-off	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 1
+speechDiarize	modelRoot=video-minimax-h3-ref2va	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	modelRoot=video-wan22-ti2v-5b-mlx	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	musicLMMode=disable	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	musicLMMode=use	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	musicTask=lego	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	musicTask=repaint	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	renderProfile=quality	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	responseFormat=json_object	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	responseFormat=text	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	thinkingMode=automatic	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	thinkingMode=hide	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	thinkingMode=show	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	videoOutputMode=audio-video	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	videoOutputMode=video-only	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	videoQuality=draft	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	videoQuality=final	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarize	voiceMode=clone	speech diarize 1 --model 1 --format 1 --output 1 --threshold 1 --min-duration 0.75 --merge-gap 0.75 --latency 1 --quiet 1
+speechDiarizeLive	default	speech diarize-live --model speech-diarization-nemotron3
+speechDiarizeLive	maximal	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	maximal-booleans-off	speech diarize-live --model 1 --device 1 --latency 1 --threshold 0.5 1
+speechDiarizeLive	modelRoot=video-minimax-h3-ref2va	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	modelRoot=video-wan22-ti2v-5b-mlx	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	musicLMMode=disable	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	musicLMMode=use	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	musicTask=lego	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	musicTask=repaint	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	renderProfile=quality	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	responseFormat=json_object	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	responseFormat=text	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	thinkingMode=automatic	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	thinkingMode=hide	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	thinkingMode=show	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	videoOutputMode=audio-video	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	videoOutputMode=video-only	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	videoQuality=draft	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	videoQuality=final	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
+speechDiarizeLive	voiceMode=clone	speech diarize-live --model 1 --device 1 --list-devices --stdin --latency 1 --threshold 0.5 --quiet 1
 speechListen	default	speech listen --language auto
 speechListen	maximal	speech listen --list-devices --device 1 --language 1 --model 1 --decode-ms 1 --silence-ms 1 --quiet --jsonl 1
 speechListen	maximal-booleans-off	speech listen --device 1 --language 1 --model 1 --decode-ms 1 --silence-ms 1 1

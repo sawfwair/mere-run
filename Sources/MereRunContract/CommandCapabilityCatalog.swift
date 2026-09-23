@@ -137,6 +137,7 @@ public enum MereRunCapabilityCatalog {
             speechSynthesize,
             speechTranscribe,
             speechDiarize,
+            speechDiarizeLive,
             speechProfileList,
             speechProfileCreate,
             speechProfileDelete,

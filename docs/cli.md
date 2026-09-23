@@ -45,7 +45,8 @@ Public tree:
 - [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, diarize, and manage voice profiles.
   - `mere.run speech synthesize` — Generate speech from text using Qwen3-TTS.
   - `mere.run speech transcribe` — Transcribe or translate speech to text using native ASR backends.
-  - `mere.run speech diarize` — Identify who spoke when in an audio file with native MLX Sortformer.
+  - `mere.run speech diarize` — Identify who spoke when in an audio file with native MLX diarization.
+  - `mere.run speech diarize-live` — Stream Nemotron 3 speaker activity from a microphone or raw PCM stdin.
   - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen ASR.
   - `mere.run speech profile` — Manage saved voice clone profiles.
     - `mere.run speech profile list` — List saved speech voice profiles.
@@ -2869,6 +2870,7 @@ Supported endpoint surface:
 - `POST /v1/images/edits`
 - `POST /v1/audio/speech`
 - `POST /v1/audio/transcriptions`
+- `POST /v1/audio/diarizations`
 - `GET /runtime/status`
 - `POST /runtime/models/{id}/load`
 - `POST /runtime/models/{id}/unload`
@@ -2899,7 +2901,8 @@ Security defaults:
 - `POST /v1/chat/completions`, `POST /v1/embeddings`,
   `POST /v1/images/generations`, and `POST /v1/audio/speech` require
   `Content-Type: application/json`; `POST /v1/images/edits` and
-  `POST /v1/audio/transcriptions` require `multipart/form-data`
+  `POST /v1/audio/transcriptions` and `POST /v1/audio/diarizations` require
+  `multipart/form-data`
 - `--rate-limit-per-minute` applies basic request throttling to the
   OpenAI-compatible routes
 - `--max-active-requests` controls fair FIFO admission for chat, embedding,
@@ -3059,6 +3062,10 @@ OpenAI image/audio compatibility:
   `verbose_json`, `srt`, and `vtt` response formats. OpenAI model names such as
   `whisper-1` map to the local default; `max_tokens` is limited to 1 through
   4,096.
+- `POST /v1/audio/diarizations` accepts one multipart audio upload for
+  `speech-diarization-nemotron3` or `speech-diarization-sortformer`, returning
+  versioned JSON or RTTM. Nemotron 3 also accepts `latency` settings `offline`,
+  `1.04`, `0.64`, and `0.32`.
 
 Examples:
 
@@ -3088,6 +3095,9 @@ curl http://127.0.0.1:8080/v1/audio/speech \
 curl http://127.0.0.1:8080/v1/audio/transcriptions \
   -F model=speech-asr-parakeet \
   -F file=@speech.wav
+curl http://127.0.0.1:8080/v1/audio/diarizations \
+  -F model=speech-diarization-nemotron3 \
+  -F file=@meeting.wav
 ```
 
 After starting a server, run `swift run mere.run status` from another terminal

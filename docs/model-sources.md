@@ -134,6 +134,7 @@ an effective overlay; they are not a second capability catalog.
 | `speech-asr` | `speech-asr-qwen3` |
 | `speech-asr` | `speech-asr-parakeet` |
 | `speech-diarization` | `speech-diarization-sortformer` |
+| `speech-diarization` | `speech-diarization-nemotron3` |
 | `text-code` | `text-code-qwen3` |
 | `text-embed` | `text-embed-qwen3-0.6b` |
 | `vision-embed` | `vision-embed-qwen3-vl-2b` |
@@ -308,6 +309,18 @@ treated as a new restriction on the converted weights.
 `diar_streaming_sortformer_4spk-v2.1`, referenced at immutable revision
 `fafaab5faa1617a0ca52d38dd3dc4bd636800d3d`; the weights are installed
 separately and are not vendored in this repository.
+
+`speech-diarization-nemotron3` installs NVIDIA's released
+[`Nemotron-3-Diarization`](https://huggingface.co/nvidia/Nemotron-3-Diarization)
+NeMo checkpoint at immutable revision
+`723e19c601d99b7e58fba6a14e32153e0afe48d9`. The 198,676,480-byte archive
+has SHA-256 `867c53f552998f772e5b5e5c082962ae85ee7ca5669c2bc17d7f615133d4e96d`.
+The runtime verifies this pin, unpacks the tensor state dict, and loads its
+31-layer RoPE Transformer and eight-speaker head into native MLX. The archive
+is an initializer container; inference does not call NeMo or PyTorch. The
+managed pull asks you to acknowledge the model's
+[OpenMDW-1.1 terms](https://openmdw.ai/license/1-1/). Weights are not vendored
+in this repository.
 
 Install most catalog IDs from managed Hugging Face sources with `mere.run model
 pull`. A small number of legacy and local catalog IDs remain so

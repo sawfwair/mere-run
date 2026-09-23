@@ -168,6 +168,7 @@ speechDiarize	speechDiarizationFormat	Optional("json")
 speechDiarize	speechDiarizationMergeGap	Optional(0.25)
 speechDiarize	speechDiarizationMinDuration	Optional(0.25)
 speechDiarize	speechDiarizationThreshold	Optional(0.5)
+speechDiarizeLive	model	speech-diarization-nemotron3
 speechProfileCreate	prompt	Narration profile
 speechSynthesize	model	speech-tts-qwen3-nano
 speechSynthesize	outputPath	~/Music/mere.run/Voice/synthesize-<stamp>.wav

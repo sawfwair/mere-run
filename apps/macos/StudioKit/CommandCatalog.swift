@@ -54,6 +54,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case speechSynthesize
     case speechTranscribe
     case speechDiarize
+    case speechDiarizeLive
     case speechProfileList
     case speechProfileCreate
     case speechProfileDelete
@@ -185,6 +186,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .speechSynthesize: return "speech.synthesize"
         case .speechTranscribe: return "speech.transcribe"
         case .speechDiarize: return "speech.diarize"
+        case .speechDiarizeLive: return "speech.diarize-live"
         case .speechProfileList: return "speech.profile.list"
         case .speechProfileCreate: return "speech.profile.create"
         case .speechProfileDelete: return "speech.profile.delete"
@@ -902,6 +904,8 @@ package struct CommandDraft: Equatable, Codable {
     package var speechJSONL = false
     /// Optional fields preserve decoding of Library rows created before native Sortformer controls.
     package var speechDiarizationFormat: String?
+    package var speechDiarizationLatency: String?
+    package var speechDiarizationLiveStdin = false
     package var speechDiarizationThreshold: Double?
     package var speechDiarizationMinDuration: Double?
     package var speechDiarizationMergeGap: Double?
@@ -1322,6 +1326,13 @@ package struct CommandTemplate: Identifiable, Equatable {
             if !["json", "rttm"].contains(format) {
                 return "Diarization format must be JSON or RTTM."
             }
+            let latency = draft.speechDiarizationLatency ?? "offline"
+            if !["offline", "1.04", "0.64", "0.32"].contains(latency) {
+                return "Nemotron 3 latency must be offline, 1.04, 0.64, or 0.32 seconds."
+            }
+            if latency != "offline" && draft.model == "speech-diarization-sortformer" {
+                return "Custom diarization latency requires Nemotron 3."
+            }
             if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
                 return "Diarization threshold must be between zero and one."
             }
@@ -1330,6 +1341,17 @@ package struct CommandTemplate: Identifiable, Equatable {
             }
             if (draft.speechDiarizationMergeGap ?? 0.25) < 0 {
                 return "Speaker merge gap must be zero or greater."
+            }
+        case .speechDiarizeLive:
+            let latency = draft.speechDiarizationLatency ?? "1.04"
+            if !["1.04", "0.64", "0.32"].contains(latency) {
+                return "Live diarization latency must be 1.04, 0.64, or 0.32 seconds."
+            }
+            if !draft.model.isBlank && draft.model != "speech-diarization-nemotron3" {
+                return "Live diarization requires speech-diarization-nemotron3."
+            }
+            if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
+                return "Diarization threshold must be between zero and one."
             }
         case .modelRemove:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1489,7 +1511,7 @@ extension CommandTemplate {
              .speechProfileCreate,
              .speechProfileDelete:
             return .speak
-        case .speechTranscribe, .speechDiarize:
+        case .speechTranscribe, .speechDiarize, .speechDiarizeLive:
             return .listen
         case .speechListen:
             return .listen

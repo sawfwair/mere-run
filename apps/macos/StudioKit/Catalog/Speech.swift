@@ -62,6 +62,14 @@ extension CommandCatalog {
             title: "Live transcription",
             subtitle: "Stream microphone audio through live Qwen ASR",
             systemImage: "waveform.badge.mic"
+        ),
+        CommandTemplate(
+            id: .speechDiarizeLive,
+            category: .speech,
+            title: "Live speakers",
+            subtitle: "Stream Nemotron 3 speaker activity from the microphone",
+            systemImage: "person.2.wave.2",
+            defaultModel: "speech-diarization-nemotron3"
         )
     ]
 }
@@ -136,6 +144,9 @@ extension CommandArguments {
         if let mergeGap = draft.speechDiarizationMergeGap {
             args.option(F.mergeGap, format(mergeGap))
         }
+        if let latency = draft.speechDiarizationLatency, latency != "offline" {
+            args.option(F.latency, latency)
+        }
         if draft.quiet { args.flag(F.quiet) }
         return args.arguments
     }
@@ -177,6 +188,21 @@ extension CommandArguments {
         }
         if draft.quiet { args.flag(F.quiet) }
         if draft.speechJSONL { args.flag(F.jsonl) }
+        return args.arguments
+    }
+
+    package static func speechDiarizeLive(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.SpeechDiarizeLive
+        var args = ArgumentBuilder(F.self)
+        if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if !draft.speechListenDevice.isBlank { args.option(F.device, draft.speechListenDevice) }
+        if draft.speechListenListDevices { args.flag(F.listDevices) }
+        if draft.speechDiarizationLiveStdin { args.flag(F.stdin) }
+        if let latency = draft.speechDiarizationLatency { args.option(F.latency, latency) }
+        if let threshold = draft.speechDiarizationThreshold {
+            args.option(F.threshold, format(threshold))
+        }
+        if draft.quiet { args.flag(F.quiet) }
         return args.arguments
     }
 }

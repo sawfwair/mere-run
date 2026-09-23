@@ -98,6 +98,7 @@ lifecycle. API keys still cross the process boundary only through
 - `POST /v1/vision/depth-video`
 - `POST /v1/audio/speech`
 - `POST /v1/audio/transcriptions`
+- `POST /v1/audio/diarizations`
 
 Laguna chat requests enable reasoning by default. Chat responses return reasoning
 in `reasoning_content`, including buffered streaming tool-call replies. Clients
@@ -884,6 +885,32 @@ response body, including partial transcoding output on failure.
 
 Unsupported format choices return OpenAI-style `invalid_request_error` payloads
 instead of being ignored.
+
+`POST /v1/audio/diarizations` accepts multipart form fields:
+
+- `file`: one required audio file part
+- `model`: `speech-diarization-nemotron3` (default) or `speech-diarization-sortformer`
+- `response_format`: `json` (default) or `rttm`
+- `threshold`: speaker activity threshold from 0 through 1; defaults to 0.5
+- `min_duration`, `merge_gap`: nonnegative seconds; both default to 0.25
+- `latency`: `offline` (default), `1.04`, `0.64`, or `0.32`; streaming
+  settings require Nemotron 3
+
+The JSON response uses the same `schema_version: 1` speaker segment contract
+as `mere.run speech diarize`. The endpoint runs under API admission and accepts
+uploaded audio rather than client filesystem paths.
+
+`POST /v1/audio/diarizations/stream` accepts a streaming
+`application/octet-stream` request body of 16 kHz mono signed 16-bit
+little-endian PCM. Query parameters are `model` (only
+`speech-diarization-nemotron3`), `latency` (`1.04` by default, `0.64`, or
+`0.32`), and `threshold` (0 through 1). The response is
+`application/x-ndjson`: a `ready` event followed by `activity` events as
+audio arrives and a `final` event at end of input. The session retains its
+speaker cache and FIFO context across request chunks. Clients must stream the
+request body and read the response concurrently; uploading a complete file
+does not provide live end-to-end behavior. The route uses the same API key,
+rate limit, and runtime admission as other inference routes.
 
 ## Vision geometry and 3D compatibility
 

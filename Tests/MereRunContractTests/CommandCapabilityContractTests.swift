@@ -109,6 +109,7 @@ import Testing
         "speech.synthesize",
         "speech.transcribe",
         "speech.diarize",
+        "speech.diarize-live",
         "speech.profile.list",
         "speech.profile.create",
         "speech.profile.delete",
@@ -138,7 +139,7 @@ import Testing
         "geo.tessera",
         "geo.olmoearth"
     ])
-    #expect(document.commands.count == 131)
+    #expect(document.commands.count == 132)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)
