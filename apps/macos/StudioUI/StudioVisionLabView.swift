@@ -384,10 +384,10 @@ struct StudioVisionLabView: View {
                 Toggle("Include embeddings", isOn: $includeEmbeddings)
             }
             if task == .faceEmbed {
-                Stepper("Face index \(faceIndex)", value: $faceIndex, in: 0...100)
+                facePicker(label: "Face to embed", selection: $faceIndex)
             }
             if task == .faceCompare {
-                Stepper("Reference face \(referenceFaceIndex)", value: $referenceFaceIndex, in: 0...100)
+                facePicker(label: "Reference face", selection: $referenceFaceIndex)
                 Stepper("Candidate face \(candidateFaceIndex)", value: $candidateFaceIndex, in: 0...100)
             }
             if task == .faceBatch {
@@ -481,6 +481,60 @@ struct StudioVisionLabView: View {
 
     private func artifact(in item: StudioLibraryItem, extension pathExtension: String) -> URL? {
         item.allArtifactURLs.first { $0.pathExtension.lowercased() == pathExtension }
+    }
+
+    /// Which face `--face-index` means, chosen by clicking it on the primary image when a Face
+    /// detection run has drawn boxes on that image; the stepper stays for an image nobody has
+    /// detected faces in yet.
+    @ViewBuilder
+    private func facePicker(label: String, selection: Binding<Int>) -> some View {
+        if let document = faceDetectionDocument(for: primaryInput) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    Text(label)
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                    Spacer()
+                    Text("Face \(selection.wrappedValue)")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textSecondary)
+                }
+                StudioVisionOverlayPreview(
+                    imageURL: URL(fileURLWithPath: primaryInput),
+                    jsonURL: document,
+                    kind: .faces,
+                    selectedFaceIndex: selection
+                )
+                .frame(height: 200)
+                .background(MereRunTheme.surfaceRaised)
+                .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.md))
+                .overlay {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
+                        .strokeBorder(MereRunTheme.border, lineWidth: 1)
+                }
+                Text("Click a face to choose it.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+        } else {
+            Stepper("\(label) \(selection.wrappedValue)", value: selection, in: 0...100)
+            Text("Run Face detection on this image first to choose a face by clicking it.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+        }
+    }
+
+    /// The newest finished Face detection result for `path`, whose boxes the picker draws.
+    private func faceDetectionDocument(for path: String) -> URL? {
+        guard !path.isBlank else { return nil }
+        let input = URL(fileURLWithPath: path).standardizedFileURL
+        let detection = library.items
+            .filter {
+                $0.templateID == .visionFaceDetect && $0.status == .completed
+                    && $0.inputURL?.standardizedFileURL == input
+            }
+            .max { $0.createdAt < $1.createdAt }
+        return detection.flatMap { artifact(in: $0, extension: "json") }
     }
 
     private func labeledField(
@@ -691,6 +745,9 @@ private struct StudioVisionOverlayPreview: View {
     let imageURL: URL
     let jsonURL: URL
     let kind: StudioVisionOverlayKind
+    /// When set, each face box is a button that picks its index, and the chosen one is drawn in
+    /// the accent.
+    var selectedFaceIndex: Binding<Int>?
 
     @State private var image: NSImage?
     @State private var faces: StudioFaceOverlayResult?
@@ -713,7 +770,11 @@ private struct StudioVisionOverlayPreview: View {
                             drawPose(pose, in: rect, context: &context)
                         }
                     }
+                    if let selectedFaceIndex, let faces {
+                        faceButtons(faces, selection: selectedFaceIndex, in: aspectFitRect(imageSize: image.size, in: geometry.size))
+                    }
                 }
+                .frame(width: geometry.size.width, height: geometry.size.height)
             } else {
                 ContentUnavailableView(
                     error == nil ? "Loading overlay" : "Overlay unavailable",
@@ -752,21 +813,52 @@ private struct StudioVisionOverlayPreview: View {
         )
     }
 
+    /// Where `face` lands in the fitted image.
+    private func faceFrame(_ face: StudioFaceOverlayResult.Record, result: StudioFaceOverlayResult, in rect: CGRect) -> CGRect {
+        let scaleX = rect.width / CGFloat(max(1, result.width))
+        let scaleY = rect.height / CGFloat(max(1, result.height))
+        let box = face.detection.boundingBox
+        return CGRect(
+            x: rect.minX + CGFloat(box.x) * scaleX,
+            y: rect.minY + CGFloat(box.y) * scaleY,
+            width: CGFloat(box.width) * scaleX,
+            height: CGFloat(box.height) * scaleY
+        )
+    }
+
+    /// One transparent button per detected face, so a click picks it. The Canvas underneath
+    /// draws the chosen one in the accent.
+    private func faceButtons(_ result: StudioFaceOverlayResult, selection: Binding<Int>, in rect: CGRect) -> some View {
+        ForEach(result.faces, id: \.index) { face in
+            let frame = faceFrame(face, result: result, in: rect)
+            Button {
+                selection.wrappedValue = face.index
+            } label: {
+                Color.clear
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: max(frame.width, 8), height: max(frame.height, 8))
+            .position(x: frame.midX, y: frame.midY)
+            .help("Face \(face.index), \(Int(face.detection.score * 100))% confidence")
+            .accessibilityLabel("Face \(face.index), \(Int(face.detection.score * 100)) percent")
+            .accessibilityAddTraits(selection.wrappedValue == face.index ? .isSelected : [])
+        }
+    }
+
     private func drawFaces(
         _ result: StudioFaceOverlayResult,
         in rect: CGRect,
         context: inout GraphicsContext
     ) {
+        if let selectedFaceIndex {
+            drawSelectableFaces(result, selected: selectedFaceIndex.wrappedValue, in: rect, context: &context)
+            return
+        }
         let scaleX = rect.width / CGFloat(max(1, result.width))
         let scaleY = rect.height / CGFloat(max(1, result.height))
         for face in result.faces {
-            let box = face.detection.boundingBox
-            let frame = CGRect(
-                x: rect.minX + CGFloat(box.x) * scaleX,
-                y: rect.minY + CGFloat(box.y) * scaleY,
-                width: CGFloat(box.width) * scaleX,
-                height: CGFloat(box.height) * scaleY
-            )
+            let frame = faceFrame(face, result: result, in: rect)
             context.stroke(Path(frame), with: .color(.green), lineWidth: 2)
             for point in face.detection.landmarks {
                 let center = CGPoint(
@@ -785,6 +877,44 @@ private struct StudioVisionOverlayPreview: View {
                 at: CGPoint(x: frame.minX, y: max(rect.minY + 8, frame.minY - 8)),
                 anchor: .leading
             )
+        }
+    }
+
+    /// The picker's rendering: the chosen face in the accent with a soft fill, the rest as quiet
+    /// white outlines, each numbered the way `--face-index` counts them.
+    private func drawSelectableFaces(
+        _ result: StudioFaceOverlayResult,
+        selected: Int,
+        in rect: CGRect,
+        context: inout GraphicsContext
+    ) {
+        for face in result.faces {
+            let frame = faceFrame(face, result: result, in: rect)
+            let isSelected = face.index == selected
+            let path = Path(roundedRect: frame, cornerRadius: 3)
+            if isSelected {
+                context.fill(path, with: .color(MereRunTheme.accent.opacity(0.18)))
+            }
+            context.stroke(
+                path,
+                with: .color(isSelected ? MereRunTheme.accent : Color.white.opacity(0.85)),
+                lineWidth: isSelected ? 2.5 : 1.5
+            )
+            let tag = Text("\(face.index)")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundColor(isSelected ? MereRunTheme.onAccent : Color.black.opacity(0.8))
+            let tagSize = context.resolve(tag).measure(in: CGSize(width: 60, height: 20))
+            let tagRect = CGRect(
+                x: frame.minX,
+                y: max(rect.minY, frame.minY - tagSize.height - 4),
+                width: tagSize.width + 8,
+                height: tagSize.height + 3
+            )
+            context.fill(
+                Path(roundedRect: tagRect, cornerRadius: 3),
+                with: .color(isSelected ? MereRunTheme.accent : Color.white.opacity(0.85))
+            )
+            context.draw(tag, at: CGPoint(x: tagRect.midX, y: tagRect.midY), anchor: .center)
         }
     }
 

@@ -68,6 +68,8 @@ struct StudioAnalyzeImageView: View {
     let masks: [StudioAnalyzeDetection]
     /// The image's true pixel size, which the result's coordinates are in.
     let imageSize: CGSize?
+    /// The prompt layer over the picture, for the tasks whose input takes drawn boxes and points.
+    var editing: StudioAnalyzeImageEditing?
 
     @State private var image: NSImage?
     @State private var didLoad = false
@@ -112,7 +114,9 @@ struct StudioAnalyzeImageView: View {
             image = loaded?.image
             didLoad = true
         }
-        .accessibilityElement(children: .ignore)
+        // The drawn prompts are elements of their own, so the picture only swallows its children
+        // while there is nothing on it to reach.
+        .accessibilityElement(children: editing == nil ? .ignore : .contain)
         .accessibilityLabel(accessibilityDescription)
     }
 
@@ -132,8 +136,17 @@ struct StudioAnalyzeImageView: View {
                     box(detection, in: geometry.size)
                 }
             }
+            .allowsHitTesting(false)
+            if let editing {
+                StudioRegionPromptLayer(
+                    prompts: editing.prompts,
+                    imageSize: pixelSize,
+                    fitted: CGRect(origin: .zero, size: geometry.size),
+                    tool: editing.tool,
+                    selection: editing.selection
+                )
+            }
         }
-        .allowsHitTesting(false)
     }
 
     private func box(_ detection: StudioAnalyzeDetection, in size: CGSize) -> some View {
@@ -179,6 +192,14 @@ struct StudioAnalyzeImageView: View {
                 .offset(x: rect.minX, y: rect.minY)
         }
     }
+}
+
+/// The bindings the prompt layer over an Analyze image edits: the prompts themselves, plus the
+/// tool and selection the canvas's toolbar shares with it.
+struct StudioAnalyzeImageEditing {
+    var prompts: Binding<[StudioRegionPrompt]>
+    var tool: Binding<StudioRegionTool>
+    var selection: Binding<UUID?>
 }
 
 /// "coffee cup 0.94" on an accent tab that sits on top of its box.

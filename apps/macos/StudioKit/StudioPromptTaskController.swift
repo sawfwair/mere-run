@@ -174,8 +174,12 @@ package final class StudioPromptTaskController {
         return true
     }
 
-    package func prepareAnalyzeHandoff(to task: StudioTask) {
-        pendingAnalyzeHandoff = StudioAnalyzeHandoff.make(to: task, inputPath: draft.inputPath, prompt: draft.prompt)
+    /// - Parameter detections: what the current result found on the input, carried into the
+    ///   target as drawn box prompts when it takes them.
+    package func prepareAnalyzeHandoff(to task: StudioTask, detections: [StudioAnalyzeDetection] = []) {
+        pendingAnalyzeHandoff = StudioAnalyzeHandoff.make(
+            to: task, inputPath: draft.inputPath, prompt: draft.prompt, detections: detections
+        )
     }
 
     package func selectAnalyzeInput(from item: StudioLibraryItem) {

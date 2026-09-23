@@ -303,8 +303,25 @@ annotated output. A run in flight, a queue, a failure, and readiness use the
 feed's own cards above the result column, and earlier runs stay one click away
 in the Library column, which also puts their input back in the composer. The
 next steps open the sibling task carrying the input when the target accepts it
-(Find ▸ "Segment these" keeps the picture; "Track in video" keeps only the
-prompt, because Track needs a clip).
+(Find ▸ "Segment these" keeps the picture and draws what Find found as Segment's
+box prompts; "Track in video" keeps only the prompt, because Track needs a clip).
+
+Segment and Track take their prompts on the picture rather than as typed
+coordinates (`StudioUI/StudioRegionPromptEditor.swift`, the geometry and the CLI
+text in `StudioKit/StudioRegionPrompts.swift`). Over the input, a drag draws a
+box, a click adds a point, and Option-click adds a negative point; a Box /
+Point / Negative / Clear toolbar picks what a click does, the selected box shows
+corner handles, drags move a prompt, and Delete removes the selection. Each
+prompt is a VoiceOver element ("Box 1, coffee cup, 120 by 80 at 40, 30"). The
+prompts live on the draft (`StudioDraft.visionRegionPrompts`) in the input's own
+pixels and become the command's `--box` / `--point` values, so the composer, the
+Command view, and the run all read one set; a drawn prompt satisfies the task's
+prompt requirement. Track shows its clip as a frame scrubber
+(`StudioUI/StudioTrackFrameEditor.swift`, frames decoded with
+`AVAssetImageGenerator`): "Start tracking here" seeds the tracker on the frame
+in view, where the prompts are drawn, and "End tracking here" sets the optional
+last frame (`--init-frame` / `--end-frame`). Once a tracked clip exists it plays
+in place, with "Adjust prompts and frames" bringing the scrubber back.
 
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
 steps — for twenty-two tasks, seventeen of which still render their own form
@@ -512,7 +529,13 @@ and the driving clip, subject rows, and stats read only from the CLI's manifest,
 tracking, and quality reports. It keeps multi-subject reference and selector
 authoring, preview and full-video SAM tracking, immutable keyframe corrections,
 the continuity and profile controls under each stage's "More" row, `plan.json`
-persistence, and durable Library jobs with a job bar for the running stage. The
+persistence, and durable Library jobs with a job bar for the running stage. A
+subject's precise selectors and each keyframe correction are drawn with the same
+region editor Segment uses (`StudioUI/StudioSubjectSelectorEditor.swift`): the
+reference selector on the reference image in its own pixels, and the driving
+selector or correction on the driving frame center-cropped to the plan's
+width × height, which is the space `video prepare-masks` segments in; the
+drawing is written back to the plan's box and point text. The
 guided SCAIL-2, Cosmos3, mask-preparation, latent-export, and resident-session
 commands live in the Command Console.
 
@@ -560,8 +583,11 @@ Segment, and Track are the Analyze tasks; Depth, Pose, Faces, Flow, Geometry,
 and Live host the lab form that renders face and pose overlays and dense optical
 flow vectors, plays live tracking and depth review video, embeds geometry point
 clouds, and preserves every JSON, EXR, mask, camera, and 3D sidecar as a durable
-Library artifact. Coordinates stay typed, ordered CLI arguments; machine-readable
-results and mask directories use explicit output pickers.
+Library artifact. Faces ▸ embedding and comparison choose their face by clicking
+it on the picture once a Face detection run has drawn boxes on that image (the
+index stepper remains for an image nobody has detected faces in). Coordinates
+reach the CLI as typed, ordered arguments; machine-readable results and mask
+directories use explicit output pickers.
 
 **Audio** ▸ Transcribe is the Analyze task over `speech transcribe`. Who Spoke
 is native Sortformer diarization with JSON and RTTM timelines and
@@ -747,6 +773,9 @@ composer with the boards' sample prompt and an in-test image attached
 (Image ▸ Generate and Vision ▸ Find), the Analyze board (Vision ▸ Find over a
 1024×1024 in-test image with a seeded `vision ground` document, and
 Audio ▸ Transcribe with a synthesized recording and a timestamped transcript),
+the region-prompt editor with boxes and points drawn on that image and Segment
+and Track on the Analyze board with prompts drawn and Track's frame scrubber
+over an in-test clip,
 Chat with the boards' sample thread, Music ▸ Realtime mid-session (a run the
 process seam holds open, fed the CLI's frame progress and steering echoes, with
 its recording synthesized on disk), Video ▸ Subjects at each stage of a seeded
