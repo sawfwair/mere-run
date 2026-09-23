@@ -222,12 +222,11 @@ struct StudioConversationView: View {
     /// Whether the transcript scrolls to keep new output in view. True until the reader scrolls
     /// away from the bottom; true again once they are back there.
     @State private var followsLatest = true
-    /// True from the moment the reader starts scrolling until that scroll comes to rest, so an
-    /// offset change caused by content landing never counts as the reader leaving the bottom.
-    @State private var readerScrolling = false
-    @State private var distanceFromBottom: CGFloat = 0
+    /// Bookkeeping that never drives a render, so writing it never re-evaluates the transcript.
+    @State private var scratch = TranscriptScratch()
 
     private static let streamingBubbleID = "studio.conversation.streaming"
+    private static let interruptedRowID = "studio.conversation.interrupted"
     static let columnWidth: CGFloat = 760
     /// How far above the end the transcript can rest and still count as at the bottom.
     private static let bottomTolerance: CGFloat = 32
@@ -241,14 +240,23 @@ struct StudioConversationView: View {
     }
 
     /// How many earlier turns the next prompt would drop to fit the budget — surfaced so the
-    /// trimming is never silent.
+    /// trimming is never silent. Rendering the whole thread is not free, so the count is kept
+    /// until the thread, its length, or the budget changes.
     private var droppedFromContext: Int {
         guard !messages.isEmpty else { return 0 }
-        return ConversationTranscript.render(
-            messages: messages,
-            systemPrompt: item?.systemPrompt,
-            budgetChars: budgetChars
-        ).droppedCount
+        let key = TranscriptScratch.TrimKey(
+            item: item?.id, count: messages.count, last: messages.last?.id,
+            systemPromptLength: item?.systemPrompt?.count ?? 0, budget: budgetChars
+        )
+        if scratch.trimKey != key {
+            scratch.trimKey = key
+            scratch.trimDropped = ConversationTranscript.render(
+                messages: messages,
+                systemPrompt: item?.systemPrompt,
+                budgetChars: budgetChars
+            ).droppedCount
+        }
+        return scratch.trimDropped
     }
 
     var body: some View {
@@ -299,6 +307,7 @@ struct StudioConversationView: View {
                                     failureReason: "Interrupted when Studio closed.",
                                     onRetry: onRetry
                                 )
+                                .id(Self.interruptedRowID)
                             }
                         }
                         .padding(EdgeInsets(top: 22, leading: 24, bottom: 8, trailing: 24))
@@ -307,19 +316,21 @@ struct StudioConversationView: View {
                         .frame(minHeight: geometry.size.height, alignment: .bottom)
                     }
                     .onScrollPhaseChange { previous, phase in
-                        readerScrolling = Self.isReaderDriven(phase)
                         // A scroll the reader made has come to rest: follow again only if it
                         // ended at the bottom. A programmatic scroll settling never changes the
-                        // decision.
-                        if phase == .idle, Self.isReaderDriven(previous) {
-                            setFollowsLatest(distanceFromBottom <= Self.bottomTolerance)
+                        // decision, and it clears its mark only once it has settled.
+                        let readerScrollEnded = phase == .idle && isReaderDriven(previous)
+                        if phase == .idle { scratch.programmaticScroll = false }
+                        scratch.readerScrolling = isReaderDriven(phase)
+                        if readerScrollEnded {
+                            setFollowsLatest(scratch.distanceFromBottom <= Self.bottomTolerance)
                         }
                     }
                     .onScrollGeometryChange(for: CGFloat.self) { scroll in
                         scroll.contentSize.height - scroll.visibleRect.maxY
                     } action: { _, distance in
-                        distanceFromBottom = distance
-                        if readerScrolling { setFollowsLatest(distance <= Self.bottomTolerance) }
+                        scratch.distanceFromBottom = distance
+                        if scratch.readerScrolling { setFollowsLatest(distance <= Self.bottomTolerance) }
                     }
                     .overlay(alignment: .bottom) {
                         if !followsLatest { jumpToLatest(proxy) }
@@ -435,9 +446,12 @@ struct StudioConversationView: View {
         .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 
-    /// The phases in which the reader, not the transcript, is moving the scroll position.
-    private static func isReaderDriven(_ phase: ScrollPhase) -> Bool {
+    /// The phases in which the reader, not the transcript, is moving the scroll position. The
+    /// keyboard (Page Down, arrows, End) scrolls in `.animating`, the same phase as
+    /// `scrollToEnd`, so that phase counts as the reader's unless a `scrollToEnd` is in flight.
+    private func isReaderDriven(_ phase: ScrollPhase) -> Bool {
         phase == .tracking || phase == .interacting || phase == .decelerating
+            || (phase == .animating && !scratch.programmaticScroll)
     }
 
     private func setFollowsLatest(_ follows: Bool) {
@@ -450,14 +464,40 @@ struct StudioConversationView: View {
     }
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        // Only a scroll with somewhere to go marks itself: one that has nothing to move never
+        // reaches `.idle` to clear the mark.
+        if scratch.distanceFromBottom > 1 { scratch.programmaticScroll = true }
         withAnimation(MereRunTheme.Motion.quick) {
             if isRunning {
                 proxy.scrollTo(Self.streamingBubbleID, anchor: .bottom)
+            } else if awaitsInterruptedReply {
+                proxy.scrollTo(Self.interruptedRowID, anchor: .bottom)
             } else if let last = messages.last {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
     }
+}
+
+/// The transcript's per-frame scroll figures and its context-trim memo. A class held in
+/// `@State` so writing it, which happens on every scrolled frame, never invalidates the view.
+private final class TranscriptScratch {
+    struct TrimKey: Equatable {
+        let item: UUID?
+        let count: Int
+        let last: UUID?
+        let systemPromptLength: Int
+        let budget: Int
+    }
+
+    var distanceFromBottom: CGFloat = 0
+    /// True from the moment the reader starts scrolling until that scroll comes to rest, so an
+    /// offset change caused by content landing never counts as the reader leaving the bottom.
+    var readerScrolling = false
+    /// True from a `scrollToEnd` until the scroll it started settles.
+    var programmaticScroll = false
+    var trimKey: TrimKey?
+    var trimDropped = 0
 }
 
 /// One conversation turn. User turns read as authored notes (warm bubble, right side);
@@ -494,6 +534,9 @@ private struct StudioTurnView: View {
 
     private var isUser: Bool { role == .user }
     private var hasReasoning: Bool { isThinking || !(reasoning ?? "").isEmpty }
+    /// A stopped reply is not a failure: it keeps its "Reply stopped" note and its regenerate
+    /// icon, and never the reason row.
+    private var showsFailureRow: Bool { failed && !cancelled }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -607,7 +650,7 @@ private struct StudioTurnView: View {
                     Label("Reply stopped", systemImage: "stop.circle")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
-                } else if failed {
+                } else if showsFailureRow {
                     failure
                 }
 
@@ -658,7 +701,6 @@ private struct StudioTurnView: View {
                             .fill(MereRunTheme.border)
                             .frame(width: 2)
                     }
-                    .accessibilityLabel("Reasoning: \(reasoning)")
             }
         }
     }
@@ -704,8 +746,6 @@ private struct StudioTurnView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
                     .merePanel(cornerRadius: MereRunTheme.Radius.sm)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Run log: \(logTail.joined(separator: ". "))")
                 }
             }
         }
@@ -747,7 +787,7 @@ private struct StudioTurnView: View {
             if let onCopy {
                 iconAction("Copy message", systemImage: "doc.on.doc", action: onCopy)
             }
-            if let onRetry, !failed {
+            if let onRetry, !showsFailureRow {
                 iconAction("Regenerate this reply", systemImage: "arrow.clockwise", action: onRetry)
                     .disabled(!actionsEnabled)
             }
@@ -784,9 +824,10 @@ private struct StudioTurnView: View {
         if let onBranch, actionsEnabled { Button("Branch from here") { onBranch() } }
     }
 
+    /// The turn is one VoiceOver element, so what its disclosures show when open is read here.
     private var accessibilityText: String {
         let speaker = isUser ? "You" : "Assistant"
-        if isStreaming && content.isEmpty {
+        if isStreaming && content.isEmpty && !(isThinking && showsReasoning) {
             return isThinking ? "\(speaker) is thinking" : "\(speaker) is generating a reply"
         }
         let suffix: String
@@ -798,7 +839,14 @@ private struct StudioTurnView: View {
             suffix = ""
         }
         let provenance = meta.map { ", \($0)" } ?? ""
-        return "\(speaker): \(content)\(suffix)\(provenance)"
+        var text = "\(speaker): \(content)\(suffix)\(provenance)"
+        if showsReasoning, let reasoning, !reasoning.isEmpty {
+            text += ". Reasoning: \(reasoning)"
+        }
+        if showsLog, showsFailureRow, !logTail.isEmpty {
+            text += ". Run log: \(logTail.joined(separator: ". "))"
+        }
+        return text
     }
 }
 

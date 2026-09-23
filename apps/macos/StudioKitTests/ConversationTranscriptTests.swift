@@ -190,6 +190,27 @@ final class ConversationTranscriptTests: XCTestCase {
         XCTAssertEqual(streaming.hidingReasoning, ConversationTranscript.Reply(answer: "Partial answer", reasoning: nil, isThinking: false))
     }
 
+    func testSplitThinkingHoldsBackATagSplitAcrossChunksWhileStreaming() {
+        // A chunk boundary inside a tag must not flash the fragment as literal text.
+        XCTAssertEqual(
+            ConversationTranscript.splitThinking("The answer <", streaming: true),
+            ConversationTranscript.Reply(answer: "The answer", reasoning: nil, isThinking: false)
+        )
+        XCTAssertEqual(
+            ConversationTranscript.splitThinking("<think>plan</thin", streaming: true),
+            ConversationTranscript.Reply(answer: "", reasoning: "plan", isThinking: true)
+        )
+        // A pre-filled block closing mid-stream: the reasoning is done, the answer has begun.
+        XCTAssertEqual(
+            ConversationTranscript.splitThinking("hidden</think>The vis", streaming: true),
+            ConversationTranscript.Reply(answer: "The vis", reasoning: "hidden", isThinking: false)
+        )
+        // Only a fragment is held back; a whole tag and ordinary angle brackets are not.
+        XCTAssertEqual(ConversationTranscript.splitThinking("<think>", streaming: true).isThinking, true)
+        XCTAssertEqual(ConversationTranscript.splitThinking("a < b", streaming: true).answer, "a < b")
+        XCTAssertEqual(ConversationTranscript.splitThinking("The answer <", streaming: false).answer, "The answer <")
+    }
+
     func testReasoningAndFailureDiagnosticsAreNeverReplayed() {
         let messages = [
             StudioMessage(role: .user, content: "first"),

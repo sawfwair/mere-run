@@ -612,9 +612,10 @@ final class StudioSnapshotTests: XCTestCase {
     }
 
     /// The transcript's turn states on their own, light and dark: a reply that thought first
-    /// (its "Thinking" disclosure collapsed above the answer), then a turn that failed with its
-    /// one-line reason, Retry, and the run's log behind a collapsed "Show log"; and a second
-    /// render of a reply streaming in while the model is still inside its reasoning block.
+    /// (its "Thinking" disclosure collapsed above the answer), a reply the person stopped (its
+    /// note and regenerate icon, no reason row), then a turn that failed with its one-line
+    /// reason, Retry, and the run's log behind a collapsed "Show log"; and a second render of a
+    /// reply streaming in while the model is still inside its reasoning block.
     func testConverseTurnStatesSnapshots() throws {
         let asked = StudioSnapshotRenderer.referenceDate.addingTimeInterval(-240)
         let model = SnapshotFixture.converseChatModelID
@@ -638,12 +639,17 @@ final class StudioSnapshotTests: XCTestCase {
                     and concrete.
                     """
                 ),
+                StudioMessage(role: .user, content: "And the one-line version?", createdAt: asked.addingTimeInterval(90)),
+                StudioMessage(
+                    role: .assistant, content: "The noise target keeps the same variance at every step, so",
+                    createdAt: asked.addingTimeInterval(100), failed: true, cancelled: true, model: model
+                ),
                 StudioMessage(role: .user, content: "Show the sampling loop in Swift with MLX.", createdAt: asked.addingTimeInterval(180)),
                 StudioMessage(
                     role: .assistant, content: "", createdAt: asked.addingTimeInterval(200), failed: true, model: model,
                     failureReason: "Model 'text-chat-qwen3.6-4b' is not installed.",
                     logTail: [
-                        "mere.run text chat --model text-chat-qwen3.6-4b --stream --stats",
+                        "Loading text-chat-qwen3.6-4b…",
                         "error: model 'text-chat-qwen3.6-4b' is not installed",
                         "Exited with code 1.",
                     ]
@@ -651,7 +657,7 @@ final class StudioSnapshotTests: XCTestCase {
             ],
             systemPrompt: nil, model: model
         )
-        let size = CGSize(width: 900, height: 620)
+        let size = CGSize(width: 900, height: 760)
         for appearance in StudioSnapshotAppearance.allCases {
             let states = StudioConversationView(
                 item: thread, liveReply: nil, isRunning: false, mode: .chat,
@@ -662,7 +668,7 @@ final class StudioSnapshotTests: XCTestCase {
 
             var streaming = thread
             streaming.status = .running
-            streaming.messages = Array(thread.messages?.prefix(3) ?? [])
+            streaming.messages = Array(thread.messages?.prefix(5) ?? [])
             let live = StudioConversationView(
                 item: streaming,
                 liveReply: ConversationTranscript.Reply(

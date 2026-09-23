@@ -965,8 +965,8 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
     /// Why a failed assistant turn failed, in one line, read from the run's stderr when it exited.
     /// Display only, like `logTail` (a failed turn is never replayed at all).
     package var failureReason: String?
-    /// The last lines a failed run wrote to stderr, plus Studio's own notes, for the turn's
-    /// "Show log" disclosure.
+    /// The last lines a failed run wrote to stderr, secrets masked, and its exit note, for the
+    /// turn's "Show log" disclosure. Never the launched command line, which carries the prompt.
     package var logTail: [String]?
 
     package init(

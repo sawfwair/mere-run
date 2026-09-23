@@ -755,43 +755,101 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertNil(results[hidden]?.reasoning)
     }
 
+    /// A thread observing the controller, so completions land in a temporary library.json.
+    private func observedLibrary(_ controller: MereRunController) -> StudioLibraryStore {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("chat-\(UUID()).json")
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        let library = StudioLibraryStore(libraryURL: url)
+        library.observe(controller: controller)
+        return library
+    }
+
+    /// A real `text chat` turn, so the launched command line carries `--prompt` and `--model`
+    /// exactly as it does in the app. The adapter's own validation is skipped so the job's
+    /// preflight is what refuses a bad turn.
+    private func chatTurn(_ conversationID: UUID, prompt: String = "hi") throws -> StudioRunRequest {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.model = "text-chat-qwen3.6-4b"
+        draft.prompt = prompt
+        return try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: conversationID, validating: false)
+    }
+
     func testFailedTurnRecordsWhyFromStderrAndTheThreadNeverReplaysIt() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
-        let libraryURL = FileManager.default.temporaryDirectory.appendingPathComponent("chat-\(UUID()).json")
-        defer { try? FileManager.default.removeItem(at: libraryURL) }
-        let library = StudioLibraryStore(libraryURL: libraryURL)
-        library.observe(controller: controller)
-
-        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
-        var draft = template.defaultDraft()
-        draft.extraArguments = "turn"
+        let library = observedLibrary(controller)
         let conversationID = UUID()
         library.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "hi")
-        XCTAssertTrue(controller.run(studio: StudioRunRequest(
-            mode: .chat, templateID: .custom, template: template, draft: draft, conversationID: conversationID
-        )))
+        XCTAssertTrue(controller.run(studio: try chatTurn(conversationID)))
+        XCTAssertTrue(runner.starts[0].configuration.arguments.contains("--prompt"))
 
         runner.starts[0].stdout("<think>oops</think>")
-        runner.starts[0].stderr("Loading model…\nerror: model 'text-chat-missing' is not installed\n")
+        runner.starts[0].stderr("Loading model…\nretrying with --api-key sk-live-1234\nerror: model 'text-chat-missing' is not installed\n")
         await Task.yield()
         runner.starts[0].termination(1)
-        try await Task.sleep(for: .milliseconds(100))
+        for _ in 0..<6 { await Task.yield() }
 
         let turn = try XCTUnwrap(library.items.first { $0.id == conversationID }?.messages?.last)
         XCTAssertTrue(turn.failed)
         XCTAssertEqual(turn.content, "", "a failed turn with no reply says nothing; its reason line says why")
         XCTAssertEqual(turn.failureReason, "Model 'text-chat-missing' is not installed")
-        let tail = try XCTUnwrap(turn.logTail)
-        XCTAssertTrue(tail.contains("error: model 'text-chat-missing' is not installed"))
-        XCTAssertTrue(tail.contains("Exited with code 1."))
-        XCTAssertFalse(tail.contains { $0.contains("oops") }, "the reply's stdout is not the log")
+        XCTAssertEqual(turn.logTail, [
+            "Loading model…",
+            "retrying with --api-key ••••••••",
+            "error: model 'text-chat-missing' is not installed",
+            "Exited with code 1.",
+        ])
+        // The launched command line, which carries the whole rendered thread, stays out.
+        XCTAssertFalse(try XCTUnwrap(turn.logTail).contains { $0.contains("--prompt") || $0.hasPrefix("mere.run") })
 
         // Neither the reason, the log, nor the stripped reasoning reaches the next prompt.
         let messages = try XCTUnwrap(library.items.first { $0.id == conversationID }?.messages)
         let prompt = ConversationTranscript.render(messages: messages + [StudioMessage(role: .user, content: "again")]).prompt
         XCTAssertEqual(prompt, "User: hi\n\nUser: again")
+    }
+
+    func testStoppedTurnIsNotAFailureAndCarriesNoReasonOrLog() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let library = observedLibrary(controller)
+        let conversationID = UUID()
+        library.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "hi")
+        XCTAssertTrue(controller.run(studio: try chatTurn(conversationID)))
+
+        runner.starts[0].stdout("The noise target keeps")
+        await Task.yield()
+        controller.cancelConversation(conversationID)
+        runner.starts[0].termination(15)
+        for _ in 0..<6 { await Task.yield() }
+
+        let turn = try XCTUnwrap(library.items.first { $0.id == conversationID }?.messages?.last)
+        XCTAssertEqual(turn.cancelled, true)
+        XCTAssertEqual(turn.content, "The noise target keeps")
+        XCTAssertNil(turn.failureReason)
+        XCTAssertNil(turn.logTail)
+    }
+
+    func testTurnThatFailsPreflightSaysWhyOnceWithNoReplyAndNoLog() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let library = observedLibrary(controller)
+        let conversationID = UUID()
+        library.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "hi")
+        // An empty prompt never launches: preflight refuses it, `run` reports that the turn is
+        // not in flight, and the completion still lands in the thread.
+        XCTAssertFalse(controller.run(studio: try chatTurn(conversationID, prompt: " ")))
+        for _ in 0..<6 { await Task.yield() }
+
+        XCTAssertTrue(runner.starts.isEmpty)
+        let turn = try XCTUnwrap(library.items.first { $0.id == conversationID }?.messages?.last)
+        XCTAssertTrue(turn.failed)
+        XCTAssertEqual(turn.content, "")
+        XCTAssertEqual(turn.failureReason, "Prompt is required.")
+        XCTAssertNil(turn.logTail)
     }
 
     func testConcurrentRunsKeepIsolatedOutputAndResults() async throws {

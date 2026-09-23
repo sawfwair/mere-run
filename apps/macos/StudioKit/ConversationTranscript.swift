@@ -141,22 +141,40 @@ package enum ConversationTranscript {
     /// `<think>` is almost certainly literal text (e.g. a code reply that discusses the tag), and
     /// truncating it would lose real content.
     package static func splitThinking(_ text: String, streaming: Bool = false) -> Reply {
-        var answer = text
+        // One forward pass: this runs over the whole accumulated reply every few chunks.
+        let text = streaming ? withoutTrailingPartialTag(text) : text
+        var answer = ""
         var blocks: [String] = []
-        while let block = answer.range(of: "<think>[\\s\\S]*?</think>", options: .regularExpression) {
-            let inner = answer[block].dropFirst("<think>".count).dropLast("</think>".count)
-            blocks.append(String(inner))
-            answer.removeSubrange(block)
-        }
-        if !answer.contains("<think>"), let close = answer.range(of: "</think>") {
-            blocks.insert(String(answer[..<close.lowerBound]), at: 0)
-            answer = String(answer[close.upperBound...])
-        }
         var isThinking = false
-        if streaming, let open = answer.range(of: "<think>") {
-            blocks.append(String(answer[open.upperBound...]))
-            answer = String(answer[..<open.lowerBound])
-            isThinking = true
+        var cursor = text.startIndex
+        while cursor < text.endIndex {
+            let rest = cursor..<text.endIndex
+            let nextOpen = text.range(of: openTag, range: rest)
+            let nextClose = text.range(of: closeTag, range: rest)
+            if let nextClose, nextOpen.map({ nextClose.lowerBound < $0.lowerBound }) ?? true {
+                // A close with no open before it: the model pre-filled the opening tag, so
+                // everything up to here was reasoning.
+                blocks.append(answer + String(text[cursor..<nextClose.lowerBound]))
+                answer = ""
+                cursor = nextClose.upperBound
+            } else if let nextOpen {
+                answer += text[cursor..<nextOpen.lowerBound]
+                let body = nextOpen.upperBound..<text.endIndex
+                if let close = text.range(of: closeTag, range: body) {
+                    blocks.append(String(text[nextOpen.upperBound..<close.lowerBound]))
+                    cursor = close.upperBound
+                } else if streaming {
+                    blocks.append(String(text[body]))
+                    isThinking = true
+                    cursor = text.endIndex
+                } else {
+                    answer += text[nextOpen.lowerBound...]
+                    cursor = text.endIndex
+                }
+            } else {
+                answer += text[rest]
+                cursor = text.endIndex
+            }
         }
         let reasoning = blocks
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -172,6 +190,19 @@ package enum ConversationTranscript {
     /// The reply without its reasoning: `splitThinking(_:streaming:)` keeping only the answer.
     package static func stripThinkTags(_ text: String, streaming: Bool = false) -> String {
         splitThinking(text, streaming: streaming).answer
+    }
+
+    private static let openTag = "<think>"
+    private static let closeTag = "</think>"
+
+    /// A tag can arrive split across chunks. While streaming, a trailing fragment of one ("<",
+    /// "</thin") is held back rather than shown literally until the rest lands.
+    private static func withoutTrailingPartialTag(_ text: String) -> String {
+        guard let start = text.lastIndex(of: "<") else { return text }
+        let fragment = text[start...]
+        let isFragment = (fragment.count < openTag.count && openTag.hasPrefix(fragment))
+            || (fragment.count < closeTag.count && closeTag.hasPrefix(fragment))
+        return isFragment ? String(text[..<start]) : text
     }
 
     /// The decode throughput from the CLI's `--stats` line
