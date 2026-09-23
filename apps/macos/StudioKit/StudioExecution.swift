@@ -128,4 +128,14 @@ extension String {
     package func maskingAPIKeyValue() -> String {
         ShellWords.split(self).maskingSecrets().shellQuoted()
     }
+
+    /// Masks secret flag values in a line of log output. Unlike `maskingAPIKeyValue()`, which
+    /// re-quotes a command line, this keeps a line of prose exactly as written apart from the
+    /// masked values.
+    package func maskingSecretValues() -> String {
+        split(separator: " ", omittingEmptySubsequences: false)
+            .map(String.init)
+            .maskingSecrets()
+            .joined(separator: " ")
+    }
 }

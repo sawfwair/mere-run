@@ -250,9 +250,10 @@ package final class MereRunController: ObservableObject {
     /// the foreground one) so the UI can disable a thread's composer and stream into the right
     /// thread even when a different conversation is in the foreground.
     @Published package private(set) var runningConversationIDs: Set<UUID> = []
-    /// Live, think-stripped assistant text per in-flight conversation, so a streaming bubble can
-    /// render even for a background conversation (the foreground-only liveOutputText cannot).
-    @Published package private(set) var conversationLiveText: [UUID: String] = [:]
+    /// The live reply per in-flight conversation — the answer so far, split from any reasoning —
+    /// so a streaming bubble can render even for a background conversation (the foreground-only
+    /// liveOutputText cannot).
+    @Published package private(set) var conversationLiveReplies: [UUID: ConversationTranscript.Reply] = [:]
     /// Latest parsed `status --json` snapshot for the Studio status pill (nil until first probe).
     @Published package private(set) var serverStatus: StudioServerStatus?
     @Published package private(set) var queuedRunCount = 0
@@ -1416,8 +1417,8 @@ package final class MereRunController: ObservableObject {
             progressByRequestID[requestID] = job.progress
         }
         if let conversationID = job.request.conversationID,
-           conversationLiveText[conversationID] != job.conversationLiveText {
-            conversationLiveText[conversationID] = job.conversationLiveText
+           conversationLiveReplies[conversationID] != job.conversationLiveReply {
+            conversationLiveReplies[conversationID] = job.conversationLiveReply
         }
     }
 
@@ -1449,7 +1450,7 @@ package final class MereRunController: ObservableObject {
             progressByRequestID[requestID] = nil
         }
         if let conversationID = job.request.conversationID {
-            conversationLiveText[conversationID] = nil
+            conversationLiveReplies[conversationID] = nil
             runningConversationIDs.remove(conversationID)
         }
         if job.startedAt != nil {

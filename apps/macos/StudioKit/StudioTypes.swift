@@ -957,6 +957,17 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
     package var tokensPerSecond: Double?
     /// Effective settings at this turn; optional for legacy history.
     package var preset: StudioMode?
+    /// The model's reasoning for this assistant turn, when the turn ran with thinking shown.
+    /// Display only: `ConversationTranscript.render` replays `content`, so reasoning never
+    /// re-enters a later prompt. nil when thinking was hidden and in threads persisted before it
+    /// was kept.
+    package var reasoning: String?
+    /// Why a failed assistant turn failed, in one line, read from the run's stderr when it exited.
+    /// Display only, like `logTail` (a failed turn is never replayed at all).
+    package var failureReason: String?
+    /// The last lines a failed run wrote to stderr, secrets masked, and its exit note, for the
+    /// turn's "Show log" disclosure. Never the launched command line, which carries the prompt.
+    package var logTail: [String]?
 
     package init(
         id: UUID = UUID(),
@@ -969,7 +980,10 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         model: String? = nil,
         systemPrompt: String? = nil,
         tokensPerSecond: Double? = nil,
-        preset: StudioMode? = nil
+        preset: StudioMode? = nil,
+        reasoning: String? = nil,
+        failureReason: String? = nil,
+        logTail: [String]? = nil
     ) {
         self.id = id
         self.role = role
@@ -982,6 +996,9 @@ package struct StudioMessage: Codable, Identifiable, Equatable {
         self.systemPrompt = systemPrompt
         self.tokensPerSecond = tokensPerSecond
         self.preset = preset
+        self.reasoning = reasoning
+        self.failureReason = failureReason
+        self.logTail = logTail
     }
 }
 

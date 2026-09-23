@@ -21,6 +21,8 @@ struct StudioThreadList: View {
     @State private var searchText = ""
     @State private var renamingID: UUID?
     @State private var renameText = ""
+    /// The thread Delete was chosen on, while its confirmation is up.
+    @State private var deletingThread: StudioLibraryItem?
 
     private var threads: [StudioLibraryItem] {
         StudioThreadListPresenter.threads(in: items)
@@ -53,10 +55,33 @@ struct StudioThreadList: View {
             }
             Button("Cancel", role: .cancel) { renamingID = nil }
         }
+        .confirmationDialog(
+            Text("Delete \u{201C}\(Self.dialogTitle(for: deletingThread))\u{201D}?"),
+            isPresented: deleteBinding,
+            titleVisibility: .visible,
+            presenting: deletingThread
+        ) { thread in
+            Button("Delete Thread", role: .destructive) { onDelete(thread.id) }
+            Button("Cancel", role: .cancel) { deletingThread = nil }
+        } message: { _ in
+            Text("The thread and its messages are removed from this Mac. This can't be undone.")
+        }
     }
 
     private var renameBinding: Binding<Bool> {
         Binding(get: { renamingID != nil }, set: { if !$0 { renamingID = nil } })
+    }
+
+    private var deleteBinding: Binding<Bool> {
+        Binding(get: { deletingThread != nil }, set: { if !$0 { deletingThread = nil } })
+    }
+
+    /// The thread's title, cut to one line's worth for the dialog: a title is usually the
+    /// thread's first message, which can run to a paragraph.
+    private static func dialogTitle(for thread: StudioLibraryItem?) -> String {
+        let title = thread?.displayTitle ?? ""
+        guard title.count > 60 else { return title }
+        return title.prefix(59).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     private var header: some View {
@@ -146,8 +171,8 @@ struct StudioThreadList: View {
                                 renameText = thread.displayTitle
                                 renamingID = thread.id
                             }
-                            Button("Delete", role: .destructive) {
-                                onDelete(thread.id)
+                            Button("Delete…", role: .destructive) {
+                                deletingThread = thread
                             }
                         }
                     }

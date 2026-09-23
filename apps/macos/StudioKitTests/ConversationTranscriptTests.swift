@@ -152,4 +152,79 @@ final class ConversationTranscriptTests: XCTestCase {
         XCTAssertNil(ConversationTranscript.decodeTokensPerSecond(in: ["no stats here"]))
         XCTAssertNil(ConversationTranscript.decodeTokensPerSecond(in: ["decode_tps=0.00"]))
     }
+
+    func testSplitThinkingKeepsReasoningBesideTheAnswer() {
+        let reply = ConversationTranscript.splitThinking("<think>plan A\nplan B</think>The answer is 42.<think>check</think> Done.")
+        XCTAssertEqual(reply.answer, "The answer is 42. Done.")
+        XCTAssertEqual(reply.reasoning, "plan A\nplan B\n\ncheck")
+        XCTAssertFalse(reply.isThinking)
+
+        // A pre-filled opening tag: the text before the orphan close is the reasoning.
+        let orphan = ConversationTranscript.splitThinking("hidden reasoning</think>The visible answer.")
+        XCTAssertEqual(orphan.answer, "The visible answer.")
+        XCTAssertEqual(orphan.reasoning, "hidden reasoning")
+
+        let plain = ConversationTranscript.splitThinking("just text")
+        XCTAssertEqual(plain.answer, "just text")
+        XCTAssertNil(plain.reasoning)
+    }
+
+    func testSplitThinkingReportsAnUnclosedBlockWhileStreamingAndKeepsItAtFinalize() {
+        let streaming = ConversationTranscript.splitThinking("Partial answer <think>still reasoning...", streaming: true)
+        XCTAssertEqual(streaming.answer, "Partial answer")
+        XCTAssertEqual(streaming.reasoning, "still reasoning...")
+        XCTAssertTrue(streaming.isThinking)
+
+        // The moment the tag opens there is no reasoning yet, but the model is thinking.
+        let opened = ConversationTranscript.splitThinking("<think>", streaming: true)
+        XCTAssertEqual(opened.answer, "")
+        XCTAssertNil(opened.reasoning)
+        XCTAssertTrue(opened.isThinking)
+
+        // A completed reply's leftover tag is literal text, exactly as stripThinkTags treats it.
+        let final = ConversationTranscript.splitThinking("Use the <think> tag to mark reasoning.")
+        XCTAssertEqual(final.answer, "Use the <think> tag to mark reasoning.")
+        XCTAssertNil(final.reasoning)
+        XCTAssertFalse(final.isThinking)
+
+        XCTAssertEqual(streaming.hidingReasoning, ConversationTranscript.Reply(answer: "Partial answer", reasoning: nil, isThinking: false))
+    }
+
+    func testSplitThinkingHoldsBackATagSplitAcrossChunksWhileStreaming() {
+        // A chunk boundary inside a tag must not flash the fragment as literal text.
+        XCTAssertEqual(
+            ConversationTranscript.splitThinking("The answer <", streaming: true),
+            ConversationTranscript.Reply(answer: "The answer", reasoning: nil, isThinking: false)
+        )
+        XCTAssertEqual(
+            ConversationTranscript.splitThinking("<think>plan</thin", streaming: true),
+            ConversationTranscript.Reply(answer: "", reasoning: "plan", isThinking: true)
+        )
+        // A pre-filled block closing mid-stream: the reasoning is done, the answer has begun.
+        XCTAssertEqual(
+            ConversationTranscript.splitThinking("hidden</think>The vis", streaming: true),
+            ConversationTranscript.Reply(answer: "The vis", reasoning: "hidden", isThinking: false)
+        )
+        // Only a fragment is held back; a whole tag and ordinary angle brackets are not.
+        XCTAssertEqual(ConversationTranscript.splitThinking("<think>", streaming: true).isThinking, true)
+        XCTAssertEqual(ConversationTranscript.splitThinking("a < b", streaming: true).answer, "a < b")
+        XCTAssertEqual(ConversationTranscript.splitThinking("The answer <", streaming: false).answer, "The answer <")
+    }
+
+    func testReasoningAndFailureDiagnosticsAreNeverReplayed() {
+        let messages = [
+            StudioMessage(role: .user, content: "first"),
+            StudioMessage(role: .assistant, content: "The answer.", reasoning: "SECRET PLAN"),
+            StudioMessage(role: .user, content: "second"),
+            StudioMessage(
+                role: .assistant, content: "partial", failed: true,
+                failureReason: "STDERR REASON", logTail: ["error: STDERR LINE"]
+            ),
+            StudioMessage(role: .user, content: "third"),
+        ]
+        let prompt = ConversationTranscript.render(messages: messages).prompt
+        XCTAssertEqual(prompt, "User: first\n\nAssistant: The answer.\n\nUser: second\n\nUser: third")
+        XCTAssertFalse(prompt.contains("SECRET PLAN"))
+        XCTAssertFalse(prompt.contains("STDERR"))
+    }
 }

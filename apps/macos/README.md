@@ -332,6 +332,21 @@ turn used (`mode`). The transcript budget derives from the model's context
 window when the inventory reports one (or an explicit context size), else stays
 at 48k characters; a banner reports any turns trimmed from the next prompt.
 
+With the thinking chip on, a reply's reasoning is kept beside the answer
+(`StudioMessage.reasoning`) and shown as a collapsed **Thinking** disclosure
+above it; while the model is still inside its reasoning block the disclosure
+reads "Thinking…" live. A turn that failed says why on one line — the last
+meaningful line of the run's stderr, or the preflight message when the run
+never started (`StudioMessage.failureReason`, via `StudioFailureSummary`) — with
+Retry beside it and the run's last stderr lines behind **Show log**
+(`StudioMessage.logTail`). A thread whose reply was cut off when Studio closed
+shows the same row. Reasoning, reason, and log are display-only: the transcript
+renders only `content`, and a failed turn is never replayed at all, so none of
+it reaches the next prompt. The transcript follows new output only while the
+reader is at the bottom; scrolling up stops the following and a **Jump to
+latest** pill brings it back. Deleting a thread from its context menu asks
+first, naming the thread.
+
 ## Inspector, Command view, and Command Console
 
 The **inspector** (⌥⌘I, the header's Inspector toggle, remembered per task under
