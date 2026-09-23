@@ -74,6 +74,31 @@ final class StudioFeedCardTests: XCTestCase {
         )
     }
 
+    /// What `text chat` wrote for a model that is not installed, and what `music train-adapter`
+    /// wrote for an argument it could not read: ArgumentParser's usage trailer follows the error
+    /// in both, and the trailer is never the reason.
+    func testFailureSummarySkipsArgumentParsersUsageTrailer() {
+        let notInstalled = """
+        Queued by machine admission: text chat (4/4 permits active, 1 queued).
+        Machine admission granted: text chat.
+        Error: Model 'text-chat-does-not-exist-xyz' is not installed. Run 'mere.run model pull text-chat-does-not-exist-xyz' explicitly.
+        Usage: mere.run [--models-root <models-root>] <subcommand>
+          See 'mere.run --help' for more information.
+        """
+        XCTAssertEqual(
+            StudioFailureSummary.summary(outputText: nil, logLines: notInstalled.components(separatedBy: .newlines), exitCode: 64),
+            "Model 'text-chat-does-not-exist-xyz' is not installed. Run 'mere.run model pull text-chat-does-not-exist-xyz' explicitly."
+        )
+        let missingValue = """
+        Error: Missing value for '--factor <factor>'
+        Help:  --factor <factor>  LoKr factorization target; -1 chooses the closest balanced factors.
+        Usage: mere.run music train-adapter [<options>] --dataset <dataset> --output <output>
+          See 'mere.run music train-adapter --help' for more information.
+        """
+        XCTAssertEqual(StudioFailureSummary.summary(outputText: missingValue, exitCode: 64), "Missing value for '--factor <factor>'")
+        XCTAssertEqual(StudioFailureSummary.lastMeaningfulLine(in: "USAGE: mere.run vision segment <image>\nSee 'mere.run --help'"), nil)
+    }
+
     func testRunningStatusCompactsStepProgress() {
         let progress = StudioProgressParser.parse(#"{"event":"progress","stage":"denoising","step":14,"total_steps":24}"#)
         XCTAssertEqual(StudioRunningStatus.text(progress: progress, fallback: "Running"), "Denoising 15/24")

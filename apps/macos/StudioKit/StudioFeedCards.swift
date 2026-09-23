@@ -74,10 +74,13 @@ package enum StudioFeedCardBuilder {
 /// never the whole stdout/stderr dump.
 package enum StudioFailureSummary {
     /// Lines that carry no diagnosis on their own: progress echoes, the shell's exit note,
-    /// tracebacks' framing, blank separators.
+    /// tracebacks' framing, blank separators, and the usage trailer ArgumentParser prints
+    /// under its own error (`Usage: …`, `  See '… --help' …`, `Help:  --flag …`), which would
+    /// otherwise be the last line of every invalid request.
     private static let noisePrefixes = [
         "traceback", "file \"", "  ", "^", "exited with code", "completed with exit code",
         "termination requested", "stderr", "warning:", "{", "[", "generating (", "denoising ",
+        "usage:", "see '", "help:",
     ]
 
     /// Summarizes a run's captured text (`StudioLibraryItem.outputText`, which is the stdout and
