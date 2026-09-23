@@ -211,6 +211,56 @@ final class ConversationTranscriptTests: XCTestCase {
         XCTAssertEqual(ConversationTranscript.splitThinking("The answer <", streaming: false).answer, "The answer <")
     }
 
+    /// Gemma 4 streams `<|channel>thought … <channel|>` (what `Gemma4Generator+Policies.cleanedResponse`
+    /// strips when thinking is hidden), then the answer, sometimes behind a bare `<|channel>final`.
+    func testSplitThinkingHandlesGemmaThoughtChannel() {
+        let complete = ConversationTranscript.splitThinking("<|channel>thought\n*   Task: 17 × 23.\n<channel|>17 × 23 = 391.")
+        XCTAssertEqual(complete, ConversationTranscript.Reply(answer: "17 × 23 = 391.", reasoning: "*   Task: 17 × 23.", isThinking: false))
+        XCTAssertEqual(
+            ConversationTranscript.splitThinking("<|channel>thought\nplan<channel|><|channel>final\nThe answer is 391."),
+            ConversationTranscript.Reply(answer: "The answer is 391.", reasoning: "plan", isThinking: false)
+        )
+
+        // Still inside the thought while streaming.
+        let streaming = ConversationTranscript.splitThinking("<|channel>thought\n*   Task: Multiply", streaming: true)
+        XCTAssertEqual(streaming, ConversationTranscript.Reply(answer: "", reasoning: "*   Task: Multiply", isThinking: true))
+        XCTAssertTrue(ConversationTranscript.splitThinking("<|channel>thought", streaming: true).isThinking)
+
+        // A reply its token budget cut off mid-thought has no answer: the channel token never
+        // occurs in literal text, so at finalize the unclosed thought is still reasoning.
+        let cut = ConversationTranscript.splitThinking("<|channel>thought\n*   Method 4: Difference of Squares")
+        XCTAssertEqual(cut, ConversationTranscript.Reply(answer: "", reasoning: "*   Method 4: Difference of Squares", isThinking: false))
+
+        // A stray close is markup, not a pre-filled block: the text before it is the answer.
+        XCTAssertEqual(ConversationTranscript.splitThinking("Hello<channel|> there"), ConversationTranscript.Reply(answer: "Hello there", reasoning: nil, isThinking: false))
+
+        // A chunk boundary inside either marker, or inside `<|channel>final`, is held back.
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|channel>tho", streaming: true).answer, "")
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|channel>thought\nplan<chan", streaming: true), ConversationTranscript.Reply(answer: "", reasoning: "plan", isThinking: true))
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|channel>thought\nplan<channel|><|channel>fin", streaming: true), ConversationTranscript.Reply(answer: "", reasoning: "plan", isThinking: false))
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|channel>tho").answer, "", "a stray channel token is markup at finalize too, as cleanedResponse strips it")
+    }
+
+    /// Inkling streams its message channels raw with thinking shown: `<|content_thinking|> …
+    /// <|end_message|>` is the reasoning and `<|content_text|> … <|end_message|>` the answer, as
+    /// `InklingOutputParser.parse` reads them.
+    func testSplitThinkingHandlesInklingThinkingChannel() {
+        let raw = "<|message_model|><|content_thinking|>weigh the options<|end_message|><|message_model|><|content_text|>Take the train.<|end_message|><|content_model_end_sampling|>"
+        XCTAssertEqual(ConversationTranscript.splitThinking(raw), ConversationTranscript.Reply(answer: "Take the train.", reasoning: "weigh the options", isThinking: false))
+
+        let streaming = ConversationTranscript.splitThinking("<|message_model|><|content_thinking|>weigh the", streaming: true)
+        XCTAssertEqual(streaming, ConversationTranscript.Reply(answer: "", reasoning: "weigh the", isThinking: true))
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|message_model|><|content_thinking|>weigh the<|end_mess", streaming: true), streaming)
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|message_model|><|content_thinking|>weigh", streaming: false).answer, "", "cut off mid-thought")
+
+        // An answer without a thinking channel: the framing goes, the text stays.
+        XCTAssertEqual(
+            ConversationTranscript.splitThinking("<|message_model|><|content_text|>Take the train.<|end_message|>", streaming: true),
+            ConversationTranscript.Reply(answer: "Take the train.", reasoning: nil, isThinking: false)
+        )
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|message_model|><|content_te", streaming: true).answer, "")
+    }
+
     func testReasoningAndFailureDiagnosticsAreNeverReplayed() {
         let messages = [
             StudioMessage(role: .user, content: "first"),
