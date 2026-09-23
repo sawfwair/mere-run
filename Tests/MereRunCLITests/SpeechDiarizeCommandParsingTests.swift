@@ -86,4 +86,17 @@ final class SpeechDiarizeCommandParsingTests: XCTestCase {
         XCTAssertEqual(object["runtime"] as? String, "native MLX (default device: gpu)")
         XCTAssertEqual(object["device"] as? String, "gpu")
     }
+
+    func testLiveDiarizationParsesPCMAndRejectsOfflineBuffer() throws {
+        let command = try SpeechDiarizeLive.parse([
+            "--stdin", "--latency", "0.64", "--threshold", "0.42", "--quiet",
+        ])
+        XCTAssertTrue(command.stdin)
+        XCTAssertEqual(command.latency, .low)
+        XCTAssertEqual(command.threshold, 0.42)
+        XCTAssertTrue(command.quiet)
+        XCTAssertThrowsError(try SpeechDiarizeLive.parse(["--latency", "offline"]))
+        XCTAssertThrowsError(try SpeechDiarizeLive.parse(["--stdin", "--device", "input-1"]))
+        XCTAssertThrowsError(try SpeechDiarizeLive.parse(["--threshold", "nan"]))
+    }
 }

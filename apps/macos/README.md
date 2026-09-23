@@ -706,17 +706,18 @@ writes `<output>.cameras.json` beside the run's output folder; camera files
 import and export.
 
 **Audio** ▸ Transcribe is the Analyze task over `speech transcribe`. Who Spoke
-is native Sortformer diarization with JSON and RTTM timelines and
+is native Sortformer or Nemotron 3 diarization with JSON and RTTM timelines and
 segment-tuning controls; a JSON timeline is drawn as one lane per speaker over
 the recording (`StudioUI/StudioSpeakerTimeline.swift`) and as the Analyze
 panel's turn rows, with Save timeline…. Enhance and Separate are the restoration surface for
 native AP-BWE and UniverSR enhancement plus ViperX two-stem, four-stem,
 dereverb, and denoise RoFormer workflows, with model-specific compute and chunk
 controls, source and output previews, and every generated stem kept in the
-Library. Audio ▸ Live is the live lane over `speech listen`: it enumerates
-capture devices through the CLI, streams partial transcripts as the recognizer
-emits them, and owns the child process directly so the operator can stop it,
-then copy or save the transcript. The packaged app and embedded CLI carry the
+Library. Audio ▸ Live offers transcription over `speech listen` and live
+speaker activity over `speech diarize-live`. It enumerates capture devices,
+streams results as they arrive, and owns the child process directly so the
+operator can stop it, then copy or save the result. The packaged app and
+embedded CLI carry the
 microphone usage description and audio-input entitlement those capture paths
 require.
 

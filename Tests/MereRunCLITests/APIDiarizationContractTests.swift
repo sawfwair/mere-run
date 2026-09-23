@@ -37,6 +37,22 @@ final class APIDiarizationContractTests: XCTestCase {
         XCTAssertThrowsError(try APIServerContract.diarizationPlan(from: duplicated))
     }
 
+    func testLivePlanUsesRecommendedBufferAndRejectsOfflineOrUnknownOptions() throws {
+        let plan = try APIServerContract.liveDiarizationPlan(parameters: [:])
+        XCTAssertEqual(plan.modelID, ModelResolver.ModelID.nemotron3Diarization.rawValue)
+        XCTAssertEqual(plan.latency, .standard)
+        XCTAssertEqual(plan.threshold, 0.5)
+        let faster = try APIServerContract.liveDiarizationPlan(parameters: [
+            "latency": "0.64", "threshold": "0.42",
+        ])
+        XCTAssertEqual(faster.latency, .low)
+        XCTAssertEqual(faster.threshold, 0.42)
+        XCTAssertThrowsError(try APIServerContract.liveDiarizationPlan(parameters: ["latency": "offline"]))
+        XCTAssertThrowsError(try APIServerContract.liveDiarizationPlan(parameters: ["model": "speech-diarization-sortformer"]))
+        XCTAssertThrowsError(try APIServerContract.liveDiarizationPlan(parameters: ["threshold": "nan"]))
+        XCTAssertThrowsError(try APIServerContract.liveDiarizationPlan(parameters: ["file": "/tmp/audio.raw"]))
+    }
+
     private func form(_ fields: [String: String]) -> MultipartFormData {
         let file = MultipartFormData.Part(
             name: "file", filename: "meeting.wav", contentType: "audio/wav", body: Data([1, 2, 3])

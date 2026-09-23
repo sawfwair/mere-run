@@ -37,6 +37,14 @@ mere.run speech diarize ./meeting.wav --model speech-diarization-nemotron3 \
 The model supplies anonymous speaker channels. Assign names only from separate
 evidence.
 
+For live input, `mere.run speech diarize-live --latency 1.04` captures the
+system microphone and emits JSON Lines speaker-activity events as chunks are
+processed. Use `--list-devices` and `--device` to select a microphone, or
+`--stdin` for 16 kHz mono signed 16-bit little-endian PCM. The live API route
+is `POST /v1/audio/diarizations/stream` with a streaming PCM request body and
+JSON Lines response. The whole-file `speech diarize` and multipart API route
+return a completed timeline only after the input is read.
+
 ## Sources and validation
 
 - [NVIDIA model card](https://huggingface.co/nvidia/Nemotron-3-Diarization)

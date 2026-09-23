@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import MereRunContract
 import StudioKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -153,6 +154,47 @@ struct StudioLiveTranscriptAccumulator: Equatable {
     }
 }
 
+struct StudioLiveDiarizationAccumulator: Equatable {
+    private var buffer = ""
+    private(set) var segments: [DiarizationStreamEvent.Segment] = []
+    private(set) var speakerCount = 0
+    private(set) var audioSeconds = 0.0
+    private(set) var errorMessage: String?
+
+    var displayText: String {
+        segments.map { segment in
+            String(format: "%.2f–%.2f  %@", segment.startSeconds, segment.endSeconds, segment.speaker)
+        }.joined(separator: "\n")
+    }
+
+    mutating func beginSession() { self = Self() }
+    mutating func clear() { self = Self() }
+
+    mutating func receive(_ chunk: String) {
+        buffer += chunk
+        while let newline = buffer.firstIndex(of: "\n") {
+            let line = String(buffer[..<newline])
+            buffer.removeSubrange(...newline)
+            guard let data = line.data(using: .utf8),
+                  let event = try? JSONDecoder().decode(DiarizationStreamEvent.self, from: data),
+                  event.schemaVersion == 1 else { continue }
+            switch event.type {
+            case .activity:
+                segments.append(contentsOf: event.segments ?? [])
+                speakerCount = event.speakerCount ?? speakerCount
+                audioSeconds = event.audioSeconds ?? audioSeconds
+            case .final:
+                speakerCount = event.speakerCount ?? speakerCount
+                audioSeconds = event.audioSeconds ?? audioSeconds
+            case .error:
+                errorMessage = event.message ?? "Live diarization failed."
+            case .ready:
+                break
+            }
+        }
+    }
+}
+
 struct StudioVoiceProfileRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let name: String
@@ -294,7 +336,10 @@ struct StudioVoiceView: View {
     @StudioStoredValue("Voice.comparisonA") private var comparisonA: UUID? = nil
     @StudioStoredValue("Voice.comparisonB") private var comparisonB: UUID? = nil
     @StudioStoredValue("Voice.listenDraft") private var listenDraft: CommandDraft = CommandDraft()
+    @StudioStoredValue("Voice.liveDiarizationDraft") private var liveDiarizationDraft: CommandDraft = CommandDraft()
+    @State private var liveSpeakers = false
     @State private var listenTranscript = StudioLiveTranscriptAccumulator()
+    @State private var liveDiarization = StudioLiveDiarizationAccumulator()
     @State private var listenDevices: [StudioListenDevice] = []
     @State private var listenCommandID: UUID?
     @State private var isListening = false
@@ -321,6 +366,10 @@ struct StudioVoiceView: View {
 
         _listenDraft = StudioStoredValue(
             initialValue: CommandCatalog.template(id: .speechListen)?.defaultDraft() ?? CommandDraft(), "Voice.listenDraft")
+        _liveDiarizationDraft = StudioStoredValue(
+            initialValue: CommandCatalog.template(id: .speechDiarizeLive)?.defaultDraft() ?? CommandDraft(),
+            "Voice.liveDiarizationDraft"
+        )
 
         var diarization = CommandCatalog.template(id: .speechDiarize)?.defaultDraft() ?? CommandDraft()
         diarization.inputPath = initialDraft.inputPath
@@ -335,7 +384,9 @@ struct StudioVoiceView: View {
         switch task {
         case .synthesize: (.speechSynthesize, synthesisDraft)
         case .transcribe: (.speechTranscribe, transcriptionDraft)
-        case .listen: (.speechListen, listenDraft)
+        case .listen: liveSpeakers
+            ? (.speechDiarizeLive, liveDiarizationDraft)
+            : (.speechListen, listenDraft)
         case .diarize: (.speechDiarize, diarizationDraft)
         case .profiles: (.speechProfileCreate, profileDraft)
         }
@@ -777,7 +828,11 @@ struct StudioVoiceView: View {
         case .transcribe:
             transcriptionResults
         case .listen:
-            listenResults
+            if liveSpeakers {
+                liveDiarizationResults
+            } else {
+                listenResults
+            }
         case .diarize:
             diarizationResults
         case .profiles:
@@ -1157,6 +1212,12 @@ struct StudioVoiceView: View {
     /// so this lane owns the child process directly instead of going through the run queue.
     private var listenControls: some View {
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
+            Picker("Live task", selection: $liveSpeakers) {
+                Text("Transcribe").tag(false)
+                Text("Who spoke").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .disabled(isListening)
             sectionTitle("Microphone")
             HStack(spacing: 8) {
                 Picker("Input device", selection: $listenDraft.speechListenDevice) {
@@ -1175,35 +1236,68 @@ struct StudioVoiceView: View {
                 .help("List the microphones the CLI can capture from")
             }
 
-            sectionTitle("Recognition")
-            labeledTextField(
-                "Language",
-                placeholder: "auto",
-                text: $listenDraft.language
-            )
-            labeledTextField(
-                "Model",
-                placeholder: "Managed ASR model id (optional)",
-                text: $listenDraft.model
-            )
-            HStack {
-                Stepper(
-                    "Decode window \(listenDraft.speechListenDecodeMS) ms",
-                    value: $listenDraft.speechListenDecodeMS,
-                    in: 0...10_000,
-                    step: 250
+            if liveSpeakers {
+                sectionTitle("Speaker activity")
+                Text("Nemotron 3 · up to 8 anonymous speakers")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                Picker(
+                    "Input buffer",
+                    selection: Binding(
+                        get: { liveDiarizationDraft.speechDiarizationLatency ?? "1.04" },
+                        set: { liveDiarizationDraft.speechDiarizationLatency = $0 }
+                    )
+                ) {
+                    Text("1.04 s").tag("1.04")
+                    Text("0.64 s").tag("0.64")
+                    Text("0.32 s").tag("0.32")
+                }
+                .disabled(isListening)
+                Slider(
+                    value: Binding(
+                        get: { liveDiarizationDraft.speechDiarizationThreshold ?? 0.5 },
+                        set: { liveDiarizationDraft.speechDiarizationThreshold = $0 }
+                    ),
+                    in: 0...1
                 )
-                Stepper(
-                    "Silence \(listenDraft.speechListenSilenceMS) ms",
-                    value: $listenDraft.speechListenSilenceMS,
-                    in: 0...5_000,
-                    step: 100
-                )
-            }
-            .disabled(isListening)
-            Text("Leave a window at zero to use the runtime default.")
+                .disabled(isListening)
+                Text(String(
+                    format: "Speaker threshold %.2f",
+                    liveDiarizationDraft.speechDiarizationThreshold ?? 0.5
+                ))
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
+            } else {
+                sectionTitle("Recognition")
+                labeledTextField(
+                    "Language",
+                    placeholder: "auto",
+                    text: $listenDraft.language
+                )
+                labeledTextField(
+                    "Model",
+                    placeholder: "Managed ASR model id (optional)",
+                    text: $listenDraft.model
+                )
+                HStack {
+                    Stepper(
+                        "Decode window \(listenDraft.speechListenDecodeMS) ms",
+                        value: $listenDraft.speechListenDecodeMS,
+                        in: 0...10_000,
+                        step: 250
+                    )
+                    Stepper(
+                        "Silence \(listenDraft.speechListenSilenceMS) ms",
+                        value: $listenDraft.speechListenSilenceMS,
+                        in: 0...5_000,
+                        step: 100
+                    )
+                }
+                .disabled(isListening)
+                Text("Leave a window at zero to use the runtime default.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
 
             Button {
                 if isListening {
@@ -1213,7 +1307,7 @@ struct StudioVoiceView: View {
                 }
             } label: {
                 Label(
-                    isListening ? "Stop listening" : "Start listening",
+                    isListening ? "Stop listening" : (liveSpeakers ? "Identify speakers" : "Start listening"),
                     systemImage: isListening ? "stop.fill" : "mic.fill"
                 )
                 .frame(maxWidth: .infinity)
@@ -1289,6 +1383,67 @@ struct StudioVoiceView: View {
         .padding(18)
     }
 
+    private var liveDiarizationResults: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Live speaker activity")
+                    .font(MereRunTheme.sectionFont)
+                if isListening {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Listening")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.green)
+                }
+                Spacer()
+                Text("\(liveDiarization.speakerCount) speakers · \(Int(liveDiarization.audioSeconds)) s")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+            HStack {
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(liveDiarization.displayText, forType: .string)
+                }
+                .buttonStyle(.mereSecondary)
+                .disabled(liveDiarization.segments.isEmpty)
+                Button("Save…") { saveLiveDiarization() }
+                    .buttonStyle(.mereSecondary)
+                    .disabled(liveDiarization.segments.isEmpty)
+                Button("Clear") { liveDiarization.clear() }
+                    .buttonStyle(.mereSecondary)
+                    .disabled(isListening || liveDiarization.segments.isEmpty)
+            }
+            if liveDiarization.segments.isEmpty {
+                ContentUnavailableView(
+                    isListening ? "Waiting for speakers" : "Not listening",
+                    systemImage: "person.2.wave.2",
+                    description: Text("Speaker activity appears as the microphone audio is processed.")
+                )
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 5) {
+                        ForEach(Array(liveDiarization.segments.suffix(200).enumerated()), id: \.offset) { _, segment in
+                            HStack {
+                                Text(segment.speaker)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(MereRunTheme.accent)
+                                Spacer()
+                                Text(String(format: "%.2f–%.2f s", segment.startSeconds, segment.endSeconds))
+                                    .monospacedDigit()
+                            }
+                            .font(MereRunTheme.bodyFont)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                }
+                .merePanel()
+            }
+        }
+        .padding(18)
+    }
+
     private func refreshListenDevices() async {
         let result = await controller.utilityCommandResult(args: ["speech", "listen", "--list-devices"])
         guard result.exitCode == 0 else {
@@ -1303,17 +1458,26 @@ struct StudioVoiceView: View {
     }
 
     private func startListening() {
-        guard let template = CommandCatalog.template(id: .speechListen) else {
-            statusMessage = "Live transcription is unavailable."
+        let selectedSpeakers = liveSpeakers
+        let templateID: CommandTemplateID = selectedSpeakers ? .speechDiarizeLive : .speechListen
+        guard let template = CommandCatalog.template(id: templateID) else {
+            statusMessage = "Live audio is unavailable."
             return
         }
         let commandID = UUID()
         listenCommandID = commandID
         isListening = true
-        statusMessage = "Listening. Speak into the selected microphone."
-        listenTranscript.beginSession()
-        var draft = listenDraft
-        draft.speechJSONL = true
+        statusMessage = selectedSpeakers
+            ? "Identifying speakers from the selected microphone."
+            : "Listening. Speak into the selected microphone."
+        if selectedSpeakers {
+            liveDiarization.beginSession()
+        } else {
+            listenTranscript.beginSession()
+        }
+        var draft = selectedSpeakers ? liveDiarizationDraft : listenDraft
+        draft.speechListenDevice = listenDraft.speechListenDevice
+        if !selectedSpeakers { draft.speechJSONL = true }
         draft.quiet = true
         let args = template.arguments(from: draft)
         Task {
@@ -1321,14 +1485,19 @@ struct StudioVoiceView: View {
                 args: args,
                 commandID: commandID,
                 onStandardOutput: { chunk in
-                    listenTranscript.receive(chunk)
+                    if selectedSpeakers {
+                        liveDiarization.receive(chunk)
+                    } else {
+                        listenTranscript.receive(chunk)
+                    }
                 }
             )
             isListening = false
             listenCommandID = nil
-            if let errorMessage = listenTranscript.errorMessage {
+            if let errorMessage = selectedSpeakers
+                ? liveDiarization.errorMessage : listenTranscript.errorMessage {
                 statusMessage = errorMessage
-            } else if result.exitCode != 0, !listenTranscript.committedText.isEmpty {
+            } else if result.exitCode != 0, selectedSpeakers || !listenTranscript.committedText.isEmpty {
                 statusMessage = "Listening stopped."
             } else if result.exitCode != 0 {
                 statusMessage = "Live transcription exited with code \(result.exitCode)."
@@ -1359,6 +1528,23 @@ struct StudioVoiceView: View {
             statusMessage = "Saved the live transcript."
         } catch {
             statusMessage = "Could not save the transcript: \(error.localizedDescription)"
+        }
+    }
+
+    private func saveLiveDiarization() {
+        let suggested = URL(fileURLWithPath: Self.timestampedOutput(
+            domain: .audio, prefix: "live-speakers", extension: "txt"
+        ))
+        guard let url = StudioSpecialistFiles.saveFile(
+            title: "Save live speaker activity",
+            suggestedName: suggested.lastPathComponent,
+            allowedContentTypes: [.plainText]
+        ) else { return }
+        do {
+            try liveDiarization.displayText.write(to: url, atomically: true, encoding: .utf8)
+            statusMessage = "Saved the speaker timeline."
+        } catch {
+            statusMessage = "Could not save speaker activity: \(error.localizedDescription)"
         }
     }
 

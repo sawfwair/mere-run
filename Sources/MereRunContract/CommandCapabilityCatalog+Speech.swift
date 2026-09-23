@@ -135,6 +135,26 @@ extension MereRunCapabilityCatalog {
         output: .init(kind: .text, flag: "--output", optional: true)
     )
 
+    public static let speechDiarizeLive = MereRunCommandCapability(
+        id: "speech.diarize-live",
+        command: ["speech", "diarize-live"],
+        title: "Live speaker diarization",
+        summary: "Stream Nemotron 3 speaker activity from a microphone or 16 kHz PCM stdin.",
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--device", label: "Input device", kind: .string),
+            .init(flag: "--list-devices", label: "List devices", kind: .boolean),
+            .init(flag: "--stdin", label: "PCM stdin", kind: .boolean),
+            .init(
+                flag: "--latency", label: "Input buffer latency", kind: .choice,
+                choices: ["1.04", "0.64", "0.32"]
+            ),
+            .init(flag: "--threshold", label: "Activity threshold", kind: .number),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
     public static let speechProfileList = MereRunCommandCapability(
         id: "speech.profile.list",
         command: ["speech", "profile", "list"],

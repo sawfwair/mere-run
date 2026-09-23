@@ -94,4 +94,21 @@ public final class Nemotron3Diarizer {
             cacheUpdatePeriod: cacheUpdatePeriod
         )
     }
+
+    public func makeStreamingSession(
+        threshold: Float = 0.5,
+        chunkLength: Int = 9,
+        rightContext: Int = 4,
+        fifoLength: Int = 264,
+        cacheUpdatePeriod: Int = 222
+    ) throws -> Nemotron3DiarizationStreamingSession {
+        try Nemotron3DiarizationStreamingSession(
+            runtime: runtime,
+            threshold: threshold,
+            chunkLength: chunkLength,
+            rightContext: rightContext,
+            fifoLength: fifoLength,
+            cacheUpdatePeriod: cacheUpdatePeriod
+        )
+    }
 }

@@ -11,6 +11,32 @@ extension APIServerContract {
         let latency: Nemotron3DiarizationLatency
     }
 
+    struct LiveDiarizationPlan: Equatable, Sendable {
+        let modelID: String
+        let latency: Nemotron3DiarizationLatency
+        let threshold: Float
+    }
+
+    static func liveDiarizationPlan(parameters: [String: String]) throws -> LiveDiarizationPlan {
+        guard Set(parameters.keys).isSubset(of: ["model", "latency", "threshold"]) else {
+            throw APIRequestValidationError.invalidField("query", "unsupported live diarization parameter")
+        }
+        let modelID = normalizedOptional(parameters["model"])
+            ?? ModelResolver.ModelID.nemotron3Diarization.rawValue
+        guard modelID == ModelResolver.ModelID.nemotron3Diarization.rawValue else {
+            throw APIRequestValidationError.invalidField("model", "expected speech-diarization-nemotron3")
+        }
+        let latencyValue = normalizedOptional(parameters["latency"]) ?? "1.04"
+        guard let latency = Nemotron3DiarizationLatency(rawValue: latencyValue), latency != .offline else {
+            throw APIRequestValidationError.invalidField("latency", "expected 1.04, 0.64, or 0.32")
+        }
+        return LiveDiarizationPlan(
+            modelID: modelID,
+            latency: latency,
+            threshold: try diarizationFloat(parameters["threshold"], name: "threshold", defaultValue: 0.5, maximum: 1)
+        )
+    }
+
     static func diarizationPlan(from form: MultipartFormData) throws -> DiarizationPlan {
         try form.validateFields(
             textFields: ["model", "response_format", "threshold", "min_duration", "merge_gap", "latency"],

@@ -5,7 +5,7 @@ import MLX
 /// eight-speaker checkpoint. All model computation runs in MLX.
 /// Streaming reference: NVIDIA/NeMo cf724ac337d1ebc7d0dda1e23fb80916f52927a5.
 public final class Nemotron3DiarizationRuntime {
-    private let model: Nemotron3DiarizationModel
+    let model: Nemotron3DiarizationModel
     private let window: MLXArray
     private let filterbank: MLXArray
 
@@ -140,12 +140,12 @@ public final class Nemotron3DiarizationRuntime {
         )
     }
 
-    private static func downsample(_ probabilities: MLXArray) -> MLXArray {
+    static func downsample(_ probabilities: MLXArray) -> MLXArray {
         let frames = probabilities.dim(1) / 8
         return MLX.mean(probabilities.reshaped(1, frames, 8, 8), axis: 2)
     }
 
-    private func compressCache(
+    func compressCache(
         embeddings: MLXArray,
         predictions: MLXArray,
         length: Int

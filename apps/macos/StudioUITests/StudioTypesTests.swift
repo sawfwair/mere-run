@@ -2440,6 +2440,31 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(transcript.partialText, "")
     }
 
+    func testLiveDiarizationAccumulatesSplitActivityEvents() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .speechDiarizeLive))
+        var draft = template.defaultDraft()
+        draft.speechDiarizationLatency = "0.64"
+        draft.speechDiarizationThreshold = 0.55
+        XCTAssertEqual(
+            template.arguments(from: draft),
+            [
+                "speech", "diarize-live", "--model", "speech-diarization-nemotron3",
+                "--latency", "0.64", "--threshold", "0.55"
+            ]
+        )
+
+        var activity = StudioLiveDiarizationAccumulator()
+        let first = #"{"schema_version":1,"type":"activity","speaker_count":1,"audio_seconds":0.64,"segments":[{"start_seconds":0.1,"end_seconds":0.5,"speaker":"speaker_1","speaker_index":1}]}"#
+        activity.receive(String(first.prefix(48)))
+        XCTAssertTrue(activity.segments.isEmpty)
+        activity.receive(String(first.dropFirst(48)) + "\n")
+        activity.receive(#"{"schema_version":1,"type":"final","speaker_count":2,"audio_seconds":1.28}"# + "\n")
+
+        XCTAssertEqual(activity.speakerCount, 2)
+        XCTAssertEqual(activity.audioSeconds, 1.28)
+        XCTAssertEqual(activity.displayText, "0.10–0.50  speaker_1")
+    }
+
     func testOpenWebUISecretsUseEnvironmentInsteadOfArguments() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .openWebui))
         var draft = template.defaultDraft()

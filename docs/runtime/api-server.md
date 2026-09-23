@@ -900,6 +900,18 @@ The JSON response uses the same `schema_version: 1` speaker segment contract
 as `mere.run speech diarize`. The endpoint runs under API admission and accepts
 uploaded audio rather than client filesystem paths.
 
+`POST /v1/audio/diarizations/stream` accepts a streaming
+`application/octet-stream` request body of 16 kHz mono signed 16-bit
+little-endian PCM. Query parameters are `model` (only
+`speech-diarization-nemotron3`), `latency` (`1.04` by default, `0.64`, or
+`0.32`), and `threshold` (0 through 1). The response is
+`application/x-ndjson`: a `ready` event followed by `activity` events as
+audio arrives and a `final` event at end of input. The session retains its
+speaker cache and FIFO context across request chunks. Clients must stream the
+request body and read the response concurrently; uploading a complete file
+does not provide live end-to-end behavior. The route uses the same API key,
+rate limit, and runtime admission as other inference routes.
+
 ## Vision geometry and 3D compatibility
 
 The five `/v1/vision/*` routes take `multipart/form-data` and return JSON whose

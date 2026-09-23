@@ -133,7 +133,7 @@ private enum ListenTermination: Sendable {
     case captureEnded
 }
 
-private struct CoreAudioInputDevice {
+struct CoreAudioInputDevice {
     let id: AudioDeviceID
     let uid: String
     let name: String
@@ -213,7 +213,7 @@ private struct CoreAudioInputDevice {
     }
 }
 
-private final class MicrophoneCapture: @unchecked Sendable {
+final class MicrophoneCapture: @unchecked Sendable {
     let samples: AsyncStream<[Float]>
     private let continuation: AsyncStream<[Float]>.Continuation
     private let engine = AVAudioEngine()
@@ -339,7 +339,7 @@ private final class MicrophoneConversionInput: @unchecked Sendable {
     }
 }
 
-private final class InterruptSignal: @unchecked Sendable {
+final class InterruptSignal: @unchecked Sendable {
     private let stream: AsyncStream<Void>
     private let continuation: AsyncStream<Void>.Continuation
     private let source: DispatchSourceSignal

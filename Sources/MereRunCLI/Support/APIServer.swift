@@ -10,6 +10,7 @@ import AudioCodecs
 import AudioSTT
 import AudioTTS
 import MediaIO
+import MereRunContract
 import MereRunCore
 
 extension APIServerContract {
@@ -227,6 +228,7 @@ actor CodeGenServer {
         print("Speech endpoint: http://\(host):\(port)/v1/audio/speech")
         print("Transcriptions endpoint: http://\(host):\(port)/v1/audio/transcriptions")
         print("Diarizations endpoint: http://\(host):\(port)/v1/audio/diarizations")
+        print("Live diarization endpoint: http://\(host):\(port)/v1/audio/diarizations/stream")
         print("Press Ctrl+C to stop.")
 
         try await app.runService()
@@ -327,6 +329,10 @@ actor CodeGenServer {
 
         router.post("/v1/audio/diarizations") { [self] request, _ in
             return try await self.handleAudioDiarizations(request)
+        }
+
+        router.post("/v1/audio/diarizations/stream") { [self] request, _ in
+            return try await self.handleLiveAudioDiarization(request)
         }
 
         router.get("/runtime/status") { [self] request, _ in
@@ -1370,6 +1376,96 @@ actor CodeGenServer {
         } catch {
             return runtimeErrorResponse(error)
         }
+    }
+
+    private func handleLiveAudioDiarization(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard request.headers[.contentType]?.lowercased() == "application/octet-stream" else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be application/octet-stream (16 kHz mono pcm_s16le).",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests, message: "Rate limit exceeded.", type: "rate_limit_error"
+            )
+        }
+        let plan: APIServerContract.LiveDiarizationPlan
+        do {
+            var parameters: [String: String] = [:]
+            for (key, value) in request.uri.queryParameters {
+                guard parameters[String(key)] == nil else {
+                    throw APIRequestValidationError.invalidField("query", "duplicate parameter \(key)")
+                }
+                parameters[String(key)] = String(value)
+            }
+            plan = try APIServerContract.liveDiarizationPlan(parameters: parameters)
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+
+        let admission = requestAdmission
+        let stream = AsyncStream<ByteBuffer> { continuation in
+            let task = Task {
+                do {
+                    try await withRuntimeRequestAdmission(using: admission) {
+                        try MLXBundleSupport.ensureAvailable(quiet: true)
+                        let modelRoot = try SpeechDiarize.resolveModelRoot(plan.modelID)
+                        let diarizer = try Nemotron3Diarizer(modelDirectory: modelRoot)
+                        let setting = plan.latency.configuration
+                        let inference = try diarizer.makeStreamingSession(
+                            threshold: plan.threshold,
+                            chunkLength: setting.chunk,
+                            rightContext: setting.right,
+                            fifoLength: setting.fifo,
+                            cacheUpdatePeriod: setting.update
+                        )
+                        let live = LiveDiarizationSession(
+                            inference: inference,
+                            modelID: plan.modelID,
+                            latency: plan.latency.rawValue
+                        )
+                        let ready = await live.ready(inputFormat: "pcm_s16le")
+                        continuation.yield(ByteBuffer(bytes: try LiveDiarizationEventWriter.encode(ready)))
+                        var decoder = PCM16LittleEndianDecoder()
+                        for try await buffer in request.body {
+                            try Task.checkCancellation()
+                            let samples = decoder.decode(Data(buffer.readableBytesView))
+                            for event in try await live.feed(samples: samples) {
+                                continuation.yield(ByteBuffer(bytes: try LiveDiarizationEventWriter.encode(event)))
+                            }
+                        }
+                        try decoder.validateEOF()
+                        for event in try await live.finish(reason: "eof") {
+                            continuation.yield(ByteBuffer(bytes: try LiveDiarizationEventWriter.encode(event)))
+                        }
+                    }
+                } catch {
+                    if !Task.isCancelled {
+                        let event = DiarizationStreamEvent(
+                            type: .error, code: "live_diarization_error", message: error.localizedDescription
+                        )
+                        if let data = try? LiveDiarizationEventWriter.encode(event) {
+                            continuation.yield(ByteBuffer(bytes: data))
+                        }
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+        return Response(
+            status: .ok,
+            headers: [
+                .contentType: "application/x-ndjson",
+                .init("Cache-Control")!: "no-cache"
+            ],
+            body: .init(asyncSequence: stream)
+        )
     }
 
     private func handleNonStreamingChat(_ session: RuntimeChatSession) -> Response {

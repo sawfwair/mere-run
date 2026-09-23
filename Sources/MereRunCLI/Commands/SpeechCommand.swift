@@ -8,6 +8,7 @@ struct Speech: ParsableCommand {
             SpeechSynthesize.self,
             SpeechTranscribe.self,
             SpeechDiarize.self,
+            SpeechDiarizeLive.self,
             SpeechListen.self,
             SpeechProfile.self,
         ]

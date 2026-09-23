@@ -2469,6 +2469,23 @@ extension CommandFlags {
     }
 }
 
+// MARK: - speech diarize-live
+
+extension CommandFlags {
+    /// `mere.run speech diarize-live` — Live speaker diarization
+    package enum SpeechDiarizeLive: CommandFlagNamespace {
+        package static let command = ["speech", "diarize-live"]
+
+        package static let model = "--model"
+        package static let device = "--device"
+        package static let listDevices = "--list-devices"
+        package static let stdin = "--stdin"
+        package static let latency = "--latency"
+        package static let threshold = "--threshold"
+        package static let quiet = "--quiet"
+    }
+}
+
 // MARK: - speech profile list
 
 extension CommandFlags {

@@ -42,6 +42,7 @@ struct APIServe: AsyncParsableCommand {
           POST /v1/audio/speech      - Native text to speech
           POST /v1/audio/transcriptions - Native speech to text
           POST /v1/audio/diarizations - Native speaker diarization
+          POST /v1/audio/diarizations/stream - Live Nemotron 3 speaker activity from PCM
 
         Example:
           # Start with the default local code model
