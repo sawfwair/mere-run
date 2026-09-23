@@ -79,7 +79,7 @@ final class StudioActivityTests: XCTestCase {
         )
         let job = store.submit(.utility(arguments: configuration.arguments, configuration: configuration, displayCommand: "mere.run model list --json"))
 
-        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(job))), "System · Checking models")
+        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(job)), titles: .none), "System · Checking models")
     }
 
     func testQueuedRowsSayWhereTheyAreInTheQueue() throws {

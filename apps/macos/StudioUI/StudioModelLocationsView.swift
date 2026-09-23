@@ -409,7 +409,7 @@ private struct StudioModelIDPicker: View {
         Picker("Model", selection: $selection) {
             Text("Choose a model…").tag("")
             ForEach(models.rows) { row in
-                Text(row.title ?? StudioModelNaming.displayName(row.id)).tag(row.id)
+                Text(StudioModelNaming.displayName(row)).tag(row.id)
             }
         }
         .labelsHidden()

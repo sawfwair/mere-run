@@ -710,6 +710,7 @@ private struct StudioMIDIPianoRoll: View {
 /// model's whole reply and the audio codes, folded away.
 private struct StudioMusicAnalysisView: View {
     let analysis: StudioMusicAnalysisDocument
+    @Environment(\.studioModelTitles) private var titles
     @State private var showsRawReply = false
     @State private var showsAudioCodes = false
 
@@ -767,7 +768,7 @@ private struct StudioMusicAnalysisView: View {
                         .foregroundStyle(MereRunTheme.textMuted)
                 }
 
-                Text("\(StudioModelNaming.displayName(analysis.model)) · \(URL(fileURLWithPath: analysis.audio).lastPathComponent)")
+                Text("\(StudioModelNaming.displayName(analysis.model, titles: titles)) · \(URL(fileURLWithPath: analysis.audio).lastPathComponent)")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)

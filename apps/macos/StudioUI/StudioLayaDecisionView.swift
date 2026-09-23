@@ -545,6 +545,7 @@ private struct StudioDecisionResultPane: View {
 
 private struct StudioDecisionAnswers: View {
     let item: StudioLibraryItem
+    @Environment(\.studioModelTitles) private var titles
     /// Read once per run: nil until loaded, then the output (nil inside when there is none).
     @State private var loaded: (output: StudioDecisionOutput?, request: StudioDecisionDocument?)?
 
@@ -592,7 +593,7 @@ private struct StudioDecisionAnswers: View {
                         .font(MereRunTheme.sectionFont)
                     Text(result == nil
                         ? "\(plan.questions.count) questions · up to \(plan.maxTokens) tokens each"
-                        : "\(plan.questions.count) questions · \(StudioModelNaming.displayName(plan.model))")
+                        : "\(plan.questions.count) questions · \(StudioModelNaming.displayName(plan.model, titles: titles))")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                     Spacer()

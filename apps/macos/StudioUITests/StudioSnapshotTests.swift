@@ -993,6 +993,44 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// `image run-plan --preflight --json` for a training plan, as `LoRATrainingPreflightEnvelope`
+    /// prints it.
+    private static let trainingPlanPreflight = """
+    {"schema_version": 1, "mere_run_version": "0.55.0", "command": ["image", "train-lora"], "mode": "preflight",
+     "status": "warning", "created_at": "2026-09-23T10:00:00Z", "cwd": "/Users/nerd/Pictures/mere.run/Image",
+     "summary": "Ready to train on 48 usable pairs; 2 images have no caption and will be skipped.",
+     "request": {"data": "/Users/nerd/Pictures/datasets/ceramic-mugs", "output": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors",
+       "model": "image-krea2-raw", "recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16,
+       "alpha": 16, "learning_rate": 0.0001, "caption_dropout": 0.1},
+     "result": {
+       "dataset": {"directory": "/Users/nerd/Pictures/datasets/ceramic-mugs", "mode": "directory", "image_count": 50, "caption_count": 48,
+         "usable_pair_count": 48, "missing_caption_count": 2, "empty_caption_count": 0, "duplicate_caption_group_count": 0,
+         "duplicate_caption_count": 0, "excluded_preview_image_count": 0, "placeholder_caption_count": 0},
+       "model": {"requested": "image-krea2-raw", "kind": "managed", "installed": true,
+         "path": "/Users/nerd/Library/Application Support/MereRun/models/image-krea2-raw", "family": "krea2", "upstream_repo_id": "krea/krea-2-raw"},
+       "output": {"path": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors", "parent_directory": "/Users/nerd/Pictures/mere.run/Image",
+         "parent_exists": true, "parent_will_be_created": false, "exists": false, "extension_valid": true},
+       "plan": {"recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16, "alpha": 16,
+         "learning_rate": 0.0001, "caption_dropout": 0.1, "checkpoint_interval": 250, "expected_checkpoint_count": 4,
+         "max_resolution": 1536, "low_ram": false, "no_compile": false, "lr_warmup_steps": 100, "use_cosine_scheduler": true, "lr_min_factor": 0.1},
+       "run_plan": {"schema_version": 1, "kind": "image.train_lora", "command": ["image", "train-lora"],
+         "created_at": "2026-09-23T10:00:00Z", "cwd": "/Users/nerd/Pictures/mere.run/Image",
+         "arguments": {"data": "/Users/nerd/Pictures/datasets/ceramic-mugs", "output": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors",
+           "model": "image-krea2-raw", "source_recipe": "krea-fast-style", "width": 1024, "height": 1024, "training_steps": 1200,
+           "batch_size": 1, "learning_rate": 0.0001, "rank": 16, "alpha": 16, "max_text_length": 512, "scheduler_steps": 1000,
+           "caption_dropout": 0.1, "seed": 42, "lite": false, "exclude_preview_images": false, "checkpoint_interval": 250,
+           "max_resolution": 1536, "progressive": true, "low_ram": false, "no_compile": false, "gradient_checkpointing": false,
+           "benchmark_warmup_steps": 0, "sample_interval": 250, "sample_prompt": "a ceramic coffee mug in soft morning light",
+           "sample_steps": 20, "sample_cfg": 3.5, "sample_lora_scale": 1, "visualize": false, "visualize_port": 8765,
+           "lr_warmup_steps": 100, "no_cosine_scheduler": false, "lr_min_factor": 0.1, "quiet": false},
+         "resolved": {"recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16, "alpha": 16,
+           "learning_rate": 0.0001, "caption_dropout": 0.1, "checkpoint_interval": 250, "expected_checkpoint_count": 4,
+           "max_resolution": 1536, "low_ram": false, "no_compile": false, "lr_warmup_steps": 100, "use_cosine_scheduler": true, "lr_min_factor": 0.1}}},
+     "diagnostics": [{"id": "missing_captions", "severity": "warning", "title": "Missing captions",
+       "message": "2 images have no caption and will be skipped.", "locations": [], "suggested_action_ids": []}],
+     "actions": []}
+    """
+
     /// Text ▸ Decisions with the handbook example in the editor and a finished run beside it:
     /// a choice, a score, and a yes-or-no answer, one of them cut to fit.
     func testLayaDecisionAnswersSnapshots() throws {

@@ -440,7 +440,7 @@ struct StudioSpecialistFailureView: View {
 
     @ViewBuilder
     private func missingModelRow(_ row: StudioModelInventoryRow) -> some View {
-        let name = row.title ?? StudioModelNaming.displayName(row.id)
+        let name = StudioModelNaming.displayName(row)
         HStack(spacing: 10) {
             if let pull = models.download(modelID: row.id) {
                 ProgressView()
