@@ -82,6 +82,7 @@ struct StatusSnapshot: Codable, Equatable {
     var inventoryMode: ModelInventoryMode = .fast
     var inventoryComplete: Bool = true
     var inventoryDurationMs: Int = 0
+    var modelLocationIssues: [ModelLocationIssue] = []
     var capabilities: StatusCapabilitiesSnapshot = .current
     var machineAdmission: MachineInferenceAdmissionSnapshot? = nil
     var machineAdmissionDetail: String? = nil
@@ -171,6 +172,7 @@ struct StatusSnapshotBuilder {
             inventoryMode: inventory.mode,
             inventoryComplete: inventory.complete,
             inventoryDurationMs: inventory.durationMs,
+            modelLocationIssues: inventory.locationIssues,
             machineAdmission: machineAdmission,
             machineAdmissionDetail: machineAdmissionDetail
         )
@@ -422,6 +424,9 @@ enum StatusFormatter {
             "  model inventory: \(snapshot.inventoryMode.rawValue), \(completeness), "
                 + "\(snapshot.inventoryDurationMs) ms"
         )
+        for issue in snapshot.modelLocationIssues {
+            lines.append("    \(issue.diagnostic)")
+        }
 
         if snapshot.installedModels.isEmpty {
             lines.append("    none")

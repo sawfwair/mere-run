@@ -34,6 +34,17 @@ metadata into the external directory. Externally registered files remain
 read-only and are outside `model remove`, `model gc`, manifest repair, and
 storage-reclamation ownership.
 
+Before model lookup reads a location, mere.run lists that location's directory
+on a separate thread and waits up to three seconds for the listing. A location
+that does not answer in that time is skipped until the listing finally returns.
+This happens when macOS is waiting for an answer to its removable- or
+network-volume access prompt, or when a disk is asleep or disconnected. Its
+models show as `offline` in `model list`. `status` and `model list` name each
+skipped location, and so do the `modelLocationIssues` fields in `status --json`
+and `/runtime/status`. The same output names a location where macOS denied
+access; to allow it, open System Settings > Privacy & Security > Files &
+Folders.
+
 ## Canonical managed model IDs
 
 This is the authoritative public catalog list. It is kept in sync with

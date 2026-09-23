@@ -266,6 +266,12 @@ plutil -insert NSCameraUsageDescription -string \
   "MereRun uses the camera for live object tracking (vision track-live)." "${contents}/Info.plist"
 plutil -insert NSMicrophoneUsageDescription -string \
   "MereRun uses the microphone to record local voice references and transcription input." "${contents}/Info.plist"
+# The bundled CLI reads registered model locations on external and network volumes;
+# macOS attributes that access to this app and shows these strings in its prompts.
+plutil -insert NSRemovableVolumesUsageDescription -string \
+  "MereRun reads models you registered on external drives." "${contents}/Info.plist"
+plutil -insert NSNetworkVolumesUsageDescription -string \
+  "MereRun reads models you registered on network volumes." "${contents}/Info.plist"
 
 if [[ -f "$app_icon" ]]; then
   cp "$app_icon" "${resources}/AppIcon.icns"

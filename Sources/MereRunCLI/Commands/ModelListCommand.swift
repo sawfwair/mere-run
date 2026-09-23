@@ -44,6 +44,9 @@ struct ModelList: ParsableCommand {
         for line in Self.usageRestrictionLines() {
             print("\n\(line)")
         }
+        for issue in snapshot.locationIssues {
+            CLIStderr.write("warning: \(issue.diagnostic)\n")
+        }
     }
 
     private func printRow(_ id: String, _ category: String, _ status: String, _ size: String, widths: ModelListColumnWidths) {
