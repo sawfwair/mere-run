@@ -967,6 +967,29 @@ mid-settle. Together with the offscreen substitutions above — lifted glass
 content, hidden scroll-edge effects, an opaque title bar — that makes the shots
 comparable by eye across runs, not a byte-for-byte pixel gate.
 
+`StudioKitTests/StudioLiveAcceptanceTests` is the other gated harness: it runs
+the real CLI against the models installed on the Mac, without the app. Each
+test builds a flow's command the way its page does (`StudioCommandAdapter` for
+composer tasks, the page's own `CommandDraft` for specialist pages), runs it,
+and decodes the output with the page's decoder, asserting what the page would
+show — Decisions, Segment with a drawn box and points on a generated photo
+(with an EXIF-rotated copy), Track's prompt frame and range, Find handing its
+boxes to Segment, Faces, Depth, multi-view geometry and InstantMesh cameras,
+Who Spoke, Music analyze, instruments, and the training manifest, run plans and
+`run inspect`, Sound's renoise, a chat turn with thinking shown, and a failed
+turn's one-line reason. Inputs are drawn, synthesized, or generated with the CLI
+into the run directory; nothing binary is committed. It is skipped unless
+`MERERUN_LIVE_ACCEPTANCE_DIR` names a directory, and each test skips on its own
+when a model it needs is not installed (`mere.run model list --json`). The CLI
+is the package's debug build, or `MERERUN_LIVE_CLI`. Every step's argv, stdout,
+stderr, and exit code are kept under `<dir>/<flow>/`, and `<dir>/summary.log`
+gets one line per flow:
+
+```
+swift build
+MERERUN_LIVE_ACCEPTANCE_DIR=/tmp/live swift test --filter StudioLiveAcceptanceTests
+```
+
 ## Packaging, updates, and support
 
 The public `scripts/build_mere_run_app.sh` path produces a contributor/CI app
