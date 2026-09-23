@@ -628,6 +628,30 @@ struct StudioVoiceView: View {
                 placeholder: "speech-diarization-sortformer",
                 text: $diarizationDraft.model
             )
+            HStack {
+                Button("Nemotron 3 · 8 speakers") {
+                    diarizationDraft.model = "speech-diarization-nemotron3"
+                }
+                Button("Sortformer · 4 speakers") {
+                    diarizationDraft.model = "speech-diarization-sortformer"
+                    diarizationDraft.speechDiarizationLatency = nil
+                }
+            }
+            .buttonStyle(.bordered)
+            if diarizationDraft.model == "speech-diarization-nemotron3" {
+                Picker(
+                    "Input buffer",
+                    selection: Binding(
+                        get: { diarizationDraft.speechDiarizationLatency ?? "offline" },
+                        set: { diarizationDraft.speechDiarizationLatency = $0 }
+                    )
+                ) {
+                    Text("30.4 s · offline").tag("offline")
+                    Text("1.04 s").tag("1.04")
+                    Text("0.64 s").tag("0.64")
+                    Text("0.32 s").tag("0.32")
+                }
+            }
             Picker(
                 "Output",
                 selection: Binding(
@@ -820,7 +844,8 @@ struct StudioVoiceView: View {
                 Text("Speaker timeline")
                     .font(MereRunTheme.sectionFont)
                 Spacer()
-                Text(diarization?.document.summary ?? "Sortformer · local on this Mac")
+                Text(diarization?.document.summary ?? (diarizationDraft.model == "speech-diarization-nemotron3"
+                    ? "Nemotron 3 · local on this Mac" : "Sortformer · local on this Mac"))
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }

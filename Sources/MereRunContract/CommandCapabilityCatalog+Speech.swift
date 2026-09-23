@@ -124,6 +124,12 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--threshold", label: "Threshold", kind: .number),
             .init(flag: "--min-duration", label: "Minimum duration", kind: .number),
             .init(flag: "--merge-gap", label: "Merge gap", kind: .number),
+            .init(
+                flag: "--latency",
+                label: "Input buffer latency",
+                kind: .choice,
+                choices: ["offline", "1.04", "0.64", "0.32"]
+            ),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .text, flag: "--output", optional: true)

@@ -202,6 +202,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-krea2-raw",
             "image-krea2-turbo",
             "image-ideogram4-sdnq-uint4",
+            Nemotron3DiarizationResources.modelID,
             "text-chat-lfm25-a1b-8bit",
             "text-chat-lfm25-a1b-bf16",
             "text-chat-lfm25-1.2b-bf16",

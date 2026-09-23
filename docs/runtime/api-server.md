@@ -98,6 +98,7 @@ lifecycle. API keys still cross the process boundary only through
 - `POST /v1/vision/depth-video`
 - `POST /v1/audio/speech`
 - `POST /v1/audio/transcriptions`
+- `POST /v1/audio/diarizations`
 
 Laguna chat requests enable reasoning by default. Chat responses return reasoning
 in `reasoning_content`, including buffered streaming tool-call replies. Clients
@@ -884,6 +885,20 @@ response body, including partial transcoding output on failure.
 
 Unsupported format choices return OpenAI-style `invalid_request_error` payloads
 instead of being ignored.
+
+`POST /v1/audio/diarizations` accepts multipart form fields:
+
+- `file`: one required audio file part
+- `model`: `speech-diarization-nemotron3` (default) or `speech-diarization-sortformer`
+- `response_format`: `json` (default) or `rttm`
+- `threshold`: speaker activity threshold from 0 through 1; defaults to 0.5
+- `min_duration`, `merge_gap`: nonnegative seconds; both default to 0.25
+- `latency`: `offline` (default), `1.04`, `0.64`, or `0.32`; streaming
+  settings require Nemotron 3
+
+The JSON response uses the same `schema_version: 1` speaker segment contract
+as `mere.run speech diarize`. The endpoint runs under API admission and accepts
+uploaded audio rather than client filesystem paths.
 
 ## Vision geometry and 3D compatibility
 

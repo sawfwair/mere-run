@@ -122,6 +122,29 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 236_108_132,
             defaultCLICommands: ["speech diarize"]
         ),
+        ManagedModelSpec(
+            id: Nemotron3DiarizationResources.modelID,
+            category: .speechDiarization,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Nemotron3DiarizationResources.repository,
+                revision: Nemotron3DiarizationResources.revision,
+                patterns: ["README.md", "Nemotron-3-Diarization.nemo"]
+            ),
+            upstreamRepoId: Nemotron3DiarizationResources.repository,
+            upstreamRevision: Nemotron3DiarizationResources.revision,
+            usageRestriction: usageRestriction(
+                summary: "NVIDIA Nemotron 3 Diarization is governed by OpenMDW-1.1; review its use and redistribution terms.",
+                license: "OpenMDW-1.1",
+                sourceRepoId: Nemotron3DiarizationResources.repository,
+                sourceRevision: Nemotron3DiarizationResources.revision,
+                licenseURL: "https://openmdw.ai/license/1-1/"
+            ),
+            validationKind: .sortformer,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 198_676_480,
+            defaultCLICommands: ["speech diarize"]
+        ),
     ]
 
     private static let sortformerUpstreamRevision = "e23e6404bd9859e93edbf94a740eb1c7fc58f12e"

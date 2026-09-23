@@ -781,6 +781,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                Nemotron3DiarizationResources.modelID,
+                "Speaker diarization, eight speakers",
+                "Identifies up to eight speakers with native MLX Nemotron 3 Diarization.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 "text-code-qwen3",
                 "Qwen3-Coder Next",
                 "Runs the GGUF Qwen3-Coder Next model through llama.cpp for local coding and agent sessions.",

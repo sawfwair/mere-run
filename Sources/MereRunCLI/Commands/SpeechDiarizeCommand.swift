@@ -9,6 +9,22 @@ enum SpeechDiarizationOutputFormat: String, CaseIterable, ExpressibleByArgument 
     case rttm
 }
 
+enum Nemotron3DiarizationLatency: String, CaseIterable, ExpressibleByArgument {
+    case offline
+    case standard = "1.04"
+    case low = "0.64"
+    case ultraLow = "0.32"
+
+    var configuration: (chunk: Int, right: Int, fifo: Int, update: Int) {
+        switch self {
+        case .offline: (340, 40, 40, 300)
+        case .standard: (9, 4, 264, 222)
+        case .low: (6, 2, 264, 222)
+        case .ultraLow: (3, 1, 264, 222)
+        }
+    }
+}
+
 struct SpeechDiarizationSegmentPayload: Codable, Equatable {
     let speaker: String
     let speakerIndex: Int
@@ -47,6 +63,33 @@ struct SpeechDiarizationPayload: Codable, Equatable {
         case processingSeconds = "processing_seconds"
         case segments
     }
+
+    static func make(
+        result: DiarizationOutput,
+        model: String,
+        source: String,
+        durationSeconds: Double
+    ) -> Self {
+        Self(
+            schemaVersion: 1,
+            model: model,
+            source: source,
+            runtime: NativeMLXRuntime.backendDescription,
+            device: NativeMLXRuntime.defaultDeviceType,
+            durationSeconds: durationSeconds,
+            speakerCount: result.numSpeakers,
+            processingSeconds: result.totalTime,
+            segments: result.segments.map { segment in
+                SpeechDiarizationSegmentPayload(
+                    speaker: "speaker_\(segment.speaker)",
+                    speakerIndex: segment.speaker,
+                    startSeconds: Double(segment.start),
+                    endSeconds: Double(segment.end),
+                    durationSeconds: Double(segment.end - segment.start)
+                )
+            }
+        )
+    }
 }
 
 struct SpeechDiarize: AsyncParsableCommand {
@@ -54,7 +97,7 @@ struct SpeechDiarize: AsyncParsableCommand {
 
     static let configuration = CommandConfiguration(
         commandName: "diarize",
-        abstract: "Identify who spoke when in an audio file with native MLX Sortformer."
+        abstract: "Identify who spoke when in an audio file with native MLX diarization."
     )
 
     @Argument(help: "Audio file to diarize.")
@@ -62,7 +105,7 @@ struct SpeechDiarize: AsyncParsableCommand {
 
     @Option(
         name: [.customShort("m"), .long],
-        help: "Canonical model id (speech-diarization-sortformer) or a local model directory."
+        help: "Canonical Sortformer or Nemotron 3 model id, or a local model directory."
     )
     var model: String = Self.defaultManagedModelID.rawValue
 
@@ -81,6 +124,9 @@ struct SpeechDiarize: AsyncParsableCommand {
     @Option(name: [.customLong("merge-gap")], help: "Merge same-speaker segments separated by at most this many seconds.")
     var mergeGap: Float = 0.25
 
+    @Option(name: [.long], help: "Nemotron 3 input-buffer latency: offline, 1.04, 0.64, or 0.32 seconds.")
+    var latency: Nemotron3DiarizationLatency = .offline
+
     @Flag(name: [.short, .long], help: "Suppress diagnostic progress output.")
     var quiet = false
 
@@ -88,10 +134,10 @@ struct SpeechDiarize: AsyncParsableCommand {
         guard (0...1).contains(threshold) else {
             throw ValidationError("--threshold must be between 0 and 1.")
         }
-        guard minDuration >= 0 else {
+        guard minDuration.isFinite, minDuration >= 0 else {
             throw ValidationError("--min-duration must be greater than or equal to 0.")
         }
-        guard mergeGap >= 0 else {
+        guard mergeGap.isFinite, mergeGap >= 0 else {
             throw ValidationError("--merge-gap must be greater than or equal to 0.")
         }
     }
@@ -104,8 +150,12 @@ struct SpeechDiarize: AsyncParsableCommand {
         }
 
         let modelRoot = try Self.resolveModelRoot(model)
+        let useNemotron = Self.isNemotron3(model: model, root: modelRoot)
+        guard useNemotron || latency == .offline else {
+            throw ValidationError("--latency is supported only with speech-diarization-nemotron3.")
+        }
         if !quiet {
-            CLIStderr.write("Loading Sortformer from \(modelRoot.path)\n")
+            CLIStderr.write("Loading \(useNemotron ? "Nemotron 3 Diarization" : "Sortformer") from \(modelRoot.path)\n")
             CLIStderr.write("[runtime] diarization backend: \(NativeMLXRuntime.backendDescription)\n")
         }
         let audioBuffer = try AudioReader.readAudioBuffer(
@@ -113,14 +163,31 @@ struct SpeechDiarize: AsyncParsableCommand {
             sampleRate: 16_000,
             channels: 1
         )
-        let diarizer = try SortformerDiarizer(modelDirectory: modelRoot)
-        let result = try diarizer.diarize(
-            samples: audioBuffer.samples,
-            sampleRate: audioBuffer.sampleRate,
-            threshold: threshold,
-            minDuration: minDuration,
-            mergeGap: mergeGap
-        )
+        let result: DiarizationOutput
+        if useNemotron {
+            let diarizer = try Nemotron3Diarizer(modelDirectory: modelRoot)
+            let selected = latency.configuration
+            result = try diarizer.diarize(
+                samples: audioBuffer.samples,
+                sampleRate: audioBuffer.sampleRate,
+                threshold: threshold,
+                minDuration: minDuration,
+                mergeGap: mergeGap,
+                chunkLength: selected.chunk,
+                rightContext: selected.right,
+                fifoLength: selected.fifo,
+                cacheUpdatePeriod: selected.update
+            )
+        } else {
+            let diarizer = try SortformerDiarizer(modelDirectory: modelRoot)
+            result = try diarizer.diarize(
+                samples: audioBuffer.samples,
+                sampleRate: audioBuffer.sampleRate,
+                threshold: threshold,
+                minDuration: minDuration,
+                mergeGap: mergeGap
+            )
+        }
         let rendered = try render(
             result,
             sourceURL: audioURL,
@@ -157,12 +224,20 @@ struct SpeechDiarize: AsyncParsableCommand {
             return localURL
         }
 
-        guard let modelID = ModelResolver.ModelID(rawValue: rawModel), modelID == defaultManagedModelID else {
+        guard let modelID = ModelResolver.ModelID(rawValue: rawModel),
+              modelID == defaultManagedModelID || modelID == .nemotron3Diarization else {
             throw ValidationError(
-                "Unsupported diarization model '\(rawModel)'. Use \(defaultManagedModelID.rawValue) or a local model directory."
+                "Unsupported diarization model '\(rawModel)'. Use a managed diarization model or a local model directory."
             )
         }
         return try ModelResolver(fileManager: fileManager).resolve(modelID).rootURL
+    }
+
+    static func isNemotron3(model: String, root: URL) -> Bool {
+        model == ModelResolver.ModelID.nemotron3Diarization.rawValue
+            || FileManager.default.fileExists(
+                atPath: root.appendingPathComponent(Nemotron3DiarizationResources.archivePin.filename).path
+            )
     }
 
     private func render(
@@ -176,24 +251,11 @@ struct SpeechDiarize: AsyncParsableCommand {
                 .replacingOccurrences(of: " ", with: "_")
             return result.rttm(fileID: fileID)
         case .json:
-            let payload = SpeechDiarizationPayload(
-                schemaVersion: 1,
+            let payload = SpeechDiarizationPayload.make(
+                result: result,
                 model: model,
                 source: sourceURL.lastPathComponent,
-                runtime: NativeMLXRuntime.backendDescription,
-                device: NativeMLXRuntime.defaultDeviceType,
-                durationSeconds: durationSeconds,
-                speakerCount: result.numSpeakers,
-                processingSeconds: result.totalTime,
-                segments: result.segments.map { segment in
-                    SpeechDiarizationSegmentPayload(
-                        speaker: "speaker_\(segment.speaker)",
-                        speakerIndex: segment.speaker,
-                        startSeconds: Double(segment.start),
-                        endSeconds: Double(segment.end),
-                        durationSeconds: Double(segment.end - segment.start)
-                    )
-                }
+                durationSeconds: durationSeconds
             )
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

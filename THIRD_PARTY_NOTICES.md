@@ -533,6 +533,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### Nemotron 3 Diarization native runtime
+
+- purpose: native Swift/MLX implementation of NVIDIA's eight-speaker
+  feature-stacking Transformer, high-resolution output head, and cache-aware
+  diarization; no model weights are vendored in this repository
+- architecture and streaming reference:
+  [`NVIDIA/NeMo`](https://github.com/NVIDIA/NeMo) commit
+  `cf724ac337d1ebc7d0dda1e23fb80916f52927a5`; Apache License 2.0
+- official model: [`nvidia/Nemotron-3-Diarization`](https://huggingface.co/nvidia/Nemotron-3-Diarization)
+  revision `723e19c601d99b7e58fba6a14e32153e0afe48d9`; installed separately
+  under OpenMDW-1.1, whose text appears in the Cosmos3-Edge notice below
+
 ### Cosmos3-Edge native omnimodal runtime
 
 - purpose: native Swift/MLX implementation of the Cosmos3-Edge transformer,

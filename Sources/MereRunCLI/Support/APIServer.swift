@@ -6,6 +6,7 @@ import Hummingbird
 import HTTPTypes
 import NIOCore
 import AudioCore
+import AudioCodecs
 import AudioSTT
 import AudioTTS
 import MediaIO
@@ -225,6 +226,7 @@ actor CodeGenServer {
         print("Video depth endpoint: http://\(host):\(port)\(APIServerContract.depthVideoRoutePath)")
         print("Speech endpoint: http://\(host):\(port)/v1/audio/speech")
         print("Transcriptions endpoint: http://\(host):\(port)/v1/audio/transcriptions")
+        print("Diarizations endpoint: http://\(host):\(port)/v1/audio/diarizations")
         print("Press Ctrl+C to stop.")
 
         try await app.runService()
@@ -321,6 +323,10 @@ actor CodeGenServer {
 
         router.post("/v1/audio/transcriptions") { [self] request, _ in
             return try await self.handleAudioTranscriptions(request)
+        }
+
+        router.post("/v1/audio/diarizations") { [self] request, _ in
+            return try await self.handleAudioDiarizations(request)
         }
 
         router.get("/runtime/status") { [self] request, _ in
@@ -1279,6 +1285,93 @@ actor CodeGenServer {
         }
     }
 
+    private func handleAudioDiarizations(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType])
+        guard boundary != nil else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be multipart/form-data.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 100 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(
+                status: .badRequest, message: "Invalid request body.", type: "invalid_request_error"
+            )
+        }
+        do {
+            let form = try MultipartFormData.parse(body: Data(body.readableBytesView), boundary: boundary)
+            let plan = try APIServerContract.diarizationPlan(from: form)
+            guard let file = form.file(named: "file") else {
+                throw APIRequestValidationError.invalidField("file", "one nonempty audio file is required")
+            }
+            let audioURL = try writeMultipartFile(file, directoryName: "mere-run-api-diarization")
+            defer { try? FileManager.default.removeItem(at: audioURL) }
+            return try await withRuntimeRequestAdmission(using: requestAdmission) {
+                try MLXBundleSupport.ensureAvailable(quiet: true)
+                let modelRoot = try SpeechDiarize.resolveModelRoot(plan.modelID)
+                let audio = try AudioReader.readAudioBuffer(from: audioURL, sampleRate: 16_000, channels: 1)
+                let result: DiarizationOutput
+                if plan.modelID == ModelResolver.ModelID.nemotron3Diarization.rawValue {
+                    let diarizer = try Nemotron3Diarizer(modelDirectory: modelRoot)
+                    let setting = plan.latency.configuration
+                    result = try diarizer.diarize(
+                        samples: audio.samples,
+                        sampleRate: audio.sampleRate,
+                        threshold: plan.threshold,
+                        minDuration: plan.minDuration,
+                        mergeGap: plan.mergeGap,
+                        chunkLength: setting.chunk,
+                        rightContext: setting.right,
+                        fifoLength: setting.fifo,
+                        cacheUpdatePeriod: setting.update
+                    )
+                } else {
+                    let diarizer = try SortformerDiarizer(modelDirectory: modelRoot)
+                    result = try diarizer.diarize(
+                        samples: audio.samples,
+                        sampleRate: audio.sampleRate,
+                        threshold: plan.threshold,
+                        minDuration: plan.minDuration,
+                        mergeGap: plan.mergeGap
+                    )
+                }
+                let source = URL(fileURLWithPath: file.filename ?? "audio.wav").lastPathComponent
+                switch plan.responseFormat {
+                case .rttm:
+                    let fileID = URL(fileURLWithPath: source).deletingPathExtension().lastPathComponent
+                        .replacingOccurrences(of: " ", with: "_")
+                    return binaryResponse(
+                        Data(result.rttm(fileID: fileID).utf8),
+                        contentType: "text/plain; charset=utf-8"
+                    )
+                case .json:
+                    return try jsonResponse(SpeechDiarizationPayload.make(
+                        result: result,
+                        model: plan.modelID,
+                        source: source,
+                        durationSeconds: Double(audio.samples.count) / Double(audio.sampleRate)
+                    ))
+                }
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
     private func handleNonStreamingChat(_ session: RuntimeChatSession) -> Response {
         let request = session.request
         let modelID = session.modelID
@@ -2219,6 +2312,10 @@ actor CodeGenServer {
                 type: "memory_pressure_error"
             )
         case let error as SpeechTranscriptionIssue:
+            return makeErrorResponse(
+                status: .badRequest, message: error.localizedDescription, type: "invalid_request_error"
+            )
+        case let error as AudioReaderError:
             return makeErrorResponse(
                 status: .badRequest, message: error.localizedDescription, type: "invalid_request_error"
             )

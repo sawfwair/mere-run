@@ -356,6 +356,15 @@
     "resourceName": "handbook-parakeet-sortformer.md"
   },
   {
+    "topic": "handbook-nemotron3-diarization",
+    "title": "Nemotron 3 Diarization (NVIDIA)",
+    "category": "Speech",
+    "models": [
+      "speech-diarization-nemotron3"
+    ],
+    "resourceName": "handbook-nemotron3-diarization.md"
+  },
+  {
     "topic": "handbook-infinity-parser",
     "title": "Infinity Parser2 Pro (infly)",
     "category": "Vision and reconstruction",

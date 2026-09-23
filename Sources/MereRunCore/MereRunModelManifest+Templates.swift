@@ -1659,6 +1659,20 @@ extension MereRunModelManifest {
                 upstreamRepoId: "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16",
                 createdAt: createdAt
             )
+        case .nemotron3Diarization:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .sortformer,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.speakerDiarization],
+                components: nil,
+                upstreamRepoId: Nemotron3DiarizationResources.repository,
+                createdAt: createdAt
+            )
         case .qwen3Code:
             return MereRunModelManifest(
                 id: modelID.rawValue,

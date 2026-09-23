@@ -1,6 +1,6 @@
 # Sortformer speaker diarization
 
-This library owns the native MLX offline speaker-diarization runtime. It depends
+This library owns the native MLX speaker-diarization runtimes. It depends
 on MLX and `MereRunModelKit`, without `MereRunCore`, speech tokenizers, or audio
 file decoding. `AudioSTT` re-exports its public types for existing callers.
 
@@ -11,6 +11,10 @@ file decoding. `AudioSTT` re-exports its public types for existing callers.
 - `SortformerModel+Inference.swift`: inference and segment post-processing.
 - `SortformerDiarizer.swift`: array-based public entrypoint used by the CLI.
 - `DiarizationOutput.swift`: backend-neutral segment and RTTM output types.
+- `Nemotron3DiarizationModel.swift` and `Nemotron3DiarizationInference.swift`:
+  NVIDIA's released eight-speaker RoPE Transformer, 10 ms output head, NeMo
+  features, and cache-aware chunk inference. `AudioSTT/Nemotron3Diarizer.swift`
+  loads the pinned NeMo initializer through the non-executing state-dict reader.
 
 The implementation is adapted from `Blaizzy/mlx-audio-swift` commit
 `4266f988d170a83017d1e82e2e4654602f277f1d` under the MIT License. Keep the

@@ -254,7 +254,13 @@ public extension ManagedModelSpec {
         case .parakeet:
             return Self.missingParakeetPaths(in: rootURL, fileManager: fileManager)
         case .sortformer:
-            return Self.missingSortformerPaths(in: rootURL, fileManager: fileManager)
+            return id == Nemotron3DiarizationResources.modelID
+                ? Self.missingFiles(
+                    [Nemotron3DiarizationResources.archivePin.filename],
+                    in: rootURL,
+                    fileManager: fileManager
+                )
+                : Self.missingSortformerPaths(in: rootURL, fileManager: fileManager)
         case .qwen3Embedding:
             return Qwen3EmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .qwen3VLEmbedding:
@@ -353,6 +359,15 @@ public extension ManagedModelSpec {
 
     func validationMessages(in rootURL: URL, fileManager: FileManager = .default) -> [String] {
         switch validationKind {
+        case .sortformer where id == Nemotron3DiarizationResources.modelID:
+            do {
+                _ = try Nemotron3DiarizationResources.verify(
+                    at: normalizedRootURL(rootURL, fileManager: fileManager)
+                )
+                return []
+            } catch {
+                return [error.localizedDescription]
+            }
         case .qwenImageEdit where id == QwenImageEditRepository.lightning2511Id:
             do {
                 _ = try QwenImageEditRepository.lightningPin.verify(

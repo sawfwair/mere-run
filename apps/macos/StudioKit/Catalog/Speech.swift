@@ -136,6 +136,9 @@ extension CommandArguments {
         if let mergeGap = draft.speechDiarizationMergeGap {
             args.option(F.mergeGap, format(mergeGap))
         }
+        if let latency = draft.speechDiarizationLatency, latency != "offline" {
+            args.option(F.latency, latency)
+        }
         if draft.quiet { args.flag(F.quiet) }
         return args.arguments
     }

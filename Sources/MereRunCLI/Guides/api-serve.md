@@ -265,6 +265,9 @@ download route.
   `task`, and `response_format`. OpenAI model names such as `whisper-1` map to
   `speech-asr-parakeet`; response formats are `json`, `text`, `verbose_json`,
   `srt`, and `vtt`; `max_tokens` is limited to 1 through 4,096.
+- `/v1/audio/diarizations` accepts one uploaded `file`, a managed diarization
+  `model`, `response_format` (`json` or `rttm`), `threshold`, `min_duration`,
+  `merge_gap`, and Nemotron 3 `latency` (`offline`, `1.04`, `0.64`, or `0.32`).
 - `vision-chat-gemma4-12b` accepts one OpenAI image content part per message through `/v1/chat/completions`; use a file path, `file://` URL, or base64 data URL because the local runtime does not fetch remote images.
 - Use `stream_options.include_usage` when a client expects the OpenAI streaming usage chunk.
 

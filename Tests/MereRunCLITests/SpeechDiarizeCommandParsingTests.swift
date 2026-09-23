@@ -31,6 +31,24 @@ final class SpeechDiarizeCommandParsingTests: XCTestCase {
         XCTAssertThrowsError(try SpeechDiarize.parse(["/tmp/meeting.wav", "--threshold", "1.1"]))
         XCTAssertThrowsError(try SpeechDiarize.parse(["/tmp/meeting.wav", "--min-duration", "-0.1"]))
         XCTAssertThrowsError(try SpeechDiarize.parse(["/tmp/meeting.wav", "--merge-gap", "-0.1"]))
+        XCTAssertThrowsError(try SpeechDiarize.parse(["/tmp/meeting.wav", "--min-duration", "inf"]))
+    }
+
+    func testParsesNemotron3LatencyAndRecognizesLocalArchive() throws {
+        let command = try SpeechDiarize.parse([
+            "/tmp/meeting.wav", "--model", ModelResolver.ModelID.nemotron3Diarization.rawValue,
+            "--latency", "0.64",
+        ])
+        XCTAssertEqual(command.latency, .low)
+        XCTAssertEqual(command.latency.configuration.chunk, 6)
+
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        XCTAssertFalse(SpeechDiarize.isNemotron3(model: root.path, root: root))
+        try Data().write(to: root.appendingPathComponent("Nemotron-3-Diarization.nemo"))
+        XCTAssertTrue(SpeechDiarize.isNemotron3(model: root.path, root: root))
     }
 
     func testResolvesLocalModelDirectory() throws {
