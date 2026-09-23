@@ -76,15 +76,16 @@ struct StudioTrackFrameEditor: View {
     /// The frame in view cannot end tracking before it starts.
     private var canEndHere: Bool { endFrame != currentFrame && currentFrame >= grid.clamped(initFrame) }
 
-    /// Which decode is wanted: the frame in view, tolerant while the knob is moving and exact
-    /// once it settles.
+    /// Which decode is wanted: the frame in view of this clip, tolerant while the knob is moving
+    /// and exact once it settles. The clip is part of the key so a replaced input decodes anew.
     private struct FrameRequest: Hashable {
+        let url: URL
         let frame: Int
         let exact: Bool
     }
 
     private var request: FrameRequest {
-        FrameRequest(frame: currentFrame, exact: !isScrubbing)
+        FrameRequest(url: url, frame: currentFrame, exact: !isScrubbing)
     }
 
     var body: some View {
@@ -97,11 +98,6 @@ struct StudioTrackFrameEditor: View {
                 .mereMediaFrame()
             scrubberRow
             markRow
-        }
-        .task(id: url) {
-            loader = StudioVideoFrameLoader(url: url)
-            image = nil
-            loadedFrame = nil
         }
         .task(id: request) { await loadFrame(request) }
         .onChange(of: initFrame) { _, seed in
@@ -269,7 +265,17 @@ struct StudioTrackFrameEditor: View {
     // MARK: Loading
 
     private func loadFrame(_ request: FrameRequest) async {
-        guard let loader else { return }
+        // One loader per clip, made the first time that clip is asked for; a replaced clip
+        // drops the old picture rather than showing it under the new prompts.
+        let loader: StudioVideoFrameLoader
+        if let current = self.loader, current.url == request.url {
+            loader = current
+        } else {
+            loader = StudioVideoFrameLoader(url: request.url)
+            self.loader = loader
+            image = nil
+            loadedFrame = nil
+        }
         // A frame already decoded exactly needs no tolerant re-decode.
         if !request.exact, loadedFrame == request.frame { return }
         guard let decoded = try? await loader.image(at: grid.time(ofFrame: request.frame), exact: request.exact),
@@ -291,6 +297,9 @@ struct StudioFrameScrubber: View {
 
     @FocusState private var focused: Bool
     @State private var hovering = false
+    /// True only while a drag is live; SwiftUI resets it when the gesture ends or is cancelled,
+    /// so a cancelled drag can never leave the editor decoding tolerant frames.
+    @GestureState private var dragging = false
 
     private enum Metrics {
         static let trackHeight: CGFloat = 6
@@ -325,13 +334,12 @@ struct StudioFrameScrubber: View {
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($dragging) { _, state, _ in state = true }
                     .onChanged { value in
                         focused = true
-                        isScrubbing = true
                         let position = min(1, max(0, (value.location.x - Metrics.knobDiameter / 2) / usable))
                         frame = grid.clamped(Int((position * Double(grid.lastFrame)).rounded()))
                     }
-                    .onEnded { _ in isScrubbing = false }
             )
         }
         .frame(height: Metrics.height)
@@ -340,6 +348,7 @@ struct StudioFrameScrubber: View {
         .focused($focused)
         .focusEffectDisabled()
         .onHover { hovering = $0 }
+        .onChange(of: dragging) { _, dragging in isScrubbing = dragging }
         .onMoveCommand { direction in
             switch direction {
             case .left: frame = grid.clamped(frame - 1)

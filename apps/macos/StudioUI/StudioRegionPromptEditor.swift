@@ -522,10 +522,12 @@ private struct StudioRegionTag: View {
 /// A picture with the prompt layer on it and the toolbar above, for surfaces that do not already
 /// draw the image themselves: a clip's seed frame, a subject's reference image.
 struct StudioRegionPromptEditor: View {
-    /// The picture, or nil while it loads.
+    /// The picture as shown (upright), or nil while it loads.
     let image: NSImage?
-    /// The pixel space the prompts are in; the image is displayed aspect-fitted to it.
+    /// The stored pixel space the prompts are in.
     let imageSize: CGSize
+    /// How the stored pixels are turned to show `image` upright.
+    var orientation = StudioImageOrientation.up
     @Binding var prompts: [StudioRegionPrompt]
     var maximumBoxes: Int?
     var maxHeight: CGFloat = 320
@@ -553,8 +555,8 @@ struct StudioRegionPromptEditor: View {
                 .overlay {
                     GeometryReader { geometry in
                         StudioRegionPromptLayer(
-                            prompts: $prompts,
-                            imageSize: imageSize,
+                            prompts: $prompts.inDisplaySpace(orientation, storedSize: imageSize),
+                            imageSize: displaySize,
                             fitted: CGRect(origin: .zero, size: geometry.size),
                             tool: $tool,
                             selection: $selection,
@@ -576,8 +578,12 @@ struct StudioRegionPromptEditor: View {
         }
     }
 
+    private var displaySize: CGSize {
+        orientation.displaySize(ofStored: imageSize)
+    }
+
     private var aspect: CGFloat {
-        guard imageSize.width > 0, imageSize.height > 0 else { return 16.0 / 9 }
-        return imageSize.width / imageSize.height
+        guard displaySize.width > 0, displaySize.height > 0 else { return 16.0 / 9 }
+        return displaySize.width / displaySize.height
     }
 }

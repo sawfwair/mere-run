@@ -33,6 +33,7 @@ struct StudioSubjectSelectorEditor: View {
     @State private var prompts: [StudioRegionPrompt] = []
     @State private var image: NSImage?
     @State private var imageSize = CGSize.zero
+    @State private var orientation = StudioImageOrientation.up
     @State private var unavailable = false
 
     private var texts: [String] { [box, positivePoints, negativePoints] }
@@ -49,6 +50,7 @@ struct StudioSubjectSelectorEditor: View {
                 StudioRegionPromptEditor(
                     image: image,
                     imageSize: imageSize,
+                    orientation: orientation,
                     prompts: $prompts,
                     maximumBoxes: 1,
                     maxHeight: 220,
@@ -96,6 +98,7 @@ struct StudioSubjectSelectorEditor: View {
         if let loaded {
             image = loaded.image
             imageSize = loaded.pixelSize
+            orientation = loaded.orientation
             unavailable = false
         } else {
             image = nil
@@ -104,24 +107,27 @@ struct StudioSubjectSelectorEditor: View {
     }
 }
 
-/// Decodes the picture a selector is drawn on, in the pixel space its coordinates use.
+/// Decodes the picture a selector is drawn on: shown upright, with the stored pixel size and
+/// orientation its coordinates are mapped through.
 enum StudioSubjectPictureLoader {
     struct Loaded {
         let image: NSImage
+        /// Stored pixels — the space the selector is written in.
         let pixelSize: CGSize
+        var orientation = StudioImageOrientation.up
     }
 
     static func load(_ picture: StudioSubjectPicture) async -> Loaded? {
         switch picture {
         case .image(let url):
-            // Stored pixels, no EXIF transform: the reference selector is segmented on the file
-            // as the CLI decodes it.
+            // The reference selector is segmented on the file as the CLI decodes it (stored
+            // pixels), so the picture is shown upright and the drawing maps through its
+            // orientation.
             return await Task.detached(priority: .userInitiated) {
-                guard let size = StudioAnalyzeMediaInfo.pixelSize(of: url),
-                      let loaded = StudioImagePreviewLoader.downsampledImage(
-                          from: url, maxPixelSize: 1_200, appliesOrientation: false
-                      ) else { return nil }
-                return Loaded(image: loaded.image, pixelSize: size)
+                guard let metadata = StudioImageMetadata.read(url),
+                      let loaded = StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 1_200)
+                else { return nil }
+                return Loaded(image: loaded.image, pixelSize: metadata.storedSize, orientation: metadata.orientation)
             }.value
         case .clipFrame(let url, let planTime, let canvas):
             let sourceRate = await Task.detached(priority: .userInitiated) {

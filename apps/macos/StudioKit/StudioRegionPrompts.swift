@@ -228,6 +228,107 @@ package enum StudioRegionBoxCorner: CaseIterable, Hashable, Sendable {
     }
 }
 
+// MARK: - Upright versus stored
+
+/// The EXIF orientation of a picture: how a viewer turns the stored pixels to show it upright.
+///
+/// The CLI decodes without the transform and keeps every coordinate in the stored pixels, while
+/// Studio shows the picture upright, so prompts drawn on screen and results drawn back onto it
+/// pass through this mapping. `displayTransform` takes a stored point (origin top-left) to its
+/// upright position (origin top-left); the eight cases are the EXIF values 1…8.
+package enum StudioImageOrientation: Int, Codable, Equatable, Sendable, CaseIterable {
+    case up = 1
+    case upMirrored = 2
+    case down = 3
+    case downMirrored = 4
+    /// Transposed: mirrored and turned a quarter turn.
+    case leftMirrored = 5
+    /// Turned a quarter turn clockwise to show upright — the portrait phone photo.
+    case right = 6
+    case rightMirrored = 7
+    /// Turned a quarter turn counter-clockwise to show upright.
+    case left = 8
+
+    package init?(exif: Int) {
+        self.init(rawValue: exif)
+    }
+
+    /// Whether the upright picture swaps the stored width and height.
+    package var swapsAxes: Bool { rawValue >= 5 }
+
+    package func displaySize(ofStored size: CGSize) -> CGSize {
+        swapsAxes ? CGSize(width: size.height, height: size.width) : size
+    }
+
+    /// Stored point → upright point, both origin top-left.
+    package func displayTransform(storedSize: CGSize) -> CGAffineTransform {
+        let width = storedSize.width
+        let height = storedSize.height
+        switch self {
+        case .up: return .identity
+        case .upMirrored: return CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: width, ty: 0)
+        case .down: return CGAffineTransform(a: -1, b: 0, c: 0, d: -1, tx: width, ty: height)
+        case .downMirrored: return CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height)
+        case .leftMirrored: return CGAffineTransform(a: 0, b: 1, c: 1, d: 0, tx: 0, ty: 0)
+        case .right: return CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: height, ty: 0)
+        case .rightMirrored: return CGAffineTransform(a: 0, b: -1, c: -1, d: 0, tx: height, ty: width)
+        case .left: return CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: width)
+        }
+    }
+
+    package func displayPoint(fromStored point: CGPoint, storedSize: CGSize) -> CGPoint {
+        point.applying(displayTransform(storedSize: storedSize))
+    }
+
+    package func storedPoint(fromDisplay point: CGPoint, storedSize: CGSize) -> CGPoint {
+        point.applying(displayTransform(storedSize: storedSize).inverted())
+    }
+
+    /// A stored rect's upright bounds (a quarter turn swaps its sides).
+    package func displayRect(fromStored rect: CGRect, storedSize: CGSize) -> CGRect {
+        rect.applying(displayTransform(storedSize: storedSize))
+    }
+
+    package func storedRect(fromDisplay rect: CGRect, storedSize: CGSize) -> CGRect {
+        rect.applying(displayTransform(storedSize: storedSize).inverted())
+    }
+}
+
+extension StudioRegionPrompt {
+    /// This prompt in the upright picture's pixels, for drawing and hit testing on screen.
+    package func inDisplaySpace(_ orientation: StudioImageOrientation, storedSize: CGSize) -> StudioRegionPrompt {
+        mapped { orientation.displayPoint(fromStored: $0, storedSize: storedSize) }
+    }
+
+    /// This prompt back in the stored pixels the CLI reads.
+    package func inStoredSpace(_ orientation: StudioImageOrientation, storedSize: CGSize) -> StudioRegionPrompt {
+        mapped { orientation.storedPoint(fromDisplay: $0, storedSize: storedSize) }
+    }
+
+    private func mapped(_ transform: (CGPoint) -> CGPoint) -> StudioRegionPrompt {
+        switch shape {
+        case .box:
+            guard let rect else { return self }
+            let start = transform(CGPoint(x: rect.minX, y: rect.minY))
+            let end = transform(CGPoint(x: rect.maxX, y: rect.maxY))
+            return .box(StudioRegionGeometry.rect(from: start, to: end), label: label, id: id)
+        case .point(_, _, let isPositive):
+            guard let point else { return self }
+            return .point(transform(point), isPositive: isPositive, label: label, id: id)
+        }
+    }
+}
+
+extension Array where Element == StudioRegionPrompt {
+    package func inDisplaySpace(_ orientation: StudioImageOrientation, storedSize: CGSize) -> [StudioRegionPrompt] {
+        map { $0.inDisplaySpace(orientation, storedSize: storedSize) }
+    }
+
+    package func inStoredSpace(_ orientation: StudioImageOrientation, storedSize: CGSize) -> [StudioRegionPrompt] {
+        map { $0.inStoredSpace(orientation, storedSize: storedSize) }
+    }
+}
+
 // MARK: - Between the screen and the pixels
 
 /// Mapping between the view that shows an image and the image's own pixels.
@@ -235,9 +336,9 @@ package enum StudioRegionBoxCorner: CaseIterable, Hashable, Sendable {
 /// The image is aspect-fitted into the view, so `fitted` is where its pixels land
 /// (`StudioAnalyzeGeometry.fittedRect`, letterboxed when the view's aspect differs). One uniform
 /// scale maps both axes; every conversion clamps to the image so a drag that leaves the picture
-/// still produces a prompt the CLI accepts. The pixel space is the file's stored pixels, which is
-/// what the CLI decodes (`AppleMediaImageIO.decode` applies no EXIF orientation), so every
-/// surface that draws on it must load the picture the same way.
+/// still produces a prompt the CLI accepts. The pixel space here is the picture as shown; a
+/// rotated photo's prompts go through `StudioImageOrientation` on their way to the stored pixels
+/// the CLI reads.
 package enum StudioRegionGeometry {
     /// Points per pixel inside `fitted`.
     package static func scale(imageSize: CGSize, fitted: CGRect) -> CGFloat {

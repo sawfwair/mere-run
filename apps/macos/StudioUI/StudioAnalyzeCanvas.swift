@@ -45,9 +45,12 @@ struct StudioAnalyzeCanvas: View {
 
     @State private var chosenView: StudioAnalyzeResultView?
     @State private var loaded: StudioAnalyzeLoadedResult?
+    /// The input's stored pixel size — the space the CLI's coordinates are in.
     @State private var inputSize: CGSize?
     @State private var inputDuration: TimeInterval?
     @State private var inputFrameRate: Double?
+    /// How the input photo is turned to show upright; results and prompts map through it.
+    @State private var inputOrientation = StudioImageOrientation.up
     @State private var regionTool = StudioRegionTool.box
     @State private var regionSelection: UUID?
     /// Track shows its finished clip once there is one; this brings the seed-frame editor back.
@@ -185,7 +188,10 @@ struct StudioAnalyzeCanvas: View {
         guard let inputURL else { return "No input" }
         var parts = [inputURL.lastPathComponent]
         if let inputSize {
-            parts.append("\(Int(inputSize.width))×\(Int(inputSize.height))")
+            // The size as the picture is shown, which for a portrait phone photo is the
+            // stored size turned on its side.
+            let shown = inputOrientation.displaySize(ofStored: inputSize)
+            parts.append("\(Int(shown.width))×\(Int(shown.height))")
         } else if let inputDuration {
             parts.append(StudioTimeFormat.string(inputDuration))
         }
@@ -237,6 +243,7 @@ struct StudioAnalyzeCanvas: View {
                     detections: view == .masks ? [] : overlayDetections,
                     masks: view == .masks ? overlayDetections : [],
                     imageSize: inputSize,
+                    orientation: inputOrientation,
                     editing: editing.map {
                         StudioAnalyzeImageEditing(prompts: $0.regionPrompts, tool: $regionTool, selection: $regionSelection)
                     }
@@ -473,6 +480,7 @@ struct StudioAnalyzeCanvas: View {
             inputSize = nil
             inputDuration = nil
             inputFrameRate = nil
+            inputOrientation = .up
             return
         }
         let kind = archetype.inputKind
@@ -483,6 +491,7 @@ struct StudioAnalyzeCanvas: View {
         inputSize = measured.size
         inputDuration = measured.duration
         inputFrameRate = measured.frameRate
+        inputOrientation = measured.orientation
     }
 }
 
@@ -532,16 +541,20 @@ struct StudioAnalyzeLoadedResult: Equatable {
 /// What the input strip can say about a file without decoding all of it.
 enum StudioAnalyzeMediaInfo {
     struct Measurement: Equatable {
+        /// Stored pixels for an image, the displayed frame for a clip.
         var size: CGSize?
         var duration: TimeInterval?
         /// The clip's declared frame rate, which Track's frame numbers count in.
         var frameRate: Double?
+        /// The photo's EXIF orientation; clips are already shown the way their track transform says.
+        var orientation = StudioImageOrientation.up
     }
 
     static func measure(_ url: URL, kind: StudioAnalyzeInputKind) -> Measurement {
         switch kind {
         case .image:
-            return Measurement(size: pixelSize(of: url), duration: nil)
+            let metadata = StudioImageMetadata.read(url)
+            return Measurement(size: metadata?.storedSize, duration: nil, orientation: metadata?.orientation ?? .up)
         case .video:
             let asset = AVURLAsset(url: url)
             let track = asset.tracks(withMediaType: .video).first
@@ -558,15 +571,8 @@ enum StudioAnalyzeMediaInfo {
         }
     }
 
-    /// The image's own pixel dimensions, read from its metadata without decoding the pixels.
+    /// The image's stored pixel dimensions, read from its metadata without decoding the pixels.
     static func pixelSize(of url: URL) -> CGSize? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int,
-              width > 0, height > 0 else {
-            return nil
-        }
-        return CGSize(width: width, height: height)
+        StudioImageMetadata.read(url)?.storedSize
     }
 }

@@ -492,31 +492,41 @@ final class StudioAnalyzeTests: XCTestCase {
 
     // MARK: - Stored pixels, not the viewer's rotation
 
-    /// A phone photo saved with EXIF orientation 6 is 40×20 on disk and displayed 20×40. The CLI
-    /// decodes and reports coordinates in the 40×20 (`AppleMediaImageIO.decode` applies no
-    /// transform), so the surfaces that draw or edit on the picture must load it the same way
-    /// while ordinary thumbnails keep the rotation.
-    func testEditingSurfacesLoadTheStoredPixelsOfARotatedPhoto() throws {
+    /// A phone photo saved with EXIF orientation 6 is 40×20 on disk and shown 20×40. The CLI
+    /// decodes and reads coordinates in the 40×20 (`AppleMediaImageIO.decode` applies no
+    /// transform), so Studio shows the picture upright and maps prompts and results through the
+    /// orientation: a box drawn at the displayed top-right is the stored top-left in the `--box`.
+    func testARotatedPhotoIsShownUprightAndItsPromptsLandInStoredPixels() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("rotated-\(UUID().uuidString).jpg")
         defer { try? FileManager.default.removeItem(at: url) }
         try Self.writeJPEG(to: url, width: 40, height: 20, orientation: 6)
 
-        XCTAssertEqual(StudioAnalyzeMediaInfo.pixelSize(of: url), CGSize(width: 40, height: 20))
-        let stored = try XCTUnwrap(
-            StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 400, appliesOrientation: false)
-        )
-        XCTAssertEqual(stored.image.size, NSSize(width: 40, height: 20))
-        let displayed = try XCTUnwrap(StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 400))
-        XCTAssertEqual(displayed.image.size, NSSize(width: 20, height: 40), "the default keeps the viewer's rotation")
+        let metadata = try XCTUnwrap(StudioImageMetadata.read(url))
+        XCTAssertEqual(metadata.storedSize, CGSize(width: 40, height: 20))
+        XCTAssertEqual(metadata.orientation, .right)
+        XCTAssertEqual(metadata.displaySize, CGSize(width: 20, height: 40))
+        XCTAssertEqual(StudioAnalyzeMediaInfo.measure(url, kind: .image).orientation, .right)
+        let shown = try XCTUnwrap(StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 400))
+        XCTAssertEqual(shown.image.size, NSSize(width: 20, height: 40), "the picture is shown upright")
 
-        // A box the CLI reports at the right edge of the stored picture lands at the right edge
-        // of the stored-space rendering, not off the bottom of a rotated one.
-        let fitted = StudioAnalyzeGeometry.fittedRect(imageSize: stored.image.size, in: CGSize(width: 400, height: 400))
-        let box = StudioRegionGeometry.viewRect(
-            fromImage: CGRect(x: 30, y: 0, width: 10, height: 20), imageSize: stored.image.size, fitted: fitted
+        // The upright 20×40 picture fitted into a 400×400 view is 200×400 at x 100. A drag over
+        // its top-right quarter-width, top quarter-height…
+        let fitted = StudioAnalyzeGeometry.fittedRect(imageSize: metadata.displaySize, in: CGSize(width: 400, height: 400))
+        XCTAssertEqual(fitted, CGRect(x: 100, y: 0, width: 200, height: 400))
+        let displayed = StudioRegionGeometry.imageRect(
+            fromView: CGPoint(x: 250, y: 0), to: CGPoint(x: 300, y: 100),
+            imageSize: metadata.displaySize, fitted: fitted
         )
-        XCTAssertEqual(box, CGRect(x: 300, y: 100, width: 100, height: 200))
+        XCTAssertEqual(displayed, CGRect(x: 15, y: 0, width: 5, height: 10))
+        // …is the stored picture's top-left corner, which is what the CLI's --box must say.
+        let prompt = StudioRegionPrompt.box(displayed).inStoredSpace(.right, storedSize: metadata.storedSize)
+        XCTAssertEqual(prompt.rect, CGRect(x: 0, y: 0, width: 10, height: 5))
+        XCTAssertEqual(StudioRegionPromptText.boxLines([prompt]), ["0,0,10,5"])
+        // And a result the CLI reports there draws back over the same upright corner.
+        let back = prompt.inDisplaySpace(.right, storedSize: metadata.storedSize)
+        XCTAssertEqual(back.rect, displayed)
+        XCTAssertEqual(back.id, prompt.id)
     }
 
     private static func writeJPEG(to url: URL, width: Int, height: Int, orientation: Int) throws {

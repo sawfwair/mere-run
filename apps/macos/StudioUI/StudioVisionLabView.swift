@@ -750,6 +750,8 @@ private struct StudioVisionOverlayPreview: View {
     var selectedFaceIndex: Binding<Int>?
 
     @State private var image: NSImage?
+    /// How the photo is turned to show upright; the documents' coordinates are in stored pixels.
+    @State private var orientation = StudioImageOrientation.up
     @State private var faces: StudioFaceOverlayResult?
     @State private var pose: StudioPoseOverlayResult?
     @State private var error: String?
@@ -787,9 +789,10 @@ private struct StudioVisionOverlayPreview: View {
     }
 
     private func load() {
-        // Stored pixels, no EXIF transform, because the face and pose documents place their
-        // boxes and landmarks in the image as the CLI decoded it.
-        image = StudioImagePreviewLoader.downsampledImage(from: imageURL, maxPixelSize: 1_600, appliesOrientation: false)?.image
+        // The picture is shown upright; the face and pose documents place their boxes and
+        // landmarks in the stored pixels the CLI decoded, so they map through the orientation.
+        image = StudioImagePreviewLoader.downsampledImage(from: imageURL, maxPixelSize: 1_600)?.image
+        orientation = StudioImageMetadata.read(imageURL)?.orientation ?? .up
         do {
             let data = try Data(contentsOf: jsonURL)
             switch kind {
@@ -815,17 +818,23 @@ private struct StudioVisionOverlayPreview: View {
         )
     }
 
-    /// Where `face` lands in the fitted image.
-    private func faceFrame(_ face: StudioFaceOverlayResult.Record, result: StudioFaceOverlayResult, in rect: CGRect) -> CGRect {
-        let scaleX = rect.width / CGFloat(max(1, result.width))
-        let scaleY = rect.height / CGFloat(max(1, result.height))
-        let box = face.detection.boundingBox
-        return CGRect(
-            x: rect.minX + CGFloat(box.x) * scaleX,
-            y: rect.minY + CGFloat(box.y) * scaleY,
-            width: CGFloat(box.width) * scaleX,
-            height: CGFloat(box.height) * scaleY
+    /// Where a stored-pixel point of a `storedSize` document lands in the fitted upright picture.
+    private func viewPoint(_ point: CGPoint, storedSize: CGSize, in rect: CGRect) -> CGPoint {
+        let shown = orientation.displaySize(ofStored: storedSize)
+        let upright = orientation.displayPoint(fromStored: point, storedSize: storedSize)
+        return CGPoint(
+            x: rect.minX + upright.x * rect.width / max(1, shown.width),
+            y: rect.minY + upright.y * rect.height / max(1, shown.height)
         )
+    }
+
+    /// Where `face` lands in the fitted upright picture.
+    private func faceFrame(_ face: StudioFaceOverlayResult.Record, result: StudioFaceOverlayResult, in rect: CGRect) -> CGRect {
+        let storedSize = CGSize(width: max(1, result.width), height: max(1, result.height))
+        let box = face.detection.boundingBox
+        let start = viewPoint(CGPoint(x: box.x, y: box.y), storedSize: storedSize, in: rect)
+        let end = viewPoint(CGPoint(x: box.x + box.width, y: box.y + box.height), storedSize: storedSize, in: rect)
+        return StudioRegionGeometry.rect(from: start, to: end)
     }
 
     /// One transparent button per detected face, so a click picks it. The Canvas underneath
@@ -857,16 +866,12 @@ private struct StudioVisionOverlayPreview: View {
             drawSelectableFaces(result, selected: selectedFaceIndex.wrappedValue, in: rect, context: &context)
             return
         }
-        let scaleX = rect.width / CGFloat(max(1, result.width))
-        let scaleY = rect.height / CGFloat(max(1, result.height))
+        let storedSize = CGSize(width: max(1, result.width), height: max(1, result.height))
         for face in result.faces {
             let frame = faceFrame(face, result: result, in: rect)
             context.stroke(Path(frame), with: .color(.green), lineWidth: 2)
             for point in face.detection.landmarks {
-                let center = CGPoint(
-                    x: rect.minX + CGFloat(point.x) * scaleX,
-                    y: rect.minY + CGFloat(point.y) * scaleY
-                )
+                let center = viewPoint(CGPoint(x: point.x, y: point.y), storedSize: storedSize, in: rect)
                 context.fill(
                     Path(ellipseIn: CGRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6)),
                     with: .color(.yellow)
@@ -925,6 +930,7 @@ private struct StudioVisionOverlayPreview: View {
         in rect: CGRect,
         context: inout GraphicsContext
     ) {
+        let storedSize = CGSize(width: max(1, result.imageWidth), height: max(1, result.imageHeight))
         for subject in result.subjects {
             let color: Color = switch subject.kind {
             case "body": .cyan
@@ -932,13 +938,17 @@ private struct StudioVisionOverlayPreview: View {
             default: .pink
             }
             for point in subject.points {
-                let x = rect.minX + CGFloat(point.x) * rect.width
                 let normalizedY = result.coordinateSpace == "normalized-bottom-left"
                     ? 1 - point.y
                     : point.y
-                let y = rect.minY + CGFloat(normalizedY) * rect.height
+                // Normalized in the stored pixels, so scale up, turn upright, then fit.
+                let center = viewPoint(
+                    CGPoint(x: point.x * storedSize.width, y: normalizedY * storedSize.height),
+                    storedSize: storedSize,
+                    in: rect
+                )
                 context.fill(
-                    Path(ellipseIn: CGRect(x: x - 2.5, y: y - 2.5, width: 5, height: 5)),
+                    Path(ellipseIn: CGRect(x: center.x - 2.5, y: center.y - 2.5, width: 5, height: 5)),
                     with: .color(color.opacity(max(0.25, point.confidence)))
                 )
             }

@@ -169,6 +169,81 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertNil(hit(900, 400))
     }
 
+    // MARK: - Upright versus stored
+
+    /// Every EXIF orientation of a 40×20 stored picture: where its top-left stored pixel shows
+    /// up, what size it is shown at, and that stored → shown → stored is the identity.
+    func testEveryOrientationMapsStoredPixelsToTheUprightPictureAndBack() {
+        let stored = CGSize(width: 40, height: 20)
+        let topLeft = CGPoint.zero
+        let expectedTopLeft: [StudioImageOrientation: CGPoint] = [
+            .up: CGPoint(x: 0, y: 0),
+            .upMirrored: CGPoint(x: 40, y: 0),
+            .down: CGPoint(x: 40, y: 20),
+            .downMirrored: CGPoint(x: 0, y: 20),
+            .leftMirrored: CGPoint(x: 0, y: 0),
+            .right: CGPoint(x: 20, y: 0),
+            .rightMirrored: CGPoint(x: 20, y: 40),
+            .left: CGPoint(x: 0, y: 40),
+        ]
+        for orientation in StudioImageOrientation.allCases {
+            XCTAssertEqual(orientation.displayPoint(fromStored: topLeft, storedSize: stored), expectedTopLeft[orientation], "\(orientation)")
+            XCTAssertEqual(
+                orientation.displaySize(ofStored: stored),
+                orientation.swapsAxes ? CGSize(width: 20, height: 40) : stored,
+                "\(orientation)"
+            )
+            for point in [CGPoint(x: 3, y: 17), CGPoint(x: 40, y: 20), CGPoint(x: 12.5, y: 0)] {
+                let shown = orientation.displayPoint(fromStored: point, storedSize: stored)
+                XCTAssertEqual(orientation.storedPoint(fromDisplay: shown, storedSize: stored), point, "\(orientation)")
+                let display = orientation.displaySize(ofStored: stored)
+                XCTAssertTrue((0...display.width).contains(shown.x) && (0...display.height).contains(shown.y), "\(orientation) leaves the picture")
+            }
+            let rect = CGRect(x: 30, y: 5, width: 10, height: 10)
+            let shownRect = orientation.displayRect(fromStored: rect, storedSize: stored)
+            XCTAssertEqual(shownRect.width * shownRect.height, 100, accuracy: 1e-9, "\(orientation)")
+            XCTAssertEqual(orientation.storedRect(fromDisplay: shownRect, storedSize: stored), rect, "\(orientation)")
+            let mapped = [cup, handle, shadow]
+                .inDisplaySpace(orientation, storedSize: CGSize(width: 1_000, height: 500))
+                .inStoredSpace(orientation, storedSize: CGSize(width: 1_000, height: 500))
+            XCTAssertEqual(mapped, [cup, handle, shadow], "\(orientation)")
+        }
+        // The portrait phone photo: the stored right edge is the shown bottom edge.
+        XCTAssertEqual(
+            StudioImageOrientation.right.displayRect(fromStored: CGRect(x: 30, y: 0, width: 10, height: 20), storedSize: stored),
+            CGRect(x: 0, y: 30, width: 20, height: 10)
+        )
+        XCTAssertNil(StudioImageOrientation(exif: 9))
+        XCTAssertEqual(StudioImageOrientation(exif: 6), .right)
+    }
+
+    /// The four flags are bound so the Command view round-trips, but the inspector never shows
+    /// them as text fields: the picture is their editor.
+    func testRegionPromptFlagsAreBoundButHiddenFromTheInspector() throws {
+        for mode in [StudioMode.segment, .track] {
+            let inspector = StudioInspectorSchema.fieldIDs(for: mode)
+            for field in ["visionBoxPrompts", "visionPointPrompts", "visionInitFrame", "visionEndFrame"] {
+                XCTAssertFalse(inspector.contains(field), "\(mode) inspector shows \(field)")
+            }
+            XCTAssertTrue(inspector.contains("visionThreshold"))
+            let override = try XCTUnwrap(StudioContractOverrides.override(forFlag: "--box", mode: mode))
+            XCTAssertEqual(override.id, .regionPrompts)
+            XCTAssertTrue(override.isExternal)
+            XCTAssertNotNil(StudioContractBindings.bindings(for: mode)["--point"])
+        }
+
+        // A Command-view edit lands on the picture through `applyingChanges`.
+        var draft = StudioDraft()
+        draft.reset(for: .segment)
+        var before = StudioConsoleDraft()
+        var after = StudioConsoleDraft()
+        before["--box"] = .unset
+        after["--box"] = .text("40,30,160,110,coffee cup")
+        after.applyingChanges(from: before, to: &draft, mode: .segment, templateID: .visionSegment)
+        XCTAssertEqual(draft.visionRegionPrompts?.count, 1)
+        XCTAssertEqual(draft.visionRegionPrompts?.first?.rect, CGRect(x: 40, y: 30, width: 120, height: 80))
+    }
+
     // MARK: - Find to Segment
 
     func testHandoffCarriesFindBoxesIntoSegmentAsDrawnPrompts() {

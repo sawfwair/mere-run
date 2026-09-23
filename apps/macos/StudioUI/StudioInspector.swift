@@ -232,7 +232,7 @@ struct StudioInspector: View {
                 selection: $draft.readImageAction,
                 accessibilityLabel: "Read task"
             ) { $0.title }
-        case .attachment:
+        case .attachment, .regionPrompts:
             EmptyView()
         }
     }

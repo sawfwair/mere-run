@@ -66,18 +66,29 @@ struct StudioAnalyzeImageView: View {
     let detections: [StudioAnalyzeDetection]
     /// Composited as a soft accent tint.
     let masks: [StudioAnalyzeDetection]
-    /// The image's true pixel size, which the result's coordinates are in.
+    /// The image's stored pixel size, which the result's coordinates and the prompts are in.
     let imageSize: CGSize?
+    /// How the stored pixels are turned to show the picture upright, as it is drawn here.
+    var orientation = StudioImageOrientation.up
     /// The prompt layer over the picture, for the tasks whose input takes drawn boxes and points.
     var editing: StudioAnalyzeImageEditing?
 
     @State private var image: NSImage?
     @State private var didLoad = false
 
+    /// Stored pixels. Until the metadata arrives the decoded (upright) picture stands in, which
+    /// is only exact for an unrotated one; the metadata always follows.
     private var pixelSize: CGSize {
         if let imageSize, imageSize.width > 0, imageSize.height > 0 { return imageSize }
-        if let image, image.size.width > 0, image.size.height > 0 { return image.size }
+        if let image, image.size.width > 0, image.size.height > 0 {
+            return orientation.swapsAxes ? CGSize(width: image.size.height, height: image.size.width) : image.size
+        }
         return CGSize(width: 1, height: 1)
+    }
+
+    /// The pixel size of the picture as shown.
+    private var displaySize: CGSize {
+        orientation.displaySize(ofStored: pixelSize)
     }
 
     var body: some View {
@@ -107,10 +118,8 @@ struct StudioAnalyzeImageView: View {
         .task(id: url) {
             didLoad = false
             image = nil
-            // Stored pixels, no EXIF transform: the result's boxes and the drawn prompts are
-            // both in the space the CLI decodes.
             let loaded = await Task.detached(priority: .userInitiated) {
-                StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 1_600, appliesOrientation: false)
+                StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 1_600)
             }.value
             guard !Task.isCancelled else { return }
             image = loaded?.image
@@ -141,8 +150,8 @@ struct StudioAnalyzeImageView: View {
             .allowsHitTesting(false)
             if let editing {
                 StudioRegionPromptLayer(
-                    prompts: editing.prompts,
-                    imageSize: pixelSize,
+                    prompts: editing.prompts.inDisplaySpace(orientation, storedSize: pixelSize),
+                    imageSize: displaySize,
                     fitted: CGRect(origin: .zero, size: geometry.size),
                     tool: editing.tool,
                     selection: editing.selection
@@ -151,10 +160,17 @@ struct StudioAnalyzeImageView: View {
         }
     }
 
-    private func box(_ detection: StudioAnalyzeDetection, in size: CGSize) -> some View {
-        let rect = StudioAnalyzeGeometry.viewRect(
-            for: detection.box, imageSize: pixelSize, displaySize: size
+    /// Where a stored-pixel result rect lands on the upright picture shown at `size`.
+    private func viewRect(for storedBox: CGRect, in size: CGSize) -> CGRect {
+        StudioAnalyzeGeometry.viewRect(
+            for: orientation.displayRect(fromStored: storedBox, storedSize: pixelSize),
+            imageSize: displaySize,
+            displaySize: size
         )
+    }
+
+    private func box(_ detection: StudioAnalyzeDetection, in size: CGSize) -> some View {
+        let rect = viewRect(for: detection.box, in: size)
         return RoundedRectangle(cornerRadius: 4)
             .strokeBorder(MereRunTheme.accent, lineWidth: 2)
             // The design's inset hairline: it keeps the accent edge readable over a pale subject.
@@ -176,11 +192,9 @@ struct StudioAnalyzeImageView: View {
     @ViewBuilder
     private func maskLayer(_ detection: StudioAnalyzeDetection, in size: CGSize) -> some View {
         if let maskURL = detection.maskURL {
-            StudioAnalyzeMaskLayer(url: maskURL)
+            StudioAnalyzeMaskLayer(url: maskURL, orientation: orientation)
         } else {
-            let rect = StudioAnalyzeGeometry.viewRect(
-                for: detection.box, imageSize: pixelSize, displaySize: size
-            )
+            let rect = viewRect(for: detection.box, in: size)
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(MereRunTheme.accent, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
                 .frame(width: max(rect.width, 2), height: max(rect.height, 2))
@@ -196,12 +210,53 @@ struct StudioAnalyzeImageView: View {
     }
 }
 
-/// The bindings the prompt layer over an Analyze image edits: the prompts themselves, plus the
-/// tool and selection the canvas's toolbar shares with it.
+/// The bindings the prompt layer over an Analyze image edits: the prompts themselves (in stored
+/// pixels), plus the tool and selection the canvas's toolbar shares with it.
 struct StudioAnalyzeImageEditing {
     var prompts: Binding<[StudioRegionPrompt]>
     var tool: Binding<StudioRegionTool>
     var selection: Binding<UUID?>
+}
+
+extension Binding where Value == [StudioRegionPrompt] {
+    /// The same prompts seen in the upright picture's pixels: the layer draws and edits there,
+    /// and every write lands back in the stored pixels the CLI reads.
+    func inDisplaySpace(_ orientation: StudioImageOrientation, storedSize: CGSize) -> Binding<[StudioRegionPrompt]> {
+        guard orientation != .up else { return self }
+        return Binding(
+            get: { wrappedValue.inDisplaySpace(orientation, storedSize: storedSize) },
+            set: { wrappedValue = $0.inStoredSpace(orientation, storedSize: storedSize) }
+        )
+    }
+}
+
+extension StudioImageOrientation {
+    /// `image`, whose pixels are in stored orientation (a mask PNG the CLI wrote beside a rotated
+    /// photo), turned to sit on the upright picture.
+    func upright(_ image: NSImage) -> NSImage {
+        guard self != .up, let source = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return image
+        }
+        let storedSize = CGSize(width: source.width, height: source.height)
+        let shown = displaySize(ofStored: storedSize)
+        guard let context = CGContext(
+            data: nil,
+            width: Int(shown.width),
+            height: Int(shown.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
+        // Core Graphics draws with a bottom-left origin, so flip into the top-left space the
+        // transform is written in, apply it, and flip back out.
+        context.concatenate(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: shown.height))
+        context.concatenate(displayTransform(storedSize: storedSize))
+        context.concatenate(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: storedSize.height))
+        context.draw(source, in: CGRect(origin: .zero, size: storedSize))
+        guard let turned = context.makeImage() else { return image }
+        return NSImage(cgImage: turned, size: NSSize(width: shown.width, height: shown.height))
+    }
 }
 
 /// "coffee cup 0.94" on an accent tab that sits on top of its box.
@@ -235,6 +290,8 @@ extension StudioAnalyzeDetection {
 /// so its luminance becomes the alpha of an accent wash.
 private struct StudioAnalyzeMaskLayer: View {
     let url: URL
+    /// The photo's orientation; the mask is written in stored pixels and turned to match.
+    let orientation: StudioImageOrientation
 
     @State private var mask: NSImage?
 
@@ -255,11 +312,13 @@ private struct StudioAnalyzeMaskLayer: View {
             }
         }
         .task(id: url) {
+            let orientation = orientation
             let loaded = await Task.detached(priority: .userInitiated) {
                 StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 1_600)
+                    .map { orientation.upright($0.image) }
             }.value
             guard !Task.isCancelled else { return }
-            mask = loaded?.image
+            mask = loaded
         }
     }
 }
