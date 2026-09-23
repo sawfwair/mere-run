@@ -56,9 +56,19 @@ struct MereRunCommands: Commands {
             MereRunCheckForUpdatesView(updater: updater)
         }
 
+        // The Studio has no styled text, so the Format menu's Font and Text items — and Show
+        // Colors, which would otherwise take ⇧⌘C from the Command Console — have nothing to act on.
+        CommandGroup(replacing: .textFormatting) {}
+
         CommandGroup(before: .windowList) {
             Button("Open Studio") { openWindow(id: "studio") }
                 .disabled(isStudioOpen)
+            // The Console carries the current task's command when a Studio window can hand it one;
+            // from anywhere else it opens as it was left.
+            Button("Command Console") {
+                if let actions { actions.openConsole() } else { openWindow(id: StudioConsoleWindow.id) }
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
             Divider()
         }
 
@@ -72,18 +82,10 @@ struct MereRunCommands: Commands {
                 .keyboardShortcut("i", modifiers: [.command, .option])
                 .disabled(actions?.canShowInspector != true)
 
-            // On a prompt task ⌥⌘C flips the Command view column; elsewhere the raw surface is
-            // still the Command Console window until every task renders its own Command view.
-            if actions?.canShowCommand == true {
-                Toggle("Show Command View", isOn: actions?.showCommand ?? .constant(false))
-                    .keyboardShortcut("c", modifiers: [.command, .option])
-            } else {
-                Button("Command Console") {
-                    actions?.openConsole()
-                }
+            // ⌥⌘C is always the task's Command view; the Console window is Window ▸ Command Console.
+            Toggle("Show Command View", isOn: actions?.showCommand ?? .constant(false))
                 .keyboardShortcut("c", modifiers: [.command, .option])
-                .disabled(actions == nil)
-            }
+                .disabled(actions?.canShowCommand != true)
 
             Divider()
         }
@@ -151,10 +153,6 @@ struct MereRunCommands: Commands {
 
             Link("mere.run", destination: URL(string: "https://mere.run")!)
             Divider()
-            Button("Command Console") {
-                actions?.openConsole()
-            }
-            .disabled(actions == nil)
             Button("Export Diagnostics…") { exportDiagnostics() }
         }
     }

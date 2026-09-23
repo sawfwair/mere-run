@@ -312,9 +312,11 @@ package enum StudioServingSafety: Equatable {
             : .protectedLAN
     }
 
+    /// A blank host counts: every endpoint in the app falls back to 127.0.0.1 without one.
     package static func isLoopback(_ host: String) -> Bool {
         let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized == "localhost"
+        return normalized.isEmpty
+            || normalized == "localhost"
             || normalized == "::1"
             || normalized == "[::1]"
             || normalized.hasPrefix("127.")

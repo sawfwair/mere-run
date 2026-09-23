@@ -19,6 +19,12 @@ package struct MereRunSettingsView: View {
     @State private var configurationPath = ""
     /// Empty means the per-media defaults in `StudioOutputLocation`.
     @AppStorage(StudioOutputLocation.rootDefaultsKey) private var outputRoot = ""
+    @AppStorage(StudioMenuBar.visibilityDefaultsKey) private var showsMenuBarExtra = true
+    /// The runtime endpoint and key as typed. They reach the controller — which retargets the
+    /// server monitor and writes the key to the Keychain — on Apply or Return, not per keystroke.
+    @State private var runtimeHost = ""
+    @State private var runtimePort = 8_080
+    @State private var runtimeAPIKey = ""
 
     package var body: some View {
         TabView {
@@ -141,24 +147,34 @@ package struct MereRunSettingsView: View {
     private var serverTab: some View {
         EditorSection("Runtime server") {
             HStack(spacing: 10) {
-                TextField("Host", text: $controller.runtimeHost)
+                TextField("Host", text: $runtimeHost)
                     .textFieldStyle(.plain)
                     .font(MereRunTheme.bodyFont)
                     .padding(10)
                     .merePanel()
-                TextField("Port", value: $controller.runtimePort, format: .number.grouping(.never))
+                TextField("Port", value: $runtimePort, format: .number.grouping(.never))
                     .textFieldStyle(.plain)
                     .font(MereRunTheme.bodyFont)
                     .frame(width: 90)
                     .padding(10)
                     .merePanel()
-                SecureField("API key (optional)", text: $controller.runtimeAPIKey)
+                SecureField("API key (optional)", text: $runtimeAPIKey)
                     .textFieldStyle(.plain)
                     .font(MereRunTheme.bodyFont)
                     .padding(10)
                     .merePanel()
             }
-            Text("Where Models and Server send load/unload requests for the running runtime (`mere.run api serve`). The key is kept in your login Keychain.")
+            .onSubmit(applyRuntimeServer)
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+                Button("Revert", action: loadRuntimeServer)
+                    .buttonStyle(.mereSecondary)
+                    .disabled(!runtimeServerEdited)
+                Button("Apply", action: applyRuntimeServer)
+                    .buttonStyle(.merePrimary)
+                    .disabled(!runtimeServerEdited)
+            }
+            Text("Where the API server listens, and where Models, Server, and the menu bar reach it (`mere.run api serve`). The key is kept in your login Keychain.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
             if let storageNotice = controller.runtimeAPIKeyStorageNotice {
@@ -168,6 +184,39 @@ package struct MereRunSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .onAppear(perform: loadRuntimeServer)
+        // A change applied on the Server page replaces only the field it changed.
+        .onChange(of: controller.runtimeHost) { _, host in runtimeHost = host }
+        .onChange(of: controller.runtimePort) { _, port in runtimePort = port }
+        .onChange(of: controller.runtimeAPIKey) { _, key in runtimeAPIKey = key }
+        EditorSection("Menu bar") {
+            Toggle("Show mere.run in the menu bar", isOn: $showsMenuBarExtra)
+            Text("Start, stop, and watch the API server and its models from the menu bar, with or without a Studio window open.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var runtimeServerEdited: Bool {
+        runtimeHost.trimmingCharacters(in: .whitespacesAndNewlines) != controller.runtimeHost
+            || runtimePort != controller.runtimePort
+            || runtimeAPIKey != controller.runtimeAPIKey
+    }
+
+    private func loadRuntimeServer() {
+        runtimeHost = controller.runtimeHost
+        runtimePort = controller.runtimePort
+        runtimeAPIKey = controller.runtimeAPIKey
+    }
+
+    private func applyRuntimeServer() {
+        let host = runtimeHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        let port = min(65_535, max(1, runtimePort))
+        if host != controller.runtimeHost { controller.runtimeHost = host }
+        if port != controller.runtimePort { controller.runtimePort = port }
+        if runtimeAPIKey != controller.runtimeAPIKey { controller.runtimeAPIKey = runtimeAPIKey }
+        loadRuntimeServer()
     }
 
     @ViewBuilder

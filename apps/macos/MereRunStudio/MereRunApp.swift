@@ -6,10 +6,27 @@ import StudioUI
 import SwiftUI
 
 final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
-    var onTerminate: (() -> Void)?
+    /// The app's shared services. The delegate owns them, rather than a window or a scene, so Quit
+    /// can ask about and stop the child processes whether or not a Studio window ever appeared.
+    @MainActor lazy var session = StudioAppSession()
+
+    /// Every child process ends with the app, so Quit asks first while a server Studio started or
+    /// the user's own work is still running.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let warning = StudioQuitWarning.message(for: session.controller) else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "Quit mere.run?"
+        alert.informativeText = warning
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
-        onTerminate?()
+        let controller = session.controller
+        controller.taskSessions.flush()
+        controller.servingMonitor.stop()
+        controller.terminateAllProcesses()
     }
 
     // QLPreviewPanelController: the app delegate is the end of the responder chain, so it answers
@@ -22,6 +39,39 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
 
     override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
         MainActor.assumeIsolated { panel.dataSource = nil }
+    }
+}
+
+/// The menu bar extra's panel, with the two ways back into the Studio window.
+struct MereRunMenuBarContent: View {
+    let controller: MereRunController
+    let navigation: NavigationModel
+    let isStudioOpen: Bool
+
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        StudioMenuBarPanel(
+            controller: controller,
+            onOpenStudio: showStudio,
+            onOpenServer: {
+                navigation.open(task: .serverServing, windowIsOpen: isStudioOpen)
+                showStudio()
+            }
+        )
+    }
+
+    /// Brings the Studio window forward, or opens it when it is closed. `openWindow` always adds a
+    /// window to a `WindowGroup`, so an open one is raised rather than opened again.
+    private func showStudio() {
+        NSApp.activate()
+        guard isStudioOpen else {
+            openWindow(id: "studio")
+            return
+        }
+        let window = NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("studio") == true }
+        if window?.isMiniaturized == true { window?.deminiaturize(nil) }
+        window?.makeKeyAndOrderFront(nil)
     }
 }
 
@@ -44,12 +94,13 @@ struct MereRunRootView: View {
 @main
 struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
-    @StateObject private var session = StudioAppSession()
+    private var session: StudioAppSession { appDelegate.session }
     @State private var isStudioOpen = false
     private var controller: MereRunController { session.controller }
     private var library: StudioLibraryStore { session.library }
     @StateObject private var navigation = NavigationModel()
     @StateObject private var crashReporter = StudioCrashReporter()
+    @AppStorage(StudioMenuBar.visibilityDefaultsKey) private var showsMenuBarExtra = true
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: nil,
@@ -75,13 +126,6 @@ struct MereRunApp: App {
                 .onAppear {
                     isStudioOpen = true
                     crashReporter.applyStoredPreference()
-                    appDelegate.onTerminate = { [weak controller] in
-                        MainActor.assumeIsolated {
-                            controller?.taskSessions.flush()
-                            controller?.servingMonitor.stop()
-                            controller?.terminateAllProcesses()
-                        }
-                    }
                 }
                 .onDisappear { isStudioOpen = false }
                 .task {
@@ -112,6 +156,14 @@ struct MereRunApp: App {
         }
         .defaultSize(width: 1_260, height: 780)
         .windowResizability(.contentMinSize)
+
+        // The server outlives the Studio window, so its control does too.
+        MenuBarExtra(isInserted: $showsMenuBarExtra) {
+            MereRunMenuBarContent(controller: controller, navigation: navigation, isStudioOpen: isStudioOpen)
+        } label: {
+            StudioMenuBarLabel(server: controller.localServer)
+        }
+        .menuBarExtraStyle(.window)
 
         Settings {
             MereRunSettingsView()

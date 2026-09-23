@@ -343,6 +343,12 @@ package final class MereRunController: ObservableObject {
     /// The controller mirrors the foreground inference job into its published console fields and
     /// re-broadcasts completions; views may also observe a `Job` directly.
     package lazy var modelStore = StudioModelStore(controller: self)
+    /// The local API server's one owner. `StudioAppSession` creates it at launch so it adopts a
+    /// server from the first job event on, whichever window or menu is open.
+    package lazy var localServer = StudioLocalServer(controller: self)
+    /// The resident `vision serve` and `music serve` processes Studio starts from the Server domain.
+    package lazy var visionServer = StudioServiceProcess(templateID: .visionServe, controller: self)
+    package lazy var musicServer = StudioServiceProcess(templateID: .musicServe, controller: self)
     package let jobs: JobStore
     /// The job whose live state mirrors into the published console fields (the run the
     /// single-pane console/canvas currently shows). Background jobs still complete into the
@@ -1211,6 +1217,28 @@ package final class MereRunController: ObservableObject {
             queueNotice: nil,
             arguments: arguments
         )
+    }
+
+    /// Launches a long-lived catalog server (`api serve`) in the service lane: it starts at once,
+    /// holds no inference slot, and reports only to whoever keeps the returned id — not to the
+    /// console, the Library, or a completion notification. `arguments`, when the task's Command
+    /// view edited them, replace the ones the draft would build. A draft that fails preflight
+    /// still returns an id; the job's state carries the reason.
+    @discardableResult
+    package func startService(template: CommandTemplate, draft: CommandDraft, arguments: [String]? = nil) -> JobID {
+        refreshResolvedCLI()
+        let execution = arguments.map { StudioExecution(templateID: template.id, arguments: $0) }
+        let draft = execution?.project(onto: draft) ?? draft
+        let launch = cliResolve(cliPath)
+        let args = arguments.map(cliArguments) ?? commandArguments(template: template, draft: draft)
+        return jobs.submit(JobRequest(
+            lane: .service,
+            template: template,
+            draft: draft,
+            configuration: processConfiguration(launch: launch, args: args, template: template, draft: draft),
+            displayCommand: launch.displayCommand(for: args),
+            execution: execution
+        ))
     }
 
     /// Snapshots the launch (resolved CLI, argv, environment, working directory) into a

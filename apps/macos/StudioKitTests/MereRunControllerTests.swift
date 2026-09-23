@@ -766,6 +766,8 @@ final class MereRunControllerTests: XCTestCase {
 
     func testRuntimeEndpointIsOwnedNotDerivedFromDraft() {
         let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        let restoreRuntimeSettings = runtimeSettingsRestorer(for: controller)
+        defer { restoreRuntimeSettings() }
         controller.runtimeHost = "example.local"
         controller.runtimePort = 9000
         controller.runtimeAPIKey = "secret"
@@ -781,6 +783,8 @@ final class MereRunControllerTests: XCTestCase {
 
     func testRuntimeEndpointFallsBackAndOmitsEmptyAuth() {
         let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        let restoreRuntimeSettings = runtimeSettingsRestorer(for: controller)
+        defer { restoreRuntimeSettings() }
         controller.runtimeHost = "   "
         controller.runtimeAPIKey = "  "
         XCTAssertEqual(controller.runtimeURL(path: "/x").host, "127.0.0.1")

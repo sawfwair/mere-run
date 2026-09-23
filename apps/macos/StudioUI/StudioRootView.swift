@@ -51,6 +51,8 @@ private struct StudioWorkspaceView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// The status probe never answered within its grace period, so the footer says so.
     @State private var probeTimedOut = false
+    /// The API server's phase, mirrored from `controller.localServer` for the footer pill.
+    @State private var serverPhase: StudioLocalServer.Phase = .stopped
     @State private var isDropTargeted = false
     /// Which jobs exist; the feed re-derives its cards when one starts or finishes.
     @StateObject private var jobMonitor = StudioJobMonitor()
@@ -312,10 +314,15 @@ private struct StudioWorkspaceView: View {
             probeTimedOut = true
         }
         .overlay(alignment: .bottomLeading) { activityOverlay }
+        .onReceive(controller.localServer.$phase) { serverPhase = $0 }
     }
 
     private var machineStatus: StudioMachineStatus {
-        StudioMachineStatus(serverStatus: controller.serverStatus, probeTimedOut: probeTimedOut)
+        StudioMachineStatus(
+            serverStatus: controller.serverStatus,
+            probeTimedOut: probeTimedOut,
+            isServing: serverPhase.isServing
+        )
     }
 
     /// How many jobs the footer pill counts: the user's work, never a readiness probe.
@@ -700,9 +707,11 @@ private struct StudioWorkspaceView: View {
                 onTrain: openTraining
             )
         case .serverServing:
-            StudioServingConsoleView(monitor: controller.servingMonitor)
+            StudioServingConsoleView(monitor: controller.servingMonitor, server: controller.localServer)
         case .serverMusic:
             StudioMusicToolsView(tool: .constant(.serve), tools: [.serve])
+        case .serverVision:
+            StudioVisionServerView(server: controller.visionServer)
         case .runsRuns:
             StudioOperationsView()
         case .pluginsCatalog:
@@ -1469,7 +1478,8 @@ private struct StudioWorkspaceView: View {
         studioError = nil
         do {
             if !showsPromptWorkspace {
-                if let base = baseTaskRequest { _ = try prompt.runTask(base, task: destination.task) }
+                guard let base = baseTaskRequest else { return }
+                if !runServer(base) { _ = try prompt.runTask(base, task: destination.task) }
                 return
             }
             guard let submission = try prompt.runPrompt(inventory: modelInventory) else { return }
@@ -1481,6 +1491,30 @@ private struct StudioWorkspaceView: View {
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    /// Runs a server task's command through the server's owner, so it starts in the service lane
+    /// like the page's own Start — never as a generation holding a slot, the console, and a
+    /// Library row. A server already running restarts on the command. Returns false for any
+    /// other command.
+    private func runServer(_ base: StudioRunRequest) -> Bool {
+        switch base.templateID {
+        case .apiServe:
+            let server = controller.localServer
+            Task { @MainActor in
+                studioError = server.phase.isOwned ? await server.restart() : server.start()
+            }
+        case .visionServe, .musicServe:
+            let server = base.templateID == .visionServe ? controller.visionServer : controller.musicServer
+            if server.state.isRunning {
+                Task { _ = await server.restart(draft: base.draft) }
+            } else {
+                server.start(draft: base.draft)
+            }
+        default:
+            return false
+        }
+        return true
     }
 
     /// The composer's Stop: the run of this mode in flight, or the thread's turn.

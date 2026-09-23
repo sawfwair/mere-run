@@ -58,11 +58,12 @@ extension CommandTemplateID {
              .modelBenchmarkToolContinuations, .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP,
              .modelBenchmarkParakeetCoreML, .modelBenchmarkAPIWorkload: return .modelsBenchmarks
         case .adapterList, .adapterPull: return .modelsAdapters
-        case .apiServe, .visionServe, .openWebui, .worldServe,
+        case .apiServe, .openWebui, .worldServe,
              .statusSnapshot, .agentOnboard, .agentStatus, .agentInstallPi,
              .agentStart, .setup, .graphStudio, .nodeConsole,
              .custom: return .serverServing
         case .musicServe: return .serverMusic
+        case .visionServe: return .serverVision
         case .runList, .runInspect, .runWatch, .runFetch,
              .runCancel, .runRetry, .evaluationPackValidate, .evaluationRun,
              .evaluationPromote: return .runsRuns

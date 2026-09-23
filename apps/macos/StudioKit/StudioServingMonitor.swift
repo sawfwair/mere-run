@@ -10,22 +10,24 @@ package final class StudioServingMonitor: ObservableObject {
     @Published package private(set) var connectionDetail = "Waiting for runtime"
     @Published package private(set) var agentDetail = "Agent readiness has not been checked"
     @Published package private(set) var lastUpdated: Date?
+    /// When the endpoint last answered a poll — with a snapshot, or with an error status such as
+    /// 401 — or nil once a poll gets no answer. A server that rejects the key is still up.
+    @Published package private(set) var lastAnsweredAt: Date?
     @Published package private(set) var activities: [StudioServiceActivity] = []
 
     private var pollingTask: Task<Void, Never>?
+    /// The `/runtime/status` request in flight. A poll that finds one waits for its answer
+    /// rather than sending a second.
+    private var runtimePoll: Task<Void, Never>?
 
     package func start(controller: MereRunController) {
         guard pollingTask == nil else { return }
+        // Agent readiness spawns a CLI process, so it is read when the Agents section asks for it
+        // rather than on this loop, which runs for the life of the app.
         pollingTask = Task { @MainActor [weak self, weak controller] in
             guard let self, let controller else { return }
-            await refreshAgent(controller: controller)
-            var iteration = 0
             while !Task.isCancelled {
                 await refreshRuntime(controller: controller)
-                if iteration > 0, iteration.isMultiple(of: 8) {
-                    await refreshAgent(controller: controller)
-                }
-                iteration += 1
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
         }
@@ -39,6 +41,14 @@ package final class StudioServingMonitor: ObservableObject {
     package func refreshNow(controller: MereRunController) async {
         await refreshRuntime(controller: controller)
         await refreshAgent(controller: controller)
+    }
+
+    /// Polls the endpoint now instead of at the next tick: after a server exits, or after the
+    /// endpoint changes. A poll already in flight was sent before whatever prompted this one, so
+    /// this waits for it and then sends its own.
+    package func refreshRuntimeNow(controller: MereRunController) async {
+        if let runtimePoll { await runtimePoll.value }
+        await startRuntimePoll(controller: controller)
     }
 
     package func refreshAgent(controller: MereRunController) async {
@@ -60,6 +70,35 @@ package final class StudioServingMonitor: ObservableObject {
         }
     }
 
+    /// Loads or unloads one text model on the runtime (`POST /runtime/models/<id>/load|unload`),
+    /// records the outcome in the activity feed, and re-reads the pool. Returns the error to show,
+    /// or nil once the runtime accepted the request.
+    package func setModel(_ id: String, loaded: Bool, controller: MereRunController) async -> String? {
+        let action = loaded ? "load" : "unload"
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        var request = URLRequest(url: controller.runtimeURL(path: "/runtime/models/\(encoded)/\(action)"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        if let authorization = controller.runtimeAuthorizationHeader {
+            request.setValue(authorization, forHTTPHeaderField: "Authorization")
+        }
+        let failure: String?
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            failure = (200..<300).contains(code) ? nil : String(data: data, encoding: .utf8) ?? "HTTP \(code)"
+        } catch {
+            failure = error.localizedDescription
+        }
+        if let failure {
+            note("Model \(action) failed", detail: failure, level: .error)
+            return StudioActivitySanitizer.sanitize(failure)
+        }
+        note(loaded ? "Model load requested" : "Model unload requested", detail: id, level: .success)
+        await refreshRuntime(controller: controller)
+        return nil
+    }
+
     package func note(
         _ title: String,
         detail: String? = nil,
@@ -69,10 +108,25 @@ package final class StudioServingMonitor: ObservableObject {
     }
 
     private func refreshRuntime(controller: MereRunController) async {
-        guard !isRefreshing else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
+        if let runtimePoll { return await runtimePoll.value }
+        await startRuntimePoll(controller: controller)
+    }
 
+    private func startRuntimePoll(controller: MereRunController) async {
+        let poll = Task { @MainActor [weak self, weak controller] in
+            guard let self, let controller else { return }
+            await self.pollRuntime(controller: controller)
+        }
+        runtimePoll = poll
+        isRefreshing = true
+        await poll.value
+        if runtimePoll == poll {
+            runtimePoll = nil
+            isRefreshing = false
+        }
+    }
+
+    private func pollRuntime(controller: MereRunController) async {
         var request = URLRequest(url: controller.runtimeURL(path: "/runtime/status"))
         request.timeoutInterval = 3
         if let authorization = controller.runtimeAuthorizationHeader {
@@ -80,8 +134,12 @@ package final class StudioServingMonitor: ObservableObject {
         }
 
         do {
+            // An answer is stamped with when it was asked for: a reply that crosses a server's exit
+            // was the exiting server's, not a sign that another one took the port.
+            let sentAt = Date()
             let (data, response) = try await URLSession.shared.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            lastAnsweredAt = sentAt
             guard (200..<300).contains(code) else {
                 let wasReachable = isReachable
                 isReachable = false
@@ -109,6 +167,7 @@ package final class StudioServingMonitor: ObservableObject {
         } catch {
             let wasReachable = isReachable
             isReachable = false
+            lastAnsweredAt = nil
             connectionDetail = "Runtime is not reachable"
             if wasReachable {
                 append([.init(level: .warning, title: "Runtime disconnected", detail: error.localizedDescription)])

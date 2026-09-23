@@ -181,9 +181,9 @@ final class StudioActivityTests: XCTestCase {
         XCTAssertEqual(ready.summary(runningJobs: 1), "Ready · 92 models · 1 running")
         XCTAssertEqual(
             StudioMachineStatus.serving(installedModels: 3, loadedModel: "gemma4-e4b").summary(runningJobs: 1),
-            "Serving · 3 models · 1 running"
+            "Serving · 1 running"
         )
-        XCTAssertEqual(StudioMachineStatus.unreachable.summary(runningJobs: 1), "Server unreachable · 1 running")
+        XCTAssertEqual(StudioMachineStatus.cliNotResponding.summary(runningJobs: 1), "CLI not responding · 1 running")
     }
 
     func testTheWorkCountIsItsOwnLineOnlyWhileJobsRun() {
@@ -193,7 +193,7 @@ final class StudioActivityTests: XCTestCase {
     }
 
     func testOnlyAnUnreachableServerColoursTheFooterPill() {
-        XCTAssertEqual(StudioMachineStatus.unreachable.summaryColor, MereRunTheme.red)
+        XCTAssertEqual(StudioMachineStatus.cliNotResponding.summaryColor, MereRunTheme.red)
         XCTAssertEqual(StudioMachineStatus.checking.summaryColor, MereRunTheme.textSecondary)
         XCTAssertEqual(StudioMachineStatus.ready(installedModels: 1).summaryColor, MereRunTheme.textSecondary)
     }

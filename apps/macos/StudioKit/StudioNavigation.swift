@@ -248,6 +248,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
 
     case serverServing = "server.serving"
     case serverMusic = "server.music"
+    case serverVision = "server.vision"
 
     case runsRuns = "runs.runs"
 
@@ -274,7 +275,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth: return .earth
         case .modelsInstalled, .modelsLocations, .modelsHealth, .modelsBenchmarks, .modelsAdapters:
             return .models
-        case .serverServing, .serverMusic: return .server
+        case .serverServing, .serverMusic, .serverVision: return .server
         case .runsRuns: return .runs
         case .pluginsCatalog: return .plugins
         }
@@ -328,6 +329,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .modelsAdapters: return "Adapters"
         case .serverServing: return "Serving"
         case .serverMusic: return "Music server"
+        case .serverVision: return "Vision server"
         case .runsRuns: return "Runs"
         case .pluginsCatalog: return "Catalog"
         }

@@ -286,9 +286,9 @@ struct StudioActivityPopover: View {
     }
 }
 
-/// One job in the Activity popover. It observes its own `Job`, so a chatty run redraws this row
-/// and nothing else in the shell.
-private struct StudioActivityJobRow: View {
+/// One job in the Activity popover and the menu bar panel. It observes its own `Job`, so a chatty
+/// run redraws this row and nothing else in the shell.
+struct StudioActivityJobRow: View {
     @Environment(\.studioReferenceDate) private var referenceDate
 
     @ObservedObject var job: Job

@@ -4,11 +4,9 @@ import SwiftUI
 
 enum StudioServingSection: String, Codable, CaseIterable, Identifiable {
     case overview = "Overview"
-    case modelPool = "Model Pool"
-    case resources = "Resources"
-    case traffic = "Traffic"
-    case agents = "Agents & Clients"
-    case vision = "Vision Grounding"
+    case modelPool = "Models"
+    case telemetry = "Telemetry"
+    case agents = "Clients"
     case activity = "Activity"
     case configuration = "Configuration"
 
@@ -18,10 +16,8 @@ enum StudioServingSection: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .overview: "rectangle.3.group"
         case .modelPool: "shippingbox.and.arrow.backward"
-        case .resources: "gauge.with.dots.needle.67percent"
-        case .traffic: "chart.xyaxis.line"
+        case .telemetry: "gauge.with.dots.needle.67percent"
         case .agents: "person.2.badge.gearshape"
-        case .vision: "viewfinder.circle"
         case .activity: "waveform.path.ecg"
         case .configuration: "slider.horizontal.3"
         }
@@ -34,14 +30,14 @@ struct StudioServingConsoleView: View {
     @EnvironmentObject private var library: StudioLibraryStore
 
     @ObservedObject private var monitor: StudioServingMonitor
+    @ObservedObject private var server: StudioLocalServer
     @StudioStoredValue("ServingConsole.section") private var section: StudioServingSection = .overview
-    @StudioStoredValue("ServingConsole.initializedConnection") private var initializedConnection = false
-    @StudioStoredValue("ServingConsole.draft") private var draft: CommandDraft = CommandDraft()
-    @StudioStoredValue("ServingConsole.serviceRequestID") private var serviceRequestID: UUID? = nil
-    @StudioStoredValue("ServingConsole.visionServeDraft") private var visionServeDraft = CommandCatalog.template(id: .visionServe)?.defaultDraft()
-        ?? CommandDraft()
-    @StudioStoredValue("ServingConsole.visionServeRequestID") private var visionServeRequestID: UUID? = nil
-    @State private var visionServeMessage: String?
+    /// The endpoint and key as the Configuration card edits them. They are read from the
+    /// controller each time the page appears and written back on Apply or Start, so the page
+    /// never holds a stale copy of what Settings changed, and the key never leaves the Keychain.
+    @State private var connectionHost = ""
+    @State private var connectionPort = 8_080
+    @State private var connectionAPIKey = ""
     @StudioStoredValue("ServingConsole.agentRequestID") private var agentRequestID: UUID? = nil
     @StudioStoredValue("ServingConsole.selectedAgentModel") private var selectedAgentModel = ""
     @StudioStoredValue("ServingConsole.agentPrompt") private var agentPrompt = "Help me configure and use mere.run on this machine."
@@ -57,30 +53,52 @@ struct StudioServingConsoleView: View {
     @State private var operationMessage: String?
     @State private var busyOperation: String?
 
-    init(monitor: StudioServingMonitor) {
+    init(monitor: StudioServingMonitor, server: StudioLocalServer) {
         _monitor = ObservedObject(wrappedValue: monitor)
-        let template = CommandCatalog.template(id: .apiServe)
-        _draft = StudioStoredValue(initialValue: template?.defaultDraft() ?? CommandDraft(), "ServingConsole.draft")
+        _server = ObservedObject(wrappedValue: server)
     }
 
-    private var ownedServiceID: UUID? {
-        serviceRequestID ?? controller.runningRequestID(for: .apiServe)
-    }
-
+    /// Stop and Restart reach only a server Studio started.
     private var ownsRunningService: Bool {
-        guard let ownedServiceID else { return false }
-        return controller.isRequestRunning(ownedServiceID)
+        server.phase.isOwned
+    }
+
+    private var isServing: Bool {
+        server.phase.isServing
     }
 
     private var serviceStateTitle: String {
-        if ownsRunningService, monitor.isReachable { return "Running in Studio" }
-        if ownsRunningService { return "Starting in Studio" }
-        if monitor.isReachable { return "Connected to external server" }
-        return "Server stopped"
+        switch server.phase {
+        case .running: return "Running in Studio"
+        case .starting: return "Starting in Studio"
+        case .stopping: return "Stopping"
+        case .external: return "Connected to external server"
+        case .stopped, .failed: return "Server stopped"
+        }
     }
 
+    /// The line under the state: why the server stopped, or what the endpoint last said.
+    private var serviceStateDetail: String {
+        if case .failed(let message) = server.phase { return message }
+        if server.phase == .external, !monitor.isReachable { return monitor.connectionDetail }
+        if server.phase == .external, let pid = monitor.runtime?.process?.processID {
+            return "Started outside Studio (process \(pid)) — stop it where it was started."
+        }
+        return monitor.connectionDetail
+    }
+
+    /// Safety of the endpoint and key as the Configuration card has them, applied or not.
     private var safety: StudioServingSafety {
-        StudioServingSafety.evaluate(host: draft.host, apiKey: draft.apiKey)
+        StudioServingSafety.evaluate(host: connectionHost, apiKey: connectionAPIKey)
+    }
+
+    /// What Start would launch, with the Configuration card's endpoint: the Command view shows it.
+    private var serveDraft: CommandDraft {
+        var draft = server.options
+        draft.host = connectionHost
+        draft.port = connectionPort
+        draft.apiKey = connectionAPIKey
+        return draft
     }
 
     var body: some View {
@@ -98,14 +116,14 @@ struct StudioServingConsoleView: View {
             }
         }
         .background(MereRunTheme.background)
+        .studioTaskCommand(.apiServe, draft: serveDraft)
         .task {
-            if !initializedConnection {
-                syncDraftFromController()
-                initializedConnection = true
-            }
-            serviceRequestID = controller.runningRequestID(for: .apiServe)
-            visionServeRequestID = controller.runningRequestID(for: .visionServe)
+            syncConnectionFromController()
         }
+        // A change made in Settings replaces only the field it changed.
+        .onChange(of: controller.runtimeHost) { _, host in connectionHost = host }
+        .onChange(of: controller.runtimePort) { _, port in connectionPort = port }
+        .onChange(of: controller.runtimeAPIKey) { _, key in connectionAPIKey = key }
         .onChange(of: monitor.agentStatus) { _, status in
             guard selectedAgentModel.isEmpty else { return }
             selectedAgentModel = status?.recommendedModelID
@@ -122,19 +140,23 @@ struct StudioServingConsoleView: View {
 
     private var header: some View {
         HStack(spacing: MereRunTheme.Spacing.md) {
-            Label(serviceStateTitle, systemImage: monitor.isReachable ? "checkmark.circle.fill" : "circle")
+            Label(serviceStateTitle, systemImage: isServing ? "checkmark.circle.fill" : "circle")
                 .font(MereRunTheme.captionFont)
-                .foregroundStyle(monitor.isReachable ? MereRunTheme.green : MereRunTheme.textMuted)
+                .foregroundStyle(isServing ? MereRunTheme.green : MereRunTheme.textMuted)
+
+            // Shown here rather than in one section, so a result is visible wherever it happened.
+            if let operationMessage {
+                Text(operationMessage)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(operationMessage)
+            }
 
             Spacer()
 
-            Button {
-                Task { await monitor.refreshNow(controller: controller) }
-            } label: {
-                Label("Refresh", systemImage: monitor.isRefreshing ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
-            }
-            .buttonStyle(.mereSecondary)
-            .disabled(monitor.isRefreshing)
+            serviceControls
         }
         .padding(.horizontal, MereRunTheme.Spacing.xl)
         .padding(.vertical, MereRunTheme.Spacing.sm)
@@ -164,16 +186,6 @@ struct StudioServingConsoleView: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            VStack(alignment: .leading, spacing: 5) {
-                Label(serviceStateTitle, systemImage: monitor.isReachable ? "checkmark.circle.fill" : "circle")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(monitor.isReachable ? MereRunTheme.green : MereRunTheme.textMuted)
-                Text(endpoint)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(2)
-            }
-            .padding(10)
         }
         .padding(MereRunTheme.Spacing.sm)
         .frame(width: 200)
@@ -185,10 +197,14 @@ struct StudioServingConsoleView: View {
         switch section {
         case .overview: overview
         case .modelPool: modelPool
-        case .resources: resources
-        case .traffic: traffic
-        case .agents: agentsAndClients
-        case .vision: visionGrounding
+        case .telemetry:
+            VStack(alignment: .leading, spacing: MereRunTheme.Spacing.xxl) {
+                resources
+                traffic
+            }
+        case .agents:
+            agentsAndClients
+                .task { await monitor.refreshAgent(controller: controller) }
         case .activity: activity
         case .configuration: configuration
         }
@@ -204,9 +220,10 @@ struct StudioServingConsoleView: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(serviceStateTitle)
                             .font(.system(size: 18, weight: .semibold))
-                        Text(monitor.connectionDetail)
+                        Text(serviceStateDetail)
                             .font(MereRunTheme.bodyFont)
                             .foregroundStyle(MereRunTheme.textSecondary)
+                            .textSelection(.enabled)
                         HStack(spacing: 7) {
                             Text(endpoint)
                                 .font(.system(size: 12, design: .monospaced))
@@ -215,14 +232,13 @@ struct StudioServingConsoleView: View {
                         }
                     }
                     Spacer()
-                    serviceControls
                 }
             }
 
             if safety == .exposedWithoutAuthentication {
                 warningBanner(
                     "Authentication required",
-                    detail: "\(draft.host) is reachable beyond this Mac. Add an API key before starting the server."
+                    detail: "\(connectionHost) is reachable beyond this Mac. Add an API key before starting the server."
                 )
             }
 
@@ -264,7 +280,7 @@ struct StudioServingConsoleView: View {
                 StudioServingCard {
                     VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
                         cardTitle("Fast actions", systemImage: "bolt")
-                        Button("Open Model Pool") { section = .modelPool }
+                        Button("Manage models") { section = .modelPool }
                             .buttonStyle(.mereSecondary)
                         Button("Set up an agent or client") { section = .agents }
                             .buttonStyle(.mereSecondary)
@@ -281,7 +297,7 @@ struct StudioServingConsoleView: View {
     private var modelPool: some View {
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.lg) {
             sectionTitle(
-                "Model Pool",
+                "Models",
                 subtitle: "Text and modality sidecars share one memory-aware runtime"
             )
 
@@ -400,192 +416,10 @@ struct StudioServingConsoleView: View {
         }
     }
 
-    // MARK: - Vision grounding
-
-    /// The resident `vision serve` endpoint gets the same lifecycle the API server has:
-    /// preflight, app-owned start/stop, and an honest reading of who owns the process.
-    private var visionGrounding: some View {
-        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.lg) {
-            StudioServingCard {
-                VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
-                    HStack {
-                        Text("Resident grounding server")
-                            .font(MereRunTheme.sectionFont)
-                        Spacer()
-                        Text(visionServeRunning ? "Running" : "Stopped")
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(visionServeRunning ? MereRunTheme.green : MereRunTheme.textMuted)
-                    }
-                    Text(
-                        "Serves binary-frame vision grounding over HTTP so a client can stream frames "
-                            + "without paying model load on every request."
-                    )
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 8) {
-                        TextField("Host", text: $visionServeDraft.host)
-                            .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                        TextField(
-                            "Port",
-                            value: $visionServeDraft.port,
-                            format: .number.grouping(.never)
-                        )
-                        .frame(width: 90)
-                        .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                    }
-                    .disabled(visionServeRunning)
-
-                    TextField("Model id or path (optional)", text: $visionServeDraft.model)
-                        .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                        .disabled(visionServeRunning)
-
-                    SecureField("API key (optional)", text: $visionServeDraft.apiKey)
-                        .mereField(cornerRadius: MereRunTheme.Radius.sm)
-                        .disabled(visionServeRunning)
-
-                    Stepper(
-                        "Maximum batch size: \(visionServeDraft.visionServeMaxBatchSize)",
-                        value: $visionServeDraft.visionServeMaxBatchSize,
-                        in: 1...32
-                    )
-                    .disabled(visionServeRunning)
-                    .help("Maximum image-query pairs accepted by one batch request")
-
-                    Text("Endpoint: \(visionServeEndpoint)")
-                        .font(MereRunTheme.monoFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                        .textSelection(.enabled)
-
-                    if visionServeExposedWithoutKey {
-                        Label(
-                            "This binds beyond loopback with no API key. Add a key or bind to 127.0.0.1.",
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.yellow)
-                    }
-
-                    HStack(spacing: 8) {
-                        Button("Preflight") { startVisionServe(preflight: true) }
-                            .buttonStyle(.mereSecondary)
-                            .disabled(visionServeRunning)
-                            .help("Validate the model and port without holding the server open")
-                        Button(visionServeRunning ? "Stop" : "Start") {
-                            if visionServeRunning {
-                                stopVisionServe()
-                            } else {
-                                startVisionServe(preflight: false)
-                            }
-                        }
-                        .buttonStyle(.merePrimary)
-                        .disabled(visionServeExposedWithoutKey && !visionServeRunning)
-                        Button("Restart") { restartVisionServe() }
-                            .buttonStyle(.mereSecondary)
-                            .disabled(!visionServeRunning)
-                        Spacer()
-                        Button("Copy endpoint") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(visionServeEndpoint, forType: .string)
-                        }
-                        .buttonStyle(.mereSecondary)
-                    }
-
-                    if let visionServeMessage {
-                        Text(visionServeMessage)
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.textMuted)
-                    }
-                }
-            }
-
-            if let visionServeRequestID {
-                StudioServingCard {
-                    VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
-                        Text("Server log")
-                            .font(MereRunTheme.sectionFont)
-                        StudioSpecialistResultView(
-                            requestID: visionServeRequestID,
-                            preferredKinds: [.text]
-                        )
-                        .frame(minHeight: 220)
-                    }
-                }
-            }
-        }
-    }
-
-    private var visionServeEndpoint: String {
-        let host = visionServeDraft.host.trimmingCharacters(in: .whitespacesAndNewlines)
-        return "http://\(host.isEmpty ? "127.0.0.1" : host):\(visionServeDraft.port)"
-    }
-
-    private var ownedVisionServeID: UUID? {
-        visionServeRequestID ?? controller.runningRequestID(for: .visionServe)
-    }
-
-    private var visionServeRunning: Bool {
-        guard let id = ownedVisionServeID else { return false }
-        return controller.isRequestRunning(id)
-    }
-
-    /// Binding beyond loopback without a key would publish the endpoint to the LAN.
-    private var visionServeExposedWithoutKey: Bool {
-        let host = visionServeDraft.host.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isLoopback = host.isEmpty || host == "127.0.0.1" || host == "localhost"
-        return !isLoopback && visionServeDraft.apiKey.isBlank
-    }
-
-    private func startVisionServe(preflight: Bool) {
-        var draft = visionServeDraft
-        draft.preflight = preflight
-        draft.port = min(65_535, max(1, draft.port))
-        visionServeRequestID = StudioSpecialistRunner.submit(
-            templateID: .visionServe,
-            mode: .findObjects,
-            draft: draft,
-            controller: controller,
-            library: library
-        )
-        monitor.note(
-            preflight ? "Vision grounding preflight requested" : "Vision grounding start requested",
-            detail: visionServeEndpoint
-        )
-        visionServeMessage = preflight
-            ? "Preflighting the grounding server…"
-            : "Starting the grounding server…"
-    }
-
-    private func stopVisionServe() {
-        guard let requestID = ownedVisionServeID, controller.cancel(requestID: requestID) else {
-            visionServeMessage = "This server was started outside Studio and cannot be stopped here."
-            return
-        }
-        monitor.note("Vision grounding stop requested", detail: visionServeEndpoint)
-        visionServeMessage = "Stopping the grounding server…"
-    }
-
-    private func restartVisionServe() {
-        guard let requestID = ownedVisionServeID, controller.cancel(requestID: requestID) else {
-            visionServeMessage = "Only an app-owned server can be restarted."
-            return
-        }
-        monitor.note("Vision grounding restart requested", detail: visionServeEndpoint)
-        Task { @MainActor in
-            for _ in 0..<40 {
-                if !controller.isRequestRunning(requestID) { break }
-                try? await Task.sleep(for: .milliseconds(250))
-            }
-            visionServeRequestID = nil
-            startVisionServe(preflight: false)
-        }
-    }
-
     private var agentsAndClients: some View {
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.lg) {
             sectionTitle(
-                "Agents & Clients",
+                "Clients",
                 subtitle: "Install Pi, connect coding agents, or use any OpenAI-compatible client"
             )
 
@@ -769,33 +603,27 @@ struct StudioServingConsoleView: View {
                 VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
                     cardTitle("Connection & safety", systemImage: "network.badge.shield.half.filled")
                     HStack {
-                        TextField("Host", text: $draft.host)
+                        TextField("Host", text: $connectionHost)
                             .mereField()
-                        TextField("Port", value: $draft.port, format: .number)
+                        TextField("Port", value: $connectionPort, format: .number.grouping(.never))
                             .mereField()
                             .frame(width: 110)
                     }
-                    SecureField("API key (required for LAN)", text: $draft.apiKey)
+                    SecureField("API key (required for LAN)", text: $connectionAPIKey)
                         .mereField()
                     safetySummary
                     HStack {
-                        Button("Apply & reconnect") {
-                            applyConnection()
-                            monitor.note("Runtime endpoint changed", detail: endpoint)
-                                        }
+                        Button("Apply & reconnect") { reconnect() }
                         .buttonStyle(.mereSecondary)
                         Spacer()
                         Button("Run preflight") { runPreflight() }
                             .buttonStyle(.mereSecondary)
-                        Button(ownsRunningService ? "Restart server" : "Start server") {
-                            if ownsRunningService {
-                                restartService()
-                            } else {
-                                startService()
-                            }
+                        if ownsRunningService {
+                            Button("Restart to apply") { restartService() }
+                                .buttonStyle(.merePrimary)
+                                .disabled(safety == .exposedWithoutAuthentication)
+                                .help("Restart the server with these settings")
                         }
-                        .buttonStyle(.merePrimary)
-                        .disabled(safety == .exposedWithoutAuthentication)
                     }
                 }
             }
@@ -803,7 +631,7 @@ struct StudioServingConsoleView: View {
             StudioServingCard {
                 VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
                     cardTitle("Runtime defaults", systemImage: "cpu")
-                    Picker("Engine", selection: $draft.engine) {
+                    Picker("Engine", selection: $server.options.engine) {
                         Text("Gemma 4").tag("text-chat-gemma4")
                         Text("Qwen 3.6").tag("text-chat-q36")
                         Text("Klein").tag("text-chat-klein")
@@ -812,22 +640,22 @@ struct StudioServingConsoleView: View {
                         Text("LFM2").tag("text-chat-lfm2")
                         Text("DeepSeek V4").tag("text-chat-deepseek-v4-flash")
                     }
-                    TextField("Default model id", text: $draft.model)
+                    TextField("Default model id", text: $server.options.model)
                         .mereField()
-                    TextField("Default adapter id or LoRA path", text: $draft.apiLoRA)
+                    TextField("Default adapter id or LoRA path", text: $server.options.apiLoRA)
                         .mereField()
                     HStack {
-                        integerField("Requests / min", value: $draft.apiRateLimitPerMinute)
-                        integerField("Concurrent", value: $draft.apiMaxActiveRequests)
-                        integerField("Context tokens", value: $draft.contextSize)
+                        integerField("Requests / min", value: $server.options.apiRateLimitPerMinute)
+                        integerField("Concurrent", value: $server.options.apiMaxActiveRequests)
+                        integerField("Context tokens", value: $server.options.contextSize)
                     }
-                    Picker("Memory guard", selection: $draft.apiMemoryGuard) {
+                    Picker("Memory guard", selection: $server.options.apiMemoryGuard) {
                         ForEach(["off", "safe", "balanced", "aggressive", "custom"], id: \.self) {
                             Text($0.capitalized).tag($0)
                         }
                     }
-                    if draft.apiMemoryGuard == "custom" {
-                        TextField("Custom ceiling (GiB)", text: $draft.apiMemoryGuardCustomCeilingGB)
+                    if server.options.apiMemoryGuard == "custom" {
+                        TextField("Custom ceiling (GiB)", text: $server.options.apiMemoryGuardCustomCeilingGB)
                             .mereField()
                     }
                 }
@@ -837,11 +665,11 @@ struct StudioServingConsoleView: View {
                 VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
                     cardTitle("KV cache", systemImage: "memorychip")
                     HStack {
-                        integerField("KV bits", value: $draft.kvBits)
-                        TextField("Scheme", text: $draft.kvQuantScheme)
+                        integerField("KV bits", value: $server.options.kvBits)
+                        TextField("Scheme", text: $server.options.kvQuantScheme)
                             .mereField()
-                        integerField("Group size", value: $draft.kvGroupSize)
-                        integerField("Quantize after", value: $draft.quantizedKVStart)
+                        integerField("Group size", value: $server.options.kvGroupSize)
+                        integerField("Quantize after", value: $server.options.quantizedKVStart)
                     }
                 }
             }
@@ -855,18 +683,31 @@ struct StudioServingConsoleView: View {
         }
     }
 
+    /// Start, Stop, and Restart, in the header so they are the same controls on every section.
     private var serviceControls: some View {
         HStack(spacing: 8) {
-            if ownsRunningService {
-                Button("Stop") { stopService() }
-                    .buttonStyle(.mereSecondary)
+            Button {
+                Task { await monitor.refreshNow(controller: controller) }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.mereIcon)
+            .disabled(monitor.isRefreshing)
+            .help("Check the endpoint again")
+            .accessibilityLabel("Refresh")
+            switch server.phase {
+            case .starting, .running, .stopping:
                 Button("Restart") { restartService() }
                     .buttonStyle(.mereSecondary)
-            } else if monitor.isReachable {
-                Button("Reconnect") {
-                        }
-                .buttonStyle(.mereSecondary)
-            } else {
+                    .disabled(server.phase == .stopping)
+                Button("Stop") { stopService() }
+                    .buttonStyle(.mereSecondary)
+                    .disabled(server.phase == .stopping)
+            case .external:
+                EmptyView()
+            case .stopped, .failed:
                 Button("Preflight") { runPreflight() }
                     .buttonStyle(.mereSecondary)
                 Button("Start") { startService() }
@@ -879,9 +720,9 @@ struct StudioServingConsoleView: View {
     private var statusOrb: some View {
         ZStack {
             Circle()
-                .fill((monitor.isReachable ? MereRunTheme.green : MereRunTheme.textMuted).opacity(0.14))
+                .fill((isServing ? MereRunTheme.green : MereRunTheme.textMuted).opacity(0.14))
             Circle()
-                .fill(monitor.isReachable ? MereRunTheme.green : MereRunTheme.textMuted)
+                .fill(isServing ? MereRunTheme.green : MereRunTheme.textMuted)
                 .frame(width: 13, height: 13)
         }
         .frame(width: 48, height: 48)
@@ -1033,7 +874,7 @@ struct StudioServingConsoleView: View {
     private var selectedClientModel: String {
         monitor.runtime?.defaultModel
             ?? monitor.runtime?.loadedTextModels.first?.id
-            ?? draft.model
+            ?? server.options.model
     }
 
     private var endpoint: String {
@@ -1051,58 +892,46 @@ struct StudioServingConsoleView: View {
         monitor.runtime?.textModels.reduce(0) { $0 + ($1.mtp?.acceptedTokens ?? 0) } ?? 0
     }
 
-    private func syncDraftFromController() {
-        draft.host = controller.runtimeHost
-        draft.port = controller.runtimePort
-        draft.apiKey = controller.runtimeAPIKey
+    private func syncConnectionFromController() {
+        connectionHost = controller.runtimeHost
+        connectionPort = controller.runtimePort
+        connectionAPIKey = controller.runtimeAPIKey
     }
 
+    /// Writes the Configuration card's endpoint and key to the controller, touching only what
+    /// changed: an unchanged key is not rewritten to the Keychain.
     private func applyConnection() {
-        controller.runtimeHost = draft.host.trimmingCharacters(in: .whitespacesAndNewlines)
-        controller.runtimePort = min(65_535, max(1, draft.port))
-        controller.runtimeAPIKey = draft.apiKey
+        let host = connectionHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        let port = min(65_535, max(1, connectionPort))
+        let changed = host != controller.runtimeHost || port != controller.runtimePort
+        if host != controller.runtimeHost { controller.runtimeHost = host }
+        if port != controller.runtimePort { controller.runtimePort = port }
+        if connectionAPIKey != controller.runtimeAPIKey { controller.runtimeAPIKey = connectionAPIKey }
+        if changed { monitor.note("Runtime endpoint changed", detail: endpoint) }
+    }
+
+    private func reconnect() {
+        applyConnection()
+        operationMessage = nil
+        Task { await monitor.refreshRuntimeNow(controller: controller) }
     }
 
     private func startService() {
-        guard safety != .exposedWithoutAuthentication else {
-            operationMessage = "Add an API key before exposing the server beyond loopback."
-            return
-        }
         applyConnection()
-        draft.prompt = endpoint
-        serviceRequestID = StudioSpecialistRunner.submit(
-            templateID: .apiServe,
-            mode: .chat,
-            draft: draft,
-            controller: controller,
-            library: library
-        )
-        monitor.note("API server start requested", detail: endpoint)
-        operationMessage = "Starting API server…"
+        operationMessage = server.start() ?? "Starting API server…"
     }
 
     private func stopService() {
-        guard let requestID = ownedServiceID, controller.cancel(requestID: requestID) else {
-            operationMessage = "This server was started outside Studio and cannot be stopped here."
-            return
-        }
-        monitor.note("API server stop requested", detail: endpoint)
-        operationMessage = "Stopping API server…"
+        operationMessage = server.stop()
+            ? "Stopping API server…"
+            : "Studio did not start this server. Stop it where it was started."
     }
 
     private func restartService() {
-        guard let requestID = ownedServiceID, controller.cancel(requestID: requestID) else {
-            operationMessage = "Only an app-owned server can be restarted."
-            return
-        }
-        monitor.note("API server restart requested", detail: endpoint)
+        applyConnection()
+        operationMessage = "Restarting API server…"
         Task { @MainActor in
-            for _ in 0..<40 {
-                if !controller.isRequestRunning(requestID) { break }
-                try? await Task.sleep(nanoseconds: 100_000_000)
-            }
-            serviceRequestID = nil
-            startService()
+            operationMessage = await server.restart() ?? "Starting API server…"
         }
     }
 
@@ -1114,7 +943,7 @@ struct StudioServingConsoleView: View {
         applyConnection()
         operationMessage = "Running server preflight…"
         Task { @MainActor in
-            var preflight = draft
+            var preflight = serveDraft
             preflight.preflight = true
             preflight.json = true
             guard let template = CommandCatalog.template(id: .apiServe) else { return }
@@ -1136,32 +965,8 @@ struct StudioServingConsoleView: View {
     private func runtimeAction(model: StudioRuntimeModel, action: String) {
         busyOperation = "\(action):\(model.id)"
         Task { @MainActor in
-            let encoded = model.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? model.id
-            var request = URLRequest(url: controller.runtimeURL(path: "/runtime/models/\(encoded)/\(action)"))
-            request.httpMethod = "POST"
-            request.timeoutInterval = 60
-            if let authorization = controller.runtimeAuthorizationHeader {
-                request.setValue(authorization, forHTTPHeaderField: "Authorization")
-            }
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                guard (200..<300).contains(code) else {
-                    throw StudioServingError.operationFailed(
-                        String(data: data, encoding: .utf8) ?? "HTTP \(code)"
-                    )
-                }
-                operationMessage = "\(model.id) \(action) succeeded."
-                monitor.note(
-                    action == "load" ? "Model load requested" : "Model unload requested",
-                    detail: model.id,
-                    level: .success
-                )
-                await monitor.refreshNow(controller: controller)
-            } catch {
-                operationMessage = StudioActivitySanitizer.sanitize(error.localizedDescription)
-                monitor.note("Model \(action) failed", detail: error.localizedDescription, level: .error)
-            }
+            let failure = await monitor.setModel(model.id, loaded: action == "load", controller: controller)
+            operationMessage = failure ?? "\(model.id) \(action) succeeded."
             busyOperation = nil
         }
     }
@@ -1309,7 +1114,6 @@ struct StudioServingConsoleView: View {
         Label(title, systemImage: systemImage)
             .font(MereRunTheme.sectionFont)
             .foregroundStyle(MereRunTheme.textPrimary)
-        .studioTaskCommand(.apiServe, draft: draft)
     }
 
     private func metricCard(_ title: String, value: String, detail: String) -> some View {
@@ -1522,7 +1326,8 @@ struct StudioServingConsoleView: View {
     }
 }
 
-private struct StudioServingCard<Content: View>: View {
+/// A Server-domain card: surface fill, hairline border, the pages' shared padding.
+struct StudioServingCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -1537,15 +1342,5 @@ private struct StudioServingCard<Content: View>: View {
                             .strokeBorder(MereRunTheme.border.opacity(0.55), lineWidth: 1)
                     }
             }
-    }
-}
-
-private enum StudioServingError: LocalizedError {
-    case operationFailed(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .operationFailed(let detail): detail
-        }
     }
 }

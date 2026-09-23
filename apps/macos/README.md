@@ -29,8 +29,8 @@ without SwiftUI and the views can be rendered without the app's scenes:
   manage), `ContractForm`, the theme (which owns the bundled Caveat wordmark
   font), the controls, and the result renderers.
 - `MereRunStudio/` — the `mere.run.app` executable:
-  `MereRunApp`, the app delegate, the menu bar commands, the Settings scene, and
-  the Sparkle wiring. Everything else it does, it does by composing the two
+  `MereRunApp`, the app delegate, the menu bar commands, the menu bar extra, the
+  Settings scene, and the Sparkle wiring. Everything else it does, it does by composing the two
   libraries.
 
 Declarations that cross a target boundary are `package`, which is exactly the
@@ -150,8 +150,10 @@ drawn by the row itself (the native `List` highlight is switched off; selection,
 arrow keys, and VoiceOver are unchanged).
 
 The footer pill reads "Ready · N models" once the status probe answers,
-"Serving · N models" while the local server is up, and "Server unreachable" (in
-red) if the probe never answers within six seconds, with "N running" on a second
+"Serving" while the API server answers (the reading the Server page
+and the menu bar extra take from `StudioLocalServer`, not the slower status
+poll), and "CLI not responding" (in red) if the probe never answers within six
+seconds, with "N running" on a second
 line while jobs are in flight. It opens the **Activity popover**
 (`StudioUI/StudioActivity.swift`), a 340pt panel the shell draws over the window from the
 bottom-left: one row per running or queued job in the inference and utility
@@ -161,6 +163,19 @@ panel shows the local server, the models root, and the resolved CLI path. It
 reads the `JobStore` directly — the lanes for which rows exist, each `Job` for
 its own progress — so nothing about the work in flight is mirrored on the
 controller.
+
+The **menu bar extra** (`StudioUI/StudioMenuBarPanel.swift`, on by default,
+switched off in Settings ▸ Server) keeps the API server within reach with no
+Studio window open. Its glyph is the app icon's Caveat "m." with the period as a
+power light: filled while a server answers, hollow while none does. The panel
+shows the server's state and address with Start, Stop, and copy-endpoint
+controls, why it stopped when it exits on its own, the resident text models
+(each with Unload) and sidecars with the runtime's memory footprint, a Stop row
+for a vision or music server Studio started while it runs, the same
+job rows as the Activity popover, and Open Studio, Server Settings…, and Quit.
+It reads the same `StudioLocalServer` the Server page drives, so the two never
+disagree. Quit asks first while a server Studio started or an inference job is
+still running, since every child process ends with the app.
 
 The sidebar toggle and task control share a 52pt header with the panel controls.
 The split view does not add a separate toolbar row. Control-Command-S toggles the
@@ -211,9 +226,11 @@ Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…; V
 Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C), and the system sidebar toggle; Go ▸ every domain
 (⌘1–⌘9, then ⌥⌘1…) plus the current domain's tasks; Run ▸ Run (⌘↩), Stop (⌘.),
 Open Last Output (⇧⌘O), and Reveal Last Output in Finder (⇧⌘R), acting on the
-current composer; Help ▸ mere.run Guide (⌘?), the mere.run link, Command
-Console, and Export Diagnostics…. Settings has General, Models, Server, and
-Advanced tabs. First run shows the Image empty state with its "Get the model"
+current composer; Window ▸ Open Studio and Command Console (⇧⌘C); Help ▸
+mere.run Guide (⌘?), the mere.run link, and Export Diagnostics…. ⌥⌘C is always
+the task's Command view, disabled on the few tasks without one. Settings has
+General, Models, Server, and Advanced tabs; the Server tab's endpoint and key
+apply on Apply or Return, not per keystroke. First run shows the Image empty state with its "Get the model"
 path and a one-time dismissible banner; there is no Welcome sheet.
 
 ## Composer, feed, and Analyze
@@ -356,7 +373,7 @@ produces the same command. Options the contract does not describe go in Extra
 arguments; the Custom template has no capability and keeps the catalog's raw
 argument editor, the one editor the console still writes by hand.
 
-The console opens from Help ▸ Command Console, a Library row's **Edit command…**,
+The console opens from Window ▸ Command Console (⇧⌘C), a Library row's **Edit command…**,
 and adapter fallbacks. Opening it from a task carries that task's command;
  a Library row reopens on the exact argv its run launched
 (`StudioLibraryItem.commandArguments`, an additive optional, so the console can
@@ -393,11 +410,14 @@ job; a chat's Stop acts on that thread's turn.
 `JobStore` owns every child process the app launches behind the
 `MereRunProcessRunning` seam (`Process()` appears only in
 `StudioKit/Jobs/ProcessRunner.swift` and the synchronous `CLIBootstrapInstaller` version
-probe), with three lanes: `inference` for Studio runs (capped at two with a FIFO
+probe), with four lanes: `inference` for Studio runs (capped at two with a FIFO
 queue), `utility` for the hand-built CLI reads and writes behind
-`utilityCommandResult` (capped at four, FIFO), and `probe` for readiness and
+`utilityCommandResult` (capped at four, FIFO), `probe` for readiness and
 `status --json` probes (never queued, deduplicated by key so a repeated probe
-joins the one in flight and a probe with stale Settings is superseded). A
+joins the one in flight and a probe with stale Settings is superseded), and
+`service` for the API, vision, and music servers Studio starts (never queued; a
+server runs until it is stopped, so it holds no inference slot and takes no
+console, Library row, or completion notification). A
 `JobRequest` is either a catalog command (template plus draft, which drive
 validation and output detection) or raw arguments (`JobRequest.utility` /
 `.probe`, which skip preflight and capture complete stdout and stderr for the
@@ -608,20 +628,35 @@ lmms-eval run.
 **Models ▸ Adapters** lists adapter catalogs and local adapters and applies one
 to a domain's composer or opens its trainer.
 
+The **Server** domain has one task per resident server: Serving (the API),
+Music server, and Vision server.
+
 **Server ▸ Serving** is one operational page over the local API and the resident
-model lanes: preflight, app-owned start, stop and restart, external-server
-reconnection, LAN and auth safety, text and sidecar residency, load/unload and
-runtime policy, unified-memory, process-CPU, Metal and thermal telemetry,
-observed request and cache/batching traffic, typed Pi readiness, install,
-configure and session actions, copyable client setup, and sanitized lifecycle
-activity. A Vision Grounding section gives `vision serve` the same lifecycle as
-the API server — preflight, start, stop, restart, an honest reading of who owns
-the process, a loopback-exposure warning when the endpoint would bind beyond
-localhost without a key, and the live server log. It polls the authenticated
+model lanes, in six sections — Overview, Models, Telemetry, Clients, Activity,
+Configuration — under one header that carries the state, the last operation's
+result, and the only Start, Stop, Restart, and Preflight controls: text and
+sidecar residency, load/unload and runtime policy, unified-memory, process-CPU,
+Metal and thermal telemetry with observed request and cache/batching traffic,
+typed Pi readiness (read when Clients opens), install, configure and session
+actions, copyable client setup, LAN and auth safety, and sanitized lifecycle
+activity. Configuration offers Restart to apply while Studio's server runs. It polls the authenticated
 `/runtime/status` contract and tolerates older payloads with missing additive
-fields. App-owned servers and agent sessions stay durable Library runs. Open
-WebUI and `world serve` are catalog templates without a section on this page;
-they run from the Command Console.
+fields. The API server has one app-wide owner, `StudioKit/StudioLocalServer.swift`,
+shared with the menu bar extra: it keeps the serve options, starts `api serve` on
+the Settings endpoint with the Keychain key, adopts a server started from the
+Command Console, restarts only after the old process has exited, and reads its
+phase (stopped, starting, running, stopping, running outside Studio, stopped
+unexpectedly) from the job and the endpoint monitor together.
+
+**Server ▸ Vision server** and **Server ▸ Music server** run `vision serve` and
+`music serve` through `StudioKit/StudioServiceProcess.swift`, the same
+service-lane owner the API server's process uses: start (with the task's Command
+view edits), stop, restart after the old process exits, preflight as a utility
+command, why the server stopped when it exits on its own, and the live server
+log. Neither is a Library run, and the menu bar lists either while it runs, with
+Stop. Agent sessions stay durable Library runs. Open WebUI and `world serve` are
+catalog templates without a page; they run from the Command Console, where a
+server is an ordinary console run.
 
 **Runs** is the domain over the public `executor` and `run` contracts. It
 discovers local durable reports, lists Relay jobs, polls typed inspection state,

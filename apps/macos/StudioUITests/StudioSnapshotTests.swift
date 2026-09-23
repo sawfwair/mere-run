@@ -202,6 +202,85 @@ final class StudioSnapshotTests: XCTestCase {
         )
     }
 
+    /// The menu bar extra's panel in each server state, light and dark: stopped; running with two
+    /// resident text models, a speech sidecar, live traffic, and Studio work in flight; running
+    /// outside Studio; and stopped unexpectedly. `/runtime/status` is answered by
+    /// `SnapshotRuntimeEndpoint`, so a server running on this machine never shows up.
+    func testMenuBarPanelSnapshots() throws {
+        SnapshotRuntimeEndpoint.install()
+        defer { SnapshotRuntimeEndpoint.uninstall() }
+        // The panel as it drops from the menu bar: a card over the desktop.
+        let size = CGSize(width: StudioMenuBarPanel.width + 40, height: 600)
+        let restoreEndpoint = pinRuntimeEndpoint(fixture.controller)
+        defer { restoreEndpoint() }
+
+        func render(_ name: String, fixture: SnapshotFixture, answer: SnapshotRuntimeEndpoint.Answer) throws {
+            let controller = fixture.controller
+            let panel = StudioMenuBarPanel(controller: controller, onOpenStudio: {}, onOpenServer: {})
+                .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
+                .overlay {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                        .strokeBorder(MereRunTheme.border, lineWidth: 1)
+                }
+                .mereShadow(radius: 12, y: 8)
+                .padding(20)
+                .frame(width: size.width, height: size.height, alignment: .top)
+                .background(MereRunTheme.background)
+            for appearance in [StudioSnapshotAppearance.light, .dark] {
+                SnapshotRuntimeEndpoint.answer = answer
+                try fixture.write(
+                    panel,
+                    size: size,
+                    appearance: appearance,
+                    name: "menu-bar-\(name)-\(appearance.rawValue)",
+                    settle: 1.5,
+                    afterAppear: {
+                        Task { await controller.servingMonitor.refreshRuntimeNow(controller: controller) }
+                    }
+                )
+            }
+        }
+
+        try render("stopped", fixture: fixture, answer: .unreachable)
+
+        let runningRunner = SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
+        let running = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup, processRunner: runningRunner)
+        defer { running.tearDown() }
+        try running.startMainBoardJobs()
+        runningRunner.liveSessionMarkers.insert("serve")
+        XCTAssertNil(running.controller.localServer.start())
+        let vision = try XCTUnwrap(CommandCatalog.template(id: .visionServe)).defaultDraft()
+        running.controller.visionServer.start(draft: vision)
+        try render("running", fixture: running, answer: .runtime(SnapshotRuntimeEndpoint.busyRuntime))
+
+        let external = try SnapshotFixture(outputDirectory: fixture.outputDirectory)
+        defer { external.tearDown() }
+        try render("external", fixture: external, answer: .runtime(SnapshotRuntimeEndpoint.busyRuntime))
+
+        let failedRunner = SnapshotProcessRunner()
+        failedRunner.liveSessionMarkers = ["serve"]
+        let failed = try SnapshotFixture(outputDirectory: fixture.outputDirectory, processRunner: failedRunner)
+        defer { failed.tearDown() }
+        XCTAssertNil(failed.controller.localServer.start())
+        let serve = try XCTUnwrap(failedRunner.liveStarts.last)
+        serve.stderr("Error: 127.0.0.1:8080 is already in use by another process.\n")
+        serve.termination(1)
+        try render("failed", fixture: failed, answer: .unreachable)
+    }
+
+    /// Points the runtime endpoint at 127.0.0.1:8080 for a render, whatever an earlier test left
+    /// in the test runner's defaults; the returned closure puts it back.
+    private func pinRuntimeEndpoint(_ controller: MereRunController) -> () -> Void {
+        let host = controller.runtimeHost
+        let port = controller.runtimePort
+        controller.runtimeHost = "127.0.0.1"
+        controller.runtimePort = 8_080
+        return {
+            controller.runtimeHost = host
+            controller.runtimePort = port
+        }
+    }
+
     override func tearDownWithError() throws {
         fixture?.tearDown()
         fixture = nil
@@ -213,6 +292,60 @@ final class StudioSnapshotTests: XCTestCase {
     /// The shell restores `studio.destination` from `@SceneStorage` on appear, and outside a real
     /// scene that is always the default (Image), so each domain is reached the way a user reaches
     /// it: through the shared `NavigationModel` after the view has appeared.
+    /// The Server domain with Studio's API server running against a busy runtime: Serving on its
+    /// Overview, Telemetry, and Configuration sections, then the Vision server and Music server
+    /// tasks with their servers running and a few log lines.
+    func testServerDomainSnapshots() throws {
+        SnapshotRuntimeEndpoint.install()
+        defer { SnapshotRuntimeEndpoint.uninstall() }
+        SnapshotRuntimeEndpoint.answer = .runtime(SnapshotRuntimeEndpoint.busyRuntime)
+        let restoreEndpoint = pinRuntimeEndpoint(fixture.controller)
+        defer { restoreEndpoint() }
+
+        let runner = SnapshotProcessRunner()
+        runner.liveSessionMarkers = ["serve"]
+        let server = try SnapshotFixture(outputDirectory: fixture.outputDirectory, processRunner: runner)
+        defer { server.tearDown() }
+        let controller = server.controller
+        XCTAssertNil(controller.localServer.start())
+        controller.visionServer.start(draft: try XCTUnwrap(CommandCatalog.template(id: .visionServe)).defaultDraft())
+        controller.musicServer.start(draft: try XCTUnwrap(CommandCatalog.template(id: .musicServe)).defaultDraft())
+        for start in runner.liveStarts.dropFirst() {
+            start.stderr("Loading model…\n")
+            start.stdout("Listening on 127.0.0.1 — ready for requests\n")
+        }
+
+        let renders: [(name: String, task: StudioTask, section: StudioServingSection?)] = [
+            ("server-serving-overview", .serverServing, .overview),
+            ("server-serving-telemetry", .serverServing, .telemetry),
+            ("server-serving-configuration", .serverServing, .configuration),
+            ("server-vision", .serverVision, nil),
+            ("server-music", .serverMusic, nil),
+        ]
+        for render in renders {
+            if let section = render.section {
+                controller.taskSessions.set(section, for: StudioTask.serverServing.rawValue + ".ServingConsole.section")
+            }
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(controller)
+                .environmentObject(server.library)
+                .environmentObject(navigation)
+                .frame(width: Self.shellSize.width, height: Self.shellSize.height)
+            try server.write(
+                view,
+                size: Self.shellSize,
+                appearance: .light,
+                name: render.name,
+                settle: 2.0,
+                afterAppear: {
+                    navigation.open(destination: render.task.destination)
+                    Task { await controller.servingMonitor.refreshRuntimeNow(controller: controller) }
+                }
+            )
+        }
+    }
+
     func testShellSnapshotsForEveryDomain() throws {
         for domain in StudioDomain.allCases {
             for appearance in StudioSnapshotAppearance.allCases {
@@ -1865,6 +1998,7 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
         let configuration: MereRunProcessConfiguration
         let stdout: @Sendable (String) -> Void
         let stderr: @Sendable (String) -> Void
+        let termination: @Sendable (Int32) -> Void
         let process: SnapshotLiveProcess
     }
 
@@ -1945,7 +2079,13 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
         lock.lock()
         if !_liveSessionMarkers.isEmpty, arguments.contains(where: { _liveSessionMarkers.contains($0) }) {
             let process = SnapshotLiveProcess()
-            _liveStarts.append(LiveStart(configuration: configuration, stdout: stdout, stderr: stderr, process: process))
+            _liveStarts.append(LiveStart(
+                configuration: configuration,
+                stdout: stdout,
+                stderr: stderr,
+                termination: termination,
+                process: process
+            ))
             lock.unlock()
             return process
         }
@@ -2150,4 +2290,69 @@ private enum ModelsInventoryScript {
             .init(matches: { $0 == ["adapter", "list", "--json"] }, stdout: adapters, exitCode: 0),
         ]
     }
+}
+
+/// Answers the runtime's `/runtime/status` for the menu bar renders, in place of the network: a
+/// `URLProtocol` registered for `URLSession.shared`, which is what `StudioServingMonitor` polls.
+private final class SnapshotRuntimeEndpoint: URLProtocol {
+    enum Answer {
+        case unreachable
+        case runtime(String)
+    }
+
+    nonisolated(unsafe) static var answer = Answer.unreachable
+
+    static func install() { URLProtocol.registerClass(SnapshotRuntimeEndpoint.self) }
+    static func uninstall() { URLProtocol.unregisterClass(SnapshotRuntimeEndpoint.self) }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.path.hasPrefix("/runtime/") == true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        switch Self.answer {
+        case .unreachable:
+            client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+        case .runtime(let json):
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(json.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    override func stopLoading() {}
+
+    /// Two resident text models (one serving two requests, one queued behind them), a resident
+    /// speech sidecar, about 12 GB in use, up a little over two hours.
+    static let busyRuntime = """
+    {
+      "object": "runtime.model_pool",
+      "defaultModel": "text-chat-gemma4",
+      "activeRequests": 2,
+      "admission": {
+        "maxActiveRequests": 4, "activeRequests": 2, "queuedRequests": 1,
+        "totalAdmittedRequests": 41, "totalCompletedRequests": 38, "totalCancelledRequests": 0
+      },
+      "memory": { "currentBytes": 13314398618, "pressure": "nominal" },
+      "process": { "processID": 48213, "uptimeSeconds": 8100 },
+      "models": [
+        { "id": "text-chat-gemma4", "loaded": true, "ready": true, "activeRequests": 2, "pinned": false },
+        { "id": "text-code-north-mini", "loaded": true, "ready": true, "activeRequests": 0, "pinned": false },
+        { "id": "text-chat-laguna", "loaded": false, "activeRequests": 0, "pinned": false }
+      ],
+      "sidecars": {
+        "defaultIdleTTLSeconds": 300, "pressure": "nominal", "loadedCount": 1,
+        "activeRequests": 0, "queuedRequests": 0,
+        "residents": [{
+          "kind": "speech", "modelID": "speech-kokoro", "loaded": true, "ready": true,
+          "activeRequests": 0, "queuedRequests": 0, "pinned": false, "ttlSeconds": 300,
+          "loadCount": 1, "replacementCount": 0, "evictionCount": 0,
+          "completedRequests": 3, "failedRequests": 0
+        }]
+      }
+    }
+    """
 }

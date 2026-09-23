@@ -90,7 +90,7 @@ The Studio is a prompt-first interface for the CLI you built. The sidebar
 lists fifteen domains, each domain has its tasks in a control at the top of the
 page, and a prompt task gives you one composer, a feed of your runs, and a local
 library of generated artifacts. Press ⌥⌘C to see the exact command behind a
-generation, or open the Command Console (Help ▸ Command Console) to run any
+generation, or open the Command Console (Window ▸ Command Console, ⇧⌘C) to run any
 `mere.run` command. Launch the Studio from a checkout:
 
 ```bash

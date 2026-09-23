@@ -27,6 +27,16 @@ result. An unsuccessful exit clears unverified file probes from the job and
 Library row without deleting files. Confirmed outputs survive later process
 failure and console-buffer truncation.
 
+`StudioServiceProcess` owns one long-lived server command (`api serve`,
+`vision serve`, `music serve`) in the service lane: the job Studio started or
+adopted from the Command Console, and start, stop, restart, and preflight.
+`StudioLocalServer` owns the local API server for the life of the app: its serve
+options, its `StudioServiceProcess`, and a phase derived from that process and
+`StudioServingMonitor`'s last answer from the endpoint. The Server page and the
+menu bar extra both drive it; neither keeps its own copy of the server's state.
+The endpoint and key stay on `MereRunController`, so the key is read from the
+Keychain at launch and never stored with the options.
+
 `StudioModelStore` owns the inventory shared by Models and the composer. Refreshes
 publish a complete typed snapshot and reject results from older requests or CLI
 configurations. Downloads use the same typed inference jobs from either entry

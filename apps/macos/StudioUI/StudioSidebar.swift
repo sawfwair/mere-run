@@ -139,23 +139,27 @@ struct StudioWordmark: View {
 enum StudioMachineStatus: Equatable {
     /// The probe has not answered yet.
     case checking
-    /// The probe did not answer within its grace period: the CLI could not report on the server.
-    case unreachable
+    /// The `status` probe did not answer within its grace period: the CLI itself is not answering,
+    /// which says nothing about the server — that reading comes from the endpoint monitor.
+    case cliNotResponding
     /// The CLI answered and the local server is idle — it starts on demand, so this is "ready".
     case ready(installedModels: Int)
     /// The CLI answered and the local server is up.
     case serving(installedModels: Int, loadedModel: String?)
 
-    /// The footer waits this long for a first answer before calling the server unreachable. The
+    /// The footer waits this long for a first answer before saying the CLI is not responding. The
     /// probe itself times out after about a second; two probe intervals cover a slow first launch.
     static let checkingGracePeriod: TimeInterval = 6
 
-    init(serverStatus: StudioServerStatus?, probeTimedOut: Bool) {
+    /// `serverStatus` is the CLI's `status --json` answer, which counts the installed models;
+    /// `isServing` is whether the API server answers, from the app's own server monitor — the same
+    /// answer the Server page and the menu bar give, and a faster one than the status poll.
+    init(serverStatus: StudioServerStatus?, probeTimedOut: Bool, isServing: Bool) {
         guard let serverStatus else {
-            self = probeTimedOut ? .unreachable : .checking
+            self = probeTimedOut ? .cliNotResponding : .checking
             return
         }
-        if serverStatus.isReachable {
+        if isServing {
             self = .serving(
                 installedModels: serverStatus.installedCount,
                 loadedModel: serverStatus.loadedModelSummary
@@ -170,12 +174,13 @@ enum StudioMachineStatus: Equatable {
         switch self {
         case .checking:
             return "Checking…"
-        case .unreachable:
-            return "Server unreachable"
+        case .cliNotResponding:
+            return "CLI not responding"
         case .ready(let count):
             return "Ready · \(Self.modelCount(count))"
-        case .serving(let count, _):
-            return "Serving · \(Self.modelCount(count))"
+        case .serving:
+            // The 212pt pill cannot also fit the model count; the popover's Models line has it.
+            return "Serving"
         }
     }
 
@@ -198,8 +203,8 @@ enum StudioMachineStatus: Equatable {
         switch self {
         case .checking:
             return "Checking…"
-        case .unreachable:
-            return "The status probe did not answer. Check the CLI path in Settings."
+        case .cliNotResponding:
+            return "The CLI did not answer `mere.run status`. Check the CLI path in Settings."
         case .ready:
             return "Not running — starts on demand"
         case .serving(_, let loadedModel):
@@ -210,7 +215,7 @@ enum StudioMachineStatus: Equatable {
     /// The models line in the details popover.
     var modelsDetail: String {
         switch self {
-        case .checking, .unreachable:
+        case .checking, .cliNotResponding:
             return "—"
         case .ready(let count), .serving(let count, _):
             return "\(count) installed"
@@ -220,7 +225,7 @@ enum StudioMachineStatus: Equatable {
     var dotColor: Color {
         switch self {
         case .checking: return MereRunTheme.yellow
-        case .unreachable: return MereRunTheme.red
+        case .cliNotResponding: return MereRunTheme.red
         case .ready, .serving: return MereRunTheme.green
         }
     }
@@ -228,7 +233,7 @@ enum StudioMachineStatus: Equatable {
     /// The pill's label color. Only a machine we cannot reach is worth colouring: it is the one
     /// state the user has to act on.
     var summaryColor: Color {
-        self == .unreachable ? MereRunTheme.red : MereRunTheme.textSecondary
+        self == .cliNotResponding ? MereRunTheme.red : MereRunTheme.textSecondary
     }
 
     var isServing: Bool {
