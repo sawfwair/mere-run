@@ -951,34 +951,29 @@ struct StudioReadinessCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: statusImage)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(statusColor)
-                    .frame(width: 32, height: 32)
-                    .background { Circle().fill(statusColor.opacity(0.12)) }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(pullJob == nil ? readiness.title : "Getting the model")
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(MereRunTheme.textPrimary)
-                    Text(readiness.message(titles: titles))
-                        .font(.callout)
-                        .foregroundStyle(MereRunTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let detail = readiness.detail {
-                        // The CLI's own last line, kept small: it is what makes a wrong model
-                        // location or a missing binary diagnosable.
-                        Text(detail)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(MereRunTheme.textMuted)
-                            .lineLimit(2)
-                            .textSelection(.enabled)
-                            .padding(.top, 2)
+            // Beside the text in the feed; under it in a narrow column such as the Analyze
+            // panel, where the buttons would otherwise crush the message to a word per line.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    statusIcon
+                    summary
+                        .frame(minWidth: 220, idealWidth: 280, maxWidth: .infinity, alignment: .leading)
+                    if pullJob == nil {
+                        HStack(spacing: 8) { nextSteps }
+                            .fixedSize()
                     }
                 }
-                Spacer(minLength: 8)
-                if pullJob == nil {
-                    nextSteps
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 12) {
+                        statusIcon
+                        summary
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if pullJob == nil {
+                        HStack(spacing: 8) { nextSteps }
+                            .fixedSize()
+                            .padding(.leading, 44)
+                    }
                 }
             }
             if let pullJob {
@@ -990,6 +985,36 @@ struct StudioReadinessCard: View {
         .feedPanel(borderColor: statusColor.opacity(0.4))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(readiness.title): \(readiness.message(titles: titles))")
+    }
+
+    private var statusIcon: some View {
+        Image(systemName: statusImage)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(statusColor)
+            .frame(width: 32, height: 32)
+            .background { Circle().fill(statusColor.opacity(0.12)) }
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(pullJob == nil ? readiness.title : "Getting the model")
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(MereRunTheme.textPrimary)
+            Text(readiness.message(titles: titles))
+                .font(.callout)
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let detail = readiness.detail {
+                // The CLI's own last line, kept small: it is what makes a wrong model
+                // location or a missing binary diagnosable.
+                Text(detail)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+                    .padding(.top, 2)
+            }
+        }
     }
 
     /// The buttons for the state, most likely step first. A missing model is fetched here (the
