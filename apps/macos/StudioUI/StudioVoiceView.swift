@@ -210,17 +210,14 @@ final class StudioVoiceRecorder: NSObject, ObservableObject {
 
         // A reference recording is filed with the voice it will drive, wherever Settings sends
         // Voice work.
-        let url = StudioOutputLocation.specialistFile(
+        let proposed = StudioOutputLocation.specialistFile(
             domain: .voice,
             name: "voice-reference",
             fileExtension: "wav",
             now: StudioDisplayClock.now
         )
         do {
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
+            let url = Self.recordingURL(proposed)
             let settings: [String: Any] = [
                 AVFormatIDKey: Int(kAudioFormatLinearPCM),
                 AVSampleRateKey: 48_000,
@@ -241,6 +238,21 @@ final class StudioVoiceRecorder: NSObject, ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             isRecording = false
+        }
+    }
+
+    /// The proposed path once its folder exists — or, when that folder cannot be made (an
+    /// unplugged drive chosen in Settings), the same file name under App Outputs, so a
+    /// recording never fails for want of somewhere to go.
+    private static func recordingURL(_ proposed: URL) -> URL {
+        let fileManager = FileManager.default
+        do {
+            try fileManager.createDirectory(at: proposed.deletingLastPathComponent(), withIntermediateDirectories: true)
+            return proposed
+        } catch {
+            let fallback = StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
+            try? fileManager.createDirectory(at: fallback, withIntermediateDirectories: true)
+            return fallback.appendingPathComponent(proposed.lastPathComponent, isDirectory: false)
         }
     }
 
@@ -406,7 +418,7 @@ struct StudioVoiceView: View {
                 )
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.merePrimary)
+            .buttonStyle(.merePrimary(tint: recorder.isRecording ? MereRunTheme.red : MereRunTheme.accent))
             if recorder.isRecording {
                 Label(
                     StudioTimeFormat.string(recorder.duration),
@@ -1181,7 +1193,7 @@ struct StudioVoiceView: View {
                 )
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.merePrimary)
+            .buttonStyle(.merePrimary(tint: isListening ? MereRunTheme.red : MereRunTheme.accent))
         }
         .task {
             if listenDevices.isEmpty { await refreshListenDevices() }

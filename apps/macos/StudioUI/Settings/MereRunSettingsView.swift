@@ -476,7 +476,7 @@ private struct PathField: View {
                 .font(MereRunTheme.bodyFont)
                 .padding(10)
                 .merePanel()
-                .accessibilityLabel(label.capitalized)
+                .accessibilityLabel(label.prefix(1).uppercased() + label.dropFirst())
             Button("Choose…") { choosePath() }
                 .buttonStyle(.mereSecondary)
                 .help(mode == .openDirectory ? "Choose a folder" : "Choose a file")

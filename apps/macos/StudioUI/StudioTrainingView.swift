@@ -1244,7 +1244,8 @@ struct StudioTrainingView: View {
         }
     }
 
-    /// An adapter is filed with the domain it trains for, beside that domain's generations.
+    /// An adapter is a document, so it lands in Documents (or the configured root) under the
+    /// domain it trains for: Image, Chat, or Music.
     private static func timestampedOutput(domain: StudioDomain, prefix: String) -> String {
         StudioSpecialistFiles.outputFile(domain: domain, name: prefix, fileExtension: "safetensors").path
     }

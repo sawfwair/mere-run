@@ -33,7 +33,7 @@ final class StudioSpecialistResultsTests: XCTestCase {
         XCTAssertEqual(document.speakers.map(\.turnCount), [2, 1])
         XCTAssertEqual(document.speakers.map(\.talkTimeDescription), ["1:06", "0:04"])
         // The Analyze panel's rows name the turn's span, since a diarized turn has no words.
-        XCTAssertEqual(StudioAnalyzeDocument.diarization(document).speechSegments.map(\.text), ["0:00 – 0:04", "0:05 – 0:08", "0:08 – 1:10"])
+        XCTAssertEqual(StudioAnalyzeDocument.diarization(document).speechSegments.map(\.text), ["Spoke for 0:04", "Spoke for 0:04", "Spoke for 1:02"])
     }
 
     func testAnRTTMTimelineIsNotADocument() throws {
@@ -100,6 +100,20 @@ final class StudioSpecialistResultsTests: XCTestCase {
         XCTAssertNil(document.caption)
         XCTAssertEqual(document.analyzedDescription, "0:12")
         XCTAssertNil(StudioMusicAnalysisDocument.decode("error: model music-acestep is not installed"))
+    }
+
+    /// A Library row keeps stdout and stderr together; the object is read out of the middle.
+    func testMusicAnalysisReadsTheObjectOutOfSurroundingText() throws {
+        let document = try XCTUnwrap(StudioMusicAnalysisDocument.decode("""
+        ACE-Step source analysis: bpm=120, keyscale=C# minor
+        {
+          "analyzedDurationSeconds" : 12.2, "audio" : "/tmp/noise.wav", "checkpointsRoot" : "/tmp/models",
+          "inputDurationSeconds" : 12.2, "languageModelRoot" : "/tmp/models/lm", "languageModelSource" : "bundled",
+          "lmSubdirectory" : "lm", "metadata" : { "bpm" : 120 }, "model" : "music-acestep", "turboSubdirectory" : "turbo"
+        }
+        STDERR: Completed with exit code 0.
+        """))
+        XCTAssertEqual(document.tempoDescription, "120 BPM")
     }
 
     // MARK: - run inspect
@@ -261,6 +275,27 @@ final class StudioSpecialistResultsTests: XCTestCase {
         XCTAssertEqual(presentation.outputs.map(\.exists), [true, false])
         XCTAssertEqual(presentation.outputs[0].detail, "adapter · 41.9 MB")
         XCTAssertEqual(presentation.problems, ["Stale run: No event in 20 minutes."])
+    }
+
+    func testRunInspectionReadsARunPlan() throws {
+        let inspection = try XCTUnwrap(StudioRunInspection.decode("""
+        {
+          "actions" : [], "command" : [ "run", "inspect" ], "created_at" : "2026-07-28T12:05:00Z",
+          "cwd" : "/Users/example", "diagnostics" : [], "mere_run_version" : "0.55.0", "mode" : "inspection",
+          "request" : { "path" : "/Users/example/plans/lighthouse.json" },
+          "result" : {
+            "kind" : "run_plan",
+            "path" : "/Users/example/plans/lighthouse.json",
+            "plan" : { "schema_version" : 1, "kind" : "image.train", "command" : [ "image", "train" ], "created_at" : "2026-07-27T09:30:00Z", "cwd" : "/Users/example" }
+          },
+          "schema_version" : 1, "status" : "ok", "summary" : "Run plan lighthouse.json: image.train"
+        }
+        """))
+
+        let presentation = inspection.presentation
+        XCTAssertEqual(presentation.state, "ok")
+        XCTAssertEqual(presentation.facts.map(\.label), ["Plan", "Command", "Written"])
+        XCTAssertEqual(presentation.facts[1].value, "image train")
     }
 
     func testRunInspectionLeavesUnreadableOutputToTheRawView() {

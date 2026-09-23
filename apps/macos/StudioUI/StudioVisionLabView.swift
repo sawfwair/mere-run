@@ -175,8 +175,21 @@ struct StudioVisionLabView: View {
             if model.isBlank { model = CommandCatalog.template(id: task.templateID)?.defaultDraft().model ?? "" }
         }
         .task(id: task) {
-            if task == .liveTrack { cameras = StudioCamera.connected() }
+            if task == .liveTrack { refreshCameras() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
+            if task == .liveTrack { refreshCameras() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
+            if task == .liveTrack { refreshCameras() }
+        }
+    }
+
+    /// Lists the cameras now attached; an index remembered for a camera that is gone falls back
+    /// to the first one, so the picker never shows an empty selection.
+    private func refreshCameras() {
+        cameras = StudioCamera.connected()
+        if !cameras.isEmpty, !cameras.contains(where: { $0.index == camera }) { camera = 0 }
     }
 
     private var configuration: some View {

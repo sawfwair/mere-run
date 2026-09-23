@@ -74,6 +74,13 @@ private struct StudioWorkspaceView: View {
     /// A run whose user-visible destination could not be created, explained once per launch.
     @State private var outputFallbackNotice: String?
     @State private var outputFallbackAnnounced = false
+
+    /// Once per session: the first run that moved says so; later ones would only repeat it.
+    private func announceOutputFallback(_ reason: String) {
+        guard !outputFallbackAnnounced else { return }
+        outputFallbackAnnounced = true
+        outputFallbackNotice = StudioOutputLocation.fallbackNotice(reason)
+    }
     @ObservedObject private var models: StudioModelStore
     private var modelInventory: [StudioModelInventoryRow] { models.rows }
     private var modelInventorySummary: StudioModelInventorySummary? {
@@ -1496,10 +1503,7 @@ private struct StudioWorkspaceView: View {
                 return
             }
             guard let submission = try prompt.runPrompt(inventory: modelInventory) else { return }
-            if let reason = submission.outputFallbackReason, !outputFallbackAnnounced {
-                outputFallbackAnnounced = true
-                outputFallbackNotice = "\(reason) Saving to \(StudioOutputLocation.abbreviate(StudioOutputLocation.appOutputsRoot())) instead."
-            }
+            if let reason = submission.outputFallbackReason { announceOutputFallback(reason) }
             navigation.selectedLibraryID = submission.request.conversationID ?? submission.request.id
         } catch {
             studioError = error.localizedDescription

@@ -60,6 +60,8 @@ final class StudioActivityTests: XCTestCase {
         XCTAssertEqual(StudioActivity.taskName(for: ["run", "inspect", "/tmp/runs/mug", "--json"]), "Inspecting a run")
         XCTAssertEqual(StudioActivity.taskName(for: ["config", "get", "hf-endpoint", "--reveal"]), "Reading settings")
         XCTAssertEqual(StudioActivity.taskName(for: ["speech", "listen", "--list-devices"]), "Finding microphones")
+        XCTAssertEqual(StudioActivity.taskName(for: ["music", "realtime", "--list-midi-inputs"]), "Finding MIDI inputs")
+        XCTAssertEqual(StudioActivity.taskName(for: ["speech", "listen", "--jsonl"]), "Running speech")
         XCTAssertEqual(StudioActivity.taskName(for: ["--version"]), "Checking the CLI version")
         // A subcommand nobody has named yet still reads as a task, not an argv.
         XCTAssertEqual(StudioActivity.taskName(for: ["world", "status", "--json"]), "Running world")

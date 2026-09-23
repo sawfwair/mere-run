@@ -421,5 +421,9 @@ private struct StudioModelIDPicker: View {
             guard !models.hasInventory, !models.isRefreshing else { return }
             await models.refresh()
         }
+        // A remembered id the inventory no longer lists would leave the picker showing nothing.
+        .onChange(of: models.rows) { _, rows in
+            if !selection.isEmpty, !rows.contains(where: { $0.id == selection }) { selection = "" }
+        }
     }
 }

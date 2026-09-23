@@ -2,7 +2,10 @@ import StudioKit
 import SwiftUI
 
 /// The canonical primary action button: accent-tinted, prominent, theme-aware in light and dark.
+/// `tint` is the fill; a control that stops something in progress (Stop recording) uses `red`.
 package struct MerePrimaryButtonStyle: ButtonStyle {
+    package var tint: Color = MereRunTheme.accent
+
     package func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(MereRunTheme.bodyFont.weight(.semibold))
@@ -11,7 +14,7 @@ package struct MerePrimaryButtonStyle: ButtonStyle {
             .frame(minHeight: 28)
             .background {
                 RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                    .fill(MereRunTheme.accent.opacity(configuration.isPressed ? 0.78 : 1))
+                    .fill(tint.opacity(configuration.isPressed ? 0.78 : 1))
             }
             .foregroundStyle(MereRunTheme.background)
             .contentShape(Rectangle())
@@ -21,6 +24,8 @@ package struct MerePrimaryButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == MerePrimaryButtonStyle {
     package static var merePrimary: MerePrimaryButtonStyle { MerePrimaryButtonStyle() }
+
+    package static func merePrimary(tint: Color) -> MerePrimaryButtonStyle { MerePrimaryButtonStyle(tint: tint) }
 }
 
 /// A quiet secondary action, drawn as the design boards draw it: a 26pt `surfaceRaised` pill

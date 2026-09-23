@@ -114,7 +114,16 @@ struct StudioGeoLabView: View {
         .onChange(of: tool) { _, _ in
             statusMessage = nil
         }
+        .onAppear {
+            // A value typed before the picker existed that the command would refuse reads as
+            // the checkpoint default.
+            let dimensions = binding(\.geoDimensions)
+            if !Self.tesseraDimensions.contains(dimensions.wrappedValue) { dimensions.wrappedValue = "" }
+        }
     }
+
+    /// What `geo tessera --dimensions` accepts, plus blank for the checkpoint's own width.
+    private static let tesseraDimensions = ["", "16", "32", "64", "128", "1024"]
 
     private var controls: some View {
         ScrollView {

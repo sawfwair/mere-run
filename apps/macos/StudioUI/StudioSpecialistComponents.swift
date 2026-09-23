@@ -309,7 +309,11 @@ enum StudioSpecialistRunner {
             template: template,
             draft: draft
         )
-        let request = controller.taskSessions.resolving(base)
+        // The same destination preparation a prompt task gets: the folder is created, or the run
+        // moves to App Outputs and the shell says why.
+        let prepared = StudioOutputLocation.preparing(controller.taskSessions.resolving(base))
+        if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
+        let request = prepared.request
         let preview = controller.commandPreview(arguments: request.execution?.arguments ?? template.arguments(from: request.draft), masksSecrets: true)
         let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
             ? .queued

@@ -44,10 +44,14 @@ The format is based on Keep a Changelog.
   a host or port changed in Settings. Agent readiness is now read when the
   Agents section opens instead of every 16 seconds for the life of the app.
 - Save every macOS Studio specialist page's output where Settings ▸ General
-  says. Vision, 3D, Sound, Voice, the Music tools, Train, Video ▸ Subjects, Text,
-  and voice recordings now propose `<Domain>/<page>-<timestamp>` under the
-  per-media folders or the configured root, instead of `~/Movies/MereRun` and
-  its siblings.
+  says. Vision, 3D, Sound, Voice, the Music tools, Train (adapters under the
+  domain they train for), Video ▸ Subjects, Text ▸ Decisions, the Image
+  utilities (validation and run plans under Image, embeddings and anonymization
+  under Text), and voice recordings now propose `<Domain>/<page>-<timestamp>`
+  under the per-media folders or the configured root, instead of
+  `~/Movies/MereRun` and its siblings. A page's run gets the same unwritable-
+  folder fallback a prompt run does, and two runs in one second no longer share
+  a name.
 - Render specialist results readably: Who Spoke draws its JSON timeline as
   speaker lanes and turn rows with Save timeline…, Music ▸ Analyze shows tempo,
   key, meter, language, caption, and lyrics, and Runs shows an inspected run's

@@ -345,6 +345,66 @@ final class StudioOutputLocationTests: XCTestCase {
         )
     }
 
+    /// A specialist run is prepared like a prompt run: an uncreatable folder moves it to App
+    /// Outputs, the Command edits' `--output` moves with it, and the reason comes back for the
+    /// banner.
+    func testPreparingASpecialistRequestFallsBackWithItsCommandEdits() throws {
+        let root = try temporaryDirectory()
+        let blocker = root.appendingPathComponent("blocked")
+        try Data("not a folder".utf8).write(to: blocker)
+        let intended = blocker.appendingPathComponent("Sound/sfx-20260903-101500.wav").path
+        let template = try XCTUnwrap(CommandCatalog.template(id: .sfxGenerate))
+        var draft = template.defaultDraft()
+        draft.prompt = "rain on a tin roof"
+        draft.outputPath = intended
+        let request = StudioRunRequest(
+            mode: .sfx,
+            templateID: .sfxGenerate,
+            template: template,
+            draft: draft,
+            execution: StudioExecution(templateID: .sfxGenerate, arguments: template.arguments(from: draft))
+        )
+
+        let prepared = StudioOutputLocation.preparing(request)
+
+        let fallback = StudioOutputLocation.appOutputsRoot().appendingPathComponent("sfx-20260903-101500.wav").path
+        XCTAssertNotNil(prepared.fallbackReason)
+        XCTAssertEqual(prepared.request.id, request.id)
+        XCTAssertEqual(prepared.request.draft.outputPath, fallback)
+        XCTAssertEqual(prepared.request.execution?.arguments.contains(fallback), true)
+        XCTAssertEqual(prepared.request.execution?.arguments.contains(intended), false)
+        XCTAssertTrue(StudioOutputLocation.fallbackNotice("Could not write.").hasSuffix("instead."))
+    }
+
+    func testPreparingAWritableSpecialistRequestLeavesItAlone() throws {
+        let root = try temporaryDirectory()
+        let template = try XCTUnwrap(CommandCatalog.template(id: .sfxGenerate))
+        var draft = template.defaultDraft()
+        draft.outputPath = root.appendingPathComponent("Music/mere.run/Sound/sfx-1.wav").path
+        let request = StudioRunRequest(mode: .sfx, templateID: .sfxGenerate, template: template, draft: draft)
+
+        let prepared = StudioOutputLocation.preparing(request)
+
+        XCTAssertNil(prepared.fallbackReason)
+        XCTAssertEqual(prepared.request, request)
+    }
+
+    /// The file of a run that was just submitted is not on disk yet; the next proposal in the
+    /// same second must still not name it.
+    func testASubmittedDestinationIsReservedForTheNextProposal() throws {
+        let home = try temporaryDirectory()
+        let now = Date(timeIntervalSince1970: 1_788_527_400)
+        let first = StudioOutputLocation.specialistFile(domain: .voice, name: "voice", fileExtension: "wav", now: now, configuredRoot: "", home: home)
+        var draft = CommandDraft()
+        draft.outputPath = first.path
+        _ = StudioOutputLocation.preparingDestination(of: draft)
+
+        let second = StudioOutputLocation.specialistFile(domain: .voice, name: "voice", fileExtension: "wav", now: now, configuredRoot: "", home: home)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: first.path), "nothing wrote the file")
+        XCTAssertEqual(second.lastPathComponent, first.deletingPathExtension().lastPathComponent + "-2.wav")
+    }
+
     /// Two runs proposed within the same second must not overwrite each other.
     func testSpecialistFileStepsAsideFromAnExistingFile() throws {
         let home = try temporaryDirectory()

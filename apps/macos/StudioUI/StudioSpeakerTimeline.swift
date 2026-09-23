@@ -56,12 +56,14 @@ struct StudioSpeakerLanes: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(speaker.name): \(turns(speaker.turnCount)), \(speaker.talkTimeDescription) speaking")
             }
+            // The clock under the lanes: the start at the left edge of the track, the end at its
+            // right edge, both under the lanes rather than the labels.
             HStack {
-                Spacer(minLength: Self.labelWidth + 10)
                 Text("0:00")
                 Spacer()
                 Text(StudioTimeFormat.string(document.durationSeconds))
             }
+            .padding(.leading, Self.labelWidth + 10)
             .font(.system(size: 10.5, weight: .medium, design: .monospaced))
             .foregroundStyle(MereRunTheme.textMuted)
             .accessibilityHidden(true)
@@ -94,11 +96,11 @@ struct StudioSpeakerLanes: View {
         count == 1 ? "1 turn" : "\(count) turns"
     }
 
-    /// The theme's own colors for the first speakers, then hues stepped around the wheel: real
-    /// conversations rarely separate into more than four voices.
+    /// The theme's accent and green for the first two speakers, then hues stepped around the
+    /// wheel from slate blue — never the theme's red, which means an error everywhere else.
     static func color(for index: Int) -> Color {
-        let named = [MereRunTheme.accent, MereRunTheme.green, MereRunTheme.red, MereRunTheme.yellow]
+        let named = [MereRunTheme.accent, MereRunTheme.green]
         if index < named.count { return named[index] }
-        return Color(hue: Double(index - named.count) * 0.19 + 0.55, saturation: 0.55, brightness: 0.72)
+        return Color(hue: Double(index - named.count) * 0.17 + 0.6, saturation: 0.42, brightness: 0.66)
     }
 }

@@ -1,5 +1,17 @@
 import Foundation
 
+/// The one JSON object in a command's captured output. The CLI's structured commands print
+/// exactly one, but the text a Library row or a utility result keeps can carry stderr lines
+/// around it, so decoding starts at the first brace and ends at the last.
+package enum StudioStructuredOutput {
+    package static func objectData(in text: String) -> Data? {
+        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start <= end else {
+            return nil
+        }
+        return Data(text[start...end].utf8)
+    }
+}
+
 // MARK: - speech diarize
 
 extension StudioDiarizationDocument {
@@ -73,7 +85,8 @@ package struct StudioMusicAnalysisDocument: Decodable, Equatable {
     package let audioCodes: String?
 
     package static func decode(_ text: String) -> StudioMusicAnalysisDocument? {
-        try? JSONDecoder().decode(Self.self, from: Data(text.utf8))
+        guard let data = StudioStructuredOutput.objectData(in: text) else { return nil }
+        return try? JSONDecoder().decode(Self.self, from: data)
     }
 
     /// "120 BPM", or nil when the model gave no tempo.
@@ -354,6 +367,12 @@ package enum StudioRunInspection: Equatable {
             package let kind: String
             package let command: [String]
             package let createdAt: Date?
+
+            enum CodingKeys: String, CodingKey {
+                case kind
+                case command
+                case createdAt = "created_at"
+            }
         }
 
         package struct Result: Decodable, Equatable {
@@ -395,10 +414,7 @@ package enum StudioRunInspection: Equatable {
     /// carries (`graph_name`, `job_reference`, `summary` with a `result`); anything else — an
     /// error message, an older CLI's text — reads as nil and the page shows the raw output.
     package static func decode(_ text: String) -> StudioRunInspection? {
-        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start <= end else {
-            return nil
-        }
-        let data = Data(text[start...end].utf8)
+        guard let data = StudioStructuredOutput.objectData(in: text) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         if let graph = try? decoder.decode(GraphRun.self, from: data) { return .graphRun(graph) }

@@ -691,6 +691,8 @@ struct StudioOperationsView: View {
         inspection = nil
         statusMessage = result.exitCode == 0 ? "\(label) completed" : "\(label) failed"
         await refresh()
+        // The run's state just changed; show it, not the command's own output.
+        if let selectedReference { await inspect(selectedReference, announce: false) }
     }
 
     private func chooseRoot() {

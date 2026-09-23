@@ -473,11 +473,17 @@ pictures and clips, `~/Music/mere.run/<Domain>` for audio,
 The suffix is derived, not random, so the path the Command view previews is the
 path the run writes. Settings ▸ General takes one root that overrides all three
 (`mererun.app.outputRoot`). The specialist pages — Vision, 3D, Sound, Voice,
-Music ▸ Analyze, Transcribe, and Realtime, Train, Video ▸ Subjects, Text, and
-the Voice recorder — propose their destinations from the same rule
+Music ▸ Analyze, Transcribe, and Realtime, Train (an adapter is filed under the
+domain it trains for), Video ▸ Subjects, Text ▸ Decisions, the Image utilities
+(validation and run plans under Image; embeddings and anonymization under
+Text), and the Voice recorder — propose their destinations from the same rule
 (`StudioOutputLocation.specialistDirectory` and `specialistFile`):
 `<Domain>/<page>-<timestamp>` under the same roots, so a run started from a page
-and one started from the Command Console file side by side. Nothing is migrated:
+and one started from the Command Console file side by side. A specialist or
+Command view run is prepared the same way a prompt run is
+(`StudioOutputLocation.preparing`): the folder is created, or the run moves to
+`App Outputs` and the shell's banner says why; a path a submitted run holds is
+reserved, so the next proposal in the same second steps aside. Nothing is migrated:
 Library rows keep the paths
 they recorded, Application Support holds metadata only, and a destination that
 cannot be created sends the run back to `App Outputs` with its sidecars and one
