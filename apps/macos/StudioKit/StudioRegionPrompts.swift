@@ -487,14 +487,32 @@ package enum StudioRegionPromptText {
         }
     }
 
-    /// One `--point` value per point prompt.
+    /// One `--point` value per point prompt, labeled after the box it refines.
+    ///
+    /// The CLI groups a labeled point with the first `--box` of the same label and unlabeled points
+    /// with the one unlabeled box, when there is exactly one (`SAM31PromptSet.normalized`). A point
+    /// drawn without a label of its own therefore takes the label of the box it belongs to: the only
+    /// box, or the smallest box containing it. An unlabeled box passes no label on, which is the
+    /// CLI's single-unlabeled-box rule; a point outside every box, or inside none of several, stays
+    /// unlabeled and forms one object with the other unlabeled points.
     package static func pointLines(_ prompts: [StudioRegionPrompt]) -> [String] {
-        prompts.compactMap { prompt in
+        let boxes = prompts.boxes
+        return prompts.compactMap { prompt in
             guard case .point(let x, let y, let isPositive) = prompt.shape else { return nil }
             var fields = [StudioRegionPrompt.pixels(x), StudioRegionPrompt.pixels(y), isPositive ? "positive" : "negative"]
-            if let label = prompt.label { fields.append(label) }
+            if let label = prompt.label ?? refinedBox(for: CGPoint(x: x, y: y), in: boxes)?.label { fields.append(label) }
             return fields.joined(separator: ",")
         }
+    }
+
+    /// The box a point refines: the only box, or the smallest one containing the point.
+    package static func refinedBox(for point: CGPoint, in boxes: [StudioRegionPrompt]) -> StudioRegionPrompt? {
+        if boxes.count == 1 { return boxes[0] }
+        return boxes
+            .compactMap { box in box.rect.map { (box: box, rect: $0) } }
+            .filter { $0.rect.contains(point) }
+            .min { $0.rect.width * $0.rect.height < $1.rect.width * $1.rect.height }?
+            .box
     }
 
     /// The `visionBoxPrompts` field: box lines joined with newlines.

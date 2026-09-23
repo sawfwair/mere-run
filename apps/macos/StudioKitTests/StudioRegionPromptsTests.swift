@@ -27,8 +27,32 @@ final class StudioRegionPromptsTests: XCTestCase {
     /// `VisionSegment.parsePointPrompt` takes `x,y,positive|negative[,label]`.
     func testPointTextIsWhatTheCLIParses() {
         XCTAssertEqual(StudioRegionPromptText.pointLines([handle, shadow]), ["400,260,positive", "12,18,negative,shadow"])
-        XCTAssertEqual(StudioRegionPromptText.pointText([cup, handle]), "400,260,positive")
+        XCTAssertEqual(StudioRegionPromptText.pointText([cup, handle]), "400,260,positive,coffee cup")
         XCTAssertEqual(StudioRegionPromptText.pointText([cup]), "")
+    }
+
+    /// The CLI groups points with boxes by label (`SAM31PromptSet.normalized`), so a point is
+    /// labeled after the box it refines: the only box, or the smallest box around it. An unlabeled
+    /// box passes nothing on, leaving the CLI's single-unlabeled-box rule to join them.
+    func testPointsAreLabeledAfterTheBoxTheyRefine() {
+        let inside = StudioRegionPrompt.point(CGPoint(x: 100, y: 70), isPositive: true)
+        let outside = StudioRegionPrompt.point(CGPoint(x: 600, y: 400), isPositive: false)
+        XCTAssertEqual(StudioRegionPromptText.pointLines([cup, inside, outside]), ["100,70,positive,coffee cup", "600,400,negative,coffee cup"])
+
+        let plain = StudioRegionPrompt.box(CGRect(x: 40, y: 30, width: 120, height: 80))
+        XCTAssertEqual(StudioRegionPromptText.pointLines([plain, inside, outside]), ["100,70,positive", "600,400,negative"])
+
+        // Several boxes: the point belongs to the smallest box containing it; one outside all of
+        // them, or inside an unlabeled one, stays unlabeled.
+        let saucer = StudioRegionPrompt.box(CGRect(x: 0, y: 0, width: 400, height: 300), label: "saucer")
+        let lid = StudioRegionPrompt.box(CGRect(x: 90, y: 60, width: 20, height: 20))
+        XCTAssertEqual(StudioRegionPromptText.pointLines([saucer, cup, inside, outside]), ["100,70,positive,coffee cup", "600,400,negative"])
+        XCTAssertEqual(StudioRegionPromptText.pointLines([saucer, cup, lid, inside]), ["100,70,positive"])
+        XCTAssertEqual(StudioRegionPromptText.refinedBox(for: CGPoint(x: 100, y: 70), in: [saucer, cup, lid])?.id, lid.id)
+        XCTAssertNil(StudioRegionPromptText.refinedBox(for: CGPoint(x: 600, y: 400), in: [saucer, cup]))
+
+        // A label of the point's own wins over the box's.
+        XCTAssertEqual(StudioRegionPromptText.pointLines([cup, shadow]), ["12,18,negative,shadow"])
     }
 
     func testDecodingAcceptsAndRejectsExactlyWhatTheCLIDoes() throws {
@@ -56,7 +80,8 @@ final class StudioRegionPromptsTests: XCTestCase {
         )
         XCTAssertEqual(decoded.map(\.isBox), [true, false, false])
         XCTAssertEqual(StudioRegionPromptText.boxText(decoded), "40,30,160,110,coffee cup")
-        XCTAssertEqual(StudioRegionPromptText.pointText(decoded), "400,260,positive\n12,18,negative,shadow")
+        // Written back, the unlabeled point is labeled after the one box it refines.
+        XCTAssertEqual(StudioRegionPromptText.pointText(decoded), "400,260,positive,coffee cup\n12,18,negative,shadow")
     }
 
     func testCountAndAccessibilityDescriptions() {
@@ -378,7 +403,7 @@ final class StudioRegionPromptsTests: XCTestCase {
         segment.visionRegionPrompts = [cup, handle, shadow]
         let request = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)
         XCTAssertEqual(request.draft.visionBoxPrompts, "40,30,160,110,coffee cup")
-        XCTAssertEqual(request.draft.visionPointPrompts, "400,260,positive\n12,18,negative,shadow")
+        XCTAssertEqual(request.draft.visionPointPrompts, "400,260,positive,coffee cup\n12,18,negative,shadow")
         let arguments = request.template.arguments(from: request.draft)
         XCTAssertTrue(arguments.contains("--box"))
         XCTAssertTrue(arguments.contains("40,30,160,110,coffee cup"))
@@ -388,6 +413,18 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)) { error in
             XCTAssertEqual(error as? StudioCommandError, .missingPrompt("A prompt or a drawn box or point"))
         }
+
+        // Negative points alone refine nothing, with or without a text prompt.
+        let negative = StudioRegionPrompt.point(CGPoint(x: 12, y: 18), isPositive: false)
+        segment.visionRegionPrompts = [negative, shadow]
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)) { error in
+            XCTAssertEqual(error as? StudioCommandError, .negativePointsOnly)
+            XCTAssertEqual(error.localizedDescription, "Add a box or a positive point for the negative points to refine.")
+        }
+        segment.prompt = "the mug"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment))
+        segment.visionRegionPrompts = [negative, handle]
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment))
 
         var track = StudioDraft()
         track.reset(for: .track)
