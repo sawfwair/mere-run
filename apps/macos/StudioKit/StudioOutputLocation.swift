@@ -248,6 +248,53 @@ package enum StudioOutputLocation {
         }
     }
 
+    /// The destination a specialist page proposes before it runs: the domain's folder wherever
+    /// Settings says, named `<name>-<timestamp>`. These pages have no prompt to name a file after
+    /// and several write a whole directory, so a timestamp is what keeps two runs apart. It is the
+    /// folder `templateOutputPath` sends the same command to from the Command Console, so a page
+    /// and the console file one command's work together.
+    package static func specialistDirectory(
+        domain: StudioDomain,
+        name: String,
+        now: Date = Date(),
+        configuredRoot: String? = nil,
+        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
+        fileManager: FileManager = .default
+    ) -> URL {
+        outputDirectoryURL(
+            domain: domain,
+            prompt: "",
+            fallbackStem: name,
+            identifierOverride: DateFormatter.mereRunTimestamp.string(from: now),
+            configuredRoot: configuredRoot,
+            home: home,
+            fileManager: fileManager
+        )
+    }
+
+    /// One file a specialist page writes, filed the same way: `<name>-<timestamp>.<ext>` in the
+    /// media folder the extension calls for, or under the configured root.
+    package static func specialistFile(
+        domain: StudioDomain,
+        name: String,
+        fileExtension: String,
+        now: Date = Date(),
+        configuredRoot: String? = nil,
+        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
+        fileManager: FileManager = .default
+    ) -> URL {
+        outputURL(
+            domain: domain,
+            prompt: "",
+            fallbackStem: name,
+            fileExtension: fileExtension,
+            identifierOverride: DateFormatter.mereRunTimestamp.string(from: now),
+            configuredRoot: configuredRoot,
+            home: home,
+            fileManager: fileManager
+        )
+    }
+
     /// The destination for one Studio run: the same folder the template already chose, but named
     /// after the prompt. `.none` output kinds (chat, the utility probes) keep `existing`.
     package static func namedOutputPath(

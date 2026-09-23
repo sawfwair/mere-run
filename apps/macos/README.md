@@ -159,8 +159,10 @@ line while jobs are in flight. It opens the **Activity popover**
 (`StudioUI/StudioActivity.swift`), a 340pt panel the shell draws over the window from the
 bottom-left: one row per running or queued job in the inference and utility
 lanes (never a probe) with its progress and a stop control, over the app↔CLI
-version handshake and a link into the Server page. With nothing running the same
-panel shows the local server, the models root, and the resolved CLI path. It
+version handshake and a link into the Server page. A row for one of Studio's own
+CLI reads names the work ("System · Checking models"), never the subcommand.
+With nothing running the same panel shows the local server and the models root;
+the resolved CLI path is the footer's tooltip. It
 reads the `JobStore` directly — the lanes for which rows exist, each `Job` for
 its own progress — so nothing about the work in flight is mirrored on the
 controller.
@@ -242,7 +244,8 @@ Open Last Output (⇧⌘O), and Reveal Last Output in Finder (⇧⌘R), acting o
 current composer; Window ▸ Open Studio and Command Console (⇧⌘C); Help ▸
 mere.run Guide (⌘?), the mere.run link, and Export Diagnostics…. ⌥⌘C is always
 the task's Command view, disabled on the few tasks without one. Settings has
-General, Models, Server, and Advanced tabs; the Server tab's endpoint and key
+General, Models, Server, and Advanced tabs; its path settings are pickers with
+Choose…, Reveal, and Reset, and the Server tab's endpoint and key
 apply on Apply or Return, not per keystroke. First run shows the Image empty state with its "Get the model"
 path and a one-time dismissible banner; there is no Welcome sheet.
 
@@ -362,7 +365,9 @@ and the rest of their options are reached in the Command Console.
 
 The **Command** panel (⌥⌘C or the header toggle) exposes the current task's
 complete editable contract. It replaces the inspector and uses a 440-point
-column when space permits, otherwise an overlay. The preview, validation, and
+column when space permits, otherwise an overlay. Each row is headed by the
+option's label with its flag beneath in small monospace, over the same typed
+controls the Console draws. The preview, validation, and
 run use the edited arguments, including options absent from the simple controls.
 Prompt controls and their mapped Command fields synchronize. Specialist Run
 buttons retain Command edits while accepting later edits from their own forms.
@@ -467,7 +472,13 @@ pictures and clips, `~/Music/mere.run/<Domain>` for audio,
 `<slug-of-prompt>-<seed-or-short-id>.<ext>` with a numeric suffix on collision.
 The suffix is derived, not random, so the path the Command view previews is the
 path the run writes. Settings ▸ General takes one root that overrides all three
-(`mererun.app.outputRoot`). Nothing is migrated: Library rows keep the paths
+(`mererun.app.outputRoot`). The specialist pages — Vision, 3D, Sound, Voice,
+Music ▸ Analyze, Transcribe, and Realtime, Train, Video ▸ Subjects, Text, and
+the Voice recorder — propose their destinations from the same rule
+(`StudioOutputLocation.specialistDirectory` and `specialistFile`):
+`<Domain>/<page>-<timestamp>` under the same roots, so a run started from a page
+and one started from the Command Console file side by side. Nothing is migrated:
+Library rows keep the paths
 they recorded, Application Support holds metadata only, and a destination that
 cannot be created sends the run back to `App Outputs` with its sidecars and one
 banner saying why.
@@ -519,7 +530,9 @@ commands live in the Command Console.
 **Music** is a production surface, not a prompt-only wrapper: quality planning,
 covers, repaint and flow edits, source and timbre-reference audio, candidate
 ranking, LM planning, adapter stacks, stems, LRC, recipes, and DAW delivery.
-Music ▸ Analyze adds standalone ACE-Step understanding with structured results;
+Music ▸ Analyze adds standalone ACE-Step understanding, read from the command's
+JSON as tempo, key, meter, language, caption, and lyrics, with the model's reply
+and audio codes folded away when a run kept them;
 Music ▸ Transcribe adds MuScriptor transcription with an embedded MIDI piano
 roll; Music ▸ Separate shares the restoration surface with Audio. Music ▸
 Realtime is the Magenta RT2 session: a transport with the live clock, the
@@ -554,18 +567,22 @@ unembedding training defaults.
 
 **Vision** covers the whole VLM and VFX family: multi-image captioning,
 LightOn/GLM/Infinity OCR, grounding, text/box/point segmentation and tracking,
-camera capture, Buffalo-L face analysis, native pose and optical flow, video
-depth, MoGe geometry, and DA3 ordered multiview reconstruction. Read, Find,
+camera capture, Buffalo-L face analysis, native pose and optical flow, still
+(Marigold V2) and video depth, MoGe geometry, and DA3 ordered multiview
+reconstruction. Read, Find,
 Segment, and Track are the Analyze tasks; Depth, Pose, Faces, Flow, Geometry,
 and Live host the lab form that renders face and pose overlays and dense optical
 flow vectors, plays live tracking and depth review video, embeds geometry point
 clouds, and preserves every JSON, EXR, mask, camera, and 3D sidecar as a durable
-Library artifact. Coordinates stay typed, ordered CLI arguments; machine-readable
+Library artifact. Live lists this Mac's cameras by name in the order the CLI
+numbers them. Coordinates stay typed, ordered CLI arguments; machine-readable
 results and mask directories use explicit output pickers.
 
 **Audio** ▸ Transcribe is the Analyze task over `speech transcribe`. Who Spoke
 is native Sortformer diarization with JSON and RTTM timelines and
-segment-tuning controls. Enhance and Separate are the restoration surface for
+segment-tuning controls; a JSON timeline is drawn as one lane per speaker over
+the recording (`StudioUI/StudioSpeakerTimeline.swift`) and as the Analyze
+panel's turn rows, with Save timeline…. Enhance and Separate are the restoration surface for
 native AP-BWE and UniverSR enhancement plus ViperX two-stem, four-stem,
 dereverb, and denoise RoFormer workflows, with model-specific compute and chunk
 controls, source and output previews, and every generated stem kept in the
@@ -619,7 +636,8 @@ and clean-up stay on the page.
 
 **Models ▸ Locations** is the store editor over `model location`. It shows the
 writable store, read-only search roots, and explicit per-model bindings with
-live availability, adds roots and bindings through a directory picker, reveals
+live availability, adds roots and bindings through a directory picker (the
+bound model is chosen from the inventory), reveals
 any of them in Finder, and confirms before removing a root or a binding — so a
 model kept on an external volume is registered without leaving the app.
 
@@ -677,7 +695,12 @@ Console.
 **Runs** is the domain over the public `executor` and `run` contracts. It
 discovers local durable reports, lists Relay jobs, polls typed inspection state,
 shows artifact inventories, reveals local runs, and exposes verified fetch,
-cancellation, and immutable Relay retry. Client-side Relay profile setup and
+cancellation, and immutable Relay retry. `run inspect --json` answers in one of
+three shapes (a Relay job, a local graph run, or the inspection envelope around
+an image run, a transcription run, a training directory, a report, or a plan);
+`StudioKit/StudioSpecialistResults.swift` decodes each and the page shows the
+state, what went wrong, the facts, each step with its state, and the outputs
+with Reveal, with the raw report behind a disclosure. Client-side Relay profile setup and
 device sign-in also go through the CLI; Studio streams the approval URL but
 never handles the credential itself.
 

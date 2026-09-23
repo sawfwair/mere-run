@@ -43,6 +43,25 @@ The format is based on Keep a Changelog.
   after a relaunch cleared the runtime API key from the Keychain and could revert
   a host or port changed in Settings. Agent readiness is now read when the
   Agents section opens instead of every 16 seconds for the life of the app.
+- Save every macOS Studio specialist page's output where Settings ▸ General
+  says. Vision, 3D, Sound, Voice, the Music tools, Train, Video ▸ Subjects, Text,
+  and voice recordings now propose `<Domain>/<page>-<timestamp>` under the
+  per-media folders or the configured root, instead of `~/Movies/MereRun` and
+  its siblings.
+- Render specialist results readably: Who Spoke draws its JSON timeline as
+  speaker lanes and turn rows with Save timeline…, Music ▸ Analyze shows tempo,
+  key, meter, language, caption, and lyrics, and Runs shows an inspected run's
+  state, timings, steps, and outputs with Reveal, each with the raw report behind
+  a disclosure.
+- Name Studio's own CLI reads plainly in the Activity popover and the menu bar
+  ("Checking models") and move the CLI path to the footer's tooltip. Head each
+  Command panel row with the option's name over its flag, make the Settings path
+  fields pickers with Reveal and Reset, and draw every specialist page's buttons
+  in the Studio styles.
+- Add still-image depth (Marigold V2) beside video depth in Vision ▸ Depth, pick
+  the live-tracking camera by name, choose TESSERA output dimensions from the
+  values the command accepts, and choose the model for a Models ▸ Locations
+  binding from the inventory.
 
 ## 0.55.0 - 2026-09-22
 

@@ -63,14 +63,9 @@ struct StudioRealtimeMusicView: View {
     init(initialDraft: StudioDraft) {
         _promptA = StudioStoredValue(initialValue: initialDraft.prompt, "RealtimeMusic.promptA")
         _model = StudioStoredValue(initialValue: Self.preferredModel(from: initialDraft.model), "RealtimeMusic.model")
-        let directory = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Music/MereRun", isDirectory: true)
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
         _outputPath = StudioStoredValue(
-            initialValue: directory
-                .appendingPathComponent("realtime-\(formatter.string(from: StudioDisplayClock.now)).wav")
-                .path, "RealtimeMusic.outputPath")
+            initialValue: StudioSpecialistFiles.outputFile(domain: .music, name: "realtime", fileExtension: "wav").path,
+            "RealtimeMusic.outputPath")
     }
 
     nonisolated static func preferredModel(from activeModel: String) -> String {

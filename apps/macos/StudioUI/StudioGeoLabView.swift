@@ -159,8 +159,7 @@ struct StudioGeoLabView: View {
                     Label("Run \(tool.title)", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
+                .buttonStyle(.merePrimary)
 
                 if let statusMessage {
                     Text(statusMessage)
@@ -202,11 +201,13 @@ struct StudioGeoLabView: View {
     private var toolControls: some View {
         switch tool {
         case .tessera:
-            labeledTextField(
-                "Output dimensions",
-                placeholder: "Students: 16, 32, 64, or 128. Teacher: 1024. Blank uses the checkpoint default.",
-                text: binding(\.geoDimensions)
-            )
+            // The only values `geo tessera --dimensions` accepts: the student widths, or 1024 for
+            // the teacher checkpoint. Blank lets the checkpoint choose.
+            Picker("Output dimensions", selection: binding(\.geoDimensions)) {
+                Text("Checkpoint default").tag("")
+                ForEach(["16", "32", "64", "128"], id: \.self) { Text($0).tag($0) }
+                Text("1024 (teacher)").tag("1024")
+            }
         case .olmoEarth:
             Picker("Spatial patch size", selection: binding(\.geoPatchSize)) {
                 Text("1 px").tag(1)

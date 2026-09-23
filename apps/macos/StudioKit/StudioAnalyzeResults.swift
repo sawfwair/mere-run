@@ -378,12 +378,13 @@ package enum StudioAnalyzeDocument: Equatable {
             }
         case .diarization(let document):
             return document.segments.enumerated().map { index, segment in
+                // A diarized turn has no words, so its row says how long it lasted instead.
                 StudioAnalyzeSpeechSegment(
                     id: index,
                     speaker: "Speaker \(segment.speakerIndex + 1)",
                     start: segment.startSeconds,
                     end: segment.endSeconds,
-                    text: ""
+                    text: "\(StudioTimeFormat.string(segment.startSeconds)) – \(StudioTimeFormat.string(segment.endSeconds))"
                 )
             }
         default:

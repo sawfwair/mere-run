@@ -49,6 +49,37 @@ final class StudioActivityTests: XCTestCase {
         XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(gate))), "Models · Quality gate")
     }
 
+    /// A hand-built CLI read has no template, so its row says what Studio is doing with it, never
+    /// the subcommand it runs.
+    func testRawJobsAreNamedByWhatStudioIsDoing() {
+        XCTAssertEqual(StudioActivity.taskName(for: ["model", "list", "--json"]), "Checking models")
+        XCTAssertEqual(StudioActivity.taskName(for: ["model", "capabilities", "--all", "--json"]), "Checking models")
+        XCTAssertEqual(StudioActivity.taskName(for: ["model", "info", "image-zimage-nano", "--components"]), "Reading model details")
+        XCTAssertEqual(StudioActivity.taskName(for: ["model", "runtime", "set", "text-chat", "--pinned"]), "Saving runtime settings")
+        XCTAssertEqual(StudioActivity.taskName(for: ["model", "location", "bind", "id", "/Volumes/Work"]), "Updating model locations")
+        XCTAssertEqual(StudioActivity.taskName(for: ["run", "inspect", "/tmp/runs/mug", "--json"]), "Inspecting a run")
+        XCTAssertEqual(StudioActivity.taskName(for: ["config", "get", "hf-endpoint", "--reveal"]), "Reading settings")
+        XCTAssertEqual(StudioActivity.taskName(for: ["speech", "listen", "--list-devices"]), "Finding microphones")
+        XCTAssertEqual(StudioActivity.taskName(for: ["--version"]), "Checking the CLI version")
+        // A subcommand nobody has named yet still reads as a task, not an argv.
+        XCTAssertEqual(StudioActivity.taskName(for: ["world", "status", "--json"]), "Running world")
+    }
+
+    func testARawJobRowCarriesThePlainName() throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let configuration = MereRunProcessConfiguration(
+            executableURL: URL(fileURLWithPath: "/usr/local/bin/mere.run"),
+            arguments: ["model", "list", "--json"],
+            currentDirectoryURL: URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true),
+            environment: [:],
+            keepsStandardInputOpen: false
+        )
+        let job = store.submit(.utility(arguments: configuration.arguments, configuration: configuration, displayCommand: "mere.run model list --json"))
+
+        XCTAssertEqual(StudioActivity.title(for: try XCTUnwrap(store.job(job))), "System · Checking models")
+    }
+
     func testQueuedRowsSayWhereTheyAreInTheQueue() throws {
         let runner = RecordingProcessRunner()
         let store = JobStore(processRunner: runner)

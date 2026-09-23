@@ -34,7 +34,7 @@ struct Studio3DCreationView: View {
     @StudioStoredValue("3DCreation.sourcePath") private var sourcePath = ""
     @StudioStoredValue("3DCreation.orderedViews") private var orderedViews: [String] = []
     @StudioStoredValue("3DCreation.outputDirectory") private var outputDirectory = StudioSpecialistFiles
-        .timestampedDirectory(component: "3D")
+        .outputDirectory(domain: .threeD, name: "3d-asset")
         .path
     @StudioStoredValue("3DCreation.model") private var model = ""
     @StudioStoredValue("3DCreation.resolution") private var resolution = 256
@@ -77,7 +77,7 @@ struct Studio3DCreationView: View {
         .studioTaskCommand(engine.templateID, draft: commandDraft)
         .onChange(of: engine) { _, _ in
             model = ""
-            outputDirectory = StudioSpecialistFiles.timestampedDirectory(component: "3D").path
+            outputDirectory = StudioSpecialistFiles.outputDirectory(domain: .threeD, name: "3d-asset").path
             errorMessage = nil
         }
     }
@@ -163,9 +163,7 @@ struct Studio3DCreationView: View {
                     Label(preflight ? "Run preflight" : "Create 3D asset", systemImage: "cube.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
-                .controlSize(.large)
+                .buttonStyle(.merePrimary)
             }
             .padding(18)
         }
@@ -229,7 +227,7 @@ struct Studio3DCreationView: View {
             } label: {
                 Label("Add views…", systemImage: "photo.stack")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
             .disabled(orderedViews.count >= 6)
         }
     }

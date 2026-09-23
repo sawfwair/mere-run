@@ -469,9 +469,9 @@ struct StudioSFXLabView: View {
             }
             HStack {
                 Button("Quick Look") { QuickLookCoordinator.shared.preview(url) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
                 Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
             }
             Spacer()
         }
@@ -501,8 +501,7 @@ struct StudioSFXLabView: View {
             Label(title, systemImage: task.symbol)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(MereRunTheme.accent)
+        .buttonStyle(.merePrimary)
     }
 
     private func submit() {
@@ -590,15 +589,7 @@ struct StudioSFXLabView: View {
     }
 
     private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Music/MereRun/Sound FX", isDirectory: true)
-            .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).\(pathExtension)",
-                isDirectory: false
-            )
-            .path
+        StudioSpecialistFiles.outputFile(domain: .sound, name: prefix, fileExtension: pathExtension).path
     }
 }
 

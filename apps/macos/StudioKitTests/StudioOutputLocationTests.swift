@@ -295,6 +295,69 @@ final class StudioOutputLocationTests: XCTestCase {
         XCTAssertEqual(draft.visionJSONOutputPath, "/Users/example/reports/detections.json")
     }
 
+    // MARK: - Specialist pages
+
+    /// Every specialist page files its proposal the way the prompt tasks do: the domain's folder
+    /// under the media root the extension calls for, named after the page and the clock.
+    func testSpecialistDestinationsFollowTheDomainAndTheMedia() {
+        let now = Date(timeIntervalSince1970: 1_788_527_400)
+        let stamp = DateFormatter.mereRunTimestamp.string(from: now)
+
+        XCTAssertEqual(
+            StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision", now: now, configuredRoot: "", home: home).path,
+            "/Users/example/Documents/mere.run/Vision/vision-\(stamp)"
+        )
+        XCTAssertEqual(
+            StudioOutputLocation.specialistFile(domain: .sound, name: "sfx", fileExtension: "wav", now: now, configuredRoot: "", home: home).path,
+            "/Users/example/Music/mere.run/Sound/sfx-\(stamp).wav"
+        )
+        XCTAssertEqual(
+            StudioOutputLocation.specialistFile(domain: .voice, name: "voice-reference", fileExtension: "wav", now: now, configuredRoot: "", home: home).path,
+            "/Users/example/Music/mere.run/Voice/voice-reference-\(stamp).wav"
+        )
+        XCTAssertEqual(
+            StudioOutputLocation.specialistFile(domain: .video, name: "scail", fileExtension: "mp4", now: now, configuredRoot: "", home: home).path,
+            "/Users/example/Pictures/mere.run/Video/scail-\(stamp).mp4"
+        )
+        // An adapter is a document, filed with the domain it trains for.
+        XCTAssertEqual(
+            StudioOutputLocation.specialistFile(domain: .image, name: "image-adapter", fileExtension: "safetensors", now: now, configuredRoot: "", home: home).path,
+            "/Users/example/Documents/mere.run/Image/image-adapter-\(stamp).safetensors"
+        )
+        XCTAssertEqual(
+            StudioOutputLocation.specialistDirectory(domain: .threeD, name: "3d-asset", now: now, configuredRoot: "", home: home).path,
+            "/Users/example/Documents/mere.run/3D/3d-asset-\(stamp)"
+        )
+    }
+
+    func testSpecialistDestinationsHonorTheConfiguredRoot() {
+        let now = Date(timeIntervalSince1970: 1_788_527_400)
+        let stamp = DateFormatter.mereRunTimestamp.string(from: now)
+        let root = "/Volumes/Work/mere.run"
+
+        XCTAssertEqual(
+            StudioOutputLocation.specialistFile(domain: .music, name: "realtime", fileExtension: "wav", now: now, configuredRoot: root, home: home).path,
+            "/Volumes/Work/mere.run/Music/realtime-\(stamp).wav"
+        )
+        XCTAssertEqual(
+            StudioOutputLocation.specialistDirectory(domain: .text, name: "decisions", now: now, configuredRoot: root, home: home).path,
+            "/Volumes/Work/mere.run/Text/decisions-\(stamp)"
+        )
+    }
+
+    /// Two runs proposed within the same second must not overwrite each other.
+    func testSpecialistFileStepsAsideFromAnExistingFile() throws {
+        let home = try temporaryDirectory()
+        let now = Date(timeIntervalSince1970: 1_788_527_400)
+        let first = StudioOutputLocation.specialistFile(domain: .sound, name: "sfx", fileExtension: "wav", now: now, configuredRoot: "", home: home)
+        try FileManager.default.createDirectory(at: first.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: first)
+
+        let second = StudioOutputLocation.specialistFile(domain: .sound, name: "sfx", fileExtension: "wav", now: now, configuredRoot: "", home: home)
+
+        XCTAssertEqual(second.lastPathComponent, first.deletingPathExtension().lastPathComponent + "-2.wav")
+    }
+
     private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("StudioOutputLocationTests-\(UUID().uuidString)", isDirectory: true)

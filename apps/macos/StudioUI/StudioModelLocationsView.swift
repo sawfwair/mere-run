@@ -231,8 +231,7 @@ struct StudioModelLocationsView: View {
                 .foregroundStyle(MereRunTheme.textMuted)
 
             HStack(spacing: 8) {
-                TextField("Canonical model id", text: $bindModelID)
-                    .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                StudioModelIDPicker(models: controller.modelStore, selection: $bindModelID)
                 TextField("Model directory", text: $bindPath)
                     .mereField(cornerRadius: MereRunTheme.Radius.sm)
                 Button("Choose…") {
@@ -240,7 +239,7 @@ struct StudioModelLocationsView: View {
                         bindPath = url.path
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.mereSecondary)
                 Button("Bind") {
                     Task { await bind() }
                 }
@@ -396,6 +395,31 @@ struct StudioModelLocationsView: View {
                 ? "The location command failed."
                 : result.outputText
             return false
+        }
+    }
+}
+
+/// The model a binding points at, chosen from the inventory rather than typed: a canonical id is
+/// exactly what `model list` knows, so nothing else can be bound.
+private struct StudioModelIDPicker: View {
+    @ObservedObject var models: StudioModelStore
+    @Binding var selection: String
+
+    var body: some View {
+        Picker("Model", selection: $selection) {
+            Text("Choose a model…").tag("")
+            ForEach(models.rows) { row in
+                Text(row.title ?? StudioModelNaming.displayName(row.id)).tag(row.id)
+            }
+        }
+        .labelsHidden()
+        .frame(minWidth: 200)
+        .help(selection.isEmpty ? "The model this directory holds" : selection)
+        .accessibilityLabel("Model to bind")
+        // The inventory is read once for the picker, not per keystroke.
+        .task {
+            guard !models.hasInventory, !models.isRefreshing else { return }
+            await models.refresh()
         }
     }
 }

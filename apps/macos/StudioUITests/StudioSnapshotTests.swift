@@ -788,6 +788,75 @@ final class StudioSnapshotTests: XCTestCase {
             name: "completion-compact-command", settle: 2, afterAppear: { navigation.toggleCommandColumn(for: .imageGenerate) })
     }
 
+    /// Audio ▸ Who Spoke with a finished diarization: the recording, one lane per speaker over
+    /// its length, and every turn as the Analyze panel's rows with Save timeline…, light and dark.
+    func testWhoSpokeTimelineSnapshots() throws {
+        try fixture.seedDiarizationRun()
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fixture.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "who-spoke-\(appearance.rawValue)",
+                settle: 2.0,
+                afterAppear: { navigation.open(task: .audioWhoSpoke) }
+            )
+        }
+    }
+
+    /// Music ▸ Analyze with a finished ACE-Step analysis: tempo, key, meter, language, and how
+    /// much was analyzed as tiles, the caption and lyrics as prose, and the model's reply folded
+    /// away, light and dark.
+    func testMusicAnalysisSnapshots() throws {
+        try fixture.seedMusicAnalysisRun()
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fixture.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "music-analyze-\(appearance.rawValue)",
+                settle: 2.0,
+                afterAppear: { navigation.open(task: .musicAnalyze) }
+            )
+        }
+    }
+
+    /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
+    /// with its own state, the outputs with Reveal, and the raw report folded away. `executor
+    /// list`, `run list`, and `run inspect` are answered by a scripted runner; no CLI runs.
+    func testRunsInspectionSnapshots() throws {
+        let runs = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: RunsScript.responses)
+        )
+        defer { runs.tearDown() }
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioOperationsView(initialSelection: RunsScript.runPath)
+                .environmentObject(runs.controller)
+                .environmentObject(runs.library)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try runs.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "runs-inspect-\(appearance.rawValue)",
+                settle: 2.5
+            )
+        }
+    }
+
     private static func snapshotDirectory() -> URL? {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_STUDIO_SNAPSHOT_DIR"],
               !path.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -2021,6 +2090,139 @@ private final class SnapshotFixture {
         try data.write(to: url, options: .atomic)
     }
 
+    // MARK: Specialist results
+
+    /// A finished Who Spoke run: a stand-up recording and the timeline `speech diarize --format
+    /// json` wrote for it, made the page's current run the way a real run leaves it.
+    func seedDiarizationRun() throws {
+        guard let template = CommandCatalog.template(id: .speechDiarize) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let recording = root.appendingPathComponent("standup.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: recording, seconds: 20)
+        let timeline = root.appendingPathComponent("standup-speakers.json", isDirectory: false)
+        try Self.diarizationDocument(source: recording).write(to: timeline, atomically: true, encoding: .utf8)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = recording.path
+        draft.outputPath = timeline.path
+        draft.speechDiarizationFormat = "json"
+        let startedAt = Self.mockupTime(hour: 14, minute: 2)
+        let row = StudioLibraryItem(
+            id: UUID(),
+            mode: .listen,
+            prompt: "",
+            inputURL: recording,
+            outputURL: timeline,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(6.1),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run speech diarize standup.wav --format json --output standup-speakers.json",
+            outputText: nil,
+            templateID: .speechDiarize,
+            commandDraft: draft,
+            artifactURLs: [timeline]
+        )
+        library.upsert(row)
+        let scope = StudioTask.audioWhoSpoke.rawValue
+        controller.taskSessions.set(Optional(row.id), for: scope + ".requestID")
+        controller.taskSessions.set(draft, for: scope + ".Voice.diarizationDraft")
+    }
+
+    /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
+    /// as the row's output text the way the Library keeps stdout.
+    func seedMusicAnalysisRun() throws {
+        guard let template = CommandCatalog.template(id: .musicAnalyze) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let song = root.appendingPathComponent("harbor-lights.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: song, seconds: 20)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = song.path
+        draft.useDuration = true
+        draft.durationSeconds = 30
+        let startedAt = Self.mockupTime(hour: 11, minute: 48)
+        let row = StudioLibraryItem(
+            id: UUID(),
+            mode: .music,
+            prompt: "",
+            inputURL: song,
+            outputURL: nil,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(14),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run music analyze harbor-lights.wav --duration 30",
+            outputText: Self.musicAnalysisOutput(audio: song),
+            templateID: .musicAnalyze,
+            commandDraft: draft
+        )
+        library.upsert(row)
+        let scope = StudioTask.musicAnalyze.rawValue
+        controller.taskSessions.set(Optional(row.id), for: scope + ".requestID")
+        controller.taskSessions.set(draft, for: scope + ".MusicTools.analyzeDraft")
+    }
+
+    /// `SpeechDiarizationPayload` for a three-minute stand-up: three voices, sixteen turns.
+    private static func diarizationDocument(source: URL) -> String {
+        let turns: [(speaker: Int, start: Double, end: Double)] = [
+            (0, 0.4, 9.8), (1, 10.3, 24.1), (0, 24.6, 27.9), (1, 28.2, 41.0), (2, 41.7, 58.3),
+            (0, 58.9, 63.2), (2, 63.4, 79.8), (1, 80.5, 96.2), (0, 96.4, 99.1), (1, 99.3, 112.7),
+            (2, 113.5, 130.0), (0, 130.6, 148.9), (1, 149.2, 152.4), (0, 152.6, 171.3),
+            (2, 171.9, 183.0), (0, 183.4, 190.8),
+        ]
+        let segments = turns.map { turn in
+            String(
+                format: "    { \"speaker\" : \"speaker_%d\", \"speaker_index\" : %d, \"start_seconds\" : %.1f, \"end_seconds\" : %.1f, \"duration_seconds\" : %.1f }",
+                turn.speaker, turn.speaker, turn.start, turn.end, turn.end - turn.start
+            )
+        }.joined(separator: ",\n")
+        return """
+        {
+          "schema_version" : 1,
+          "model" : "speech-diarization-sortformer",
+          "source" : "\(source.path)",
+          "runtime" : "mlx",
+          "device" : "gpu",
+          "duration_seconds" : 192.4,
+          "speaker_count" : 3,
+          "processing_seconds" : 6.1,
+          "segments" : [
+        \(segments)
+          ]
+        }
+        """
+    }
+
+    /// `MusicAnalyzeOutput` for the harbor-lights demo, with the model's reply kept.
+    private static func musicAnalysisOutput(audio: URL) -> String {
+        """
+        {
+          "analyzedDurationSeconds" : 30,
+          "audio" : "\(audio.path)",
+          "checkpointsRoot" : "/Users/example/Library/Application Support/MereRun/models/music-acestep",
+          "inputDurationSeconds" : 214.6,
+          "languageModelRoot" : "/Users/example/Library/Application Support/MereRun/models/music-acestep/lm",
+          "languageModelSource" : "bundled",
+          "lmSubdirectory" : "acestep-5Hz-lm-1.7B",
+          "metadata" : {
+            "bpm" : 96,
+            "caption" : "Warm, unhurried indie folk: fingerpicked nylon guitar over a soft brushed kit, an upright bass walking underneath, and a close, breathy lead vocal with light harmonies on the chorus. Wide, roomy reverb; a late-evening, harbourside mood.",
+            "durationSeconds" : 214.6,
+            "keyscale" : "D major",
+            "language" : "en",
+            "lyrics" : "[verse]\\nHarbour lights are blinking slow\\nOn the water where the old boats go\\nI left my coat on the ferry rail\\nAnd watched the evening turn to pale\\n\\n[chorus]\\nStay a while, the tide is low\\nThere's nowhere else we have to go",
+            "timesignature" : "4/4"
+          },
+          "model" : "music-acestep",
+          "rawLMOutput" : "<bpm>96</bpm><keyscale>D major</keyscale><timesignature>4/4</timesignature><language>en</language><caption>Warm, unhurried indie folk…</caption>",
+          "turboSubdirectory" : "acestep-v15-turbo"
+        }
+        """
+    }
+
     /// A valid 16 kHz mono 16-bit PCM WAV of near-silence with a quiet tone so a waveform draws.
     private static func writeSilentWAV(to url: URL, seconds: Int) throws {
         let sampleRate = 16_000
@@ -2217,6 +2419,74 @@ private enum ConverseScript {
                 stdout: ModelsInventoryScript.capabilities,
                 exitCode: 0
             ),
+        ]
+    }
+}
+
+/// What the Runs render's CLI reads answer: no Relay executors, one durable graph run under
+/// `~/runs`, and that run's manifest as `run inspect --json` prints it — failed at its render
+/// node on the second attempt, with the poster it managed to write.
+private enum RunsScript {
+    static let runPath = "/Users/example/runs/poster-2026-09-03"
+
+    static let list = """
+    {
+      "summary" : "1 durable run under /Users/example/runs",
+      "result" : {
+        "root" : "/Users/example/runs",
+        "scanned_directory_count" : 3,
+        "entries" : [
+          {
+            "id" : "poster-2026-09-03",
+            "kind" : "graph_run",
+            "path" : "\(runPath)",
+            "relative_path" : "poster-2026-09-03",
+            "status" : "failed",
+            "state" : "failed",
+            "summary" : "Graph poster failed at render",
+            "created_at" : "2026-09-03T12:00:00Z",
+            "updated_at" : "2026-09-03T12:00:41Z",
+            "event_count" : 12,
+            "artifact_count" : 1,
+            "diagnostic_count" : 1,
+            "blocker_count" : 1
+          }
+        ]
+      }
+    }
+
+    """
+
+    static let inspection = """
+    {
+      "attempt" : 1,
+      "contract_version" : "mere.run/graph-run.v1",
+      "created_at" : "2026-09-03T12:00:00Z",
+      "error" : "render: image generate exited with status 1 (model image-zimage-nano is not installed)",
+      "executor" : { "kind" : "local", "profile" : null, "job_reference" : null },
+      "graph_fingerprint" : "3f9c21",
+      "graph_name" : "poster",
+      "job_id" : "poster-2026-09-03",
+      "nodes" : [
+        { "artifacts" : [], "attempt" : 1, "completed_at" : "2026-09-03T12:00:01Z", "fingerprint" : "n0", "id" : "fetch-references", "kind" : "files.copy", "max_attempts" : 1, "models" : [], "outputs" : [], "started_at" : "2026-09-03T12:00:00Z", "state" : "finished" },
+        { "artifacts" : [], "attempt" : 1, "completed_at" : "2026-09-03T12:00:20Z", "fingerprint" : "n1", "id" : "write-tagline", "kind" : "text.chat", "max_attempts" : 1, "models" : [], "outputs" : [], "started_at" : "2026-09-03T12:00:02Z", "state" : "finished" },
+        { "artifacts" : [ { "content_type" : "image/png", "kind" : "image", "name" : "poster-draft", "path" : "\(runPath)/poster-draft.png", "sha256" : "cd", "size_bytes" : 1843200 } ], "attempt" : 2, "error" : "image generate exited with status 1", "fingerprint" : "n2", "id" : "render", "kind" : "image.generate", "max_attempts" : 3, "models" : [], "outputs" : [], "started_at" : "2026-09-03T12:00:20Z", "state" : "failed" },
+        { "artifacts" : [], "attempt" : 0, "fingerprint" : "n3", "id" : "publish", "kind" : "files.export", "max_attempts" : 1, "models" : [], "outputs" : [], "state" : "planned" }
+      ],
+      "outputs" : [
+        { "content_type" : "image/png", "kind" : "image", "name" : "poster-draft", "path" : "\(runPath)/poster-draft.png", "sha256" : "cd", "size_bytes" : 1843200 }
+      ],
+      "state" : "failed",
+      "updated_at" : "2026-09-03T12:00:41Z"
+    }
+
+    """
+
+    static var responses: [SnapshotProcessRunner.Response] {
+        [
+            .init(matches: { $0 == ["executor", "list", "--json"] }, stdout: "{\"profiles\": []}\n", exitCode: 0),
+            .init(matches: { $0.starts(with: ["run", "list"]) }, stdout: list, exitCode: 0),
+            .init(matches: { $0.starts(with: ["run", "inspect"]) }, stdout: inspection, exitCode: 0),
         ]
     }
 }

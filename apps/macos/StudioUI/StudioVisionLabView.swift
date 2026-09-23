@@ -1,3 +1,4 @@
+import AVFoundation
 import AppKit
 import StudioKit
 import SwiftUI
@@ -12,6 +13,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
     case faceBatch = "Face batch"
     case pose = "Pose landmarks"
     case flow = "Optical flow"
+    case depth = "Image depth"
     case depthVideo = "Video depth"
     case geometry = "Metric geometry"
     case geometryMultiview = "Multi-view geometry"
@@ -27,6 +29,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
         case .faceBatch: .visionFaceBatch
         case .pose: .visionPose
         case .flow: .visionFlow
+        case .depth: .visionDepth
         case .depthVideo: .visionDepthVideo
         case .geometry: .visionGeometry
         case .geometryMultiview: .visionGeometryMultiview
@@ -42,6 +45,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
         case .faceBatch: "person.3.sequence"
         case .pose: "figure.stand"
         case .flow: "arrow.triangle.2.circlepath"
+        case .depth: "square.3.layers.3d.down.right"
         case .depthVideo: "square.3.layers.3d"
         case .geometry: "view.3d"
         case .geometryMultiview: "camera.metering.multispot"
@@ -57,6 +61,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
         case .faceBatch: "Warm-session JSONL analysis of many images"
         case .pose: "Native body, hand, and face landmarks"
         case .flow: "Dense per-pixel motion between equal-size frames"
+        case .depth: "Relative depth for one still image, with a preview to review"
         case .depthVideo: "Temporally consistent depth frames and review video"
         case .geometry: "Metric depth, normals, cameras, and point cloud"
         case .geometryMultiview: "Joint cameras, confidence, and point cloud"
@@ -65,7 +70,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
     }
 
     var needsPrimaryImage: Bool {
-        [.faceDetect, .faceEmbed, .faceCompare, .faceBatch, .pose, .flow, .geometry, .geometryMultiview]
+        [.faceDetect, .faceEmbed, .faceCompare, .faceBatch, .pose, .flow, .depth, .geometry, .geometryMultiview]
             .contains(self)
     }
 
@@ -75,7 +80,7 @@ enum StudioVisionTask: String, CaseIterable, Identifiable {
         case .faceDetect, .faceEmbed, .faceCompare, .faceBatch: .visionFaces
         case .pose: .visionPose
         case .flow: .visionFlow
-        case .depthVideo: .visionDepth
+        case .depth, .depthVideo: .visionDepth
         case .geometry, .geometryMultiview: .visionGeometry
         case .liveTrack: .visionLive
         }
@@ -89,7 +94,7 @@ extension StudioTask {
         case .visionFaces: .faceDetect
         case .visionPose: .pose
         case .visionFlow: .flow
-        case .visionDepth: .depthVideo
+        case .visionDepth: .depth
         case .visionGeometry: .geometry
         case .visionLive: .liveTrack
         default: nil
@@ -108,7 +113,7 @@ struct StudioVisionLabView: View {
     @StudioStoredValue("VisionLab.additionalInputs") private var additionalInputs: [String] = []
     @StudioStoredValue("VisionLab.inputListPath") private var inputListPath = ""
     @State private var outputDirectory = StudioSpecialistFiles
-        .timestampedDirectory(component: "Vision")
+        .outputDirectory(domain: .vision, name: "vision")
         .path
     @StudioStoredValue("VisionLab.model") private var model = ""
     @StudioStoredValue("VisionLab.faceThreshold") private var faceThreshold = 0.65
@@ -127,6 +132,9 @@ struct StudioVisionLabView: View {
     @StudioStoredValue("VisionLab.flowAccuracy") private var flowAccuracy = "high"
     @StudioStoredValue("VisionLab.inputSize") private var inputSize = 518
     @StudioStoredValue("VisionLab.maxFrames") private var maxFrames = 240
+    @StudioStoredValue("VisionLab.depthMaxEdge") private var depthMaxEdge = 1_024
+    @StudioStoredValue("VisionLab.depthNative") private var depthNative = false
+    @StudioStoredValue("VisionLab.depthCheckpoint") private var depthCheckpoint = ""
     @StudioStoredValue("VisionLab.resolutionLevel") private var resolutionLevel = 9
     @StudioStoredValue("VisionLab.tokenCount") private var tokenCount = 0
     @StudioStoredValue("VisionLab.maxPoints") private var maxPoints = 0
@@ -146,6 +154,8 @@ struct StudioVisionLabView: View {
     @StudioStoredValue("VisionLab.dryRun") private var dryRun = false
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var errorMessage: String?
+    /// The cameras on this Mac, in the order the CLI numbers them.
+    @State private var cameras: [StudioCamera] = []
 
     private var currentItem: StudioLibraryItem? {
         guard let requestID else { return nil }
@@ -158,11 +168,14 @@ struct StudioVisionLabView: View {
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: task) { _, newTask in
-            outputDirectory = StudioSpecialistFiles.timestampedDirectory(component: "Vision").path
+            outputDirectory = StudioSpecialistFiles.outputDirectory(domain: .vision, name: "vision").path
             errorMessage = nil
         }
         .onAppear {
             if model.isBlank { model = CommandCatalog.template(id: task.templateID)?.defaultDraft().model ?? "" }
+        }
+        .task(id: task) {
+            if task == .liveTrack { cameras = StudioCamera.connected() }
         }
     }
 
@@ -191,7 +204,7 @@ struct StudioVisionLabView: View {
 
                 taskControls
 
-                if task == .depthVideo || task == .geometry || task == .geometryMultiview {
+                if task == .depth || task == .depthVideo || task == .geometry || task == .geometryMultiview {
                     Toggle("Preflight only", isOn: $dryRun)
                 }
 
@@ -207,9 +220,7 @@ struct StudioVisionLabView: View {
                     Label(dryRun ? "Run preflight" : "Run \(task.rawValue)", systemImage: task.icon)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
-                .controlSize(.large)
+                .buttonStyle(.merePrimary)
             }
             .padding(16)
         }
@@ -304,7 +315,7 @@ struct StudioVisionLabView: View {
             } label: {
                 Label("Add images…", systemImage: "photo.stack")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
         }
     }
 
@@ -327,6 +338,19 @@ struct StudioVisionLabView: View {
                 Text("Medium").tag("medium")
                 Text("High").tag("high")
                 Text("Very high").tag("very-high")
+            }
+        case .depth:
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Run at the source resolution", isOn: $depthNative)
+                // `--max-edge` is rounded to a multiple of 16 and cannot go with `--native`.
+                Stepper("Longest edge \(depthMaxEdge)", value: $depthMaxEdge, in: 256...4_096, step: 16)
+                    .disabled(depthNative)
+                Picker("Checkpoint", selection: $depthCheckpoint) {
+                    Text("Default").tag("")
+                    ForEach(Self.depthCheckpoints, id: \.self) { checkpoint in
+                        Text(checkpoint).tag(checkpoint)
+                    }
+                }
             }
         case .depthVideo:
             VStack(alignment: .leading, spacing: 10) {
@@ -359,7 +383,16 @@ struct StudioVisionLabView: View {
             }
         case .liveTrack:
             VStack(alignment: .leading, spacing: 10) {
-                Stepper("Camera \(camera)", value: $camera, in: 0...16)
+                if cameras.isEmpty {
+                    Stepper("Camera \(camera)", value: $camera, in: 0...16)
+                } else {
+                    // The CLI numbers cameras the way AVFoundation lists them; this is that list.
+                    Picker("Camera", selection: $camera) {
+                        ForEach(cameras) { device in
+                            Text(device.name).tag(device.index)
+                        }
+                    }
+                }
                 valueSlider("Duration", value: $duration, range: 1...3_600, suffix: "s")
                 Stepper("Initial frame \(initFrame)", value: $initFrame, in: 0...10_000)
                 Stepper("Seed search \(seedSearchFrames)", value: $seedSearchFrames, in: 1...240)
@@ -435,6 +468,7 @@ struct StudioVisionLabView: View {
         case .faceDetect: "Boxes and five-point landmarks render over the source."
         case .pose: "Body, hand, and face points render in native image coordinates."
         case .flow: "Direction-colored vectors visualize the Middlebury flow field."
+        case .depth: "Review the depth preview; the depth map and manifest are beside it."
         case .depthVideo: "Review the depth video and per-frame EXR/PNG artifacts."
         case .geometry, .geometryMultiview: "Orbit the GLB/PLY point cloud and inspect depth/normal maps."
         case .liveTrack: "The annotated camera recording appears as soon as it is written."
@@ -445,6 +479,7 @@ struct StudioVisionLabView: View {
     private var resultPreferredKinds: [StudioOutputFileKind] {
         switch task {
         case .geometry, .geometryMultiview: [.model3D, .image, .text]
+        case .depth: [.image, .text]
         case .depthVideo, .liveTrack: [.video, .image, .text]
         default: [.image, .text, .video, .model3D]
         }
@@ -539,6 +574,9 @@ struct StudioVisionLabView: View {
         draft.visionFlowAccuracy = flowAccuracy
         draft.visionInputSize = inputSize
         draft.visionMaxFrames = maxFrames
+        draft.visionMaxEdge = depthNative ? nil : depthMaxEdge
+        draft.visionNative = depthNative
+        draft.visionCheckpoint = depthCheckpoint.isEmpty ? nil : depthCheckpoint
         draft.visionResolutionLevel = resolutionLevel
         draft.visionTokenCount = tokenCount
         draft.visionMaxPoints = maxPoints
@@ -566,7 +604,7 @@ struct StudioVisionLabView: View {
         case .flow:
             draft.outputPath = root.appendingPathComponent("motion.flo").path
             draft.visionJSONOutputPath = root.appendingPathComponent("motion.json").path
-        case .depthVideo, .geometry, .geometryMultiview:
+        case .depth, .depthVideo, .geometry, .geometryMultiview:
             draft.outputPath = root.path
         case .liveTrack:
             draft.outputPath = root.appendingPathComponent("live-tracking.mp4").path
@@ -575,6 +613,12 @@ struct StudioVisionLabView: View {
 
         return draft
     }
+
+    /// `vision depth --checkpoint` names, as `MarigoldV2DepthCheckpoint` spells them.
+    private static let depthCheckpoints = [
+        "log-stage2", "log-stage1", "log-layered", "uniform-base", "uniform-layered",
+        "disparity-base", "disparity-layered",
+    ]
 
     private func run() {
         errorMessage = nil
@@ -630,6 +674,27 @@ struct StudioVisionLabView: View {
             return false
         }
         return true
+    }
+}
+
+/// A camera `vision track-live --camera <index>` can open. The CLI indexes
+/// `AVCaptureDevice.DiscoverySession` over the built-in, Continuity, and external cameras, so
+/// Studio lists the same session in the same order and shows names for its numbers.
+struct StudioCamera: Identifiable, Equatable {
+    let index: Int
+    let name: String
+
+    var id: Int { index }
+
+    static func connected() -> [StudioCamera] {
+        AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .continuityCamera, .external],
+            mediaType: .video,
+            position: .unspecified
+        )
+        .devices
+        .enumerated()
+        .map { StudioCamera(index: $0.offset, name: $0.element.localizedName) }
     }
 }
 

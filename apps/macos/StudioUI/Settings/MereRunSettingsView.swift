@@ -81,20 +81,24 @@ package struct MereRunSettingsView: View {
                 .foregroundStyle(MereRunTheme.textMuted)
         }
         EditorSection("Command line") {
-            PathField(path: $controller.cliPath, placeholder: "Auto-detect executable", mode: .openFile([.unixExecutable, .item]))
+            PathField(label: "command line", path: $controller.cliPath, placeholder: "Auto-detect executable", mode: .openFile([.unixExecutable, .item]))
             Text("The app uses a bundled `mere.run` first, then nearby SwiftPM build products, common install locations, and the current package checkout.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
         EditorSection("Working directory") {
-            PathField(path: $controller.workingDirectory, placeholder: "Working directory", mode: .openDirectory)
+            PathField(label: "working directory", path: $controller.workingDirectory, placeholder: "Same as the app", mode: .openDirectory)
         }
         EditorSection("Models root") {
-            PathField(path: $controller.modelsRoot, placeholder: "Optional model links/local-files root", mode: .openDirectory)
+            PathField(label: "models root", path: $controller.modelsRoot, placeholder: "Default: the managed model store", mode: .openDirectory)
+            Text("A folder of model links or local model files to search before the managed store.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         EditorSection("Where generations are saved") {
-            PathField(path: $outputRoot, placeholder: outputRootPlaceholder, mode: .openDirectory)
+            PathField(label: "output folder", path: $outputRoot, placeholder: outputRootPlaceholder, mode: .openDirectory)
             Text("Leave this empty to file work by what it is: pictures and clips in `~/Pictures/mere.run`, audio in `~/Music/mere.run`, everything else in `~/Documents/mere.run`, each under a folder named for the domain. Set a folder to keep every domain together there instead. Runs already in the Library keep the paths they recorded.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
@@ -155,7 +159,7 @@ package struct MereRunSettingsView: View {
             hfEndpoint = await controller.loadHuggingFaceEndpoint()
         }
         EditorSection("Model payload storage") {
-            PathField(path: $controller.hubCache, placeholder: "Optional model payload storage", mode: .openDirectory)
+            PathField(label: "model payload storage", path: $controller.hubCache, placeholder: "Default: Application Support", mode: .openDirectory)
             Text("Downloads land here. Browsing, cleanup, and locations live in the Models domain.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
@@ -325,7 +329,7 @@ package struct MereRunSettingsView: View {
                     } label: {
                         Label(actionTitle, systemImage: "terminal")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.merePrimary)
                 }
 
                 Button {
@@ -333,7 +337,7 @@ package struct MereRunSettingsView: View {
                 } label: {
                     Label("Install Skill", systemImage: "sparkles")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.mereSecondary)
             }
             Text("Studio-managed CLI payloads keep every runtime asset in Application Support and activate the command with an atomic symlink. Skill install copies the bundled `use-mere-run` Codex skill to `~/.codex/skills`.")
                 .font(MereRunTheme.captionFont)
@@ -446,27 +450,50 @@ private enum PathFieldMode: Equatable {
     case saveFile
 }
 
+/// One path setting: the field (a typed or pasted path still works), Choose… for the panel,
+/// Reveal for what is there now, and Reset back to the default the placeholder describes — the
+/// same shape as a specialist page's path row.
 private struct PathField: View {
+    /// What the path is, in lower case, for the buttons' accessibility labels ("Choose models root").
+    let label: String
     @Binding var path: String
     let placeholder: String
     let mode: PathFieldMode
+
+    private var trimmed: String { path.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// The path as a file URL, when something is at it.
+    private var existingURL: URL? {
+        guard !trimmed.isEmpty else { return nil }
+        let url = URL(fileURLWithPath: NSString(string: trimmed).expandingTildeInPath)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
 
     var body: some View {
         HStack(spacing: 8) {
             TextField(placeholder, text: $path)
                 .textFieldStyle(.plain)
                 .font(MereRunTheme.bodyFont)
-            Button {
-                choosePath()
-            } label: {
-                Image(systemName: mode == .saveFile ? "square.and.arrow.down" : "folder")
+                .padding(10)
+                .merePanel()
+                .accessibilityLabel(label.capitalized)
+            Button("Choose…") { choosePath() }
+                .buttonStyle(.mereSecondary)
+                .help(mode == .openDirectory ? "Choose a folder" : "Choose a file")
+                .accessibilityLabel("Choose \(label)")
+            Button("Reveal") {
+                if let existingURL { NSWorkspace.shared.activateFileViewerSelecting([existingURL]) }
             }
-            .buttonStyle(.borderless)
-            .help(mode == .saveFile ? "Choose output path" : "Choose path")
-            .accessibilityLabel(mode == .saveFile ? "Choose output path" : "Choose path")
+            .buttonStyle(.mereSecondary)
+            .disabled(existingURL == nil)
+            .help("Show in Finder")
+            .accessibilityLabel("Reveal \(label) in Finder")
+            Button("Reset") { path = "" }
+                .buttonStyle(.mereSecondary)
+                .disabled(trimmed.isEmpty)
+                .help("Use the default")
+                .accessibilityLabel("Reset \(label) to the default")
         }
-        .padding(10)
-        .merePanel()
     }
 
     private func choosePath() {

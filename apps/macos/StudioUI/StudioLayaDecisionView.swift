@@ -38,12 +38,12 @@ struct StudioLayaDecisionView: View {
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle("Inspect token budgets", isOn: $preflight)
                     Button(preflight ? "Inspect request" : "Evaluate questions") {
-                        output = StudioSpecialistFiles.timestampedDirectory(component: "decisions")
+                        output = StudioSpecialistFiles.outputDirectory(domain: .text, name: "decisions")
                             .appending(path: preflight ? "preflight.json" : "decisions.json").path
                         requestID = StudioSpecialistRunner.submit(
                             templateID: .textDecide, mode: .chat, draft: draft, controller: controller, library: library)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.merePrimary)
                     .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 .padding(18)

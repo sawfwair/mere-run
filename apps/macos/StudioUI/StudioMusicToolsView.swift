@@ -503,8 +503,8 @@ struct StudioMusicToolsView: View {
                 .frame(height: 180)
                 .merePanel()
         }
-        if let object = analysisJSONObject {
-            StudioJSONSummaryView(value: object)
+        if let analysis {
+            StudioMusicAnalysisView(analysis: analysis)
         } else {
             StudioSpecialistResultView(requestID: requestID, preferredKinds: [.text, .audio])
         }
@@ -529,9 +529,9 @@ struct StudioMusicToolsView: View {
                 .merePanel()
             HStack {
                 Button("Quick Look") { QuickLookCoordinator.shared.preview(midiURL) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
                 Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([midiURL]) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
             }
         } else {
             StudioSpecialistResultView(requestID: requestID, preferredKinds: [.text, .audio])
@@ -542,10 +542,9 @@ struct StudioMusicToolsView: View {
         StudioMusicServerStatus(server: controller.musicServer, host: serveDraft.host, port: serveDraft.port)
     }
 
-    private var analysisJSONObject: Any? {
-        guard let text = item?.outputText,
-              let data = text.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data)
+    /// `music analyze` prints its result on stdout, which the Library row keeps as the run's text.
+    private var analysis: StudioMusicAnalysisDocument? {
+        item?.outputText.flatMap(StudioMusicAnalysisDocument.decode)
     }
 
     private var midiURL: URL? {
@@ -577,8 +576,7 @@ struct StudioMusicToolsView: View {
             Label(title, systemImage: tool.symbol)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(MereRunTheme.accent)
+        .buttonStyle(.merePrimary)
     }
 
     private func submit() {
@@ -637,15 +635,7 @@ struct StudioMusicToolsView: View {
     }
 
     private static func timestampedOutput(prefix: String, extension pathExtension: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Music/MereRun/Tools", isDirectory: true)
-            .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).\(pathExtension)",
-                isDirectory: false
-            )
-            .path
+        StudioSpecialistFiles.outputFile(domain: .music, name: prefix, fileExtension: pathExtension).path
     }
 
     nonisolated private static func replacingExtension(_ path: String, with pathExtension: String) -> String {
@@ -719,102 +709,125 @@ private struct StudioMIDIPianoRoll: View {
     }
 }
 
-private struct StudioJSONSummaryView: View {
-    let value: Any
+/// What ACE-Step understood about a piece: tempo, key, meter, and language as tiles, the caption
+/// as prose, the lyrics it heard, and — only when the run asked to keep them — the language
+/// model's whole reply and the audio codes, folded away.
+private struct StudioMusicAnalysisView: View {
+    let analysis: StudioMusicAnalysisDocument
+    @State private var showsRawReply = false
+    @State private var showsAudioCodes = false
 
-    private struct Row: Identifiable {
-        let id: String
-        let label: String
-        let value: String?
-        let depth: Int
-    }
-
-    private var flattenedRows: [Row] {
-        var rows: [Row] = []
-        Self.flatten(value, key: nil, depth: 0, path: "root", into: &rows)
-        return rows
+    private var tiles: [(label: String, value: String)] {
+        var tiles: [(String, String)] = []
+        if let tempo = analysis.tempoDescription { tiles.append(("Tempo", tempo)) }
+        if let key = analysis.metadata.keyscale, !key.isBlank { tiles.append(("Key", key)) }
+        if let meter = analysis.metadata.timesignature, !meter.isBlank { tiles.append(("Meter", meter)) }
+        if let language = analysis.languageDescription { tiles.append(("Language", language)) }
+        tiles.append(("Analyzed", analysis.analyzedDescription))
+        return tiles
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(flattenedRows) { row in
-                    if let value = row.value {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(row.label)
+            VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
+                HStack(spacing: 8) {
+                    ForEach(tiles, id: \.label) { tile in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(tile.label)
                                 .font(MereRunTheme.captionFont)
                                 .foregroundStyle(MereRunTheme.textMuted)
-                                .frame(width: max(90, 150 - CGFloat(row.depth * 12)), alignment: .leading)
-                            Text(value)
-                                .font(MereRunTheme.bodyFont)
-                                .textSelection(.enabled)
-                            Spacer()
+                            Text(tile.value)
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .lineLimit(1)
                         }
                         .padding(10)
-                        .padding(.leading, CGFloat(row.depth * 10))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .merePanel()
-                    } else {
-                        Text(row.label)
-                            .font(row.depth == 0 ? MereRunTheme.titleFont : MereRunTheme.sectionFont)
-                            .padding(.leading, CGFloat(row.depth * 10))
-                            .padding(.top, row.depth == 0 ? 0 : 6)
+                        .accessibilityElement(children: .combine)
                     }
+                }
+
+                if let caption = analysis.caption {
+                    section("What it sounds like") {
+                        Text(caption)
+                            .font(MereRunTheme.bodyFont)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let lyrics = analysis.lyrics {
+                    section("Lyrics") {
+                        Text(lyrics)
+                            .font(MereRunTheme.bodyFont)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if analysis.caption == nil, analysis.lyrics == nil, analysis.metadata.bpm == nil {
+                    Text("The model found no tempo, key, caption, or lyrics in this recording.")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+
+                Text("\(StudioModelNaming.displayName(analysis.model)) · \(URL(fileURLWithPath: analysis.audio).lastPathComponent)")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                if let reply = analysis.rawLMOutput, !reply.isBlank {
+                    disclosure("Model reply", isExpanded: $showsRawReply, text: reply)
+                }
+                if let codes = analysis.audioCodes, !codes.isBlank {
+                    disclosure("Audio codes", isExpanded: $showsAudioCodes, text: codes)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Music analysis")
     }
 
-    private static func flatten(
-        _ value: Any,
-        key: String?,
-        depth: Int,
-        path: String,
-        into rows: inout [Row]
-    ) {
-        if let dictionary = value as? [String: Any] {
-            if let key {
-                rows.append(Row(id: path, label: key.humanizedMusicKey, value: nil, depth: depth))
-            }
-            for childKey in dictionary.keys.sorted() {
-                if let child = dictionary[childKey] {
-                    flatten(
-                        child,
-                        key: childKey,
-                        depth: depth + 1,
-                        path: "\(path).\(childKey)",
-                        into: &rows
-                    )
-                }
-            }
-        } else if let array = value as? [Any] {
-            rows.append(
-                Row(
-                    id: path,
-                    label: key?.humanizedMusicKey ?? "Values",
-                    value: array.prefix(40).map { String(describing: $0) }.joined(separator: ", "),
-                    depth: depth
-                )
-            )
-        } else {
-            rows.append(
-                Row(
-                    id: path,
-                    label: key?.humanizedMusicKey ?? "Value",
-                    value: String(describing: value),
-                    depth: depth
-                )
-            )
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(MereRunTheme.sectionFont)
+            content()
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .merePanel()
     }
-}
 
-private extension String {
-    var humanizedMusicKey: String {
-        replacingOccurrences(of: "_", with: " ")
-            .split(separator: " ")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
+    private func disclosure(_ title: String, isExpanded: Binding<Bool>, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(MereRunTheme.Motion.quick) { isExpanded.wrappedValue.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text(title)
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(MereRunTheme.textMuted)
+            }
+            .buttonStyle(.plain)
+            if isExpanded.wrappedValue {
+                ScrollView {
+                    Text(text)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(MereRunTheme.textSecondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 220)
+                .padding(10)
+                .merePanel()
+            }
+        }
     }
 }
 
@@ -845,8 +858,7 @@ private struct StudioMusicServerControl: View {
                 Label("Start resident server", systemImage: StudioMusicTool.serve.symbol)
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(MereRunTheme.accent)
+            .buttonStyle(.merePrimary)
         }
     }
 }
