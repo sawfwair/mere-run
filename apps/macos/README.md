@@ -584,10 +584,11 @@ clouds, and preserves every JSON, EXR, mask, camera, and 3D sidecar as a durable
 Library artifact. Coordinates stay typed, ordered CLI arguments; machine-readable
 results and mask directories use explicit output pickers. Geometry's multi-view
 task edits optional calibrated cameras per view — image size, normalized focal
-length and centre, and a world-to-camera rotation and translation — with the
-CLI's own checks (positive size and focal length, a proper rotation), and writes
-`<output>.cameras.json` beside the run's output folder; camera files import and
-export.
+length and center, and a world-to-camera rotation and translation — with the
+CLI's own checks (positive size and focal length, a proper rotation, and an
+image size equal to the image's decoded size, which new cameras take from the
+image), and writes `<output>.cameras.json` beside the run's output folder;
+camera files import and export.
 
 **Audio** ▸ Transcribe is the Analyze task over `speech transcribe`. Who Spoke
 is native Sortformer diarization with JSON and RTTM timelines and

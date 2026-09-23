@@ -363,17 +363,18 @@ struct Studio3DCreationView: View {
     }
 
     private struct CameraDraftKey: Equatable {
+        let engine: Studio3DEngine
         let enabled: Bool
         let document: StudioInstantMeshCameraDocument
         let viewCount: Int
     }
 
     private var cameraDraftKey: CameraDraftKey {
-        CameraDraftKey(enabled: suppliesCameras, document: cameras, viewCount: orderedViews.count)
+        CameraDraftKey(engine: engine, enabled: suppliesCameras, document: cameras, viewCount: orderedViews.count)
     }
 
     /// Keeps the Command view's camera file current, a moment after editing stops; only a document
-    /// the CLI would accept is saved.
+    /// the CLI would accept is saved, under a name made from its content.
     private func saveDraftCameras() async {
         guard engine == .instantMesh, suppliesCameras, cameras.problems(viewCount: orderedViews.count).isEmpty else {
             draftCamerasPath = ""
@@ -381,26 +382,32 @@ struct Studio3DCreationView: View {
         }
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
-        let url = StudioCameraDocuments.draftURL(page: "3D Creation")
         do {
+            let content = try cameras.json()
+            let url = StudioCameraDocuments.draftURL(page: "3D Creation", content: content)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try cameras.json().write(to: url, options: .atomic)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try content.write(to: url, options: .atomic)
+            }
+            StudioCameraDocuments.pruneDrafts(page: "3D Creation", current: url)
             draftCamerasPath = url.path
         } catch {
             draftCamerasPath = ""
         }
     }
 
-    /// A camera file chosen before this page edited cameras is read into the editor, once.
+    /// A camera file chosen before this page edited cameras is read into the editor, once; the
+    /// path is forgotten only once its cameras are in, otherwise the page says why they are not.
     private func adoptLegacyCameras() {
-        guard !legacyCamerasPath.isBlank else { return }
+        guard !legacyCamerasPath.isBlank, cameras.cameras.isEmpty else { return }
         let url = URL(fileURLWithPath: NSString(string: legacyCamerasPath).expandingTildeInPath)
-        legacyCamerasPath = ""
-        guard cameras.cameras.isEmpty,
-              let data = try? Data(contentsOf: url),
-              let document = try? StudioInstantMeshCameraDocument.importing(data) else { return }
-        cameras = document
-        suppliesCameras = true
+        do {
+            cameras = try StudioInstantMeshCameraDocument.importing(Data(contentsOf: url))
+            suppliesCameras = true
+            legacyCamerasPath = ""
+        } catch {
+            errorMessage = "The camera file at \(url.lastPathComponent) could not be read into the editor: \(error.localizedDescription)"
+        }
     }
 }
 

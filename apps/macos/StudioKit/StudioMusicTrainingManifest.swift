@@ -64,28 +64,34 @@ package struct StudioMusicTrainingManifest: Codable, Equatable {
             }
     }
 
+    /// Whether a clip's audio file is there. The default asks the file system; the editor passes a
+    /// cache so a long list is not stat-ed on every render.
+    package typealias FileCheck = @Sendable (URL) -> Bool
+
+    package static let fileExists: FileCheck = { FileManager.default.fileExists(atPath: $0.path) }
+
     /// Clips the trainer would accept: an audio file that exists and a caption.
-    package func readyClipCount(fileManager: FileManager = .default) -> Int {
-        clips.filter { clipProblems($0, fileManager: fileManager).isEmpty }.count
+    package func readyClipCount(fileExists: FileCheck = StudioMusicTrainingManifest.fileExists) -> Int {
+        clips.filter { clipProblems($0, fileExists: fileExists).isEmpty }.count
     }
 
     /// What stops the manifest from training, in the order the page shows them; empty when it is
     /// ready. These are the checks `music train-adapter` makes when it loads the manifest ("empty
     /// audio path", "empty caption") and when it opens each clip ("Dataset audio N not found").
-    package func problems(fileManager: FileManager = .default) -> [String] {
+    package func problems(fileExists: FileCheck = StudioMusicTrainingManifest.fileExists) -> [String] {
         guard !clips.isEmpty else { return ["Add at least one audio clip."] }
         return clips.enumerated().flatMap { index, clip in
-            clipProblems(clip, fileManager: fileManager).map { "Clip \(index + 1) \($0)" }
+            clipProblems(clip, fileExists: fileExists).map { "Clip \(index + 1) \($0)" }
         }
     }
 
     /// One clip's problems, without its number: "has no audio file.", "needs a caption."
-    package func clipProblems(_ clip: StudioMusicTrainingClip, fileManager: FileManager = .default) -> [String] {
+    package func clipProblems(_ clip: StudioMusicTrainingClip, fileExists: FileCheck = StudioMusicTrainingManifest.fileExists) -> [String] {
         var problems: [String] = []
         let path = clip.audioPath.trimmingCharacters(in: .whitespacesAndNewlines)
         if path.isEmpty {
             problems.append("has no audio file.")
-        } else if !fileManager.fileExists(atPath: clip.audioURL.path) {
+        } else if !fileExists(clip.audioURL) {
             problems.append("is missing its audio file, \(clip.fileName).")
         }
         if clip.caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -95,15 +101,18 @@ package struct StudioMusicTrainingManifest: Codable, Equatable {
     }
 
     /// The JSONL `--dataset` reads: one record per line, absolute audio paths, lyrics only when given.
+    /// Line and paragraph separators inside a caption or lyrics (U+2028, U+2029, U+0085, `\r`) become
+    /// `\n`: `JSONEncoder` leaves them unescaped, and the trainer splits the file on every newline
+    /// character, so any of them would break a record in two.
     package func jsonl() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         var lines = Data()
         for clip in clips {
-            let lyrics = clip.lyrics.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lyrics = Self.singleLineBreaks(clip.lyrics).trimmingCharacters(in: .whitespacesAndNewlines)
             let record = Record(
                 audio: clip.audioURL.path,
-                caption: clip.caption.trimmingCharacters(in: .whitespacesAndNewlines),
+                caption: Self.singleLineBreaks(clip.caption).trimmingCharacters(in: .whitespacesAndNewlines),
                 lyrics: lyrics.isEmpty ? nil : lyrics
             )
             lines.append(try encoder.encode(record))
@@ -112,21 +121,58 @@ package struct StudioMusicTrainingManifest: Codable, Equatable {
         return lines
     }
 
-    /// Where a run's manifest goes: beside the adapter it trains, as `<adapter stem>.dataset.jsonl`,
-    /// so the run folder holds what produced the adapter.
-    package static func manifestURL(besideOutput outputPath: String) -> URL {
+    /// Every newline character the trainer's line split recognises, as `\n`.
+    static func singleLineBreaks(_ text: String) -> String {
+        var result = ""
+        result.reserveCapacity(text.utf8.count)
+        for character in text {
+            if character == "\n" || !character.isNewline {
+                result.append(character)
+            } else {
+                result.append("\n")
+            }
+        }
+        return result
+    }
+
+    /// Where a run's manifest goes: beside the adapter it trains, as `<adapter stem>.dataset.jsonl`
+    /// (`-2`, `-3`… when that name is taken by an earlier attempt), so the run folder holds what
+    /// produced the adapter and never loses an earlier run's manifest.
+    package static func manifestURL(besideOutput outputPath: String, fileManager: FileManager = .default) -> URL {
         let output = URL(fileURLWithPath: NSString(string: outputPath).expandingTildeInPath).standardizedFileURL
-        return output.deletingLastPathComponent()
-            .appendingPathComponent("\(output.deletingPathExtension().lastPathComponent).dataset.jsonl")
+        let folder = output.deletingLastPathComponent()
+        let name = StudioOutputLocation.uniqueFileName(
+            stem: "\(output.deletingPathExtension().lastPathComponent).dataset",
+            identifier: "",
+            fileExtension: "jsonl",
+            exists: { fileManager.fileExists(atPath: folder.appendingPathComponent($0).path) }
+        )
+        return folder.appendingPathComponent(name)
     }
 
     /// Where the page keeps the manifest it is editing, so the Command view's Run has a real file to
-    /// pass as `--dataset`. Each Start training writes its own copy beside its adapter.
-    package static func draftManifestURL(fileManager: FileManager = .default) -> URL {
+    /// pass as `--dataset`. The name carries a hash of the content, so a command the Library recorded
+    /// keeps pointing at the clips it ran with while the page moves on; `pruneDrafts` keeps the folder
+    /// small. Each Start training writes its own copy beside its adapter.
+    package static func draftManifestURL(content: Data, fileManager: FileManager = .default) -> URL {
+        draftFolder(fileManager: fileManager)
+            .appendingPathComponent("dataset-\(StudioOutputLocation.shortIdentifier(for: String(decoding: content, as: UTF8.self))).jsonl")
+    }
+
+    /// Removes all but the newest `keeping` manifest drafts, never the one at `current`.
+    package static func pruneDrafts(current: URL, keeping: Int = 8, fileManager: FileManager = .default) {
+        StudioDraftFiles.prune(in: draftFolder(fileManager: fileManager), matching: "dataset-", current: current, keeping: keeping, fileManager: fileManager)
+    }
+
+    /// Whether `url` is one of this page's drafts rather than a manifest the user chose.
+    package static func isDraftURL(_ url: URL, fileManager: FileManager = .default) -> Bool {
+        url.standardizedFileURL.deletingLastPathComponent() == draftFolder(fileManager: fileManager).standardizedFileURL
+    }
+
+    private static func draftFolder(fileManager: FileManager) -> URL {
         StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
             .deletingLastPathComponent()
             .appendingPathComponent("Music Training", isDirectory: true)
-            .appendingPathComponent("dataset.jsonl")
     }
 
     /// Reads a manifest written by hand or by this page, the way the trainer does: a JSON array of

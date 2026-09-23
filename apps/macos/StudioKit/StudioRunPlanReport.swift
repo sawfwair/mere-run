@@ -21,6 +21,13 @@ package struct StudioRunPlanReport: Decodable, Equatable {
         case warning
         case note
         case estimate
+        /// A severity this build does not know; the report still reads, shown as a note.
+        case unknown
+
+        package init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Severity(rawValue: raw) ?? .unknown
+        }
     }
 
     /// What was checked or written, by the command the plan wraps.
@@ -381,13 +388,13 @@ package struct StudioRunPlanReport: Decodable, Equatable {
         if let factor = plan.lrMinFactor { schedule.append(.init("Minimum rate factor", number(factor))) }
         var memory: [Section.Row] = []
         if let resolution = plan.maxResolution { memory.append(.init("Maximum source resolution", String(resolution))) }
-        if let bits = arguments.baseQuantizationBits { memory.append(.init("Frozen base", "\(bits)-bit")) }
+        if let bits = arguments.baseQuantizationBits { memory.append(.init("Frozen-base quantization", "\(bits)-bit")) }
         let switches = [
             ("Progressive resolution", arguments.progressive),
-            ("Low RAM cache", plan.lowRam),
+            ("Low RAM latent cache", plan.lowRam),
             ("Gradient checkpointing", arguments.gradientCheckpointing),
             ("Compiled train step", !plan.noCompile),
-            ("Lite targets", arguments.lite),
+            ("Lite attention targets", arguments.lite),
         ].filter(\.1).map(\.0)
         if !switches.isEmpty { memory.append(.init("Enabled", switches.joined(separator: ", "))) }
         if let preset = plan.loraTargetPreset { memory.append(.init("Target preset", preset)) }

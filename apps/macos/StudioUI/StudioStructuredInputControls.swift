@@ -124,12 +124,18 @@ struct StudioInstrumentPicker: View {
         value = StudioInstrumentList.encode(selected.filter { $0 != name })
     }
 
-    /// Reads the CLI's list once per appearance; a failure leaves the plain field.
+    /// Reads the CLI's list once per launch, kept on the controller so rebuilding the page does not
+    /// spawn the CLI again; a failure leaves the plain field.
     private func load() async {
         guard names == nil else { return }
+        if let cached = controller.cachedInstrumentNames {
+            names = cached
+            return
+        }
         let result = await controller.utilityCommandResult(args: StudioInstrumentList.listArguments)
         let parsed = StudioInstrumentList.parse(result.stdout)
         if result.exitCode == 0, !parsed.isEmpty {
+            controller.cachedInstrumentNames = parsed
             names = parsed
         } else {
             loadFailed = true
@@ -211,15 +217,15 @@ struct StudioTargetRankEditor: View {
 
 // MARK: - Renoise
 
-/// Sound ▸ Generate's Woosh renoise: the model's default, one amount, or one amount per step.
+/// Sound ▸ Generate's Woosh renoise: the model's default, one amount, or one amount per step. The
+/// page keeps `mode` beside the draft, so "Per step" survives an empty field and a rebuilt view.
 struct StudioRenoiseControl: View {
     /// The `--renoise` value; blank for the model's default.
     @Binding var value: String
+    @Binding var mode: StudioRenoise.Mode
     let steps: Int
-    @State private var mode: StudioRenoise.Mode = .automatic
-    @State private var scheduleText = ""
 
-    private var renoise: StudioRenoise { StudioRenoise(argument: value) }
+    private var renoise: StudioRenoise { StudioRenoise(mode: mode, argument: value) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -250,9 +256,8 @@ struct StudioRenoiseControl: View {
                 }
                 .accessibilityLabel("Renoise amount")
             case .schedule:
-                TextField("One amount per step, 0 to 1: 0.3, 0.3, 0.2, …", text: $scheduleText)
+                TextField("One amount per step, 0 to 1: 0.3, 0.3, 0.2, …", text: $value)
                     .mereField()
-                    .onChange(of: scheduleText) { _, text in value = StudioRenoise(argument: text).argument }
                     .accessibilityLabel("Renoise schedule")
             }
             ForEach(renoise.problems(steps: steps), id: \.self) { problem in
@@ -262,14 +267,17 @@ struct StudioRenoiseControl: View {
             }
         }
         .onAppear {
-            mode = renoise.mode
-            if case .schedule = renoise { scheduleText = value }
+            // A draft written before the page kept a mode: read the mode the argument implies.
+            if mode == .automatic, !value.isBlank { mode = StudioRenoise.inferredMode(argument: value) }
         }
-        .onChange(of: mode) { _, mode in
+        .onChange(of: mode) { previous, mode in
             switch mode {
-            case .automatic: value = ""
-            case .amount: if case .amount = renoise {} else { value = StudioRenoise.amount(0.5).argument }
-            case .schedule: scheduleText = ""; value = ""
+            case .automatic:
+                value = ""
+            case .amount:
+                if Double(value.trimmingCharacters(in: .whitespacesAndNewlines)) == nil { value = StudioRenoise.amount(0.5).argument }
+            case .schedule:
+                if previous == .automatic { value = "" }
             }
         }
     }

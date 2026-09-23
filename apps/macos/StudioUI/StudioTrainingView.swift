@@ -78,7 +78,7 @@ struct StudioTrainingDatasetSnapshot: Equatable {
     static func inspect(manifest: StudioMusicTrainingManifest) -> StudioTrainingDatasetSnapshot {
         let ready = manifest.readyClipCount()
         return .init(
-            source: StudioMusicTrainingManifest.draftManifestURL(),
+            source: StudioMusicTrainingManifest.draftManifestURL(content: (try? manifest.jsonl()) ?? Data()),
             totalRecords: manifest.clips.count,
             usableRecords: ready,
             previews: [],
@@ -1167,6 +1167,10 @@ struct StudioTrainingView: View {
             statusMessage = "The selected resume checkpoint does not exist."
             return false
         }
+        if kind == .image, let problem = StudioTargetRank.problems(StudioTargetRank.decode(draft.loraTargetRanks)).first {
+            statusMessage = problem
+            return false
+        }
         guard draft.steps > 0, draft.rank > 0, draft.learningRate > 0 else {
             statusMessage = "Steps, rank, and learning rate must be positive."
             return false
@@ -1184,25 +1188,35 @@ struct StudioTrainingView: View {
         }
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
-        let url = StudioMusicTrainingManifest.draftManifestURL()
         do {
+            let content = try musicManifest.jsonl()
+            let url = StudioMusicTrainingManifest.draftManifestURL(content: content)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try musicManifest.jsonl().write(to: url, options: .atomic)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try content.write(to: url, options: .atomic)
+            }
+            StudioMusicTrainingManifest.pruneDrafts(current: url)
             draftManifestPath = url.path
         } catch {
             draftManifestPath = ""
         }
     }
 
-    /// A manifest chosen before this page built its own is read into the clips, once.
+    /// A manifest chosen before this page built its own is read into the clips, once; the path is
+    /// forgotten only once its clips are in, otherwise the page says why they are not.
     private func adoptExistingMusicManifest() {
         guard kind == .music, musicManifest.clips.isEmpty, !musicDraft.inputPath.isBlank else { return }
         let url = URL(fileURLWithPath: NSString(string: musicDraft.inputPath).expandingTildeInPath).standardizedFileURL
-        musicDraft.inputPath = ""
-        guard url != StudioMusicTrainingManifest.draftManifestURL().standardizedFileURL,
-              let data = try? Data(contentsOf: url),
-              let manifest = try? StudioMusicTrainingManifest.importing(data, from: url) else { return }
-        musicManifest = manifest
+        if StudioMusicTrainingManifest.isDraftURL(url) {
+            musicDraft.inputPath = ""
+            return
+        }
+        do {
+            musicManifest = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
+            musicDraft.inputPath = ""
+        } catch {
+            statusMessage = "The manifest at \(url.lastPathComponent) could not be read into the clip list: \(error.localizedDescription)"
+        }
     }
 
     private func refreshSnapshot() {

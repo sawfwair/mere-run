@@ -54,9 +54,14 @@ package struct StudioTargetRank: Codable, Equatable, Identifiable {
         self.rank = rank
     }
 
-    /// The argument: `suffix=rank` entries joined by commas; empty when there are none.
+    /// The argument: `suffix=rank` entries joined by commas; empty when there are none. A row whose
+    /// suffix is still blank is left out rather than sent as `=rank`, which the CLI rejects.
     package static func encode(_ ranks: [StudioTargetRank]) -> String {
-        ranks.map { "\($0.suffix.trimmingCharacters(in: .whitespacesAndNewlines))=\($0.rank)" }.joined(separator: ",")
+        ranks.compactMap { entry in
+            let suffix = entry.suffix.trimmingCharacters(in: .whitespacesAndNewlines)
+            return suffix.isEmpty ? nil : "\(suffix)=\(entry.rank)"
+        }
+        .joined(separator: ",")
     }
 
     /// The entries in an argument; a malformed entry keeps its text as the suffix with rank 0 so
@@ -88,13 +93,16 @@ package struct StudioTargetRank: Codable, Equatable, Identifiable {
 // MARK: - Renoise
 
 /// `sfx generate --renoise` for Woosh models: blank for the model's default, one amount in 0…1, or
-/// one amount per denoising step. Mirrors `parseRenoiseSchedule` in `MereRunCLI`.
+/// one amount per denoising step. Mirrors `parseRenoiseSchedule` in `MereRunCLI`. The page keeps the
+/// mode it chose beside the argument, so "Per step" with nothing typed yet stays "Per step".
 package enum StudioRenoise: Equatable {
     case automatic
     case amount(Double)
-    case schedule([Double])
+    /// The schedule as typed, so a token that is not a number stays visible and is reported rather
+    /// than dropped.
+    case schedule(String)
 
-    package enum Mode: String, CaseIterable, Identifiable {
+    package enum Mode: String, CaseIterable, Codable, Identifiable {
         case automatic
         case amount
         case schedule
@@ -110,17 +118,22 @@ package enum StudioRenoise: Equatable {
         }
     }
 
-    /// Reads the argument as the CLI would; text it cannot read becomes an empty schedule so the
-    /// page shows the problem instead of silently dropping the value.
-    package init(argument: String) {
-        let values = argument.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        if values.isEmpty {
-            self = .automatic
-        } else if values.count == 1, let amount = Double(values[0]) {
-            self = .amount(amount)
-        } else {
-            self = .schedule(values.compactMap(Double.init))
+    /// The argument read in the page's chosen mode. An amount that does not parse becomes 0.5.
+    package init(mode: Mode, argument: String) {
+        switch mode {
+        case .automatic: self = .automatic
+        case .amount: self = .amount(Double(argument.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0.5)
+        case .schedule: self = .schedule(argument)
         }
+    }
+
+    /// The mode an argument written elsewhere implies, for a page that has not chosen one yet:
+    /// blank is automatic, one number is an amount, anything else is a schedule.
+    package static func inferredMode(argument: String) -> Mode {
+        let tokens = Self.tokens(argument)
+        if tokens.isEmpty { return .automatic }
+        if tokens.count == 1, Double(tokens[0]) != nil { return .amount }
+        return .schedule
     }
 
     package var mode: Mode {
@@ -131,13 +144,22 @@ package enum StudioRenoise: Equatable {
         }
     }
 
-    /// The `--renoise` value; empty for automatic, which the page omits.
+    /// The `--renoise` value, always with a `.` decimal point whatever the user's locale, since the
+    /// CLI reads it with `Float(_:)`; empty for automatic, which the page omits.
     package var argument: String {
         switch self {
         case .automatic: return ""
-        case .amount(let amount): return Self.format(amount)
-        case .schedule(let values): return values.map(Self.format).joined(separator: ",")
+        case .amount(let amount): return CommandArguments.format(amount)
+        case .schedule(let text): return Self.tokens(text).joined(separator: ",")
         }
+    }
+
+    /// The schedule's amounts, or nil while any token is not a number.
+    package var scheduleValues: [Double]? {
+        guard case .schedule(let text) = self else { return nil }
+        let tokens = Self.tokens(text)
+        let values = tokens.compactMap { Double($0) }
+        return values.count == tokens.count ? values : nil
     }
 
     /// The CLI's checks against the run's step count.
@@ -147,11 +169,14 @@ package enum StudioRenoise: Equatable {
             return []
         case .amount(let amount):
             return (0...1).contains(amount) ? [] : ["Renoise must be between 0 and 1."]
-        case .schedule(let values):
+        case .schedule(let text):
+            let tokens = Self.tokens(text)
+            guard !tokens.isEmpty else { return ["Enter one renoise amount per step, separated by commas."] }
+            guard let values = scheduleValues else {
+                return ["Renoise amounts must be numbers separated by commas, with a point for decimals."]
+            }
             var problems: [String] = []
-            if values.isEmpty {
-                problems.append("Enter one renoise amount per step, separated by commas.")
-            } else if values.count != steps {
+            if values.count != steps {
                 problems.append("The renoise schedule has \(values.count) values but the run has \(steps) steps.")
             }
             if values.contains(where: { !(0...1).contains($0) }) { problems.append("Renoise values must be between 0 and 1.") }
@@ -159,7 +184,8 @@ package enum StudioRenoise: Equatable {
         }
     }
 
-    private static func format(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0...4)).grouping(.never))
+    private static func tokens(_ text: String) -> [String] {
+        text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 }
+

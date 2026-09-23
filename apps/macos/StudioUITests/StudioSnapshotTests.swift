@@ -835,7 +835,11 @@ final class StudioSnapshotTests: XCTestCase {
                 Divider()
                 StudioGeometryCameraEditor(
                     enabled: .constant(true), document: .constant(geometry),
-                    viewNames: ["IMG_0412.heic", "IMG_0413.heic"], message: .constant(nil)
+                    views: [
+                        StudioCameraView(name: "IMG_0412.heic", pixelSize: StudioPixelSize(width: 4_032, height: 3_024)),
+                        StudioCameraView(name: "IMG_0413.heic", pixelSize: StudioPixelSize(width: 4_032, height: 3_024)),
+                    ],
+                    message: .constant(nil)
                 )
             }
             .padding(18)

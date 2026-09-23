@@ -5,33 +5,46 @@ import UniformTypeIdentifiers
 
 /// Music ▸ Train's dataset: the clips to train on, each with a caption and optional lyrics. Studio
 /// writes the manifest the trainer reads from these rows; a manifest made elsewhere still imports.
+///
+/// The editor works on its own copy of the manifest and writes it back to the page's stored value
+/// a moment after typing stops: the stored value decodes its JSON on every read, which a list of
+/// hundreds of clips cannot afford on every keystroke. Whether each clip's audio file exists is
+/// checked once per change of the file list, not once per render.
 struct StudioMusicManifestEditor: View {
     @Binding var manifest: StudioMusicTrainingManifest
     /// Set when an import or export fails, in the page's words.
     @Binding var message: String?
+    @State private var draft = StudioMusicTrainingManifest()
+    @State private var existingFiles: Set<String> = []
     @State private var isDropTargeted = false
 
-    private var readyCount: Int { manifest.readyClipCount() }
+    private var audioPaths: [String] { draft.clips.map { $0.audioURL.path } }
 
     var body: some View {
+        let fileExists: StudioMusicTrainingManifest.FileCheck = { existingFiles.contains($0.path) }
+        let rowProblems = draft.clips.map { draft.clipProblems($0, fileExists: fileExists) }
+        let readyCount = rowProblems.filter(\.isEmpty).count
+        let problems = draft.problems(fileExists: fileExists)
+        let numbers = Dictionary(uniqueKeysWithValues: draft.clips.enumerated().map { ($1.id, $0 + 1) })
         VStack(alignment: .leading, spacing: 10) {
-            header
-            if manifest.clips.isEmpty {
+            header(readyCount: readyCount)
+            if draft.clips.isEmpty {
                 emptyState
             } else {
-                VStack(spacing: 8) {
-                    ForEach($manifest.clips) { $clip in
+                LazyVStack(spacing: 8) {
+                    ForEach($draft.clips) { $clip in
+                        let number = numbers[clip.id] ?? 0
                         StudioMusicClipRow(
                             clip: $clip,
-                            number: (manifest.clips.firstIndex { $0.id == clip.id } ?? 0) + 1,
-                            problems: manifest.clipProblems(clip),
-                            onRemove: { manifest.clips.removeAll { $0.id == clip.id } }
+                            number: number,
+                            hasAudio: !clip.audioPath.isBlank && existingFiles.contains(clip.audioURL.path),
+                            problems: rowProblems.indices.contains(number - 1) ? rowProblems[number - 1] : [],
+                            onRemove: { draft.clips.removeAll { $0.id == clip.id } }
                         )
                     }
                 }
             }
-            let problems = manifest.problems()
-            if !problems.isEmpty, !manifest.clips.isEmpty {
+            if !problems.isEmpty, !draft.clips.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(problems, id: \.self) { problem in
                         Label(problem, systemImage: "exclamationmark.circle")
@@ -52,16 +65,31 @@ struct StudioMusicManifestEditor: View {
                     .padding(-6)
             }
         }
+        .onAppear {
+            draft = manifest
+            refreshExistingFiles()
+        }
+        .onChange(of: manifest) { _, manifest in
+            // The page adopted a manifest from elsewhere; a write-back arrives equal to the draft.
+            if manifest != draft { draft = manifest }
+        }
+        .onChange(of: audioPaths) { _, _ in refreshExistingFiles() }
+        .task(id: draft) {
+            guard draft != manifest else { return }
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            manifest = draft
+        }
     }
 
-    private var header: some View {
+    private func header(readyCount: Int) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Clips")
                 .font(MereRunTheme.sectionFont)
-            if !manifest.clips.isEmpty {
-                Text("\(manifest.clips.count) · \(readyCount) ready")
+            if !draft.clips.isEmpty {
+                Text("\(draft.clips.count) · \(readyCount) ready")
                     .font(MereRunTheme.captionFont)
-                    .foregroundStyle(readyCount == manifest.clips.count ? MereRunTheme.green : MereRunTheme.textMuted)
+                    .foregroundStyle(readyCount == draft.clips.count ? MereRunTheme.green : MereRunTheme.textMuted)
                     .monospacedDigit()
             }
             Spacer()
@@ -73,14 +101,14 @@ struct StudioMusicManifestEditor: View {
             .buttonStyle(.mereSecondary)
             .controlSize(.small)
             Menu {
-                Button("Add a Folder of Clips…", action: addFolder)
+                Button("Add a folder of clips…", action: addFolder)
                 Divider()
-                Button("Import Manifest…", action: importManifest)
-                Button("Export Manifest…", action: exportManifest)
-                    .disabled(manifest.clips.isEmpty)
+                Button("Import manifest…", action: importManifest)
+                Button("Export manifest…", action: exportManifest)
+                    .disabled(draft.clips.isEmpty)
                 Divider()
-                Button("Clear Clips", role: .destructive) { manifest.clips.removeAll() }
-                    .disabled(manifest.clips.isEmpty)
+                Button("Clear clips", role: .destructive) { draft.clips.removeAll() }
+                    .disabled(draft.clips.isEmpty)
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -110,9 +138,13 @@ struct StudioMusicManifestEditor: View {
         }
     }
 
+    private func refreshExistingFiles() {
+        existingFiles = Set(audioPaths.filter { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) })
+    }
+
     /// Adds audio files, and every audio file at the top of a dropped folder; skips files already listed.
     private func add(_ urls: [URL]) {
-        let listed = Set(manifest.clips.map { $0.audioURL.path })
+        let listed = Set(audioPaths)
         var added: [StudioMusicTrainingClip] = []
         for url in urls {
             var isDirectory: ObjCBool = false
@@ -122,24 +154,23 @@ struct StudioMusicManifestEditor: View {
                 added.append(StudioMusicTrainingClip(audioPath: url.path))
             }
         }
-        manifest.clips += added.filter { !listed.contains($0.audioURL.path) }
+        draft.clips += added.filter { !listed.contains($0.audioURL.path) }
     }
 
     private func addFolder() {
         guard let folder = StudioSpecialistFiles.chooseDirectory(title: "Add a folder of clips") else { return }
-        let before = manifest.clips.count
+        let before = draft.clips.count
         add([folder])
-        if manifest.clips.count == before {
+        if draft.clips.count == before {
             message = "No audio files were found at the top of \(folder.lastPathComponent)."
         }
     }
 
+    /// Any file type: `.jsonl` has no declared type, so a type filter would grey the files out.
     private func importManifest() {
-        guard let url = StudioSpecialistFiles.chooseFile(title: "Import a training manifest", allowedContentTypes: [.json, .plainText]).first else {
-            return
-        }
+        guard let url = StudioSpecialistFiles.chooseFile(title: "Import a training manifest").first else { return }
         do {
-            manifest = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
+            draft = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
             message = nil
         } catch {
             message = "That file is not a training manifest: \(error.localizedDescription)"
@@ -147,13 +178,9 @@ struct StudioMusicManifestEditor: View {
     }
 
     private func exportManifest() {
-        guard let url = StudioSpecialistFiles.saveFile(
-            title: "Export the training manifest",
-            suggestedName: "dataset.jsonl",
-            allowedContentTypes: [.json, .plainText]
-        ) else { return }
+        guard let url = StudioSpecialistFiles.saveFile(title: "Export the training manifest", suggestedName: "dataset.jsonl") else { return }
         do {
-            try manifest.jsonl().write(to: url, options: .atomic)
+            try draft.jsonl().write(to: url, options: .atomic)
         } catch {
             message = "Studio could not save the manifest: \(error.localizedDescription)"
         }
@@ -164,13 +191,10 @@ struct StudioMusicManifestEditor: View {
 private struct StudioMusicClipRow: View {
     @Binding var clip: StudioMusicTrainingClip
     let number: Int
+    let hasAudio: Bool
     let problems: [String]
     let onRemove: () -> Void
     @State private var showsLyrics = false
-
-    private var hasAudio: Bool {
-        !clip.audioPath.isBlank && FileManager.default.fileExists(atPath: clip.audioURL.path)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {

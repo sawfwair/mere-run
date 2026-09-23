@@ -137,6 +137,8 @@ struct StudioVisionLabView: View {
     /// The saved copy of a valid camera document, for the Command view; empty when cameras are off
     /// or do not match the views. Each run writes its own copy beside its output.
     @State private var draftCamerasPath = ""
+    /// Each multi-view image's decoded size by path, read when the list changes.
+    @State private var viewSizes: [String: StudioPixelSize] = [:]
     @StudioStoredValue("VisionLab.processResolution") private var processResolution = 504
     @StudioStoredValue("VisionLab.referenceView") private var referenceView = "saddle-balanced"
     @StudioStoredValue("VisionLab.confidencePercentile") private var confidencePercentile = 40.0
@@ -171,6 +173,7 @@ struct StudioVisionLabView: View {
             if model.isBlank { model = CommandCatalog.template(id: task.templateID)?.defaultDraft().model ?? "" }
             adoptLegacyCameras()
         }
+        .task(id: multiviewPaths) { refreshViewSizes() }
         .task(id: cameraDraftKey) { await saveDraftCameras() }
     }
 
@@ -352,7 +355,7 @@ struct StudioVisionLabView: View {
                 StudioGeometryCameraEditor(
                     enabled: $suppliesCameras,
                     document: $geometryCameras,
-                    viewNames: multiviewNames,
+                    views: multiviewViews,
                     message: $errorMessage
                 )
                 Stepper("Process resolution \(processResolution)", value: $processResolution, in: 128...2_048, step: 14)
@@ -614,50 +617,68 @@ struct StudioVisionLabView: View {
         )
     }
 
-    /// The images a multi-view run sends, in order, for labelling cameras.
-    private var multiviewNames: [String] {
-        ([primaryInput] + additionalInputs).filter { !$0.isBlank }.map { URL(fileURLWithPath: $0).lastPathComponent }
+    /// The images a multi-view run sends, in order.
+    private var multiviewPaths: [String] {
+        ([primaryInput] + additionalInputs).filter { !$0.isBlank }
+    }
+
+    /// Those images with their decoded sizes, for labelling and sizing cameras. Sizes come from
+    /// `viewSizes`, read once per change of the list rather than per render.
+    private var multiviewViews: [StudioCameraView] {
+        multiviewPaths.map { StudioCameraView(name: URL(fileURLWithPath: $0).lastPathComponent, pixelSize: viewSizes[$0]) }
+    }
+
+    private func refreshViewSizes() {
+        viewSizes = Dictionary(uniqueKeysWithValues: multiviewPaths.compactMap { path in
+            StudioPixelSize.of(URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)).map { (path, $0) }
+        })
     }
 
     private struct CameraDraftKey: Equatable {
         let enabled: Bool
         let document: StudioGeometryCameraDocument
-        let viewCount: Int
+        let views: [StudioCameraView]
     }
 
     private var cameraDraftKey: CameraDraftKey {
-        CameraDraftKey(enabled: suppliesCameras, document: geometryCameras, viewCount: multiviewNames.count)
+        CameraDraftKey(enabled: suppliesCameras, document: geometryCameras, views: multiviewViews)
     }
 
     /// Keeps the Command view's camera file current, a moment after editing stops; only a document
-    /// the CLI would accept is saved.
+    /// the CLI would accept is saved, under a name made from its content.
     private func saveDraftCameras() async {
-        guard suppliesCameras, geometryCameras.problems(viewCount: multiviewNames.count).isEmpty else {
+        guard suppliesCameras, geometryCameras.problems(views: multiviewViews).isEmpty else {
             draftCamerasPath = ""
             return
         }
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
-        let url = StudioCameraDocuments.draftURL(page: "Vision Geometry")
         do {
+            let content = try geometryCameras.json()
+            let url = StudioCameraDocuments.draftURL(page: "Vision Geometry", content: content)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try geometryCameras.json().write(to: url, options: .atomic)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try content.write(to: url, options: .atomic)
+            }
+            StudioCameraDocuments.pruneDrafts(page: "Vision Geometry", current: url)
             draftCamerasPath = url.path
         } catch {
             draftCamerasPath = ""
         }
     }
 
-    /// A camera file chosen before this page edited cameras is read into the editor, once.
+    /// A camera file chosen before this page edited cameras is read into the editor, once; the
+    /// path is forgotten only once its cameras are in, otherwise the page says why they are not.
     private func adoptLegacyCameras() {
-        guard !legacyCamerasPath.isBlank else { return }
+        guard !legacyCamerasPath.isBlank, geometryCameras.cameras.isEmpty else { return }
         let url = URL(fileURLWithPath: NSString(string: legacyCamerasPath).expandingTildeInPath)
-        legacyCamerasPath = ""
-        guard geometryCameras.cameras.isEmpty,
-              let data = try? Data(contentsOf: url),
-              let document = try? StudioGeometryCameraDocument.importing(data) else { return }
-        geometryCameras = document
-        suppliesCameras = true
+        do {
+            geometryCameras = try StudioGeometryCameraDocument.importing(Data(contentsOf: url))
+            suppliesCameras = true
+            legacyCamerasPath = ""
+        } catch {
+            errorMessage = "The camera file at \(url.lastPathComponent) could not be read into the editor: \(error.localizedDescription)"
+        }
     }
 
     private func validate() -> Bool {
@@ -692,7 +713,7 @@ struct StudioVisionLabView: View {
             return false
         }
         if task == .geometryMultiview, suppliesCameras,
-           let problem = geometryCameras.problems(viewCount: multiviewNames.count).first {
+           let problem = geometryCameras.problems(views: multiviewViews).first {
             errorMessage = problem
             return false
         }

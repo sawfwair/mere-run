@@ -7,20 +7,22 @@ import UniformTypeIdentifiers
 // the page writes the file each run needs. Import and export keep files made elsewhere usable.
 
 /// The cameras for `vision geometry-multiview --cameras`: image size, normalized focal length and
-/// principal point, and a world-to-camera rotation and translation per view.
+/// principal point, and a world-to-camera rotation and translation per view. Each view's decoded
+/// size comes in with it, because the CLI rejects a camera whose image size is not the image's.
 struct StudioGeometryCameraEditor: View {
     @Binding var enabled: Bool
     @Binding var document: StudioGeometryCameraDocument
-    /// The views in order, so each camera is labelled with its image.
-    let viewNames: [String]
+    /// The views in order, with their pixel sizes when readable, so each camera is labelled with
+    /// its image and sized to it.
+    let views: [StudioCameraView]
     @Binding var message: String?
 
     var body: some View {
         StudioCameraSection(
             enabled: $enabled,
             count: document.cameras.count,
-            viewCount: viewNames.count,
-            problems: document.problems(viewCount: viewNames.count),
+            viewCount: views.count,
+            problems: document.problems(views: views),
             onEnable: { if document.cameras.isEmpty { matchViews() } },
             onMatchViews: matchViews,
             onImport: importDocument,
@@ -29,13 +31,14 @@ struct StudioGeometryCameraEditor: View {
         ) {
             ForEach($document.cameras) { $camera in
                 let index = document.cameras.firstIndex { $0.id == camera.id } ?? 0
+                let view = views.indices.contains(index) ? views[index] : nil
                 StudioCameraCard(
                     title: "Camera \(index + 1)",
-                    subtitle: viewNames.indices.contains(index) ? viewNames[index] : "No view",
-                    problems: camera.problems,
+                    subtitle: view?.name ?? "No view",
+                    problems: camera.problems(view: view),
                     onRemove: { document.cameras.removeAll { $0.id == camera.id } }
                 ) {
-                    HStack(spacing: 14) {
+                    HStack(alignment: .top, spacing: 14) {
                         StudioNumberGroup("Image size") {
                             StudioIntegerCell(value: $camera.imageWidth, label: "width")
                             Text("×").foregroundStyle(MereRunTheme.textMuted)
@@ -45,10 +48,18 @@ struct StudioGeometryCameraEditor: View {
                             StudioNumberCell(value: $camera.normalizedFX, label: "fx")
                             StudioNumberCell(value: $camera.normalizedFY, label: "fy")
                         }
-                        StudioNumberGroup("Centre (of size)") {
+                        StudioNumberGroup("Center (of size)") {
                             StudioNumberCell(value: $camera.normalizedCX, label: "cx")
                             StudioNumberCell(value: $camera.normalizedCY, label: "cy")
                         }
+                    }
+                    if let size = view?.pixelSize, size.width != camera.imageWidth || size.height != camera.imageHeight {
+                        Button("Use the image's size, \(size.label)") {
+                            camera.imageWidth = size.width
+                            camera.imageHeight = size.height
+                        }
+                        .buttonStyle(.mereSecondary)
+                        .controlSize(.small)
                     }
                     HStack(alignment: .top, spacing: 14) {
                         StudioNumberGroup("Rotation, world to camera") {
@@ -63,14 +74,15 @@ struct StudioGeometryCameraEditor: View {
         }
     }
 
-    /// One identity camera per view; extra cameras beyond the views are dropped from the end.
+    /// One camera per view, each sized to its image; extra cameras beyond the views are dropped
+    /// from the end.
     private func matchViews() {
-        let count = viewNames.count
+        let count = views.count
         if document.cameras.count > count {
             document.cameras.removeLast(document.cameras.count - count)
         }
         while document.cameras.count < count {
-            document.cameras.append(.identity())
+            document.cameras.append(.identity(size: views[document.cameras.count].pixelSize))
         }
     }
 
@@ -98,7 +110,8 @@ struct StudioGeometryCameraEditor: View {
 }
 
 /// The cameras for `image reconstruct-3d-multiview --cameras`: a 3 × 4 camera-to-world pose and
-/// `fx, fy, cx, cy` per view.
+/// `fx, fy, cx, cy` per view. InstantMesh resizes every view to its conditioning size, so image
+/// sizes play no part here.
 struct StudioInstantMeshCameraEditor: View {
     @Binding var enabled: Bool
     @Binding var document: StudioInstantMeshCameraDocument
@@ -135,14 +148,14 @@ struct StudioInstantMeshCameraEditor: View {
                                     StudioNumberCell(value: $camera.values[12], label: "fx")
                                     StudioNumberCell(value: $camera.values[13], label: "fy")
                                 }
-                                StudioNumberGroup("Centre") {
+                                StudioNumberGroup("Center") {
                                     StudioNumberCell(value: $camera.values[14], label: "cx")
                                     StudioNumberCell(value: $camera.values[15], label: "cy")
                                 }
                             }
                         }
                     } else {
-                        Button("Reset to the example camera") { camera = .example }
+                        Button("Reset to the starting camera") { camera = .example }
                             .buttonStyle(.mereSecondary)
                             .controlSize(.small)
                     }
@@ -207,8 +220,8 @@ private struct StudioCameraSection<Cards: View>: View {
                     .onChange(of: enabled) { _, enabled in if enabled { onEnable() } }
                 Spacer()
                 Menu {
-                    Button("Import Camera File…", action: onImport)
-                    Button("Export Camera File…", action: onExport)
+                    Button("Import camera file…", action: onImport)
+                    Button("Export camera file…", action: onExport)
                         .disabled(!canExport)
                 } label: {
                     Image(systemName: "ellipsis.circle")

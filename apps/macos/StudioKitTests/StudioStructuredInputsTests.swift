@@ -1,4 +1,6 @@
+import ImageIO
 @testable import StudioKit
+import UniformTypeIdentifiers
 import XCTest
 
 /// The manifests, documents, and argument syntaxes Studio builds for the CLI, checked against the
@@ -171,19 +173,90 @@ final class StudioStructuredInputsTests: XCTestCase {
             "Target 4 needs a module suffix, like .attn.to_q.",
         ])
         XCTAssertEqual(StudioTargetRank.encode([]), "")
+        // A row still waiting for its suffix is not sent as "=64", which the CLI rejects.
+        XCTAssertEqual(StudioTargetRank.encode([.init(suffix: "", rank: 64), .init(suffix: ".attn.to_k", rank: 32)]), ".attn.to_k=32")
     }
 
     // MARK: - Renoise
 
     func testRenoiseReadsAndWritesTheCLIsArgument() {
-        XCTAssertEqual(StudioRenoise(argument: ""), .automatic)
-        XCTAssertEqual(StudioRenoise(argument: "0.35"), .amount(0.35))
-        XCTAssertEqual(StudioRenoise(argument: "0.1, 0.2,0.3"), .schedule([0.1, 0.2, 0.3]))
+        XCTAssertEqual(StudioRenoise.inferredMode(argument: ""), .automatic)
+        XCTAssertEqual(StudioRenoise.inferredMode(argument: "0.35"), .amount)
+        XCTAssertEqual(StudioRenoise.inferredMode(argument: "0.1, 0.2,0.3"), .schedule)
+        XCTAssertEqual(StudioRenoise(mode: .amount, argument: "0.35"), .amount(0.35))
+        XCTAssertEqual(StudioRenoise(mode: .amount, argument: "junk"), .amount(0.5))
         XCTAssertEqual(StudioRenoise.amount(0.35).argument, "0.35")
-        XCTAssertEqual(StudioRenoise.schedule([0.1, 0.25, 1]).argument, "0.1,0.25,1")
+        XCTAssertEqual(StudioRenoise.schedule(" 0.1, 0.25,1 ").argument, "0.1,0.25,1")
         XCTAssertEqual(StudioRenoise.amount(1.5).problems(steps: 3), ["Renoise must be between 0 and 1."])
-        XCTAssertEqual(StudioRenoise.schedule([0.1, 0.2]).problems(steps: 3), ["The renoise schedule has 2 values but the run has 3 steps."])
-        XCTAssertEqual(StudioRenoise.schedule([0.1, 0.2, 0.3]).problems(steps: 3), [])
+        XCTAssertEqual(StudioRenoise.schedule("0.1, 0.2").problems(steps: 3), ["The renoise schedule has 2 values but the run has 3 steps."])
+        XCTAssertEqual(StudioRenoise.schedule("0.1, 0.2, 0.3").problems(steps: 3), [])
+        XCTAssertEqual(StudioRenoise.schedule("0.3").problems(steps: 3), ["The renoise schedule has 1 values but the run has 3 steps."])
+        XCTAssertEqual(StudioRenoise.schedule("").problems(steps: 3), ["Enter one renoise amount per step, separated by commas."])
+    }
+
+    /// The argument is what `parseRenoiseSchedule` splits on commas and reads with `Float(_:)`, so a
+    /// locale that writes decimals with a comma must not reach it; and a token the CLI would reject
+    /// is reported rather than dropped.
+    func testRenoiseWritesAPointDecimalWhateverTheLocaleAndKeepsBadTokens() {
+        let german = 0.35.formatted(.number.locale(Locale(identifier: "de_DE")))
+        XCTAssertEqual(german, "0,35", "the hazard this test guards against")
+
+        XCTAssertEqual(StudioRenoise.amount(0.35).argument, "0.35")
+        XCTAssertEqual(Float(StudioRenoise.amount(0.35).argument), 0.35)
+        // A comma decimal typed into a schedule is two tokens to the CLI, so the step count catches it.
+        XCTAssertEqual(StudioRenoise.schedule("0.5,\(german)").scheduleValues, [0.5, 0, 35])
+        XCTAssertEqual(
+            StudioRenoise.schedule("0.5,\(german)").problems(steps: 2),
+            ["The renoise schedule has 3 values but the run has 2 steps.", "Renoise values must be between 0 and 1."]
+        )
+        XCTAssertNil(StudioRenoise.schedule("0.5,half").scheduleValues)
+        XCTAssertEqual(
+            StudioRenoise.schedule("0.5,half").problems(steps: 2),
+            ["Renoise amounts must be numbers separated by commas, with a point for decimals."]
+        )
+    }
+
+    /// Line separators `JSONEncoder` does not escape would split a record when the trainer splits
+    /// the file on newlines; they are written as `\n`.
+    func testLyricsWithUnicodeLineSeparatorsStayOneRecord() throws {
+        let manifest = StudioMusicTrainingManifest(clips: [
+            .init(audioPath: "/clips/a.wav", caption: "verse\u{2028}chorus", lyrics: "one\u{2029}two\u{85}three\r\nfour\rfive"),
+        ])
+
+        let records = try cliLoadManifest(try manifest.jsonl())
+
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records[0].caption, "verse\nchorus")
+        XCTAssertEqual(records[0].lyrics, "one\ntwo\nthree\nfour\nfive")
+    }
+
+    func testDraftNamesCarryTheirContentAndRunFilesNeverOverwrite() throws {
+        let a = try StudioMusicTrainingManifest(clips: [.init(audioPath: "/a.wav", caption: "a")]).jsonl()
+        let b = try StudioMusicTrainingManifest(clips: [.init(audioPath: "/a.wav", caption: "b")]).jsonl()
+
+        XCTAssertEqual(StudioMusicTrainingManifest.draftManifestURL(content: a), StudioMusicTrainingManifest.draftManifestURL(content: a))
+        XCTAssertNotEqual(StudioMusicTrainingManifest.draftManifestURL(content: a), StudioMusicTrainingManifest.draftManifestURL(content: b))
+        XCTAssertTrue(StudioMusicTrainingManifest.isDraftURL(StudioMusicTrainingManifest.draftManifestURL(content: a)))
+        XCTAssertFalse(StudioMusicTrainingManifest.isDraftURL(root.appendingPathComponent("dataset.jsonl")))
+
+        try Data([0]).write(to: root.appendingPathComponent("adapter.dataset.jsonl"))
+        XCTAssertEqual(
+            StudioMusicTrainingManifest.manifestURL(besideOutput: root.appendingPathComponent("adapter.safetensors").path).lastPathComponent,
+            "adapter.dataset-2.jsonl"
+        )
+        try Data([0]).write(to: root.appendingPathComponent("run.cameras.json"))
+        XCTAssertEqual(
+            StudioCameraDocuments.url(besideOutputDirectory: root.appendingPathComponent("run").path).lastPathComponent,
+            "run.cameras-2.json"
+        )
+    }
+
+    func testAnUnknownDiagnosticSeverityDoesNotDropTheReport() throws {
+        let json = Self.materialized.replacingOccurrences(of: "\"severity\": \"note\"", with: "\"severity\": \"hint\"")
+
+        let report = try XCTUnwrap(StudioRunPlanReport.decode(Data(json.utf8)))
+
+        XCTAssertEqual(report.diagnostics.map(\.severity), [.unknown])
     }
 
     // MARK: - Cameras
@@ -236,15 +309,49 @@ final class StudioStructuredInputsTests: XCTestCase {
         skewed.rotation = [1, 0.5, 0, 0, 1, 0, 0, 0, 1]
         var flat = StudioGeometryCamera.identity(width: 0)
         flat.normalizedFX = 0
+        let views = [StudioCameraView(name: "a.png"), StudioCameraView(name: "b.png"), StudioCameraView(name: "c.png")]
 
-        XCTAssertEqual(StudioGeometryCamera.identity().problems, [])
-        XCTAssertEqual(mirrored.problems, ["has a rotation that mirrors (its determinant is not +1)."])
-        XCTAssertEqual(skewed.problems, ["has a rotation that is not a pure rotation (a row or column is not unit length)."])
-        XCTAssertEqual(flat.problems, ["needs a positive image size.", "needs positive focal lengths."])
+        XCTAssertEqual(StudioGeometryCamera.identity().problems(), [])
+        XCTAssertEqual(mirrored.problems(), ["has a rotation that mirrors (its determinant is not +1)."])
+        XCTAssertEqual(skewed.problems(), ["has a rotation that is not a pure rotation (a row or column is not unit length)."])
+        XCTAssertEqual(flat.problems(), ["needs a positive image size.", "needs positive focal lengths."])
         XCTAssertEqual(
-            StudioGeometryCameraDocument(cameras: [mirrored]).problems(viewCount: 3),
+            StudioGeometryCameraDocument(cameras: [mirrored]).problems(views: views),
             ["Add one camera per view: 3 views, 1 camera.", "Camera 1 has a rotation that mirrors (its determinant is not +1)."]
         )
+    }
+
+    /// `DepthAnything3CameraValidation.validate(_:sourceDimensions:)` rejects a camera whose image
+    /// size is not the decoded image's, so the page reads each view's size the way the CLI does
+    /// (`kCGImagePropertyPixelWidth` and `Height`) and sizes new cameras to it with square pixels.
+    func testGeometryCamerasAreSizedToTheirImagesAndReportAMismatch() throws {
+        let image = root.appendingPathComponent("view.png")
+        try Self.writePNG(to: image, width: 640, height: 360)
+
+        let size = try XCTUnwrap(StudioPixelSize.of(image))
+        let sized = StudioGeometryCamera.identity(size: size)
+        let view = StudioCameraView(name: "view.png", pixelSize: size)
+
+        XCTAssertEqual(size, StudioPixelSize(width: 640, height: 360))
+        XCTAssertEqual(sized.imageWidth, 640)
+        XCTAssertEqual(sized.imageHeight, 360)
+        XCTAssertEqual(sized.normalizedFX * Double(sized.imageWidth), sized.normalizedFY * Double(sized.imageHeight), accuracy: 1e-9)
+        XCTAssertEqual(sized.problems(view: view), [])
+        XCTAssertEqual(StudioGeometryCamera.identity().problems(view: view), ["is sized 1920 × 1080 but view.png is 640 × 360."])
+        XCTAssertEqual(StudioGeometryCamera.identity().problems(view: StudioCameraView(name: "unreadable.png")), [])
+        XCTAssertNil(StudioPixelSize.of(root.appendingPathComponent("missing.png")))
+    }
+
+    private static func writePNG(to url: URL, width: Int, height: Int) throws {
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let image = context.makeImage(),
+              let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            throw XCTSkip("Could not draw a PNG")
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        CGImageDestinationFinalize(destination)
     }
 
     func testInstantMeshCamerasEncodeSixteenValuesPerView() throws {
@@ -257,7 +364,7 @@ final class StudioStructuredInputsTests: XCTestCase {
         XCTAssertEqual((object?["cameras"] as? [[Double]])?.count, 4)
         XCTAssertEqual((object?["cameras"] as? [[Double]])?.first, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 4, 1.866, 1.866, 0.5, 0.5])
         XCTAssertEqual(reimported.cameras.count, 4)
-        XCTAssertEqual(StudioInstantMeshCamera.example.poseRows, [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 4]])
+        XCTAssertEqual(Set(document.cameras.map(\.id)).count, 4, "each starting camera is its own row")
         XCTAssertEqual(document.problems(viewCount: 4), [])
         XCTAssertEqual(document.problems(viewCount: 6), ["Add one camera per view: 6 views, 4 cameras."])
         XCTAssertEqual(StudioInstantMeshCamera(values: [1, 2]).problems, ["needs 16 values: a 3 × 4 pose and fx, fy, cx, cy."])

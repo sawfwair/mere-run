@@ -55,7 +55,9 @@ struct StudioRunPlanReportView: View {
                             .frame(width: 168, alignment: .leading)
                             .gridColumnAlignment(.leading)
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(row.path == nil ? row.value : StudioOutputLocation.abbreviate(URL(fileURLWithPath: row.value)))
+                            // A row whose value is its path shows the path shortened; a row with
+                            // more to say ("Missing: …") shows its words as written.
+                            Text(row.path == row.value ? StudioOutputLocation.abbreviate(URL(fileURLWithPath: row.value)) : row.value)
                                 .font(row.path == nil ? MereRunTheme.bodyFont : MereRunTheme.monoFont)
                                 .textSelection(.enabled)
                                 .lineLimit(row.path == nil ? 4 : 1)
@@ -110,7 +112,7 @@ struct StudioRunPlanReportView: View {
         switch severity {
         case .blocker: return .error
         case .warning: return .warning
-        case .note, .estimate: return .info
+        case .note, .estimate, .unknown: return .info
         }
     }
 }

@@ -133,6 +133,10 @@ struct StudioSFXLabView: View {
     @StudioStoredValue("SFXLab.decodeDraft") private var decodeDraft: CommandDraft = CommandDraft()
     @StudioStoredValue("SFXLab.scoreDraft") private var scoreDraft: CommandDraft = CommandDraft()
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
+    /// How each generation draft's renoise is entered, kept beside the draft so "Per step" survives
+    /// an empty field and a rebuilt page.
+    @StudioStoredValue("SFXLab.generateRenoiseMode") private var generateRenoiseMode = StudioRenoise.Mode.automatic
+    @StudioStoredValue("SFXLab.videoRenoiseMode") private var videoRenoiseMode = StudioRenoise.Mode.automatic
     @State private var statusMessage: String?
 
     init(task: Binding<StudioSFXTask>, tasks: [StudioSFXTask], initialDraft: StudioDraft) {
@@ -263,7 +267,11 @@ struct StudioSFXLabView: View {
             Slider(value: draft.cfgScale, in: 0...20, step: 0.25)
         }
         labeledTextField("Seed", placeholder: "Random", text: draft.seed)
-        StudioRenoiseControl(value: draft.sfxRenoise, steps: draft.wrappedValue.steps)
+        StudioRenoiseControl(
+            value: draft.sfxRenoise,
+            mode: videoConditioned ? $videoRenoiseMode : $generateRenoiseMode,
+            steps: draft.wrappedValue.steps
+        )
 
         if videoConditioned {
             Divider().overlay(MereRunTheme.border.opacity(0.5))
@@ -517,6 +525,13 @@ struct StudioSFXLabView: View {
         if task != .score, draft.outputPath.isBlank {
             statusMessage = "Choose an output path."
             return
+        }
+        if [.generate, .video].contains(task) {
+            let mode = task == .video ? videoRenoiseMode : generateRenoiseMode
+            if let problem = StudioRenoise(mode: mode, argument: draft.sfxRenoise).problems(steps: draft.steps).first {
+                statusMessage = problem
+                return
+            }
         }
         requestID = StudioSpecialistRunner.submit(
             templateID: task.templateID,

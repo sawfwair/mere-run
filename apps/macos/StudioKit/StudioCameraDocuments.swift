@@ -1,9 +1,45 @@
 import Foundation
+import ImageIO
 
 // Vision ▸ Geometry (multi-view) and 3D ▸ InstantMesh take optional calibrated cameras as a JSON
 // file. Studio edits them as one camera per view and writes the file each run needs beside the run's
 // output; a file made elsewhere still imports. Both documents carry `schemaVersion` 1 and one camera
 // per image, in view order.
+
+/// A view a camera describes: its file name and, when the header could be read, its pixel size.
+package struct StudioCameraView: Equatable, Hashable {
+    package let name: String
+    package let pixelSize: StudioPixelSize?
+
+    package init(name: String, pixelSize: StudioPixelSize? = nil) {
+        self.name = name
+        self.pixelSize = pixelSize
+    }
+}
+
+/// An image's decoded size, read from its header the way the CLI reads it (`MediaImageIO.size`:
+/// `kCGImagePropertyPixelWidth` and `Height`, no orientation applied).
+package struct StudioPixelSize: Equatable, Hashable, Codable {
+    package let width: Int
+    package let height: Int
+
+    package init(width: Int, height: Int) {
+        self.width = width
+        self.height = height
+    }
+
+    package static func of(_ url: URL) -> StudioPixelSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
+            return nil
+        }
+        return StudioPixelSize(width: width, height: height)
+    }
+
+    package var label: String { "\(width) × \(height)" }
+}
 
 // MARK: - DA3 multi-view geometry
 
@@ -17,7 +53,7 @@ package struct StudioGeometryCamera: Codable, Equatable, Identifiable {
     /// Focal lengths as a fraction of the image width and height.
     package var normalizedFX: Double
     package var normalizedFY: Double
-    /// The principal point as a fraction of the image width and height; 0.5 is the centre.
+    /// The principal point as a fraction of the image width and height; 0.5 is the center.
     package var normalizedCX: Double
     package var normalizedCY: Double
     package var rotation: [Double]
@@ -43,16 +79,31 @@ package struct StudioGeometryCamera: Codable, Equatable, Identifiable {
         self.translation = translation
     }
 
-    /// A camera at the origin looking down its own axis, for a view of `width` × `height`.
+    /// A camera at the origin looking down its own axis, for a view of `width` × `height`, with a
+    /// focal length of one image width in both axes so its pixels are square.
     package static func identity(width: Int = 1_920, height: Int = 1_080) -> StudioGeometryCamera {
-        StudioGeometryCamera(imageWidth: width, imageHeight: height)
+        StudioGeometryCamera(
+            imageWidth: width,
+            imageHeight: height,
+            normalizedFX: 1,
+            normalizedFY: height > 0 ? Double(width) / Double(height) : 1
+        )
+    }
+
+    package static func identity(size: StudioPixelSize?) -> StudioGeometryCamera {
+        identity(width: size?.width ?? 1_920, height: size?.height ?? 1_080)
     }
 
     /// The CLI's checks (`DepthAnything3CameraValidation.issue`), in the page's words; empty when
-    /// the camera is valid.
-    package var problems: [String] {
+    /// the camera is valid. `view` adds the run-time check that the intrinsics' image size equals
+    /// the decoded image's (`validate(_:sourceDimensions:)`).
+    package func problems(view: StudioCameraView? = nil) -> [String] {
         var problems: [String] = []
-        if imageWidth <= 0 || imageHeight <= 0 { problems.append("needs a positive image size.") }
+        if imageWidth <= 0 || imageHeight <= 0 {
+            problems.append("needs a positive image size.")
+        } else if let view, let size = view.pixelSize, size.width != imageWidth || size.height != imageHeight {
+            problems.append("is sized \(imageWidth) × \(imageHeight) but \(view.name) is \(size.label).")
+        }
         if normalizedFX <= 0 || normalizedFY <= 0 { problems.append("needs positive focal lengths.") }
         let numbers = [normalizedFX, normalizedFY, normalizedCX, normalizedCY] + rotation + translation
         if numbers.contains(where: { !$0.isFinite }) { problems.append("has a value that is not a number.") }
@@ -98,14 +149,16 @@ package struct StudioGeometryCameraDocument: Codable, Equatable {
         self.cameras = cameras
     }
 
-    /// The CLI's checks against the run's views: one camera per view, each valid.
-    package func problems(viewCount: Int) -> [String] {
+    /// The CLI's checks against the run's views: one camera per view, each valid and sized like its
+    /// image.
+    package func problems(views: [StudioCameraView]) -> [String] {
         var problems: [String] = []
-        if cameras.count != viewCount {
-            problems.append(StudioCameraDocuments.countProblem(cameras: cameras.count, views: viewCount))
+        if cameras.count != views.count {
+            problems.append(StudioCameraDocuments.countProblem(cameras: cameras.count, views: views.count))
         }
         for (index, camera) in cameras.enumerated() {
-            problems += camera.problems.map { "Camera \(index + 1) \($0)" }
+            let view = views.indices.contains(index) ? views[index] : nil
+            problems += camera.problems(view: view).map { "Camera \(index + 1) \($0)" }
         }
         return problems
     }
@@ -182,16 +235,11 @@ package struct StudioInstantMeshCamera: Codable, Equatable, Identifiable {
         self.values = values
     }
 
-    /// The guide's example row: identity pose four units back, the released focal length. A new
-    /// camera each time, so a document built from several keeps distinct rows.
+    /// A starting row, the shape of the released rig's front view (`InstantMeshCameraRig.official`):
+    /// identity pose four units back, the trained normalized focal length, centered. A new camera
+    /// each time, so a document built from several keeps distinct rows.
     package static var example: StudioInstantMeshCamera {
         StudioInstantMeshCamera(values: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 4, 1.866, 1.866, 0.5, 0.5])
-    }
-
-    /// The camera-to-world matrix, row by row.
-    package var poseRows: [[Double]] {
-        guard values.count == 16 else { return [] }
-        return (0..<3).map { Array(values[($0 * 4)..<($0 * 4 + 4)]) }
     }
 
     /// The CLI's check: exactly sixteen finite values.
@@ -249,20 +297,61 @@ package enum StudioCameraDocuments {
         "Add one camera per view: \(views) \(views == 1 ? "view" : "views"), \(cameras) \(cameras == 1 ? "camera" : "cameras")."
     }
 
-    /// Where a run's camera file goes: beside the run's output folder, as `<folder name>.cameras.json`,
-    /// so the output folder itself stays empty for the command to fill.
-    package static func url(besideOutputDirectory outputDirectory: String) -> URL {
+    /// Where a run's camera file goes: beside the run's output folder, as `<folder name>.cameras.json`
+    /// (`-2`, `-3`… when that name is taken), so the output folder itself stays empty for the command
+    /// to fill and an earlier run's file is never overwritten.
+    package static func url(besideOutputDirectory outputDirectory: String, fileManager: FileManager = .default) -> URL {
         let output = URL(fileURLWithPath: NSString(string: outputDirectory).expandingTildeInPath, isDirectory: true).standardizedFileURL
-        return output.deletingLastPathComponent().appendingPathComponent("\(output.lastPathComponent).cameras.json")
+        let folder = output.deletingLastPathComponent()
+        let name = StudioOutputLocation.uniqueFileName(
+            stem: "\(output.lastPathComponent).cameras",
+            identifier: "",
+            fileExtension: "json",
+            exists: { fileManager.fileExists(atPath: folder.appendingPathComponent($0).path) }
+        )
+        return folder.appendingPathComponent(name)
     }
 
     /// Where a page keeps the camera file it is editing, so the Command view's Run has a real file to
-    /// pass as `--cameras`; one per page.
-    package static func draftURL(page: String, fileManager: FileManager = .default) -> URL {
+    /// pass as `--cameras`. The name carries a hash of the content, so a command the Library recorded
+    /// keeps pointing at the cameras it ran with while the page moves on; `pruneDrafts` keeps the
+    /// folder from growing without bound.
+    package static func draftURL(page: String, content: Data, fileManager: FileManager = .default) -> URL {
+        draftFolder(page: page, fileManager: fileManager)
+            .appendingPathComponent("cameras-\(StudioOutputLocation.shortIdentifier(for: String(decoding: content, as: UTF8.self))).json")
+    }
+
+    /// Removes all but the newest `keeping` camera drafts for `page`, never the one at `current`.
+    package static func pruneDrafts(page: String, current: URL, keeping: Int = 8, fileManager: FileManager = .default) {
+        StudioDraftFiles.prune(in: draftFolder(page: page, fileManager: fileManager), matching: "cameras-", current: current, keeping: keeping, fileManager: fileManager)
+    }
+
+    private static func draftFolder(page: String, fileManager: FileManager) -> URL {
         StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
             .deletingLastPathComponent()
             .appendingPathComponent(page, isDirectory: true)
-            .appendingPathComponent("cameras.json")
+    }
+}
+
+/// Draft files a page writes for the Command view, named by content so recorded commands stay
+/// reproducible, and pruned so the folder stays small.
+package enum StudioDraftFiles {
+    static func prune(in folder: URL, matching prefix: String, current: URL, keeping: Int, fileManager: FileManager) {
+        let urls = (try? fileManager.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        let drafts = urls
+            .filter { $0.lastPathComponent.hasPrefix(prefix) && $0.standardizedFileURL != current.standardizedFileURL }
+            .sorted {
+                let lhs = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let rhs = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return lhs > rhs
+            }
+        for url in drafts.dropFirst(max(keeping - 1, 0)) {
+            try? fileManager.removeItem(at: url)
+        }
     }
 }
 

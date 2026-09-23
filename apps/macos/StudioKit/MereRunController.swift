@@ -224,6 +224,11 @@ package struct MereRunUtilityCommandResult: Equatable {
 
 @MainActor
 package final class MereRunController: ObservableObject {
+    /// The instrument groups `music transcribe --list-instruments` printed, read once per launch
+    /// for Music ▸ Transcribe rather than every time its page is built. Not published: the picker
+    /// reads it when it appears.
+    package var cachedInstrumentNames: [String]?
+
     package let servingMonitor = StudioServingMonitor()
     /// This Mac's CPU, memory, and thermal load for the menu bar. `StudioAppSession` starts it.
     package let machineMonitor: StudioMachineMonitor
