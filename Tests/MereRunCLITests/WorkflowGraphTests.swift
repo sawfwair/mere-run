@@ -1172,7 +1172,12 @@ final class WorkflowGraphTests: XCTestCase {
         let terminated = WorkflowChildProcessRegistry.terminateAll(in: runDirectory)
         queue.waitUntilAllOperationsAreFinished()
 
-        XCTAssertEqual(terminated, registered)
+        // Each runner also polls cancel.request and stops its own child, so on a loaded machine a
+        // child can be gone before terminateAll reads the registry. Either path must stop them all.
+        XCTAssertTrue(Set(terminated).isSubset(of: Set(registered)))
+        for processID in registered {
+            XCTAssertNotEqual(kill(processID, 0), 0, "Process \(processID) is still running.")
+        }
         XCTAssertEqual(results.completionCount, nodeDirectories.count)
         XCTAssertEqual(results.failureCount, nodeDirectories.count)
         XCTAssertTrue(WorkflowChildProcessRegistry.processIDs(in: runDirectory).isEmpty)
