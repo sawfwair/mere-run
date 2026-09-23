@@ -81,8 +81,24 @@ package final class NavigationModel: ObservableObject {
     /// the destination's own mode when it has one, otherwise the persisted last prompt mode.
     @discardableResult
     package func restore(destination: StudioDestination, lastPromptMode: StudioMode) -> StudioMode {
+        let destination = destinationForNextWindow ?? destination
+        destinationForNextWindow = nil
         open(destination: destination)
         return destination.task.mode ?? lastPromptMode
+    }
+
+    /// A destination asked for from outside the Studio window — the menu bar — while no Studio
+    /// window was open. The window that opens next restores it instead of the remembered one.
+    private var destinationForNextWindow: StudioDestination?
+
+    /// Opens `task` from outside the Studio window: at once when the window is open, or as the
+    /// place the next Studio window opens on.
+    package func open(task: StudioTask, windowIsOpen: Bool) {
+        if windowIsOpen {
+            open(task: task)
+        } else {
+            destinationForNextWindow = task.destination
+        }
     }
 
     /// Whether the inspector column is shown for `task`: remembered on, and not displaced by the

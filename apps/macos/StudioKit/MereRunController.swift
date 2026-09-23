@@ -225,6 +225,8 @@ package struct MereRunUtilityCommandResult: Equatable {
 @MainActor
 package final class MereRunController: ObservableObject {
     package let servingMonitor = StudioServingMonitor()
+    /// This Mac's CPU, memory, and thermal load for the menu bar. `StudioAppSession` starts it.
+    package let machineMonitor: StudioMachineMonitor
     package let taskSessions: StudioTaskSessions
     @Published package var selectedTemplate: CommandTemplate
     @Published package var draft: CommandDraft
@@ -343,6 +345,17 @@ package final class MereRunController: ObservableObject {
     /// The controller mirrors the foreground inference job into its published console fields and
     /// re-broadcasts completions; views may also observe a `Job` directly.
     package lazy var modelStore = StudioModelStore(controller: self)
+    /// The local API server's one owner. `StudioAppSession` creates it at launch so it adopts a
+    /// server from the first job event on, whichever window or menu is open.
+    package lazy var localServer = StudioLocalServer(controller: self)
+    /// The resident `vision serve` and `music serve` processes Studio starts from the Server domain.
+    package lazy var visionServer = StudioServiceProcess(templateID: .visionServe, controller: self)
+    package lazy var musicServer = StudioServiceProcess(templateID: .musicServe, controller: self)
+    /// `world serve`, which has no page: it starts from the Command Console or a Command view.
+    package lazy var worldServer = StudioServiceProcess(templateID: .worldServe, controller: self)
+
+    /// The resident servers besides the API server, in the order the menu bar lists them.
+    package var residentServers: [StudioServiceProcess] { [visionServer, musicServer, worldServer] }
     package let jobs: JobStore
     /// The job whose live state mirrors into the published console fields (the run the
     /// single-pane console/canvas currently shows). Background jobs still complete into the
@@ -405,9 +418,11 @@ package final class MereRunController: ObservableObject {
         fileSystem: MereRunFileProbing = FileManager.default,
         cliResolver: @escaping (String) -> MereRunLaunch = { CLIResolver.resolve(customPath: $0) },
         resolvesCLIOnInit: Bool = true,
-        taskSessions: StudioTaskSessions? = nil
+        taskSessions: StudioTaskSessions? = nil,
+        machineMonitor: StudioMachineMonitor? = nil
     ) {
         self.taskSessions = taskSessions ?? StudioTaskSessions()
+        self.machineMonitor = machineMonitor ?? StudioMachineMonitor()
         self.secretStore = secretStore
         self.fileSystem = fileSystem
         self.cliResolve = cliResolver
@@ -1213,6 +1228,34 @@ package final class MereRunController: ObservableObject {
         )
     }
 
+    /// Launches a long-lived catalog server (`api serve`) in the service lane: it starts at once,
+    /// holds no inference slot, and reports only to whoever keeps the returned id — not to the
+    /// console, the Library, or a completion notification. `arguments`, when the task's Command
+    /// view edited them, replace the ones the draft would build. A draft that fails preflight
+    /// still returns an id; the job's state carries the reason.
+    @discardableResult
+    package func startService(
+        template: CommandTemplate,
+        draft: CommandDraft,
+        arguments: [String]? = nil,
+        requestID: UUID? = nil
+    ) -> JobID {
+        refreshResolvedCLI()
+        let execution = arguments.map { StudioExecution(templateID: template.id, arguments: $0) }
+        let draft = execution?.project(onto: draft) ?? draft
+        let launch = cliResolve(cliPath)
+        let args = arguments.map(cliArguments) ?? commandArguments(template: template, draft: draft)
+        return jobs.submit(JobRequest(
+            lane: .service,
+            template: template,
+            draft: draft,
+            requestID: requestID,
+            configuration: processConfiguration(launch: launch, args: args, template: template, draft: draft),
+            displayCommand: launch.displayCommand(for: args),
+            execution: execution
+        ))
+    }
+
     /// Snapshots the launch (resolved CLI, argv, environment, working directory) into a
     /// `JobRequest` and hands it to the inference lane. Returns false only when the job failed
     /// preflight or could not launch; a queued job returns true.
@@ -1484,13 +1527,23 @@ package final class MereRunController: ObservableObject {
     /// Posts a local notification when a run finishes while the app is backgrounded, so
     /// users can leave a multi-minute pull or render running. No-op for non-bundle (dev) launches.
     private func notifyCompletionIfNeeded(success: Bool, summary: String) {
+        notifyIfInBackground(title: success ? "Run complete" : "Run failed", body: summary)
+    }
+
+    /// Tells the user a server Studio started exited on its own — most often while no Studio
+    /// window is in front, which is exactly when nothing else would show it.
+    package func notifyServerStopped(_ server: String, reason: String) {
+        notifyIfInBackground(title: "\(server) stopped", body: reason)
+    }
+
+    private func notifyIfInBackground(title: String, body: String) {
         // NSApp is nil outside a running NSApplication (e.g. unit tests); guard before use.
         guard Bundle.main.bundleURL.pathExtension == "app", Bundle.main.bundleIdentifier != nil, NSApp != nil, !NSApp.isActive else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
-            content.title = success ? "Run complete" : "Run failed"
-            content.body = summary
+            content.title = title
+            content.body = body
             content.sound = .default
             UNUserNotificationCenter.current().add(
                 UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)

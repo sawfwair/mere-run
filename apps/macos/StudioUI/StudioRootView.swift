@@ -51,6 +51,9 @@ private struct StudioWorkspaceView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// The status probe never answered within its grace period, so the footer says so.
     @State private var probeTimedOut = false
+    /// The API server's phase, mirrored from `controller.localServer` for the footer pill.
+    @State private var serverPhase: StudioLocalServer.Phase = .stopped
+    @State private var serverLoadedModel: String?
     @State private var isDropTargeted = false
     /// Which jobs exist; the feed re-derives its cards when one starts or finishes.
     @StateObject private var jobMonitor = StudioJobMonitor()
@@ -310,12 +313,29 @@ private struct StudioWorkspaceView: View {
             try? await Task.sleep(for: .seconds(StudioMachineStatus.checkingGracePeriod))
             guard !Task.isCancelled, controller.serverStatus == nil else { return }
             probeTimedOut = true
+            // The probe otherwise runs only on inventory and settings changes; while it has no
+            // answer — a CLI still installing, a probe that timed out — keep asking.
+            while !Task.isCancelled, controller.serverStatus == nil {
+                try? await Task.sleep(for: .seconds(20))
+                await controller.refreshServerStatus()
+            }
         }
         .overlay(alignment: .bottomLeading) { activityOverlay }
+        .onReceive(controller.localServer.$phase) { serverPhase = $0 }
+        .onReceive(controller.servingMonitor.$runtime) { serverLoadedModel = $0?.loadedTextModels.first?.id }
     }
 
     private var machineStatus: StudioMachineStatus {
-        StudioMachineStatus(serverStatus: controller.serverStatus, probeTimedOut: probeTimedOut)
+        StudioMachineStatus(
+            serverStatus: controller.serverStatus,
+            probeTimedOut: probeTimedOut,
+            isServing: serverPhase.isServing,
+            loadedModel: serverLoadedModel
+        )
+    }
+
+    private func refreshStatus() {
+        Task { await controller.refreshServerStatus() }
     }
 
     /// How many jobs the footer pill counts: the user's work, never a readiness probe.
@@ -700,9 +720,11 @@ private struct StudioWorkspaceView: View {
                 onTrain: openTraining
             )
         case .serverServing:
-            StudioServingConsoleView(monitor: controller.servingMonitor)
+            StudioServingConsoleView(monitor: controller.servingMonitor, server: controller.localServer)
         case .serverMusic:
             StudioMusicToolsView(tool: .constant(.serve), tools: [.serve])
+        case .serverVision:
+            StudioVisionServerView(server: controller.visionServer)
         case .runsRuns:
             StudioOperationsView()
         case .pluginsCatalog:
@@ -1100,14 +1122,14 @@ private struct StudioWorkspaceView: View {
 
     private var lifecycleShell: some View {
         presentedShell
-        .task {
-            // Poll the local server status for the sidebar status cluster. status has a 1s probe
-            // timeout, so a modest cadence keeps it live without hammering the CLI.
-            while !Task.isCancelled {
-                await controller.refreshServerStatus()
-                try? await Task.sleep(nanoseconds: 20 * 1_000_000_000)
-            }
-        }
+        // The footer reads whether a server answers from the endpoint monitor. What `status`
+        // still tells it — the installed-model count, and that the CLI answers at all — changes
+        // only when the inventory or the CLI settings do, so the probe runs then, not on a timer.
+        // The inventory publishes once on subscribe, which is the probe at appearance.
+        .onReceive(controller.modelStore.$rows) { _ in refreshStatus() }
+        .onChange(of: controller.cliPath) { _, _ in refreshStatus() }
+        .onChange(of: controller.modelsRoot) { _, _ in refreshStatus() }
+        .onChange(of: controller.cliVersion) { _, _ in refreshStatus() }
         .onAppear {
             navigation.showLibrary = storedShowLibrary
             navigation.inspectorTasks = StudioInspectorTaskMemory.decode(storedInspectorTasks)
@@ -1469,7 +1491,8 @@ private struct StudioWorkspaceView: View {
         studioError = nil
         do {
             if !showsPromptWorkspace {
-                if let base = baseTaskRequest { _ = try prompt.runTask(base, task: destination.task) }
+                guard let base = baseTaskRequest else { return }
+                if !runServer(base) { _ = try prompt.runTask(base, task: destination.task) }
                 return
             }
             guard let submission = try prompt.runPrompt(inventory: modelInventory) else { return }
@@ -1481,6 +1504,32 @@ private struct StudioWorkspaceView: View {
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    /// Runs a server task's command through the server's owner, so it starts in the service lane
+    /// like the page's own Start — never as a generation holding a slot, the console, and a
+    /// Library row. A server already running restarts on the command. Returns false for any
+    /// other command.
+    private func runServer(_ base: StudioRunRequest) -> Bool {
+        switch base.templateID {
+        case .apiServe:
+            let server = controller.localServer
+            Task { @MainActor in
+                studioError = server.phase.isOwned ? await server.restart() : server.start()
+            }
+        case .visionServe, .musicServe, .worldServe:
+            guard let server = controller.residentServers.first(where: { $0.templateID == base.templateID }) else {
+                return false
+            }
+            if server.state.isRunning {
+                Task { _ = await server.restart(draft: base.draft) }
+            } else {
+                server.start(draft: base.draft)
+            }
+        default:
+            return false
+        }
+        return true
     }
 
     /// The composer's Stop: the run of this mode in flight, or the thread's turn.

@@ -257,16 +257,6 @@ struct StudioMusicToolsView: View {
                     transcriptionControls
                 case .serve:
                     serverControls
-                    if controller.isRunning {
-                        Button(role: .destructive) {
-                            controller.cancel()
-                            statusMessage = "Stopping resident music server…"
-                        } label: {
-                            Label("Stop server", systemImage: "stop.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                    }
                 }
                 if let statusMessage {
                     Text(statusMessage)
@@ -406,7 +396,7 @@ struct StudioMusicToolsView: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
             HStack {
                 labeledTextField("Host", placeholder: "127.0.0.1", text: $serveDraft.host)
-                Stepper("Port \(serveDraft.port)", value: $serveDraft.port, in: 1...65_535)
+                Stepper("Port \(String(serveDraft.port))", value: $serveDraft.port, in: 1...65_535)
             }
             labeledTextField("ACE-Step model", placeholder: "music-acestep", text: $serveDraft.model)
             checkpointControls(draft: $serveDraft, includesLanguageModel: true)
@@ -434,8 +424,7 @@ struct StudioMusicToolsView: View {
             Text("The token is injected through MERERUN_API_KEY and is never placed in argv.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
-            runButton(controller.isRunning ? "Server already running" : "Start resident server")
-                .disabled(controller.isRunning)
+            StudioMusicServerControl(server: controller.musicServer, draft: serveDraft)
         }
     }
 
@@ -488,7 +477,8 @@ struct StudioMusicToolsView: View {
                 Text(tool.title)
                     .font(MereRunTheme.sectionFont)
                 Spacer()
-                if let item {
+                // The resident server is a process, not a Library run; its state is in the pane.
+                if let item, tool != .serve {
                     Text(item.status.rawValue.capitalized)
                         .font(.system(size: 10.5, weight: .bold))
                         .foregroundStyle(item.status == .failed ? MereRunTheme.red : MereRunTheme.textMuted)
@@ -549,38 +539,7 @@ struct StudioMusicToolsView: View {
     }
 
     private var serverResult: some View {
-        VStack(spacing: 18) {
-            ZStack {
-                Circle()
-                    .fill(controller.isRunning ? MereRunTheme.green.opacity(0.14) : MereRunTheme.surface)
-                Image(systemName: controller.isRunning ? "bolt.horizontal.circle.fill" : "bolt.slash.circle")
-                    .font(.system(size: 58, weight: .semibold))
-                    .foregroundStyle(controller.isRunning ? MereRunTheme.green : MereRunTheme.textMuted)
-            }
-            .frame(width: 130, height: 130)
-            Text(controller.isRunning ? "Resident music is running" : "Resident music is stopped")
-                .font(MereRunTheme.titleFont)
-            Text("http://\(serveDraft.host):\(serveDraft.port)")
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                .textSelection(.enabled)
-            HStack {
-                Button("Open health endpoint") {
-                    guard let url = URL(string: "http://\(serveDraft.host):\(serveDraft.port)/health") else {
-                        return
-                    }
-                    NSWorkspace.shared.open(url)
-                }
-                .buttonStyle(.bordered)
-                if controller.isRunning {
-                    Button(role: .destructive) { controller.cancel() } label: {
-                        Label("Stop", systemImage: "stop.fill")
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-            StudioSpecialistResultView(requestID: requestID, preferredKinds: [.text])
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        StudioMusicServerStatus(server: controller.musicServer, host: serveDraft.host, port: serveDraft.port)
     }
 
     private var analysisJSONObject: Any? {
@@ -856,5 +815,83 @@ private extension String {
             .split(separator: " ")
             .map { $0.prefix(1).uppercased() + $0.dropFirst() }
             .joined(separator: " ")
+    }
+}
+
+/// Start or Stop for the resident music server. It observes `controller.musicServer`, the process
+/// the menu bar can stop too, rather than whichever run happens to hold the console.
+private struct StudioMusicServerControl: View {
+    @ObservedObject var server: StudioServiceProcess
+    let draft: CommandDraft
+
+    var body: some View {
+        if server.state.isRunning {
+            HStack {
+                Button { Task { _ = await server.restart(draft: draft) } } label: {
+                    Label("Restart", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.mereSecondary)
+                .help("Restart the server with these settings")
+                Button { server.stop() } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.mereSecondary)
+            }
+            .disabled(server.state.isStopping)
+        } else {
+            Button { server.start(draft: draft) } label: {
+                Label("Start resident server", systemImage: StudioMusicTool.serve.symbol)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(MereRunTheme.accent)
+        }
+    }
+}
+
+/// The resident music server's state, endpoint, and live log.
+private struct StudioMusicServerStatus: View {
+    @ObservedObject var server: StudioServiceProcess
+    let host: String
+    let port: Int
+
+    private var isRunning: Bool { server.state.isRunning && !server.state.isStopping }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            ZStack {
+                Circle()
+                    .fill(isRunning ? MereRunTheme.green.opacity(0.14) : MereRunTheme.surface)
+                Image(systemName: isRunning ? "bolt.horizontal.circle.fill" : "bolt.slash.circle")
+                    .font(.system(size: 58, weight: .semibold))
+                    .foregroundStyle(isRunning ? MereRunTheme.green : MereRunTheme.textMuted)
+            }
+            .frame(width: 130, height: 130)
+            Text("Resident music is \(StudioResidentServerCopy.title(server.state).lowercased())")
+                .font(MereRunTheme.titleFont)
+            if let failure = StudioResidentServerCopy.failure(server.state) {
+                Text(failure)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.red)
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
+            }
+            Text("http://\(host):\(String(port))")
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .textSelection(.enabled)
+            Button("Open health endpoint") {
+                guard let url = URL(string: "http://\(host):\(port)/health") else { return }
+                NSWorkspace.shared.open(url)
+            }
+            .buttonStyle(.mereSecondary)
+            .disabled(!isRunning)
+            if let job = server.job {
+                StudioServiceLogView(job: job)
+                    .frame(minHeight: 200)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

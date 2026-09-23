@@ -8,35 +8,50 @@ final class StudioSidebarTests: XCTestCase {
     // MARK: - Machine status
 
     func testMachineStatusResolvesEveryProbeOutcome() {
-        XCTAssertEqual(StudioMachineStatus(serverStatus: nil, probeTimedOut: false), .checking)
-        XCTAssertEqual(StudioMachineStatus(serverStatus: nil, probeTimedOut: true), .unreachable)
+        XCTAssertEqual(StudioMachineStatus(serverStatus: nil, probeTimedOut: false, isServing: false), .checking)
+        XCTAssertEqual(StudioMachineStatus(serverStatus: nil, probeTimedOut: true, isServing: false), .cliNotResponding)
 
         let idle = StudioServerStatus(health: "down", loadedModels: [], installedCount: 92)
         XCTAssertEqual(
-            StudioMachineStatus(serverStatus: idle, probeTimedOut: false),
+            StudioMachineStatus(serverStatus: idle, probeTimedOut: false, isServing: false),
             .ready(installedModels: 92)
         )
         // A late answer wins over the grace-period fallback.
         XCTAssertEqual(
-            StudioMachineStatus(serverStatus: idle, probeTimedOut: true),
+            StudioMachineStatus(serverStatus: idle, probeTimedOut: true, isServing: false),
             .ready(installedModels: 92)
         )
 
         let serving = StudioServerStatus(health: "ok", loadedModels: ["gemma4-e4b"], installedCount: 3)
         XCTAssertEqual(
-            StudioMachineStatus(serverStatus: serving, probeTimedOut: false),
+            StudioMachineStatus(serverStatus: serving, probeTimedOut: false, isServing: true, loadedModel: "gemma4-e4b"),
             .serving(installedModels: 3, loadedModel: "gemma4-e4b")
+        )
+    }
+
+    func testMachineStatusTakesServingFromTheServerMonitorNotTheSlowerStatusPoll() {
+        // The 20-second `status --json` poll can lag the 2-second endpoint monitor either way; the
+        // footer follows the monitor, as the Server page and the menu bar do.
+        let staleUp = StudioServerStatus(health: "ok", loadedModels: ["gemma4-e4b"], installedCount: 3)
+        XCTAssertEqual(
+            StudioMachineStatus(serverStatus: staleUp, probeTimedOut: false, isServing: false),
+            .ready(installedModels: 3)
+        )
+        let staleDown = StudioServerStatus(health: "down", loadedModels: [], installedCount: 3)
+        XCTAssertEqual(
+            StudioMachineStatus(serverStatus: staleDown, probeTimedOut: false, isServing: true),
+            .serving(installedModels: 3, loadedModel: nil)
         )
     }
 
     func testMachineStatusCopy() {
         XCTAssertEqual(StudioMachineStatus.checking.summary, "Checking…")
-        XCTAssertEqual(StudioMachineStatus.unreachable.summary, "Server unreachable")
+        XCTAssertEqual(StudioMachineStatus.cliNotResponding.summary, "CLI not responding")
         XCTAssertEqual(StudioMachineStatus.ready(installedModels: 92).summary, "Ready · 92 models")
         XCTAssertEqual(StudioMachineStatus.ready(installedModels: 1).summary, "Ready · 1 model")
         XCTAssertEqual(
             StudioMachineStatus.serving(installedModels: 3, loadedModel: "gemma4-e4b").summary,
-            "Serving · 3 models"
+            "Serving"
         )
 
         XCTAssertEqual(
@@ -45,8 +60,8 @@ final class StudioSidebarTests: XCTestCase {
         )
         XCTAssertEqual(StudioMachineStatus.serving(installedModels: 3, loadedModel: nil).serverDetail, "Up")
         XCTAssertEqual(StudioMachineStatus.ready(installedModels: 2).serverDetail, "Not running — starts on demand")
-        XCTAssertTrue(StudioMachineStatus.unreachable.serverDetail.contains("did not answer"))
-        XCTAssertEqual(StudioMachineStatus.unreachable.modelsDetail, "—")
+        XCTAssertTrue(StudioMachineStatus.cliNotResponding.serverDetail.contains("did not answer"))
+        XCTAssertEqual(StudioMachineStatus.cliNotResponding.modelsDetail, "—")
         XCTAssertEqual(StudioMachineStatus.ready(installedModels: 2).modelsDetail, "2 installed")
     }
 

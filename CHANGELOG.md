@@ -6,6 +6,44 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add a macOS Studio menu bar extra for the local API server: its state and
+  address, Start and Stop, why it stopped, the resident models with Unload, the
+  Studio jobs in flight, and a way back into the Studio, with or without a Studio
+  window open. Settings ▸ Server turns it off. The Server page, the menu bar, and
+  the sidebar footer now read one app-wide server owner and agree.
+- Run the Studio-started API, vision, and music servers outside the two
+  inference slots, so a running server no longer halves generation capacity,
+  takes over the console, or becomes a Library row. Restart waits for the old
+  process to exit, and each server page shows its live log and why it stopped.
+- Give the vision server its own Server ▸ Vision server task and reduce Server ▸
+  Serving to six sections with one set of Start, Stop, and Restart controls.
+- Fix the music server page, whose Stop cancelled whichever run held the console
+  and which reported "Server already running" during any generation. Ports no
+  longer render with thousands separators.
+- Make ⌥⌘C always toggle the Command view; the Command Console moves to Window ▸
+  Command Console (⇧⌘C). Settings ▸ Server applies the endpoint and key on Apply
+  or Return rather than on every keystroke. The sidebar footer says "CLI not
+  responding" instead of "Server unreachable" when `mere.run status` does not
+  answer.
+- Ask before quitting while a server Studio started or an inference job is still
+  running.
+- Show this Mac's load in the menu bar: CPU and the server's decode rate with
+  two minutes of history, and a memory bar splitting the server's footprint from
+  the rest, with a thermal warning when the Mac throttles. Load a server model
+  from the menu bar.
+- Let mere.run live in the menu bar: it leaves the Dock while no window is open,
+  can start the API server when it opens, and can open at login. A server that
+  stops on its own posts a notification while mere.run is in the background.
+- Treat an API server that answers `/health` but not `/runtime/status` as up,
+  and poll its status every 30 seconds instead of every 2 until it answers.
+- Run `world serve` and servers started from the Command Console in the service
+  lane too, and refresh the sidebar's status probe only when the model inventory
+  or CLI settings change instead of every 20 seconds.
+- Fix the Server page's Reconnect button, which did nothing, and Start, which
+  after a relaunch cleared the runtime API key from the Keychain and could revert
+  a host or port changed in Settings. Agent readiness is now read when the
+  Agents section opens instead of every 16 seconds for the life of the app.
+
 ## 0.55.0 - 2026-09-22
 
 - Add native Laya decisions through `text decide`, macOS Studio, and

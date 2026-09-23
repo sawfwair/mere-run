@@ -20,13 +20,17 @@ package enum JobLane: Hashable, CaseIterable, Sendable {
     case utility
     /// Readiness and status probes. Never queued; deduplicated by `JobRequest.dedupeKey`.
     case probe
+    /// Long-lived servers Studio starts and stops (`api serve`). A server runs until it is
+    /// stopped, so it never waits for or holds an inference slot, and it is not a run: it takes
+    /// no foreground console, no Library row, and no completion notification.
+    case service
 
     /// How many jobs may execute at once in this lane; further submissions wait in FIFO order.
     package var capacity: Int {
         switch self {
         case .inference: return 2
         case .utility: return 4
-        case .probe: return Int.max
+        case .probe, .service: return Int.max
         }
     }
 }

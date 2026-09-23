@@ -303,7 +303,7 @@ current addresses:
 | `model benchmark` (12) | Health & Repair, a sheet | **Models ▸ Benchmarks**, beside **Models ▸ Health** |
 | `model location` (5) | Models → Locations, a nested sheet | **Models ▸ Locations** |
 | `speech listen` (1) | Voice Studio → Listen Live | **Audio ▸ Live** |
-| `vision serve` (1) | Serving → Vision Grounding | **Server ▸ Serving**, its Vision Grounding section |
+| `vision serve` (1) | Serving → Vision Grounding | **Server ▸ Vision server** |
 | `plugin` info/run/rollback (3) | Plugins, a sheet | **Plugins ▸ Catalog** |
 | `config list` / `path` (2) | Settings | **Settings ▸ Advanced** |
 

@@ -107,6 +107,14 @@ package struct StudioConsoleView: View {
             draft: commandDraft,
             execution: StudioExecution(templateID: template.id, arguments: arguments)
         )
+        // A server runs until stopped: it goes to the service lane, where it holds no generation
+        // slot and makes no Library row, and its page and the menu bar adopt it. The console
+        // still shows its log. A preflight checks and exits, so it stays an ordinary run.
+        if template.id.isResidentServer, !commandDraft.preflight {
+            requestID = request.id
+            controller.startService(template: template, draft: commandDraft, arguments: arguments, requestID: request.id)
+            return
+        }
         let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
             ? .queued
             : .running
