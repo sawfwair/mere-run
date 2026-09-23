@@ -40,6 +40,7 @@ struct StudioAnalyzeCanvas: View {
     let readiness: ModelReadinessState
     let pullJob: Job?
     let actions: StudioFeedActions
+    let readinessActions: StudioReadinessActions
     let analyze: StudioAnalyzeActions
     var editing: StudioAnalyzePromptEditing?
 
@@ -402,8 +403,7 @@ struct StudioAnalyzeCanvas: View {
                 StudioReadinessCard(
                     readiness: readiness,
                     pullJob: pullJob,
-                    onPullModel: actions.pullModel,
-                    onShowDetails: actions.showDetails,
+                    actions: readinessActions,
                     onCancelPull: { actions.cancel($0) }
                 )
             }
@@ -421,7 +421,8 @@ struct StudioAnalyzeCanvas: View {
             if let job = card.job {
                 StudioRunningCard(item: card.item, job: job, isHighlighted: false) { actions.cancel(job) }
             } else {
-                StudioFailureCard(item: card.item, job: nil, isHighlighted: false, actions: actions)
+                StudioFailureCard(item: card.item, job: nil, isHighlighted: false, actions: actions,
+                                  modelInventory: readinessActions.modelInventory)
             }
         case .queued:
             StudioQueuedRow(
@@ -432,7 +433,8 @@ struct StudioAnalyzeCanvas: View {
                 actions.remove(card)
             }
         case .failed:
-            StudioFailureCard(item: card.item, job: card.job, isHighlighted: false, actions: actions)
+            StudioFailureCard(item: card.item, job: card.job, isHighlighted: false, actions: actions,
+                              modelInventory: readinessActions.modelInventory)
         case .generation:
             EmptyView()
         }

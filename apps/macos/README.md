@@ -222,10 +222,30 @@ Rows carry a hover star (`StudioLibraryItem.isFavorite`, an additive optional
 written as `nil` when unstarred), rename in place, and drag out to Finder or any
 app. ⌘ and ⇧ click build a batch (`StudioLibrarySelection`) with a bar for
 Reveal, Save to…, and Delete; Delete asks first and offers to move the run's
-files to the Trash. Filtering and day-grouping live in `StudioLibraryPresenter`,
-so both are testable without a view. The view mode, kind, and favorites filter
-persist per window under `studio.libraryView`, `studio.libraryKind`, and
+files to the Trash. A batch of exactly two finished image runs adds **Compare**
+to the bar and the context menu, which opens the older run in the result
+workspace with the newer beside it. Search matches a run's title, kind, prompt,
+model (the name the app shows or the exact id, from the thread, the recorded
+draft, or a legacy row's `--model` argument); a whole status word ("failed",
+"running") narrows to that status and the rest of the query must still match,
+so "failed harbor" is the failed harbor runs, and a fragment like "ed" matches
+nothing.
+Filtering and day-grouping live in `StudioLibraryPresenter`, so both are
+testable without a view. The view mode, kind, and favorites filter persist per
+window under `studio.libraryView`, `studio.libraryKind`, and
 `studio.libraryFavorites`.
+
+A row's context menu offers **Use these settings** (also on a finished card's
+icon row and beside Retry on a failed card): the run's task opens with its
+recorded prompt, model, and options in the composer, ready to tweak and run
+again. `StudioLibraryDraftRestoration` reads the recorded command back through
+the same contract bindings the Command view uses, replaces the task's parked
+draft and any Command view override, and records the run as the draft's parent.
+Only options a page control binds come back; a Command view extra with no
+control (an option the composer never shows) is not restored, and a row whose
+command the composer does not build (an upscale or edit run from the Console)
+does not offer the action at all (`StudioLibraryDraftRestoration.canRestore`).
+Run again and Edit command… stay for an exact rerun or a raw edit.
 
 Each task retains its full draft and selected run through `StudioTaskSessions`.
 Prompt modes preserve model, seed, dimensions, attachments, and sampling values;
@@ -260,9 +280,16 @@ prompt, a **chip strip** shows up to four essentials (size, length, steps, seed,
 threshold, task, voice mode, thinking) as menus with popover editors for custom
 values; some modes show only the model chip. The **model chip** is the only
 model control: it lists `model list` rows filtered to the mode's category,
-installed first, with "Auto" for the mode's default. The chips and the inspector
-bind the same `StudioDraft`, so a value changed in one shows in the other. ⌘↩
-runs; while a conversation turn streams, the send circle becomes Stop.
+installed first, with "Auto" for the mode's default. A fresh draft starts on the
+model the user made the task's default in Models ▸ Installed ("Use for Chat by
+default", kept per task in `StudioTaskSessions`), else the CLI's recommendation
+for Chat and Code, else the template default. Every surface names a model
+through `StudioModelNaming`: the inventory's title when `StudioModelStore` has
+published one (`StudioModelTitles`, set in the environment by each window root
+and passed to presenters explicitly), else a name formatted from the id, with
+the exact id in the tooltip. The chips and the inspector bind the same `StudioDraft`, so a value
+changed in one shows in the other. ⌘↩ runs; while a conversation turn streams,
+the send circle becomes Stop.
 
 The **feed** above the composer (`StudioUI/StudioFeedCanvas.swift`, cards derived in
 `StudioKit/StudioFeedCards.swift`) lists the mode's runs oldest first, newest beside the
@@ -277,8 +304,18 @@ row with Remove; both come from `JobStore`, not from a controller mirror. A
 failed run leads with the last meaningful stderr line, keeps the log behind
 "Show log", and offers Retry. Validation errors ("Prompt is required.") render
 as a banner under the composer; readiness (missing model, missing CLI) is a card
-at the bottom of the feed with "Get the model" and the pull's own progress, so
-it never hides earlier work. Completion never moves the Library selection; a
+at the bottom of the feed, so it never hides earlier work. The card speaks
+plainly ("LTX-2 Fast isn't on this Mac yet.") and carries the next step for its
+state: **Get the model** with the pull's own progress (a publisher's terms are
+acknowledged in a sheet first, the same one the composer uses), beside
+**Choose another model**, the composer's own picker; the picker with **Open in
+Models** when the Mac cannot run the model; **Check again** and the picker when
+the check itself failed, with the CLI's last line kept as a muted detail so a
+wrong model location stays diagnosable; and **Check the model** before the first
+check, which has its own neutral state (`ModelReadinessState.notChecked`,
+`StudioReadinessActions`). A run that failed because its model is not on this
+Mac says so plainly and offers **Get the model** on its card instead of the
+CLI's error line. Completion never moves the Library selection; a
 result that finishes off-screen shows a "New result ↓" pill. Picking a Library
 row scrolls to its card and outlines it briefly.
 
@@ -441,7 +478,9 @@ Studio window.
 ## Focus, compare, and continue
 
 Click an image or **Focus** on its result card to inspect it in the workspace.
-**Compare** selects another result and links zoom and pan. The settings area
+**Compare** selects another result and links zoom and pan; batching two image
+rows in the Library and choosing Compare lands in the same view with the pair
+already side by side. The settings area
 shows differences between the recorded commands. **Continue with…** opens a
 new draft for editing, reference guidance, video, image understanding, or
 segmentation. The resulting run records its parent; the original stays in Library.
@@ -691,7 +730,14 @@ Run gate and Benchmark… routing to those tasks), a Performance panel (last run
 length, unified-memory needs, latest benchmark), the adapters whose base model it
 is (Use in `<domain>` applies one to the composer, Train new… opens the
 trainer), and the runtime-settings editor and raw `model info` output under two
-folds. Rows whose data the CLI or Library does not have are omitted rather than
+folds. The header's tags name the tasks the model runs by default ("Default for
+Image" for a template default, "Your default for Code" for a choice), and the
+More menu offers **Use for `<task>` by default** for each task whose model chip
+lists the model; turning one on moves that task's composer onto the model at
+once (a model the user picked by hand in a parked draft stays), turning it off
+returns the task to the built-in default, and a choice whose model has since
+left the inventory is ignored rather than left pointing at nothing. Rows whose data
+the CLI or Library does not have are omitted rather than
 faked. A job bar at the page bottom reports a pull, MiniMax-H3 optimize or
 rebuild, or storage clean-up in flight with Cancel and Log. Downloads started
 from either the composer or Models use the same job, including queued downloads.

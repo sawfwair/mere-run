@@ -5,6 +5,9 @@ import Foundation
 @MainActor
 package final class StudioModelStore: ObservableObject {
     @Published package private(set) var rows: [StudioModelInventoryRow] = []
+    /// The names of `rows`, published with them, so every surface that names a model observes
+    /// one source and re-renders when a refresh brings titles in.
+    @Published package private(set) var titles = StudioModelTitles.none
     @Published package private(set) var hasInventory = false
     @Published package private(set) var storage: StudioModelStorageReport?
     @Published package private(set) var isRefreshing = false
@@ -81,6 +84,7 @@ package final class StudioModelStore: ObservableObject {
         isRefreshing = true
         if snapshotContext != context {
             rows = []
+            titles = .none
             hasInventory = false
             storage = nil
             metadata = [:]
@@ -118,6 +122,7 @@ package final class StudioModelStore: ObservableObject {
         metadata = freshMetadata
         storage = freshStorage
         rows = applyingStorage(freshStorage, to: StudioModelCatalogParser.applying(freshMetadata, to: freshRows))
+        titles = StudioModelTitles(rows: rows)
         hasInventory = true
         error = nil
     }

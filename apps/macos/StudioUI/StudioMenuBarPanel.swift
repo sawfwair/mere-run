@@ -97,6 +97,8 @@ package struct StudioMenuBarPanel: View {
     @ObservedObject private var monitor: StudioServingMonitor
     @ObservedObject private var jobs: JobStore
     @ObservedObject private var machine: StudioMachineMonitor
+    /// For the job rows' model names; observed so a row renames when the inventory arrives.
+    @ObservedObject private var modelStore: StudioModelStore
     private let controller: MereRunController
     private let onOpenStudio: () -> Void
     private let onOpenServer: () -> Void
@@ -118,13 +120,14 @@ package struct StudioMenuBarPanel: View {
         _monitor = ObservedObject(wrappedValue: controller.servingMonitor)
         _jobs = ObservedObject(wrappedValue: controller.jobs)
         _machine = ObservedObject(wrappedValue: controller.machineMonitor)
+        _modelStore = ObservedObject(wrappedValue: controller.modelStore)
         self.onOpenStudio = onOpenStudio
         self.onOpenServer = onOpenServer
     }
 
     package var body: some View {
         _ = generation
-        let rows = StudioActivity.rows(in: jobs)
+        let rows = StudioActivity.rows(in: jobs, titles: modelStore.titles)
         return VStack(alignment: .leading, spacing: 0) {
             header
             serverRow

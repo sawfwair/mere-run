@@ -96,6 +96,25 @@ The format is based on Keep a Changelog.
   cameras as per-view fields checked the way the CLI checks them, enter Klein
   per-target LoRA ranks as rows, and set Woosh renoise as a slider or a per-step
   schedule; Studio writes the exact files and arguments each command reads.
+- Name models the same way everywhere in Studio: the model chip, the thread
+  list, the Adapters page, the Library, and the readiness card now print the
+  title the Models page prints, and fall back to a readable name only for ids
+  the inventory has not named.
+- Add "Use these settings" to Library rows and result cards, which opens the
+  run's task with its recorded prompt, model, and options in the composer to
+  tweak and run again; Run again and Edit command… stay for exact reruns.
+- Let Library search find runs by model name or id, and narrow by a whole
+  status word such as "failed" or "running" alongside the rest of the query.
+- Offer Compare from the Library: batch two finished image runs and the bar and
+  context menu open them side by side in the result workspace.
+- Let Models ▸ Installed make a model the default for a task ("Use for Chat by
+  default"); the task's composer moves onto it at once and fresh drafts start
+  from it.
+- Rewrite the readiness card in plain language and replace its Details button
+  with the next step: Get the model (with the publisher's terms sheet when there
+  is one), Choose another model, or Check again, keeping the CLI's last line as
+  a muted detail when a check fails. A run that failed because its model is not
+  on this Mac now says so on its card and offers Get the model.
 
 ## 0.55.0 - 2026-09-22
 

@@ -426,6 +426,7 @@ struct StudioAnalyzeResultPanel: View {
     let outputText: String?
     let view: StudioAnalyzeResultView
     let nextActions: [StudioAnalyzeNextAction]
+    @Environment(\.studioModelTitles) private var titles
     let onOpenTask: (StudioTask) -> Void
     let onSave: (StudioAnalyzeSaveKind) -> Void
 
@@ -454,7 +455,7 @@ struct StudioAnalyzeResultPanel: View {
     private var meta: String {
         var parts: [String] = []
         if let model = document?.modelID ?? item.commandDraft?.model, !model.isBlank {
-            parts.append(StudioModelNaming.displayName(model))
+            parts.append(StudioModelNaming.displayName(model, titles: titles))
         }
         let elapsed = item.updatedAt.timeIntervalSince(item.createdAt)
         if elapsed >= 0.05 { parts.append(String(format: "%.1f s", elapsed)) }
@@ -631,6 +632,7 @@ struct StudioAnalyzeResultPanel: View {
 /// What was asked, and the settings it ran with.
 struct StudioAnalyzePromptPanel: View {
     let item: StudioLibraryItem
+    @Environment(\.studioModelTitles) private var titles
 
     private var prompt: String {
         item.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -638,7 +640,7 @@ struct StudioAnalyzePromptPanel: View {
 
     /// The run's own chips, capitalized the way the board draws them.
     private var chips: [String] {
-        StudioFeedChips.chips(for: item).map { chip in
+        StudioFeedChips.chips(for: item, titles: titles).map { chip in
             guard let first = chip.first else { return chip }
             return first.uppercased() + chip.dropFirst()
         }

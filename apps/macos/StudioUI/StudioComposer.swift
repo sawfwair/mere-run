@@ -17,6 +17,7 @@ struct StudioComposer: View {
     var sendBlocked: Bool = false
     /// Every row of `model list`, installed or not; the model chip filters it to the mode.
     let modelInventory: [StudioModelInventoryRow]
+    @Environment(\.studioModelTitles) private var titles
     /// The seed of the mode's most recent run, for "Reuse last".
     var lastSeed: String?
     var promptFocus: FocusState<Bool>.Binding
@@ -350,7 +351,7 @@ struct StudioComposer: View {
         case .unavailable(let message):
             return message
         case .managedModel(let modelID):
-            return controller.modelCapabilitiesByID[modelID]?.unavailableMessage
+            return controller.modelCapabilitiesByID[modelID]?.unavailableMessage(titles: titles)
         case nil:
             return nil
         }
@@ -513,14 +514,14 @@ struct StudioComposer: View {
 
     private var sendHelp: String {
         if sendBlocked { return "Waiting for the current reply…" }
-        if readiness.blocksRun { return readiness.message }
+        if readiness.blocksRun { return readiness.message(titles: titles) }
         return "Run (⌘↩)"
     }
 
     /// Spoken explanation of why Run is disabled, so the blocked state is not color-only.
     private var accessibilityRunHint: String {
         if sendBlocked { return "Waiting for the current reply to finish" }
-        if readiness.blocksRun { return readiness.message }
+        if readiness.blocksRun { return readiness.message(titles: titles) }
         return ""
     }
 }

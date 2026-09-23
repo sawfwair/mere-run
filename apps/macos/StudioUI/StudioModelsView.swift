@@ -127,19 +127,23 @@ struct StudioModelsView: View {
     let adapterTargetTitle: String
     let onUseAdapter: (StudioAdapterRow) -> Void
     let onTrain: (CommandTemplateID) -> Void
+    /// "Use for Chat by default": the model (nil to return to the built-in default) and the mode.
+    let onSetDefaultModel: (String?, StudioMode) -> Void
 
     init(
         modelStore: StudioModelStore,
         onModelsChanged: @escaping () -> Void,
         adapterTargetTitle: String = "Image",
         onUseAdapter: @escaping (StudioAdapterRow) -> Void = { _ in },
-        onTrain: @escaping (CommandTemplateID) -> Void = { _ in }
+        onTrain: @escaping (CommandTemplateID) -> Void = { _ in },
+        onSetDefaultModel: @escaping (String?, StudioMode) -> Void = { _, _ in }
     ) {
         self.onModelsChanged = onModelsChanged
         self.modelStore = modelStore
         self.adapterTargetTitle = adapterTargetTitle
         self.onUseAdapter = onUseAdapter
         self.onTrain = onTrain
+        self.onSetDefaultModel = onSetDefaultModel
     }
 
     private var rows: [StudioModelInventoryRow] { modelStore.rows }
@@ -509,8 +513,8 @@ struct StudioModelsView: View {
                     if let size = StudioModelsPresenter.sizeChip(for: row, facts: infoFactsByID[row.id]) {
                         StudioModelsTag(title: size)
                     }
-                    ForEach(StudioModelsPresenter.defaultDomainTitles(for: row.id), id: \.self) { domain in
-                        StudioModelsTag(title: "Default for \(domain)", accent: true)
+                    ForEach(StudioModelsPresenter.defaultTitles(for: row.id, preferred: preferredModels), id: \.self) { title in
+                        StudioModelsTag(title: title, accent: true)
                     }
                     if row.supported == false {
                         StudioModelsTag(title: "Needs attention", accent: true)
@@ -559,6 +563,21 @@ struct StudioModelsView: View {
             .disabled(removingID != nil)
 
             Menu {
+                // One toggle per task this model can serve: on means the task's composer starts
+                // on this model; off returns it to the built-in default.
+                let candidates = StudioModelsPresenter.defaultCandidateModes(for: row)
+                if !candidates.isEmpty {
+                    ForEach(candidates) { mode in
+                        Toggle(
+                            "Use for \(StudioModelsPresenter.defaultTargetTitle(for: mode)) by default",
+                            isOn: Binding(
+                                get: { preferredModels[mode] == row.id },
+                                set: { on in onSetDefaultModel(on ? row.id : nil, mode) }
+                            )
+                        )
+                    }
+                    Divider()
+                }
                 Button("Refresh inventory") {
                     Task { await refresh() }
                 }
@@ -944,7 +963,15 @@ struct StudioModelsView: View {
     }
 
     private func displayName(for modelID: String) -> String {
-        rows.first { $0.id == modelID }.map(StudioModelsPresenter.displayName) ?? modelID
+        rows.first { $0.id == modelID }.map(StudioModelsPresenter.displayName)
+            ?? StudioModelNaming.displayName(modelID, titles: modelStore.titles)
+    }
+
+    /// The user's per-mode default models, read from the task sessions the composer starts from.
+    private var preferredModels: [StudioMode: String] {
+        Dictionary(uniqueKeysWithValues: StudioMode.allCases.compactMap { mode in
+            controller.taskSessions.preferredModel(for: mode).map { (mode, $0) }
+        })
     }
 
     private func status(of row: StudioModelInventoryRow) -> StudioModelRowStatus {

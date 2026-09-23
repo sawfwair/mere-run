@@ -123,6 +123,47 @@ package enum StudioLibraryReplay {
     }
 }
 
+/// Library ▸ "Use these settings": the run's recorded command read back into a composer draft,
+/// so the prompt, model, and every option it ran with are there to tweak and run again. The
+/// reading goes through the same contract bindings the Command view uses to carry its edits
+/// into the composer, so a flag lands in the draft field that emits it and nothing is guessed
+/// from the command preview.
+package enum StudioLibraryDraftRestoration {
+    /// Whether "Use these settings" applies to a row: not a thread, its command recorded, and
+    /// that command one the mode's composer builds (a Console run of another template, an
+    /// upscale or edit, has no composer to land in). Every surface that offers the action asks
+    /// this first, so it never offers what `draft(from:baseline:)` cannot do.
+    package static func canRestore(_ item: StudioLibraryItem) -> Bool {
+        guard !item.isConversation, let templateID = item.templateID, item.commandDraft != nil,
+              templateID.capability != nil else { return false }
+        return composerBuilds(templateID, for: item.mode)
+    }
+
+    /// nil exactly when `canRestore` is false.
+    package static func draft(from item: StudioLibraryItem, baseline: StudioDraft) -> StudioDraft? {
+        guard canRestore(item), let templateID = item.templateID, let recorded = item.commandDraft,
+              let template = CommandCatalog.template(id: templateID), let capability = templateID.capability
+        else { return nil }
+        let arguments = item.commandArguments ?? template.arguments(from: recorded)
+        let form = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
+        var draft = baseline
+        form.applyingChanges(from: StudioConsoleDraft(), to: &draft, mode: item.mode, templateID: templateID)
+        if let action = readImageAction(for: templateID) { draft.readImageAction = action }
+        draft.parentID = item.id
+        return draft
+    }
+
+    /// Read Image's composer runs one of three templates, chosen by its task chip; every other
+    /// mode's composer runs exactly its default template.
+    private static func composerBuilds(_ templateID: CommandTemplateID, for mode: StudioMode) -> Bool {
+        mode == .readImage ? readImageAction(for: templateID) != nil : templateID == mode.defaultTemplateID
+    }
+
+    private static func readImageAction(for templateID: CommandTemplateID) -> StudioReadImageAction? {
+        StudioReadImageAction.allCases.first { $0.templateID == templateID }
+    }
+}
+
 
 extension String {
     package func maskingAPIKeyValue() -> String {

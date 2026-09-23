@@ -235,6 +235,7 @@ private struct StudioAdapterCatalogItem: Decodable, Identifiable {
 
 private struct AdapterCatalogPreview: View {
     let catalog: StudioAdapterCatalog
+    @Environment(\.studioModelTitles) private var titles
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -272,9 +273,10 @@ private struct AdapterCatalogPreview: View {
                             Text(adapter.summary)
                                 .font(MereRunTheme.captionFont)
                                 .foregroundStyle(MereRunTheme.textSecondary)
-                            Text("\(adapter.baseModelID) · \(adapter.license) · \(ByteCountFormatter.string(fromByteCount: adapter.byteCount, countStyle: .file))")
+                            Text("\(StudioModelNaming.displayName(adapter.baseModelID, titles: titles)) · \(adapter.license) · \(ByteCountFormatter.string(fromByteCount: adapter.byteCount, countStyle: .file))")
                                 .font(MereRunTheme.captionFont)
                                 .foregroundStyle(MereRunTheme.textMuted)
+                                .help("Base model: \(adapter.baseModelID)")
                             if let path = adapter.path {
                                 Text(path)
                                     .font(MereRunTheme.monoFont)

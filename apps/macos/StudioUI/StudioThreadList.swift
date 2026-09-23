@@ -202,6 +202,7 @@ struct StudioThreadList: View {
 /// One thread: the title on one line and a meta line naming the preset, model, and last activity.
 private struct StudioThreadRow: View {
     @Environment(\.studioReferenceDate) private var referenceDate
+    @Environment(\.studioModelTitles) private var titles
 
     let thread: StudioLibraryItem
     let isSelected: Bool
@@ -209,7 +210,9 @@ private struct StudioThreadRow: View {
 
     @State private var hovering = false
 
-    private var meta: String { StudioThreadListPresenter.meta(for: thread, now: referenceDate ?? Date()) }
+    private var meta: String {
+        StudioThreadListPresenter.meta(for: thread, now: referenceDate ?? Date(), titles: titles)
+    }
 
     var body: some View {
         Button(action: action) {

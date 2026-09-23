@@ -153,10 +153,43 @@ final class StudioModelsPresenterTests: XCTestCase {
 
     // MARK: Defaults
 
-    func testDefaultDomainTitlesNameThePromptDomainsWhoseTemplateDefaultsToTheModel() {
-        XCTAssertEqual(StudioModelsPresenter.defaultDomainTitles(for: "image-zimage-nano"), ["Image"])
-        XCTAssertEqual(StudioModelsPresenter.defaultDomainTitles(for: StudioChatDefaults.fallbackModelID), ["Chat"])
-        XCTAssertTrue(StudioModelsPresenter.defaultDomainTitles(for: "no-such-model").isEmpty)
+    func testDefaultTitlesNameThePromptDomainsWhoseTemplateDefaultsToTheModel() {
+        XCTAssertEqual(StudioModelsPresenter.defaultTitles(for: "image-zimage-nano", preferred: [:]), ["Default for Image"])
+        XCTAssertEqual(StudioModelsPresenter.defaultTitles(for: StudioChatDefaults.fallbackModelID, preferred: [:]), ["Default for Chat"])
+        XCTAssertTrue(StudioModelsPresenter.defaultTitles(for: "no-such-model", preferred: [:]).isEmpty)
+    }
+
+    /// A user's choice replaces the built-in tag for that mode and is named per mode, so a chat
+    /// model chosen for Code only says so for Code.
+    func testDefaultTitlesFollowTheUsersChoiceOverTheTemplateDefault() {
+        let preferred: [StudioMode: String] = [.createImage: "image-other", .code: "text-chat-qwen3.6-4b"]
+        XCTAssertEqual(StudioModelsPresenter.defaultTitles(for: "image-zimage-nano", preferred: preferred), [])
+        XCTAssertEqual(StudioModelsPresenter.defaultTitles(for: "image-other", preferred: preferred), ["Your default for Image"])
+        XCTAssertEqual(StudioModelsPresenter.defaultTitles(for: "text-chat-qwen3.6-4b", preferred: preferred), ["Your default for Code"])
+        XCTAssertEqual(
+            StudioModelsPresenter.defaultTitles(for: StudioChatDefaults.fallbackModelID, preferred: preferred),
+            ["Default for Chat"],
+            "Chat keeps its built-in default; only Code was pointed elsewhere."
+        )
+    }
+
+    /// A domain with one prompt task names the default after the domain, since "Create Image"
+    /// and "Speak" are verbs the Models page has no sentence for; shared domains name the mode.
+    func testDefaultTargetTitleUsesTheDomainWhereItHasOnePromptTask() {
+        XCTAssertEqual(StudioModelsPresenter.defaultTargetTitle(for: .createImage), "Image")
+        XCTAssertEqual(StudioModelsPresenter.defaultTargetTitle(for: .speak), "Voice")
+        XCTAssertEqual(StudioModelsPresenter.defaultTargetTitle(for: .listen), "Audio")
+        XCTAssertEqual(StudioModelsPresenter.defaultTargetTitle(for: .sfx), "Sound")
+        XCTAssertEqual(StudioModelsPresenter.defaultTargetTitle(for: .chat), "Chat")
+        XCTAssertEqual(StudioModelsPresenter.defaultTargetTitle(for: .code), "Code")
+        XCTAssertEqual(StudioModelsPresenter.defaultTargetTitle(for: .segment), "Segment")
+    }
+
+    func testDefaultCandidateModesAreTheModesWhoseChipOffersTheRow() {
+        XCTAssertEqual(StudioModelsPresenter.defaultCandidateModes(for: row("text-chat-qwen3.6-4b", category: "text-chat")), [.chat, .code])
+        XCTAssertEqual(StudioModelsPresenter.defaultCandidateModes(for: row("image-zimage-nano", category: "image")), [.createImage])
+        XCTAssertEqual(StudioModelsPresenter.defaultCandidateModes(for: row("vision-chat-qwen3.6-vl-4b", category: "vision-chat")), [.chat, .readImage])
+        XCTAssertTrue(StudioModelsPresenter.defaultCandidateModes(for: row("image-3d-x", category: "image-3d")).isEmpty)
     }
 
     // MARK: Library-derived facts

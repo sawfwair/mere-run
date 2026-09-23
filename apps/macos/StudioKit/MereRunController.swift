@@ -544,6 +544,10 @@ package final class MereRunController: ObservableObject {
         recommendedCodeModelID ?? StudioCodeDefaults.fallbackModelID
     }
 
+    /// Resolves the model a fresh draft starts with, weakest first: the template default, then
+    /// the CLI's recommendation for Chat and Code, then the model the user made this mode's
+    /// default on the Models page — unless the inventory no longer lists that model, in which
+    /// case the choice is ignored rather than left pointing at something that cannot run.
     package func applyRecommendedDefaults(to studioDraft: inout StudioDraft, for mode: StudioMode) {
         switch mode {
         case .chat:
@@ -558,6 +562,10 @@ package final class MereRunController: ObservableObject {
             }
         default:
             break
+        }
+        if let preferred = taskSessions.preferredModel(for: mode),
+           !modelStore.hasInventory || modelStore.rows.contains(where: { $0.id == preferred }) {
+            studioDraft.model = preferred
         }
     }
 
@@ -1083,7 +1091,7 @@ package final class MereRunController: ObservableObject {
         readinessRequests[mode] = request
         readinessByMode[mode] = .checking
 
-        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
             cancelReadinessProbe(for: mode)
             readinessByMode[mode] = .unsupported(message)
             return
@@ -1127,18 +1135,22 @@ package final class MereRunController: ObservableObject {
         }
 
         guard let modelID = readinessRequests[mode]?.modelID else { return }
-        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+        if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
             readinessProbes[mode] = nil
             readinessByMode[mode] = .unsupported(message)
             return
         }
         if result.exitCode != 0, report.capabilitiesByID.isEmpty {
             readinessProbes[mode] = nil
-            let detail = (result.standardError ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            readinessByMode[mode] = .unknown(detail.isEmpty ? "Could not check model capabilities." : detail)
+            readinessByMode[mode] = .unknown(Self.capabilitiesUnavailableMessage, detail: Self.probeDetail(result))
             return
         }
         probeModelList(for: mode)
+    }
+
+    /// The CLI's last meaningful stderr line, for the readiness card's muted second line.
+    private static func probeDetail(_ result: JobResult) -> String? {
+        StudioFailureSummary.lastMeaningfulLine(in: result.standardError ?? "")
     }
 
     private func probeModelList(for mode: StudioMode) {
@@ -1148,20 +1160,28 @@ package final class MereRunController: ObservableObject {
             guard let self else { return }
             readinessProbes[mode] = nil
             guard let modelID = readinessRequests[mode]?.modelID else { return }
-            if let message = modelCapabilitiesByID[modelID]?.unavailableMessage {
+            if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
                 readinessByMode[mode] = .unsupported(message)
                 return
             }
             guard result.exitCode == 0 else {
-                readinessByMode[mode] = .unknown("Could not list models. Check the CLI and model location.")
+                readinessByMode[mode] = .unknown(Self.modelListUnavailableMessage, detail: Self.probeDetail(result))
                 return
             }
             readinessByMode[mode] = ModelReadinessParser.state(
                 for: modelID,
-                modelListOutput: result.standardOutput ?? ""
+                modelListOutput: result.standardOutput ?? "",
+                titles: modelStore.titles
             )
         }
     }
+
+    /// What the readiness card says when a probe fails: the next step in plain words, with the
+    /// CLI's own last line kept as the card's muted detail rather than as the message.
+    nonisolated package static let capabilitiesUnavailableMessage =
+        "Couldn't check which models this Mac can run. Check again, or choose another model."
+    nonisolated package static let modelListUnavailableMessage =
+        "Couldn't read the model list. Check the mere.run install in Settings, then check again."
 
     /// Submits one readiness probe for `mode` and runs `completion` with its result unless a later
     /// probe replaced it. A submission the store deduplicated onto the probe already tracked for

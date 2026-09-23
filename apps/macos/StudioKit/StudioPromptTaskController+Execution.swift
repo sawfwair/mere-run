@@ -31,13 +31,13 @@ extension StudioPromptTaskController {
         switch StudioCommandAdapter.capabilityRequirement(for: mode, draft: draft) {
         case .unavailable(let message): throw ValidationError(message: message)
         case .managedModel(let modelID):
-            if let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage {
+            if let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage(titles: controller.modelStore.titles) {
                 throw ValidationError(message: message)
             }
         case nil: break
         }
-        let readiness = controller.readinessByMode[mode] ?? .unknown("Readiness has not been checked yet.")
-        if readiness.blocksRun { throw ValidationError(message: readiness.message) }
+        let readiness = controller.readinessByMode[mode] ?? .notChecked
+        if readiness.blocksRun { throw ValidationError(message: readiness.message(titles: controller.modelStore.titles)) }
     }
 
     package func runPrompt(

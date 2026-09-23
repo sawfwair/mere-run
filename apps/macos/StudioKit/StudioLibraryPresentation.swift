@@ -97,18 +97,43 @@ package enum StudioLibraryPresenter {
         return StudioOutputFileKind.classify(url)
     }
 
-    package static func filter(_ items: [StudioLibraryItem], with filter: StudioLibraryFilter) -> [StudioLibraryItem] {
+    /// `titles` names models the way the app shows them, so "qwen" finds a Qwen run whether the
+    /// user remembers the title or the id. A whole status word in the query ("failed", "running")
+    /// narrows to rows in that status, and the rest of the query must still match: "failed
+    /// harbor" is the failed harbor runs, not every failed run plus every harbor run.
+    package static func filter(
+        _ items: [StudioLibraryItem],
+        with filter: StudioLibraryFilter,
+        titles: StudioModelTitles
+    ) -> [StudioLibraryItem] {
         let query = filter.query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        let statusWords = words.filter(statusRawValues.contains)
+        let text = words.filter { !statusRawValues.contains($0) }.joined(separator: " ")
         return items.filter { item in
             if filter.scope == .domain, item.domain != filter.domain { return false }
             if filter.favoritesOnly, !item.isStarred { return false }
             let hasText = item.outputText?.isBlank == false
             if !filter.kind.matches(fileKind: fileKind(of: item), hasText: hasText) { return false }
             guard !query.isEmpty else { return true }
-            return item.displayTitle.lowercased().contains(query)
-                || item.displayKindTitle.lowercased().contains(query)
-                || item.prompt.lowercased().contains(query)
+            if !statusWords.isEmpty, !statusWords.contains(item.status.rawValue) { return false }
+            return text.isEmpty || matchesText(item, query: text, titles: titles)
         }
+    }
+
+    private static let statusRawValues = Set(StudioLibraryStatus.allCases.map(\.rawValue))
+
+    private static func matchesText(_ item: StudioLibraryItem, query: String, titles: StudioModelTitles) -> Bool {
+        item.displayTitle.lowercased().contains(query)
+            || item.displayKindTitle.lowercased().contains(query)
+            || item.prompt.lowercased().contains(query)
+            || matchesModel(item, query: query, titles: titles)
+    }
+
+    private static func matchesModel(_ item: StudioLibraryItem, query: String, titles: StudioModelTitles) -> Bool {
+        guard let modelID = item.recordedModelID else { return false }
+        return modelID.lowercased().contains(query)
+            || StudioModelNaming.displayName(modelID, titles: titles).lowercased().contains(query)
     }
 
     /// The rows the column shows before the kind, favorites, and search filters narrow them — the
