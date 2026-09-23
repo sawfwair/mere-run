@@ -574,6 +574,13 @@ package enum StudioMenuBarCopy {
         return "\(Int(tokensPerSecond.rounded())) tok/s"
     }
 
+    /// "12.4 GB", "110 MB": one decimal in gigabytes, whole megabytes below one, so every figure
+    /// in the memory section reads alike.
+    package static func size(_ bytes: UInt64) -> String {
+        let megabytes = Double(bytes) / 1_048_576
+        return megabytes < 1_024 ? String(format: "%.0f MB", megabytes) : String(format: "%.1f GB", megabytes / 1_024)
+    }
+
     /// "34.2 of 128 GB".
     package static func memoryUsage(used: UInt64, total: UInt64) -> String {
         let gigabyte = 1_073_741_824.0

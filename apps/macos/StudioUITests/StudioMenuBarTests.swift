@@ -79,6 +79,8 @@ final class StudioMenuBarTests: XCTestCase {
         XCTAssertNil(StudioMenuBarCopy.thermal(.nominal))
         XCTAssertEqual(StudioMenuBarCopy.thermal(.serious), "Thermal: Serious")
         XCTAssertEqual(StudioMenuBarCopy.residentCount(3), "3 resident")
+        XCTAssertEqual(StudioMenuBarCopy.size(115_762_790), "110 MB")
+        XCTAssertEqual(StudioMenuBarCopy.size(60_687_468_380), "56.5 GB")
     }
 
     func testTheDockIconHidesOnlyWithTheMenuBarToComeBackFrom() throws {

@@ -171,7 +171,7 @@ private struct StudioMemoryBreakdown: View {
                 }
                 legend(server > 0 ? "Other" : "In use", bytes: other, color: MereRunTheme.textMuted.opacity(0.6))
                 Spacer(minLength: 0)
-                Text("\(StudioServingFormat.bytes(free)) free")
+                Text("\(StudioMenuBarCopy.size(free)) free")
                     .font(.caption2.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(MereRunTheme.textMuted)
@@ -197,7 +197,7 @@ private struct StudioMemoryBreakdown: View {
     private func legend(_ title: String, bytes: UInt64, color: Color) -> some View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 6, height: 6)
-            Text("\(title) \(StudioServingFormat.bytes(bytes))")
+            Text("\(title) \(StudioMenuBarCopy.size(bytes))")
                 .font(.caption2.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(MereRunTheme.textSecondary)

@@ -96,6 +96,7 @@ struct MereRunMenuBarContent: View {
     let isStudioOpen: Bool
 
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         StudioMenuBarPanel(
@@ -111,6 +112,8 @@ struct MereRunMenuBarContent: View {
     /// Brings the Studio window forward, or opens it when it is closed. `openWindow` always adds a
     /// window to a `WindowGroup`, so an open one is raised rather than opened again.
     private func showStudio() {
+        // The panel has done its job once it has sent you to the Studio.
+        dismiss()
         // Back into the Dock first, so the window opens as a regular app's window, in front.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
@@ -217,6 +220,9 @@ struct MereRunApp: App {
         }
         .defaultSize(width: 1_260, height: 780)
         .windowResizability(.contentMinSize)
+        // Window ▸ Command Console (⌃⌘C) in MereRunCommands opens it; SwiftUI's own Window-menu
+        // item for the scene would list it twice.
+        .commandsRemoved()
 
         // The server outlives the Studio window, so its control does too.
         MenuBarExtra(isInserted: menuBarExtraInserted) {

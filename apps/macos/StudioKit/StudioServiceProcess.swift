@@ -163,14 +163,20 @@ package final class StudioServiceProcess: ObservableObject {
         }
     }
 
-    /// The server's last words on stderr, or its exit status when it said nothing.
-    private static func failureMessage(for job: Job, exit: Int32) -> String {
-        let lastError = job.log.lines.last {
-            $0.stream == .stderr && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+    /// The server's last error on stderr, or its exit status. A server that dies without saying why
+    /// — killed, or crashed — leaves progress and startup lines last, which are not the reason.
+    static func failureMessage(for job: Job, exit: Int32) -> String {
+        let lastError = job.log.lines.last { $0.stream == .stderr && describesFailure($0.text) }
         guard let lastError else {
             return exit == 0 ? "The server exited." : "The server exited with status \(exit)."
         }
         return StudioActivitySanitizer.sanitize(lastError.text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Whether a log line states a failure, the way the CLI and the runtimes word one.
+    static func describesFailure(_ line: String) -> Bool {
+        let text = line.lowercased()
+        return ["error", "failed", "fatal", "in use", "refused", "denied", "not found", "cannot", "unable"]
+            .contains { text.contains($0) }
     }
 }

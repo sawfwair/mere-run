@@ -56,9 +56,6 @@ struct MereRunCommands: Commands {
             MereRunCheckForUpdatesView(updater: updater)
         }
 
-        // The Studio has no styled text, so the Format menu's Font and Text items — and Show
-        // Colors, which would otherwise take ⇧⌘C from the Command Console — have nothing to act on.
-        CommandGroup(replacing: .textFormatting) {}
 
         CommandGroup(before: .windowList) {
             Button("Open Studio") { openWindow(id: "studio") }

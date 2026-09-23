@@ -93,6 +93,19 @@ final class StudioLocalServerTests: XCTestCase {
         XCTAssertEqual(server.phase, .failed("Error: port 9 is already in use"))
     }
 
+    func testAServerKilledWithoutAnErrorReportsItsExitStatusNotItsLastLogLine() async {
+        let (controller, runner, restore) = makeController()
+        defer { restore() }
+        let server = controller.localServer
+        server.start()
+
+        runner.starts[0].stderr("[loadingModel] Loading LFM2.5 DSpark\ninfo Hummingbird: Server started and listening on 127.0.0.1:9\n")
+        runner.starts[0].termination(9)
+        await settle()
+
+        XCTAssertEqual(server.phase, .failed("The server exited with status 9."))
+    }
+
     func testRestartWaitsForTheOldServerToExitBeforeLaunchingTheNext() async {
         let (controller, runner, restore) = makeController()
         defer { restore() }
