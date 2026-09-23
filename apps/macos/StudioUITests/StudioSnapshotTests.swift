@@ -891,6 +891,108 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Music ▸ Train with three clips in the manifest editor — two captioned, one with lyrics, and
+    /// one still needing a caption so the row and the problem list show — light and dark.
+    func testMusicTrainingManifestEditorSnapshots() throws {
+        let clips = fixture.root.appendingPathComponent("clips", isDirectory: true)
+        try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
+        var manifest = StudioMusicTrainingManifest()
+        let rows: [(name: String, caption: String, lyrics: String)] = [
+            ("late-night-drive.wav", "warm analog synth pad over a slow four-on-the-floor kick, 92 bpm",
+             "city lights blur past the window\nwe don't say a word"),
+            ("brass-hit.wav", "short brass section stab, bright and dry", ""),
+            ("vocal-take.wav", "", ""),
+        ]
+        for row in rows {
+            let url = clips.appendingPathComponent(row.name)
+            try SnapshotFixture.writeSilentWAV(to: url, seconds: 2)
+            manifest.clips.append(.init(audioPath: url.path, caption: row.caption, lyrics: row.lyrics))
+        }
+        fixture.controller.taskSessions.set(manifest, for: StudioTask.musicTrain.rawValue + ".Training.musicManifest")
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+            try fixture.write(view, size: Self.fidelitySize, appearance: appearance,
+                              name: "music-train-manifest-\(appearance.rawValue)", settle: 1.5,
+                              afterAppear: { navigation.open(task: .musicTrain) })
+        }
+    }
+
+    /// Image ▸ Datasets ▸ Run plan after a training-plan preflight with one warning: the report's
+    /// sections in place of the old path list, light and dark.
+    func testImageRunPlanReportSnapshots() throws {
+        var item = StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: "Run plan",
+            inputURL: fixture.root.appendingPathComponent("plan.json"),
+            outputURL: nil,
+            createdAt: StudioSnapshotRenderer.referenceDate,
+            updatedAt: StudioSnapshotRenderer.referenceDate,
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run image run-plan plan.json --preflight --json",
+            outputText: Self.trainingPlanPreflight,
+            artifactURLs: []
+        )
+        item.templateID = .imageRunPlan
+        fixture.library.upsert(item)
+        let sessions = fixture.controller.taskSessions
+        sessions.set(Optional(item.id), for: StudioTask.imageDatasets.rawValue + ".requestID")
+        sessions.set(fixture.root.appendingPathComponent("plan.json").path, for: StudioTask.imageDatasets.rawValue + ".UtilityLab.planPath")
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioUtilityLabView(task: .constant(.runPlan), tasks: [.datasetDiscovery, .imageValidation, .runPlan], showsTaskPicker: true)
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, StudioTask.imageDatasets.rawValue)
+                .frame(width: 1_200, height: 820)
+            try fixture.write(view, size: CGSize(width: 1_200, height: 820), appearance: appearance,
+                              name: "image-run-plan-\(appearance.rawValue)", settle: 1.5)
+        }
+    }
+
+    /// The camera editors at the width of the 3D and Vision columns: InstantMesh with four views and
+    /// one camera short, and multi-view geometry with two views and one mirrored rotation, so the
+    /// per-view fields, the Match views button, and the CLI's checks all show, light and dark.
+    func testCameraEditorSnapshots() throws {
+        let instantMesh = StudioInstantMeshCameraDocument(cameras: (0..<3).map { _ in .example })
+        var mirrored = StudioGeometryCamera.identity()
+        mirrored.rotation = [-1, 0, 0, 0, 1, 0, 0, 0, 1]
+        let geometry = StudioGeometryCameraDocument(cameras: [.identity(width: 4_032, height: 3_024), mirrored])
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = VStack(alignment: .leading, spacing: 24) {
+                StudioInstantMeshCameraEditor(
+                    enabled: .constant(true), document: .constant(instantMesh),
+                    viewNames: ["front.png", "right.png", "back.png", "left.png"], message: .constant(nil)
+                )
+                Divider()
+                StudioGeometryCameraEditor(
+                    enabled: .constant(true), document: .constant(geometry),
+                    views: [
+                        StudioCameraView(name: "IMG_0412.heic", pixelSize: StudioPixelSize(width: 4_032, height: 3_024)),
+                        StudioCameraView(name: "IMG_0413.heic", pixelSize: StudioPixelSize(width: 4_032, height: 3_024)),
+                    ],
+                    message: .constant(nil)
+                )
+            }
+            .padding(18)
+            .frame(width: 520, alignment: .topLeading)
+            .background(MereRunTheme.background)
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .environmentObject(fixture.controller)
+            .environmentObject(fixture.library)
+            try fixture.write(view, size: CGSize(width: 520, height: 1_180), appearance: appearance,
+                              name: "camera-editors-\(appearance.rawValue)", settle: 1)
+        }
+    }
+
     /// Text ▸ Decisions with the handbook example in the editor and a finished run beside it:
     /// a choice, a score, and a yes-or-no answer, one of them cut to fit.
     func testLayaDecisionAnswersSnapshots() throws {
@@ -2270,7 +2372,7 @@ private final class SnapshotFixture {
     }
 
     /// A valid 16 kHz mono 16-bit PCM WAV of near-silence with a quiet tone so a waveform draws.
-    private static func writeSilentWAV(to url: URL, seconds: Int) throws {
+    static func writeSilentWAV(to url: URL, seconds: Int) throws {
         let sampleRate = 16_000
         let frames = sampleRate * seconds
         var samples = Data(capacity: frames * 2)

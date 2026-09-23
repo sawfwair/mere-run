@@ -97,27 +97,50 @@ final class StudioFirstClassWorkspaceTests: XCTestCase {
         XCTAssertEqual(document.candidates.first?.problems, ["Missing captions: Two images need captions."])
     }
 
-    func testRunPlanDocumentExtractsMaterializedPaths() throws {
+    /// A materialized run's report lists the files the CLI wrote, each with a path to reveal; a run
+    /// whose output is not the CLI's envelope falls back to the raw result view.
+    func testRunPlanReportReadsAMaterializedRun() throws {
         let data = Data(
             """
-            {
-              "status": "ok",
-              "summary": "Materialized run.",
-              "result": {
-                "run_directory": "/tmp/run",
-                "plan_path": "/tmp/run/plan.json",
-                "nested": {"events_path": "/tmp/run/events.jsonl"}
-              },
-              "diagnostics": [{"title": "Output relocated", "message": "Output is durable."}]
-            }
+            {"schema_version": 1, "mere_run_version": "0.55.0", "command": ["image", "run-plan"], "mode": "materialize",
+             "status": "ok", "created_at": "2026-09-23T10:00:00Z", "cwd": "/tmp", "summary": "Materialized image.train_lora run at /tmp/run.",
+             "request": {"plan_file": "/tmp/plan.json", "run_directory": "/tmp/run"},
+             "result": {"run_directory": "/tmp/run", "plan_path": "/tmp/run/plan.json", "actions_path": "/tmp/run/actions.json",
+               "run_manifest_path": "/tmp/run/run.json", "events_path": "/tmp/run/events.jsonl",
+               "output_path": "/tmp/run/adapter.safetensors", "original_output_path": "/tmp/adapter.safetensors"},
+             "diagnostics": [{"id": "output_relocated", "severity": "note", "title": "Output relocated", "message": "Output is durable.",
+               "locations": [], "suggested_action_ids": []}],
+             "actions": []}
             """.utf8
         )
 
-        let document = try XCTUnwrap(StudioRunPlanDocument.decode(data))
-        XCTAssertEqual(document.status, "ok")
-        XCTAssertTrue(document.paths.contains { $0.path == "/tmp/run/plan.json" })
-        XCTAssertTrue(document.paths.contains { $0.path == "/tmp/run/events.jsonl" })
-        XCTAssertEqual(document.diagnostics, ["Output relocated: Output is durable."])
+        let report = try XCTUnwrap(StudioRunPlanReport.decode(data))
+        XCTAssertEqual(report.status, "ok")
+        XCTAssertEqual(report.title, "Materialized run")
+        XCTAssertEqual(report.sections.first?.rows.map(\.path), [
+            "/tmp/run", "/tmp/run/plan.json", "/tmp/run/actions.json", "/tmp/run/run.json", "/tmp/run/events.jsonl", "/tmp/run/adapter.safetensors",
+        ])
+        XCTAssertEqual(report.diagnostics.map(\.message), ["Output is durable."])
+        XCTAssertNil(StudioRunPlanReport.decode(Data("{\"status\": \"ok\"}".utf8)))
+    }
+
+    /// The music trainer's dataset snapshot comes from the clips the page edits, not a file.
+    func testMusicTrainingSnapshotCountsReadyClips() {
+        let manifest = StudioMusicTrainingManifest(clips: [
+            .init(audioPath: "/nowhere/a.wav", caption: "a"),
+            .init(audioPath: "", caption: ""),
+        ])
+
+        let snapshot = StudioTrainingDatasetSnapshot.inspect(manifest: manifest)
+
+        XCTAssertNil(StudioTrainingDatasetSnapshot.inspect(kind: .music, path: "/nowhere/dataset.jsonl"))
+        XCTAssertEqual(snapshot.totalRecords, 2)
+        XCTAssertEqual(snapshot.usableRecords, 0)
+        XCTAssertEqual(snapshot.diagnostics, [
+            "Clip 1 is missing its audio file, a.wav.",
+            "Clip 2 has no audio file.",
+            "Clip 2 needs a caption.",
+        ])
     }
 
     func testNPYMetadataReadsShapeAndDescriptor() throws {
@@ -152,7 +175,7 @@ final class StudioFirstClassWorkspaceTests: XCTestCase {
         try Data([0x89, 0x50, 0x4e, 0x47]).write(to: root.appendingPathComponent("frame.png"))
         try Data("a subject in warm light".utf8).write(to: root.appendingPathComponent("frame.txt"))
 
-        let snapshot = StudioTrainingDatasetSnapshot.inspect(kind: .image, path: root.path)
+        let snapshot = try XCTUnwrap(StudioTrainingDatasetSnapshot.inspect(kind: .image, path: root.path))
         XCTAssertEqual(snapshot.totalRecords, 1)
         XCTAssertEqual(snapshot.usableRecords, 1)
         XCTAssertEqual(snapshot.previews.first?.detail, "a subject in warm light")

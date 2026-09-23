@@ -336,11 +336,7 @@ struct StudioMusicToolsView: View {
                     with: format == "midi" ? "mid" : format
                 )
             }
-            labeledTextField(
-                "Expected instruments",
-                placeholder: "voice,drums,bass — blank means automatic",
-                text: $transcribeDraft.musicInstruments
-            )
+            StudioInstrumentPicker(value: $transcribeDraft.musicInstruments)
             HStack {
                 Stepper(
                     "Beam \(transcribeDraft.musicBeamSize)",

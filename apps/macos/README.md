@@ -539,8 +539,14 @@ discovery, durable plans and dashboards. Image ▸ Generate includes
 multi-reference editing, structured prompts, LoRA catalog IDs or local adapters,
 Krea tuning, and preflight. Image ▸ Train adds dataset previews, preflight,
 launch and resume, loss metrics, samples, checkpoints, and run comparison for
-Krea 2 and FLUX.2 Klein. Image ▸ Datasets renders validation artifacts,
-candidate dataset diagnostics, and materialized plan paths.
+Krea 2 and FLUX.2 Klein; Klein's per-target ranks are rows of module suffix and
+rank rather than a typed `suffix=rank` list. Image ▸ Datasets renders validation
+artifacts, candidate dataset diagnostics, and the run plan as a report
+(`StudioKit/StudioRunPlanReport.swift`, `StudioUI/StudioRunPlanReportView.swift`):
+a preflight's steps, resolution, batch, rank, learning rate, checkpoint and
+preview cadence, schedule, memory switches, dataset counts, model, and output,
+read from the CLI's typed envelope, or a materialized run's files, each
+revealable in Finder.
 
 **Video** ▸ Generate uses model-family-aware controls: LTX uses `--quality` and
 `--output-mode`, while native MiniMax-H3 exposes its exact `17n+5` frame
@@ -569,16 +575,26 @@ covers, repaint and flow edits, source and timbre-reference audio, candidate
 ranking, LM planning, adapter stacks, stems, LRC, recipes, and DAW delivery.
 Music ▸ Analyze adds standalone ACE-Step understanding with structured results;
 Music ▸ Transcribe adds MuScriptor transcription with an embedded MIDI piano
-roll; Music ▸ Separate shares the restoration surface with Audio. Music ▸
+roll, and picks expected instruments from the list the CLI prints with
+`--list-instruments` (a plain field when the list cannot be read); Music ▸
+Separate shares the restoration surface with Audio. Music ▸
 Realtime is the Magenta RT2 session: a transport with the live clock, the
 recording's waveform, Prompt A/B steering with a blend slider, temperature,
 top-k, and guidance sent over the CLI's stdin protocol as you release each
 control, the session log, and a job bar with Cancel and Log; it re-attaches to a
 running session when you navigate back to it. Music ▸ Train is the shared
-LoRA/LoKr trainer with dataset audio previews and live loss events. The resident
-ACE-Step server's health and lifecycle live under Server ▸ Music server.
+LoRA/LoKr trainer with live loss events; its dataset is a clip list
+(`StudioUI/StudioMusicManifestEditor.swift`, `StudioKit/StudioMusicTrainingManifest.swift`)
+rather than a hand-written manifest: add audio files or a folder of clips with
+matching `.txt` captions (or drop them in), caption each clip, add lyrics where
+they matter, play any clip, and see the trainer's own checks in the page's words.
+Start training writes `<adapter>.dataset.jsonl` beside the adapter, one record
+per line the way `music train-adapter --dataset` reads it; manifests made
+elsewhere import, and the clip list exports. The resident ACE-Step server's
+health and lifecycle live under Server ▸ Music server.
 
-**Sound** ▸ Generate and Video Foley produce effects; Condition, Encode, Decode,
+**Sound** ▸ Generate and Video Foley produce effects, with Woosh renoise as the
+model's default, one amount on a slider, or one amount per step; Condition, Encode, Decode,
 and Score cover conditioning, AE encode and decode, CLAP scoring, waveform
 review, NPY metadata, and durable artifacts.
 
@@ -588,7 +604,12 @@ profiles, reference recording, streaming feedback, and A/B playback.
 **3D** is the domain for TripoSR, native TRELLIS.2 PBR reconstruction, and
 ordered 4- and 6-view InstantMesh. It has engine-specific controls, immutable
 output directories, embedded orbitable Quick Look models, manifest statistics,
-and the shared progress and Library lifecycle. It runs the `image reconstruct-3d`
+and the shared progress and Library lifecycle. InstantMesh's optional calibrated
+cameras are edited per view (`StudioUI/StudioCameraEditor.swift`,
+`StudioKit/StudioCameraDocuments.swift`) — a 3 × 4 camera-to-world pose and
+`fx, fy, cx, cy` — checked as the CLI checks them and written as
+`<output>.cameras.json` beside the run's output folder; camera files import and
+export. It runs the `image reconstruct-3d`
 family; the `vision image-to-3d` aliases stay CLI-only rather than being
 duplicated under Vision.
 
@@ -612,7 +633,13 @@ Library artifact. Faces ▸ embedding and comparison choose their face by clicki
 it on the picture once a Face detection run has drawn boxes on that image (the
 index stepper remains for an image nobody has detected faces in). Coordinates
 reach the CLI as typed, ordered arguments; machine-readable results and mask
-directories use explicit output pickers.
+directories use explicit output pickers. Geometry's multi-view task edits
+optional calibrated cameras per view — image size, normalized focal length and
+center, and a world-to-camera rotation and translation — with the CLI's own
+checks (positive size and focal length, a proper rotation, and an image size
+equal to the image's decoded size, which new cameras take from the image), and
+writes `<output>.cameras.json` beside the run's output folder; camera files
+import and export.
 
 **Audio** ▸ Transcribe is the Analyze task over `speech transcribe`. Who Spoke
 is native Sortformer diarization with JSON and RTTM timelines and
