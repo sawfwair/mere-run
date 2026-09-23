@@ -272,6 +272,13 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var readImageAction: StudioReadImageAction = .inspect
     /// Mask confidence floor for Segment and Track (the CLI `--threshold`); Find has none.
     package var visionThreshold = 0.05
+    /// The boxes and points drawn on the Segment or Track input, in its own pixels (the CLI's
+    /// `--box` / `--point`). Optional preserves saved Studio drafts from before drawn prompts.
+    package var visionRegionPrompts: [StudioRegionPrompt]?
+    /// Track's seed frame, where the prompts are drawn (`--init-frame`), and the optional last
+    /// frame (`--end-frame`). Optional for the same reason; nil reads as frame 0 and the whole clip.
+    package var visionInitFrame: Int?
+    package var visionEndFrame: Int?
     // Speak voice cloning (Studio surface). "style" uses the voice description; "clone" uses a
     // saved profile or reference audio.
     package var voiceMode = "style"
@@ -398,6 +405,9 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         durationSeconds = 10
         readImageAction = .inspect
         visionThreshold = base?.visionThreshold ?? 0.05
+        visionRegionPrompts = nil
+        visionInitFrame = nil
+        visionEndFrame = nil
         voiceMode = "style"
         voiceProfile = ""
         refAudioPath = ""
@@ -728,6 +738,17 @@ package enum StudioCommandAdapter {
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.visionThreshold = studioDraft.visionThreshold
+            // What was drawn on the picture becomes the CLI's `--box` / `--point` text; Find takes
+            // neither. Track's seed and end frames come from the frame scrubber.
+            if mode != .findObjects {
+                let region = studioDraft.visionRegionPrompts ?? []
+                draft.visionBoxPrompts = StudioRegionPromptText.boxText(region)
+                draft.visionPointPrompts = StudioRegionPromptText.pointText(region)
+            }
+            if mode == .track {
+                draft.visionInitFrame = studioDraft.visionInitFrame ?? 0
+                draft.visionEndFrame = studioDraft.visionEndFrame.map(String.init) ?? ""
+            }
             // Studio renders these results natively, so it always asks for the structured
             // document beside the annotated output. Masks are per-detection PNG sidecars; a
             // tracked clip writes one set per frame, so only the still tasks request them.
@@ -909,12 +930,20 @@ package enum StudioCommandAdapter {
             promptRequired = false
         case .readImage:
             promptRequired = templateID != .visionOCR
+        case .segment, .track:
+            // A box or point drawn on the picture is a prompt in its own right.
+            promptRequired = (draft.visionRegionPrompts ?? []).isEmpty
         default:
             promptRequired = true
         }
 
         if promptRequired && prompt.isEmpty {
-            throw StudioCommandError.missingPrompt("Prompt")
+            throw StudioCommandError.missingPrompt(
+                mode == .segment || mode == .track ? "A prompt or a drawn box or point" : "Prompt"
+            )
+        }
+        if mode == .track, let end = draft.visionEndFrame, end < (draft.visionInitFrame ?? 0) {
+            throw StudioCommandError.missingPrompt("An end frame at or after the start frame")
         }
     }
 }

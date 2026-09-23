@@ -937,7 +937,8 @@ private struct StudioWorkspaceView: View {
                 readiness: readiness,
                 pullJob: activePullJob,
                 actions: feedActions,
-                analyze: analyzeActions
+                analyze: analyzeActions,
+                editing: analyzePromptEditing
             )
         } else {
             StudioFeedCanvas(
@@ -983,6 +984,26 @@ private struct StudioWorkspaceView: View {
             replaceInput: chooseAttachment,
             openTask: openSiblingTask,
             save: saveAnalyzeResult
+        )
+    }
+
+    /// Segment and Track draw their prompts and pick their frames on the draft itself, so the
+    /// canvas, the composer's validation, and the Command view all read one set of fields.
+    private var analyzePromptEditing: StudioAnalyzePromptEditing? {
+        guard destination.task.drawsRegionPrompts else { return nil }
+        return StudioAnalyzePromptEditing(
+            regionPrompts: Binding(
+                get: { draft.visionRegionPrompts ?? [] },
+                set: { draft.visionRegionPrompts = $0.isEmpty ? nil : $0 }
+            ),
+            initFrame: Binding(
+                get: { draft.visionInitFrame ?? 0 },
+                set: { draft.visionInitFrame = $0 == 0 ? nil : $0 }
+            ),
+            endFrame: Binding(
+                get: { draft.visionEndFrame },
+                set: { draft.visionEndFrame = $0 }
+            )
         )
     }
 
@@ -1555,10 +1576,11 @@ private struct StudioWorkspaceView: View {
     }
 
     /// A contextual next step on an Analyze result: opens the sibling task with this run's input
-    /// and prompt carried over, so "Segment these" continues from the same picture.
-    private func openSiblingTask(_ task: StudioTask) {
+    /// and prompt carried over, so "Segment these" continues from the same picture — with what
+    /// Find found already drawn as its box prompts.
+    private func openSiblingTask(_ task: StudioTask, detections: [StudioAnalyzeDetection]) {
         if task.mode != nil {
-            prompt.prepareAnalyzeHandoff(to: task)
+            prompt.prepareAnalyzeHandoff(to: task, detections: detections)
             navigation.selectedLibraryID = nil
         }
         // A task without a composer reads this same draft, so its input is already carried.
@@ -1861,7 +1883,9 @@ private struct StudioWorkspaceView: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = mode.acceptedTypes.isEmpty ? [.item] : mode.acceptedTypes
         if panel.runModal() == .OK, let url = panel.url {
-            draft.inputPath = url.path
+            var next = draft
+            next.replaceInput(url.path)
+            draft = next
             studioError = nil
         }
     }

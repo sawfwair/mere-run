@@ -562,6 +562,73 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Drawing prompts instead of typing them: the region editor over the 1024×1024 mug with two
+    /// boxes (the labeled one selected, showing its handles), a positive and a negative point,
+    /// light and dark; then Segment on the Analyze board with the same prompts drawn over a
+    /// seeded `vision segment` result, and Track's seed-frame scrubber over the in-test clip with
+    /// a box on frame 12 and tracking set to end at frame 40.
+    func testRegionPromptEditorSnapshots() throws {
+        let analyze = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .analyze,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { analyze.tearDown() }
+
+        let prompts = SnapshotFixture.regionPrompts
+        let image = try XCTUnwrap(
+            StudioImagePreviewLoader.downsampledImage(from: analyze.largeMugURL, maxPixelSize: 1_600)?.image
+        )
+        let editorSize = CGSize(width: 640, height: 620)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = RegionEditorPreview(image: image, prompts: prompts, selection: prompts[0].id)
+                .padding(24)
+                .frame(width: editorSize.width, height: editorSize.height)
+                .background(MereRunTheme.background)
+            try analyze.write(view, size: editorSize, appearance: appearance, name: "f6-region-editor-\(appearance.rawValue)")
+        }
+
+        var segment = StudioDraft()
+        segment.reset(for: .segment)
+        segment.prompt = ""
+        segment.inputPath = analyze.largeMugURL.path
+        segment.visionRegionPrompts = prompts
+
+        var track = StudioDraft()
+        track.reset(for: .track)
+        track.prompt = "the bright band"
+        track.inputPath = analyze.clipURL.path
+        track.visionRegionPrompts = [
+            .box(CGRect(x: 60, y: 40, width: 220, height: 150), label: "band"),
+            .point(CGPoint(x: 420, y: 300), isPositive: false)
+        ]
+        track.visionInitFrame = 12
+        track.visionEndFrame = 40
+
+        let renders: [(name: String, task: StudioTask, appearance: StudioSnapshotAppearance)] = [
+            ("f6-analyze-segment-light", .visionSegment, .light),
+            ("f6-analyze-segment-dark", .visionSegment, .dark),
+            ("f6-analyze-track-light", .visionTrack, .light),
+            ("f6-analyze-track-dark", .visionTrack, .dark)
+        ]
+        for render in renders {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.segment: segment, .track: track])
+                .environmentObject(analyze.controller)
+                .environmentObject(analyze.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try analyze.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: render.appearance,
+                name: render.name,
+                settle: 3.0,
+                afterAppear: { navigation.open(task: render.task) }
+            )
+        }
+    }
+
     /// Chat at the mockup size with the Converse board's threads: the thread list with four
     /// rows, the diffusion thread open (two user turns, a reply with a Python block, and a reply
     /// streaming in), the model and system chips, and the composer's Stop circle. `model list`
@@ -946,6 +1013,18 @@ private final class SnapshotFixture {
     private(set) var largeMugURL: URL!
     /// A short recording for the Transcribe board's waveform.
     private(set) var narrationURL: URL!
+    /// A 640×360 clip of 60 frames at 12 fps for Track's seed-frame scrubber.
+    private(set) var clipURL: URL!
+
+    /// The prompts the region-editor renders draw on the 1024×1024 mug: the cup's box (labeled,
+    /// selected in the shot), the saucer's, a positive point on the handle, a negative one on
+    /// the shadow.
+    static let regionPrompts: [StudioRegionPrompt] = [
+        .box(CGRect(x: 246, y: 307, width: 471, height: 451), label: "coffee cup"),
+        .box(CGRect(x: 82, y: 757, width: 184, height: 164)),
+        .point(CGPoint(x: 690, y: 520), isPositive: true),
+        .point(CGPoint(x: 880, y: 900), isPositive: false)
+    ]
     private let processRunner: MereRunProcessRunning
     /// The default runner's live-session seam; nil when the fixture was given a scripted runner.
     private var liveSessionRunner: SnapshotProcessRunner? { processRunner as? SnapshotProcessRunner }
@@ -1228,6 +1307,14 @@ private final class SnapshotFixture {
         let narration = directory.appendingPathComponent("narration.wav", isDirectory: false)
         try Self.writeSilentWAV(to: narration, seconds: 6)
         narrationURL = narration
+        let clip = directory.appendingPathComponent("band.mp4", isDirectory: false)
+        try Self.writeFixtureMP4(to: clip, size: CGSize(width: 640, height: 360), frames: 60)
+        clipURL = clip
+        let segmented = directory.appendingPathComponent("mug_segmented.png", isDirectory: false)
+        try Self.writeMugPNG(to: segmented, side: 1_024)
+        let segmentDocument = directory.appendingPathComponent("mug_segmented.json", isDirectory: false)
+        try Self.segmentDocument(input: mug, annotated: segmented, document: segmentDocument)
+            .write(to: segmentDocument, atomically: true, encoding: .utf8)
 
         var findDraft = groundTemplate.defaultDraft()
         findDraft.prompt = Self.analyzePrompt
@@ -1273,14 +1360,16 @@ private final class SnapshotFixture {
             StudioLibraryItem(
                 id: UUID(),
                 mode: .segment,
-                prompt: "the neon sign",
+                prompt: "the cup",
                 inputURL: mug,
-                outputURL: nil,
+                outputURL: segmented,
                 createdAt: findAt.addingTimeInterval(-60 * 60 * 24 * 5),
                 updatedAt: findAt.addingTimeInterval(-60 * 60 * 24 * 5 + 3),
                 status: .completed,
                 exitCode: 0,
-                commandPreview: "mere.run vision segment diner.png --prompt \"the neon sign\""
+                commandPreview: "mere.run vision segment mug.png --prompt \"the cup\"",
+                templateID: .visionSegment,
+                artifactURLs: [segmented, segmentDocument]
             ),
             StudioLibraryItem(
                 id: UUID(),
@@ -1335,6 +1424,32 @@ private final class SnapshotFixture {
           "modelID" : "vision-ground-falcon-perception",
           "queries" : [ "\(analyzePrompt)" ],
           "schemaVersion" : 1
+        }
+        """
+    }
+
+    /// One detection as `vision segment --json-output` writes it (`SAM31SegmentationMetadata`):
+    /// pixel xyxy boxes, camelCase keys, no mask sidecar so the Masks view shows its fallback.
+    private static func segmentDocument(input: URL, annotated: URL, document: URL) -> String {
+        """
+        {
+          "annotatedImagePath" : "\(annotated.path)",
+          "detections" : [
+            {
+              "box" : { "x1" : 250, "y1" : 312, "x2" : 712, "y2" : 752 },
+              "label" : "the cup",
+              "maskAreaPixels" : 148220,
+              "objectID" : "obj-1",
+              "promptKind" : "text",
+              "score" : 0.91
+            }
+          ],
+          "inputImagePath" : "\(input.path)",
+          "jsonOutputPath" : "\(document.path)",
+          "modelID" : "vision-segment-sam31",
+          "prompts" : [ "the cup" ],
+          "schemaVersion" : 1,
+          "threshold" : 0.05
         }
         """
     }
@@ -2565,4 +2680,37 @@ private final class SnapshotRuntimeEndpoint: URLProtocol {
       }
     }
     """
+}
+
+// MARK: - Region editor preview
+
+/// The region-prompt editor's building blocks with a chosen prompt already selected, so the
+/// render shows the handles a click reveals; `StudioRegionPromptEditor` itself starts with no
+/// selection.
+private struct RegionEditorPreview: View {
+    let image: NSImage
+    @State var prompts: [StudioRegionPrompt]
+    @State var selection: UUID?
+    @State private var tool = StudioRegionTool.box
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            StudioRegionToolbar(tool: $tool, prompts: $prompts, selection: $selection)
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .overlay {
+                    GeometryReader { geometry in
+                        StudioRegionPromptLayer(
+                            prompts: $prompts,
+                            imageSize: CGSize(width: 1_024, height: 1_024),
+                            fitted: CGRect(origin: .zero, size: geometry.size),
+                            tool: $tool,
+                            selection: $selection
+                        )
+                    }
+                }
+                .mereMediaFrame()
+        }
+    }
 }

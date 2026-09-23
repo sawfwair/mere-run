@@ -85,6 +85,8 @@ struct StudioSCAILView: View {
     @State private var animateJob: StudioSubjectsJobBar.Job?
     @State private var notice: Notice?
     @State private var editingSubjectID: UUID?
+    /// Which picture the subject editor's precise selectors are drawn on.
+    @State private var selectorSide = "reference"
     @State private var showsPlanMore = false
     @State private var showsTrackMore = false
     @State private var showsAnimateMore = false
@@ -559,13 +561,20 @@ struct StudioSCAILView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove correction")
             }
-            TextField("Box x1,y1,x2,y2", text: correction.box)
-                .mereField()
-            HStack(spacing: 8) {
-                TextField("Positive points x,y; x,y", text: correction.positivePoints)
-                    .mereField()
-                TextField("Negative points x,y; x,y", text: correction.negativePoints)
-                    .mereField()
+            if let url = pathURL(drivingVideo) {
+                StudioSubjectSelectorEditor(
+                    picture: .clipFrame(
+                        url: url,
+                        planTime: drivingPlanTime(correction.wrappedValue.frameIndex),
+                        canvas: planCanvas
+                    ),
+                    box: correction.box,
+                    positivePoints: correction.positivePoints,
+                    negativePoints: correction.negativePoints,
+                    caption: "Drawn on frame \(correction.wrappedValue.frameIndex) at \(width)×\(height)."
+                )
+            } else {
+                selectorPlaceholder("Choose a driving clip to draw the correction on.")
             }
             HStack(spacing: 8) {
                 TextField("Painted binary correction PNG", text: correction.paintedMaskPath)
@@ -843,22 +852,65 @@ struct StudioSCAILView: View {
             labeledField("Reference selector", text: subject.referencePrompt, placeholder: "woman in red")
             labeledField("Driving selector", text: subject.drivingPrompt, placeholder: "dancer")
             DisclosureGroup("Precise selectors") {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Optional box: x1,y1,x2,y2 · points: x,y; x,y")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Draw a box or points where the text selector is not enough.")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
-                    TextField("Reference box", text: subject.referenceBox).mereField()
-                    TextField("Driving box", text: subject.drivingBox).mereField()
-                    TextField("Reference positive points", text: subject.referencePositivePoints).mereField()
-                    TextField("Reference negative points", text: subject.referenceNegativePoints).mereField()
-                    TextField("Driving positive points", text: subject.drivingPositivePoints).mereField()
-                    TextField("Driving negative points", text: subject.drivingNegativePoints).mereField()
+                    ProjectSegmented(
+                        items: [("reference", "Reference image"), ("driving", "Driving clip")],
+                        selection: $selectorSide,
+                        accessibilityLabel: "Selector picture"
+                    )
+                    if selectorSide == "reference" {
+                        if let url = pathURL(subject.wrappedValue.referenceImage) {
+                            StudioSubjectSelectorEditor(
+                                picture: .image(url),
+                                box: subject.referenceBox,
+                                positivePoints: subject.referencePositivePoints,
+                                negativePoints: subject.referenceNegativePoints,
+                                caption: "Drawn on the reference image."
+                            )
+                        } else {
+                            selectorPlaceholder("Choose a reference image to draw on.")
+                        }
+                    } else if let url = pathURL(drivingVideo) {
+                        StudioSubjectSelectorEditor(
+                            picture: .clipFrame(url: url, planTime: drivingPlanTime(0), canvas: planCanvas),
+                            box: subject.drivingBox,
+                            positivePoints: subject.drivingPositivePoints,
+                            negativePoints: subject.drivingNegativePoints,
+                            caption: "Drawn on the first driving frame at \(width)×\(height)."
+                        )
+                    } else {
+                        selectorPlaceholder("Choose a driving clip to draw on.")
+                    }
                 }
                 .padding(.top, 7)
             }
         }
         .padding(14)
         .frame(width: 380)
+    }
+
+    private func selectorPlaceholder(_ text: String) -> some View {
+        Text(text)
+            .font(MereRunTheme.captionFont)
+            .foregroundStyle(MereRunTheme.textMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+    }
+
+    /// The plan's frame canvas: `video prepare-masks` center-crops every driving frame to it, so
+    /// driving selectors and corrections are drawn in these pixels.
+    private var planCanvas: CGSize {
+        CGSize(width: width, height: height)
+    }
+
+    /// Where plan frame `frame` falls in the driving clip: the CLI resamples the (optionally
+    /// trimmed) clip at the plan's fps from the in point, then takes the nearest source frame
+    /// (`StudioVideoFrameGrid.sourceTime(forPlanTime:sourceFrameRate:)` does that snap).
+    private func drivingPlanTime(_ frame: Int) -> TimeInterval {
+        (useTrimRange ? inSeconds : 0) + Double(frame) / Double(max(1, fps))
     }
 
     private func addSubject() {

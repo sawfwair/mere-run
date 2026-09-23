@@ -257,6 +257,17 @@ package struct StudioAnalyzeHandoff: Equatable {
     package let task: StudioTask
     package let inputPath: String
     package let prompt: String
+    /// What the source found, as box prompts on the carried input: "Segment these" from Find
+    /// opens Segment with the detected boxes already drawn. Empty unless the input carries, since
+    /// the boxes are in that picture's pixels.
+    package let regionPrompts: [StudioRegionPrompt]
+
+    package init(task: StudioTask, inputPath: String, prompt: String, regionPrompts: [StudioRegionPrompt] = []) {
+        self.task = task
+        self.inputPath = inputPath
+        self.prompt = prompt
+        self.regionPrompts = regionPrompts
+    }
 
     /// Whether `target` accepts `url` as its input, which decides if the well is carried over.
     package static func carriesInput(_ url: URL, to target: StudioTask) -> Bool {
@@ -269,12 +280,23 @@ package struct StudioAnalyzeHandoff: Equatable {
     }
 
     /// The handoff a next step produces, or nil when there is nothing to carry.
-    package static func make(to target: StudioTask, inputPath: String, prompt: String) -> StudioAnalyzeHandoff {
+    ///
+    /// - Parameter detections: the source result's boxes in the input's pixels, carried as box
+    ///   prompts when the target draws prompts (Segment, Track) and the input itself carries.
+    package static func make(
+        to target: StudioTask,
+        inputPath: String,
+        prompt: String,
+        detections: [StudioAnalyzeDetection] = []
+    ) -> StudioAnalyzeHandoff {
         let trimmed = inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let carried = trimmed.isEmpty || carriesInput(URL(fileURLWithPath: trimmed), to: target)
             ? trimmed
             : ""
-        return StudioAnalyzeHandoff(task: target, inputPath: carried, prompt: prompt)
+        let prompts = !carried.isEmpty && target.drawsRegionPrompts
+            ? detections.map { StudioRegionPrompt.box($0.box, label: $0.label) }
+            : []
+        return StudioAnalyzeHandoff(task: target, inputPath: carried, prompt: prompt, regionPrompts: prompts)
     }
 
     /// Applies the handoff to the draft the target task is about to show.
@@ -283,5 +305,17 @@ package struct StudioAnalyzeHandoff: Equatable {
         draft.prompt = prompt
         guard !inputPath.isEmpty else { return }
         _ = draft.attach(dropped: [URL(fileURLWithPath: inputPath)], for: mode)
+        // Prompts drawn on the target's previous input do not belong on this one.
+        if task.drawsRegionPrompts {
+            draft.visionRegionPrompts = regionPrompts.isEmpty ? nil : regionPrompts
+        }
+    }
+}
+
+extension StudioTask {
+    /// Whether this task's input can carry boxes and points drawn on it (the CLI's `--box` and
+    /// `--point`): Segment on a still, Track on a clip's seed frame.
+    package var drawsRegionPrompts: Bool {
+        self == .visionSegment || self == .visionTrack
     }
 }

@@ -671,6 +671,9 @@ package enum StudioContractOverrideID: String, CaseIterable, Hashable {
     case readImageAction
     /// An attachment the composer's well owns; the inspector never repeats it.
     case attachment
+    /// Boxes and points drawn on the picture, and Track's frames picked on its scrubber; the
+    /// canvas owns them, so the inspector never shows them as text.
+    case regionPrompts
 }
 
 /// One composite editor: the flags it owns, and any draft field behind it that has no flag of its
@@ -765,7 +768,17 @@ package enum StudioContractOverrides {
                 ),
                 StudioContractOverride(id: .attachment, flags: ["--image"], isExternal: true),
             ]
-        case .code, .listen, .readImage, .findObjects, .segment, .track:
+        case .segment, .track:
+            // Bound so a Command-view edit flows back into the drawing, but never a text field:
+            // the canvas is the editor.
+            overrides += [
+                StudioContractOverride(
+                    id: .regionPrompts,
+                    flags: ["--box", "--point", "--init-frame", "--end-frame"],
+                    isExternal: true
+                ),
+            ]
+        case .code, .listen, .readImage, .findObjects:
             break
         }
         return overrides
@@ -960,8 +973,14 @@ package enum StudioContractBindings {
 
     private static var findObjects: [String: StudioContractBinding<StudioDraft>] { model }
 
+    // The prompts are drawn on the picture; these bindings let a Command-view edit of the same
+    // flags flow back into the drawing, and Track's frame flags into its scrubber.
     private static var segmentAndTrack: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--threshold": .number("visionThreshold", \.visionThreshold),
+        "--box": .text("visionBoxPrompts", \.visionBoxPromptsText),
+        "--point": .text("visionPointPrompts", \.visionPointPromptsText),
+        "--init-frame": .integer("visionInitFrame", \.visionInitFrameValue),
+        "--end-frame": .integerText("visionEndFrame", \.visionEndFrameText),
     ]) { first, _ in first } }
 }
 

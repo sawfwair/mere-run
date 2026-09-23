@@ -8,10 +8,18 @@ import SwiftUI
 struct StudioAnalyzeActions {
     /// Pick a different input; writes the composer's well so the two never disagree.
     let replaceInput: () -> Void
-    /// Continue in a sibling task, carrying this input and prompt.
-    let openTask: (StudioTask) -> Void
+    /// Continue in a sibling task, carrying this input, prompt, and what the result found on it.
+    let openTask: (StudioTask, [StudioAnalyzeDetection]) -> Void
     /// Write part of the result somewhere the user picks.
     let save: (StudioAnalyzeSaveKind) -> Void
+}
+
+/// The draft fields Segment and Track edit on the picture itself: the boxes and points drawn on
+/// the input, and Track's seed and end frames. Nil for the tasks that take no drawn prompts.
+struct StudioAnalyzePromptEditing {
+    var regionPrompts: Binding<[StudioRegionPrompt]>
+    var initFrame: Binding<Int>
+    var endFrame: Binding<Int?>
 }
 
 /// The Analyze archetype: one input on the left, what the model found on the right.
@@ -33,11 +41,20 @@ struct StudioAnalyzeCanvas: View {
     let pullJob: Job?
     let actions: StudioFeedActions
     let analyze: StudioAnalyzeActions
+    var editing: StudioAnalyzePromptEditing?
 
     @State private var chosenView: StudioAnalyzeResultView?
     @State private var loaded: StudioAnalyzeLoadedResult?
+    /// The input's stored pixel size — the space the CLI's coordinates are in.
     @State private var inputSize: CGSize?
     @State private var inputDuration: TimeInterval?
+    @State private var inputFrameRate: Double?
+    /// How the input photo is turned to show upright; results and prompts map through it.
+    @State private var inputOrientation = StudioImageOrientation.up
+    @State private var regionTool = StudioRegionTool.box
+    @State private var regionSelection: UUID?
+    /// Track shows its finished clip once there is one; this brings the seed-frame editor back.
+    @State private var editsTrackPrompts = false
 
     private enum Metrics {
         static let contentWidth: CGFloat = 940
@@ -121,6 +138,7 @@ struct StudioAnalyzeCanvas: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: resultCard?.id) { await loadDocument() }
         .task(id: inputPath) { await measureInput() }
+        .onChange(of: resultCard?.id) { _, _ in editsTrackPrompts = false }
     }
 
     private var content: some View {
@@ -170,7 +188,10 @@ struct StudioAnalyzeCanvas: View {
         guard let inputURL else { return "No input" }
         var parts = [inputURL.lastPathComponent]
         if let inputSize {
-            parts.append("\(Int(inputSize.width))×\(Int(inputSize.height))")
+            // The size as the picture is shown, which for a portrait phone photo is the
+            // stored size turned on its side.
+            let shown = inputOrientation.displaySize(ofStored: inputSize)
+            parts.append("\(Int(shown.width))×\(Int(shown.height))")
         } else if let inputDuration {
             parts.append(StudioTimeFormat.string(inputDuration))
         }
@@ -210,14 +231,25 @@ struct StudioAnalyzeCanvas: View {
     @ViewBuilder
     private var imageView: some View {
         if let inputURL {
-            StudioAnalyzeImageView(
-                url: inputURL,
-                maxHeight: Metrics.mediaMaxHeight,
-                detections: view == .masks ? [] : overlayDetections,
-                masks: view == .masks ? overlayDetections : [],
-                imageSize: inputSize
-            )
-            .mereMediaFrame()
+            VStack(alignment: .leading, spacing: 8) {
+                if let editing {
+                    StudioRegionToolbarRow(
+                        tool: $regionTool, prompts: editing.regionPrompts, selection: $regionSelection
+                    )
+                }
+                StudioAnalyzeImageView(
+                    url: inputURL,
+                    maxHeight: Metrics.mediaMaxHeight,
+                    detections: view == .masks ? [] : overlayDetections,
+                    masks: view == .masks ? overlayDetections : [],
+                    imageSize: inputSize,
+                    orientation: inputOrientation,
+                    editing: editing.map {
+                        StudioAnalyzeImageEditing(prompts: $0.regionPrompts, tool: $regionTool, selection: $regionSelection)
+                    }
+                )
+                .mereMediaFrame()
+            }
         } else {
             missingInput
         }
@@ -226,17 +258,70 @@ struct StudioAnalyzeCanvas: View {
     @ViewBuilder
     private var videoView: some View {
         if let inputURL {
-            VStack(spacing: 8) {
-                StudioVideoPlayerView(url: playableVideoURL ?? inputURL)
-                    .aspectRatio(videoAspect, contentMode: .fit)
-                    .frame(maxHeight: Metrics.mediaMaxHeight - 26)
-                    .mereMediaFrame()
-                if case .tracking(let tracking) = document {
-                    StudioAnalyzeTrackScrubber(document: tracking)
+            if let editing, !resultDescribesInput || editsTrackPrompts {
+                seedFrameEditor(url: inputURL, editing: editing)
+            } else {
+                VStack(spacing: 8) {
+                    StudioVideoPlayerView(url: playableVideoURL ?? inputURL)
+                        .aspectRatio(videoAspect, contentMode: .fit)
+                        .frame(maxHeight: Metrics.mediaMaxHeight - 26)
+                        .mereMediaFrame()
+                    if case .tracking(let tracking) = document {
+                        StudioAnalyzeTrackScrubber(document: tracking)
+                    }
+                    if editing != nil {
+                        HStack {
+                            Button {
+                                editsTrackPrompts = true
+                            } label: {
+                                Label("Adjust prompts and frames", systemImage: "rectangle.dashed")
+                            }
+                            .buttonStyle(.mereSecondary)
+                            .help("Draw on the start frame and pick where tracking starts and ends")
+                            Spacer()
+                        }
+                    }
                 }
             }
         } else {
             missingInput
+        }
+    }
+
+    /// Track's input as frames to draw on and pick from. The clip's size and rate arrive from
+    /// `measureInput`; until then there is nothing to map a drawing onto.
+    @ViewBuilder
+    private func seedFrameEditor(url: URL, editing: StudioAnalyzePromptEditing) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if resultDescribesInput {
+                HStack {
+                    Button {
+                        editsTrackPrompts = false
+                    } label: {
+                        Label("Show result", systemImage: "play.rectangle")
+                    }
+                    .buttonStyle(.mereSecondary)
+                    Spacer()
+                }
+            }
+            if let frameSize = inputSize ?? document?.reportedInputSize {
+                StudioTrackFrameEditor(
+                    url: url,
+                    frameSize: frameSize,
+                    grid: StudioVideoFrameGrid(duration: inputDuration ?? 0, frameRate: inputFrameRate ?? 0),
+                    prompts: editing.regionPrompts,
+                    initFrame: editing.initFrame,
+                    endFrame: editing.endFrame,
+                    maxHeight: Metrics.mediaMaxHeight - 96
+                )
+            } else {
+                Rectangle()
+                    .fill(MereRunTheme.surfaceRaised)
+                    .aspectRatio(videoAspect, contentMode: .fit)
+                    .frame(maxHeight: Metrics.mediaMaxHeight - 96)
+                    .overlay { ProgressView().controlSize(.small) }
+                    .mereMediaFrame()
+            }
         }
     }
 
@@ -364,7 +449,7 @@ struct StudioAnalyzeCanvas: View {
             outputText: card.item.outputText,
             view: view,
             nextActions: archetype.nextActions,
-            onOpenTask: analyze.openTask,
+            onOpenTask: { analyze.openTask($0, detections) },
             onSave: analyze.save
         )
             } else {
@@ -394,6 +479,8 @@ struct StudioAnalyzeCanvas: View {
         guard let inputURL else {
             inputSize = nil
             inputDuration = nil
+            inputFrameRate = nil
+            inputOrientation = .up
             return
         }
         let kind = archetype.inputKind
@@ -403,6 +490,8 @@ struct StudioAnalyzeCanvas: View {
         guard !Task.isCancelled else { return }
         inputSize = measured.size
         inputDuration = measured.duration
+        inputFrameRate = measured.frameRate
+        inputOrientation = measured.orientation
     }
 }
 
@@ -452,20 +541,27 @@ struct StudioAnalyzeLoadedResult: Equatable {
 /// What the input strip can say about a file without decoding all of it.
 enum StudioAnalyzeMediaInfo {
     struct Measurement: Equatable {
+        /// Stored pixels for an image, the displayed frame for a clip.
         var size: CGSize?
         var duration: TimeInterval?
+        /// The clip's declared frame rate, which Track's frame numbers count in.
+        var frameRate: Double?
+        /// The photo's EXIF orientation; clips are already shown the way their track transform says.
+        var orientation = StudioImageOrientation.up
     }
 
     static func measure(_ url: URL, kind: StudioAnalyzeInputKind) -> Measurement {
         switch kind {
         case .image:
-            return Measurement(size: pixelSize(of: url), duration: nil)
+            let metadata = StudioImageMetadata.read(url)
+            return Measurement(size: metadata?.storedSize, duration: nil, orientation: metadata?.orientation ?? .up)
         case .video:
             let asset = AVURLAsset(url: url)
             let track = asset.tracks(withMediaType: .video).first
             let size = track.map { $0.naturalSize.applying($0.preferredTransform) }
                 .map { CGSize(width: abs($0.width), height: abs($0.height)) }
-            return Measurement(size: size, duration: CMTimeGetSeconds(asset.duration))
+            let rate = track.map { Double($0.nominalFrameRate) }.flatMap { $0 > 0 ? $0 : nil }
+            return Measurement(size: size, duration: CMTimeGetSeconds(asset.duration), frameRate: rate)
         case .audio:
             let asset = AVURLAsset(url: url)
             let duration = CMTimeGetSeconds(asset.duration)
@@ -475,15 +571,8 @@ enum StudioAnalyzeMediaInfo {
         }
     }
 
-    /// The image's own pixel dimensions, read from its metadata without decoding the pixels.
+    /// The image's stored pixel dimensions, read from its metadata without decoding the pixels.
     static func pixelSize(of url: URL) -> CGSize? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int,
-              width > 0, height > 0 else {
-            return nil
-        }
-        return CGSize(width: width, height: height)
+        StudioImageMetadata.read(url)?.storedSize
     }
 }

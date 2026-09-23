@@ -69,6 +69,8 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
         let incoming = urls.filter(accepts).map(\.path)
         guard !incoming.isEmpty else { return }
         switch storage {
+        case .path(let keyPath) where keyPath == \StudioDraft.inputPath:
+            draft.replaceInput(incoming[0])
         case .path(let keyPath):
             draft[keyPath: keyPath] = incoming[0]
         case .pathList(let keyPath):
@@ -81,6 +83,8 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
 
     package func clear(in draft: inout StudioDraft) {
         switch storage {
+        case .path(let keyPath) where keyPath == \StudioDraft.inputPath:
+            draft.replaceInput("")
         case .path(let keyPath), .pathList(let keyPath):
             draft[keyPath: keyPath] = ""
         }

@@ -66,6 +66,22 @@ The format is based on Keep a Changelog.
 - Stop pinning the Chat transcript to the bottom while a reply streams: it
   follows new output only while you are already there, and a "Jump to latest"
   pill brings you back after you scroll up. Deleting a thread now asks first.
+- Draw box and point prompts on the picture in Vision ▸ Segment and Track
+  instead of typing pixel coordinates: drag for a box, click for a point,
+  Option-click for a negative point, with handles to resize, Delete to remove,
+  and a Box / Point / Negative / Clear toolbar. The drawing becomes the CLI's
+  `--box` and `--point` values, and a box or point counts as the prompt, so a
+  text prompt is no longer required.
+- Carry the boxes Find detected into Segment as drawn prompts when you choose
+  "Segment these".
+- Pick Track's start and end frames on a frame scrubber over the clip, with the
+  prompts drawn on the start frame, instead of typing frame numbers.
+- Choose the face for Vision ▸ Faces embedding and comparison by clicking it on
+  the image once Face detection has run on that picture; the index stepper stays
+  for pictures without a detection.
+- Draw Video ▸ Subjects' precise selectors and keyframe corrections on the
+  reference image or the driving frame at the plan's size, which is the space
+  the mask plan is written in, instead of typing them.
 
 ## 0.55.0 - 2026-09-22
 

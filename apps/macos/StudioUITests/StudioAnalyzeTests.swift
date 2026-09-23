@@ -1,7 +1,10 @@
 @testable import StudioKit
 @testable import StudioUI
+import AppKit
 import CoreGraphics
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 import XCTest
 
 /// The Analyze archetype: decoding the documents the CLI really writes, putting their coordinates
@@ -485,5 +488,59 @@ final class StudioAnalyzeTests: XCTestCase {
         StudioVisionResultPaths.apply(to: &blank, wantsMasks: true)
         XCTAssertTrue(blank.visionJSONOutputPath.isEmpty)
         XCTAssertTrue(blank.visionMaskOutputDirectory.isEmpty)
+    }
+
+    // MARK: - Stored pixels, not the viewer's rotation
+
+    /// A phone photo saved with EXIF orientation 6 is 40×20 on disk and shown 20×40. The CLI
+    /// decodes and reads coordinates in the 40×20 (`AppleMediaImageIO.decode` applies no
+    /// transform), so Studio shows the picture upright and maps prompts and results through the
+    /// orientation: a box drawn at the displayed top-right is the stored top-left in the `--box`.
+    func testARotatedPhotoIsShownUprightAndItsPromptsLandInStoredPixels() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rotated-\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Self.writeJPEG(to: url, width: 40, height: 20, orientation: 6)
+
+        let metadata = try XCTUnwrap(StudioImageMetadata.read(url))
+        XCTAssertEqual(metadata.storedSize, CGSize(width: 40, height: 20))
+        XCTAssertEqual(metadata.orientation, .right)
+        XCTAssertEqual(metadata.displaySize, CGSize(width: 20, height: 40))
+        XCTAssertEqual(StudioAnalyzeMediaInfo.measure(url, kind: .image).orientation, .right)
+        let shown = try XCTUnwrap(StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 400))
+        XCTAssertEqual(shown.image.size, NSSize(width: 20, height: 40), "the picture is shown upright")
+
+        // The upright 20×40 picture fitted into a 400×400 view is 200×400 at x 100. A drag over
+        // its top-right quarter-width, top quarter-height…
+        let fitted = StudioAnalyzeGeometry.fittedRect(imageSize: metadata.displaySize, in: CGSize(width: 400, height: 400))
+        XCTAssertEqual(fitted, CGRect(x: 100, y: 0, width: 200, height: 400))
+        let displayed = StudioRegionGeometry.imageRect(
+            fromView: CGPoint(x: 250, y: 0), to: CGPoint(x: 300, y: 100),
+            imageSize: metadata.displaySize, fitted: fitted
+        )
+        XCTAssertEqual(displayed, CGRect(x: 15, y: 0, width: 5, height: 10))
+        // …is the stored picture's top-left corner, which is what the CLI's --box must say.
+        let prompt = StudioRegionPrompt.box(displayed).inStoredSpace(.right, storedSize: metadata.storedSize)
+        XCTAssertEqual(prompt.rect, CGRect(x: 0, y: 0, width: 10, height: 5))
+        XCTAssertEqual(StudioRegionPromptText.boxLines([prompt]), ["0,0,10,5"])
+        // And a result the CLI reports there draws back over the same upright corner.
+        let back = prompt.inDisplaySpace(.right, storedSize: metadata.storedSize)
+        XCTAssertEqual(back.rect, displayed)
+        XCTAssertEqual(back.id, prompt.id)
+    }
+
+    private static func writeJPEG(to url: URL, width: Int, height: Int, orientation: Int) throws {
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ))
+        context.setFillColor(CGColor(red: 0.6, green: 0.5, blue: 0.3, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let image = try XCTUnwrap(context.makeImage())
+        let destination = try XCTUnwrap(
+            CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
+        )
+        CGImageDestinationAddImage(destination, image, [kCGImagePropertyOrientation: orientation] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
     }
 }
