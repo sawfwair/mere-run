@@ -263,6 +263,67 @@ final class StudioLocalServerTests: XCTestCase {
         XCTAssertEqual(StudioQuitWarning.message(for: controller), nil, "a stopped server holds nothing back")
     }
 
+    func testWorldServeIsAResidentServerTheMenuBarAndQuitKnowAbout() throws {
+        let (controller, _, restore) = makeController()
+        defer { restore() }
+        XCTAssertTrue(CommandTemplateID.worldServe.isResidentServer)
+        XCTAssertFalse(CommandTemplateID.imageGenerate.isResidentServer)
+
+        controller.worldServer.start(draft: try XCTUnwrap(CommandCatalog.template(id: .worldServe)).defaultDraft())
+
+        XCTAssertEqual(controller.jobs.running(in: .service).count, 1)
+        XCTAssertEqual(controller.residentServers.map(\.title), ["Vision server", "Music server", "World server"])
+        XCTAssertEqual(StudioQuitWarning.message(for: controller), "Quitting stops the world server Studio started.")
+    }
+
+    // MARK: - Resources
+
+    func testMachineMonitorKeepsTwoMinutesOfReadings() {
+        var reading = 0.0
+        let monitor = StudioMachineMonitor(sampler: {
+            reading += 0.01
+            return StudioMachineMonitor.Sample(
+                cpu: reading,
+                memoryUsedBytes: 1,
+                memoryTotalBytes: 2,
+                thermalState: .nominal
+            )
+        })
+        for _ in 0..<(StudioMachineMonitor.historyLength + 5) { monitor.sampleNow() }
+
+        XCTAssertEqual(monitor.cpuHistory.count, StudioMachineMonitor.historyLength)
+        XCTAssertEqual(monitor.cpuHistory.last ?? 0, 0.65, accuracy: 1e-9)
+        XCTAssertEqual(monitor.latest?.cpu ?? 0, 0.65, accuracy: 1e-9)
+    }
+
+    func testThroughputIsTheTokenRateBetweenPollsAndRestartsWithTheServer() throws {
+        let monitor = StudioServingMonitor()
+        let start = Date(timeIntervalSince1970: 0)
+        func snapshot(tokens: Int) throws -> StudioRuntimeSnapshot {
+            try JSONDecoder().decode(StudioRuntimeSnapshot.self, from: Data("""
+            {"benchmarkStats": {"available": true, "detail": "", "reportedModelCount": 1,
+              "completedRequests": 1, "failedRequests": 0, "generatedTokens": \(tokens)}}
+            """.utf8))
+        }
+
+        monitor.recordThroughput(try snapshot(tokens: 1_000), at: start)
+        XCTAssertTrue(monitor.throughputHistory.isEmpty, "the first poll is only a baseline")
+        monitor.recordThroughput(try snapshot(tokens: 1_080), at: start.addingTimeInterval(2))
+        monitor.recordThroughput(try snapshot(tokens: 1_080), at: start.addingTimeInterval(4))
+        XCTAssertEqual(monitor.throughputHistory, [40, 0])
+        // A restarted server counts from zero: a new baseline, not a negative rate.
+        monitor.recordThroughput(try snapshot(tokens: 12), at: start.addingTimeInterval(6))
+        XCTAssertEqual(monitor.throughputHistory, [40, 0])
+    }
+
+    func testARuntimeWithoutTokenCountsHasNoRateRatherThanAnIdleOne() throws {
+        let monitor = StudioServingMonitor()
+        let older = try JSONDecoder().decode(StudioRuntimeSnapshot.self, from: Data(#"{"activeRequests": 2}"#.utf8))
+        monitor.recordThroughput(older, at: Date(timeIntervalSince1970: 0))
+        monitor.recordThroughput(older, at: Date(timeIntervalSince1970: 2))
+        XCTAssertTrue(monitor.throughputHistory.isEmpty)
+    }
+
     // MARK: - Quit warning
 
     func testQuitWarnsOnlyWhenItWouldStopAServerOrTheUsersWork() {

@@ -214,7 +214,14 @@ final class StudioSnapshotTests: XCTestCase {
         let restoreEndpoint = pinRuntimeEndpoint(fixture.controller)
         defer { restoreEndpoint() }
 
-        func render(_ name: String, fixture: SnapshotFixture, answer: SnapshotRuntimeEndpoint.Answer) throws {
+        // Every render polls the stub, whose token count never moves, so each render sets the
+        // decode history it shows after that poll rather than inheriting the last render's.
+        func render(
+            _ name: String,
+            fixture: SnapshotFixture,
+            answer: SnapshotRuntimeEndpoint.Answer,
+            throughput: [Double] = []
+        ) throws {
             let controller = fixture.controller
             let panel = StudioMenuBarPanel(controller: controller, onOpenStudio: {}, onOpenServer: {})
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
@@ -235,27 +242,54 @@ final class StudioSnapshotTests: XCTestCase {
                     name: "menu-bar-\(name)-\(appearance.rawValue)",
                     settle: 1.5,
                     afterAppear: {
-                        Task { await controller.servingMonitor.refreshRuntimeNow(controller: controller) }
+                        Task {
+                            await controller.servingMonitor.refreshRuntimeNow(controller: controller)
+                            controller.servingMonitor.throughputHistory = throughput
+                        }
                     }
                 )
             }
         }
 
-        try render("stopped", fixture: fixture, answer: .unreachable)
+        let stopped = try SnapshotFixture(outputDirectory: fixture.outputDirectory, machineMonitor: Self.scriptedMachine())
+        defer { stopped.tearDown() }
+        try render("stopped", fixture: stopped, answer: .unreachable)
 
         let runningRunner = SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
-        let running = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup, processRunner: runningRunner)
+        let running = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .mockup,
+            processRunner: runningRunner,
+            machineMonitor: Self.scriptedMachine(busy: true)
+        )
+        // Two minutes of decode traffic: quiet, a burst of chat turns, quiet, then a steady client.
+        let traffic: [Double] = (0..<StudioMachineMonitor.historyLength).map { index in
+            let t = Double(index)
+            switch index {
+            case 8..<20: return 32 + 9 * sin(t / 1.7)
+            case 38...: return 41 + 5 * sin(t / 2.3)
+            default: return 0
+            }
+        }
         defer { running.tearDown() }
         try running.startMainBoardJobs()
         runningRunner.liveSessionMarkers.insert("serve")
         XCTAssertNil(running.controller.localServer.start())
         let vision = try XCTUnwrap(CommandCatalog.template(id: .visionServe)).defaultDraft()
         running.controller.visionServer.start(draft: vision)
-        try render("running", fixture: running, answer: .runtime(SnapshotRuntimeEndpoint.busyRuntime))
+        try render("running", fixture: running, answer: .runtime(SnapshotRuntimeEndpoint.busyRuntime), throughput: traffic)
 
-        let external = try SnapshotFixture(outputDirectory: fixture.outputDirectory)
+        let external = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            machineMonitor: Self.scriptedMachine(thermal: .serious)
+        )
         defer { external.tearDown() }
-        try render("external", fixture: external, answer: .runtime(SnapshotRuntimeEndpoint.busyRuntime))
+        try render(
+            "external",
+            fixture: external,
+            answer: .runtime(SnapshotRuntimeEndpoint.busyRuntime),
+            throughput: Array(repeating: 0, count: 12)
+        )
 
         let failedRunner = SnapshotProcessRunner()
         failedRunner.liveSessionMarkers = ["serve"]
@@ -266,6 +300,28 @@ final class StudioSnapshotTests: XCTestCase {
         serve.stderr("Error: 127.0.0.1:8080 is already in use by another process.\n")
         serve.termination(1)
         try render("failed", fixture: failed, answer: .unreachable)
+    }
+
+    /// Two minutes of a 64 GB Mac's load, the same on every render: CPU idling around 15–30%, with
+    /// a sustained climb near the end when `busy`.
+    private static func scriptedMachine(
+        busy: Bool = false,
+        thermal: ProcessInfo.ThermalState = .nominal
+    ) -> StudioMachineMonitor {
+        var index = 0
+        let monitor = StudioMachineMonitor(sampler: {
+            defer { index += 1 }
+            let t = Double(index)
+            let load = busy && index > 38 ? 0.32 + 0.1 * sin(t / 2) : 0
+            return StudioMachineMonitor.Sample(
+                cpu: 0.2 + 0.07 * sin(t / 4.5) + 0.03 * sin(t * 1.3) + load,
+                memoryUsedBytes: busy ? 44_023_414_784 : 29_527_900_160,
+                memoryTotalBytes: 68_719_476_736,
+                thermalState: thermal
+            )
+        })
+        for _ in 0..<StudioMachineMonitor.historyLength { monitor.sampleNow() }
+        return monitor
     }
 
     /// Points the runtime endpoint at 127.0.0.1:8080 for a render, whatever an earlier test left
@@ -577,16 +633,18 @@ final class StudioSnapshotTests: XCTestCase {
     /// The Settings scene content at the width the app gives it.
     func testSettingsSnapshots() throws {
         for appearance in StudioSnapshotAppearance.allCases {
-            let view = MereRunSettingsView()
-                .environmentObject(fixture.controller)
-                .environmentObject(fixture.crashReporter)
-                .frame(width: Self.settingsSize.width)
-            try fixture.write(
-                view,
-                size: Self.settingsSize,
-                appearance: appearance,
-                name: "settings-\(appearance.rawValue)"
-            )
+            for (tab, suffix) in [(MereRunSettingsView.Tab.general, ""), (.server, "-server")] {
+                let view = MereRunSettingsView(tab: tab)
+                    .environmentObject(fixture.controller)
+                    .environmentObject(fixture.crashReporter)
+                    .frame(width: Self.settingsSize.width)
+                try fixture.write(
+                    view,
+                    size: Self.settingsSize,
+                    appearance: appearance,
+                    name: "settings\(suffix)-\(appearance.rawValue)"
+                )
+            }
         }
     }
 
@@ -758,7 +816,8 @@ private final class SnapshotFixture {
     init(
         outputDirectory: URL,
         seed: Seed = .fixture,
-        processRunner: MereRunProcessRunning = SnapshotProcessRunner()
+        processRunner: MereRunProcessRunning = SnapshotProcessRunner(),
+        machineMonitor: StudioMachineMonitor? = nil
     ) throws {
         self.outputDirectory = outputDirectory
         self.processRunner = processRunner
@@ -777,7 +836,8 @@ private final class SnapshotFixture {
             secretStore: InMemorySecretStore(),
             processRunner: processRunner,
             cliResolver: { _ in .executable(URL(fileURLWithPath: "/usr/local/bin/mere.run")) },
-            resolvesCLIOnInit: true
+            resolvesCLIOnInit: true,
+            machineMonitor: machineMonitor
         )
         library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
         switch seed {

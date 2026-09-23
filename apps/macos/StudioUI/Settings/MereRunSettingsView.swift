@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import StudioKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -7,7 +8,16 @@ import UniformTypeIdentifiers
 /// configuration — where the CLI is, where models and generations live, what the runtime server
 /// answers on, and the local diagnostics — rather than anything about one run.
 package struct MereRunSettingsView: View {
-    package init() {}
+    package enum Tab: Hashable {
+        case general, models, server, advanced
+    }
+
+    /// `tab` is where the window opens: General, unless a snapshot board asks for another.
+    package init(tab: Tab = .general) {
+        _tab = State(initialValue: tab)
+    }
+
+    @State private var tab: Tab
 
     @EnvironmentObject private var crashReporter: StudioCrashReporter
     @EnvironmentObject private var controller: MereRunController
@@ -20,6 +30,11 @@ package struct MereRunSettingsView: View {
     /// Empty means the per-media defaults in `StudioOutputLocation`.
     @AppStorage(StudioOutputLocation.rootDefaultsKey) private var outputRoot = ""
     @AppStorage(StudioMenuBar.visibilityDefaultsKey) private var showsMenuBarExtra = true
+    @AppStorage(StudioMenuBar.hidesDockIconDefaultsKey) private var hidesDockIcon = true
+    @AppStorage(StudioMenuBar.serveAtLaunchDefaultsKey) private var servesAtLaunch = false
+    /// The login item's registration as macOS reports it; read on appear and after each change.
+    @State private var loginItemStatus = SMAppService.Status.notRegistered
+    @State private var loginItemError: String?
     /// The runtime endpoint and key as typed. They reach the controller — which retargets the
     /// server monitor and writes the key to the Keychain — on Apply or Return, not per keystroke.
     @State private var runtimeHost = ""
@@ -27,15 +42,19 @@ package struct MereRunSettingsView: View {
     @State private var runtimeAPIKey = ""
 
     package var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             settingsTab { generalTab }
                 .tabItem { Label("General", systemImage: "gearshape") }
+                .tag(Tab.general)
             settingsTab { modelsTab }
                 .tabItem { Label("Models", systemImage: "shippingbox") }
+                .tag(Tab.models)
             settingsTab { serverTab }
                 .tabItem { Label("Server", systemImage: "network") }
+                .tag(Tab.server)
             settingsTab { advancedTab }
                 .tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
+                .tag(Tab.advanced)
         }
         .padding(22)
         .background(MereRunTheme.background)
@@ -165,14 +184,15 @@ package struct MereRunSettingsView: View {
                     .merePanel()
             }
             .onSubmit(applyRuntimeServer)
-            HStack(spacing: 10) {
-                Spacer(minLength: 0)
-                Button("Revert", action: loadRuntimeServer)
-                    .buttonStyle(.mereSecondary)
-                    .disabled(!runtimeServerEdited)
-                Button("Apply", action: applyRuntimeServer)
-                    .buttonStyle(.merePrimary)
-                    .disabled(!runtimeServerEdited)
+            // Only an edit has anything to apply or revert.
+            if runtimeServerEdited {
+                HStack(spacing: 10) {
+                    Spacer(minLength: 0)
+                    Button("Revert", action: loadRuntimeServer)
+                        .buttonStyle(.mereSecondary)
+                    Button("Apply", action: applyRuntimeServer)
+                        .buttonStyle(.merePrimary)
+                }
             }
             Text("Where the API server listens, and where Models, Server, and the menu bar reach it (`mere.run api serve`). The key is kept in your login Keychain.")
                 .font(MereRunTheme.captionFont)
@@ -189,13 +209,53 @@ package struct MereRunSettingsView: View {
         .onChange(of: controller.runtimeHost) { _, host in runtimeHost = host }
         .onChange(of: controller.runtimePort) { _, port in runtimePort = port }
         .onChange(of: controller.runtimeAPIKey) { _, key in runtimeAPIKey = key }
-        EditorSection("Menu bar") {
+        EditorSection("Menu bar and startup") {
             Toggle("Show mere.run in the menu bar", isOn: $showsMenuBarExtra)
-            Text("Start, stop, and watch the API server and its models from the menu bar, with or without a Studio window open.")
+            Text("Start, stop, and watch the servers, their models, and this Mac's load from the menu bar, with or without a Studio window open.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
+            Toggle("Hide the Dock icon while no window is open", isOn: $hidesDockIcon)
+                .disabled(!showsMenuBarExtra)
+                .help("mere.run keeps running in the menu bar; opening the Studio brings the Dock icon back")
+            Toggle("Start the API server when mere.run opens", isOn: $servesAtLaunch)
+            Toggle("Open mere.run at login", isOn: Binding(
+                get: { loginItemStatus == .enabled || loginItemStatus == .requiresApproval },
+                set: { setOpensAtLogin($0) }
+            ))
+            if loginItemStatus == .requiresApproval {
+                HStack(spacing: 10) {
+                    Text("Allow mere.run in System Settings ▸ General ▸ Login Items.")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.yellow)
+                    Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
+                        .buttonStyle(.mereSecondary)
+                }
+            }
+            if let loginItemError {
+                Text(loginItemError)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .onAppear { loginItemStatus = SMAppService.mainApp.status }
+    }
+
+    /// Registers or removes mere.run as a login item. Only the packaged app can register; a build
+    /// run from the command line reports why not.
+    private func setOpensAtLogin(_ opens: Bool) {
+        do {
+            if opens {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            loginItemError = nil
+        } catch {
+            loginItemError = "mere.run could not change its login item: \(error.localizedDescription)"
+        }
+        loginItemStatus = SMAppService.mainApp.status
     }
 
     private var runtimeServerEdited: Bool {

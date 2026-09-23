@@ -14,6 +14,10 @@ package final class StudioServingMonitor: ObservableObject {
     /// 401 — or nil once a poll gets no answer. A server that rejects the key is still up.
     @Published package private(set) var lastAnsweredAt: Date?
     @Published package private(set) var activities: [StudioServiceActivity] = []
+    /// Tokens generated per second between consecutive polls, oldest first, for the menu bar's
+    /// sparkline. It reads 0 while the server is idle and empties when the server goes away.
+    @Published package internal(set) var throughputHistory: [Double] = []
+    private var lastTokenCount: (tokens: Int, at: Date)?
 
     private var pollingTask: Task<Void, Never>?
     /// The `/runtime/status` request in flight. A poll that finds one waits for its answer
@@ -159,6 +163,7 @@ package final class StudioServingMonitor: ObservableObject {
             isReachable = true
             connectionDetail = "Connected"
             lastUpdated = Date()
+            recordThroughput(decoded, at: sentAt)
             if wasReachable {
                 append(StudioServiceActivityDiff.events(previous: previous, current: decoded))
             } else {
@@ -168,10 +173,27 @@ package final class StudioServingMonitor: ObservableObject {
             let wasReachable = isReachable
             isReachable = false
             lastAnsweredAt = nil
+            lastTokenCount = nil
+            throughputHistory = []
             connectionDetail = "Runtime is not reachable"
             if wasReachable {
                 append([.init(level: .warning, title: "Runtime disconnected", detail: error.localizedDescription)])
             }
+        }
+    }
+
+    /// Appends the generation rate since the previous poll. A counter that went backwards is a
+    /// restarted server: that poll starts a new baseline rather than reading a negative rate.
+    func recordThroughput(_ snapshot: StudioRuntimeSnapshot, at date: Date) {
+        let perModel = snapshot.textModels.compactMap(\.benchmarkStats?.generatedTokens)
+        // A runtime that reports no token counts has no rate to show; "Idle" would be a guess.
+        guard let tokens = snapshot.benchmarkStats?.generatedTokens
+            ?? (perModel.isEmpty ? nil : perModel.reduce(0, +)) else { return }
+        defer { lastTokenCount = (tokens, date) }
+        guard let last = lastTokenCount, tokens >= last.tokens, date > last.at else { return }
+        throughputHistory.append(Double(tokens - last.tokens) / date.timeIntervalSince(last.at))
+        if throughputHistory.count > StudioMachineMonitor.historyLength {
+            throughputHistory.removeFirst(throughputHistory.count - StudioMachineMonitor.historyLength)
         }
     }
 

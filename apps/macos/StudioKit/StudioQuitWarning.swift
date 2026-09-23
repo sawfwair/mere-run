@@ -26,8 +26,9 @@ package enum StudioQuitWarning {
     package static func message(for controller: MereRunController) -> String? {
         var servers: [String] = []
         if controller.localServer.phase.isOwned { servers.append("API server") }
-        if controller.visionServer.state.isRunning { servers.append("vision server") }
-        if controller.musicServer.state.isRunning { servers.append("music server") }
+        for server in controller.residentServers where server.state.isRunning {
+            servers.append(server.title.prefix(1).lowercased() + server.title.dropFirst())
+        }
         return message(
             servers: servers,
             runningJobs: controller.jobs.running(in: .inference).count,

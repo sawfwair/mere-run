@@ -31,6 +31,17 @@ package final class StudioServiceProcess: ObservableObject {
     package let templateID: CommandTemplateID
     @Published package private(set) var state = State.none(exitedAt: nil)
 
+    /// "API server", "Vision server": how menus, alerts, and notifications name it.
+    package var title: String {
+        switch templateID {
+        case .apiServe: return "API server"
+        case .visionServe: return "Vision server"
+        case .musicServe: return "Music server"
+        case .worldServe: return "World server"
+        default: return CommandCatalog.template(id: templateID)?.title ?? "Server"
+        }
+    }
+
     private weak var controller: MereRunController?
     private var jobID: JobID?
     private var subscription: AnyCancellable?
@@ -129,7 +140,11 @@ package final class StudioServiceProcess: ObservableObject {
 
     private func refresh() {
         let next = Self.state(of: job)
-        if state != next { state = next }
+        guard state != next else { return }
+        if case .running(stopRequested: false, _) = state, case .failed(let reason, _) = next {
+            controller?.notifyServerStopped(title, reason: reason)
+        }
+        state = next
     }
 
     private static func state(of job: Job?) -> State {

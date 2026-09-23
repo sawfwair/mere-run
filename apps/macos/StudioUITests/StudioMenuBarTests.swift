@@ -69,10 +69,38 @@ final class StudioMenuBarTests: XCTestCase {
         XCTAssertEqual(StudioMenuBarCopy.uptime(3 * 86_400 + 4 * 3_600 + 59 * 60), "3d 4h")
     }
 
-    func testMemoryLineReadsTheRuntimeFootprint() throws {
-        let memory = try JSONDecoder().decode(StudioRuntimeMemory.self, from: Data(#"{"currentBytes": 1073741824}"#.utf8))
-        XCTAssertEqual(StudioMenuBarCopy.memoryLine(memory), "1 GB in use")
-        XCTAssertNil(StudioMenuBarCopy.memoryLine(nil))
+    func testResourceCopy() {
+        XCTAssertEqual(StudioMenuBarCopy.percent(0.234), "23%")
+        XCTAssertEqual(StudioMenuBarCopy.percent(1.4), "100%")
+        XCTAssertEqual(StudioMenuBarCopy.rate(nil), "—")
+        XCTAssertEqual(StudioMenuBarCopy.rate(0.2), "Idle")
+        XCTAssertEqual(StudioMenuBarCopy.rate(41.6), "42 tok/s")
+        XCTAssertEqual(StudioMenuBarCopy.memoryUsage(used: 44_023_414_784, total: 68_719_476_736), "41.0 of 64 GB")
+        XCTAssertNil(StudioMenuBarCopy.thermal(.nominal))
+        XCTAssertEqual(StudioMenuBarCopy.thermal(.serious), "Thermal: Serious")
+        XCTAssertEqual(StudioMenuBarCopy.residentCount(3), "3 resident")
+    }
+
+    func testTheDockIconHidesOnlyWithTheMenuBarToComeBackFrom() throws {
+        XCTAssertTrue(StudioMenuBar.hidesDockIcon(showsMenuBarExtra: true, hidesWithoutWindows: true, hasOpenWindow: false))
+        XCTAssertFalse(StudioMenuBar.hidesDockIcon(showsMenuBarExtra: true, hidesWithoutWindows: true, hasOpenWindow: true))
+        XCTAssertFalse(StudioMenuBar.hidesDockIcon(showsMenuBarExtra: false, hidesWithoutWindows: true, hasOpenWindow: false))
+        XCTAssertFalse(StudioMenuBar.hidesDockIcon(showsMenuBarExtra: true, hidesWithoutWindows: false, hasOpenWindow: false))
+
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "StudioMenuBarTests-\(UUID().uuidString)"))
+        XCTAssertTrue(StudioMenuBar.isOn("unset", defaults: defaults), "an unset preference is on")
+        defaults.set(false, forKey: "off")
+        XCTAssertFalse(StudioMenuBar.isOn("off", defaults: defaults))
+    }
+
+    func testSparklinePutsTheNewestReadingAtTheRightEdge() {
+        let size = CGSize(width: 118, height: 28)
+        let points = StudioSparkline.points([0, 0.5, 1], maximum: 1, in: size)
+        XCTAssertEqual(points.count, 3)
+        XCTAssertEqual(points.last?.x, 118)
+        XCTAssertEqual(points.last?.y, 2, "a full reading reaches the top margin")
+        XCTAssertEqual(points.first?.y, 26, "an empty reading sits on the bottom margin")
+        XCTAssertEqual(points[1].x - points[0].x, 2, "one slot per reading of a full two-minute history")
     }
 
     func testIconIsATemplateWhosePeriodLightsWhileServing() throws {

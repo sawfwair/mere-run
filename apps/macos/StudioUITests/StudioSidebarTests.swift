@@ -24,7 +24,7 @@ final class StudioSidebarTests: XCTestCase {
 
         let serving = StudioServerStatus(health: "ok", loadedModels: ["gemma4-e4b"], installedCount: 3)
         XCTAssertEqual(
-            StudioMachineStatus(serverStatus: serving, probeTimedOut: false, isServing: true),
+            StudioMachineStatus(serverStatus: serving, probeTimedOut: false, isServing: true, loadedModel: "gemma4-e4b"),
             .serving(installedModels: 3, loadedModel: "gemma4-e4b")
         )
     }

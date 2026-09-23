@@ -27,6 +27,16 @@ The format is based on Keep a Changelog.
   answer.
 - Ask before quitting while a server Studio started or an inference job is still
   running.
+- Show this Mac's load in the menu bar: CPU and the server's decode rate with
+  two minutes of history, and a memory bar splitting the server's footprint from
+  the rest, with a thermal warning when the Mac throttles. Load a server model
+  from the menu bar.
+- Let mere.run live in the menu bar: it leaves the Dock while no window is open,
+  can start the API server when it opens, and can open at login. A server that
+  stops on its own posts a notification while mere.run is in the background.
+- Run `world serve` and servers started from the Command Console in the service
+  lane too, and refresh the sidebar's status probe only when the model inventory
+  or CLI settings change instead of every 20 seconds.
 - Fix the Server page's Reconnect button, which did nothing, and Start, which
   after a relaunch cleared the runtime API key from the Keychain and could revert
   a host or port changed in Settings. Agent readiness is now read when the

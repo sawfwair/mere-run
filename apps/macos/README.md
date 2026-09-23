@@ -149,7 +149,8 @@ launch by `MereRunTheme.Brand`), and the selected row is a solid accent pill
 drawn by the row itself (the native `List` highlight is switched off; selection,
 arrow keys, and VoiceOver are unchanged).
 
-The footer pill reads "Ready · N models" once the status probe answers,
+The footer pill reads "Ready · N models" once the status probe answers (the
+probe runs when the model inventory or the CLI settings change, not on a timer),
 "Serving" while the API server answers (the reading the Server page
 and the menu bar extra take from `StudioLocalServer`, not the slower status
 poll), and "CLI not responding" (in red) if the probe never answers within six
@@ -169,13 +170,25 @@ switched off in Settings ▸ Server) keeps the API server within reach with no
 Studio window open. Its glyph is the app icon's Caveat "m." with the period as a
 power light: filled while a server answers, hollow while none does. The panel
 shows the server's state and address with Start, Stop, and copy-endpoint
-controls, why it stopped when it exits on its own, the resident text models
-(each with Unload) and sidecars with the runtime's memory footprint, a Stop row
-for a vision or music server Studio started while it runs, the same
+controls and why it stopped when it exits on its own; a Stop row for a vision,
+music, or world server Studio started while it runs; **This Mac** — CPU and the
+server's decode rate as tiles with two minutes of sparkline history, and one
+memory bar splitting the server's footprint from everything else and free, with
+a tinted thermal warning when the Mac is throttling (`StudioMachineMonitor` reads
+Mach host statistics every two seconds; the decode rate is the change in
+generated tokens between endpoint polls); the resident text models (each with
+Unload), sidecars, and a Load menu of the server's other text models; the same
 job rows as the Activity popover, and Open Studio, Server Settings…, and Quit.
 It reads the same `StudioLocalServer` the Server page drives, so the two never
 disagree. Quit asks first while a server Studio started or an inference job is
-still running, since every child process ends with the app.
+still running, since every child process ends with the app; the app delegate owns
+the session, so that holds with no Studio window. With the extra in place,
+mere.run leaves the Dock while no window is open and returns when one opens.
+Settings ▸ Server ▸ Menu bar and startup turns off the extra or the Dock hiding,
+starts the API server when mere.run opens (unless something already answers on
+the endpoint), and registers mere.run as a login item (`SMAppService`; only the
+packaged app can register). A server Studio started that exits on its own posts
+a notification while mere.run is in the background.
 
 The sidebar toggle and task control share a 52pt header with the panel controls.
 The split view does not add a separate toolbar row. Control-Command-S toggles the
@@ -649,14 +662,17 @@ phase (stopped, starting, running, stopping, running outside Studio, stopped
 unexpectedly) from the job and the endpoint monitor together.
 
 **Server ▸ Vision server** and **Server ▸ Music server** run `vision serve` and
-`music serve` through `StudioKit/StudioServiceProcess.swift`, the same
+`music serve` (and `world serve`, which has no page) through
+`StudioKit/StudioServiceProcess.swift`, the same
 service-lane owner the API server's process uses: start (with the task's Command
 view edits), stop, restart after the old process exits, preflight as a utility
 command, why the server stopped when it exits on its own, and the live server
-log. Neither is a Library run, and the menu bar lists either while it runs, with
-Stop. Agent sessions stay durable Library runs. Open WebUI and `world serve` are
-catalog templates without a page; they run from the Command Console, where a
-server is an ordinary console run.
+log. None is a Library run, and the menu bar lists each while it runs, with
+Stop. A server started from the Command Console goes to the same service lane —
+the console still shows its log — and its owner adopts it; a `--preflight` run
+stays an ordinary console run. Agent sessions stay durable Library runs. Open
+WebUI is a Docker launcher, not a resident server, and runs from the Command
+Console.
 
 **Runs** is the domain over the public `executor` and `run` contracts. It
 discovers local durable reports, lists Relay jobs, polls typed inspection state,

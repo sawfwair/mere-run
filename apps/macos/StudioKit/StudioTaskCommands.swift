@@ -79,3 +79,13 @@ extension StudioTask {
         return CommandCatalog.templates.filter { $0.id.studioTask == owner && $0.externalURL == nil }
     }
 }
+
+extension CommandTemplateID {
+    /// The commands that run until stopped and that Studio starts in the `.service` lane.
+    package var isResidentServer: Bool {
+        switch self {
+        case .apiServe, .visionServe, .musicServe, .worldServe: return true
+        default: return false
+        }
+    }
+}

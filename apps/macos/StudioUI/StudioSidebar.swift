@@ -152,9 +152,9 @@ enum StudioMachineStatus: Equatable {
     static let checkingGracePeriod: TimeInterval = 6
 
     /// `serverStatus` is the CLI's `status --json` answer, which counts the installed models;
-    /// `isServing` is whether the API server answers, from the app's own server monitor — the same
-    /// answer the Server page and the menu bar give, and a faster one than the status poll.
-    init(serverStatus: StudioServerStatus?, probeTimedOut: Bool, isServing: Bool) {
+    /// `isServing` and `loadedModel` come from the app's own endpoint monitor — the answer the
+    /// Server page and the menu bar give, and a live one where the status probe is occasional.
+    init(serverStatus: StudioServerStatus?, probeTimedOut: Bool, isServing: Bool, loadedModel: String? = nil) {
         guard let serverStatus else {
             self = probeTimedOut ? .cliNotResponding : .checking
             return
@@ -162,7 +162,7 @@ enum StudioMachineStatus: Equatable {
         if isServing {
             self = .serving(
                 installedModels: serverStatus.installedCount,
-                loadedModel: serverStatus.loadedModelSummary
+                loadedModel: loadedModel
             )
         } else {
             self = .ready(installedModels: serverStatus.installedCount)

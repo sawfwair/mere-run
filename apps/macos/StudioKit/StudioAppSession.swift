@@ -15,8 +15,8 @@ package final class StudioAppSession: ObservableObject {
         library = StudioLibraryStore()
         library.observe(controller: controller)
         controller.servingMonitor.start(controller: controller)
+        controller.machineMonitor.start()
         _ = controller.localServer
-        _ = controller.visionServer
-        _ = controller.musicServer
+        _ = controller.residentServers
     }
 }
