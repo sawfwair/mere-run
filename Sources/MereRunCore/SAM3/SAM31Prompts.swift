@@ -139,6 +139,14 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
             && objectPrompts.isEmpty
     }
 
+    /// The prompted objects, in a fixed order: explicit objects, text prompts, boxes, point-only
+    /// groups, masks.
+    ///
+    /// Boxes and points combine by label, since the interactive decoder takes a box and points for
+    /// one object. A labeled point refines the first box with the same label, or, with no such
+    /// box, joins the other points of that label as one object. Unlabeled points form one object
+    /// together; when exactly one box is unlabeled they refine it instead. Every box is its own
+    /// object. Point-only groups keep the order their label first appears in.
     public func normalized(maxObjects: Int = 16) throws -> [SAM31PromptObject] {
         var objects = objectPrompts
         objects.reserveCapacity(
@@ -162,37 +170,53 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
             guard box.x2 > box.x1, box.y2 > box.y1 else {
                 throw ValidationError.invalidBox(box)
             }
-            let label = normalizedLabel(box.label, fallback: "object")
+        }
+        let boxLabels = boxPrompts.map { trimmedLabel($0.label) }
+        let unlabeledBoxIndices = boxLabels.indices.filter { boxLabels[$0] == nil }
+        var pointsByBoxIndex: [Int: [SAM31PromptPoint]] = [:]
+        var pointGroups: [(label: String?, points: [SAM31PromptPoint])] = []
+        for point in pointPrompts {
+            let label = trimmedLabel(point.label)
+            let boxIndex: Int?
+            if let label {
+                boxIndex = boxLabels.firstIndex(of: label)
+            } else {
+                boxIndex = unlabeledBoxIndices.count == 1 ? unlabeledBoxIndices[0] : nil
+            }
+            if let boxIndex {
+                pointsByBoxIndex[boxIndex, default: []].append(point)
+            } else if let groupIndex = pointGroups.firstIndex(where: { $0.label == label }) {
+                pointGroups[groupIndex].points.append(point)
+            } else {
+                pointGroups.append((label, [point]))
+            }
+        }
+
+        for (index, box) in boxPrompts.enumerated() {
             objects.append(
                 SAM31PromptObject(
                     objectID: "",
-                    label: label,
+                    label: boxLabels[index] ?? "object",
                     promptKind: .box,
-                    boxPrompt: box
+                    boxPrompt: box,
+                    pointPrompts: pointsByBoxIndex[index] ?? []
                 )
             )
         }
 
-        let groupedPoints = Dictionary(grouping: pointPrompts) { point in
-            let label = point.label?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (label?.isEmpty == false) ? label! : UUID().uuidString
-        }
-        let sortedKeys = groupedPoints.keys.sorted()
-        for key in sortedKeys {
-            guard let points = groupedPoints[key], !points.isEmpty else { continue }
-            let label = points[0].label.flatMap { normalizedLabel($0, fallback: nil) } ?? "point-object"
+        for group in pointGroups {
             objects.append(
                 SAM31PromptObject(
                     objectID: "",
-                    label: label,
+                    label: group.label ?? "point-object",
                     promptKind: .point,
-                    pointPrompts: points
+                    pointPrompts: group.points
                 )
             )
         }
 
         for mask in maskPrompts {
-            let label = normalizedLabel(mask.label, fallback: "mask-object")
+            let label = trimmedLabel(mask.label) ?? "mask-object"
             objects.append(
                 SAM31PromptObject(
                     objectID: "",
@@ -237,12 +261,10 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
         }
     }
 
-    private func normalizedLabel(_ raw: String?, fallback: String?) -> String {
+    /// The label with its surrounding whitespace removed, or nil when nothing is left.
+    private func trimmedLabel(_ raw: String?) -> String? {
         let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmed.isEmpty {
-            return trimmed
-        }
-        return fallback ?? "object"
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func slugify(_ value: String) -> String {

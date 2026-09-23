@@ -83,6 +83,48 @@ final class SAM31ImageSegmenterTests: MereRunCoreTestCase {
         )
     }
 
+    /// SAM 2's prompt encoder, which the tracker head inherits, embeds each point with its own
+    /// label, puts a box in as two corners labeled 2 and 3, and ends every list with the pad token.
+    func testEachPointCarriesItsOwnLabelBehindTheBoxCornersAndBeforeThePadToken() {
+        let encoder = SAM31InteractivePromptEncoder(
+            config: SAM31PromptEncoderConfig(
+                hiddenSize: 8,
+                imageSize: 8,
+                patchSize: 4,
+                maskInputChannels: 4
+            )
+        )
+        let points = SAM31PointPromptTensor(
+            coords: MLXArray([1, 2, 5, 6] as [Float], [1, 2, 2]),
+            labels: MLXArray([1, 0] as [Int32], [1, 2])
+        )
+        let output = encoder(
+            points: points,
+            boxes: MLXArray([0, 0, 4, 4] as [Float], [1, 1, 4]),
+            targetHeight: 2,
+            targetWidth: 2
+        )
+        XCTAssertEqual(output.sparseEmbeddings.shape, [1, 5, 8], "two corners, two points, one pad")
+
+        func single(_ x: Float, _ y: Float, label: Int32) -> MLXArray {
+            encoder.embedPoints(MLXArray([x, y], [1, 1, 2]), labels: MLXArray([label], [1, 1]))[0, 0]
+        }
+        let tokens = (0..<5).map { output.sparseEmbeddings[0, $0] }
+        XCTAssertTrue(MLX.allClose(tokens[0], single(0, 0, label: 2)).item(Bool.self))
+        XCTAssertTrue(MLX.allClose(tokens[1], single(4, 4, label: 3)).item(Bool.self))
+        XCTAssertTrue(MLX.allClose(tokens[2], single(1, 2, label: 1)).item(Bool.self))
+        XCTAssertTrue(MLX.allClose(tokens[3], single(5, 6, label: 0)).item(Bool.self))
+        XCTAssertTrue(MLX.allClose(tokens[4], encoder.notAPointEmbed.weight[0]).item(Bool.self))
+        XCTAssertFalse(
+            MLX.allClose(tokens[2], single(1, 2, label: 0)).item(Bool.self),
+            "a positive point must not carry the negative label"
+        )
+
+        let pointsOnly = encoder(points: points, targetHeight: 2, targetWidth: 2)
+        XCTAssertEqual(pointsOnly.sparseEmbeddings.shape, [1, 3, 8])
+        XCTAssertTrue(MLX.allClose(pointsOnly.sparseEmbeddings[0, 0], tokens[2]).item(Bool.self))
+    }
+
     func testDenseMaskPromptIncludesTheUpstreamNotAPointToken() {
         let encoder = SAM31InteractivePromptEncoder(
             config: SAM31PromptEncoderConfig(

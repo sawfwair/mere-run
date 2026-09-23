@@ -114,6 +114,9 @@ general image understanding.
 
 - Still-image text prompting uses the native detector path.
 - Still-image box and point prompting use the native interactive SAM prompt path.
+  Boxes and points combine by label: a labeled point refines the first box with
+  the same label, unlabeled points refine the one unlabeled box when there is
+  exactly one, and points that match no box form one object per label.
 - Offline video tracking uses native prompt propagation built on the image
   segmenter instead of a full SAM memory-bank tracker.
 - Live capture supports text-prompt seeding in the CLI.

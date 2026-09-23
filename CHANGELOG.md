@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Change how `vision segment` and `vision track` group `--box` and `--point`
+  prompts: a labeled point now refines the first box with the same label,
+  unlabeled points form one object together and refine the one unlabeled box
+  when there is exactly one, and each box stays its own object. Before, every
+  unlabeled point was a separate object and points never refined a box, so a
+  drawn box with a positive and a negative point ran as three objects. Studio
+  labels its drawn points after the box they refine and no longer runs a
+  drawing whose only prompts are negative points.
+- Fix SAM 3.1 box and point prompts that combined more than one point: the
+  interactive prompt encoder added every point's label embedding to every
+  point, so a box with a positive and a negative point masked the whole image.
+  Each point now carries its own label, a box goes in as its two corners ahead
+  of the points, and the list ends in the upstream pad token, as SAM 2's prompt
+  encoder builds it.
 - Add a macOS Studio menu bar extra for the local API server: its state and
   address, Start and Stop, why it stopped, the resident models with Unload, the
   Studio jobs in flight, and a way back into the Studio, with or without a Studio

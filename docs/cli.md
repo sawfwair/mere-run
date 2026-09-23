@@ -1226,7 +1226,7 @@ swift run mere.run vision segment ./photo.jpg --prompt "a cat"
 Key options:
 
 - `--prompt`: one or more text object prompts
-- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts
+- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts, one object each
 - `--point`: one or more `x,y,positive[,label]` or `x,y,negative[,label]` geometry prompts
 - `--model`: managed model id or local SAM 3.1 model root
 - `--output`: annotated image path
@@ -1251,6 +1251,11 @@ Defaults:
 Notes:
 
 - still-image runs accept text, box, and point prompts in the same invocation
+- boxes and points combine by label: a labeled `--point` refines the first
+  `--box` with the same label, or forms one object with the other points of
+  that label; unlabeled points form one object together, or refine the one
+  unlabeled `--box` when there is exactly one (a lone negative point does
+  nothing on its own)
 - `--mask-output-dir` writes one PNG mask per exported detection candidate
 - empty detection sets still produce annotated output plus JSON metadata
 
@@ -1261,6 +1266,7 @@ swift run mere.run vision segment ./photo.jpg --prompt "a cat"
 swift run mere.run vision segment ./photo.jpg --prompt "a person" "a phone" --show-boxes
 swift run mere.run vision segment ./photo.jpg --box "120,80,420,760,person" --mask-output-dir ./masks
 swift run mere.run vision segment ./photo.jpg --point "512,384,positive,person" --point "700,200,negative,person"
+swift run mere.run vision segment ./photo.jpg --box "120,80,420,760" --point "260,400,positive" --point "400,700,negative"
 swift run mere.run vision segment ./photo.jpg --prompt "a dog" --output ./photo-segmented.png --json-output ./photo-segmented.json
 ```
 
@@ -1276,8 +1282,10 @@ swift run mere.run vision track ./clip.mp4 --prompt "a dog"
 Key options:
 
 - `--prompt`: one or more text prompts used to seed objects on the init frame
-- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts
-- `--point`: one or more `x,y,positive[,label]` or `x,y,negative[,label]` geometry prompts
+- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts, one object each
+- `--point`: one or more `x,y,positive[,label]` or `x,y,negative[,label]`
+  geometry prompts, grouped with boxes by label the way `vision segment` groups
+  them
 - `--init-frame`: starting frame index for seeding
 - `--end-frame`: optional inclusive final frame index
 - `--output`: annotated video path
