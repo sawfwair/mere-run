@@ -55,9 +55,11 @@ You can pipe the request to stdin instead of passing `--input`. Output is always
 JSON. `--output` also writes the same result to a file. A local `--model` path
 must name the checkpoint directory containing `rl_agent_config.json`.
 
-In macOS Studio, open **Text > Decisions**, select the model and request file,
-and select **Evaluate questions**. **Inspect token budgets** runs preflight.
-Results remain in the Studio Library with the JSON artifact.
+In macOS Studio, open **Text > Decisions**, choose the model, enter the text,
+and add choice, score, or yes-or-no questions; **Load the example** fills in the
+request above. **Check fit** runs preflight, and **Decide** shows each answer with
+its probabilities. Studio writes `request.json` and `decisions.json` into the run's
+folder, and can import and export request files.
 
 ## Controls and variants
 

@@ -43,6 +43,18 @@ The format is based on Keep a Changelog.
   after a relaunch cleared the runtime API key from the Keychain and could revert
   a host or port changed in Settings. Agent readiness is now read when the
   Agents section opens instead of every 16 seconds for the life of the app.
+- Build Laya decision requests in macOS Studio instead of supplying a JSON file:
+  enter the text and add choice, score, and yes-or-no questions, start from the
+  handbook example, and read each answer's probabilities, confidence, and
+  truncation as cards; **Check fit** shows token budgets before a run. Request
+  files still import and export.
+- When a run fails on a Studio specialist page, show why, its log, and **Get the
+  model** when its model is not installed, instead of pointing to a Library row
+  those pages do not have.
+- Fix Earth's input checklists for TESSERA (`S2`, `S2_DOY`, and at least one
+  complete Sentinel-1 pair) and OlmoEarth (`TIMESTAMPS` and at least one of
+  `S2L2A`, `S1RTC`, `LANDSAT`), read Sound ▸ Score from the CLAP JSON by name,
+  and draw disabled Studio buttons as disabled.
 
 ## 0.55.0 - 2026-09-22
 

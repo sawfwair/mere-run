@@ -577,12 +577,22 @@ microphone usage description and audio-input entitlement those capture paths
 require.
 
 **Text** ▸ Embeddings adds vector norms and cosine-similarity inspection;
-Text ▸ Anonymize shows original and protected PII spans.
+Text ▸ Anonymize shows original and protected PII spans. Text ▸ Decisions
+(`StudioUI/StudioLayaDecisionView.swift`, `StudioKit/StudioDecisions.swift`) builds
+the Laya request instead of asking for one: the text to judge, then ordered
+choice, score (levels lowest first), and yes-or-no questions, with optional
+option descriptions and editable ids derived from each question. It checks the
+request the way `text decide` does, writes it beside the run's output in the Text
+folder, and reads the result back as each question's answer, probabilities, and
+confidence, with what was cut to fit; **Check fit** runs `--preflight` and shows
+each question's token fit. The handbook example loads with one click, and request
+JSON imports and exports.
 
 **Earth** is native Earth-observation inference, with Flood, Fire, TESSERA, and
 OlmoEarth tasks. It covers TerraMind flood and fire tile inference and the
 TESSERA v2 and OlmoEarth v1.2 encoders, names the tensors each input bundle must
-carry before a run rather than after it, exposes engine-specific controls
+carry before a run rather than after it (required and at-least-one-of, as each
+command checks them), exposes engine-specific controls
 (TESSERA output dimensions; OlmoEarth patch size, ground sample distance, and
 space-time tokens), and preserves every produced safetensors file as a durable
 Library artifact.

@@ -751,6 +751,66 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Text ▸ Decisions with the handbook example in the editor and a finished run beside it:
+    /// a choice, a score, and a yes-or-no answer, one of them cut to fit.
+    func testLayaDecisionAnswersSnapshots() throws {
+        let run = fixture.root.appendingPathComponent("decisions-run", isDirectory: true)
+        try FileManager.default.createDirectory(at: run, withIntermediateDirectories: true)
+        let requestURL = run.appendingPathComponent("request.json")
+        let outputURL = run.appendingPathComponent("decisions.json")
+        try StudioDecisionDocument.example.requestJSON().write(to: requestURL)
+        try Data(Self.layaResult.utf8).write(to: outputURL)
+
+        var draft = CommandDraft()
+        draft.inputPath = requestURL.path
+        draft.outputPath = outputURL.path
+        draft.model = "text-decide-laya"
+        var item = StudioLibraryItem(
+            id: UUID(),
+            mode: .chat,
+            prompt: "Decisions",
+            inputURL: requestURL,
+            outputURL: outputURL,
+            createdAt: StudioSnapshotRenderer.referenceDate,
+            updatedAt: StudioSnapshotRenderer.referenceDate,
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run text decide --input request.json",
+            outputText: nil,
+            artifactURLs: [outputURL]
+        )
+        item.templateID = .textDecide
+        item.commandDraft = draft
+        fixture.library.upsert(item)
+        let sessions = fixture.controller.taskSessions
+        sessions.set(StudioDecisionDocument.example, for: StudioTask.textDecide.rawValue + ".Laya.document")
+        sessions.set(Optional(item.id), for: StudioTask.textDecide.rawValue + ".requestID")
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+            try fixture.write(view, size: CGSize(width: 1_440, height: 900), appearance: appearance,
+                              name: "laya-answers-\(appearance.rawValue)", settle: 1.5,
+                              afterAppear: { navigation.open(task: .textDecide) })
+        }
+    }
+
+    private static let layaResult = """
+    {"model": "text-decide-laya", "runtime": "mlx", "inputTokens": 131, "outputTokens": 0,
+     "plan": {"model": "text-decide-laya", "maxTokens": 512, "headMaxTokens": 192, "questions": [
+       {"id": "department", "inputTokens": 44, "stateTokens": 18, "stateTokensDropped": 0, "instructionTokensDropped": 0, "optionTokensDropped": [0, 0, 0], "optionCount": 3},
+       {"id": "urgency", "inputTokens": 45, "stateTokens": 18, "stateTokensDropped": 0, "instructionTokensDropped": 0, "optionTokensDropped": [0, 0, 0], "optionCount": 3},
+       {"id": "refund", "inputTokens": 42, "stateTokens": 18, "stateTokensDropped": 6, "instructionTokensDropped": 0, "optionTokensDropped": [0, 0], "optionCount": 2}]},
+     "answers": {
+       "department": {"type": "choice", "choice": "billing", "probabilities": {"billing": 0.91, "technical support": 0.06, "sales": 0.03}, "confidence": 0.78, "actProbability": 0.2, "rawTemperature": 0.9, "appliedTemperature": 0.9, "temperatureClamped": false},
+       "urgency": {"type": "score", "score": 1.24, "probabilities": {"0": 0.18, "1": 0.4, "2": 0.42}, "confidence": 0.31, "actProbability": 0.3, "rawTemperature": 1.1, "appliedTemperature": 1.1, "temperatureClamped": false},
+       "refund": {"type": "noul", "noul": 0.94, "probabilities": {"false": 0.06, "true": 0.94}, "confidence": 0.94, "actProbability": 0.7, "rawTemperature": 1.0, "appliedTemperature": 1.0, "temperatureClamped": false}
+     }}
+    """
+
     func testResultWorkspaceFocusAndComparisonSnapshots() throws {
         let fidelity = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup)
         defer { fidelity.tearDown() }
