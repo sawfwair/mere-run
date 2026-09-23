@@ -262,10 +262,8 @@ struct StudioSFXLabView: View {
                 .foregroundStyle(MereRunTheme.textMuted)
             Slider(value: draft.cfgScale, in: 0...20, step: 0.25)
         }
-        HStack {
-            labeledTextField("Seed", placeholder: "Random", text: draft.seed)
-            labeledTextField("Renoise", placeholder: "auto", text: draft.sfxRenoise)
-        }
+        labeledTextField("Seed", placeholder: "Random", text: draft.seed)
+        StudioRenoiseControl(value: draft.sfxRenoise, steps: draft.wrappedValue.steps)
 
         if videoConditioned {
             Divider().overlay(MereRunTheme.border.opacity(0.5))

@@ -43,6 +43,20 @@ The format is based on Keep a Changelog.
   after a relaunch cleared the runtime API key from the Keychain and could revert
   a host or port changed in Settings. Agent readiness is now read when the
   Agents section opens instead of every 16 seconds for the life of the app.
+- Build music training datasets in macOS Studio instead of writing a JSONL
+  manifest by hand: add audio files or a folder of clips (or drop them in),
+  caption each clip, add lyrics, play any clip, and see the trainer's checks
+  before a run. Start training writes the manifest beside the adapter; manifests
+  made elsewhere import, and the clip list exports.
+- Show Image ▸ Datasets' run plan as a report — steps, resolution, batch, rank,
+  learning rate, checkpoint and preview cadence, schedule, dataset counts, model,
+  and output — read from the CLI's typed preflight and materialize output, with
+  each file revealable, instead of a list of paths scraped from the JSON.
+- Pick Music ▸ Transcribe's expected instruments from the list the CLI prints
+  with `--list-instruments`, edit Vision's multi-view cameras and InstantMesh's
+  cameras as per-view fields checked the way the CLI checks them, enter Klein
+  per-target LoRA ranks as rows, and set Woosh renoise as a slider or a per-step
+  schedule; Studio writes the exact files and arguments each command reads.
 
 ## 0.55.0 - 2026-09-22
 

@@ -59,7 +59,9 @@ struct StudioTrainingDatasetSnapshot: Equatable {
     let previews: [StudioTrainingDatasetPreview]
     let diagnostics: [String]
 
-    static func inspect(kind: StudioTrainingKind, path: String) -> StudioTrainingDatasetSnapshot {
+    /// Image and text datasets are files on disk; the music dataset is the manifest the page edits,
+    /// see `inspect(manifest:)`.
+    static func inspect(kind: StudioTrainingKind, path: String) -> StudioTrainingDatasetSnapshot? {
         let url = URL(fileURLWithPath: path).standardizedFileURL
         switch kind {
         case .image:
@@ -67,8 +69,21 @@ struct StudioTrainingDatasetSnapshot: Equatable {
         case .text:
             return inspectText(at: url)
         case .music:
-            return inspectMusic(at: url)
+            return nil
         }
+    }
+
+    /// The music trainer's view of the manifest it is about to write: every clip, those the trainer
+    /// would accept, and the problems in the page's words.
+    static func inspect(manifest: StudioMusicTrainingManifest) -> StudioTrainingDatasetSnapshot {
+        let ready = manifest.readyClipCount()
+        return .init(
+            source: StudioMusicTrainingManifest.draftManifestURL(),
+            totalRecords: manifest.clips.count,
+            usableRecords: ready,
+            previews: [],
+            diagnostics: manifest.problems()
+        )
     }
 
     private static func inspectImages(at root: URL) -> StudioTrainingDatasetSnapshot {
@@ -159,77 +174,6 @@ struct StudioTrainingDatasetSnapshot: Equatable {
             diagnostics: valid == lines.count
                 ? ["Every JSONL row parses as JSON."]
                 : ["\(lines.count - valid) malformed JSONL row(s) need attention."]
-        )
-    }
-
-    private static func inspectMusic(at url: URL) -> StudioTrainingDatasetSnapshot {
-        guard let data = try? Data(contentsOf: url) else {
-            return .init(
-                source: url,
-                totalRecords: 0,
-                usableRecords: 0,
-                previews: [],
-                diagnostics: ["The music dataset manifest could not be read."]
-            )
-        }
-        let records: [[String: Any]]
-        if url.pathExtension.lowercased() == "jsonl",
-           let text = String(data: data, encoding: .utf8) {
-            records = text.split(whereSeparator: \.isNewline).compactMap { line in
-                guard let row = String(line).data(using: .utf8) else { return nil }
-                return (try? JSONSerialization.jsonObject(with: row)) as? [String: Any]
-            }
-        } else {
-            let object = try? JSONSerialization.jsonObject(with: data)
-            records = object as? [[String: Any]]
-                ?? (object as? [String: Any]).flatMap { $0["records"] as? [[String: Any]] }
-                ?? []
-        }
-        let root = url.deletingLastPathComponent()
-        var usable = 0
-        let previews = records.prefix(10).enumerated().map { index, record in
-            let rawAudio = (record["audio"] as? String) ?? ""
-            let audioURL = rawAudio.isEmpty
-                ? nil
-                : (rawAudio.hasPrefix("/")
-                    ? URL(fileURLWithPath: rawAudio)
-                    : root.appendingPathComponent(rawAudio))
-            if let audioURL, FileManager.default.fileExists(atPath: audioURL.path),
-               (record["caption"] as? String)?.isEmpty == false {
-                usable += 1
-            }
-            let caption = (record["caption"] as? String) ?? "Missing caption"
-            let lyrics = (record["lyrics"] as? String).flatMap {
-                $0.isEmpty ? nil : String($0.prefix(100))
-            }
-            return StudioTrainingDatasetPreview(
-                id: "\(url.path)#\(index)",
-                title: audioURL?.lastPathComponent ?? "Missing audio",
-                detail: lyrics.map { "\(caption)\nLyrics: \($0)" } ?? caption,
-                imageURL: nil,
-                audioURL: audioURL
-            )
-        }
-        // Count all usable records, not only the preview window.
-        usable = records.reduce(into: 0) { count, record in
-            let rawAudio = (record["audio"] as? String) ?? ""
-            let resolved = rawAudio.hasPrefix("/")
-                ? URL(fileURLWithPath: rawAudio)
-                : root.appendingPathComponent(rawAudio)
-            if !rawAudio.isEmpty,
-               FileManager.default.fileExists(atPath: resolved.path),
-               (record["caption"] as? String)?.isEmpty == false {
-                count += 1
-            }
-        }
-        return .init(
-            source: url,
-            totalRecords: records.count,
-            usableRecords: usable,
-            previews: Array(previews),
-            diagnostics: usable == records.count && !records.isEmpty
-                ? ["Every manifest row resolves to audio and a caption."]
-                : ["\(records.count - usable) row(s) are missing audio or a caption."]
         )
     }
 }
@@ -335,6 +279,10 @@ struct StudioTrainingView: View {
     @StudioStoredValue("Training.imageDraft") private var imageDraft: CommandDraft = CommandDraft()
     @StudioStoredValue("Training.textDraft") private var textDraft: CommandDraft = CommandDraft()
     @StudioStoredValue("Training.musicDraft") private var musicDraft: CommandDraft = CommandDraft()
+    /// The clips Music ▸ Train writes as the trainer's manifest, beside each run's adapter.
+    @StudioStoredValue("Training.musicManifest") private var musicManifest = StudioMusicTrainingManifest()
+    /// The saved copy of a ready manifest, for the Command view; empty while the clips have problems.
+    @State private var draftManifestPath = ""
     @State private var datasetSnapshot: StudioTrainingDatasetSnapshot?
     @State private var currentSnapshot: StudioTrainingSnapshot?
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
@@ -366,11 +314,16 @@ struct StudioTrainingView: View {
         _musicDraft = StudioStoredValue(wrappedValue: music, "Training.musicDraft")
     }
 
+    /// The command the Command view shows and runs. For music, `--dataset` is the saved copy of the
+    /// clips; each Start training writes its own manifest beside the adapter instead.
     private var activeDraft: CommandDraft {
         switch kind {
-        case .image: imageDraft
-        case .text: textDraft
-        case .music: musicDraft
+        case .image: return imageDraft
+        case .text: return textDraft
+        case .music:
+            var draft = musicDraft
+            draft.inputPath = draftManifestPath
+            return draft
         }
     }
 
@@ -406,6 +359,8 @@ struct StudioTrainingView: View {
             statusMessage = nil
         }
         .task { seedComparisons() }
+        .task(id: musicManifest) { await saveDraftManifest() }
+        .onAppear(perform: adoptExistingMusicManifest)
     }
 
     private var leftColumn: some View {
@@ -433,7 +388,16 @@ struct StudioTrainingView: View {
         }
     }
 
+    @ViewBuilder
     private var datasetSection: some View {
+        if kind == .music {
+            StudioMusicManifestEditor(manifest: $musicManifest, message: $statusMessage)
+        } else {
+            fileDatasetSection
+        }
+    }
+
+    private var fileDatasetSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Dataset")
@@ -444,8 +408,8 @@ struct StudioTrainingView: View {
                     .controlSize(.small)
             }
             StudioPathField(
-                label: kind == .image ? "Image-caption directory" : "JSON / JSONL manifest",
-                placeholder: kind == .image ? "Folder with image + .txt pairs" : "Training manifest",
+                label: kind == .image ? "Image-caption directory" : "JSONL dataset",
+                placeholder: kind == .image ? "Folder with image + .txt pairs" : "Training examples, one per line",
                 path: activeInputBinding,
                 picksDirectory: kind == .image,
                 allowedContentTypes: kind == .image ? [] : [.json, .plainText]
@@ -606,11 +570,7 @@ struct StudioTrainingView: View {
                         Text("None").tag("")
                         Text("fal Klein fast").tag("fal-klein-fast")
                     }
-                    labeledTextField(
-                        "Per-target ranks",
-                        placeholder: ".attn.to_q=128,.ff.linear_in=64",
-                        text: $imageDraft.loraTargetRanks
-                    )
+                    StudioTargetRankEditor(value: $imageDraft.loraTargetRanks)
                     Picker("Timestep sampling", selection: $imageDraft.timestepSampling) {
                         ForEach(
                             ["", "uniform", "bellCurve", "contentFocused", "styleFocused", "logitNormal", "shift"],
@@ -1105,6 +1065,11 @@ struct StudioTrainingView: View {
     }
 
     private func inspectDataset() {
+        if kind == .music {
+            datasetSnapshot = StudioTrainingDatasetSnapshot.inspect(manifest: musicManifest)
+            statusMessage = nil
+            return
+        }
         let path = activeDraft.inputPath
         guard !path.isBlank else {
             statusMessage = "Choose a dataset first."
@@ -1119,9 +1084,7 @@ struct StudioTrainingView: View {
         inspectDataset()
         guard validateDraft(allowsExistingOutput: true) else { return }
         if kind == .music {
-            statusMessage = datasetSnapshot?.usableRecords == datasetSnapshot?.totalRecords
-                ? "Music dataset is ready. ACE-Step will validate model resources when training starts."
-                : "Resolve the dataset issues before training."
+            statusMessage = "The clips are ready. ACE-Step checks its model files when training starts."
             return
         }
         var draft = activeDraft
@@ -1145,15 +1108,28 @@ struct StudioTrainingView: View {
     private func startTraining() {
         inspectDataset()
         guard validateDraft(allowsExistingOutput: false) else { return }
+        var draft = activeDraft
+        if kind == .music {
+            // The manifest lives beside the adapter it trains, so the run folder shows what made it.
+            let manifestURL = StudioMusicTrainingManifest.manifestURL(besideOutput: draft.outputPath)
+            do {
+                try FileManager.default.createDirectory(at: manifestURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try musicManifest.jsonl().write(to: manifestURL, options: .atomic)
+            } catch {
+                statusMessage = "Studio could not write the training manifest: \(error.localizedDescription)"
+                return
+            }
+            draft.inputPath = manifestURL.path
+        }
         requestID = StudioSpecialistRunner.submit(
             templateID: kind.templateID,
             mode: kind.mode,
-            draft: activeDraft,
+            draft: draft,
             controller: controller,
             library: library
         )
-        currentSnapshot = StudioTrainingSnapshot.load(outputPath: activeDraft.outputPath)
-        statusMessage = activeDraft.trainingResumePath?.isBlank == false
+        currentSnapshot = StudioTrainingSnapshot.load(outputPath: draft.outputPath)
+        statusMessage = draft.trainingResumePath?.isBlank == false
             ? "Checkpoint resume submitted."
             : "Training submitted."
         advanceOutput()
@@ -1161,11 +1137,18 @@ struct StudioTrainingView: View {
     }
 
     private func validateDraft(allowsExistingOutput: Bool) -> Bool {
-        guard let snapshot = datasetSnapshot,
-              snapshot.totalRecords > 0,
-              snapshot.usableRecords == snapshot.totalRecords else {
-            statusMessage = "Inspect and repair the dataset before training."
-            return false
+        if kind == .music {
+            if let problem = musicManifest.problems().first {
+                statusMessage = problem
+                return false
+            }
+        } else {
+            guard let snapshot = datasetSnapshot,
+                  snapshot.totalRecords > 0,
+                  snapshot.usableRecords == snapshot.totalRecords else {
+                statusMessage = "Inspect and repair the dataset before training."
+                return false
+            }
         }
         let draft = activeDraft
         guard !draft.outputPath.isBlank,
@@ -1189,6 +1172,37 @@ struct StudioTrainingView: View {
             return false
         }
         return true
+    }
+
+    /// Keeps the Command view's manifest current, a moment after editing stops; only a manifest the
+    /// trainer would accept is saved, so the Command view never runs a broken one.
+    private func saveDraftManifest() async {
+        guard kind == .music else { return }
+        guard musicManifest.problems().isEmpty else {
+            draftManifestPath = ""
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        let url = StudioMusicTrainingManifest.draftManifestURL()
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try musicManifest.jsonl().write(to: url, options: .atomic)
+            draftManifestPath = url.path
+        } catch {
+            draftManifestPath = ""
+        }
+    }
+
+    /// A manifest chosen before this page built its own is read into the clips, once.
+    private func adoptExistingMusicManifest() {
+        guard kind == .music, musicManifest.clips.isEmpty, !musicDraft.inputPath.isBlank else { return }
+        let url = URL(fileURLWithPath: NSString(string: musicDraft.inputPath).expandingTildeInPath).standardizedFileURL
+        musicDraft.inputPath = ""
+        guard url != StudioMusicTrainingManifest.draftManifestURL().standardizedFileURL,
+              let data = try? Data(contentsOf: url),
+              let manifest = try? StudioMusicTrainingManifest.importing(data, from: url) else { return }
+        musicManifest = manifest
     }
 
     private func refreshSnapshot() {

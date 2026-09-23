@@ -751,6 +751,142 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Music ▸ Train with three clips in the manifest editor — two captioned, one with lyrics, and
+    /// one still needing a caption so the row and the problem list show — light and dark.
+    func testMusicTrainingManifestEditorSnapshots() throws {
+        let clips = fixture.root.appendingPathComponent("clips", isDirectory: true)
+        try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
+        var manifest = StudioMusicTrainingManifest()
+        let rows: [(name: String, caption: String, lyrics: String)] = [
+            ("late-night-drive.wav", "warm analog synth pad over a slow four-on-the-floor kick, 92 bpm",
+             "city lights blur past the window\nwe don't say a word"),
+            ("brass-hit.wav", "short brass section stab, bright and dry", ""),
+            ("vocal-take.wav", "", ""),
+        ]
+        for row in rows {
+            let url = clips.appendingPathComponent(row.name)
+            try SnapshotFixture.writeSilentWAV(to: url, seconds: 2)
+            manifest.clips.append(.init(audioPath: url.path, caption: row.caption, lyrics: row.lyrics))
+        }
+        fixture.controller.taskSessions.set(manifest, for: StudioTask.musicTrain.rawValue + ".Training.musicManifest")
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+            try fixture.write(view, size: Self.fidelitySize, appearance: appearance,
+                              name: "music-train-manifest-\(appearance.rawValue)", settle: 1.5,
+                              afterAppear: { navigation.open(task: .musicTrain) })
+        }
+    }
+
+    /// Image ▸ Datasets ▸ Run plan after a training-plan preflight with one warning: the report's
+    /// sections in place of the old path list, light and dark.
+    func testImageRunPlanReportSnapshots() throws {
+        var item = StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: "Run plan",
+            inputURL: fixture.root.appendingPathComponent("plan.json"),
+            outputURL: nil,
+            createdAt: StudioSnapshotRenderer.referenceDate,
+            updatedAt: StudioSnapshotRenderer.referenceDate,
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run image run-plan plan.json --preflight --json",
+            outputText: Self.trainingPlanPreflight,
+            artifactURLs: []
+        )
+        item.templateID = .imageRunPlan
+        fixture.library.upsert(item)
+        let sessions = fixture.controller.taskSessions
+        sessions.set(Optional(item.id), for: StudioTask.imageDatasets.rawValue + ".requestID")
+        sessions.set(fixture.root.appendingPathComponent("plan.json").path, for: StudioTask.imageDatasets.rawValue + ".UtilityLab.planPath")
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioUtilityLabView(task: .constant(.runPlan), tasks: [.datasetDiscovery, .imageValidation, .runPlan], showsTaskPicker: true)
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, StudioTask.imageDatasets.rawValue)
+                .frame(width: 1_200, height: 820)
+            try fixture.write(view, size: CGSize(width: 1_200, height: 820), appearance: appearance,
+                              name: "image-run-plan-\(appearance.rawValue)", settle: 1.5)
+        }
+    }
+
+    /// The camera editors at the width of the 3D and Vision columns: InstantMesh with four views and
+    /// one camera short, and multi-view geometry with two views and one mirrored rotation, so the
+    /// per-view fields, the Match views button, and the CLI's checks all show, light and dark.
+    func testCameraEditorSnapshots() throws {
+        let instantMesh = StudioInstantMeshCameraDocument(cameras: (0..<3).map { _ in .example })
+        var mirrored = StudioGeometryCamera.identity()
+        mirrored.rotation = [-1, 0, 0, 0, 1, 0, 0, 0, 1]
+        let geometry = StudioGeometryCameraDocument(cameras: [.identity(width: 4_032, height: 3_024), mirrored])
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = VStack(alignment: .leading, spacing: 24) {
+                StudioInstantMeshCameraEditor(
+                    enabled: .constant(true), document: .constant(instantMesh),
+                    viewNames: ["front.png", "right.png", "back.png", "left.png"], message: .constant(nil)
+                )
+                Divider()
+                StudioGeometryCameraEditor(
+                    enabled: .constant(true), document: .constant(geometry),
+                    viewNames: ["IMG_0412.heic", "IMG_0413.heic"], message: .constant(nil)
+                )
+            }
+            .padding(18)
+            .frame(width: 520, alignment: .topLeading)
+            .background(MereRunTheme.background)
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .environmentObject(fixture.controller)
+            .environmentObject(fixture.library)
+            try fixture.write(view, size: CGSize(width: 520, height: 1_180), appearance: appearance,
+                              name: "camera-editors-\(appearance.rawValue)", settle: 1)
+        }
+    }
+
+    /// `image run-plan --preflight --json` for a training plan, as `LoRATrainingPreflightEnvelope`
+    /// prints it.
+    private static let trainingPlanPreflight = """
+    {"schema_version": 1, "mere_run_version": "0.55.0", "command": ["image", "train-lora"], "mode": "preflight",
+     "status": "warning", "created_at": "2026-09-23T10:00:00Z", "cwd": "/Users/nerd/Pictures/mere.run/Image",
+     "summary": "Ready to train on 48 usable pairs; 2 images have no caption and will be skipped.",
+     "request": {"data": "/Users/nerd/Pictures/datasets/ceramic-mugs", "output": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors",
+       "model": "image-krea2-raw", "recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16,
+       "alpha": 16, "learning_rate": 0.0001, "caption_dropout": 0.1},
+     "result": {
+       "dataset": {"directory": "/Users/nerd/Pictures/datasets/ceramic-mugs", "mode": "directory", "image_count": 50, "caption_count": 48,
+         "usable_pair_count": 48, "missing_caption_count": 2, "empty_caption_count": 0, "duplicate_caption_group_count": 0,
+         "duplicate_caption_count": 0, "excluded_preview_image_count": 0, "placeholder_caption_count": 0},
+       "model": {"requested": "image-krea2-raw", "kind": "managed", "installed": true,
+         "path": "/Users/nerd/Library/Application Support/MereRun/models/image-krea2-raw", "family": "krea2", "upstream_repo_id": "krea/krea-2-raw"},
+       "output": {"path": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors", "parent_directory": "/Users/nerd/Pictures/mere.run/Image",
+         "parent_exists": true, "parent_will_be_created": false, "exists": false, "extension_valid": true},
+       "plan": {"recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16, "alpha": 16,
+         "learning_rate": 0.0001, "caption_dropout": 0.1, "checkpoint_interval": 250, "expected_checkpoint_count": 4,
+         "max_resolution": 1536, "low_ram": false, "no_compile": false, "lr_warmup_steps": 100, "use_cosine_scheduler": true, "lr_min_factor": 0.1},
+       "run_plan": {"schema_version": 1, "kind": "image.train_lora", "command": ["image", "train-lora"],
+         "created_at": "2026-09-23T10:00:00Z", "cwd": "/Users/nerd/Pictures/mere.run/Image",
+         "arguments": {"data": "/Users/nerd/Pictures/datasets/ceramic-mugs", "output": "/Users/nerd/Pictures/mere.run/Image/ceramic-mugs.safetensors",
+           "model": "image-krea2-raw", "source_recipe": "krea-fast-style", "width": 1024, "height": 1024, "training_steps": 1200,
+           "batch_size": 1, "learning_rate": 0.0001, "rank": 16, "alpha": 16, "max_text_length": 512, "scheduler_steps": 1000,
+           "caption_dropout": 0.1, "seed": 42, "lite": false, "exclude_preview_images": false, "checkpoint_interval": 250,
+           "max_resolution": 1536, "progressive": true, "low_ram": false, "no_compile": false, "gradient_checkpointing": false,
+           "benchmark_warmup_steps": 0, "sample_interval": 250, "sample_prompt": "a ceramic coffee mug in soft morning light",
+           "sample_steps": 20, "sample_cfg": 3.5, "sample_lora_scale": 1, "visualize": false, "visualize_port": 8765,
+           "lr_warmup_steps": 100, "no_cosine_scheduler": false, "lr_min_factor": 0.1, "quiet": false},
+         "resolved": {"recipe": "krea-fast-style", "training_steps": 1200, "width": 1024, "height": 1024, "rank": 16, "alpha": 16,
+           "learning_rate": 0.0001, "caption_dropout": 0.1, "checkpoint_interval": 250, "expected_checkpoint_count": 4,
+           "max_resolution": 1536, "low_ram": false, "no_compile": false, "lr_warmup_steps": 100, "use_cosine_scheduler": true, "lr_min_factor": 0.1}}},
+     "diagnostics": [{"id": "missing_captions", "severity": "warning", "title": "Missing captions",
+       "message": "2 images have no caption and will be skipped.", "locations": [], "suggested_action_ids": []}],
+     "actions": []}
+    """
+
     func testResultWorkspaceFocusAndComparisonSnapshots() throws {
         let fidelity = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup)
         defer { fidelity.tearDown() }
@@ -2022,7 +2158,7 @@ private final class SnapshotFixture {
     }
 
     /// A valid 16 kHz mono 16-bit PCM WAV of near-silence with a quiet tone so a waveform draws.
-    private static func writeSilentWAV(to url: URL, seconds: Int) throws {
+    static func writeSilentWAV(to url: URL, seconds: Int) throws {
         let sampleRate = 16_000
         let frames = sampleRate * seconds
         var samples = Data(capacity: frames * 2)

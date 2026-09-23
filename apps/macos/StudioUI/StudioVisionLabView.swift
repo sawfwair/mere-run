@@ -130,7 +130,13 @@ struct StudioVisionLabView: View {
     @StudioStoredValue("VisionLab.resolutionLevel") private var resolutionLevel = 9
     @StudioStoredValue("VisionLab.tokenCount") private var tokenCount = 0
     @StudioStoredValue("VisionLab.maxPoints") private var maxPoints = 0
-    @StudioStoredValue("VisionLab.camerasPath") private var camerasPath = ""
+    /// A camera file chosen before the page edited cameras itself; read into `geometryCameras` once.
+    @StudioStoredValue("VisionLab.camerasPath") private var legacyCamerasPath = ""
+    @StudioStoredValue("VisionLab.suppliesCameras") private var suppliesCameras = false
+    @StudioStoredValue("VisionLab.geometryCameras") private var geometryCameras = StudioGeometryCameraDocument()
+    /// The saved copy of a valid camera document, for the Command view; empty when cameras are off
+    /// or do not match the views. Each run writes its own copy beside its output.
+    @State private var draftCamerasPath = ""
     @StudioStoredValue("VisionLab.processResolution") private var processResolution = 504
     @StudioStoredValue("VisionLab.referenceView") private var referenceView = "saddle-balanced"
     @StudioStoredValue("VisionLab.confidencePercentile") private var confidencePercentile = 40.0
@@ -163,7 +169,9 @@ struct StudioVisionLabView: View {
         }
         .onAppear {
             if model.isBlank { model = CommandCatalog.template(id: task.templateID)?.defaultDraft().model ?? "" }
+            adoptLegacyCameras()
         }
+        .task(id: cameraDraftKey) { await saveDraftCameras() }
     }
 
     private var configuration: some View {
@@ -341,11 +349,11 @@ struct StudioVisionLabView: View {
             }
         case .geometryMultiview:
             VStack(alignment: .leading, spacing: 10) {
-                StudioPathField(
-                    label: "Camera JSON (optional)",
-                    placeholder: "/path/to/cameras.json",
-                    path: $camerasPath,
-                    allowedContentTypes: [.json]
+                StudioGeometryCameraEditor(
+                    enabled: $suppliesCameras,
+                    document: $geometryCameras,
+                    viewNames: multiviewNames,
+                    message: $errorMessage
                 )
                 Stepper("Process resolution \(processResolution)", value: $processResolution, in: 128...2_048, step: 14)
                 Picker("Reference view", selection: $referenceView) {
@@ -542,7 +550,7 @@ struct StudioVisionLabView: View {
         draft.visionResolutionLevel = resolutionLevel
         draft.visionTokenCount = tokenCount
         draft.visionMaxPoints = maxPoints
-        draft.camerasPath = camerasPath
+        draft.camerasPath = task == .geometryMultiview && suppliesCameras ? draftCamerasPath : ""
         draft.visionProcessResolution = processResolution
         draft.visionReferenceView = referenceView
         draft.visionConfidencePercentile = confidencePercentile
@@ -583,15 +591,73 @@ struct StudioVisionLabView: View {
             errorMessage = "The selected vision command is unavailable."
             return
         }
-
+        var draft = commandDraft
+        if task == .geometryMultiview, suppliesCameras {
+            // The camera file lives beside the run's output folder, which the command fills itself.
+            let camerasURL = StudioCameraDocuments.url(besideOutputDirectory: outputDirectory)
+            do {
+                try FileManager.default.createDirectory(at: camerasURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try geometryCameras.json().write(to: camerasURL, options: .atomic)
+            } catch {
+                errorMessage = "Studio could not write the camera file: \(error.localizedDescription)"
+                return
+            }
+            draft.camerasPath = camerasURL.path
+        }
 
         requestID = StudioSpecialistRunner.submit(
             templateID: task.templateID,
             mode: task == .liveTrack ? .track : .readImage,
-            draft: commandDraft,
+            draft: draft,
             controller: controller,
             library: library
         )
+    }
+
+    /// The images a multi-view run sends, in order, for labelling cameras.
+    private var multiviewNames: [String] {
+        ([primaryInput] + additionalInputs).filter { !$0.isBlank }.map { URL(fileURLWithPath: $0).lastPathComponent }
+    }
+
+    private struct CameraDraftKey: Equatable {
+        let enabled: Bool
+        let document: StudioGeometryCameraDocument
+        let viewCount: Int
+    }
+
+    private var cameraDraftKey: CameraDraftKey {
+        CameraDraftKey(enabled: suppliesCameras, document: geometryCameras, viewCount: multiviewNames.count)
+    }
+
+    /// Keeps the Command view's camera file current, a moment after editing stops; only a document
+    /// the CLI would accept is saved.
+    private func saveDraftCameras() async {
+        guard suppliesCameras, geometryCameras.problems(viewCount: multiviewNames.count).isEmpty else {
+            draftCamerasPath = ""
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        let url = StudioCameraDocuments.draftURL(page: "Vision Geometry")
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try geometryCameras.json().write(to: url, options: .atomic)
+            draftCamerasPath = url.path
+        } catch {
+            draftCamerasPath = ""
+        }
+    }
+
+    /// A camera file chosen before this page edited cameras is read into the editor, once.
+    private func adoptLegacyCameras() {
+        guard !legacyCamerasPath.isBlank else { return }
+        let url = URL(fileURLWithPath: NSString(string: legacyCamerasPath).expandingTildeInPath)
+        legacyCamerasPath = ""
+        guard geometryCameras.cameras.isEmpty,
+              let data = try? Data(contentsOf: url),
+              let document = try? StudioGeometryCameraDocument.importing(data) else { return }
+        geometryCameras = document
+        suppliesCameras = true
     }
 
     private func validate() -> Bool {
@@ -623,6 +689,11 @@ struct StudioVisionLabView: View {
         }
         if task == .geometryMultiview && additionalInputs.isEmpty {
             errorMessage = "Add at least one additional ordered view."
+            return false
+        }
+        if task == .geometryMultiview, suppliesCameras,
+           let problem = geometryCameras.problems(viewCount: multiviewNames.count).first {
+            errorMessage = problem
             return false
         }
         if task == .liveTrack && prompts.isBlank {

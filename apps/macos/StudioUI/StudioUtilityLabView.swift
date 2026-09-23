@@ -188,61 +188,6 @@ struct StudioDatasetDiscoveryDocument: Equatable {
     }
 }
 
-struct StudioRunPlanDocument: Equatable {
-    let summary: String
-    let status: String
-    let paths: [(label: String, path: String)]
-    let diagnostics: [String]
-
-    static func == (lhs: StudioRunPlanDocument, rhs: StudioRunPlanDocument) -> Bool {
-        lhs.summary == rhs.summary
-            && lhs.status == rhs.status
-            && lhs.paths.elementsEqual(rhs.paths, by: ==)
-            && lhs.diagnostics == rhs.diagnostics
-    }
-
-    static func decode(_ data: Data) -> StudioRunPlanDocument? {
-        guard let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        var paths: [(String, String)] = []
-        collectPaths(in: envelope["result"], prefix: nil, into: &paths)
-        let diagnostics = (envelope["diagnostics"] as? [[String: Any]] ?? []).compactMap { value -> String? in
-            let title = value["title"] as? String ?? ""
-            let message = value["message"] as? String ?? ""
-            let combined = [title, message].filter { !$0.isEmpty }.joined(separator: ": ")
-            return combined.isEmpty ? nil : combined
-        }
-        return StudioRunPlanDocument(
-            summary: envelope["summary"] as? String ?? "Plan processed.",
-            status: envelope["status"] as? String ?? "unknown",
-            paths: paths,
-            diagnostics: diagnostics
-        )
-    }
-
-    private static func collectPaths(
-        in value: Any?,
-        prefix: String?,
-        into paths: inout [(String, String)]
-    ) {
-        if let dictionary = value as? [String: Any] {
-            for (key, nested) in dictionary.sorted(by: { $0.key < $1.key }) {
-                if let path = nested as? String,
-                   key.lowercased().contains("path") || key.lowercased().contains("directory") {
-                    paths.append((key.humanizedUtilityKey, path))
-                } else {
-                    collectPaths(in: nested, prefix: key, into: &paths)
-                }
-            }
-        } else if let array = value as? [Any] {
-            for nested in array {
-                collectPaths(in: nested, prefix: prefix, into: &paths)
-            }
-        }
-    }
-}
-
 struct StudioUtilityLabView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
@@ -506,8 +451,8 @@ struct StudioUtilityLabView: View {
                         fallbackResult
                     }
                 case .runPlan:
-                    if let document = StudioRunPlanDocument.decode(data) {
-                        runPlanResult(document)
+                    if let report = StudioRunPlanReport.decode(outputText: String(decoding: data, as: UTF8.self)) {
+                        StudioRunPlanReportView(report: report)
                     } else {
                         fallbackResult
                     }
@@ -673,42 +618,6 @@ struct StudioUtilityLabView: View {
                 }
                 ForEach(document.diagnostics, id: \.self) {
                     MereBanner(severity: .warning, text: $0)
-                }
-            }
-        }
-    }
-
-    private func runPlanResult(_ document: StudioRunPlanDocument) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: document.status == "ok" ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(document.status == "ok" ? MereRunTheme.green : MereRunTheme.yellow)
-                    Text(document.summary)
-                        .font(MereRunTheme.bodyFont)
-                }
-                ForEach(Array(document.paths.enumerated()), id: \.offset) { _, row in
-                    HStack(alignment: .top) {
-                        Text(row.label)
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.textMuted)
-                            .frame(width: 150, alignment: .leading)
-                        Text(row.path)
-                            .font(MereRunTheme.monoFont)
-                            .textSelection(.enabled)
-                        Spacer()
-                        Button {
-                            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: row.path)])
-                        } label: {
-                            Image(systemName: "folder")
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                    .padding(10)
-                    .merePanel()
-                }
-                ForEach(document.diagnostics, id: \.self) {
-                    MereBanner(severity: .info, text: $0)
                 }
             }
         }
