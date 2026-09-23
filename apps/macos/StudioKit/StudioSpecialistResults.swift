@@ -58,6 +58,47 @@ extension StudioDiarizationDocument {
     }
 }
 
+// MARK: - vision face detect
+
+/// What `mere.run vision face detect --json-output` writes (`FaceAnalysisResult`): the picture's
+/// stored size and one record per face, numbered the way `--face-index` counts them, each with
+/// its score, bounding box, and five landmarks in stored pixels. The Vision Lab overlay draws
+/// these and the click-to-pick face picker selects among them.
+package struct StudioFaceOverlayResult: Decodable, Equatable {
+    package struct Record: Decodable, Equatable {
+        package struct Detection: Decodable, Equatable {
+            package struct Box: Decodable, Equatable {
+                package let x: Double
+                package let y: Double
+                package let width: Double
+                package let height: Double
+            }
+
+            package struct Point: Decodable, Equatable {
+                package let x: Double
+                package let y: Double
+            }
+
+            package let score: Double
+            package let boundingBox: Box
+            package let landmarks: [Point]
+        }
+
+        package let index: Int
+        package let detection: Detection
+    }
+
+    package let width: Int
+    package let height: Int
+    package let faces: [Record]
+
+    /// The file `--json-output` wrote, or nil when it is not a face document.
+    package static func load(from url: URL) -> StudioFaceOverlayResult? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(Self.self, from: data)
+    }
+}
+
 // MARK: - music analyze
 
 /// What `mere.run music analyze` prints: one JSON object (`MusicAnalyzeOutput`) naming the file

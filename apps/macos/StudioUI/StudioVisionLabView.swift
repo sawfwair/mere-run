@@ -861,37 +861,6 @@ private enum StudioVisionOverlayKind {
     case pose
 }
 
-private struct StudioFaceOverlayResult: Decodable {
-    struct Record: Decodable {
-        struct Detection: Decodable {
-            struct Box: Decodable {
-                let x: Double
-                let y: Double
-                let width: Double
-                let height: Double
-            }
-            struct Point: Decodable {
-                let x: Double
-                let y: Double
-            }
-            let score: Double
-            let boundingBox: Box
-            let landmarks: [Point]
-
-            enum CodingKeys: String, CodingKey {
-                case score
-                case boundingBox = "boundingBox"
-                case landmarks
-            }
-        }
-        let index: Int
-        let detection: Detection
-    }
-    let width: Int
-    let height: Int
-    let faces: [Record]
-}
-
 private struct StudioPoseOverlayResult: Decodable {
     struct Subject: Decodable {
         struct Point: Decodable {
