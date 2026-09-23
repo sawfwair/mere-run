@@ -698,14 +698,100 @@ final class MereRunControllerTests: XCTestCase {
         runner.starts[0].stdout("<think>deliberating</think>Final answer.")
         await Task.yield()
         // Live, think-stripped text is published for the streaming bubble.
-        XCTAssertEqual(controller.conversationLiveText[conversationID], "Final answer.")
+        XCTAssertEqual(controller.conversationLiveReplies[conversationID]?.answer, "Final answer.")
 
         runner.starts[0].termination(0)
         await Task.yield()
         await Task.yield()
         XCTAssertEqual(controller.lastRunResult?.outputText, "Final answer.")
         // Cleared once finalized so the bubble switches to the persisted message.
-        XCTAssertNil(controller.conversationLiveText[conversationID])
+        XCTAssertNil(controller.conversationLiveReplies[conversationID])
+    }
+
+    func testTurnWithThinkingShownKeepsReasoningBesideTheReplyAndHiddenDropsIt() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        func request(_ conversationID: UUID, showsThinking: Bool) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = "turn"
+            draft.thinkingMode = showsThinking ? .show : .hide
+            return StudioRunRequest(mode: .chat, templateID: .custom, template: template, draft: draft, conversationID: conversationID)
+        }
+        let shown = UUID()
+        let hidden = UUID()
+        XCTAssertTrue(controller.run(studio: request(shown, showsThinking: true)))
+        XCTAssertTrue(controller.run(studio: request(hidden, showsThinking: false)))
+
+        runner.starts[0].stdout("<think>weigh both")
+        runner.starts[1].stdout("<think>weigh both")
+        await Task.yield()
+        // Live: the shown turn is thinking, with its reasoning so far; the hidden one just waits.
+        XCTAssertEqual(
+            controller.conversationLiveReplies[shown],
+            ConversationTranscript.Reply(answer: "", reasoning: "weigh both", isThinking: true)
+        )
+        XCTAssertEqual(
+            controller.conversationLiveReplies[hidden],
+            ConversationTranscript.Reply(answer: "", reasoning: nil, isThinking: false)
+        )
+
+        var results: [UUID: JobResult] = [:]
+        let cancellable = controller.runCompletions.sink { result in
+            if let conversationID = result.conversationID { results[conversationID] = result }
+        }
+        defer { cancellable.cancel() }
+        runner.starts[0].stdout("</think>Final answer.")
+        runner.starts[1].stdout("</think>Final answer.")
+        await Task.yield()
+        runner.starts[0].termination(0)
+        runner.starts[1].termination(0)
+        for _ in 0..<6 { await Task.yield() }
+
+        XCTAssertEqual(results[shown]?.outputText, "Final answer.")
+        XCTAssertEqual(results[shown]?.reasoning, "weigh both")
+        XCTAssertEqual(results[hidden]?.outputText, "Final answer.")
+        XCTAssertNil(results[hidden]?.reasoning)
+    }
+
+    func testFailedTurnRecordsWhyFromStderrAndTheThreadNeverReplaysIt() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let libraryURL = FileManager.default.temporaryDirectory.appendingPathComponent("chat-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: libraryURL) }
+        let library = StudioLibraryStore(libraryURL: libraryURL)
+        library.observe(controller: controller)
+
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var draft = template.defaultDraft()
+        draft.extraArguments = "turn"
+        let conversationID = UUID()
+        library.appendUser(conversationID: conversationID, mode: .chat, model: nil, systemPrompt: nil, content: "hi")
+        XCTAssertTrue(controller.run(studio: StudioRunRequest(
+            mode: .chat, templateID: .custom, template: template, draft: draft, conversationID: conversationID
+        )))
+
+        runner.starts[0].stdout("<think>oops</think>")
+        runner.starts[0].stderr("Loading model…\nerror: model 'text-chat-missing' is not installed\n")
+        await Task.yield()
+        runner.starts[0].termination(1)
+        try await Task.sleep(for: .milliseconds(100))
+
+        let turn = try XCTUnwrap(library.items.first { $0.id == conversationID }?.messages?.last)
+        XCTAssertTrue(turn.failed)
+        XCTAssertEqual(turn.content, "", "a failed turn with no reply says nothing; its reason line says why")
+        XCTAssertEqual(turn.failureReason, "Model 'text-chat-missing' is not installed")
+        let tail = try XCTUnwrap(turn.logTail)
+        XCTAssertTrue(tail.contains("error: model 'text-chat-missing' is not installed"))
+        XCTAssertTrue(tail.contains("Exited with code 1."))
+        XCTAssertFalse(tail.contains { $0.contains("oops") }, "the reply's stdout is not the log")
+
+        // Neither the reason, the log, nor the stripped reasoning reaches the next prompt.
+        let messages = try XCTUnwrap(library.items.first { $0.id == conversationID }?.messages)
+        let prompt = ConversationTranscript.render(messages: messages + [StudioMessage(role: .user, content: "again")]).prompt
+        XCTAssertEqual(prompt, "User: hi\n\nUser: again")
     }
 
     func testConcurrentRunsKeepIsolatedOutputAndResults() async throws {

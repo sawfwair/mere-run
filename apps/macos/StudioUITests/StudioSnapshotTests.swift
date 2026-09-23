@@ -611,6 +611,73 @@ final class StudioSnapshotTests: XCTestCase {
         XCTAssertTrue(fixture.controller.runningConversationIDs.contains(SnapshotFixture.converseThreadID))
     }
 
+    /// The transcript's turn states on their own, light and dark: a reply that thought first
+    /// (its "Thinking" disclosure collapsed above the answer), then a turn that failed with its
+    /// one-line reason, Retry, and the run's log behind a collapsed "Show log"; and a second
+    /// render of a reply streaming in while the model is still inside its reasoning block.
+    func testConverseTurnStatesSnapshots() throws {
+        let asked = StudioSnapshotRenderer.referenceDate.addingTimeInterval(-240)
+        let model = SnapshotFixture.converseChatModelID
+        let thread = StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: "", inputURL: nil, outputURL: nil,
+            createdAt: asked, updatedAt: asked.addingTimeInterval(200), status: .failed, exitCode: 1,
+            commandPreview: "mere.run text chat", outputText: nil,
+            messages: [
+                StudioMessage(role: .user, content: "Why predict the noise instead of the image?", createdAt: asked),
+                StudioMessage(
+                    role: .assistant,
+                    content: """
+                    Predicting the noise gives the network a target with the same scale at every \
+                    step, so one set of weights serves the whole schedule. Predicting the clean \
+                    image makes the early, very noisy steps an almost impossible regression.
+                    """,
+                    createdAt: asked.addingTimeInterval(30), model: model, tokensPerSecond: 39,
+                    reasoning: """
+                    The question is about the parameterization. Two things matter: the target's \
+                    variance across timesteps, and how the loss weights the steps. Keep it short \
+                    and concrete.
+                    """
+                ),
+                StudioMessage(role: .user, content: "Show the sampling loop in Swift with MLX.", createdAt: asked.addingTimeInterval(180)),
+                StudioMessage(
+                    role: .assistant, content: "", createdAt: asked.addingTimeInterval(200), failed: true, model: model,
+                    failureReason: "Model 'text-chat-qwen3.6-4b' is not installed.",
+                    logTail: [
+                        "mere.run text chat --model text-chat-qwen3.6-4b --stream --stats",
+                        "error: model 'text-chat-qwen3.6-4b' is not installed",
+                        "Exited with code 1.",
+                    ]
+                ),
+            ],
+            systemPrompt: nil, model: model
+        )
+        let size = CGSize(width: 900, height: 620)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let states = StudioConversationView(
+                item: thread, liveReply: nil, isRunning: false, mode: .chat,
+                onNewChat: {}, onCopy: { _ in }, onRetry: {}, onEdit: { _ in }, onBranch: { _ in }
+            )
+            .background(MereRunTheme.background)
+            try fixture.write(states, size: size, appearance: appearance, name: "chat-turn-states-\(appearance.rawValue)", settle: 1.5)
+
+            var streaming = thread
+            streaming.status = .running
+            streaming.messages = Array(thread.messages?.prefix(3) ?? [])
+            let live = StudioConversationView(
+                item: streaming,
+                liveReply: ConversationTranscript.Reply(
+                    answer: "",
+                    reasoning: "The user wants MLX, so the tensors are MLXArray and the scheduler step is explicit.",
+                    isThinking: true
+                ),
+                isRunning: true, mode: .chat,
+                onNewChat: {}, onCopy: { _ in }, onRetry: {}, onEdit: { _ in }, onBranch: { _ in }
+            )
+            .background(MereRunTheme.background)
+            try fixture.write(live, size: size, appearance: appearance, name: "chat-thinking-live-\(appearance.rawValue)", settle: 1.5)
+        }
+    }
+
     /// Video ▸ Subjects in the Track stage: a three-subject plan whose masks were tracked (the
     /// manifest, tracking, and quality reports the CLI would have written, with a synthesized
     /// overlay frame), while a re-track job is held open by the process seam so the job bar

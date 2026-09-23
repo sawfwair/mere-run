@@ -67,14 +67,18 @@ package final class StudioLibraryStore: ObservableObject {
             if case .cancelled = job?.state { cancelled = true } else { cancelled = false }
             if let conversationID = result.conversationID {
                 let text = result.outputText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let failed = result.exitCode != 0 && !cancelled
                 self.appendAssistant(
                     conversationID: conversationID,
-                    content: text.isEmpty ? (result.exitCode == 0 ? "(No output.)" : "Run stopped before a reply was received.") : text,
+                    content: text.isEmpty ? Self.placeholderReply(exitCode: result.exitCode, cancelled: cancelled) : text,
                     exitCode: result.exitCode,
                     cancelled: cancelled,
                     model: job?.request.draft?.model,
                     systemPrompt: job?.request.draft?.secondaryText,
-                    tokensPerSecond: job.flatMap { ConversationTranscript.decodeTokensPerSecond(in: $0.log.lines.map(\.text)) }
+                    tokensPerSecond: job.flatMap { ConversationTranscript.decodeTokensPerSecond(in: $0.log.lines.map(\.text)) },
+                    reasoning: result.reasoning,
+                    failureReason: failed ? Self.failureReason(job: job, exitCode: result.exitCode) : nil,
+                    logTail: failed ? job.map { Array($0.log.text(of: [.stderr, .system]).suffix(Self.turnLogTailLines)) } : nil
                 )
             } else {
                 self.complete(id: requestID, exitCode: result.exitCode, outputURL: result.outputURL,
@@ -288,9 +292,27 @@ package final class StudioLibraryStore: ObservableObject {
         return item
     }
 
+    /// How many lines of a failed turn's stderr and notes ride along in the thread.
+    package static let turnLogTailLines = 40
+
+    /// What an assistant turn says when the run produced no reply text. A failed turn says
+    /// nothing here — its `failureReason` line says why.
+    private static func placeholderReply(exitCode: Int32, cancelled: Bool) -> String {
+        if exitCode == 0 { return "(No output.)" }
+        return cancelled ? "Run stopped before a reply was received." : ""
+    }
+
+    /// One line saying why a conversation turn failed: the preflight message when the run never
+    /// started, else the last meaningful line of its stderr, else the exit code.
+    private static func failureReason(job: Job?, exitCode: Int32) -> String {
+        if case .preflightFailed(let failure) = job?.state { return failure.message }
+        return StudioFailureSummary.summary(outputText: nil, logLines: job?.log.text(of: [.stderr]) ?? [], exitCode: exitCode)
+    }
+
     /// Appends the assistant reply for the latest turn, recording the model and system prompt
     /// that produced it (and the decode speed when the run reported one). A non-zero exit marks
-    /// the message failed but keeps the thread so the user can retry.
+    /// the message failed but keeps the thread so the user can retry; the failure's reason and
+    /// log tail, like the turn's reasoning, are kept for display and never replayed.
     package func appendAssistant(
         conversationID: UUID,
         content: String,
@@ -298,7 +320,10 @@ package final class StudioLibraryStore: ObservableObject {
         cancelled: Bool = false,
         model: String? = nil,
         systemPrompt: String? = nil,
-        tokensPerSecond: Double? = nil
+        tokensPerSecond: Double? = nil,
+        reasoning: String? = nil,
+        failureReason: String? = nil,
+        logTail: [String]? = nil
     ) {
         guard let index = items.firstIndex(where: { $0.id == conversationID }) else { return }
         var item = items[index]
@@ -311,7 +336,10 @@ package final class StudioLibraryStore: ObservableObject {
             model: model,
             systemPrompt: systemPrompt,
             tokensPerSecond: tokensPerSecond,
-            preset: item.mode
+            preset: item.mode,
+            reasoning: reasoning,
+            failureReason: failureReason,
+            logTail: logTail
         ))
         item.messages = messages
         item.status = cancelled ? .cancelled : (exitCode == 0 ? .completed : .failed)
@@ -360,7 +388,10 @@ package final class StudioLibraryStore: ObservableObject {
                 model: message.model,
                 systemPrompt: message.systemPrompt,
                 tokensPerSecond: message.tokensPerSecond,
-                preset: message.preset
+                preset: message.preset,
+                reasoning: message.reasoning,
+                failureReason: message.failureReason,
+                logTail: message.logTail
             )
         }
         // An edited user turn adopts that turn's settings, even though it is excluded from history.

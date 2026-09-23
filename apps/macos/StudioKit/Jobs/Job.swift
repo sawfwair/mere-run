@@ -271,6 +271,11 @@ package struct LogRing: Equatable {
 
     package var isEmpty: Bool { lines.isEmpty }
 
+    /// The text of the lines written to `streams`, oldest first.
+    package func text(of streams: Set<LogStream>) -> [String] {
+        lines.filter { streams.contains($0.stream) }.map(\.text)
+    }
+
     package mutating func append(_ line: LogLine) {
         lines.append(line)
         if lines.count > capacity {
@@ -355,6 +360,9 @@ package struct JobResult: Identifiable, Equatable {
     package let standardOutput: String?
     /// For raw-argument jobs, the complete stderr. Nil for catalog commands.
     package let standardError: String?
+    /// For a conversation turn that ran with thinking shown, the model's reasoning, split out of
+    /// `outputText` so the thread can show it without ever replaying it. Nil otherwise.
+    package let reasoning: String?
 
     package init(
         id: UUID = UUID(),
@@ -369,7 +377,8 @@ package struct JobResult: Identifiable, Equatable {
         completedAt: Date = Date(),
         conversationID: UUID? = nil,
         standardOutput: String? = nil,
-        standardError: String? = nil
+        standardError: String? = nil,
+        reasoning: String? = nil
     ) {
         self.id = id
         self.requestID = requestID
@@ -384,6 +393,7 @@ package struct JobResult: Identifiable, Equatable {
         self.conversationID = conversationID
         self.standardOutput = standardOutput
         self.standardError = standardError
+        self.reasoning = reasoning
     }
 }
 
@@ -435,8 +445,10 @@ package final class Job: ObservableObject, Identifiable {
     /// Capped, NUL-stripped stdout for the console's live pane.
     @Published package private(set) var liveText = ""
     @Published package private(set) var artifacts: [Artifact] = []
-    /// Think-stripped streaming reply for conversation turns; nil for other jobs and once finished.
-    @Published package private(set) var conversationLiveText: String?
+    /// The streaming reply of a conversation turn, split into the answer so far, the reasoning so
+    /// far when the turn shows thinking, and whether the model is still inside a reasoning block.
+    /// nil for other jobs and once finished.
+    @Published package private(set) var conversationLiveReply: ConversationTranscript.Reply?
     @Published package private(set) var result: JobResult?
     /// When the process launched; nil for jobs that never ran (queued, cancelled early, preflight).
     package private(set) var startedAt: Date?
@@ -494,7 +506,14 @@ package final class Job: ObservableObject, Identifiable {
             && request.configuration.arguments.contains(StudioMachineOutputFlags.receipt)
     }
     private var isConversationTurn: Bool { request.conversationID != nil }
+    /// Whether the turn's reasoning is kept for the thread: only when the person turned thinking
+    /// on. Hidden or automatic thinking is stripped, as the CLI's non-stream path would.
+    private var keepsReasoning: Bool {
+        isConversationTurn && request.command.draft?.thinkingMode == .show
+    }
     private var isRawCommand: Bool { request.command.isRaw }
+    /// The streaming answer alone, for callers that show no reasoning.
+    package var conversationLiveText: String? { conversationLiveReply?.answer }
     /// The template a result is attributed to; raw commands report the catalog's raw-argument one.
     private var resultTemplateID: CommandTemplateID { request.templateID ?? .custom }
 
@@ -544,10 +563,11 @@ package final class Job: ObservableObject, Identifiable {
                 if lastLiveStripLength == 0
                     || fullOutput.count - lastLiveStripLength >= Self.liveStripGranularity {
                     lastLiveStripLength = fullOutput.count
-                    conversationLiveText = ConversationTranscript.stripThinkTags(
+                    let reply = ConversationTranscript.splitThinking(
                         fullOutput.replacingOccurrences(of: "\0", with: ""),
                         streaming: true
                     )
+                    conversationLiveReply = keepsReasoning ? reply : reply.hidingReasoning
                 }
             } else if detectsArtifacts {
                 if let receipt = StudioRunReceipt.parse(stdout: stdoutBuffer), receipt.exit == 0,
@@ -627,10 +647,15 @@ package final class Job: ObservableObject, Identifiable {
         // replies are not clipped by the 32 KB console buffer; raw commands from their complete
         // stdout/stderr for the same reason; other modes use the console buffers.
         let outputText: String?
+        var reasoning: String?
         if isConversationTurn {
-            // Strip reasoning for conversation turns on EVERY exit path (not just success) so
-            // <think> blocks and STDERR never leak into the next turn's replayed prompt.
-            outputText = ConversationTranscript.stripThinkTags(fullOutput.replacingOccurrences(of: "\0", with: ""))
+            // Split reasoning out of conversation turns on EVERY exit path (not just success) so
+            // <think> blocks and STDERR never leak into the next turn's replayed prompt. The
+            // reasoning rides beside the reply in the result; the thread shows it but never
+            // renders it into a prompt.
+            let reply = ConversationTranscript.splitThinking(fullOutput.replacingOccurrences(of: "\0", with: ""))
+            outputText = reply.answer
+            reasoning = keepsReasoning ? reply.reasoning : nil
         } else if isRawCommand {
             outputText = Self.capturedResultText(stdout: fullOutput, stderr: fullErrorOutput, exitCode: exitCode)
         } else {
@@ -661,7 +686,7 @@ package final class Job: ObservableObject, Identifiable {
             status = "Exited \(exitCode)"
             log.append(LogLine(stream: .system, text: "Exited with code \(exitCode)."))
         }
-        conversationLiveText = nil
+        conversationLiveReply = nil
         state = cancelRequested && exitCode != 0
             ? .cancelled(exit: exitCode, at: date)
             : .finished(exit: exitCode, at: date)
@@ -677,7 +702,8 @@ package final class Job: ObservableObject, Identifiable {
             completedAt: date,
             conversationID: request.conversationID,
             standardOutput: isRawCommand ? fullOutput : nil,
-            standardError: isRawCommand ? fullErrorOutput : nil
+            standardError: isRawCommand ? fullErrorOutput : nil,
+            reasoning: reasoning
         )
         releaseBuffers()
         self.result = result

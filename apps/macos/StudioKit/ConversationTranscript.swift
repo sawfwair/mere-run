@@ -106,33 +106,72 @@ package enum ConversationTranscript {
         message.content.count + 12
     }
 
-    /// Removes model reasoning blocks from an assistant reply. With `--stream` the CLI emits
+    /// An assistant reply split into what the model said and what it thought first. The answer is
+    /// what the thread stores in `StudioMessage.content` and replays; the reasoning is kept beside
+    /// it for display only.
+    package struct Reply: Equatable {
+        /// The reply with every reasoning block removed, trimmed.
+        package let answer: String
+        /// The reasoning blocks' text, a blank line between blocks; nil when the reply had none.
+        package let reasoning: String?
+        /// True while a streaming reply is still inside an unclosed reasoning block.
+        package let isThinking: Bool
+
+        package init(answer: String, reasoning: String?, isThinking: Bool) {
+            self.answer = answer
+            self.reasoning = reasoning
+            self.isThinking = isThinking
+        }
+
+        /// The same reply with its reasoning dropped, for a turn that runs with thinking hidden.
+        package var hidingReasoning: Reply {
+            Reply(answer: answer, reasoning: nil, isThinking: false)
+        }
+    }
+
+    /// Splits model reasoning out of an assistant reply. With `--stream` the CLI emits
     /// `<think>…</think>` reasoning inline (it only strips it on the non-stream path), so the app
-    /// must strip it before storing/replaying — otherwise reasoning leaks into the next turn's
+    /// must separate it before storing/replaying — otherwise reasoning leaks into the next turn's
     /// prompt.
     ///
-    /// Complete blocks are always removed, as is a leading orphan `</think>` (some models pre-fill
-    /// the opening tag and emit only the close). A trailing UNCLOSED block is only stripped while
-    /// `streaming` — that is reasoning still in progress. At finalize it is kept: a completed
-    /// reply's leftover `<think>` is almost certainly literal text (e.g. a code reply that
-    /// discusses the tag), and truncating it would lose real content.
-    package static func stripThinkTags(_ text: String, streaming: Bool = false) -> String {
-        var result = text.replacingOccurrences(
-            of: "<think>[\\s\\S]*?</think>",
-            with: "",
-            options: .regularExpression
+    /// Complete blocks always move to `reasoning`, as does the text before a leading orphan
+    /// `</think>` (some models pre-fill the opening tag and emit only the close). A trailing
+    /// UNCLOSED block is only split off while `streaming` — that is reasoning still in progress,
+    /// and `isThinking` says so. At finalize it stays in the answer: a completed reply's leftover
+    /// `<think>` is almost certainly literal text (e.g. a code reply that discusses the tag), and
+    /// truncating it would lose real content.
+    package static func splitThinking(_ text: String, streaming: Bool = false) -> Reply {
+        var answer = text
+        var blocks: [String] = []
+        while let block = answer.range(of: "<think>[\\s\\S]*?</think>", options: .regularExpression) {
+            let inner = answer[block].dropFirst("<think>".count).dropLast("</think>".count)
+            blocks.append(String(inner))
+            answer.removeSubrange(block)
+        }
+        if !answer.contains("<think>"), let close = answer.range(of: "</think>") {
+            blocks.insert(String(answer[..<close.lowerBound]), at: 0)
+            answer = String(answer[close.upperBound...])
+        }
+        var isThinking = false
+        if streaming, let open = answer.range(of: "<think>") {
+            blocks.append(String(answer[open.upperBound...]))
+            answer = String(answer[..<open.lowerBound])
+            isThinking = true
+        }
+        let reasoning = blocks
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        return Reply(
+            answer: answer.trimmingCharacters(in: .whitespacesAndNewlines),
+            reasoning: reasoning.isEmpty ? nil : reasoning,
+            isThinking: isThinking
         )
-        if !result.contains("<think>"), let close = result.range(of: "</think>") {
-            result = String(result[close.upperBound...])
-        }
-        if streaming {
-            result = result.replacingOccurrences(
-                of: "<think>[\\s\\S]*$",
-                with: "",
-                options: .regularExpression
-            )
-        }
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The reply without its reasoning: `splitThinking(_:streaming:)` keeping only the answer.
+    package static func stripThinkTags(_ text: String, streaming: Bool = false) -> String {
+        splitThinking(text, streaming: streaming).answer
     }
 
     /// The decode throughput from the CLI's `--stats` line

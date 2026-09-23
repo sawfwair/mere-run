@@ -179,9 +179,9 @@ private struct StudioWorkspaceView: View {
         return library.items.first { $0.id == activeConversationID && $0.isConversation }
     }
 
-    private var activeConversationLiveText: String? {
+    private var activeConversationLiveReply: ConversationTranscript.Reply? {
         guard let activeConversationID else { return nil }
-        return controller.conversationLiveText[activeConversationID]
+        return controller.conversationLiveReplies[activeConversationID]
     }
 
     private var activeConversationRunning: Bool {
@@ -917,7 +917,7 @@ private struct StudioWorkspaceView: View {
         if showsConversation {
             StudioConversationView(
                 item: activeConversationItem,
-                liveText: activeConversationLiveText,
+                liveReply: activeConversationLiveReply,
                 isRunning: activeConversationRunning,
                 mode: mode,
                 onNewChat: startNewConversation,
@@ -1011,7 +1011,7 @@ private struct StudioWorkspaceView: View {
         StudioConverseView(
             mode: mode,
             item: activeConversationItem,
-            liveText: activeConversationLiveText,
+            liveReply: activeConversationLiveReply,
             isRunning: activeConversationRunning,
             readiness: readiness,
             error: studioError,

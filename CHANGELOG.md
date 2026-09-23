@@ -43,6 +43,17 @@ The format is based on Keep a Changelog.
   after a relaunch cleared the runtime API key from the Keychain and could revert
   a host or port changed in Settings. Agent readiness is now read when the
   Agents section opens instead of every 16 seconds for the life of the app.
+- Show why a Chat turn failed: one line read from the run's stderr, Retry beside
+  it, and the run's last log lines behind Show log. A thread whose reply was cut
+  off when Studio closed gets the same row. None of it is replayed into a later
+  prompt.
+- Show a reply's reasoning in Chat when thinking is on, as a collapsed Thinking
+  disclosure above the answer that reads "Thinking…" live while the model is
+  still reasoning. The reasoning is kept beside the reply and never re-enters a
+  prompt; threads saved by earlier versions open unchanged.
+- Stop pinning the Chat transcript to the bottom while a reply streams: it
+  follows new output only while you are already there, and a "Jump to latest"
+  pill brings you back after you scroll up. Deleting a thread now asks first.
 
 ## 0.55.0 - 2026-09-22
 
