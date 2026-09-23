@@ -189,18 +189,24 @@ package final class StudioPromptTaskController {
 
     /// Models ▸ "Use for … by default": records the choice and moves the task onto it now — its
     /// parked draft, and the open composer when this is the active task — so the next run uses
-    /// it without a restart. An open thread keeps its own model; nil restores the built-in default.
+    /// it without a restart. A draft that was following the previous default follows the new
+    /// one; a model the user picked by hand stays, as does an open thread's. nil restores the
+    /// built-in default.
     package func setPreferredModel(_ modelID: String?, for mode: StudioMode) {
+        let previous = freshDraft(for: mode).model
         sessions.setPreferredModel(modelID, for: mode)
+        let next = freshDraft(for: mode).model
+        func followsDefault(_ model: String) -> Bool { model.isBlank || model == previous }
         let key = mode.task.rawValue + ".draft"
-        if var parked = sessions.value(for: key, default: Optional<StudioDraft>.none) {
-            parked.model = freshDraft(for: mode).model
+        if var parked = sessions.value(for: key, default: Optional<StudioDraft>.none), followsDefault(parked.model) {
+            parked.model = next
             sessions.set(parked, for: key)
         }
-        guard mode == activatedMode, !(mode.isConversational && activeConversationID != nil) else { return }
-        var next = draft
-        next.model = freshDraft(for: mode).model
-        draft = next
+        guard mode == activatedMode, !(mode.isConversational && activeConversationID != nil),
+              followsDefault(draft.model) else { return }
+        var current = draft
+        current.model = next
+        draft = current
     }
 
     package func prepareAnalyzeHandoff(to task: StudioTask) {

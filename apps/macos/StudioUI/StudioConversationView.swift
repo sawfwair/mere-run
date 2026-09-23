@@ -21,6 +21,7 @@ struct StudioConverseView: View {
     let readinessActions: StudioReadinessActions
     let onShowModels: () -> Void
     let onCopy: (String) -> Void
+    @Environment(\.studioModelTitles) private var titles
     let onRetry: () -> Void
     let onEdit: (UUID) -> Void
     let onBranch: (UUID) -> Void
@@ -82,7 +83,7 @@ struct StudioConverseView: View {
             Image(systemName: error == nil ? "arrow.down.circle" : "exclamationmark.triangle")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(error == nil ? MereRunTheme.accent : MereRunTheme.red)
-            Text(error ?? readiness.message)
+            Text(error ?? readiness.message(titles: titles))
                 .font(.system(size: 12))
                 .foregroundStyle(MereRunTheme.textPrimary)
                 .lineLimit(2)
@@ -200,6 +201,7 @@ struct StudioConversationView: View {
     let liveText: String?
     let isRunning: Bool
     let mode: StudioMode
+    @Environment(\.studioModelTitles) private var titles
     /// Unused by the Converse surface (the thread list owns "new thread"); kept for the
     /// canvas call site until the Main board drops its conversation branch.
     let onNewChat: () -> Void
@@ -304,7 +306,7 @@ struct StudioConversationView: View {
         var parts: [String] = []
         let modelID = message.model ?? item?.model ?? ""
         if !modelID.isBlank {
-            parts.append(StudioModelNaming.displayName(modelID))
+            parts.append(StudioModelNaming.displayName(modelID, titles: titles))
         }
         if let tokensPerSecond = message.tokensPerSecond, tokensPerSecond > 0 {
             parts.append("\(Int(tokensPerSecond.rounded())) tok/s")

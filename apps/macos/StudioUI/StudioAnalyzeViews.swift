@@ -344,6 +344,7 @@ struct StudioAnalyzeResultPanel: View {
     let outputText: String?
     let view: StudioAnalyzeResultView
     let nextActions: [StudioAnalyzeNextAction]
+    @Environment(\.studioModelTitles) private var titles
     let onOpenTask: (StudioTask) -> Void
     let onSave: (StudioAnalyzeSaveKind) -> Void
 
@@ -372,7 +373,7 @@ struct StudioAnalyzeResultPanel: View {
     private var meta: String {
         var parts: [String] = []
         if let model = document?.modelID ?? item.commandDraft?.model, !model.isBlank {
-            parts.append(StudioModelNaming.displayName(model))
+            parts.append(StudioModelNaming.displayName(model, titles: titles))
         }
         let elapsed = item.updatedAt.timeIntervalSince(item.createdAt)
         if elapsed >= 0.05 { parts.append(String(format: "%.1f s", elapsed)) }

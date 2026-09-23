@@ -963,7 +963,8 @@ struct StudioModelsView: View {
     }
 
     private func displayName(for modelID: String) -> String {
-        rows.first { $0.id == modelID }.map(StudioModelsPresenter.displayName) ?? StudioModelNaming.displayName(modelID)
+        rows.first { $0.id == modelID }.map(StudioModelsPresenter.displayName)
+            ?? StudioModelNaming.displayName(modelID, titles: modelStore.titles)
     }
 
     /// The user's per-mode default models, read from the task sessions the composer starts from.

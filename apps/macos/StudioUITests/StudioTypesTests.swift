@@ -2206,14 +2206,29 @@ final class StudioTypesTests: XCTestCase {
     func testReadinessMessagesSpeakPlainlyAndNameTheModel() {
         XCTAssertEqual(ModelReadinessState.missingModel("video-ltx2-fast").title, "Model needed")
         XCTAssertEqual(
-            ModelReadinessState.missingModel("video-ltx2-fast").message,
+            ModelReadinessState.missingModel("video-ltx2-fast").message(titles: .none),
             "LTX-2 Fast isn't on this Mac yet. Get it once and it stays."
         )
         XCTAssertEqual(ModelReadinessState.unsupported("x").title, "Can't run on this Mac")
         XCTAssertEqual(ModelReadinessState.unknown("x").title, "Couldn't check the model")
-        XCTAssertEqual(ModelReadinessState.notChecked, .unknown("Not checked yet."))
-        XCTAssertEqual(ModelReadinessState.checking.message, "Checking whether the model is on this Mac…")
-        XCTAssertEqual(ModelReadinessState.ready.message, "Ready to run on this Mac.")
+        XCTAssertEqual(ModelReadinessState.checking.message(titles: .none), "Checking whether the model is on this Mac…")
+        XCTAssertEqual(ModelReadinessState.ready.message(titles: .none), "Ready to run on this Mac.")
+
+        // Before the first probe the state is its own, never a failure: a neutral heading, and
+        // the run stays blocked until the check answers.
+        XCTAssertEqual(ModelReadinessState.notChecked.title, "Not checked yet")
+        XCTAssertEqual(ModelReadinessState.notChecked.message(titles: .none), "The model hasn't been checked yet.")
+        XCTAssertTrue(ModelReadinessState.notChecked.blocksRun)
+        XCTAssertNotEqual(ModelReadinessState.notChecked, .unknown("Not checked yet."))
+
+        // A failed check keeps the CLI's last meaningful line as detail beside the plain message.
+        let failed = ModelReadinessState.unknown(MereRunController.modelListUnavailableMessage,
+                                                 detail: "models root /Volumes/Models is not mounted")
+        XCTAssertEqual(failed.message(titles: .none), MereRunController.modelListUnavailableMessage)
+        XCTAssertEqual(failed.detail, "models root /Volumes/Models is not mounted")
+        XCTAssertNil(ModelReadinessState.unknown("x").detail)
+        XCTAssertEqual(StudioFailureSummary.lastMeaningfulLine(in: "warning: slow disk\nerror: no such root\n"), "No such root")
+        XCTAssertNil(StudioFailureSummary.lastMeaningfulLine(in: "\n  \n"))
 
         let absent = ModelReadinessParser.state(for: "vision-segment-sam31", modelListOutput: "ID Category Status\n")
         XCTAssertEqual(
@@ -2225,12 +2240,12 @@ final class StudioTypesTests: XCTestCase {
             modelID: "video-ltx2-fast", isSupported: false, minimumUnifiedMemoryGB: 32,
             recommendedUnifiedMemoryGB: 64, download: nil, reason: nil
         )
-        XCTAssertEqual(memory.unavailableMessage, "LTX-2 Fast needs at least 32 GB of unified memory.")
+        XCTAssertEqual(memory.unavailableMessage(titles: .none), "LTX-2 Fast needs at least 32 GB of unified memory.")
         let unsupported = StudioModelCapability(
             modelID: "video-ltx2-fast", isSupported: false, minimumUnifiedMemoryGB: nil,
             recommendedUnifiedMemoryGB: nil, download: nil, reason: nil
         )
-        XCTAssertEqual(unsupported.unavailableMessage, "LTX-2 Fast can't run on this Mac.")
+        XCTAssertEqual(unsupported.unavailableMessage(titles: .none), "LTX-2 Fast can't run on this Mac.")
         for message in [MereRunController.capabilitiesUnavailableMessage, MereRunController.modelListUnavailableMessage] {
             XCTAssertFalse(message.contains("CLI"), message)
             XCTAssertFalse(message.contains("capabilities"), message)
@@ -2264,12 +2279,12 @@ final class StudioTypesTests: XCTestCase {
 
         XCTAssertTrue(nano.isSupported)
         XCTAssertEqual(nano.minimumUnifiedMemoryGB, 12)
-        XCTAssertNil(nano.unavailableMessage)
+        XCTAssertNil(nano.unavailableMessage(titles: .none))
         XCTAssertFalse(max.isSupported)
         XCTAssertEqual(max.minimumUnifiedMemoryGB, 48)
         XCTAssertEqual(max.recommendedUnifiedMemoryGB, 64)
         XCTAssertEqual(
-            max.unavailableMessage,
+            max.unavailableMessage(titles: .none),
             "Requires at least 48 GB unified memory; detected 32 GB."
         )
     }
@@ -2316,7 +2331,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(gemma.isSupported)
         XCTAssertEqual(gemma.minimumUnifiedMemoryGB, 48)
         XCTAssertEqual(
-            gemma.unavailableMessage,
+            gemma.unavailableMessage(titles: .none),
             "Requires at least 48 GB unified memory; detected 32 GB."
         )
     }

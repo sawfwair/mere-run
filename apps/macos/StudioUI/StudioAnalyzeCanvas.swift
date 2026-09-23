@@ -336,7 +336,8 @@ struct StudioAnalyzeCanvas: View {
             if let job = card.job {
                 StudioRunningCard(item: card.item, job: job, isHighlighted: false) { actions.cancel(job) }
             } else {
-                StudioFailureCard(item: card.item, job: nil, isHighlighted: false, actions: actions)
+                StudioFailureCard(item: card.item, job: nil, isHighlighted: false, actions: actions,
+                                  modelInventory: readinessActions.modelInventory)
             }
         case .queued:
             StudioQueuedRow(
@@ -347,7 +348,8 @@ struct StudioAnalyzeCanvas: View {
                 actions.remove(card)
             }
         case .failed:
-            StudioFailureCard(item: card.item, job: card.job, isHighlighted: false, actions: actions)
+            StudioFailureCard(item: card.item, job: card.job, isHighlighted: false, actions: actions,
+                              modelInventory: readinessActions.modelInventory)
         case .generation:
             EmptyView()
         }

@@ -13,6 +13,7 @@ struct StudioResultWorkspaceView: View {
     let onSave: (URL) -> Void
     let onContinue: (StudioResultContinuation, StudioLibraryItem, URL) -> Void
 
+    @Environment(\.studioModelTitles) private var titles
     @State private var comparison: StudioResultSelection?
     @State private var zoom: CGFloat = 1
     @State private var pan: CGSize = .zero
@@ -162,7 +163,7 @@ struct StudioResultWorkspaceView: View {
 
     private var provenance: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(item.recordedModelID.map(StudioModelNaming.displayName) ?? item.mode.title)
+            Text(item.recordedModelID.map { StudioModelNaming.displayName($0, titles: titles) } ?? item.mode.title)
                 .font(.caption).lineLimit(1)
                 .help(item.recordedModelID ?? item.mode.title)
             if let parentID = item.parentID, let parent = items.first(where: { $0.id == parentID }) {

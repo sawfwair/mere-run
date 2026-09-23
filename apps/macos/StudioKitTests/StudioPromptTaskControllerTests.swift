@@ -138,25 +138,35 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertTrue(runner.starts.isEmpty)
     }
 
-    /// Models ▸ "Use for … by default" is what a task starts from: the open composer and the
-    /// task's parked draft move onto it at once, fresh drafts follow, nil restores the built-in
-    /// default, and an open thread keeps the model it was running on.
+    /// Models ▸ "Use for … by default" is what a task starts from: a composer or parked draft
+    /// that was following the previous default moves onto the new one at once, fresh drafts
+    /// follow, nil restores the built-in default, and a model the user picked by hand — in a
+    /// parked draft or an open thread — stays.
     func testModelsPageDefaultMovesTheTaskOntoTheModelNowAndForFreshDrafts() throws {
         activate(.createImage)
         let builtIn = prompt.draft.model
         prompt.setPreferredModel("image-zimage-turbo", for: .createImage)
-        XCTAssertEqual(prompt.draft.model, "image-zimage-turbo")
+        XCTAssertEqual(prompt.draft.model, "image-zimage-turbo", "the composer was on the built-in default, so it follows")
         XCTAssertEqual(controller.taskSessions.preferredModel(for: .createImage), "image-zimage-turbo")
         XCTAssertEqual(prompt.freshDraft(for: .createImage).model, "image-zimage-turbo")
 
-        prompt.draft.model = "hand-picked"
         activate(.video)
         prompt.setPreferredModel("image-other", for: .createImage)
-        let parked = controller.taskSessions.value(for: StudioTask.imageGenerate.rawValue + ".draft", default: StudioDraft())
-        XCTAssertEqual(parked.model, "image-other", "a parked task moves too, so the change shows on return")
-        prompt.setPreferredModel(nil, for: .createImage)
+        let followed = controller.taskSessions.value(for: StudioTask.imageGenerate.rawValue + ".draft", default: StudioDraft())
+        XCTAssertEqual(followed.model, "image-other", "a parked draft on the old default moves too, so the change shows on return")
+
         activate(.createImage)
-        XCTAssertEqual(prompt.draft.model, builtIn, "nil returns the task to the built-in default")
+        prompt.draft.model = "hand-picked"
+        activate(.video)
+        prompt.setPreferredModel("image-third", for: .createImage)
+        let kept = controller.taskSessions.value(for: StudioTask.imageGenerate.rawValue + ".draft", default: StudioDraft())
+        XCTAssertEqual(kept.model, "hand-picked", "a model the user chose is not overwritten")
+        XCTAssertEqual(prompt.freshDraft(for: .createImage).model, "image-third", "but a fresh draft starts on the new default")
+
+        activate(.createImage)
+        prompt.draft.model = "image-third"
+        prompt.setPreferredModel(nil, for: .createImage)
+        XCTAssertEqual(prompt.draft.model, builtIn, "nil returns a following draft to the built-in default")
 
         let threadID = thread()
         activate(.chat, selected: threadID)
@@ -165,6 +175,27 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertEqual(prompt.draft.model, "chosen-model", "an open thread keeps its own model")
         prompt.startNewConversation()
         XCTAssertEqual(prompt.draft.model, "text-chat-qwen3.6-4b", "a new thread starts on the default")
+        XCTAssertTrue(runner.starts.isEmpty)
+    }
+
+    /// A Console run of a template the composer does not build (an upscale, an edit) records a
+    /// command but has no composer to land in, so the action is not offered rather than failing.
+    func testUseTheseSettingsIsOnlyOfferedForCommandsTheComposerBuilds() throws {
+        let generate = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
+        let generated = library.start(
+            request: StudioRunRequest(mode: .createImage, templateID: .imageGenerate, template: generate, draft: generate.defaultDraft()),
+            commandPreview: "fixture"
+        )
+        XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(generated))
+
+        let otherTemplate = try XCTUnwrap(CommandCatalog.templates.first { $0.libraryMode == .createImage && $0.id != .imageGenerate })
+        let other = library.start(
+            request: StudioRunRequest(mode: .createImage, templateID: otherTemplate.id, template: otherTemplate, draft: otherTemplate.defaultDraft()),
+            commandPreview: "fixture"
+        )
+        XCTAssertFalse(StudioLibraryDraftRestoration.canRestore(other), otherTemplate.id.rawValue)
+        XCTAssertNil(StudioLibraryDraftRestoration.draft(from: other, baseline: StudioDraft()))
+        XCTAssertFalse(prompt.useSettings(from: other))
         XCTAssertTrue(runner.starts.isEmpty)
     }
 
@@ -404,7 +435,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
                           .unsupported("This model cannot run here."), .checking] {
                 controller.readinessByMode[mode] = state
                 XCTAssertThrowsError(try prompt.retryLastTurn(inventory: []), "\(mode) \(state)") { error in
-                    XCTAssertEqual(error.localizedDescription, state.message)
+                    XCTAssertEqual(error.localizedDescription, state.message(titles: .none))
                 }
                 XCTAssertEqual(library.items.first { $0.id == id }, original)
                 XCTAssertEqual(prompt.draft, draft)

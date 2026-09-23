@@ -41,6 +41,27 @@ package struct StudioConsoleView: View {
     private func stop() { if let job { jobs.cancel(job) } }
 
     package var body: some View {
+        // The console is its own scene, so it sets the model titles for its subtree itself.
+        StudioModelTitlesScope(store: controller.modelStore) { splitView }
+            .frame(maxHeight: .infinity)
+            .background(MereRunTheme.background.ignoresSafeArea())
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .onAppear {
+                jobs.attach(controller.jobs)
+                library.observe(controller: controller)
+                navigation.isConsoleOpen = true
+                reseed()
+            }
+            .onDisappear { navigation.isConsoleOpen = false }
+            // The console's values are read out of the template's own argv, so selecting a template,
+            // syncing the composer into it, or opening a Library row all arrive the same way.
+            .onChange(of: controller.selectedTemplate.id) { reseed() }
+            .onChange(of: controller.draft) { reseed() }
+            .onChange(of: controller.consoleSeedArguments) { reseed() }
+            .focusedSceneValue(\.studioActions, sceneActions)
+    }
+
+    private var splitView: some View {
         HSplitView {
             StudioConsoleCatalog()
                 .frame(minWidth: 220, idealWidth: 268, maxWidth: 360, maxHeight: .infinity)
@@ -55,22 +76,6 @@ package struct StudioConsoleView: View {
             }
                 .frame(minWidth: 320, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxHeight: .infinity)
-        .background(MereRunTheme.background.ignoresSafeArea())
-        .foregroundStyle(MereRunTheme.textPrimary)
-        .onAppear {
-            jobs.attach(controller.jobs)
-            library.observe(controller: controller)
-            navigation.isConsoleOpen = true
-            reseed()
-        }
-        .onDisappear { navigation.isConsoleOpen = false }
-        // The console's values are read out of the template's own argv, so selecting a template,
-        // syncing the composer into it, or opening a Library row all arrive the same way.
-        .onChange(of: controller.selectedTemplate.id) { reseed() }
-        .onChange(of: controller.draft) { reseed() }
-        .onChange(of: controller.consoleSeedArguments) { reseed() }
-        .focusedSceneValue(\.studioActions, sceneActions)
     }
 
     private var capability: MereRunCommandCapability? {

@@ -11,27 +11,6 @@ package enum StudioModelNaming {
         CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
     }
 
-    // MARK: Inventory titles
-
-    /// The titles `model capabilities` reported, keyed by id. `StudioModelStore` records them
-    /// with every inventory snapshot, so a surface that has no inventory in hand — a Library
-    /// chip, the thread list, the Activity popover, a readiness message — still prints the same
-    /// name the Models page does. Static because the id-to-name rule has no owner of its own;
-    /// the lock is what lets a presenter read it off the main actor.
-    nonisolated(unsafe) private static var inventoryTitles: [String: String] = [:]
-    private static let inventoryTitlesLock = NSLock()
-
-    /// Replaces the known titles with `rows`'. An inventory refresh publishes one complete
-    /// snapshot, so this replaces rather than merges.
-    package static func recordInventoryTitles(_ rows: [StudioModelInventoryRow]) {
-        let titles = Dictionary(rows.compactMap { row in row.title.map { (row.id, $0) } }, uniquingKeysWith: { first, _ in first })
-        inventoryTitlesLock.withLock { inventoryTitles = titles }
-    }
-
-    package static func inventoryTitle(for id: String) -> String? {
-        inventoryTitlesLock.withLock { inventoryTitles[id] }
-    }
-
     /// The name for an inventory row: its own title, else the id formatted.
     package static func displayName(_ row: StudioModelInventoryRow) -> String {
         row.title ?? formattedName(row.id)
@@ -46,18 +25,19 @@ package enum StudioModelNaming {
 
     /// What a picker shows for a draft: the resolved model's name, or "Auto" when the mode has
     /// no default.
-    package static func displayLabel(for mode: StudioMode, model: String) -> String {
+    package static func displayLabel(for mode: StudioMode, model: String, titles: StudioModelTitles) -> String {
         let resolved = resolvedModelID(for: mode, model: model)
-        return resolved.isEmpty ? "Auto" : displayName(resolved)
+        return resolved.isEmpty ? "Auto" : displayName(resolved, titles: titles)
     }
 
-    /// A human-facing label for a model id: the inventory's title when one has been recorded,
-    /// else the id with its modality/category prefix dropped and the distinctive remainder
-    /// title-cased, keeping the casing the model cards print ("text-agent-deepseek-v4-flash" →
-    /// "Deepseek V4 Flash", "text-chat-qwen3.6-4b" → "Qwen3.6 4B", "vision-chat-qwen3.6-vl-4b"
-    /// → "Qwen3.6-VL 4B").
-    package static func displayName(_ id: String) -> String {
-        inventoryTitle(for: id) ?? formattedName(id)
+    /// A human-facing label for a model id: the inventory's title when `titles` has one, else the
+    /// id with its modality/category prefix dropped and the distinctive remainder title-cased,
+    /// keeping the casing the model cards print ("text-agent-deepseek-v4-flash" → "Deepseek V4
+    /// Flash", "text-chat-qwen3.6-4b" → "Qwen3.6 4B", "vision-chat-qwen3.6-vl-4b" → "Qwen3.6-VL
+    /// 4B"). Callers pass the titles rather than reading a shared table, so a surface re-renders
+    /// when the inventory it observes changes and a presenter stays a pure function.
+    package static func displayName(_ id: String, titles: StudioModelTitles) -> String {
+        titles[id] ?? formattedName(id)
     }
 
     private static func formattedName(_ id: String) -> String {
@@ -118,6 +98,25 @@ package enum StudioModelNaming {
         guard token.count >= 2, let last = token.last, last == "b" || last == "m" else { return false }
         let digits = token.dropLast()
         return !digits.isEmpty && digits.allSatisfy { $0.isNumber || $0 == "." } && digits.contains { $0.isNumber }
+    }
+}
+
+/// The titles the model inventory reports, keyed by id: the one source every surface names a
+/// model from. `StudioModelStore` publishes a value with each inventory snapshot; views read it
+/// from the environment and presenters take it as a parameter, so nothing names a model from a
+/// table that could be stale or shared across windows and tests.
+package struct StudioModelTitles: Equatable, Sendable {
+    /// No inventory yet: every name falls back to the formatted id.
+    package static let none = StudioModelTitles()
+
+    private let byID: [String: String]
+
+    package init(rows: [StudioModelInventoryRow] = []) {
+        byID = Dictionary(rows.compactMap { row in row.title.map { (row.id, $0) } }, uniquingKeysWith: { first, _ in first })
+    }
+
+    package subscript(id: String) -> String? {
+        byID[id]
     }
 }
 

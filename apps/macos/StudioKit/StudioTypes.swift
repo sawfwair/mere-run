@@ -1098,17 +1098,22 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
 }
 
 package enum ModelReadinessState: Equatable {
+    /// No check has run for this mode yet. Distinct from `.unknown` so the card before the first
+    /// probe never reads as a failure.
+    case notChecked
     case checking
     case ready
     case missingModel(String)
     case unsupported(String)
-    case unknown(String)
+    /// The check itself failed. `detail` is the CLI's own last meaningful line, kept beside the
+    /// plain message because a wrong model location or missing binary is undiagnosable without it.
+    case unknown(String, detail: String? = nil)
 
     package var blocksRun: Bool {
         switch self {
-        case .checking, .missingModel, .unsupported, .unknown:
+        case .notChecked, .checking, .missingModel, .unsupported, .unknown:
             return true
-        default:
+        case .ready:
             return false
         }
     }
@@ -1130,6 +1135,7 @@ package enum ModelReadinessState: Equatable {
     /// The readiness card's heading. Plain words: the card is the first thing a new user meets.
     package var title: String {
         switch self {
+        case .notChecked: return "Not checked yet"
         case .checking: return "Checking the model"
         case .ready: return "Ready"
         case .missingModel: return "Model needed"
@@ -1138,25 +1144,30 @@ package enum ModelReadinessState: Equatable {
         }
     }
 
-    /// One sentence under the heading. Models are named the way the Models page names them;
-    /// the id stays in the model chip's tooltip.
-    package var message: String {
+    /// One sentence under the heading. Models are named the way the Models page names them
+    /// (`titles`); the id stays in the model chip's tooltip.
+    package func message(titles: StudioModelTitles) -> String {
         switch self {
+        case .notChecked:
+            return "The model hasn't been checked yet."
         case .checking:
             return "Checking whether the model is on this Mac…"
         case .ready:
             return "Ready to run on this Mac."
         case .missingModel(let model):
-            return "\(StudioModelNaming.displayName(model)) isn't on this Mac yet. Get it once and it stays."
+            return "\(StudioModelNaming.displayName(model, titles: titles)) isn't on this Mac yet. Get it once and it stays."
         case .unsupported(let reason):
             return reason
-        case .unknown(let reason):
+        case .unknown(let reason, _):
             return reason
         }
     }
 
-    /// The state before any check has run.
-    package static let notChecked = ModelReadinessState.unknown("Not checked yet.")
+    /// The CLI's own words behind a failed check, for the card's muted second line.
+    package var detail: String? {
+        if case .unknown(_, let detail) = self { return detail }
+        return nil
+    }
 }
 
 package struct StudioModelCapability: Equatable {
@@ -1167,12 +1178,12 @@ package struct StudioModelCapability: Equatable {
     package let download: String?
     package let reason: String?
 
-    package var unavailableMessage: String? {
+    package func unavailableMessage(titles: StudioModelTitles) -> String? {
         guard !isSupported else { return nil }
         if let reason, !reason.isBlank {
             return reason
         }
-        let name = StudioModelNaming.displayName(modelID)
+        let name = StudioModelNaming.displayName(modelID, titles: titles)
         if let minimumUnifiedMemoryGB {
             return "\(name) needs at least \(minimumUnifiedMemoryGB) GB of unified memory."
         }
@@ -1903,7 +1914,11 @@ package enum StudioArtifactDiscovery {
 }
 
 package enum ModelReadinessParser {
-    package static func state(for modelID: String, modelListOutput: String) -> ModelReadinessState {
+    package static func state(
+        for modelID: String,
+        modelListOutput: String,
+        titles: StudioModelTitles = .none
+    ) -> ModelReadinessState {
         guard !modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .ready
         }
@@ -1919,7 +1934,7 @@ package enum ModelReadinessParser {
 
             let normalized = row.lowercased()
             if normalized.contains("unsupported") {
-                return .unsupported("\(StudioModelNaming.displayName(modelID)) can't run on this Mac.")
+                return .unsupported("\(StudioModelNaming.displayName(modelID, titles: titles)) can't run on this Mac.")
             }
             if normalized.contains("installed") || normalized.contains("ready") || normalized.contains("present") {
                 return .ready
@@ -1928,7 +1943,7 @@ package enum ModelReadinessParser {
         }
 
         return .unknown(
-            "\(StudioModelNaming.displayName(modelID)) isn't in the model list. "
+            "\(StudioModelNaming.displayName(modelID, titles: titles)) isn't in the model list. "
                 + "Check the model location in Settings, or choose another model."
         )
     }

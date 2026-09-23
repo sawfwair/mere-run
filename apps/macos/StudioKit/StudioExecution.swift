@@ -129,12 +129,21 @@ package enum StudioLibraryReplay {
 /// into the composer, so a flag lands in the draft field that emits it and nothing is guessed
 /// from the command preview.
 package enum StudioLibraryDraftRestoration {
-    /// nil for a thread, for a row from before commands were recorded, and for a row whose
-    /// command is not one the mode's composer builds (a Console run of another template).
+    /// Whether "Use these settings" applies to a row: not a thread, its command recorded, and
+    /// that command one the mode's composer builds (a Console run of another template, an
+    /// upscale or edit, has no composer to land in). Every surface that offers the action asks
+    /// this first, so it never offers what `draft(from:baseline:)` cannot do.
+    package static func canRestore(_ item: StudioLibraryItem) -> Bool {
+        guard !item.isConversation, let templateID = item.templateID, item.commandDraft != nil,
+              templateID.capability != nil else { return false }
+        return composerBuilds(templateID, for: item.mode)
+    }
+
+    /// nil exactly when `canRestore` is false.
     package static func draft(from item: StudioLibraryItem, baseline: StudioDraft) -> StudioDraft? {
-        guard !item.isConversation, let templateID = item.templateID, let recorded = item.commandDraft,
-              let template = CommandCatalog.template(id: templateID), let capability = templateID.capability,
-              composerBuilds(templateID, for: item.mode) else { return nil }
+        guard canRestore(item), let templateID = item.templateID, let recorded = item.commandDraft,
+              let template = CommandCatalog.template(id: templateID), let capability = templateID.capability
+        else { return nil }
         let arguments = item.commandArguments ?? template.arguments(from: recorded)
         let form = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
         var draft = baseline

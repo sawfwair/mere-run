@@ -38,23 +38,7 @@ package struct MereSecondaryButtonStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(MereRunTheme.textPrimary)
-                .padding(.horizontal, MereRunTheme.Spacing.sm)
-                .frame(minHeight: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                        .fill(MereRunTheme.surfaceRaised)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                                .fill(hovering ? MereRunTheme.hoverFill : .clear)
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                                .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
-                        }
-                }
-                .contentShape(Rectangle())
+                .modifier(MereSecondaryChrome(hovering: hovering))
                 .scaleEffect(configuration.isPressed ? 0.98 : 1)
                 .onHover { hovering = $0 }
                 .animation(MereRunTheme.Motion.quick, value: hovering)
@@ -67,20 +51,13 @@ extension ButtonStyle where Self == MereSecondaryButtonStyle {
     package static var mereSecondary: MereSecondaryButtonStyle { MereSecondaryButtonStyle() }
 }
 
-/// The secondary button's chrome on a control that is not a `Button` — a `Menu`'s label — so a
-/// menu beside a secondary button reads as its sibling. The menu shows its own open state, so
-/// the label carries no hover or press feedback of its own.
-package struct MereSecondaryMenuLabel: View {
-    let title: String
-    let systemImage: String
+/// The secondary control's face — type, padding, fill, hover wash, and border — shared by the
+/// button style and the menu label so the two cannot drift apart.
+private struct MereSecondaryChrome: ViewModifier {
+    let hovering: Bool
 
-    package init(_ title: String, systemImage: String) {
-        self.title = title
-        self.systemImage = systemImage
-    }
-
-    package var body: some View {
-        Label(title, systemImage: systemImage)
+    func body(content: Content) -> some View {
+        content
             .font(.system(size: 11.5, weight: .medium))
             .foregroundStyle(MereRunTheme.textPrimary)
             .padding(.horizontal, MereRunTheme.Spacing.sm)
@@ -90,10 +67,35 @@ package struct MereSecondaryMenuLabel: View {
                     .fill(MereRunTheme.surfaceRaised)
                     .overlay {
                         RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                            .fill(hovering ? MereRunTheme.hoverFill : .clear)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
                             .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
                     }
             }
             .contentShape(Rectangle())
+    }
+}
+
+/// The secondary button's chrome on a control that is not a `Button` — a `Menu`'s label — so a
+/// menu beside a secondary button reads as its sibling. The menu shows its own open state, so
+/// the label carries no press feedback; it does take the hover wash.
+package struct MereSecondaryMenuLabel: View {
+    let title: String
+    let systemImage: String
+    @State private var hovering = false
+
+    package init(_ title: String, systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    package var body: some View {
+        Label(title, systemImage: systemImage)
+            .modifier(MereSecondaryChrome(hovering: hovering))
+            .onHover { hovering = $0 }
+            .animation(MereRunTheme.Motion.quick, value: hovering)
     }
 }
 

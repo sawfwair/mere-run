@@ -22,13 +22,13 @@ enum StudioActivity {
     /// Running jobs first (lane order, then start order), then the queue in FIFO order — the order
     /// the work will actually finish in.
     @MainActor
-    static func rows(in store: JobStore) -> [StudioActivityRow] {
+    static func rows(in store: JobStore, titles: StudioModelTitles = .none) -> [StudioActivityRow] {
         let running = lanes.flatMap { store.running(in: $0) }
         let queued = lanes.flatMap { store.queued(in: $0) }
         return running.map {
-            StudioActivityRow(id: $0.id, title: title(for: $0), isRunning: true, isNextInQueue: false)
+            StudioActivityRow(id: $0.id, title: title(for: $0, titles: titles), isRunning: true, isNextInQueue: false)
         } + queued.enumerated().map { index, job in
-            StudioActivityRow(id: job.id, title: title(for: job), isRunning: false, isNextInQueue: index == 0)
+            StudioActivityRow(id: job.id, title: title(for: job, titles: titles), isRunning: false, isNextInQueue: index == 0)
         }
     }
 
@@ -42,9 +42,9 @@ enum StudioActivity {
     /// The domain and task a job belongs to, so a row names the work rather than the command.
     /// A raw utility read or write has no template, so it names its own CLI subcommand.
     @MainActor
-    static func title(for job: Job) -> String {
+    static func title(for job: Job, titles: StudioModelTitles = .none) -> String {
         guard let templateID = job.request.templateID else { return rawTitle(for: job) }
-        return "\(StudioDomain(templateID: templateID).title) · \(task(for: job))"
+        return "\(StudioDomain(templateID: templateID).title) · \(task(for: job, titles: titles))"
     }
 
     /// The line under the title: step progress and elapsed time for a run, transferred bytes and
@@ -90,13 +90,13 @@ enum StudioActivity {
     // MARK: - Private
 
     @MainActor
-    private static func task(for job: Job) -> String {
+    private static func task(for job: Job, titles: StudioModelTitles) -> String {
         guard let template = job.request.template else { return rawTitle(for: job) }
         if template.id == .modelPull {
             let model = (job.request.draft?.model ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             // The same friendly name the composer's model chip shows, so one model reads the same
             // way wherever it appears.
-            return model.isEmpty ? "Pull model" : "Pull \(StudioModelNaming.displayName(model))"
+            return model.isEmpty ? "Pull model" : "Pull \(StudioModelNaming.displayName(model, titles: titles))"
         }
         // A prompt task names itself the way the task control does ("Generate", "Transcribe");
         // everything else falls back to the template's own title.
@@ -158,6 +158,7 @@ struct StudioActivityPopover: View {
     let resolvedCLI: String
     let onOpenServer: () -> Void
     let onOpenModels: () -> Void
+    @Environment(\.studioModelTitles) private var titles
 
     /// Bumped whenever a job starts or finishes: lane membership is not itself published, so the
     /// row list is re-derived from the store's own event stream.
@@ -169,7 +170,7 @@ struct StudioActivityPopover: View {
     var body: some View {
         // Reading `generation` here is what ties the row list to the store's start/finish events.
         _ = generation
-        let rows = StudioActivity.rows(in: jobs)
+        let rows = StudioActivity.rows(in: jobs, titles: titles)
         return VStack(alignment: .leading, spacing: 0) {
             header(rows)
             if rows.isEmpty {

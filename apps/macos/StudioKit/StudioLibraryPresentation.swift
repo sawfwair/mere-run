@@ -97,7 +97,13 @@ package enum StudioLibraryPresenter {
         return StudioOutputFileKind.classify(url)
     }
 
-    package static func filter(_ items: [StudioLibraryItem], with filter: StudioLibraryFilter) -> [StudioLibraryItem] {
+    /// `titles` names models the way the app shows them, so "qwen" finds a Qwen run whether the
+    /// user remembers the title or the id.
+    package static func filter(
+        _ items: [StudioLibraryItem],
+        with filter: StudioLibraryFilter,
+        titles: StudioModelTitles = .none
+    ) -> [StudioLibraryItem] {
         let query = filter.query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return items.filter { item in
             if filter.scope == .domain, item.domain != filter.domain { return false }
@@ -108,16 +114,21 @@ package enum StudioLibraryPresenter {
             return item.displayTitle.lowercased().contains(query)
                 || item.displayKindTitle.lowercased().contains(query)
                 || item.prompt.lowercased().contains(query)
-                || matchesModel(item, query: query)
-                || item.status.rawValue.contains(query)
+                || matchesModel(item, query: query, titles: titles)
+                || matchesStatus(item, query: query)
         }
     }
 
-    /// "qwen" finds the runs that used a Qwen model, by the name the app shows or the exact id.
-    private static func matchesModel(_ item: StudioLibraryItem, query: String) -> Bool {
+    private static func matchesModel(_ item: StudioLibraryItem, query: String, titles: StudioModelTitles) -> Bool {
         guard let modelID = item.recordedModelID else { return false }
         return modelID.lowercased().contains(query)
-            || StudioModelNaming.displayName(modelID).lowercased().contains(query)
+            || StudioModelNaming.displayName(modelID, titles: titles).lowercased().contains(query)
+    }
+
+    /// A status matches only as a whole word ("failed", "running"), never as a fragment: "ed"
+    /// or "ing" must not pull in every finished or running row.
+    private static func matchesStatus(_ item: StudioLibraryItem, query: String) -> Bool {
+        query.split(whereSeparator: \.isWhitespace).contains { $0 == Substring(item.status.rawValue) }
     }
 
     /// The rows the column shows before the kind, favorites, and search filters narrow them — the

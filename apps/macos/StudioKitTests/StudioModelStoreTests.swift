@@ -130,6 +130,7 @@ final class StudioModelStoreTests: XCTestCase {
         oldInventory.stdout(inventory("old")); oldInventory.termination(0)
         await old.value
         XCTAssertTrue(host.modelStore.rows.isEmpty)
+        XCTAssertEqual(host.modelStore.titles, .none, "names from the old location go with its rows")
         XCTAssertFalse(host.modelStore.hasInventory)
         let new = Task { await host.modelStore.refresh() }
         let newInventory = try await start(1, from: runner)

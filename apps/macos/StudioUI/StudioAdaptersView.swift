@@ -27,6 +27,7 @@ struct StudioAdapterRow: Decodable, Equatable, Identifiable {
 struct StudioAdaptersView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
+    @Environment(\.studioModelTitles) private var titles
 
     let activeModelID: String
     let onUse: (StudioAdapterRow) -> Void
@@ -184,7 +185,7 @@ struct StudioAdaptersView: View {
                                             .font(.system(size: 12.5, weight: .semibold))
                                             .foregroundStyle(MereRunTheme.textPrimary)
                                             .lineLimit(1)
-                                        Text(StudioModelNaming.displayName(row.baseModelID))
+                                        Text(StudioModelNaming.displayName(row.baseModelID, titles: titles))
                                             .font(MereRunTheme.captionFont)
                                             .foregroundStyle(MereRunTheme.textMuted)
                                             .lineLimit(1)
@@ -256,7 +257,7 @@ struct StudioAdaptersView: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
 
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
-                detailRow("Base model", StudioModelNaming.displayName(row.baseModelID))
+                detailRow("Base model", StudioModelNaming.displayName(row.baseModelID, titles: titles))
                 detailRow("Format", row.format)
                 detailRow("License", row.license)
                 detailRow("Size", ByteCountFormatter.string(fromByteCount: row.byteCount, countStyle: .file))
@@ -264,8 +265,8 @@ struct StudioAdaptersView: View {
 
             if !activeModelID.isBlank, activeModelID != row.baseModelID {
                 Label(
-                    "The active model is \(StudioModelNaming.displayName(activeModelID)). "
-                        + "This adapter targets \(StudioModelNaming.displayName(row.baseModelID)).",
+                    "The active model is \(StudioModelNaming.displayName(activeModelID, titles: titles)). "
+                        + "This adapter targets \(StudioModelNaming.displayName(row.baseModelID, titles: titles)).",
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .help("Active: \(activeModelID) · Adapter base: \(row.baseModelID)")

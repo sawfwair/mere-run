@@ -12,12 +12,13 @@ struct StudioModelPicker<Label: View>: View {
     let modelInventory: [StudioModelInventoryRow]
     let onShowModels: () -> Void
     @ViewBuilder let label: () -> Label
+    @Environment(\.studioModelTitles) private var titles
 
     var body: some View {
         Menu {
             let defaultID = StudioModelNaming.defaultModelID(for: mode)
             Toggle(isOn: Binding(get: { model.isBlank }, set: { _ in model = "" })) {
-                Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID))")
+                Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID, titles: titles))")
             }
             let choices = mode.modelChoices(from: modelInventory)
             let installed = choices.filter(\.isInstalled)
@@ -65,6 +66,7 @@ struct StudioModelChip: View {
     let modelInventory: [StudioModelInventoryRow]
     let readiness: ModelReadinessState
     let onShowModels: () -> Void
+    @Environment(\.studioModelTitles) private var titles
 
     var body: some View {
         StudioModelPicker(mode: mode, model: $model, modelInventory: modelInventory, onShowModels: onShowModels) {
@@ -81,7 +83,7 @@ struct StudioModelChip: View {
     }
 
     private var label: String {
-        StudioModelNaming.displayLabel(for: mode, model: model)
+        StudioModelNaming.displayLabel(for: mode, model: model, titles: titles)
     }
 
     /// A glyph before the model name when the model is not ready: missing locally, or unsupported.
@@ -89,15 +91,15 @@ struct StudioModelChip: View {
         switch readiness {
         case .missingModel: return "arrow.down.circle"
         case .unsupported: return "exclamationmark.triangle"
-        case .checking, .ready, .unknown: return nil
+        case .notChecked, .checking, .ready, .unknown: return nil
         }
     }
 
     private var help: String {
         let identity = resolvedModelID.isEmpty ? "Auto — the mode's default model" : "Model: \(resolvedModelID)"
         switch readiness {
-        case .ready, .unknown: return identity
-        default: return "\(identity) · \(readiness.message)"
+        case .ready, .unknown, .notChecked: return identity
+        default: return "\(identity) · \(readiness.message(titles: titles))"
         }
     }
 

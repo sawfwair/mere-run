@@ -86,13 +86,25 @@ final class StudioLibraryPresentationTests: XCTestCase {
         let failed = item(mode: .video, templateID: .videoGenerate, output: nil, prompt: "harbor", status: .failed)
         let items = [drafted, legacy, failed]
 
-        func ids(_ query: String) -> [UUID] {
-            StudioLibraryPresenter.filter(items, with: StudioLibraryFilter(scope: .all, query: query)).map(\.id)
+        func ids(_ query: String, titles: StudioModelTitles = .none) -> [UUID] {
+            StudioLibraryPresenter.filter(items, with: StudioLibraryFilter(scope: .all, query: query), titles: titles).map(\.id)
         }
         XCTAssertEqual(ids("Qwen3.6"), [drafted.id], "the display name matches")
         XCTAssertEqual(ids("text-chat-qwen"), [drafted.id], "so does the exact id")
         XCTAssertEqual(ids("zimage nano"), [legacy.id], "a row from before drafts is found through its --model argument")
+        let titled = StudioModelTitles(rows: [StudioModelInventoryRow(
+            id: "text-chat-qwen3.6-4b", category: "text-chat", status: "installed", size: "2 GB",
+            usageTerms: nil, title: "Little Owl"
+        )])
+        XCTAssertEqual(ids("little owl", titles: titled), [drafted.id], "the inventory's title, when the app shows one")
         XCTAssertEqual(ids("failed"), [failed.id])
+        XCTAssertEqual(ids("harbor failed"), [failed.id], "a status word composes with the rest of the query")
+        // Fragments that occur only inside status words: none of them may pull in a row, or
+        // "ai" would list every failed run and "ing" every running one.
+        XCTAssertTrue(ids("ai").isEmpty, "a fragment of a status word matches nothing")
+        XCTAssertTrue(ids("aile").isEmpty)
+        XCTAssertTrue(ids("mplete").isEmpty)
+        XCTAssertTrue(ids("nning").isEmpty)
         XCTAssertEqual(ids("harbor").count, 3, "prompt search still works alongside")
         XCTAssertEqual(legacy.recordedModelID, "image-zimage-nano")
         XCTAssertEqual(StudioLibraryItem.modelFlagValue(in: "mere.run text chat --model=text-chat-x -q"), "text-chat-x")

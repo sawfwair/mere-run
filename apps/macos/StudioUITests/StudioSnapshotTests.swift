@@ -791,10 +791,10 @@ final class StudioSnapshotTests: XCTestCase {
     /// Compare, "Use these settings", and the readiness card's next steps, light and dark. First
     /// the Library column with its two newest image rows batched, so the bar offers Compare. Then
     /// the feed with a finished mockup run (its card carries the settings icon beside Vary), a
-    /// failed run with "Use these settings" beside Retry, and the readiness card for a model that
-    /// is not on this Mac — Get the model and Choose another model — followed by the same card
-    /// when the model's terms send the user to Models first, when the Mac cannot run it, and when
-    /// the check failed.
+    /// run that failed for want of its model (a plain reason and Get the model beside "Use these
+    /// settings" and Retry), and the readiness card for that model — Get the model and Choose
+    /// another model — followed by the same card before any check, when the Mac cannot run the
+    /// model, and when the check failed with the CLI's line kept as muted detail.
     func testLibraryReuseAndReadinessSnapshots() throws {
         let fidelity = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,
@@ -822,9 +822,15 @@ final class StudioSnapshotTests: XCTestCase {
         }
 
         try fidelity.seedFailedImageRun()
-        let inventory = StudioModelInventoryParser.rows(from: ModelsInventoryScript.modelList)
+        // The failed run's model is in the inventory but not on this Mac, with a title, so the
+        // failed card and the readiness card both name it "Z-Image Turbo" and offer the pull.
+        let inventory = StudioModelInventoryParser.rows(from: ModelsInventoryScript.modelList) + [
+            StudioModelInventoryRow(id: "image-zimage-turbo", category: "image", status: "missing", size: "—",
+                                    usageTerms: nil, title: "Z-Image Turbo", estimatedDownloadBytes: 6_300_000_000)
+        ]
+        let titles = StudioModelTitles(rows: inventory)
 
-        func feed(_ readiness: ModelReadinessState, requiresUsageTerms: Bool = false) -> some View {
+        func feed(_ readiness: ModelReadinessState) -> some View {
             let cards = StudioFeedCardBuilder.cards(items: fidelity.library.items, mode: .createImage) { _ in nil }
             let shown = [cards.last { $0.kind == .generation }, cards.first { $0.item.status == .failed }].compactMap { $0 }
             let noop: (StudioLibraryItem) -> Void = { _ in }
@@ -837,13 +843,15 @@ final class StudioSnapshotTests: XCTestCase {
                 newResultID: .constant(nil),
                 actions: StudioFeedActions(
                     vary: noop, rerun: noop, useAsInput: { _ in }, saveTo: { _ in }, cancel: { _ in },
-                    remove: { _ in }, retry: noop, delete: noop, useSettings: noop, useExample: { _ in }, attach: {}
+                    remove: { _ in }, retry: noop, delete: noop, useSettings: noop, pullModel: { _ in },
+                    useExample: { _ in }, attach: {}
                 ),
                 readinessActions: StudioReadinessActions(
                     mode: .createImage, model: .constant("image-zimage-turbo"), modelInventory: inventory,
-                    requiresUsageTerms: requiresUsageTerms, pullModel: {}, openModels: {}, recheck: {}
+                    pullModel: {}, openModels: {}, recheck: {}
                 )
             )
+            .environment(\.studioModelTitles, titles)
             .frame(width: 900, height: 640)
             .background(MereRunTheme.background)
         }
@@ -854,14 +862,19 @@ final class StudioSnapshotTests: XCTestCase {
                 appearance: appearance, name: "library-reuse-readiness-missing-\(appearance.rawValue)", settle: 2
             )
         }
-        let variants: [(name: String, readiness: ModelReadinessState, terms: Bool)] = [
-            ("terms", .missingModel("image-zimage-turbo"), true),
-            ("unsupported", .unsupported("Zimage Turbo needs at least 32 GB of unified memory."), false),
-            ("unknown", .unknown(MereRunController.modelListUnavailableMessage), false),
+        let tooLarge = StudioModelCapability(
+            modelID: "image-zimage-turbo", isSupported: false, minimumUnifiedMemoryGB: 32,
+            recommendedUnifiedMemoryGB: 64, download: nil, reason: nil
+        )
+        let variants: [(name: String, readiness: ModelReadinessState)] = [
+            ("unchecked", .notChecked),
+            ("unsupported", .unsupported(try XCTUnwrap(tooLarge.unavailableMessage(titles: titles)))),
+            ("unknown", .unknown(MereRunController.modelListUnavailableMessage,
+                                 detail: "Models root /Volumes/Models is not mounted")),
         ]
         for variant in variants {
             try fidelity.write(
-                feed(variant.readiness, requiresUsageTerms: variant.terms), size: CGSize(width: 900, height: 640),
+                feed(variant.readiness), size: CGSize(width: 900, height: 640),
                 appearance: .light, name: "library-reuse-readiness-\(variant.name)-light", settle: 2
             )
         }

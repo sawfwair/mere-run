@@ -18,7 +18,9 @@ package struct StudioRootView: View {
     }
 
     package var body: some View {
-        StudioWorkspaceView(controller: controller, library: library, navigation: navigation, seededDrafts: seededDrafts)
+        StudioModelTitlesScope(store: controller.modelStore) {
+            StudioWorkspaceView(controller: controller, library: library, navigation: navigation, seededDrafts: seededDrafts)
+        }
     }
 }
 
@@ -203,7 +205,6 @@ private struct StudioWorkspaceView: View {
             mode: mode,
             model: $prompt.draft.model,
             modelInventory: modelInventory,
-            requiresUsageTerms: modelUsageTermsByID[StudioCommandAdapter.requiredModel(for: mode, draft: draft)] != nil,
             pullModel: pullModel,
             openModels: { navigation.open(task: .modelsInstalled) },
             recheck: refreshReadiness
@@ -218,26 +219,6 @@ private struct StudioWorkspaceView: View {
             .first { !$0.isEmpty }
     }
 
-    private var selectedCapabilityRequirement: StudioCapabilityRequirement? {
-        StudioCommandAdapter.capabilityRequirement(for: mode, draft: draft)
-    }
-
-    private var selectedCapability: StudioModelCapability? {
-        guard let selectedCapabilityRequirement,
-              case .managedModel(let modelID) = selectedCapabilityRequirement else {
-            return nil
-        }
-        return controller.modelCapabilitiesByID[modelID]
-    }
-
-    private var selectedUnavailableCapabilityMessage: String? {
-        guard let selectedCapabilityRequirement,
-              case .unavailable(let message) = selectedCapabilityRequirement else {
-            return nil
-        }
-        return message
-    }
-
     /// Domains whose default task needs a managed model this machine cannot run.
     private var domainUnavailableMessages: [StudioDomain: String] {
         var messages: [StudioDomain: String] = [:]
@@ -248,7 +229,7 @@ private struct StudioWorkspaceView: View {
             let requirement = StudioCommandAdapter.capabilityRequirement(for: candidate, draft: candidateDraft)
             guard let requirement,
                   case .managedModel(let modelID) = requirement,
-                  let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage else {
+                  let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage(titles: models.titles) else {
                 continue
             }
             messages[domain] = message
@@ -1007,7 +988,7 @@ private struct StudioWorkspaceView: View {
     /// reads the parked draft this wrote.
     private func useLibraryItemSettings(_ item: StudioLibraryItem) {
         guard prompt.useSettings(from: item) else {
-            studioError = "This older Library item does not include its settings."
+            studioError = "This run's command can't be loaded into the composer. Use Edit command… to change it."
             return
         }
         studioError = nil
@@ -1069,6 +1050,7 @@ private struct StudioWorkspaceView: View {
             retry: retryLibraryItem,
             delete: { deleteLibraryItem($0.id) },
             useSettings: useLibraryItemSettings,
+            pullModel: pullModel,
             useExample: useExamplePrompt,
             attach: chooseAttachment,
             focus: focusResult
@@ -1857,26 +1839,43 @@ private struct StudioWorkspaceView: View {
 
     // MARK: - Readiness and models
 
+    /// The readiness card's Get the model: the model this mode's composer needs.
     private func pullModel() {
+        pull(modelID: nil)
+    }
+
+    /// A failed card's Get the model: the model that run needed, whatever the composer holds now.
+    private func pullModel(_ modelID: String) {
+        pull(modelID: modelID)
+    }
+
+    /// One pull path for both, so a model whose publisher asks for terms first gets the same
+    /// acknowledgement sheet wherever the pull starts.
+    private func pull(modelID: String?) {
         studioError = nil
+        var target = draft
+        if let modelID { target.model = modelID }
 
-        if let message = selectedUnavailableCapabilityMessage {
+        switch StudioCommandAdapter.capabilityRequirement(for: mode, draft: target) {
+        case .unavailable(let message):
             studioError = message
             return
+        case .managedModel(let required):
+            if let message = controller.modelCapabilitiesByID[required]?.unavailableMessage(titles: models.titles) {
+                studioError = message
+                return
+            }
+        case nil:
+            break
         }
 
-        if let message = selectedCapability?.unavailableMessage {
-            studioError = message
-            return
-        }
-
-        guard readiness.canPull else {
-            studioError = readiness.message
+        if modelID == nil, !readiness.canPull {
+            studioError = readiness.message(titles: models.titles)
             return
         }
 
         do {
-            guard let request = try StudioCommandAdapter.pullRequest(for: mode, draft: draft) else {
+            guard let request = try StudioCommandAdapter.pullRequest(for: mode, draft: target) else {
                 studioError = "This mode does not need a managed model."
                 return
             }

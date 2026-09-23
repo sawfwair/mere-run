@@ -98,6 +98,12 @@ package enum StudioFailureSummary {
         return "The run failed."
     }
 
+    /// The last meaningful line of some captured text, cleaned, or nil when nothing in it says
+    /// anything: what a readiness card keeps from a probe's stderr under its plain heading.
+    package static func lastMeaningfulLine(in text: String) -> String? {
+        text.components(separatedBy: .newlines).reversed().first(where: isMeaningful).map(cleaned)
+    }
+
     package static func isMeaningful(_ rawLine: String) -> Bool {
         let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard line.count > 3 else { return false }

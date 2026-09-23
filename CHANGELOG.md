@@ -50,16 +50,18 @@ The format is based on Keep a Changelog.
 - Add "Use these settings" to Library rows and result cards, which opens the
   run's task with its recorded prompt, model, and options in the composer to
   tweak and run again; Run again and Edit command… stay for exact reruns.
-- Let Library search find runs by model name or id and by status word, such as
-  "failed" or "running".
+- Let Library search find runs by model name or id and by a whole status word,
+  such as "failed" or "running".
 - Offer Compare from the Library: batch two finished image runs and the bar and
   context menu open them side by side in the result workspace.
 - Let Models ▸ Installed make a model the default for a task ("Use for Chat by
   default"); the task's composer moves onto it at once and fresh drafts start
   from it.
 - Rewrite the readiness card in plain language and replace its Details button
-  with the next step: Get the model, Open in Models when the publisher's terms
-  come first, Choose another model when the Mac cannot run it, or Check again.
+  with the next step: Get the model (with the publisher's terms sheet when there
+  is one), Choose another model, or Check again, keeping the CLI's last line as
+  a muted detail when a check fails. A run that failed because its model is not
+  on this Mac now says so on its card and offers Get the model.
 
 ## 0.55.0 - 2026-09-22
 

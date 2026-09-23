@@ -45,6 +45,7 @@ struct StudioLibraryPanel: View {
     @FocusState private var renameFocused: Bool
     @Environment(\.studioLibrarySeed) private var seed
     @Environment(\.studioReferenceDate) private var referenceDate
+    @Environment(\.studioModelTitles) private var titles
 
     /// The layout the column draws in — the user's, unless a render is staging the other one.
     private var effectiveViewMode: StudioLibraryViewMode {
@@ -70,7 +71,7 @@ struct StudioLibraryPanel: View {
     }
 
     private var filteredItems: [StudioLibraryItem] {
-        StudioLibraryPresenter.filter(items, with: currentFilter)
+        StudioLibraryPresenter.filter(items, with: currentFilter, titles: titles)
     }
 
     private var daySections: [(day: Date, title: String, items: [StudioLibraryItem])] {
@@ -393,7 +394,9 @@ struct StudioLibraryPanel: View {
             }
             if item.commandDraft != nil, item.templateID != nil {
                 Divider()
-                Button("Use these settings") { onUseSettings(item) }
+                if StudioLibraryDraftRestoration.canRestore(item) {
+                    Button("Use these settings") { onUseSettings(item) }
+                }
                 Button("Run again") { onRetry(item) }
                 Button("Edit command…") { onEdit(item) }
             }
@@ -510,14 +513,16 @@ struct StudioLibraryPanel: View {
         items(in: ids).compactMap(\.outputURL)
     }
 
-    /// The two rows a batch can compare: exactly two, both finished with a picture. In the
-    /// column's order, so the earlier run is the "A" side.
+    /// The two rows a batch can compare: exactly two, both finished with a picture. The older
+    /// run is the "A" side (the column lists newest first, so this is the reverse of its order):
+    /// a comparison reads as what changed since.
     private var comparablePair: (StudioLibraryItem, StudioLibraryItem)? {
         let selected = items(in: batch)
         guard selected.count == 2, batch.count == 2,
               selected.allSatisfy({ $0.status == .completed && StudioLibraryPresenter.fileKind(of: $0) == .image })
         else { return nil }
-        return (selected[0], selected[1])
+        let ordered = selected.sorted { $0.createdAt < $1.createdAt }
+        return (ordered[0], ordered[1])
     }
 
     // MARK: - Rename

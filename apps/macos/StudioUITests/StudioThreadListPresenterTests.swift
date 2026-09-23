@@ -77,7 +77,7 @@ final class StudioThreadListPresenterTests: XCTestCase {
         XCTAssertFalse(expected.isEmpty)
         XCTAssertEqual(
             StudioThreadListPresenter.modelLabel(for: untitled),
-            StudioModelNaming.displayName(expected)
+            StudioModelNaming.displayName(expected, titles: .none)
         )
     }
 
