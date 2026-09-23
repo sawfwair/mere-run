@@ -123,6 +123,38 @@ package enum StudioLibraryReplay {
     }
 }
 
+/// Library ▸ "Use these settings": the run's recorded command read back into a composer draft,
+/// so the prompt, model, and every option it ran with are there to tweak and run again. The
+/// reading goes through the same contract bindings the Command view uses to carry its edits
+/// into the composer, so a flag lands in the draft field that emits it and nothing is guessed
+/// from the command preview.
+package enum StudioLibraryDraftRestoration {
+    /// nil for a thread, for a row from before commands were recorded, and for a row whose
+    /// command is not one the mode's composer builds (a Console run of another template).
+    package static func draft(from item: StudioLibraryItem, baseline: StudioDraft) -> StudioDraft? {
+        guard !item.isConversation, let templateID = item.templateID, let recorded = item.commandDraft,
+              let template = CommandCatalog.template(id: templateID), let capability = templateID.capability,
+              composerBuilds(templateID, for: item.mode) else { return nil }
+        let arguments = item.commandArguments ?? template.arguments(from: recorded)
+        let form = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
+        var draft = baseline
+        form.applyingChanges(from: StudioConsoleDraft(), to: &draft, mode: item.mode, templateID: templateID)
+        if let action = readImageAction(for: templateID) { draft.readImageAction = action }
+        draft.parentID = item.id
+        return draft
+    }
+
+    /// Read Image's composer runs one of three templates, chosen by its task chip; every other
+    /// mode's composer runs exactly its default template.
+    private static func composerBuilds(_ templateID: CommandTemplateID, for mode: StudioMode) -> Bool {
+        mode == .readImage ? readImageAction(for: templateID) != nil : templateID == mode.defaultTemplateID
+    }
+
+    private static func readImageAction(for templateID: CommandTemplateID) -> StudioReadImageAction? {
+        StudioReadImageAction.allCases.first { $0.templateID == templateID }
+    }
+}
+
 
 extension String {
     package func maskingAPIKeyValue() -> String {

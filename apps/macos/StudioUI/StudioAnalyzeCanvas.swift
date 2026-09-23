@@ -32,6 +32,7 @@ struct StudioAnalyzeCanvas: View {
     let readiness: ModelReadinessState
     let pullJob: Job?
     let actions: StudioFeedActions
+    let readinessActions: StudioReadinessActions
     let analyze: StudioAnalyzeActions
 
     @State private var chosenView: StudioAnalyzeResultView?
@@ -317,8 +318,7 @@ struct StudioAnalyzeCanvas: View {
                 StudioReadinessCard(
                     readiness: readiness,
                     pullJob: pullJob,
-                    onPullModel: actions.pullModel,
-                    onShowDetails: actions.showDetails,
+                    actions: readinessActions,
                     onCancelPull: { actions.cancel($0) }
                 )
             }

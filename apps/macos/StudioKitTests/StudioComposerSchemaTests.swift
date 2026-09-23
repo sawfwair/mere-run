@@ -303,6 +303,33 @@ final class StudioComposerSchemaTests: XCTestCase {
         XCTAssertEqual(StudioModelNaming.displayName("mere-run/image-zimage-turbo"), "Zimage Turbo")
     }
 
+    /// The inventory's title wins wherever it is known, so the Library chip, the picker, and
+    /// the readiness card print what the Models page prints; ids the inventory has not named
+    /// keep the formatted fallback, and the next snapshot replaces the last one.
+    func testDisplayModelNamePrefersTheInventoryTitleWhenKnown() {
+        defer { StudioModelNaming.recordInventoryTitles([]) }
+        let titled = StudioModelInventoryRow(
+            id: "image-zimage-nano", category: "image", status: "installed", size: "2.1 GB",
+            usageTerms: nil, title: "Z-Image Nano (4-bit)"
+        )
+        let untitled = StudioModelInventoryRow(
+            id: "video-ltx2-fast", category: "video", status: "installed", size: "9 GB", usageTerms: nil
+        )
+        StudioModelNaming.recordInventoryTitles([titled, untitled])
+        XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano"), "Z-Image Nano (4-bit)")
+        XCTAssertEqual(StudioModelNaming.displayName(titled), "Z-Image Nano (4-bit)")
+        XCTAssertEqual(StudioModelNaming.displayName("video-ltx2-fast"), "LTX-2 Fast")
+        XCTAssertEqual(StudioModelNaming.displayName(untitled), "LTX-2 Fast")
+        XCTAssertEqual(StudioModelNaming.displayLabel(for: .createImage, model: "image-zimage-nano"), "Z-Image Nano (4-bit)")
+        XCTAssertEqual(
+            ModelReadinessState.missingModel("image-zimage-nano").message,
+            "Z-Image Nano (4-bit) isn't on this Mac yet. Get it once and it stays."
+        )
+
+        StudioModelNaming.recordInventoryTitles([untitled])
+        XCTAssertEqual(StudioModelNaming.displayName("image-zimage-nano"), "Zimage Nano", "a refresh replaces the snapshot")
+    }
+
     // MARK: - Helpers
 
     private static func sampleExtension(for slot: StudioAttachmentSlot) -> String {

@@ -174,6 +174,35 @@ package final class StudioPromptTaskController {
         return true
     }
 
+    /// Library ▸ "Use these settings": makes the run's recorded command the task's draft, in
+    /// place of any Command view edits, so the composer shows exactly what ran. false when the
+    /// row has nothing to restore.
+    package func useSettings(from item: StudioLibraryItem) -> Bool {
+        let mode = item.mode
+        guard let next = StudioLibraryDraftRestoration.draft(from: item, baseline: freshDraft(for: mode)) else { return false }
+        sessions.set(next, for: mode.task.rawValue + ".draft")
+        sessions.set(Optional<StudioTaskCommandState>.none, for: mode.task.rawValue + ".commandOverride")
+        sessions.setFocus(nil, for: mode.task)
+        if mode == activatedMode { draft = next }
+        return true
+    }
+
+    /// Models ▸ "Use for … by default": records the choice and moves the task onto it now — its
+    /// parked draft, and the open composer when this is the active task — so the next run uses
+    /// it without a restart. An open thread keeps its own model; nil restores the built-in default.
+    package func setPreferredModel(_ modelID: String?, for mode: StudioMode) {
+        sessions.setPreferredModel(modelID, for: mode)
+        let key = mode.task.rawValue + ".draft"
+        if var parked = sessions.value(for: key, default: Optional<StudioDraft>.none) {
+            parked.model = freshDraft(for: mode).model
+            sessions.set(parked, for: key)
+        }
+        guard mode == activatedMode, !(mode.isConversational && activeConversationID != nil) else { return }
+        var next = draft
+        next.model = freshDraft(for: mode).model
+        draft = next
+    }
+
     package func prepareAnalyzeHandoff(to task: StudioTask) {
         pendingAnalyzeHandoff = StudioAnalyzeHandoff.make(to: task, inputPath: draft.inputPath, prompt: draft.prompt)
     }

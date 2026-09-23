@@ -118,6 +118,9 @@ package final class StudioModelStore: ObservableObject {
         metadata = freshMetadata
         storage = freshStorage
         rows = applyingStorage(freshStorage, to: StudioModelCatalogParser.applying(freshMetadata, to: freshRows))
+        // Every surface names models through `StudioModelNaming`; the inventory is where the
+        // titles come from, so publish them with the same snapshot.
+        StudioModelNaming.recordInventoryTitles(rows)
         hasInventory = true
         error = nil
     }

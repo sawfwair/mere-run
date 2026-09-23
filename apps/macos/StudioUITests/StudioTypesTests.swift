@@ -2191,13 +2191,49 @@ final class StudioTypesTests: XCTestCase {
         )
         XCTAssertEqual(
             ModelReadinessParser.state(for: "vision-segment-sam31", modelListOutput: output),
-            .unsupported("vision-segment-sam31 is listed as unsupported on this Mac.")
+            .unsupported("Sam31 can't run on this Mac.")
         )
 
         if case .unknown = ModelReadinessParser.state(for: "missing", modelListOutput: output) {
             // expected
         } else {
             XCTFail("Expected unknown readiness for a model absent from the list.")
+        }
+    }
+
+    /// The readiness card is the first thing a new user meets, so its copy names the model the
+    /// way the Models page does and says what to do next, never a CLI verb.
+    func testReadinessMessagesSpeakPlainlyAndNameTheModel() {
+        XCTAssertEqual(ModelReadinessState.missingModel("video-ltx2-fast").title, "Model needed")
+        XCTAssertEqual(
+            ModelReadinessState.missingModel("video-ltx2-fast").message,
+            "LTX-2 Fast isn't on this Mac yet. Get it once and it stays."
+        )
+        XCTAssertEqual(ModelReadinessState.unsupported("x").title, "Can't run on this Mac")
+        XCTAssertEqual(ModelReadinessState.unknown("x").title, "Couldn't check the model")
+        XCTAssertEqual(ModelReadinessState.notChecked, .unknown("Not checked yet."))
+        XCTAssertEqual(ModelReadinessState.checking.message, "Checking whether the model is on this Mac…")
+        XCTAssertEqual(ModelReadinessState.ready.message, "Ready to run on this Mac.")
+
+        let absent = ModelReadinessParser.state(for: "vision-segment-sam31", modelListOutput: "ID Category Status\n")
+        XCTAssertEqual(
+            absent,
+            .unknown("Sam31 isn't in the model list. Check the model location in Settings, or choose another model.")
+        )
+
+        let memory = StudioModelCapability(
+            modelID: "video-ltx2-fast", isSupported: false, minimumUnifiedMemoryGB: 32,
+            recommendedUnifiedMemoryGB: 64, download: nil, reason: nil
+        )
+        XCTAssertEqual(memory.unavailableMessage, "LTX-2 Fast needs at least 32 GB of unified memory.")
+        let unsupported = StudioModelCapability(
+            modelID: "video-ltx2-fast", isSupported: false, minimumUnifiedMemoryGB: nil,
+            recommendedUnifiedMemoryGB: nil, download: nil, reason: nil
+        )
+        XCTAssertEqual(unsupported.unavailableMessage, "LTX-2 Fast can't run on this Mac.")
+        for message in [MereRunController.capabilitiesUnavailableMessage, MereRunController.modelListUnavailableMessage] {
+            XCTAssertFalse(message.contains("CLI"), message)
+            XCTAssertFalse(message.contains("capabilities"), message)
         }
     }
 

@@ -88,6 +88,86 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertTrue(runner.starts.isEmpty)
     }
 
+    /// Library ▸ "Use these settings" reads the recorded command back through the contract
+    /// bindings, so the prompt, model, and every option land in the draft fields that emit
+    /// them — for the task that ran it, whether or not it is the open one.
+    func testUseTheseSettingsRestoresARunsPromptModelAndOptionsIntoItsTaskDraft() throws {
+        activate(.chat)
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
+        var recorded = template.defaultDraft()
+        recorded.prompt = "a green ceramic bowl"
+        recorded.model = "image-zimage-turbo"
+        recorded.width = 768
+        recorded.height = 512
+        recorded.steps = 9
+        recorded.seed = "4242"
+        recorded.cfgScale = 3.5
+        recorded.outputPath = root.appendingPathComponent("bowl.png").path
+        let request = StudioRunRequest(mode: .createImage, templateID: .imageGenerate, template: template, draft: recorded)
+        let item = library.start(request: request, commandPreview: "fixture")
+
+        XCTAssertTrue(prompt.useSettings(from: item))
+        let parked = controller.taskSessions.value(for: StudioTask.imageGenerate.rawValue + ".draft", default: StudioDraft())
+        XCTAssertEqual(parked.prompt, "a green ceramic bowl")
+        XCTAssertEqual(parked.model, "image-zimage-turbo")
+        XCTAssertEqual(parked.width, 768)
+        XCTAssertEqual(parked.height, 512)
+        XCTAssertEqual(parked.steps, 9)
+        XCTAssertEqual(parked.seed, "4242")
+        XCTAssertEqual(parked.cfgScale, 3.5)
+        XCTAssertEqual(parked.parentID, item.id)
+        XCTAssertEqual(prompt.draft.prompt, "", "the open Chat draft is untouched")
+
+        activate(.createImage)
+        XCTAssertEqual(prompt.draft, parked, "opening the task lands on the restored draft")
+        let replayed = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: prompt.draft)
+        XCTAssertEqual(replayed.draft.width, 768)
+        XCTAssertEqual(replayed.draft.seed, "4242")
+        XCTAssertEqual(replayed.draft.model, "image-zimage-turbo")
+
+        prompt.draft.prompt = "something else"
+        XCTAssertTrue(prompt.useSettings(from: item))
+        XCTAssertEqual(prompt.draft.prompt, "a green ceramic bowl", "the open task's composer updates in place")
+
+        var legacy = item
+        legacy.commandDraft = nil
+        XCTAssertFalse(prompt.useSettings(from: legacy), "a row from before commands were recorded restores nothing")
+        let threadID = thread()
+        let threadItem = try XCTUnwrap(library.items.first { $0.id == threadID })
+        XCTAssertFalse(prompt.useSettings(from: threadItem), "threads are reopened, not restored")
+        XCTAssertTrue(runner.starts.isEmpty)
+    }
+
+    /// Models ▸ "Use for … by default" is what a task starts from: the open composer and the
+    /// task's parked draft move onto it at once, fresh drafts follow, nil restores the built-in
+    /// default, and an open thread keeps the model it was running on.
+    func testModelsPageDefaultMovesTheTaskOntoTheModelNowAndForFreshDrafts() throws {
+        activate(.createImage)
+        let builtIn = prompt.draft.model
+        prompt.setPreferredModel("image-zimage-turbo", for: .createImage)
+        XCTAssertEqual(prompt.draft.model, "image-zimage-turbo")
+        XCTAssertEqual(controller.taskSessions.preferredModel(for: .createImage), "image-zimage-turbo")
+        XCTAssertEqual(prompt.freshDraft(for: .createImage).model, "image-zimage-turbo")
+
+        prompt.draft.model = "hand-picked"
+        activate(.video)
+        prompt.setPreferredModel("image-other", for: .createImage)
+        let parked = controller.taskSessions.value(for: StudioTask.imageGenerate.rawValue + ".draft", default: StudioDraft())
+        XCTAssertEqual(parked.model, "image-other", "a parked task moves too, so the change shows on return")
+        prompt.setPreferredModel(nil, for: .createImage)
+        activate(.createImage)
+        XCTAssertEqual(prompt.draft.model, builtIn, "nil returns the task to the built-in default")
+
+        let threadID = thread()
+        activate(.chat, selected: threadID)
+        XCTAssertEqual(prompt.draft.model, "chosen-model")
+        prompt.setPreferredModel("text-chat-qwen3.6-4b", for: .chat)
+        XCTAssertEqual(prompt.draft.model, "chosen-model", "an open thread keeps its own model")
+        prompt.startNewConversation()
+        XCTAssertEqual(prompt.draft.model, "text-chat-qwen3.6-4b", "a new thread starts on the default")
+        XCTAssertTrue(runner.starts.isEmpty)
+    }
+
     func testLegacyImportKeepsUnvisitedTasksAndFullSessionDraftsTakePrecedence() throws {
         activate(.createImage)
         prompt.draft.prompt = "Current full draft"

@@ -36,7 +36,7 @@ extension StudioPromptTaskController {
             }
         case nil: break
         }
-        let readiness = controller.readinessByMode[mode] ?? .unknown("Readiness has not been checked yet.")
+        let readiness = controller.readinessByMode[mode] ?? .notChecked
         if readiness.blocksRun { throw ValidationError(message: readiness.message) }
     }
 

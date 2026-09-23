@@ -18,11 +18,26 @@ struct StudioFeedActions {
     let remove: (StudioFeedCard) -> Void
     let retry: (StudioLibraryItem) -> Void
     let delete: (StudioLibraryItem) -> Void
-    let pullModel: () -> Void
-    let showDetails: () -> Void
+    /// Put the run's recorded prompt, model, and options back in the composer to tweak.
+    let useSettings: (StudioLibraryItem) -> Void
     let useExample: (String) -> Void
     let attach: () -> Void
     var focus: (StudioLibraryItem, URL) -> Void = { _, _ in }
+}
+
+/// What the readiness card needs to offer the next step itself. The model picker is the
+/// composer's own (same mode, same draft field, same inventory), so "Choose another model" is
+/// the chip's menu rather than a second one; the shell owns getting a model, opening Models,
+/// and checking again.
+struct StudioReadinessActions {
+    let mode: StudioMode
+    let model: Binding<String>
+    let modelInventory: [StudioModelInventoryRow]
+    /// The required model's publisher asks for terms before it is pulled; Models handles that.
+    let requiresUsageTerms: Bool
+    let pullModel: () -> Void
+    let openModels: () -> Void
+    let recheck: () -> Void
 }
 
 /// The feed of generations for a prompt mode: oldest at the top, the newest just above the
@@ -39,6 +54,7 @@ struct StudioFeedCanvas: View {
     /// A run that finished while its card was off-screen; cleared once the card is seen.
     @Binding var newResultID: UUID?
     let actions: StudioFeedActions
+    let readinessActions: StudioReadinessActions
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleCardIDs: Set<UUID> = []
@@ -110,8 +126,7 @@ struct StudioFeedCanvas: View {
                             StudioReadinessCard(
                                 readiness: readiness,
                                 pullJob: pullJob,
-                                onPullModel: actions.pullModel,
-                                onShowDetails: actions.showDetails,
+                                actions: readinessActions,
                                 onCancelPull: { job in actions.cancel(job) }
                             )
                             .id(StudioReadinessCard.feedID)
@@ -473,10 +488,12 @@ struct StudioGenerationCard: View {
             }
             if item.commandDraft != nil, item.templateID != nil {
                 cardIcon("shuffle", help: "Vary with a new seed") { actions.vary(item) }
+                cardIcon("slider.horizontal.3", help: "Use these settings") { actions.useSettings(item) }
             }
             Menu {
                 if item.commandDraft != nil, item.templateID != nil {
                     Button("Rerun with the same settings") { actions.rerun(item) }
+                    Button("Use these settings") { actions.useSettings(item) }
                 }
                 if let primaryURL {
                     Button("Use as input") { actions.useAsInput(primaryURL) }.disabled(!canUseAsInput)
@@ -854,6 +871,11 @@ struct StudioFailureCard: View {
                 }
                 Spacer(minLength: 8)
                 if item.commandDraft != nil, item.templateID != nil {
+                    // A failed run is the one people most want to adjust, so the composer is a
+                    // click away beside the plain retry.
+                    Button("Use these settings") { actions.useSettings(item) }
+                        .buttonStyle(.mereSecondary)
+                        .help("Put this run's prompt, model, and options back in the composer")
                     Button("Retry") { actions.retry(item) }
                         .buttonStyle(.mereSecondary)
                         .help("Run the same command again")
@@ -877,12 +899,13 @@ struct StudioFailureCard: View {
 // MARK: - Readiness card
 
 /// The bottom card while the mode cannot run: the model to get (with the pull's own progress
-/// once it is downloading), or what went wrong checking. Never covers earlier cards.
+/// once it is downloading), or what went wrong checking, each with its next step — get the
+/// model, open it in Models when its publisher asks for terms first, choose another model, or
+/// check again. Never covers earlier cards.
 struct StudioReadinessCard: View {
     let readiness: ModelReadinessState
     let pullJob: Job?
-    let onPullModel: () -> Void
-    let onShowDetails: () -> Void
+    let actions: StudioReadinessActions
     let onCancelPull: (Job) -> Void
 
     static let feedID = UUID()
@@ -906,17 +929,7 @@ struct StudioReadinessCard: View {
                 }
                 Spacer(minLength: 8)
                 if pullJob == nil {
-                    if readiness.canPull {
-                        Button {
-                            onPullModel()
-                        } label: {
-                            Label("Get the model", systemImage: "arrow.down.circle.fill")
-                        }
-                        .buttonStyle(.merePrimary)
-                    }
-                    Button("Details", action: onShowDetails)
-                        .buttonStyle(.mereSecondary)
-                        .help("Show the command this task would run")
+                    nextSteps
                 }
             }
             if let pullJob {
@@ -928,6 +941,60 @@ struct StudioReadinessCard: View {
         .feedPanel(borderColor: statusColor.opacity(0.4))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(readiness.title): \(readiness.message)")
+    }
+
+    /// The buttons for the state, most likely step first. A missing model is fetched here unless
+    /// its terms need reading in Models; an unsupported one is swapped; a failed check is retried.
+    @ViewBuilder private var nextSteps: some View {
+        switch readiness {
+        case .missingModel where actions.requiresUsageTerms:
+            openModelsButton(primary: true)
+            chooseModelMenu
+        case .missingModel:
+            Button {
+                actions.pullModel()
+            } label: {
+                Label("Get the model", systemImage: "arrow.down.circle.fill")
+            }
+            .buttonStyle(.merePrimary)
+            chooseModelMenu
+        case .unsupported:
+            chooseModelMenu
+            openModelsButton(primary: false)
+        case .unknown:
+            Button("Check again", action: actions.recheck)
+                .buttonStyle(.merePrimary)
+                .help("Look for the model again")
+            openModelsButton(primary: false)
+        case .checking, .ready:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder private func openModelsButton(primary: Bool) -> some View {
+        let button = Button("Open in Models", action: actions.openModels)
+            .help(primary ? "Read the model's terms and get it from Models" : "See this model in Models")
+        if primary {
+            button.buttonStyle(.merePrimary)
+        } else {
+            button.buttonStyle(.mereSecondary)
+        }
+    }
+
+    /// The composer's own picker under a plain title, so picking here is the same as picking on
+    /// the model chip and readiness re-checks the new choice.
+    private var chooseModelMenu: some View {
+        StudioModelPicker(
+            mode: actions.mode,
+            model: actions.model,
+            modelInventory: actions.modelInventory,
+            onShowModels: actions.openModels
+        ) {
+            MereSecondaryMenuLabel("Choose another model", systemImage: "chevron.up.chevron.down")
+        }
+        .fixedSize()
+        .help("Pick a different model for this task")
+        .accessibilityLabel("Choose another model")
     }
 
     private var statusImage: String {

@@ -1031,6 +1031,25 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
 
     package var isStarred: Bool { isFavorite == true }
 
+    /// The model this row ran with: a thread records it directly, a run carries it in its draft,
+    /// and a row from before drafts were recorded still names it in its `--model` argument.
+    package var recordedModelID: String? {
+        if let model, !model.isBlank { return model }
+        if let model = commandDraft?.model, !model.isBlank { return model }
+        return Self.modelFlagValue(in: commandPreview)
+    }
+
+    /// The value after `--model` (or `-m`, or `--model=`) in a command line, if any.
+    package static func modelFlagValue(in commandPreview: String) -> String? {
+        let tokens = commandPreview.split(whereSeparator: \.isWhitespace).map(String.init)
+        if let flag = tokens.firstIndex(where: { $0 == "--model" || $0 == "-m" }), flag + 1 < tokens.count {
+            return tokens[flag + 1]
+        }
+        return tokens.lazy.compactMap { token in
+            token.hasPrefix("--model=") ? String(token.dropFirst("--model=".count)) : nil
+        }.first
+    }
+
     package var displayTitle: String {
         if let customTitle, !customTitle.isBlank { return customTitle }
         if let firstUser = messages?.first(where: { $0.role == .user })?.content,
@@ -1108,30 +1127,36 @@ package enum ModelReadinessState: Equatable {
         return false
     }
 
+    /// The readiness card's heading. Plain words: the card is the first thing a new user meets.
     package var title: String {
         switch self {
-        case .checking: return "Checking"
+        case .checking: return "Checking the model"
         case .ready: return "Ready"
         case .missingModel: return "Model needed"
-        case .unsupported: return "Unsupported"
-        case .unknown: return "Not checked"
+        case .unsupported: return "Can't run on this Mac"
+        case .unknown: return "Couldn't check the model"
         }
     }
 
+    /// One sentence under the heading. Models are named the way the Models page names them;
+    /// the id stays in the model chip's tooltip.
     package var message: String {
         switch self {
         case .checking:
-            return "Checking local model availability."
+            return "Checking whether the model is on this Mac…"
         case .ready:
-            return "This mode is ready to run locally."
+            return "Ready to run on this Mac."
         case .missingModel(let model):
-            return "Download \(model) before running this mode."
+            return "\(StudioModelNaming.displayName(model)) isn't on this Mac yet. Get it once and it stays."
         case .unsupported(let reason):
             return reason
         case .unknown(let reason):
             return reason
         }
     }
+
+    /// The state before any check has run.
+    package static let notChecked = ModelReadinessState.unknown("Not checked yet.")
 }
 
 package struct StudioModelCapability: Equatable {
@@ -1147,10 +1172,11 @@ package struct StudioModelCapability: Equatable {
         if let reason, !reason.isBlank {
             return reason
         }
+        let name = StudioModelNaming.displayName(modelID)
         if let minimumUnifiedMemoryGB {
-            return "Requires at least \(minimumUnifiedMemoryGB) GB unified memory."
+            return "\(name) needs at least \(minimumUnifiedMemoryGB) GB of unified memory."
         }
-        return "\(modelID) is not supported on this Mac."
+        return "\(name) can't run on this Mac."
     }
 }
 
@@ -1893,7 +1919,7 @@ package enum ModelReadinessParser {
 
             let normalized = row.lowercased()
             if normalized.contains("unsupported") {
-                return .unsupported("\(modelID) is listed as unsupported on this Mac.")
+                return .unsupported("\(StudioModelNaming.displayName(modelID)) can't run on this Mac.")
             }
             if normalized.contains("installed") || normalized.contains("ready") || normalized.contains("present") {
                 return .ready
@@ -1901,7 +1927,10 @@ package enum ModelReadinessParser {
             return .missingModel(modelID)
         }
 
-        return .unknown("Run model capabilities or configure model sources to check \(modelID).")
+        return .unknown(
+            "\(StudioModelNaming.displayName(modelID)) isn't in the model list. "
+                + "Check the model location in Settings, or choose another model."
+        )
     }
 }
 

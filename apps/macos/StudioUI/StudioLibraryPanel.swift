@@ -28,6 +28,10 @@ struct StudioLibraryPanel: View {
     let onExport: ([StudioLibraryItem]) -> Void
     let onRetry: (StudioLibraryItem) -> Void
     let onEdit: (StudioLibraryItem) -> Void
+    /// "Use these settings": put the run's recorded prompt, model, and options in its task's composer.
+    let onUseSettings: (StudioLibraryItem) -> Void
+    /// "Compare": focus the first image result with the second beside it.
+    let onCompare: (StudioLibraryItem, StudioLibraryItem) -> Void
     /// Extra leading space for the header while the window's traffic lights sit over it.
     var leadingInset: CGFloat = 0
 
@@ -368,6 +372,10 @@ struct StudioLibraryPanel: View {
     @ViewBuilder
     private func menu(for item: StudioLibraryItem) -> some View {
         if batch.count > 1, batch.contains(item.id) {
+            if let pair = comparablePair {
+                Button("Compare") { onCompare(pair.0, pair.1) }
+                Divider()
+            }
             Button("Reveal \(batch.count) in Finder") { onReveal(urls(in: batch)) }
             Button("Save \(batch.count) to…") { onExport(items(in: batch)) }
             Divider()
@@ -385,6 +393,7 @@ struct StudioLibraryPanel: View {
             }
             if item.commandDraft != nil, item.templateID != nil {
                 Divider()
+                Button("Use these settings") { onUseSettings(item) }
                 Button("Run again") { onRetry(item) }
                 Button("Edit command…") { onEdit(item) }
             }
@@ -403,6 +412,11 @@ struct StudioLibraryPanel: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
             Spacer(minLength: 0)
             // Icons, not labels: three words do not fit a 248pt column beside the count.
+            if let pair = comparablePair {
+                batchAction(systemImage: "rectangle.split.2x1", label: "Compare", tint: MereRunTheme.textSecondary) {
+                    onCompare(pair.0, pair.1)
+                }
+            }
             batchAction(systemImage: "folder", label: "Reveal in Finder", tint: MereRunTheme.textSecondary) {
                 onReveal(urls(in: batch))
             }
@@ -494,6 +508,16 @@ struct StudioLibraryPanel: View {
 
     private func urls(in ids: Set<UUID>) -> [URL] {
         items(in: ids).compactMap(\.outputURL)
+    }
+
+    /// The two rows a batch can compare: exactly two, both finished with a picture. In the
+    /// column's order, so the earlier run is the "A" side.
+    private var comparablePair: (StudioLibraryItem, StudioLibraryItem)? {
+        let selected = items(in: batch)
+        guard selected.count == 2, batch.count == 2,
+              selected.allSatisfy({ $0.status == .completed && StudioLibraryPresenter.fileKind(of: $0) == .image })
+        else { return nil }
+        return (selected[0], selected[1])
     }
 
     // MARK: - Rename

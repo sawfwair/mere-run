@@ -73,6 +73,32 @@ final class StudioLibraryPresentationTests: XCTestCase {
         )
     }
 
+    /// "qwen" and "failed" are how people remember a run, so both find it: the model by the
+    /// name the app shows or its exact id, wherever the row recorded it, and the status word.
+    func testSearchMatchesTheModelByNameOrIDAndTheStatusWord() {
+        var draft = CommandDraft()
+        draft.model = "text-chat-qwen3.6-4b"
+        let drafted = item(mode: .createImage, templateID: .imageGenerate, output: "a.png", prompt: "harbor", commandDraft: draft)
+        let legacy = item(
+            mode: .createImage, templateID: .imageGenerate, output: "b.png", prompt: "harbor",
+            commandPreview: "mere.run image generate --model image-zimage-nano --steps 4"
+        )
+        let failed = item(mode: .video, templateID: .videoGenerate, output: nil, prompt: "harbor", status: .failed)
+        let items = [drafted, legacy, failed]
+
+        func ids(_ query: String) -> [UUID] {
+            StudioLibraryPresenter.filter(items, with: StudioLibraryFilter(scope: .all, query: query)).map(\.id)
+        }
+        XCTAssertEqual(ids("Qwen3.6"), [drafted.id], "the display name matches")
+        XCTAssertEqual(ids("text-chat-qwen"), [drafted.id], "so does the exact id")
+        XCTAssertEqual(ids("zimage nano"), [legacy.id], "a row from before drafts is found through its --model argument")
+        XCTAssertEqual(ids("failed"), [failed.id])
+        XCTAssertEqual(ids("harbor").count, 3, "prompt search still works alongside")
+        XCTAssertEqual(legacy.recordedModelID, "image-zimage-nano")
+        XCTAssertEqual(StudioLibraryItem.modelFlagValue(in: "mere.run text chat --model=text-chat-x -q"), "text-chat-x")
+        XCTAssertNil(StudioLibraryItem.modelFlagValue(in: "mere.run text chat"))
+    }
+
     // MARK: - Multi-selection
 
     func testPlainClickReplacesTheBatchAndOpensTheRow() {
@@ -250,7 +276,10 @@ final class StudioLibraryPresentationTests: XCTestCase {
         templateID: CommandTemplateID,
         output: String?,
         outputText: String? = nil,
-        prompt: String = "prompt"
+        prompt: String = "prompt",
+        status: StudioLibraryStatus = .completed,
+        commandPreview: String = "mere.run",
+        commandDraft: CommandDraft? = nil
     ) -> StudioLibraryItem {
         StudioLibraryItem(
             id: UUID(),
@@ -260,11 +289,12 @@ final class StudioLibraryPresentationTests: XCTestCase {
             outputURL: output.map { URL(fileURLWithPath: "/tmp/\($0)") },
             createdAt: Date(),
             updatedAt: Date(),
-            status: .completed,
+            status: status,
             exitCode: 0,
-            commandPreview: "mere.run",
+            commandPreview: commandPreview,
             outputText: outputText,
-            templateID: templateID
+            templateID: templateID,
+            commandDraft: commandDraft
         )
     }
 }

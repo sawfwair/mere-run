@@ -43,6 +43,23 @@ The format is based on Keep a Changelog.
   after a relaunch cleared the runtime API key from the Keychain and could revert
   a host or port changed in Settings. Agent readiness is now read when the
   Agents section opens instead of every 16 seconds for the life of the app.
+- Name models the same way everywhere in Studio: the model chip, the thread
+  list, the Adapters page, the Library, and the readiness card now print the
+  title the Models page prints, and fall back to a readable name only for ids
+  the inventory has not named.
+- Add "Use these settings" to Library rows and result cards, which opens the
+  run's task with its recorded prompt, model, and options in the composer to
+  tweak and run again; Run again and Edit command… stay for exact reruns.
+- Let Library search find runs by model name or id and by status word, such as
+  "failed" or "running".
+- Offer Compare from the Library: batch two finished image runs and the bar and
+  context menu open them side by side in the result workspace.
+- Let Models ▸ Installed make a model the default for a task ("Use for Chat by
+  default"); the task's composer moves onto it at once and fresh drafts start
+  from it.
+- Rewrite the readiness card in plain language and replace its Details button
+  with the next step: Get the model, Open in Models when the publisher's terms
+  come first, Choose another model when the Mac cannot run it, or Check again.
 
 ## 0.55.0 - 2026-09-22
 

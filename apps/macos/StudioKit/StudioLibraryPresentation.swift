@@ -108,7 +108,16 @@ package enum StudioLibraryPresenter {
             return item.displayTitle.lowercased().contains(query)
                 || item.displayKindTitle.lowercased().contains(query)
                 || item.prompt.lowercased().contains(query)
+                || matchesModel(item, query: query)
+                || item.status.rawValue.contains(query)
         }
+    }
+
+    /// "qwen" finds the runs that used a Qwen model, by the name the app shows or the exact id.
+    private static func matchesModel(_ item: StudioLibraryItem, query: String) -> Bool {
+        guard let modelID = item.recordedModelID else { return false }
+        return modelID.lowercased().contains(query)
+            || StudioModelNaming.displayName(modelID).lowercased().contains(query)
     }
 
     /// The rows the column shows before the kind, favorites, and search filters narrow them — the

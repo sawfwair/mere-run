@@ -191,8 +191,9 @@ struct StudioModelUsageSummary: Equatable {
 /// Pure presentation rules for the Installed page: filtering, the row meta line, chips,
 /// Library-derived facts, and the job bar. Everything here is unit-testable without a view.
 enum StudioModelsPresenter {
+    /// The one naming rule, so the list, the composer chip, and the Library agree.
     static func displayName(_ row: StudioModelInventoryRow) -> String {
-        row.title ?? row.id
+        StudioModelNaming.displayName(row)
     }
 
     static func family(of row: StudioModelInventoryRow) -> StudioModelFamily {
@@ -265,17 +266,38 @@ enum StudioModelsPresenter {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// Domain titles whose prompt task defaults to this model ("Default for Image").
-    static func defaultDomainTitles(for modelID: String) -> [String] {
+    /// Domain titles whose prompt task defaults to this model ("Default for Image"), skipping a
+    /// mode the user pointed at another model, and the modes the user made this model the
+    /// default for ("Your default for Code"). A user choice is per mode because Chat and Code
+    /// share a domain but not a model.
+    static func defaultTitles(for modelID: String, preferred: [StudioMode: String]) -> [String] {
         var titles: [String] = []
         for task in StudioTask.allCases {
-            guard let mode = task.mode,
-                  let template = CommandCatalog.template(id: mode.defaultTemplateID),
+            guard let mode = task.mode else { continue }
+            if let chosen = preferred[mode] {
+                if chosen == modelID { titles.append("Your default for \(defaultTargetTitle(for: mode))") }
+                continue
+            }
+            guard let template = CommandCatalog.template(id: mode.defaultTemplateID),
                   template.defaultModel == modelID else { continue }
-            let title = task.domain.title
+            let title = "Default for \(task.domain.title)"
             if !titles.contains(title) { titles.append(title) }
         }
         return titles
+    }
+
+    /// The prompt modes whose model chip offers this row: the modes "Use for … by default" can
+    /// point at it.
+    static func defaultCandidateModes(for row: StudioModelInventoryRow) -> [StudioMode] {
+        StudioMode.allCases.filter { $0.modelCategories.contains(row.category) }
+    }
+
+    /// How "Use for … by default" names a mode: by its domain where the domain has one prompt
+    /// task ("Image", not "Create Image"; "Voice", not "Speak"), by the mode where several share
+    /// a domain ("Chat" and "Code"; "Read Image", "Find", "Segment", "Track").
+    static func defaultTargetTitle(for mode: StudioMode) -> String {
+        let siblings = StudioTask.allCases.filter { $0.domain == mode.task.domain && $0.mode != nil }
+        return siblings.count == 1 ? mode.task.domain.title : mode.title
     }
 
     /// Runs from the Library that used this model: conversation threads record it directly,
@@ -288,12 +310,7 @@ enum StudioModelsPresenter {
 
     static func uses(_ modelID: String, item: StudioLibraryItem) -> Bool {
         if item.model == modelID || item.commandDraft?.model == modelID { return true }
-        let tokens = item.commandPreview.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard let flag = tokens.firstIndex(where: { $0 == "--model" || $0 == "-m" }),
-              flag + 1 < tokens.count else {
-            return tokens.contains { $0 == "--model=\(modelID)" }
-        }
-        return tokens[flag + 1] == modelID
+        return StudioLibraryItem.modelFlagValue(in: item.commandPreview) == modelID
     }
 
     /// "1:31 PM · 214 runs" today, "Aug 30 · 3 runs" otherwise.

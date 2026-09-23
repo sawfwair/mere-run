@@ -74,6 +74,8 @@ private struct StudioWorkspaceView: View {
     /// A run whose user-visible destination could not be created, explained once per launch.
     @State private var outputFallbackNotice: String?
     @State private var outputFallbackAnnounced = false
+    /// The "B" side Library ▸ Compare asked for, handed to the focused result once it opens.
+    @State private var pendingComparison: StudioResultSelection?
     @ObservedObject private var models: StudioModelStore
     private var modelInventory: [StudioModelInventoryRow] { models.rows }
     private var modelInventorySummary: StudioModelInventorySummary? {
@@ -190,7 +192,22 @@ private struct StudioWorkspaceView: View {
     }
 
     private var readiness: ModelReadinessState {
-        controller.readinessByMode[mode] ?? .unknown("Readiness has not been checked yet.")
+        controller.readinessByMode[mode] ?? .notChecked
+    }
+
+    /// The readiness card's next steps for the current mode: the composer's model field and
+    /// inventory (so "Choose another model" is the chip's menu), whether the required model's
+    /// terms send the user to Models first, and the shell's pull, navigate, and recheck.
+    private var readinessActions: StudioReadinessActions {
+        StudioReadinessActions(
+            mode: mode,
+            model: $prompt.draft.model,
+            modelInventory: modelInventory,
+            requiresUsageTerms: modelUsageTermsByID[StudioCommandAdapter.requiredModel(for: mode, draft: draft)] != nil,
+            pullModel: pullModel,
+            openModels: { navigation.open(task: .modelsInstalled) },
+            recheck: refreshReadiness
+        )
     }
 
     /// The seed the mode's most recent run was queued with, for the seed chip's "Reuse last".
@@ -531,6 +548,8 @@ private struct StudioWorkspaceView: View {
             onExport: exportLibraryItems,
             onRetry: retryLibraryItem,
             onEdit: editLibraryItem,
+            onUseSettings: useLibraryItemSettings,
+            onCompare: compareLibraryItems,
             leadingInset: windowChromeInset
         )
     }
@@ -695,7 +714,8 @@ private struct StudioWorkspaceView: View {
                 onModelsChanged: refreshReadiness,
                 adapterTargetTitle: mode.destination.domain.title,
                 onUseAdapter: applyAdapter,
-                onTrain: openTraining
+                onTrain: openTraining,
+                onSetDefaultModel: setDefaultModel
             )
         case .modelsLocations:
             StudioModelLocationsView(onLocationsChanged: {
@@ -855,7 +875,8 @@ private struct StudioWorkspaceView: View {
         VStack(spacing: 0) {
             if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
                 StudioResultWorkspaceView(item: item, url: selection.url, items: library.items,
-                    onClose: { focusedResult = nil; promptFocused = true }, onVary: varyLibraryItem,
+                    initialComparison: pendingComparison,
+                    onClose: { focusedResult = nil; pendingComparison = nil; promptFocused = true }, onVary: varyLibraryItem,
                     onSave: saveOutput, onContinue: continueResult)
             } else if mode.isConversational {
                 converseSurface
@@ -937,6 +958,7 @@ private struct StudioWorkspaceView: View {
                 readiness: readiness,
                 pullJob: activePullJob,
                 actions: feedActions,
+                readinessActions: readinessActions,
                 analyze: analyzeActions
             )
         } else {
@@ -947,7 +969,8 @@ private struct StudioWorkspaceView: View {
                 pullJob: activePullJob,
                 highlightedID: highlightedCardID,
                 newResultID: $newResultID,
-                actions: feedActions
+                actions: feedActions,
+                readinessActions: readinessActions
             )
         }
     }
@@ -968,6 +991,7 @@ private struct StudioWorkspaceView: View {
         }
         navigation.selectedLibraryID = item.id
         controller.taskSessions.rememberSelection(item.id, for: mode)
+        pendingComparison = nil
         focusedResult = StudioResultSelection(itemID: item.id, url: url)
     }
 
@@ -976,6 +1000,54 @@ private struct StudioWorkspaceView: View {
         navigation.selectedLibraryID = nil
         navigation.open(task: action.task)
         promptFocused = true
+    }
+
+    /// Library ▸ "Use these settings": the run's task opens on its recorded prompt, model, and
+    /// options, ready to tweak. Another task's run switches there first; `activateMode` then
+    /// reads the parked draft this wrote.
+    private func useLibraryItemSettings(_ item: StudioLibraryItem) {
+        guard prompt.useSettings(from: item) else {
+            studioError = "This older Library item does not include its settings."
+            return
+        }
+        studioError = nil
+        libraryOverlay = false
+        navigation.selectedLibraryID = item.id
+        controller.taskSessions.rememberSelection(item.id, for: item.mode)
+        if item.mode != mode || !showsPromptWorkspace {
+            navigation.open(destination: item.mode.destination)
+        } else {
+            refreshReadiness()
+        }
+        promptFocused = true
+    }
+
+    /// Library ▸ Compare on two finished image runs: focuses the first with the second beside
+    /// it, the same view Focus ▸ Compare reaches, so the pair is one click from the column.
+    private func compareLibraryItems(_ first: StudioLibraryItem, _ second: StudioLibraryItem) {
+        func picture(of item: StudioLibraryItem) -> URL? {
+            item.allArtifactURLs.first { StudioOutputFileKind.classify($0) == .image && FileManager.default.fileExists(atPath: $0.path) }
+        }
+        guard let firstURL = picture(of: first), let secondURL = picture(of: second) else {
+            studioError = "Compare needs two image results that are still on disk."
+            return
+        }
+        studioError = nil
+        libraryOverlay = false
+        navigation.selectedLibraryID = first.id
+        controller.taskSessions.rememberSelection(first.id, for: first.mode)
+        pendingComparison = StudioResultSelection(itemID: second.id, url: secondURL)
+        controller.taskSessions.setFocus(StudioResultSelection(itemID: first.id, url: firstURL), for: first.mode.task)
+        if first.mode != mode || !showsPromptWorkspace {
+            navigation.open(destination: first.mode.destination)
+        }
+    }
+
+    /// Models ▸ "Use for … by default": records the choice and moves the mode's composer onto
+    /// it now, then re-checks readiness for the model that will actually run.
+    private func setDefaultModel(_ modelID: String?, for defaultMode: StudioMode) {
+        prompt.setPreferredModel(modelID, for: defaultMode)
+        if defaultMode == mode { refreshReadiness() }
     }
 
     private var analyzeActions: StudioAnalyzeActions {
@@ -996,10 +1068,7 @@ private struct StudioWorkspaceView: View {
             remove: removeQueued,
             retry: retryLibraryItem,
             delete: { deleteLibraryItem($0.id) },
-            pullModel: pullModel,
-            showDetails: {
-                if !navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
-            },
+            useSettings: useLibraryItemSettings,
             useExample: useExamplePrompt,
             attach: chooseAttachment,
             focus: focusResult
@@ -1019,8 +1088,7 @@ private struct StudioWorkspaceView: View {
             modelInventory: modelInventory,
             model: $prompt.draft.model,
             systemPrompt: $prompt.draft.secondaryText,
-            onPullModel: pullModel,
-            onShowDetails: { openConsole() },
+            readinessActions: readinessActions,
             onShowModels: { navigation.open(task: .modelsInstalled) },
             onCopy: copyToClipboard,
             onRetry: retryLastTurn,

@@ -1,13 +1,40 @@
 import Foundation
 
 /// How a model id reads to a person. One place, so the composer chip, the Converse thread
-/// header, the inspector, the Models page, and the Activity popover all print the same name for
-/// the same id. The exact id stays in tooltips and in the Command view, so the friendly name
-/// never hides what the CLI actually expects.
+/// header, the inspector, the Models page, the Adapters page, the readiness card, and the
+/// Activity popover all print the same name for the same id: the title the model inventory
+/// reports when it is known, else a name formatted from the id. The exact id stays in tooltips
+/// and in the Command view, so the friendly name never hides what the CLI actually expects.
 package enum StudioModelNaming {
     /// The mode's template default, shown as "Auto".
     package static func defaultModelID(for mode: StudioMode) -> String {
         CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
+    }
+
+    // MARK: Inventory titles
+
+    /// The titles `model capabilities` reported, keyed by id. `StudioModelStore` records them
+    /// with every inventory snapshot, so a surface that has no inventory in hand — a Library
+    /// chip, the thread list, the Activity popover, a readiness message — still prints the same
+    /// name the Models page does. Static because the id-to-name rule has no owner of its own;
+    /// the lock is what lets a presenter read it off the main actor.
+    nonisolated(unsafe) private static var inventoryTitles: [String: String] = [:]
+    private static let inventoryTitlesLock = NSLock()
+
+    /// Replaces the known titles with `rows`'. An inventory refresh publishes one complete
+    /// snapshot, so this replaces rather than merges.
+    package static func recordInventoryTitles(_ rows: [StudioModelInventoryRow]) {
+        let titles = Dictionary(rows.compactMap { row in row.title.map { (row.id, $0) } }, uniquingKeysWith: { first, _ in first })
+        inventoryTitlesLock.withLock { inventoryTitles = titles }
+    }
+
+    package static func inventoryTitle(for id: String) -> String? {
+        inventoryTitlesLock.withLock { inventoryTitles[id] }
+    }
+
+    /// The name for an inventory row: its own title, else the id formatted.
+    package static func displayName(_ row: StudioModelInventoryRow) -> String {
+        row.title ?? formattedName(row.id)
     }
 
     /// The model id a draft actually runs with: its explicit model, else the mode's template
@@ -24,11 +51,16 @@ package enum StudioModelNaming {
         return resolved.isEmpty ? "Auto" : displayName(resolved)
     }
 
-    /// A human-facing label for a model id: drop the modality/category prefix and title-case the
-    /// distinctive remainder, keeping the casing the model cards print
-    /// ("text-agent-deepseek-v4-flash" → "Deepseek V4 Flash", "text-chat-qwen3.6-4b" →
-    /// "Qwen3.6 4B", "vision-chat-qwen3.6-vl-4b" → "Qwen3.6-VL 4B").
+    /// A human-facing label for a model id: the inventory's title when one has been recorded,
+    /// else the id with its modality/category prefix dropped and the distinctive remainder
+    /// title-cased, keeping the casing the model cards print ("text-agent-deepseek-v4-flash" →
+    /// "Deepseek V4 Flash", "text-chat-qwen3.6-4b" → "Qwen3.6 4B", "vision-chat-qwen3.6-vl-4b"
+    /// → "Qwen3.6-VL 4B").
     package static func displayName(_ id: String) -> String {
+        inventoryTitle(for: id) ?? formattedName(id)
+    }
+
+    private static func formattedName(_ id: String) -> String {
         let leaf = id.components(separatedBy: "/").last ?? id
         var core = leaf
         for prefix in categoryPrefixes where core.hasPrefix(prefix) {

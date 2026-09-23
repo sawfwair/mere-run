@@ -788,6 +788,85 @@ final class StudioSnapshotTests: XCTestCase {
             name: "completion-compact-command", settle: 2, afterAppear: { navigation.toggleCommandColumn(for: .imageGenerate) })
     }
 
+    /// Compare, "Use these settings", and the readiness card's next steps, light and dark. First
+    /// the Library column with its two newest image rows batched, so the bar offers Compare. Then
+    /// the feed with a finished mockup run (its card carries the settings icon beside Vary), a
+    /// failed run with "Use these settings" beside Retry, and the readiness card for a model that
+    /// is not on this Mac — Get the model and Choose another model — followed by the same card
+    /// when the model's terms send the user to Models first, when the Mac cannot run it, and when
+    /// the check failed.
+    func testLibraryReuseAndReadinessSnapshots() throws {
+        let fidelity = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .mockup,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses)
+        )
+        defer { fidelity.tearDown() }
+
+        // The column first, while its two newest rows are both finished pictures.
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "a ceramic coffee mug in soft morning light"
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.createImage: draft])
+                .environmentObject(fidelity.controller)
+                .environmentObject(fidelity.library)
+                .environmentObject(navigation)
+                .environment(\.studioLibrarySeed, StudioLibrarySeed(viewMode: .list, batchCount: 2))
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fidelity.write(
+                view, size: Self.fidelitySize, appearance: appearance,
+                name: "library-compare-batch-\(appearance.rawValue)", settle: 3.0
+            )
+        }
+
+        try fidelity.seedFailedImageRun()
+        let inventory = StudioModelInventoryParser.rows(from: ModelsInventoryScript.modelList)
+
+        func feed(_ readiness: ModelReadinessState, requiresUsageTerms: Bool = false) -> some View {
+            let cards = StudioFeedCardBuilder.cards(items: fidelity.library.items, mode: .createImage) { _ in nil }
+            let shown = [cards.last { $0.kind == .generation }, cards.first { $0.item.status == .failed }].compactMap { $0 }
+            let noop: (StudioLibraryItem) -> Void = { _ in }
+            return StudioFeedCanvas(
+                mode: .createImage,
+                cards: shown,
+                readiness: readiness,
+                pullJob: nil,
+                highlightedID: nil,
+                newResultID: .constant(nil),
+                actions: StudioFeedActions(
+                    vary: noop, rerun: noop, useAsInput: { _ in }, saveTo: { _ in }, cancel: { _ in },
+                    remove: { _ in }, retry: noop, delete: noop, useSettings: noop, useExample: { _ in }, attach: {}
+                ),
+                readinessActions: StudioReadinessActions(
+                    mode: .createImage, model: .constant("image-zimage-turbo"), modelInventory: inventory,
+                    requiresUsageTerms: requiresUsageTerms, pullModel: {}, openModels: {}, recheck: {}
+                )
+            )
+            .frame(width: 900, height: 640)
+            .background(MereRunTheme.background)
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try fidelity.write(
+                feed(.missingModel("image-zimage-turbo")), size: CGSize(width: 900, height: 640),
+                appearance: appearance, name: "library-reuse-readiness-missing-\(appearance.rawValue)", settle: 2
+            )
+        }
+        let variants: [(name: String, readiness: ModelReadinessState, terms: Bool)] = [
+            ("terms", .missingModel("image-zimage-turbo"), true),
+            ("unsupported", .unsupported("Zimage Turbo needs at least 32 GB of unified memory."), false),
+            ("unknown", .unknown(MereRunController.modelListUnavailableMessage), false),
+        ]
+        for variant in variants {
+            try fidelity.write(
+                feed(variant.readiness, requiresUsageTerms: variant.terms), size: CGSize(width: 900, height: 640),
+                appearance: .light, name: "library-reuse-readiness-\(variant.name)-light", settle: 2
+            )
+        }
+    }
+
     private static func snapshotDirectory() -> URL? {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_STUDIO_SNAPSHOT_DIR"],
               !path.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -1339,6 +1418,37 @@ private final class SnapshotFixture {
         if let mug = library.items.last(where: { $0.mode == .createImage }) {
             library.setFavorite(id: mug.id, isFavorite: true)
         }
+    }
+
+    /// One Image ▸ Generate run that failed a few minutes ago with its command recorded, so the
+    /// feed's failed card offers "Use these settings" beside Retry.
+    func seedFailedImageRun() throws {
+        guard let template = CommandCatalog.template(id: .imageGenerate) else {
+            throw StudioSnapshotError.noContentView
+        }
+        var draft = template.defaultDraft()
+        draft.prompt = "a lighthouse keeper's desk, brass instruments, late afternoon"
+        draft.model = "image-zimage-turbo"
+        draft.width = 1_536
+        draft.height = 1_024
+        draft.steps = 9
+        draft.seed = "8181"
+        // Earlier than the mockup's finished runs, so the column's first two rows stay pictures.
+        library.upsert(StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: draft.prompt,
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: Self.mockupTime(hour: 8, minute: 40),
+            updatedAt: Self.mockupTime(hour: 8, minute: 41),
+            status: .failed,
+            exitCode: 1,
+            commandPreview: "mere.run " + template.arguments(from: draft).joined(separator: " "),
+            outputText: "error: image-zimage-turbo is not installed; run `mere.run model pull image-zimage-turbo`",
+            templateID: .imageGenerate,
+            commandDraft: draft
+        ))
     }
 
     /// Runs the Models detail column reads: image generations with the seeded default model

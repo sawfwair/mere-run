@@ -67,6 +67,36 @@ extension ButtonStyle where Self == MereSecondaryButtonStyle {
     package static var mereSecondary: MereSecondaryButtonStyle { MereSecondaryButtonStyle() }
 }
 
+/// The secondary button's chrome on a control that is not a `Button` — a `Menu`'s label — so a
+/// menu beside a secondary button reads as its sibling. The menu shows its own open state, so
+/// the label carries no hover or press feedback of its own.
+package struct MereSecondaryMenuLabel: View {
+    let title: String
+    let systemImage: String
+
+    package init(_ title: String, systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    package var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .padding(.horizontal, MereRunTheme.Spacing.sm)
+            .frame(minHeight: 26)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                    .fill(MereRunTheme.surfaceRaised)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                            .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
+                    }
+            }
+            .contentShape(Rectangle())
+    }
+}
+
 /// Icon-only buttons that acknowledge the pointer: a soft fill on hover, a slight press dip.
 /// Hover feedback is what separates a native-feeling control from a static glyph.
 package struct MereIconButtonStyle: ButtonStyle {

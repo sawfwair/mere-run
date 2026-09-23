@@ -18,8 +18,7 @@ struct StudioConverseView: View {
     /// that turn; earlier turns keep what they ran with.
     @Binding var model: String
     @Binding var systemPrompt: String
-    let onPullModel: () -> Void
-    let onShowDetails: () -> Void
+    let readinessActions: StudioReadinessActions
     let onShowModels: () -> Void
     let onCopy: (String) -> Void
     let onRetry: () -> Void
@@ -53,8 +52,7 @@ struct StudioConverseView: View {
                     StudioReadinessCard(
                         readiness: readiness,
                         pullJob: nil,
-                        onPullModel: onPullModel,
-                        onShowDetails: onShowDetails,
+                        actions: readinessActions,
                         onCancelPull: { _ in }
                     )
                     .frame(maxWidth: StudioThreadHeader.maxWidth)
@@ -90,7 +88,7 @@ struct StudioConverseView: View {
                 .lineLimit(2)
             Spacer(minLength: 8)
             if error == nil, readiness.canPull {
-                Button("Get the model", action: onPullModel)
+                Button("Get the model", action: readinessActions.pullModel)
                     .buttonStyle(.mereSecondary)
             }
         }

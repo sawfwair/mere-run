@@ -48,7 +48,7 @@ struct StudioModelPicker<Label: View>: View {
     private func modelRow(_ row: StudioModelInventoryRow) -> some View {
         Toggle(isOn: Binding(get: { row.id == model }, set: { _ in model = row.id })) {
             SwiftUI.Label(
-                StudioModelNaming.displayName(row.id),
+                StudioModelNaming.displayName(row),
                 systemImage: row.isInstalled ? "internaldrive" : "arrow.down.circle"
             )
         }

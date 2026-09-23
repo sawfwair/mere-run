@@ -4,8 +4,8 @@ import StudioKit
 import SwiftUI
 
 /// The Command Console's window identity, shared by the scene that declares it and by every
-/// surface that opens it: the toolbar, View ▸ Command Console, readiness "Details", Library
-/// "Edit command", and the adapter fallbacks. There is no docked or detached variant any more.
+/// surface that opens it: the toolbar, Window ▸ Command Console, Library "Edit command", and
+/// the adapter fallbacks. There is no docked or detached variant any more.
 package enum StudioConsoleWindow {
     package static let id = "console"
     package static let title = "Command Console"

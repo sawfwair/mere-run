@@ -49,7 +49,9 @@ struct StudioResultWorkspaceView: View {
         }
         .background(MereRunTheme.background)
         .onAppear { comparison = initialComparison }
-        .onChange(of: url) { _, _ in comparison = nil; resetViewport() }
+        // Library ▸ Compare while a result is already focused re-points the second pane.
+        .onChange(of: initialComparison) { _, next in comparison = next; resetViewport() }
+        .onChange(of: url) { _, _ in comparison = initialComparison; resetViewport() }
         .onChange(of: items) { _, items in
             if let comparison, !items.contains(where: { $0.id == comparison.itemID && $0.allArtifactURLs.contains(comparison.url) }) {
                 self.comparison = nil
@@ -160,7 +162,9 @@ struct StudioResultWorkspaceView: View {
 
     private var provenance: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(item.model ?? item.mode.title).font(.caption).lineLimit(1)
+            Text(item.recordedModelID.map(StudioModelNaming.displayName) ?? item.mode.title)
+                .font(.caption).lineLimit(1)
+                .help(item.recordedModelID ?? item.mode.title)
             if let parentID = item.parentID, let parent = items.first(where: { $0.id == parentID }) {
                 Text("From \(parent.displayTitle)").font(.caption).foregroundStyle(MereRunTheme.textSecondary).lineLimit(1)
             }
