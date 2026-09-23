@@ -202,6 +202,31 @@ final class StudioSnapshotTests: XCTestCase {
         )
     }
 
+    /// The idle Activity popover when the inventory skipped a model drive that did not answer.
+    func testActivityPopoverSkippedModelLocationSnapshots() throws {
+        let status = StudioMachineStatus.ready(
+            installedModels: 88,
+            skippedLocations: [StudioSkippedModelLocation(path: "/Volumes/MODELS", problem: .unresponsive)]
+        )
+        let size = CGSize(width: StudioActivityPopover.width + 40, height: 360)
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioActivityPopover(
+                jobs: fixture.controller.jobs,
+                status: status,
+                appVersion: "1.0",
+                cliVersion: "0.55.0",
+                modelsRoot: "~/Library/Application Support/MereRun/models",
+                resolvedCLI: "/Applications/MereRun.app/Contents/MacOS/mere.run",
+                onOpenServer: {},
+                onOpenModels: {}
+            )
+            .padding(20)
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .background(MereRunTheme.background)
+            try fixture.write(view, size: size, appearance: appearance, name: "activity-skipped-location-\(appearance.rawValue)")
+        }
+    }
+
     /// The menu bar extra's panel in each server state, light and dark: stopped; running with two
     /// resident text models, a speech sidecar, live traffic, and Studio work in flight; running
     /// outside Studio; and stopped unexpectedly. `/runtime/status` is answered by

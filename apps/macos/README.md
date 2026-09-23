@@ -162,7 +162,11 @@ lanes (never a probe) with its progress and a stop control, over the app↔CLI
 version handshake and a link into the Server page. A row for one of Studio's own
 CLI reads names the work ("System · Checking models"), never the subcommand.
 With nothing running the same panel shows the local server and the models root;
-the resolved CLI path is the footer's tooltip. It
+the resolved CLI path is the footer's tooltip. When `status --json` reports
+`modelLocationIssues` (a registered drive that did not answer in time, usually
+because macOS is waiting on its removable- or network-volume access prompt, or
+one macOS denied), the pill's dot turns yellow and the panel adds a row naming
+the drive that opens Privacy & Security ▸ Files & Folders. It
 reads the `JobStore` directly — the lanes for which rows exist, each `Job` for
 its own progress — so nothing about the work in flight is mirrored on the
 controller.

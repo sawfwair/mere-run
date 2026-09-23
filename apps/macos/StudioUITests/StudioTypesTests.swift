@@ -962,6 +962,20 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(status?.isReachable, true)
     }
 
+    func testStudioServerStatusParsesSkippedModelLocations() {
+        let json = """
+        {"server":{"health":"down","loadedModels":[]},"installedModels":[],\
+        "modelLocationIssues":[{"path":"/Volumes/MODELS","problem":"unresponsive"},\
+        {"path":"/Volumes/Home/models","problem":"denied"}]}
+        """
+        XCTAssertEqual(StudioServerStatus.parse(jsonStdout: json)?.skippedLocations, [
+            StudioSkippedModelLocation(path: "/Volumes/MODELS", problem: .unresponsive),
+            StudioSkippedModelLocation(path: "/Volumes/Home/models", problem: .denied),
+        ])
+        let older = #"{"server":{"health":"down","loadedModels":[]},"installedModels":[]}"#
+        XCTAssertEqual(StudioServerStatus.parse(jsonStdout: older)?.skippedLocations, [])
+    }
+
     func testStudioServerStatusReturnsNilForNonJSON() {
         XCTAssertNil(StudioServerStatus.parse(jsonStdout: "connection refused"))
     }
