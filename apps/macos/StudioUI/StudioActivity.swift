@@ -16,6 +16,12 @@ struct StudioActivityRow: Identifiable, Equatable {
 /// each row and the header carry. Pure functions over the store and one job, so every string the
 /// popover shows is testable without a view.
 enum StudioActivity {
+    /// System Settings ▸ Privacy & Security ▸ Files & Folders, where removable- and
+    /// network-volume access for MereRun is granted.
+    static let filesAndFoldersSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
+    )!
+
     /// The lanes whose jobs are the user's work. `.probe` is deliberately absent.
     static let lanes: [JobLane] = [.inference, .utility]
 
@@ -231,6 +237,15 @@ struct StudioActivityPopover: View {
             }
             .buttonStyle(.plain)
             .help("Open Models ▸ Installed")
+            if let notice = status.locationNotice {
+                Button {
+                    NSWorkspace.shared.open(StudioActivity.filesAndFoldersSettingsURL)
+                } label: {
+                    detailRow(dot: MereRunTheme.yellow, title: notice.title, detail: notice.detail)
+                }
+                .buttonStyle(.plain)
+                .help("Open Privacy & Security ▸ Files & Folders")
+            }
             detailRow(dot: nil, title: "CLI", detail: resolvedCLI.isBlank ? "Not resolved" : resolvedCLI)
         }
     }

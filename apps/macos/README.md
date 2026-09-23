@@ -160,7 +160,12 @@ line while jobs are in flight. It opens the **Activity popover**
 bottom-left: one row per running or queued job in the inference and utility
 lanes (never a probe) with its progress and a stop control, over the app↔CLI
 version handshake and a link into the Server page. With nothing running the same
-panel shows the local server, the models root, and the resolved CLI path. It
+panel shows the local server, the models root, and the resolved CLI path. When
+`status --json` reports `modelLocationIssues` (a registered drive that did not
+answer in time, usually because macOS is waiting on its removable- or
+network-volume access prompt, or one macOS denied), the pill's dot turns yellow
+and the panel adds a row naming the drive that opens Privacy & Security ▸ Files
+& Folders. It
 reads the `JobStore` directly — the lanes for which rows exist, each `Job` for
 its own progress — so nothing about the work in flight is mirrored on the
 controller.

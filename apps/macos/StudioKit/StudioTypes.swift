@@ -1905,11 +1905,30 @@ package enum ModelReadinessParser {
     }
 }
 
+/// A model location the CLI's inventory skipped: a drive that did not answer in time (often
+/// because macOS is waiting on its removable- or network-volume access prompt) or one macOS denied.
+package struct StudioSkippedModelLocation: Equatable {
+    package enum Problem: String, Decodable {
+        case unresponsive
+        case denied
+    }
+
+    package let path: String
+    package let problem: Problem
+
+    package init(path: String, problem: Problem) {
+        self.path = path
+        self.problem = problem
+    }
+}
+
 /// A parsed snapshot of `mere.run status --json` for the Studio status pill.
 package struct StudioServerStatus: Equatable {
     package let health: String
     package let loadedModels: [String]
     package let installedCount: Int
+    /// Older CLIs omit the field and never skip a location.
+    package var skippedLocations: [StudioSkippedModelLocation] = []
 
     package var isReachable: Bool {
         let normalized = health.lowercased()
@@ -1929,14 +1948,22 @@ package struct StudioServerStatus: Equatable {
                 package let loadedModels: [String]?
             }
             package struct InstalledModel: Decodable { let id: String }
+            package struct LocationIssue: Decodable {
+                let path: String
+                let problem: StudioSkippedModelLocation.Problem
+            }
             package let server: Server?
             package let installedModels: [InstalledModel]?
+            package let modelLocationIssues: [LocationIssue]?
         }
         guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return nil }
         return StudioServerStatus(
             health: snapshot.server?.health ?? "unknown",
             loadedModels: snapshot.server?.loadedModels ?? [],
-            installedCount: snapshot.installedModels?.count ?? 0
+            installedCount: snapshot.installedModels?.count ?? 0,
+            skippedLocations: (snapshot.modelLocationIssues ?? []).map {
+                StudioSkippedModelLocation(path: $0.path, problem: $0.problem)
+            }
         )
     }
 
