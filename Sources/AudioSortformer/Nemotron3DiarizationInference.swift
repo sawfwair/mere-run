@@ -195,10 +195,13 @@ public final class Nemotron3DiarizationRuntime {
         }
 
         let width = frameCount + 1
-        let selected = (0..<(width * 8))
-            .sorted { scores[$0 / width][$0 % width] > scores[$1 / width][$1 % width] }
-            .prefix(length)
-            .sorted()
+        var ranked = Array(0..<(width * 8))
+        ranked.sort { (left: Int, right: Int) -> Bool in
+            let leftScore = scores[left / width][left % width]
+            let rightScore = scores[right / width][right % width]
+            return leftScore > rightScore
+        }
+        let selected = ranked.prefix(length).sorted()
         var selectedVectors = [Float]()
         var selectedPredictions = [Float]()
         selectedVectors.reserveCapacity(length * 512)
