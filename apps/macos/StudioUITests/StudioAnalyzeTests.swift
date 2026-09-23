@@ -1,7 +1,10 @@
 @testable import StudioKit
 @testable import StudioUI
+import AppKit
 import CoreGraphics
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 import XCTest
 
 /// The Analyze archetype: decoding the documents the CLI really writes, putting their coordinates
@@ -485,5 +488,49 @@ final class StudioAnalyzeTests: XCTestCase {
         StudioVisionResultPaths.apply(to: &blank, wantsMasks: true)
         XCTAssertTrue(blank.visionJSONOutputPath.isEmpty)
         XCTAssertTrue(blank.visionMaskOutputDirectory.isEmpty)
+    }
+
+    // MARK: - Stored pixels, not the viewer's rotation
+
+    /// A phone photo saved with EXIF orientation 6 is 40×20 on disk and displayed 20×40. The CLI
+    /// decodes and reports coordinates in the 40×20 (`AppleMediaImageIO.decode` applies no
+    /// transform), so the surfaces that draw or edit on the picture must load it the same way
+    /// while ordinary thumbnails keep the rotation.
+    func testEditingSurfacesLoadTheStoredPixelsOfARotatedPhoto() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rotated-\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Self.writeJPEG(to: url, width: 40, height: 20, orientation: 6)
+
+        XCTAssertEqual(StudioAnalyzeMediaInfo.pixelSize(of: url), CGSize(width: 40, height: 20))
+        let stored = try XCTUnwrap(
+            StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 400, appliesOrientation: false)
+        )
+        XCTAssertEqual(stored.image.size, NSSize(width: 40, height: 20))
+        let displayed = try XCTUnwrap(StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 400))
+        XCTAssertEqual(displayed.image.size, NSSize(width: 20, height: 40), "the default keeps the viewer's rotation")
+
+        // A box the CLI reports at the right edge of the stored picture lands at the right edge
+        // of the stored-space rendering, not off the bottom of a rotated one.
+        let fitted = StudioAnalyzeGeometry.fittedRect(imageSize: stored.image.size, in: CGSize(width: 400, height: 400))
+        let box = StudioRegionGeometry.viewRect(
+            fromImage: CGRect(x: 30, y: 0, width: 10, height: 20), imageSize: stored.image.size, fitted: fitted
+        )
+        XCTAssertEqual(box, CGRect(x: 300, y: 100, width: 100, height: 200))
+    }
+
+    private static func writeJPEG(to url: URL, width: Int, height: Int, orientation: Int) throws {
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ))
+        context.setFillColor(CGColor(red: 0.6, green: 0.5, blue: 0.3, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let image = try XCTUnwrap(context.makeImage())
+        let destination = try XCTUnwrap(
+            CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
+        )
+        CGImageDestinationAddImage(destination, image, [kCGImagePropertyOrientation: orientation] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
     }
 }

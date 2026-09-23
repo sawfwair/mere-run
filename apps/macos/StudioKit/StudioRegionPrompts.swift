@@ -98,13 +98,19 @@ package struct StudioRegionPrompt: Identifiable, Codable, Equatable, Sendable {
         }
     }
 
-    /// A box prompt with `corner` dragged to `imagePoint`; the opposite corner stays put. Points
-    /// have no corners and come back unchanged.
-    package func resizingBox(corner: StudioRegionBoxCorner, to imagePoint: CGPoint, within imageSize: CGSize) -> StudioRegionPrompt {
-        guard let rect else { return self }
-        let anchor = corner.opposite.point(of: rect)
+    /// A box prompt spanning `anchor` and `imagePoint`: the corner being dragged lands on the
+    /// point, the opposite one stays on the anchor. The anchor is captured when the drag begins
+    /// (`anchor(for:)`) rather than re-read from the box, so dragging a corner across the box
+    /// flips it cleanly instead of collapsing it. Points have no corners and come back unchanged.
+    package func resizingBox(anchor: CGPoint, to imagePoint: CGPoint, within imageSize: CGSize) -> StudioRegionPrompt {
+        guard isBox else { return self }
         let moved = StudioRegionGeometry.clampedPoint(imagePoint, within: imageSize)
         return StudioRegionPrompt.box(StudioRegionGeometry.rect(from: anchor, to: moved), label: label, id: id)
+    }
+
+    /// The corner that stays put while `corner` is dragged.
+    package func anchor(for corner: StudioRegionBoxCorner) -> CGPoint? {
+        rect.map { corner.opposite.point(of: $0) }
     }
 
     /// What VoiceOver reads for this prompt: "Box 1, 120 by 80 at 40, 30", "Positive point 2 at
@@ -121,26 +127,63 @@ package struct StudioRegionPrompt: Identifiable, Codable, Equatable, Sendable {
         }
     }
 
-    /// The prompt as the CLI text carries it, for the accessibility value and the coordinate readout.
-    package var coordinateDescription: String {
-        switch shape {
-        case .box:
-            guard let rect else { return "" }
-            return [rect.minX, rect.minY, rect.maxX, rect.maxY].map(Self.pixels).joined(separator: ", ")
-        case .point(let x, let y, _):
-            return "\(Self.pixels(x)), \(Self.pixels(y))"
-        }
-    }
-
     static func pixels(_ value: Double) -> String {
         String(Int(value.rounded()))
     }
 
+    /// Commas become spaces and whitespace runs collapse, so "cup, saucer" is stored as
+    /// "cup saucer" and never splits the CLI's comma-separated prompt.
     private static func sanitizedLabel(_ label: String?) -> String? {
         guard let label else { return nil }
         let cleaned = label.replacingOccurrences(of: ",", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
         return cleaned.isEmpty ? nil : cleaned
+    }
+}
+
+extension StudioDraft {
+    /// Points the draft at a different input. Boxes and points are in the previous picture's
+    /// pixels and Track's frames belong to the previous clip, so they go with it; an unchanged
+    /// path keeps them. Every way an input arrives (the well, a drop or paste, a Library row, a
+    /// handoff) goes through here.
+    package mutating func replaceInput(_ path: String) {
+        guard path != inputPath else { return }
+        inputPath = path
+        visionRegionPrompts = nil
+        visionInitFrame = nil
+        visionEndFrame = nil
+    }
+
+    /// The `--box` values as one newline-separated text, the way the Command view carries a
+    /// repeated option. Writing it replaces the boxes and keeps the points.
+    package var visionBoxPromptsText: String {
+        get { StudioRegionPromptText.boxText(visionRegionPrompts ?? []) }
+        set { replaceRegionPrompts(boxes: StudioRegionPromptText.prompts(boxText: newValue, pointText: ""), points: nil) }
+    }
+
+    /// The `--point` values, likewise; writing it replaces the points and keeps the boxes.
+    package var visionPointPromptsText: String {
+        get { StudioRegionPromptText.pointText(visionRegionPrompts ?? []) }
+        set { replaceRegionPrompts(boxes: nil, points: StudioRegionPromptText.prompts(boxText: "", pointText: newValue)) }
+    }
+
+    /// `--init-frame` as the Command view's integer; 0 is the CLI's default and reads as unset.
+    package var visionInitFrameValue: Int {
+        get { visionInitFrame ?? 0 }
+        set { visionInitFrame = newValue == 0 ? nil : newValue }
+    }
+
+    /// `--end-frame` as text, blank meaning the end of the clip.
+    package var visionEndFrameText: String {
+        get { visionEndFrame.map(String.init) ?? "" }
+        set { visionEndFrame = Int(newValue.trimmingCharacters(in: .whitespaces)) }
+    }
+
+    private mutating func replaceRegionPrompts(boxes: [StudioRegionPrompt]?, points: [StudioRegionPrompt]?) {
+        let current = visionRegionPrompts ?? []
+        let merged = (boxes ?? current.boxes) + (points ?? current.points)
+        visionRegionPrompts = merged.isEmpty ? nil : merged
     }
 }
 
@@ -189,15 +232,13 @@ package enum StudioRegionBoxCorner: CaseIterable, Hashable, Sendable {
 
 /// Mapping between the view that shows an image and the image's own pixels.
 ///
-/// The image is aspect-fitted into the view, so `fitted` is where its pixels land (letterboxed
-/// when the view's aspect differs). One uniform scale maps both axes; every conversion clamps to
-/// the image so a drag that leaves the picture still produces a prompt the CLI accepts.
+/// The image is aspect-fitted into the view, so `fitted` is where its pixels land
+/// (`StudioAnalyzeGeometry.fittedRect`, letterboxed when the view's aspect differs). One uniform
+/// scale maps both axes; every conversion clamps to the image so a drag that leaves the picture
+/// still produces a prompt the CLI accepts. The pixel space is the file's stored pixels, which is
+/// what the CLI decodes (`AppleMediaImageIO.decode` applies no EXIF orientation), so every
+/// surface that draws on it must load the picture the same way.
 package enum StudioRegionGeometry {
-    /// The rect an image of `imageSize` occupies when aspect-fitted into a view of `viewSize`.
-    package static func fittedRect(imageSize: CGSize, in viewSize: CGSize) -> CGRect {
-        StudioAnalyzeGeometry.fittedRect(imageSize: imageSize, in: viewSize)
-    }
-
     /// Points per pixel inside `fitted`.
     package static func scale(imageSize: CGSize, fitted: CGRect) -> CGFloat {
         guard imageSize.width > 0, imageSize.height > 0 else { return 1 }
@@ -284,9 +325,9 @@ package enum StudioRegionHit: Equatable {
     /// The topmost hit at `viewPoint`, later prompts first so the one drawn last wins.
     ///
     /// - Parameters:
-    ///   - handleRadius: half the side of a resize handle, in view points; only a selected box
-    ///     shows handles, so `selectedID` decides which box offers them.
-    ///   - pointRadius: the radius of a point marker, in view points.
+    ///   - handleRadius: how far from a handle's centre, in view points, a press still grabs it;
+    ///     only a selected box shows handles, so `selectedID` decides which box offers them.
+    ///   - pointRadius: how far from a point marker's centre a press still grabs it.
     package static func hit(
         in prompts: [StudioRegionPrompt],
         at viewPoint: CGPoint,
@@ -474,16 +515,25 @@ package enum StudioSubjectSelectorText {
 /// Frame indices of a clip, as `vision track --init-frame` / `--end-frame` count them: frame `i`
 /// is the picture shown from `i / fps` seconds. Studio asks the decoder for the middle of that
 /// interval so a zero-tolerance seek lands inside frame `i` rather than on its edge.
+///
+/// The count mirrors the CLI's extraction (`AppleMediaVideoIO.extractFrames`): the track's
+/// nominal rate, or 30 when it declares none, floored at 1 fps
+/// (`MediaVideoFrameRateResolver.resolve(_:fallbackFPS: 30)`), and `duration × fps` rounded to
+/// nearest, ties to even.
 package struct StudioVideoFrameGrid: Equatable, Sendable {
+    package static let fallbackFrameRate = 30.0
+
     package let frameCount: Int
     package let frameRate: Double
 
-    /// The grid of a clip of `duration` seconds at `frameRate`; a clip always has at least one
-    /// frame, and an unknown rate is read as 24.
+    /// The grid of a clip of `duration` seconds at `frameRate` (0 or non-finite for a clip that
+    /// declares none); a clip always has at least one frame.
     package init(duration: TimeInterval, frameRate: Double) {
-        let rate = frameRate.isFinite && frameRate > 0 ? frameRate : 24
-        self.frameRate = rate
-        let counted = duration.isFinite && duration > 0 ? Int((duration * rate).rounded(.down)) : 0
+        let declared = frameRate.isFinite && frameRate > 0 ? frameRate : Self.fallbackFrameRate
+        self.frameRate = max(1, declared)
+        let counted = duration.isFinite && duration > 0
+            ? Int((duration * self.frameRate).rounded(.toNearestOrEven))
+            : 0
         frameCount = max(1, counted)
     }
 
@@ -498,10 +548,12 @@ package struct StudioVideoFrameGrid: Equatable, Sendable {
         (Double(clamped(frame)) + 0.5) / frameRate
     }
 
-    /// The frame shown at `time`.
-    package func frame(atTime time: TimeInterval) -> Int {
-        guard time.isFinite else { return 0 }
-        return clamped(Int((time * frameRate).rounded(.down)))
+    /// The moment to decode for plan frame `planTime` seconds into a clip that `video
+    /// prepare-masks` resamples: the CLI picks source frame `round(t × sourceFPS)`
+    /// (`SCAIL2MaskPreparer`, the normalized-frames loop), so this is the middle of that frame.
+    package static func sourceTime(forPlanTime planTime: TimeInterval, sourceFrameRate: Double) -> TimeInterval {
+        let rate = max(1, sourceFrameRate.isFinite && sourceFrameRate > 0 ? sourceFrameRate : fallbackFrameRate)
+        return ((planTime * rate).rounded() + 0.5) / rate
     }
 
     /// "0:04.5" — the clock the scrubber shows beside the frame number.

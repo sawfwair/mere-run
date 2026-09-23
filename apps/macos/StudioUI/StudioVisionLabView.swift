@@ -787,7 +787,9 @@ private struct StudioVisionOverlayPreview: View {
     }
 
     private func load() {
-        image = NSImage(contentsOf: imageURL)
+        // Stored pixels, no EXIF transform, because the face and pose documents place their
+        // boxes and landmarks in the image as the CLI decoded it.
+        image = StudioImagePreviewLoader.downsampledImage(from: imageURL, maxPixelSize: 1_600, appliesOrientation: false)?.image
         do {
             let data = try Data(contentsOf: jsonURL)
             switch kind {

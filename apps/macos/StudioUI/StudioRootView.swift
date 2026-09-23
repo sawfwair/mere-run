@@ -1883,7 +1883,9 @@ private struct StudioWorkspaceView: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = mode.acceptedTypes.isEmpty ? [.item] : mode.acceptedTypes
         if panel.runModal() == .OK, let url = panel.url {
-            draft.inputPath = url.path
+            var next = draft
+            next.replaceInput(url.path)
+            draft = next
             studioError = nil
         }
     }

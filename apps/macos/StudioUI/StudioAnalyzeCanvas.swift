@@ -301,7 +301,7 @@ struct StudioAnalyzeCanvas: View {
                 StudioTrackFrameEditor(
                     url: url,
                     frameSize: frameSize,
-                    grid: StudioVideoFrameGrid(duration: inputDuration ?? 0, frameRate: inputFrameRate ?? 24),
+                    grid: StudioVideoFrameGrid(duration: inputDuration ?? 0, frameRate: inputFrameRate ?? 0),
                     prompts: editing.regionPrompts,
                     initFrame: editing.initFrame,
                     endFrame: editing.endFrame,

@@ -114,9 +114,9 @@ package enum StudioResultContinuation: String, CaseIterable, Identifiable {
         draft.prompt = self == .read ? "Describe this image." : item.prompt
         if self == .reference {
             draft.referenceImagePaths = url.path
-            draft.inputPath = ""
+            draft.replaceInput("")
         } else {
-            draft.inputPath = url.path
+            draft.replaceInput(url.path)
         }
         if self == .edit {
             draft.width = item.commandDraft?.width ?? baseline.width

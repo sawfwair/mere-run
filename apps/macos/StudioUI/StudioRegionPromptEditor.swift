@@ -149,6 +149,10 @@ struct StudioRegionPromptLayer: View {
 
     @State private var drag: DragState?
     @State private var hover: StudioRegionHit?
+    /// The prompt being moved or resized, as it is right now. It lives here rather than in the
+    /// binding until the drag ends, so a drag does not write the draft (and persist it) on every
+    /// pointer event.
+    @State private var liveEdit: StudioRegionPrompt?
     @FocusState private var focused: Bool
 
     private enum Metrics {
@@ -161,16 +165,23 @@ struct StudioRegionPromptLayer: View {
     private enum DragState {
         case drawing(start: CGPoint, current: CGPoint, negative: Bool)
         case moving(id: UUID, original: StudioRegionPrompt, start: CGPoint)
-        case resizing(id: UUID, corner: StudioRegionBoxCorner)
+        /// `anchor` is the corner that stays put, captured when the drag began.
+        case resizing(id: UUID, anchor: CGPoint)
         /// A press on a prompt that has not moved yet: a click selects, a drag moves.
         case pressing(hit: StudioRegionHit, start: CGPoint)
+    }
+
+    /// What is drawn: the bound prompts, with the one mid-drag shown at its live position.
+    private var displayedPrompts: [StudioRegionPrompt] {
+        guard let liveEdit else { return prompts }
+        return prompts.map { $0.id == liveEdit.id ? liveEdit : $0 }
     }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.clear
                 .contentShape(Rectangle())
-            ForEach(Array(prompts.enumerated()), id: \.element.id) { index, prompt in
+            ForEach(Array(displayedPrompts.enumerated()), id: \.element.id) { index, prompt in
                 promptView(prompt, ordinal: index + 1)
             }
             if case .drawing(let start, let current, _) = drag {
@@ -250,9 +261,9 @@ struct StudioRegionPromptLayer: View {
             .overlay {
                 if isSelected {
                     ForEach(StudioRegionBoxCorner.allCases, id: \.self) { corner in
-                        let anchor = corner.point(of: CGRect(origin: .zero, size: CGSize(width: width, height: height)))
+                        let position = corner.point(of: CGRect(origin: .zero, size: CGSize(width: width, height: height)))
                         handle(isActive: hover == .handle(id: prompt.id, corner: corner))
-                            .position(anchor)
+                            .position(position)
                     }
                 }
             }
@@ -344,8 +355,9 @@ struct StudioRegionPromptLayer: View {
         focused = true
         if let hit = hit(at: location) {
             selection = hit.id
-            if case .handle(let id, let corner) = hit {
-                drag = .resizing(id: id, corner: corner)
+            if case .handle(let id, let corner) = hit,
+               let anchor = prompts.first(where: { $0.id == id })?.anchor(for: corner) {
+                drag = .resizing(id: id, anchor: anchor)
             } else {
                 drag = .pressing(hit: hit, start: location)
             }
@@ -366,30 +378,38 @@ struct StudioRegionPromptLayer: View {
             move(id: hit.id, original: original, from: start, to: location)
         case .moving(let id, let original, let start):
             move(id: id, original: original, from: start, to: location)
-        case .resizing(let id, let corner):
-            guard let index = prompts.firstIndex(where: { $0.id == id }) else { return }
+        case .resizing(let id, let anchor):
+            guard let prompt = prompts.first(where: { $0.id == id }) else { return }
             let imagePoint = StudioRegionGeometry.imagePoint(fromView: location, imageSize: imageSize, fitted: fitted)
-            prompts[index] = prompts[index].resizingBox(corner: corner, to: imagePoint, within: imageSize)
+            liveEdit = prompt.resizingBox(anchor: anchor, to: imagePoint, within: imageSize)
         case nil:
             break
         }
     }
 
     private func end(at location: CGPoint) {
-        defer { drag = nil }
+        defer {
+            drag = nil
+            liveEdit = nil
+        }
         switch drag {
         case .drawing(let start, _, let negative):
             let travelled = max(abs(location.x - start.x), abs(location.y - start.y))
-            if travelled < Metrics.clickSlop {
+            let rect = StudioRegionGeometry.imageRect(fromView: start, to: location, imageSize: imageSize, fitted: fitted)
+            // A press that barely moved on screen, or moved less than a pixel of the picture
+            // (a zoomed-out image), is a click.
+            if travelled < Metrics.clickSlop || rect.width < 1 || rect.height < 1 {
                 click(at: start, negative: negative)
             } else {
-                let rect = StudioRegionGeometry.imageRect(fromView: start, to: location, imageSize: imageSize, fitted: fitted)
-                guard rect.width >= 1, rect.height >= 1 else { return }
                 addBox(rect)
             }
-        case .pressing, .moving, .resizing, nil:
-            // A click on a prompt only selects it, which `begin` already did; a move or resize
-            // was applied as it happened.
+        case .moving, .resizing:
+            // Commit the live position to the draft once, now that the drag is over.
+            if let liveEdit, let index = prompts.firstIndex(where: { $0.id == liveEdit.id }) {
+                prompts[index] = liveEdit
+            }
+        case .pressing, nil:
+            // A click on a prompt only selects it, which `begin` already did.
             break
         }
     }
@@ -421,11 +441,10 @@ struct StudioRegionPromptLayer: View {
     }
 
     private func move(id: UUID, original: StudioRegionPrompt, from start: CGPoint, to location: CGPoint) {
-        guard let index = prompts.firstIndex(where: { $0.id == id }) else { return }
         let scale = StudioRegionGeometry.scale(imageSize: imageSize, fitted: fitted)
         guard scale > 0 else { return }
         let delta = CGVector(dx: (location.x - start.x) / scale, dy: (location.y - start.y) / scale)
-        prompts[index] = original.moved(by: delta, within: imageSize)
+        liveEdit = original.moved(by: delta, within: imageSize)
     }
 
     private func removeSelection() {
@@ -438,6 +457,8 @@ struct StudioRegionPromptLayer: View {
         if selection == id { selection = nil }
     }
 
+    /// Both reaches are a little larger than the marks they grab, so a handle or point does not
+    /// have to be hit dead centre.
     private func hit(at location: CGPoint) -> StudioRegionHit? {
         StudioRegionHit.hit(
             in: prompts,
@@ -454,7 +475,7 @@ struct StudioRegionPromptLayer: View {
         guard isEnabled else { return .default }
         switch drag {
         case .moving: return .grabActive
-        case .resizing(_, let corner): return .frameResize(position: corner.resizePosition)
+        case .resizing: return .grabActive
         case .drawing: return .rectSelection
         case .pressing, nil: break
         }

@@ -9,11 +9,12 @@ import SwiftUI
 
 /// The picture a subject selector is drawn on.
 enum StudioSubjectPicture: Equatable {
-    /// The reference image, in its own pixels.
+    /// The reference image, in its own stored pixels.
     case image(URL)
-    /// One frame of the driving clip at `time`, as `video prepare-masks` sees it: center-cropped
-    /// into the plan's `canvas` (see `StudioSubjectFrameGeometry`).
-    case clipFrame(url: URL, time: TimeInterval, canvas: CGSize)
+    /// The driving-clip frame `planTime` seconds into the plan, as `video prepare-masks` sees
+    /// it: the source frame nearest that moment on the clip's own frame grid, center-cropped into
+    /// the plan's `canvas` (see `StudioSubjectFrameGeometry`).
+    case clipFrame(url: URL, planTime: TimeInterval, canvas: CGSize)
 }
 
 /// A selector's box and points, drawn on its picture and written back to the plan's text fields.
@@ -90,10 +91,7 @@ struct StudioSubjectSelectorEditor: View {
     }
 
     private func load() async {
-        let picture = picture
-        let loaded = await Task.detached(priority: .userInitiated) {
-            StudioSubjectPictureLoader.load(picture)
-        }.value
+        let loaded = await StudioSubjectPictureLoader.load(picture)
         guard !Task.isCancelled else { return }
         if let loaded {
             image = loaded.image
@@ -113,16 +111,26 @@ enum StudioSubjectPictureLoader {
         let pixelSize: CGSize
     }
 
-    static func load(_ picture: StudioSubjectPicture) -> Loaded? {
+    static func load(_ picture: StudioSubjectPicture) async -> Loaded? {
         switch picture {
         case .image(let url):
-            guard let size = StudioAnalyzeMediaInfo.pixelSize(of: url),
-                  let loaded = StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 1_200) else {
-                return nil
-            }
-            return Loaded(image: loaded.image, pixelSize: size)
-        case .clipFrame(let url, let time, let canvas):
-            guard let frame = StudioVideoFrameLoader.frame(of: url, at: time, maxPixelSize: 1_600)?.image,
+            // Stored pixels, no EXIF transform: the reference selector is segmented on the file
+            // as the CLI decodes it.
+            return await Task.detached(priority: .userInitiated) {
+                guard let size = StudioAnalyzeMediaInfo.pixelSize(of: url),
+                      let loaded = StudioImagePreviewLoader.downsampledImage(
+                          from: url, maxPixelSize: 1_200, appliesOrientation: false
+                      ) else { return nil }
+                return Loaded(image: loaded.image, pixelSize: size)
+            }.value
+        case .clipFrame(let url, let planTime, let canvas):
+            let sourceRate = await Task.detached(priority: .userInitiated) {
+                StudioVideoFrameLoader.frameRate(of: url)
+            }.value
+            let time = StudioVideoFrameGrid.sourceTime(
+                forPlanTime: planTime, sourceFrameRate: sourceRate ?? StudioVideoFrameGrid.fallbackFrameRate
+            )
+            guard let frame = try? await StudioVideoFrameLoader(url: url).image(at: time, exact: true),
                   let composed = composed(frame, into: canvas) else { return nil }
             return Loaded(image: composed, pixelSize: canvas)
         }

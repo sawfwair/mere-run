@@ -107,8 +107,10 @@ struct StudioAnalyzeImageView: View {
         .task(id: url) {
             didLoad = false
             image = nil
+            // Stored pixels, no EXIF transform: the result's boxes and the drawn prompts are
+            // both in the space the CLI decodes.
             let loaded = await Task.detached(priority: .userInitiated) {
-                StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 1_600)
+                StudioImagePreviewLoader.downsampledImage(from: url, maxPixelSize: 1_600, appliesOrientation: false)
             }.value
             guard !Task.isCancelled else { return }
             image = loaded?.image

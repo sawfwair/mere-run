@@ -190,7 +190,7 @@ package final class StudioPromptTaskController {
 
     private static func applyAnalyzeInput(from item: StudioLibraryItem?, to draft: inout StudioDraft) {
         guard let item, let inputURL = item.inputURL else { return }
-        draft.inputPath = inputURL.path
+        draft.replaceInput(inputURL.path)
         if !item.prompt.isBlank { draft.prompt = item.prompt }
     }
 }

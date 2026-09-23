@@ -565,7 +565,7 @@ struct StudioSCAILView: View {
                 StudioSubjectSelectorEditor(
                     picture: .clipFrame(
                         url: url,
-                        time: drivingFrameTime(correction.wrappedValue.frameIndex),
+                        planTime: drivingPlanTime(correction.wrappedValue.frameIndex),
                         canvas: planCanvas
                     ),
                     box: correction.box,
@@ -875,7 +875,7 @@ struct StudioSCAILView: View {
                         }
                     } else if let url = pathURL(drivingVideo) {
                         StudioSubjectSelectorEditor(
-                            picture: .clipFrame(url: url, time: drivingFrameTime(0), canvas: planCanvas),
+                            picture: .clipFrame(url: url, planTime: drivingPlanTime(0), canvas: planCanvas),
                             box: subject.drivingBox,
                             positivePoints: subject.drivingPositivePoints,
                             negativePoints: subject.drivingNegativePoints,
@@ -906,9 +906,10 @@ struct StudioSCAILView: View {
         CGSize(width: width, height: height)
     }
 
-    /// When plan frame `frame` is taken from the driving clip: the CLI resamples the (optionally
-    /// trimmed) clip at the plan's fps from the in point.
-    private func drivingFrameTime(_ frame: Int) -> TimeInterval {
+    /// Where plan frame `frame` falls in the driving clip: the CLI resamples the (optionally
+    /// trimmed) clip at the plan's fps from the in point, then takes the nearest source frame
+    /// (`StudioVideoFrameGrid.sourceTime(forPlanTime:sourceFrameRate:)` does that snap).
+    private func drivingPlanTime(_ frame: Int) -> TimeInterval {
         (useTrimRange ? inSeconds : 0) + Double(frame) / Double(max(1, fps))
     }
 

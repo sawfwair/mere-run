@@ -315,8 +315,12 @@ corner handles, drags move a prompt, and Delete removes the selection. Each
 prompt is a VoiceOver element ("Box 1, coffee cup, 120 by 80 at 40, 30"). The
 prompts live on the draft (`StudioDraft.visionRegionPrompts`) in the input's own
 pixels and become the command's `--box` / `--point` values, so the composer, the
-Command view, and the run all read one set; a drawn prompt satisfies the task's
-prompt requirement. Track shows its clip as a frame scrubber
+Command view, and the run all read one set (a `--box` typed in the Command view
+appears on the picture through the same binding table); a drawn prompt
+satisfies the task's prompt requirement. Replacing the input, by any route,
+clears the prompts and frames drawn on the previous one. Pictures are shown in
+their stored pixels without the EXIF transform, because that is the space the
+CLI decodes, reports, and reads coordinates in. Track shows its clip as a frame scrubber
 (`StudioUI/StudioTrackFrameEditor.swift`, frames decoded with
 `AVAssetImageGenerator`): "Start tracking here" seeds the tracker on the frame
 in view, where the prompts are drawn, and "End tracking here" sets the optional
@@ -374,7 +378,7 @@ defaults.
 
 The inspector shows only the flags the binding table maps to a draft field, so
 no control can look live and change nothing. That makes it thin where the table
-is thin: Read, Find, Segment, Track, and Code bind between one and five flags,
+is thin: Read, Find, Segment, Track, and Code bind between one and six flags,
 and the rest of their options are reached in the Command Console.
 
 The **Command** panel (⌥⌘C or the header toggle) exposes the current task's

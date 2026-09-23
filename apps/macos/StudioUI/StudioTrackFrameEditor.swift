@@ -6,25 +6,40 @@ import SwiftUI
 // Picking frames on the clip instead of typing their numbers: Track's seed frame (where the
 // prompts are drawn) and its optional end frame, on a scrubber over the decoded frame.
 
-/// Single frames of a clip, decoded on demand.
-enum StudioVideoFrameLoader {
-    /// The frame shown at `time`, decoded exactly (no tolerance), no larger than `maxPixelSize`.
-    static func frame(of url: URL, at time: TimeInterval, maxPixelSize: CGFloat) -> StudioLoadedImage? {
+/// Single frames of one clip, decoded on demand.
+///
+/// One asset and two generators per clip: an exact one for the frame that stays on screen and a
+/// tolerant one for scrubbing, which lets the decoder hand back the nearest keyframe instead of
+/// decoding forward from it for every pointer move. Decoding is `async`, so a scrub that moves on
+/// cancels the frame it no longer needs.
+final class StudioVideoFrameLoader: @unchecked Sendable {
+    let url: URL
+    private let exactGenerator: AVAssetImageGenerator
+    private let scrubGenerator: AVAssetImageGenerator
+
+    init(url: URL, maxPixelSize: CGFloat = 1_600) {
+        self.url = url
         let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
-        generator.requestedTimeToleranceBefore = .zero
-        generator.requestedTimeToleranceAfter = .zero
-        let requested = CMTime(seconds: time, preferredTimescale: 600)
-        guard let cgImage = try? generator.copyCGImage(at: requested, actualTime: nil) else { return nil }
-        return StudioLoadedImage(image: NSImage(
-            cgImage: cgImage,
-            size: NSSize(width: cgImage.width, height: cgImage.height)
-        ))
+        func generator(tolerance: CMTime) -> AVAssetImageGenerator {
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
+            generator.requestedTimeToleranceBefore = tolerance
+            generator.requestedTimeToleranceAfter = tolerance
+            return generator
+        }
+        exactGenerator = generator(tolerance: .zero)
+        scrubGenerator = generator(tolerance: CMTime(seconds: 0.5, preferredTimescale: 600))
     }
 
-    /// The clip's frame rate as the container declares it.
+    /// The frame shown at `time`; `exact` decodes that very frame, otherwise a nearby one.
+    func image(at time: TimeInterval, exact: Bool) async throws -> NSImage {
+        let generator = exact ? exactGenerator : scrubGenerator
+        let (cgImage, _) = try await generator.image(at: CMTime(seconds: time, preferredTimescale: 600))
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    /// The clip's frame rate as the container declares it, or nil when it declares none.
     static func frameRate(of url: URL) -> Double? {
         let rate = AVURLAsset(url: url).tracks(withMediaType: .video).first?.nominalFrameRate
         guard let rate, rate > 0 else { return nil }
@@ -49,6 +64,8 @@ struct StudioTrackFrameEditor: View {
     var maxHeight: CGFloat = 480
 
     @State private var shownFrame: Int?
+    @State private var isScrubbing = false
+    @State private var loader: StudioVideoFrameLoader?
     @State private var image: NSImage?
     @State private var loadedFrame: Int?
     @State private var tool = StudioRegionTool.box
@@ -56,6 +73,19 @@ struct StudioTrackFrameEditor: View {
 
     private var currentFrame: Int { grid.clamped(shownFrame ?? initFrame) }
     private var onSeedFrame: Bool { currentFrame == grid.clamped(initFrame) }
+    /// The frame in view cannot end tracking before it starts.
+    private var canEndHere: Bool { endFrame != currentFrame && currentFrame >= grid.clamped(initFrame) }
+
+    /// Which decode is wanted: the frame in view, tolerant while the knob is moving and exact
+    /// once it settles.
+    private struct FrameRequest: Hashable {
+        let frame: Int
+        let exact: Bool
+    }
+
+    private var request: FrameRequest {
+        FrameRequest(frame: currentFrame, exact: !isScrubbing)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -68,7 +98,12 @@ struct StudioTrackFrameEditor: View {
             scrubberRow
             markRow
         }
-        .task(id: currentFrame) { await loadFrame() }
+        .task(id: url) {
+            loader = StudioVideoFrameLoader(url: url)
+            image = nil
+            loadedFrame = nil
+        }
+        .task(id: request) { await loadFrame(request) }
         .onChange(of: initFrame) { _, seed in
             // Moving the seed from elsewhere (a Library row, the Command view) follows it.
             if shownFrame == nil || !onSeedFrame { shownFrame = grid.clamped(seed) }
@@ -148,6 +183,7 @@ struct StudioTrackFrameEditor: View {
             StudioFrameScrubber(
                 grid: grid,
                 frame: Binding(get: { currentFrame }, set: { shownFrame = grid.clamped($0) }),
+                isScrubbing: $isScrubbing,
                 startFrame: grid.clamped(initFrame),
                 endFrame: endFrame.map(grid.clamped)
             )
@@ -179,12 +215,16 @@ struct StudioTrackFrameEditor: View {
             } else {
                 Button {
                     endFrame = currentFrame
-                    if currentFrame < initFrame { initFrame = currentFrame }
                 } label: {
                     Label("End tracking here", systemImage: "flag.checkered")
                 }
                 .buttonStyle(.mereSecondary)
-                .help("Stop tracking after this frame instead of at the end of the clip")
+                .disabled(!canEndHere)
+                .help(
+                    canEndHere
+                        ? "Stop tracking after this frame instead of at the end of the clip"
+                        : "Tracking cannot end before it starts; move the start frame here first"
+                )
             }
 
             if endFrame != nil {
@@ -228,27 +268,24 @@ struct StudioTrackFrameEditor: View {
 
     // MARK: Loading
 
-    private func loadFrame() async {
-        let frame = currentFrame
-        let time = grid.time(ofFrame: frame)
-        let url = url
-        let loaded = await Task.detached(priority: .userInitiated) {
-            StudioVideoFrameLoader.frame(of: url, at: time, maxPixelSize: 1_600)
-        }.value
-        guard !Task.isCancelled else { return }
-        if let loaded {
-            image = loaded.image
-            loadedFrame = frame
-        }
+    private func loadFrame(_ request: FrameRequest) async {
+        guard let loader else { return }
+        // A frame already decoded exactly needs no tolerant re-decode.
+        if !request.exact, loadedFrame == request.frame { return }
+        guard let decoded = try? await loader.image(at: grid.time(ofFrame: request.frame), exact: request.exact),
+              !Task.isCancelled else { return }
+        image = decoded
+        loadedFrame = request.frame
     }
 }
 
 /// A frame slider: the clip as a track, the tracked span in accent from the start frame to the
 /// end frame (or the clip's end), and a knob for the frame in view. Arrow keys step a frame when
-/// it has focus.
+/// it has focus. `isScrubbing` is true while the knob is being dragged.
 struct StudioFrameScrubber: View {
     let grid: StudioVideoFrameGrid
     @Binding var frame: Int
+    @Binding var isScrubbing: Bool
     let startFrame: Int
     let endFrame: Int?
 
@@ -290,9 +327,11 @@ struct StudioFrameScrubber: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         focused = true
+                        isScrubbing = true
                         let position = min(1, max(0, (value.location.x - Metrics.knobDiameter / 2) / usable))
                         frame = grid.clamped(Int((position * Double(grid.lastFrame)).rounded()))
                     }
+                    .onEnded { _ in isScrubbing = false }
             )
         }
         .frame(height: Metrics.height)

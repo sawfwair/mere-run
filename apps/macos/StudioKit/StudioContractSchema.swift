@@ -960,8 +960,14 @@ package enum StudioContractBindings {
 
     private static var findObjects: [String: StudioContractBinding<StudioDraft>] { model }
 
+    // The prompts are drawn on the picture; these bindings let a Command-view edit of the same
+    // flags flow back into the drawing, and Track's frame flags into its scrubber.
     private static var segmentAndTrack: [String: StudioContractBinding<StudioDraft>] { model.merging([
         "--threshold": .number("visionThreshold", \.visionThreshold),
+        "--box": .text("visionBoxPrompts", \.visionBoxPromptsText),
+        "--point": .text("visionPointPrompts", \.visionPointPromptsText),
+        "--init-frame": .integer("visionInitFrame", \.visionInitFrameValue),
+        "--end-frame": .integerText("visionEndFrame", \.visionEndFrameText),
     ]) { first, _ in first } }
 }
 

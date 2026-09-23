@@ -79,7 +79,16 @@ package struct StudioLoadedImage: @unchecked Sendable {
 }
 
 package enum StudioImagePreviewLoader {
-    package static func downsampledImage(from url: URL, maxPixelSize: CGFloat) -> StudioLoadedImage? {
+    /// - Parameter appliesOrientation: whether the EXIF orientation is baked in, as a viewer
+    ///   shows the picture. Surfaces that draw or edit coordinates in the file's pixel space —
+    ///   result boxes, drawn prompts, face picking — pass false, because the CLI decodes without
+    ///   the transform (`AppleMediaImageIO.decode`) and reports and reads coordinates in the
+    ///   stored pixels; an orientation-6 phone photo would otherwise draw everything rotated.
+    package static func downsampledImage(
+        from url: URL,
+        maxPixelSize: CGFloat,
+        appliesOrientation: Bool = true
+    ) -> StudioLoadedImage? {
         guard StudioOutputFileKind.classify(url) == .image else {
             return nil
         }
@@ -93,7 +102,7 @@ package enum StudioImagePreviewLoader {
 
         let thumbnailOptions: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceCreateThumbnailWithTransform: appliesOrientation,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: max(1, Int(maxPixelSize.rounded()))
         ]

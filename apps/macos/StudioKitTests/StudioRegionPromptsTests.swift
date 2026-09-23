@@ -18,8 +18,9 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertEqual(StudioRegionPromptText.boxLines([cup]), ["40,30,160,110,coffee cup"])
         let unlabeled = StudioRegionPrompt.box(CGRect(x: 160.6, y: 110.4, width: -120.6, height: -80.4))
         XCTAssertEqual(StudioRegionPromptText.boxLines([unlabeled]), ["40,30,161,110"])
-        let comma = StudioRegionPrompt.box(CGRect(x: 0, y: 0, width: 10, height: 10), label: "cup, saucer")
-        XCTAssertEqual(StudioRegionPromptText.boxLines([comma]), ["0,0,10,10,cup  saucer"])
+        let comma = StudioRegionPrompt.box(CGRect(x: 0, y: 0, width: 10, height: 10), label: "  cup,  saucer , ")
+        XCTAssertEqual(StudioRegionPromptText.boxLines([comma]), ["0,0,10,10,cup saucer"])
+        XCTAssertNil(StudioRegionPrompt.box(.zero, label: " , ").label)
         XCTAssertEqual(StudioRegionPromptText.boxText([cup, handle, unlabeled]), "40,30,160,110,coffee cup\n40,30,161,110")
     }
 
@@ -65,7 +66,6 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertEqual(cup.accessibilityDescription(ordinal: 1), "Box 1, coffee cup, 120 by 80 at 40, 30")
         XCTAssertEqual(handle.accessibilityDescription(ordinal: 2), "Positive point 2 at 400, 260")
         XCTAssertEqual(shadow.accessibilityDescription(ordinal: 3), "Negative point 3, shadow at 12, 18")
-        XCTAssertEqual(cup.coordinateDescription, "40, 30, 160, 110")
     }
 
     // MARK: - Screen to pixels
@@ -75,7 +75,7 @@ final class StudioRegionPromptsTests: XCTestCase {
     func testViewAndImageCoordinatesMapThroughTheFittedRect() {
         let imageSize = CGSize(width: 1_000, height: 500)
         let viewSize = CGSize(width: 400, height: 400)
-        let fitted = StudioRegionGeometry.fittedRect(imageSize: imageSize, in: viewSize)
+        let fitted = StudioAnalyzeGeometry.fittedRect(imageSize: imageSize, in: viewSize)
         XCTAssertEqual(fitted, CGRect(x: 0, y: 100, width: 400, height: 200))
         XCTAssertEqual(StudioRegionGeometry.scale(imageSize: imageSize, fitted: fitted), 0.4)
 
@@ -123,14 +123,26 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertTrue(point.isPositivePoint)
     }
 
-    func testResizingKeepsTheOppositeCorner() {
+    /// The anchor is captured once when the drag starts, so a corner dragged across the box and
+    /// on keeps growing from the same fixed corner instead of collapsing on itself.
+    func testResizingKeepsTheAnchorAcrossACrossingDrag() throws {
         let imageSize = CGSize(width: 1_000, height: 500)
-        let grown = cup.resizingBox(corner: .bottomTrailing, to: CGPoint(x: 300, y: 200), within: imageSize)
+        let anchor = try XCTUnwrap(cup.anchor(for: .bottomTrailing))
+        XCTAssertEqual(anchor, CGPoint(x: 40, y: 30))
+        let grown = cup.resizingBox(anchor: anchor, to: CGPoint(x: 300, y: 200), within: imageSize)
         XCTAssertEqual(grown.rect, CGRect(x: 40, y: 30, width: 260, height: 170))
-        // Dragging a corner past its opposite flips the box rather than inverting it.
-        let flipped = cup.resizingBox(corner: .topLeading, to: CGPoint(x: 200, y: 150), within: imageSize)
-        XCTAssertEqual(flipped.rect, CGRect(x: 160, y: 110, width: 40, height: 40))
-        XCTAssertEqual(handle.resizingBox(corner: .topLeading, to: .zero, within: imageSize), handle)
+
+        // Step one crosses the anchor; step two keeps going. Re-deriving the anchor from the
+        // flipped box after step one would pin (20, 10) instead and shrink the box to 10×5.
+        let crossed = cup.resizingBox(anchor: anchor, to: CGPoint(x: 20, y: 10), within: imageSize)
+        XCTAssertEqual(crossed.rect, CGRect(x: 20, y: 10, width: 20, height: 20))
+        let further = crossed.resizingBox(anchor: anchor, to: CGPoint(x: 10, y: 5), within: imageSize)
+        XCTAssertEqual(further.rect, CGRect(x: 10, y: 5, width: 30, height: 25))
+        XCTAssertEqual(further.id, cup.id)
+        XCTAssertEqual(further.label, "coffee cup")
+
+        XCTAssertEqual(handle.resizingBox(anchor: .zero, to: CGPoint(x: 5, y: 5), within: imageSize), handle)
+        XCTAssertNil(handle.anchor(for: .topLeading))
     }
 
     /// Handles of the selected box win over the box, points win over boxes, and the prompt drawn
@@ -195,6 +207,81 @@ final class StudioRegionPromptsTests: XCTestCase {
         )
         XCTAssertEqual(toRead.inputPath, "/tmp/mug.png")
         XCTAssertTrue(toRead.regionPrompts.isEmpty)
+    }
+
+    /// Every way an input arrives goes through `replaceInput`, and a new picture takes the old
+    /// one's prompts and frames with it; the same path keeps them.
+    func testReplacingTheInputClearsPromptsAndFramesDrawnOnThePreviousOne() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .track)
+        draft.inputPath = "/tmp/a.mp4"
+        draft.visionRegionPrompts = [cup]
+        draft.visionInitFrame = 12
+        draft.visionEndFrame = 40
+
+        draft.replaceInput("/tmp/a.mp4")
+        XCTAssertEqual(draft.visionRegionPrompts, [cup])
+        XCTAssertEqual(draft.visionInitFrame, 12)
+
+        draft.replaceInput("/tmp/b.mp4")
+        XCTAssertEqual(draft.inputPath, "/tmp/b.mp4")
+        XCTAssertNil(draft.visionRegionPrompts)
+        XCTAssertNil(draft.visionInitFrame)
+        XCTAssertNil(draft.visionEndFrame)
+
+        // The composer's well (a drop, a paste, a click to pick) attaches through the slot.
+        let slot = try XCTUnwrap(StudioMode.segment.attachmentSlots.first)
+        var segment = StudioDraft()
+        segment.reset(for: .segment)
+        segment.inputPath = "/tmp/mug.png"
+        segment.visionRegionPrompts = [cup]
+        slot.attach([URL(fileURLWithPath: "/tmp/mug.png")], to: &segment)
+        XCTAssertEqual(segment.visionRegionPrompts, [cup], "re-attaching the same picture keeps the drawing")
+        XCTAssertTrue(segment.attach(dropped: [URL(fileURLWithPath: "/tmp/other.png")], for: .segment))
+        XCTAssertEqual(segment.inputPath, "/tmp/other.png")
+        XCTAssertNil(segment.visionRegionPrompts)
+        segment.visionRegionPrompts = [handle]
+        slot.clear(in: &segment)
+        XCTAssertEqual(segment.inputPath, "")
+        XCTAssertNil(segment.visionRegionPrompts)
+    }
+
+    /// The Command view's `--box`, `--point`, `--init-frame`, and `--end-frame` flow back into the
+    /// drawing through the binding table, so the two never disagree and the validation that
+    /// accepts a drawn prompt accepts a typed one.
+    func testCommandViewOverridesFlowBackIntoTheDrawing() throws {
+        let bindings = StudioContractBindings.bindings(for: .track)
+        var draft = StudioDraft()
+        draft.reset(for: .track)
+        draft.prompt = ""
+        draft.inputPath = "/tmp/clip.mp4"
+        draft.visionRegionPrompts = [handle]
+
+        try XCTUnwrap(bindings["--box"]).write(&draft, .text("40,30,160,110,coffee cup\n1,2,3"))
+        XCTAssertEqual(draft.visionRegionPrompts?.map(\.isBox), [true, false], "boxes replaced, points kept")
+        XCTAssertEqual(draft.visionRegionPrompts?.first?.label, "coffee cup")
+        XCTAssertEqual(try XCTUnwrap(bindings["--box"]).read(draft), .text("40,30,160,110,coffee cup"))
+
+        try XCTUnwrap(bindings["--point"]).write(&draft, .text("12,18,negative,shadow"))
+        XCTAssertEqual(StudioRegionPromptText.pointText(draft.visionRegionPrompts ?? []), "12,18,negative,shadow")
+        XCTAssertEqual(draft.visionRegionPrompts?.boxes.count, 1)
+
+        try XCTUnwrap(bindings["--init-frame"]).write(&draft, .integer(12))
+        XCTAssertEqual(draft.visionInitFrame, 12)
+        try XCTUnwrap(bindings["--init-frame"]).write(&draft, .integer(0))
+        XCTAssertNil(draft.visionInitFrame, "0 is the CLI's default and reads as unset")
+        try XCTUnwrap(bindings["--end-frame"]).write(&draft, .integer(40))
+        XCTAssertEqual(draft.visionEndFrame, 40)
+        XCTAssertEqual(try XCTUnwrap(bindings["--end-frame"]).read(draft), .integer(40))
+        try XCTUnwrap(bindings["--end-frame"]).write(&draft, .unset)
+        XCTAssertNil(draft.visionEndFrame)
+
+        // A prompt typed in the Command view satisfies the run's validation like a drawn one.
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .track, draft: draft))
+        try XCTUnwrap(bindings["--box"]).write(&draft, .text(""))
+        try XCTUnwrap(bindings["--point"]).write(&draft, .text(""))
+        XCTAssertNil(draft.visionRegionPrompts)
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .track, draft: draft))
     }
 
     func testHandoffWithoutDetectionsClearsPromptsDrawnOnThePreviousPicture() {
@@ -302,28 +389,36 @@ final class StudioRegionPromptsTests: XCTestCase {
 
     // MARK: - Frames
 
+    /// `AppleMediaVideoIO.extractFrames`: nominal rate or 30, floored at 1, and
+    /// `(duration × fps).rounded(.toNearestOrEven)` frames.
     func testVideoFrameGridCountsFramesTheWayTheTrackerDoes() {
         let grid = StudioVideoFrameGrid(duration: 10, frameRate: 24)
         XCTAssertEqual(grid.frameCount, 240)
         XCTAssertEqual(grid.lastFrame, 239)
         XCTAssertEqual(grid.time(ofFrame: 3), 3.5 / 24, accuracy: 1e-9)
-        XCTAssertEqual(grid.frame(atTime: 0.999), 23)
-        XCTAssertEqual(grid.frame(atTime: 99), 239)
         XCTAssertEqual(grid.clamped(-4), 0)
         XCTAssertEqual(grid.clamped(1_000), 239)
         XCTAssertEqual(grid.timeDescription(ofFrame: 36), "0:01.5")
         XCTAssertEqual(grid.timeDescription(ofFrame: 239), "0:09.9")
 
-        let unknown = StudioVideoFrameGrid(duration: 0, frameRate: 0)
-        XCTAssertEqual(unknown.frameCount, 1)
-        XCTAssertEqual(unknown.frameRate, 24)
-        XCTAssertEqual(StudioVideoFrameGrid(duration: .nan, frameRate: 30).frameCount, 1)
-    }
-}
+        XCTAssertEqual(StudioVideoFrameGrid(duration: 2.5, frameRate: 29.97).frameCount, 75, "74.925 rounds to nearest")
+        XCTAssertEqual(StudioVideoFrameGrid(duration: 2.5, frameRate: 29).frameCount, 72, "72.5 rounds to even")
+        XCTAssertEqual(StudioVideoFrameGrid(duration: 10, frameRate: 0.25).frameRate, 1, "floored at 1 fps")
 
-private extension StudioRegionHit {
-    var isHandle: Bool {
-        if case .handle = self { return true }
-        return false
+        let unknown = StudioVideoFrameGrid(duration: 2, frameRate: 0)
+        XCTAssertEqual(unknown.frameRate, 30)
+        XCTAssertEqual(unknown.frameCount, 60)
+        XCTAssertEqual(StudioVideoFrameGrid(duration: 0, frameRate: 0).frameCount, 1)
+        XCTAssertEqual(StudioVideoFrameGrid(duration: .nan, frameRate: 30).frameCount, 1)
+        XCTAssertEqual(StudioVideoFrameGrid(duration: 1, frameRate: .nan).frameRate, 30)
+    }
+
+    /// `SCAIL2MaskPreparer` takes source frame `round(t × sourceFPS)` for plan time `t`.
+    func testSubjectPlanTimeSnapsToTheSourceFrameGrid() {
+        // Plan frame 1 at 24 fps (t = 1/24) on a 30 fps clip is source frame round(1.25) = 1.
+        XCTAssertEqual(StudioVideoFrameGrid.sourceTime(forPlanTime: 1.0 / 24, sourceFrameRate: 30), 1.5 / 30, accuracy: 1e-9)
+        // Plan frame 3 (t = 0.125) is source frame round(3.75) = 4.
+        XCTAssertEqual(StudioVideoFrameGrid.sourceTime(forPlanTime: 0.125, sourceFrameRate: 30), 4.5 / 30, accuracy: 1e-9)
+        XCTAssertEqual(StudioVideoFrameGrid.sourceTime(forPlanTime: 0, sourceFrameRate: 0), 0.5 / 30, accuracy: 1e-9)
     }
 }
