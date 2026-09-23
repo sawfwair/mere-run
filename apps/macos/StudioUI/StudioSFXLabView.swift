@@ -419,8 +419,7 @@ struct StudioSFXLabView: View {
 
     private var clapScore: Double? {
         guard task == .score, let text = item?.outputText else { return nil }
-        let tokens = text.split { $0.isWhitespace || $0 == ":" || $0 == "=" }
-        return tokens.reversed().compactMap { Double($0) }.first
+        return StudioCLAPScore.parse(text)
     }
 
     private func clapScoreView(_ score: Double) -> some View {
@@ -630,5 +629,17 @@ private struct StudioSFXSyncReview: View {
                 .merePanel()
             }
         }
+    }
+}
+
+/// `mere.run sfx clap` prints one JSON object (`score`, `prompt`, `audio`, `model`); the score is
+/// read from it by name, from the last line that decodes, rather than guessed from the text.
+enum StudioCLAPScore {
+    private struct Output: Decodable { let score: Double }
+
+    static func parse(_ text: String) -> Double? {
+        text.components(separatedBy: .newlines).reversed().lazy.compactMap { line in
+            try? JSONDecoder().decode(Output.self, from: Data(line.utf8)).score
+        }.first
     }
 }

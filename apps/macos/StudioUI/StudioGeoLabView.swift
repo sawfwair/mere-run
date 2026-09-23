@@ -59,12 +59,17 @@ enum StudioGeoTool: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// The tensors the input safetensors file must carry for the run to succeed.
-    var requiredTensors: [String] {
+    /// The tensors the input safetensors file must carry, as each command checks them
+    /// (`GeoFloodCommand`, `GeoFireCommand`, `GeoTESSERACommand`, `GeoOlmoEarthCommand`).
+    var tensorRequirement: StudioGeoTensorRequirement {
         switch self {
-        case .flood, .fire: ["S2L2A", "S1RTC", "DEM"]
-        case .tessera: ["S2", "S1", "DOY"]
-        case .olmoEarth: ["TIMESTAMPS"]
+        case .flood, .fire:
+            return .init(required: ["S2L2A", "S1RTC", "DEM"])
+        case .tessera:
+            // Sentinel-1 comes in complete pairs: bands with their day of year.
+            return .init(required: ["S2", "S2_DOY"], oneOf: ["S1_ASC + S1_ASC_DOY", "S1_DESC + S1_DESC_DOY"])
+        case .olmoEarth:
+            return .init(required: ["TIMESTAMPS"], oneOf: ["S2L2A", "S1RTC", "LANDSAT"])
         }
     }
 }
@@ -176,12 +181,22 @@ struct StudioGeoLabView: View {
     /// Names the tensors the CLI will look for, so a malformed bundle is caught by the
     /// operator before a run rather than by a ValidationError afterwards.
     private var requiredTensorsHint: some View {
+        let requirement = tool.tensorRequirement
+        return VStack(alignment: .leading, spacing: 8) {
+            tensorGroup("Required tensors", requirement.required)
+            if !requirement.oneOf.isEmpty {
+                tensorGroup("And at least one of", requirement.oneOf)
+            }
+        }
+    }
+
+    private func tensorGroup(_ title: String, _ names: [String]) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("Required tensors")
+            Text(title)
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
             HStack(spacing: 6) {
-                ForEach(tool.requiredTensors, id: \.self) { name in
+                ForEach(names, id: \.self) { name in
                     Text(name)
                         .font(MereRunTheme.monoFont)
                         .padding(.horizontal, 8)
@@ -192,9 +207,7 @@ struct StudioGeoLabView: View {
             }
             // Read as one phrase rather than a run of unrelated mono tokens.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(
-                "Required tensors: \(tool.requiredTensors.joined(separator: ", "))"
-            )
+            .accessibilityLabel("\(title): \(names.joined(separator: ", "))")
         }
     }
 
@@ -298,4 +311,12 @@ struct StudioGeoLabView: View {
             ? "\(tool.title) preflight submitted."
             : "\(tool.title) submitted."
     }
+}
+
+/// What an Earth command's input bundle must hold: every required tensor, and at least one of
+/// the `oneOf` entries when there are any. An entry joined with "+" is a pair that must be
+/// present together.
+struct StudioGeoTensorRequirement: Equatable {
+    var required: [String]
+    var oneOf: [String] = []
 }

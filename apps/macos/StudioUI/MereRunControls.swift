@@ -2,20 +2,30 @@ import StudioKit
 import SwiftUI
 
 /// The canonical primary action button: accent-tinted, prominent, theme-aware in light and dark.
+/// Disabled, it fades, so an action that cannot run never looks like one that can.
 package struct MerePrimaryButtonStyle: ButtonStyle {
     package func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(MereRunTheme.bodyFont.weight(.semibold))
-            .padding(.horizontal, MereRunTheme.Spacing.md)
-            .padding(.vertical, MereRunTheme.Spacing.xs)
-            .frame(minHeight: 28)
-            .background {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                    .fill(MereRunTheme.accent.opacity(configuration.isPressed ? 0.78 : 1))
-            }
-            .foregroundStyle(MereRunTheme.background)
-            .contentShape(Rectangle())
-            .opacity(configuration.isPressed ? 0.95 : 1)
+        MerePrimaryButtonBody(configuration: configuration)
+    }
+
+    private struct MerePrimaryButtonBody: View {
+        let configuration: Configuration
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            configuration.label
+                .font(MereRunTheme.bodyFont.weight(.semibold))
+                .padding(.horizontal, MereRunTheme.Spacing.md)
+                .padding(.vertical, MereRunTheme.Spacing.xs)
+                .frame(minHeight: 28)
+                .background {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                        .fill(MereRunTheme.accent.opacity(configuration.isPressed ? 0.78 : 1))
+                }
+                .foregroundStyle(MereRunTheme.background)
+                .contentShape(Rectangle())
+                .opacity(isEnabled ? (configuration.isPressed ? 0.95 : 1) : 0.4)
+        }
     }
 }
 
@@ -34,6 +44,7 @@ package struct MereSecondaryButtonStyle: ButtonStyle {
 
     private struct MereSecondaryButtonBody: View {
         let configuration: Configuration
+        @Environment(\.isEnabled) private var isEnabled
         @State private var hovering = false
 
         var body: some View {
@@ -56,6 +67,7 @@ package struct MereSecondaryButtonStyle: ButtonStyle {
                 }
                 .contentShape(Rectangle())
                 .scaleEffect(configuration.isPressed ? 0.98 : 1)
+                .opacity(isEnabled ? 1 : 0.45)
                 .onHover { hovering = $0 }
                 .animation(MereRunTheme.Motion.quick, value: hovering)
                 .animation(MereRunTheme.Motion.quick, value: configuration.isPressed)
