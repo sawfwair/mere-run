@@ -101,7 +101,7 @@ struct StudioAdaptersView: View {
             } label: {
                 Label("Store", systemImage: "folder")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
             .disabled(payload == nil)
 
             Button {
@@ -109,14 +109,14 @@ struct StudioAdaptersView: View {
             } label: {
                 Label("Use local…", systemImage: "doc.badge.plus")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
 
             Button {
                 Task { await refresh() }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.mereSecondary)
             .disabled(isRefreshing)
         }
         .padding(.horizontal, 18)
@@ -281,23 +281,21 @@ struct StudioAdaptersView: View {
                     } label: {
                         Label("Use in Studio", systemImage: "checkmark.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MereRunTheme.accent)
+                    .buttonStyle(.merePrimary)
 
                     Button {
                         reveal(row)
                     } label: {
                         Label("Reveal", systemImage: "magnifyingglass")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
                 } else {
                     Button {
                         pull(row)
                     } label: {
                         Label(pullingID == row.id ? "Queued" : "Download", systemImage: "arrow.down.circle")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(MereRunTheme.accent)
+                    .buttonStyle(.merePrimary)
                     .disabled(pullingID != nil)
                 }
             }
@@ -367,22 +365,18 @@ struct StudioAdaptersView: View {
                                 Button(selectedTrainingID == item.id ? "Hide" : "Inspect") {
                                     selectedTrainingID = selectedTrainingID == item.id ? nil : item.id
                                 }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
+                                .buttonStyle(.mereSecondary)
                                 if let output = adapterOutput(for: item) {
                                     Button("Use") {
                                         onUseLocal(output.path)
                                     }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(MereRunTheme.accent)
-                                    .controlSize(.small)
+                                    .buttonStyle(.merePrimary)
                                 }
                                 if let output = item.outputURL {
                                     Button("Reveal") {
                                         NSWorkspace.shared.activateFileViewerSelecting([output])
                                     }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
+                                    .buttonStyle(.mereSecondary)
                                 }
                             }
                             if selectedTrainingID == item.id {
@@ -408,7 +402,7 @@ struct StudioAdaptersView: View {
             Label(title, systemImage: symbol)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.mereSecondary)
     }
 
     @MainActor

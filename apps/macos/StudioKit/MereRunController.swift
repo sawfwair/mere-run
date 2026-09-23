@@ -305,6 +305,9 @@ package final class MereRunController: ObservableObject {
     /// Why the runtime API key is not in the Keychain, or nil once it is. Set when the launch
     /// migration or a later save fails; the key still applies for the running session.
     @Published package private(set) var runtimeAPIKeyStorageNotice: String?
+    /// Why the latest run had to move to App Outputs, for the shell's banner; the specialist
+    /// pages and the Command view report here since neither owns a banner of its own.
+    @Published package private(set) var outputFallbackReason: String?
     @Published package private(set) var liveOutputText = ""
     @Published package private(set) var currentProgress: StudioRunProgress?
     /// Live progress keyed by durable Studio request id. Unlike `currentProgress`, this covers
@@ -1031,6 +1034,10 @@ package final class MereRunController: ObservableObject {
     }
 
     @discardableResult
+    package func noteOutputFallback(_ reason: String) {
+        outputFallbackReason = reason
+    }
+
     package func run(studio request: StudioRunRequest) -> Bool {
         // Track the conversation as in-flight at SUBMISSION time, not at start, so a turn that
         // queues behind the concurrency cap still blocks a second send into the same thread and

@@ -21,6 +21,10 @@ enum ContractFormLabelStyle {
     case label
     /// The raw flag in a fixed monospaced column, the way the Command board draws it.
     case flag
+    /// The Command panel's shape: the label in the column with the flag under it in small
+    /// monospace, over the raw controls of `.flag` — typed values, exactly what the argv carries —
+    /// so the panel reads in plain words without hiding what it will run.
+    case labelledFlag
 }
 
 struct ContractForm<Draft, Override: View>: View {
@@ -71,7 +75,7 @@ struct ContractFormControl<Draft>: View {
     var body: some View {
         switch labelStyle {
         case .label: labelled
-        case .flag: flagged
+        case .flag, .labelledFlag: flagged
         }
     }
 
@@ -186,16 +190,40 @@ struct ContractFormControl<Draft>: View {
 
     private func flagRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .center, spacing: 10) {
+            flagColumn
+                .frame(width: Self.flagColumnWidth, alignment: .leading)
+            content()
+        }
+        .frame(minHeight: 28)
+    }
+
+    /// The row's head: the flag alone for the console, or the label over the flag for the panel.
+    @ViewBuilder
+    private var flagColumn: some View {
+        switch labelStyle {
+        case .labelledFlag:
+            VStack(alignment: .leading, spacing: 1) {
+                Text(field.label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(field.flag)
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .help(field.flag)
+            .accessibilityElement(children: .combine)
+        case .label, .flag:
             Text(field.flag)
                 .font(.system(size: 12, weight: .medium, design: .monospaced))
                 .foregroundStyle(MereRunTheme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .frame(width: Self.flagColumnWidth, alignment: .leading)
                 .help(field.option.label)
-            content()
         }
-        .frame(minHeight: 28)
     }
 
     // MARK: Numeric controls

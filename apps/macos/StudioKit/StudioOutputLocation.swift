@@ -73,6 +73,42 @@ package enum StudioOutputLocation {
         UserDefaults.standard.string(forKey: rootDefaultsKey) ?? ""
     }
 
+    // MARK: - Reservations
+
+    /// The destinations of runs submitted in this process. A run's file is not on disk until the
+    /// CLI writes it, so a second proposal made in the same second — the page advancing its own
+    /// path right after Submit, or two pages sharing a clock — would name the same file; naming
+    /// treats a reserved path like an existing one.
+    private static let reservations = Reservations()
+
+    private final class Reservations: @unchecked Sendable {
+        private let lock = NSLock()
+        private var paths: Set<String> = []
+
+        func insert(_ path: String) {
+            lock.lock()
+            paths.insert(URL(fileURLWithPath: path).standardizedFileURL.path)
+            lock.unlock()
+        }
+
+        func contains(_ path: String) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return paths.contains(URL(fileURLWithPath: path).standardizedFileURL.path)
+        }
+    }
+
+    /// Marks `path` as taken by a submitted run. `preparingDestination` does this for every run
+    /// it prepares; it is exposed so a test can prove the naming steps aside.
+    package static func reserve(_ path: String) {
+        guard !path.isBlank else { return }
+        reservations.insert(path)
+    }
+
+    private static func isTaken(_ path: String, fileManager: FileManager) -> Bool {
+        fileManager.fileExists(atPath: path) || reservations.contains(path)
+    }
+
     // MARK: - Names
 
     /// A file-name stem from free text: lowercased, diacritics folded, everything that is not a
@@ -185,7 +221,7 @@ package enum StudioOutputLocation {
             stem: stem(prompt: prompt, fallbackStem: fallbackStem),
             identifier: identifierOverride ?? identifier(seed: seed, fingerprint: fingerprint),
             fileExtension: fileExtension,
-            exists: { fileManager.fileExists(atPath: directory.appendingPathComponent($0).path) }
+            exists: { isTaken(directory.appendingPathComponent($0).path, fileManager: fileManager) }
         )
         return directory.appendingPathComponent(name, isDirectory: false)
     }
@@ -211,7 +247,7 @@ package enum StudioOutputLocation {
             stem: stem(prompt: prompt, fallbackStem: fallbackStem),
             identifier: identifierOverride ?? shortIdentifier(for: fingerprint),
             fileExtension: "",
-            exists: { fileManager.fileExists(atPath: directory.appendingPathComponent($0).path) }
+            exists: { isTaken(directory.appendingPathComponent($0).path, fileManager: fileManager) }
         )
         return directory.appendingPathComponent(name, isDirectory: true)
     }
@@ -246,6 +282,53 @@ package enum StudioOutputLocation {
         case .none:
             return nil
         }
+    }
+
+    /// The destination a specialist page proposes before it runs: the domain's folder wherever
+    /// Settings says, named `<name>-<timestamp>`. These pages have no prompt to name a file after
+    /// and several write a whole directory, so a timestamp is what keeps two runs apart. It is the
+    /// folder `templateOutputPath` sends the same command to from the Command Console, so a page
+    /// and the console file one command's work together.
+    package static func specialistDirectory(
+        domain: StudioDomain,
+        name: String,
+        now: Date = Date(),
+        configuredRoot: String? = nil,
+        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
+        fileManager: FileManager = .default
+    ) -> URL {
+        outputDirectoryURL(
+            domain: domain,
+            prompt: "",
+            fallbackStem: name,
+            identifierOverride: DateFormatter.mereRunTimestamp.string(from: now),
+            configuredRoot: configuredRoot,
+            home: home,
+            fileManager: fileManager
+        )
+    }
+
+    /// One file a specialist page writes, filed the same way: `<name>-<timestamp>.<ext>` in the
+    /// media folder the extension calls for, or under the configured root.
+    package static func specialistFile(
+        domain: StudioDomain,
+        name: String,
+        fileExtension: String,
+        now: Date = Date(),
+        configuredRoot: String? = nil,
+        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
+        fileManager: FileManager = .default
+    ) -> URL {
+        outputURL(
+            domain: domain,
+            prompt: "",
+            fallbackStem: name,
+            fileExtension: fileExtension,
+            identifierOverride: DateFormatter.mereRunTimestamp.string(from: now),
+            configuredRoot: configuredRoot,
+            home: home,
+            fileManager: fileManager
+        )
     }
 
     /// The destination for one Studio run: the same folder the template already chose, but named
@@ -305,6 +388,7 @@ package enum StudioOutputLocation {
 
         do {
             try fileManager.createDirectory(at: intended, withIntermediateDirectories: true)
+            reserve(draft.outputPath)
             return Preparation(draft: draft)
         } catch {
             let fallbackDirectory = appOutputsRoot(fileManager: fileManager)
@@ -320,11 +404,42 @@ package enum StudioOutputLocation {
                 draft.visionMaskOutputDirectory, from: originalDirectory, to: fallbackDirectory
             )
             moved.timingsOutputPath = redirect(draft.timingsOutputPath, from: originalDirectory, to: fallbackDirectory)
+            reserve(moved.outputPath)
             return Preparation(
                 draft: moved,
                 fallbackReason: "Could not write to \(abbreviate(intended)): \(error.localizedDescription)"
             )
         }
+    }
+
+    /// `preparingDestination` for a whole request — the specialist pages and the Command view
+    /// submit one of these rather than a prompt draft. When the draft moves, the `--output` the
+    /// request's Command edits carry moves with it, so a redirected run and its recorded argv
+    /// agree. The reason, when there is one, is for the shell's banner.
+    package static func preparing(
+        _ request: StudioRunRequest,
+        fileManager: FileManager = .default
+    ) -> (request: StudioRunRequest, fallbackReason: String?) {
+        let prepared = preparingDestination(of: request.draft, fileManager: fileManager)
+        guard prepared.draft != request.draft else { return (request, nil) }
+        let flag = request.templateID.capability?.output.flag ?? "--output"
+        let moved = StudioRunRequest(
+            id: request.id,
+            mode: request.mode,
+            templateID: request.templateID,
+            template: request.template,
+            draft: prepared.draft,
+            createdAt: request.createdAt,
+            conversationID: request.conversationID,
+            execution: request.execution?.replacing(flag, with: prepared.draft.outputPath),
+            parentID: request.parentID
+        )
+        return (moved, prepared.fallbackReason)
+    }
+
+    /// The one line the shell shows when a run had to move: why, and where it went instead.
+    package static func fallbackNotice(_ reason: String) -> String {
+        "\(reason) Saving to \(abbreviate(appOutputsRoot())) instead."
     }
 
     /// Rewrites a path that lived in `directory` so it lives in `replacement` instead. Paths

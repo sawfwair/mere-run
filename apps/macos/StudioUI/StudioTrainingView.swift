@@ -297,19 +297,19 @@ struct StudioTrainingView: View {
         _kind = State(initialValue: kind)
 
         var image = CommandCatalog.template(id: .imageTrainLoRA)?.defaultDraft() ?? CommandDraft()
-        image.outputPath = Self.timestampedOutput(prefix: "image-adapter")
+        image.outputPath = Self.timestampedOutput(domain: .image, prefix: "image-adapter")
         if image.seed.isBlank { image.seed = "42" }
         image.checkpointInterval = 250
         image.sampleInterval = 250
         _imageDraft = StudioStoredValue(wrappedValue: image, "Training.imageDraft")
 
         var text = CommandCatalog.template(id: .textTrainLoRA)?.defaultDraft() ?? CommandDraft()
-        text.outputPath = Self.timestampedOutput(prefix: "text-adapter")
+        text.outputPath = Self.timestampedOutput(domain: .chat, prefix: "text-adapter")
         if text.seed.isBlank { text.seed = "42" }
         _textDraft = StudioStoredValue(wrappedValue: text, "Training.textDraft")
 
         var music = CommandCatalog.template(id: .musicTrainAdapter)?.defaultDraft() ?? CommandDraft()
-        music.outputPath = Self.timestampedOutput(prefix: "music-adapter")
+        music.outputPath = Self.timestampedOutput(domain: .music, prefix: "music-adapter")
         if music.seed.isBlank { music.seed = "42" }
         _musicDraft = StudioStoredValue(wrappedValue: music, "Training.musicDraft")
     }
@@ -404,8 +404,7 @@ struct StudioTrainingView: View {
                     .font(MereRunTheme.sectionFont)
                 Spacer()
                 Button("Inspect") { inspectDataset() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(.mereSecondary)
             }
             StudioPathField(
                 label: kind == .image ? "Image-caption directory" : "JSONL dataset",
@@ -752,15 +751,14 @@ struct StudioTrainingView: View {
                     Label(kind == .music ? "Validate" : "Preflight", systemImage: "checkmark.shield")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.mereSecondary)
                 Button {
                     startTraining()
                 } label: {
                     Label(activeDraft.trainingResumePath?.isBlank == false ? "Resume training" : "Start training", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
+                .buttonStyle(.merePrimary)
             }
         }
     }
@@ -977,7 +975,7 @@ struct StudioTrainingView: View {
                     } label: {
                         Label(url.lastPathComponent, systemImage: "shippingbox")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.mereSecondary)
                     .help(url.path)
                 }
             }
@@ -1235,12 +1233,12 @@ struct StudioTrainingView: View {
     private func advanceOutput() {
         switch kind {
         case .image:
-            imageDraft.outputPath = Self.timestampedOutput(prefix: "image-adapter")
+            imageDraft.outputPath = Self.timestampedOutput(domain: .image, prefix: "image-adapter")
             imageDraft.trainingResumePath = nil
         case .text:
-            textDraft.outputPath = Self.timestampedOutput(prefix: "text-adapter")
+            textDraft.outputPath = Self.timestampedOutput(domain: .chat, prefix: "text-adapter")
         case .music:
-            musicDraft.outputPath = Self.timestampedOutput(prefix: "music-adapter")
+            musicDraft.outputPath = Self.timestampedOutput(domain: .music, prefix: "music-adapter")
         }
     }
 
@@ -1268,16 +1266,10 @@ struct StudioTrainingView: View {
         }
     }
 
-    private static func timestampedOutput(prefix: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Documents/MereRun/Training", isDirectory: true)
-            .appendingPathComponent(
-                "\(prefix)-\(formatter.string(from: StudioDisplayClock.now)).safetensors",
-                isDirectory: false
-            )
-            .path
+    /// An adapter is a document, so it lands in Documents (or the configured root) under the
+    /// domain it trains for: Image, Chat, or Music.
+    private static func timestampedOutput(domain: StudioDomain, prefix: String) -> String {
+        StudioSpecialistFiles.outputFile(domain: domain, name: prefix, fileExtension: "safetensors").path
     }
 }
 

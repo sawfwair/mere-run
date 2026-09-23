@@ -47,14 +47,23 @@ package enum StudioSpecialistFiles {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
+    /// A fresh directory for a specialist run, in `domain`'s folder wherever Settings ▸ General
+    /// says generations go, stamped with the display clock so the snapshot boards render a
+    /// stable path.
     @MainActor
-    static func timestampedDirectory(component: String) -> URL {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Movies/MereRun", isDirectory: true)
-            .appendingPathComponent(component, isDirectory: true)
-            .appendingPathComponent(formatter.string(from: StudioDisplayClock.now), isDirectory: true)
+    static func outputDirectory(domain: StudioDomain, name: String) -> URL {
+        StudioOutputLocation.specialistDirectory(domain: domain, name: name, now: StudioDisplayClock.now)
+    }
+
+    /// One output file for a specialist run, filed the same way as `outputDirectory`.
+    @MainActor
+    static func outputFile(domain: StudioDomain, name: String, fileExtension: String) -> URL {
+        StudioOutputLocation.specialistFile(
+            domain: domain,
+            name: name,
+            fileExtension: fileExtension,
+            now: StudioDisplayClock.now
+        )
     }
 }
 
@@ -90,7 +99,7 @@ struct StudioPathField: View {
                         }
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.mereSecondary)
             }
         }
     }
@@ -172,13 +181,13 @@ struct StudioSpecialistResultView: View {
                         } label: {
                             Label("Quick Look", systemImage: "eye")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.mereSecondary)
                         Button {
                             NSWorkspace.shared.activateFileViewerSelecting([activeURL])
                         } label: {
                             Label("Reveal", systemImage: "folder")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.mereSecondary)
                     }
                 }
 
@@ -188,16 +197,25 @@ struct StudioSpecialistResultView: View {
                     .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
 
                 if artifacts.count > 1 {
+                    // Which file the preview shows: a segmented row, the way every other
+                    // either-or choice in Studio is drawn.
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 7) {
+                        HStack(spacing: 2) {
                             ForEach(artifacts, id: \.self) { url in
-                                Button(url.lastPathComponent) { selection = url }
-                                    .buttonStyle(.bordered)
-                                    .tint(activeURL == url ? MereRunTheme.accent : nil)
-                                    .help(url.path)
+                                MereSegment(title: url.lastPathComponent, isSelected: activeURL == url) {
+                                    selection = url
+                                }
+                                .help(url.path)
                             }
                         }
+                        .padding(2)
+                        .background {
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(MereRunTheme.surfaceRaised)
+                        }
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Result files")
                 }
             } else {
                 ContentUnavailableView(
@@ -293,7 +311,11 @@ enum StudioSpecialistRunner {
             template: template,
             draft: draft
         )
-        let request = controller.taskSessions.resolving(base)
+        // The same destination preparation a prompt task gets: the folder is created, or the run
+        // moves to App Outputs and the shell says why.
+        let prepared = StudioOutputLocation.preparing(controller.taskSessions.resolving(base))
+        if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
+        let request = prepared.request
         let preview = controller.commandPreview(arguments: request.execution?.arguments ?? template.arguments(from: request.draft), masksSecrets: true)
         let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
             ? .queued

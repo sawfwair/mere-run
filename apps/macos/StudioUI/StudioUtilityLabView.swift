@@ -297,8 +297,7 @@ struct StudioUtilityLabView: View {
                 Label(runButtonTitle, systemImage: "play.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(.merePrimary)
             .disabled(!canRun)
         }
     }
@@ -726,18 +725,18 @@ struct StudioUtilityLabView: View {
             inputText = "My name is Alice Smith and my email is alice@example.com"
         case .imageValidation:
             if outputPath.isEmpty {
-                outputPath = StudioSpecialistFiles.timestampedDirectory(component: "validation").path
+                outputPath = StudioSpecialistFiles.outputDirectory(domain: .image, name: "validation").path
             }
         case .datasetDiscovery:
             break
         case .runPlan:
             if materializePath.isEmpty {
-                materializePath = StudioSpecialistFiles.timestampedDirectory(component: "run-plan").path
+                materializePath = StudioSpecialistFiles.outputDirectory(domain: .image, name: "run-plan").path
             }
         }
     }
 
-    @StudioStoredValue("UtilityLab.directory") private var utilityDirectory = StudioSpecialistFiles.timestampedDirectory(component: "utilities")
+    @StudioStoredValue("UtilityLab.directory") private var utilityDirectory = StudioSpecialistFiles.outputDirectory(domain: .text, name: "utilities")
 
     private func outputPathForUtility(filename: String) -> String {
         utilityDirectory

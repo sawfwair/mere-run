@@ -58,8 +58,11 @@ extension StudioPromptTaskController {
 
     /// Specialist forms use the same stored Command override as their Command panel.
     package func runTask(_ base: StudioRunRequest, task: StudioTask) throws -> StudioRunRequest {
-        let request = sessions.resolving(base)
-        try validate(request)
+        let resolved = sessions.resolving(base)
+        try validate(resolved)
+        let prepared = StudioOutputLocation.preparing(resolved)
+        if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
+        let request = prepared.request
         sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
         submitLibraryRequest(request)
         return request

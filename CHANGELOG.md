@@ -115,6 +115,29 @@ The format is based on Keep a Changelog.
   is one), Choose another model, or Check again, keeping the CLI's last line as
   a muted detail when a check fails. A run that failed because its model is not
   on this Mac now says so on its card and offers Get the model.
+- Save every macOS Studio specialist page's output where Settings ▸ General
+  says. Vision, 3D, Sound, Voice, the Music tools, Train (adapters under the
+  domain they train for), Video ▸ Subjects, Text ▸ Decisions, the Image
+  utilities (validation and run plans under Image, embeddings and anonymization
+  under Text), and voice recordings now propose `<Domain>/<page>-<timestamp>`
+  under the per-media folders or the configured root, instead of
+  `~/Movies/MereRun` and its siblings. A page's run gets the same unwritable-
+  folder fallback a prompt run does, and two runs in one second no longer share
+  a name.
+- Render specialist results readably: Who Spoke draws its JSON timeline as
+  speaker lanes and turn rows with Save timeline…, Music ▸ Analyze shows tempo,
+  key, meter, language, caption, and lyrics, and Runs shows an inspected run's
+  state, timings, steps, and outputs with Reveal, each with the raw report behind
+  a disclosure.
+- Name Studio's own CLI reads plainly in the Activity popover and the menu bar
+  ("Checking models") and move the CLI path to the footer's tooltip. Head each
+  Command panel row with the option's name over its flag, make the Settings path
+  fields pickers with Reveal and Reset, and draw every specialist page's buttons
+  in the Studio styles.
+- Add still-image depth (Marigold V2) beside video depth in Vision ▸ Depth, pick
+  the live-tracking camera by name, choose TESSERA output dimensions from the
+  values the command accepts, and choose the model for a Models ▸ Locations
+  binding from the inventory.
 
 ## 0.55.0 - 2026-09-22
 

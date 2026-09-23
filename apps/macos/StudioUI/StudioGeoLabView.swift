@@ -119,7 +119,16 @@ struct StudioGeoLabView: View {
         .onChange(of: tool) { _, _ in
             statusMessage = nil
         }
+        .onAppear {
+            // A value typed before the picker existed that the command would refuse reads as
+            // the checkpoint default.
+            let dimensions = binding(\.geoDimensions)
+            if !Self.tesseraDimensions.contains(dimensions.wrappedValue) { dimensions.wrappedValue = "" }
+        }
     }
+
+    /// What `geo tessera --dimensions` accepts, plus blank for the checkpoint's own width.
+    private static let tesseraDimensions = ["", "16", "32", "64", "128", "1024"]
 
     private var controls: some View {
         ScrollView {
@@ -164,8 +173,7 @@ struct StudioGeoLabView: View {
                     Label("Run \(tool.title)", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
+                .buttonStyle(.merePrimary)
 
                 if let statusMessage {
                     Text(statusMessage)
@@ -215,11 +223,13 @@ struct StudioGeoLabView: View {
     private var toolControls: some View {
         switch tool {
         case .tessera:
-            labeledTextField(
-                "Output dimensions",
-                placeholder: "Students: 16, 32, 64, or 128. Teacher: 1024. Blank uses the checkpoint default.",
-                text: binding(\.geoDimensions)
-            )
+            // The only values `geo tessera --dimensions` accepts: the student widths, or 1024 for
+            // the teacher checkpoint. Blank lets the checkpoint choose.
+            Picker("Output dimensions", selection: binding(\.geoDimensions)) {
+                Text("Checkpoint default").tag("")
+                ForEach(["16", "32", "64", "128"], id: \.self) { Text($0).tag($0) }
+                Text("1024 (teacher)").tag("1024")
+            }
         case .olmoEarth:
             Picker("Spatial patch size", selection: binding(\.geoPatchSize)) {
                 Text("1 px").tag(1)

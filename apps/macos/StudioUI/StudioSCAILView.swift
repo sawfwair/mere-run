@@ -71,9 +71,8 @@ struct StudioSCAILView: View {
     @StudioStoredValue("Subjects.modelRoot") private var modelRoot = ""
     @StudioStoredValue("Subjects.adapterPath") private var adapterPath = ""
     @StudioStoredValue("Subjects.adapterStrength") private var adapterStrength = 1.0
-    @StudioStoredValue("Subjects.outputPath") private var outputPath = StudioSpecialistFiles.timestampedDirectory(component: "SCAIL")
-        .deletingLastPathComponent()
-        .appendingPathComponent("scail-\(UUID().uuidString.prefix(8)).mp4")
+    @StudioStoredValue("Subjects.outputPath") private var outputPath = StudioSpecialistFiles
+        .outputFile(domain: .video, name: "scail", fileExtension: "mp4")
         .path
 
     // Jobs and chrome

@@ -35,7 +35,7 @@ struct StudioTaskCommandView: View {
                                 MereEyebrow(group.title)
                                 ContractForm(fields: group.fields,
                                              dependencies: StudioConsoleCommand.dependencies(for: capability, draft: form),
-                                             draft: $form, labelStyle: .flag) { _ in EmptyView() }
+                                             draft: $form, labelStyle: .labelledFlag) { _ in EmptyView() }
                             }
                         }
                     }
