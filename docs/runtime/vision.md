@@ -217,6 +217,24 @@ per detection. `--preflight --json` validates the image, installed model,
 queries, and output plan without loading the model; `--quiet` prints only the
 annotated image path.
 
+For local model roots, preflight applies the same manifest, checkpoint-file,
+and tokenizer-layout validation as execution. Missing or invalid manifests fail
+before the command reports readiness. These checks do not load tensor data or
+establish model accuracy.
+
+Coordinate decoding follows the Falcon reference's repeated-location policy in
+both direct grounding and the batch endpoint. Each query keeps its own coordinate
+history. If both predicted axes are within a strict 1% of an earlier coordinate,
+the decoder suppresses both selected bins and tries again, for at most 100
+attempts. The selected coordinate feeds subsequent token generation; this is not
+postprocessing of final boxes. The last candidate is retained when the attempt
+limit is reached, so duplicates are still possible. Token budgets and image
+preprocessing remain separate settings.
+
+Direct grounding and batched vision serving stop each query when the model emits
+its configured end-of-sequence token or the tokenizer's `<|end_of_query|>` token.
+Other batch queries continue until they stop or reach the requested token limit.
+
 Portable graphs expose the same runtime as the built-in `vision.ground` node.
 The node accepts an image plus a JSON array of queries and produces a verified
 annotated `image`, structured `detections` JSON, and a portable `masks`

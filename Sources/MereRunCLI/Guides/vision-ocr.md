@@ -62,6 +62,12 @@ mere.run vision ocr --help
   the managed LightOn path on a new document type.
 - Preprocess by cropping, deskewing, or improving contrast before changing sampling.
 
+LightOnOCR is intended for document transcription. For a camera scene, crop
+the text region and verify the result against the image before using it as
+evidence. A response that describes the scene or invents contact details is
+not a transcription. `--temperature 0` makes a run repeatable; it does not
+establish that the text is correct.
+
 ## Examples
 
 ```bash

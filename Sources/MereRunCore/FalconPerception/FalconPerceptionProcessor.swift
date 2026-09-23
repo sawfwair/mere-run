@@ -225,7 +225,7 @@ public struct FalconPerceptionProcessor: @unchecked Sendable {
             newWidth = Int(Double(newHeight) * aspectRatio)
         }
 
-        return (try? MediaImageIO.resized(image, width: newWidth, height: newHeight)) ?? image
+        return (try? FalconPerceptionRGBResize.resized(image, width: newWidth, height: newHeight)) ?? image
     }
 
     public static func smartResize(_ image: MediaImage, factor: Int, minPixels: Int = 56 * 56, maxPixels: Int = 28 * 28 * 1280) -> MediaImage {
@@ -248,7 +248,7 @@ public struct FalconPerceptionProcessor: @unchecked Sendable {
         if roundedWidth == width && roundedHeight == height {
             return image
         }
-        return (try? MediaImageIO.resized(image, width: roundedWidth, height: roundedHeight)) ?? image
+        return (try? FalconPerceptionRGBResize.resized(image, width: roundedWidth, height: roundedHeight)) ?? image
     }
 
     private static func normalizedPixels(from image: MediaImage) -> [Float] {

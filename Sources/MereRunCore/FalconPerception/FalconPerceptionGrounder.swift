@@ -391,6 +391,7 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         MLX.eval(logits)
 
         var preparedDetections = Array(repeating: [PreparedDetection](), count: batchSize)
+        var coordinateDecoders = Array(repeating: FalconPerceptionCoordinateDecoder(), count: batchSize)
         var currentXY = [FalconPerceptionCenter?](repeating: nil, count: batchSize)
         var currentHW = [FalconPerceptionSize?](repeating: nil, count: batchSize)
         var stopped = [Bool](repeating: false, count: batchSize)
@@ -414,10 +415,8 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                 hiddenLast = nil
             }
             let coordLogits = needsCoordinates ? hiddenLast.map(model.decodeCoordinates) : nil
-            let coordBins = coordLogits.map {
-                MLX.argMax($0, axis: -1).asArray(Int32.self).map(Int.init)
-            } ?? []
-            let coordBinCount = max(1, (coordLogits?.dim(-1) ?? 1) - 1)
+            let coordValues = coordLogits?.asArray(Float.self) ?? []
+            let coordBinCount = coordLogits?.dim(-1) ?? 0
             let sizeValues = needsSizes
                 ? hiddenLast.map { model.processSizes(model.decodeSizes(from: $0)).asArray(Float.self) } ?? []
                 : []
@@ -430,7 +429,7 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                     continue
                 }
                 let tokenID = tokenIDs[batchIndex]
-                if tokenID == config.eosID {
+                if state.tokenizer.isGenerationStopToken(tokenID, modelEosTokenID: config.eosID) {
                     stopped[batchIndex] = true
                     tokenIDs[batchIndex] = state.tokenizer.padTokenID
                     continue
@@ -451,10 +450,11 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                         )
                     }
                     let valueOffset = batchIndex * 2
-                    let xy = FalconPerceptionCenter(
-                        x: Float(coordBins[valueOffset]) / Float(coordBinCount),
-                        y: Float(coordBins[valueOffset + 1]) / Float(coordBinCount)
+                    let logitsOffset = valueOffset * coordBinCount
+                    let coordinate = coordinateDecoders[batchIndex].decode(
+                        logits: Array(coordValues[logitsOffset..<(logitsOffset + 2 * coordBinCount)])
                     )
+                    let xy = FalconPerceptionCenter(x: Float(coordinate.x), y: Float(coordinate.y))
                     currentXY[batchIndex] = xy
                     currentHW[batchIndex] = nil
                     encodedCoordinates[valueOffset] = xy.x
@@ -684,6 +684,7 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
         var detections: [PreparedDetection] = []
         detections.reserveCapacity(8)
 
+        var coordinateDecoder = FalconPerceptionCoordinateDecoder()
         var currentXY: FalconPerceptionCenter?
         var currentHW: FalconPerceptionSize?
         var currentMask: [UInt8]?
@@ -703,8 +704,8 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
             }
             let tokenID = Int(MLX.argMax(lastLogits).item(Int32.self))
             trace("TRACE runtime token: \(tokenID) \(state.tokenizer.decode(token: tokenID))")
-            if tokenID == config.eosID {
-                trace("TRACE runtime hit_eos")
+            if state.tokenizer.isGenerationStopToken(tokenID, modelEosTokenID: config.eosID) {
+                trace("TRACE runtime hit_stop_token: \(tokenID)")
                 break
             }
 
@@ -754,10 +755,9 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
                     }
 
                     let coordLogits = model.decodeCoordinates(from: hiddenForDecode)
-                    let predBins = MLX.argMax(coordLogits, axis: -1).asArray(Int32.self)
-                    let numBins = max(1, coordLogits.dim(-1) - 1)
-                    let x = Float(predBins[0]) / Float(numBins)
-                    let y = Float(predBins[1]) / Float(numBins)
+                    let coordinate = coordinateDecoder.decode(logits: coordLogits.asArray(Float.self))
+                    let x = Float(coordinate.x)
+                    let y = Float(coordinate.y)
                     let xy = FalconPerceptionCenter(x: x, y: y)
                     currentXY = xy
                     encodedCoordXY = MLXArray([x, y], [1, 2]).asType(.float32)

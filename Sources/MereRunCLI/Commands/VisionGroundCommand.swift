@@ -100,6 +100,17 @@ struct VisionGround: AsyncParsableCommand {
         let maskOutputDirectoryURL = Self.resolveDirectoryURL(maskOutputDir)
 
         if preflight {
+            let validation = MereRunModelValidator.validate(
+                modelRoot: resolvedModel.rootURL,
+                expectedModelID: resolvedModel.isManaged ? resolvedModel.modelID : nil,
+                fileManager: fileManager
+            )
+            guard validation.isValid else {
+                throw FalconPerceptionGrounder.GrounderError.invalidModelRoot(
+                    resolvedModel.rootURL,
+                    details: validation.errors
+                )
+            }
             let report = PreflightReport(
                 status: "ready",
                 capability: "vision.ground",
