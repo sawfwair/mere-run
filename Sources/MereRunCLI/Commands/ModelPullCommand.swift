@@ -136,6 +136,11 @@ struct ModelPull: AsyncParsableCommand {
 
     private func pull(_ spec: ManagedModelSpec) async throws {
         let modelDir = spec.managedInstallRootURL()
+        if !force, acceptModelLicense,
+           ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir),
+           try acknowledgeInstalledUsageTerms(for: spec, at: modelDir) {
+            stderr("[\(spec.id)] recorded acceptance of installed model terms without downloading")
+        }
         if !force, isInstalledInUnifiedCatalog(spec) {
             if !quiet {
                 let resolution = spec.modelID.flatMap { ModelResolver().resolveIfPresent($0) }
@@ -280,6 +285,25 @@ struct ModelPull: AsyncParsableCommand {
             spec: spec,
             at: spec.managedInstallRootURL()
         )
+    }
+
+    func acknowledgeInstalledUsageTerms(for spec: ManagedModelSpec, at modelDir: URL) throws -> Bool {
+        guard let restriction = spec.usageRestriction else { return false }
+        var manifest = try MereRunModelManifest.loadRequired(from: modelDir)
+        guard manifest.id == spec.id else {
+            throw ValidationError("Installed manifest identifies \(manifest.id), expected \(spec.id).")
+        }
+        guard manifest.usageTermsAcknowledged != true else { return false }
+        if !quiet {
+            stderr("[\(spec.id)] third-party usage terms: \(restriction.summary)")
+            for term in restriction.terms {
+                stderr("  \(term.component): \(term.license)")
+                stderr("    terms: \(term.licenseURL)")
+            }
+        }
+        manifest.usageTermsAcknowledged = true
+        try manifest.write(to: modelDir)
+        return true
     }
 
     private func stderr(_ message: String) {
