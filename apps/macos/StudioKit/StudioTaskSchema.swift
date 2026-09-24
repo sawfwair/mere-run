@@ -141,7 +141,11 @@ package enum StudioTaskSchema {
     }
 
     /// Flags whose value is a model location rather than an input: the model chip's business.
-    private static let modelLocationFlags: Set<String> = ["--model-path", "--model-root", "--lora", "--adapter"]
+    /// The contract files an ungrouped directory option under Inputs, so ACE-Step's checkpoint
+    /// root is named here to keep it out of the well.
+    private static let modelLocationFlags: Set<String> = [
+        "--model-path", "--model-root", "--lora", "--adapter", "--checkpoints-root",
+    ]
 
     // MARK: Output
 
@@ -184,7 +188,8 @@ package enum StudioTaskSchema {
         // the reordering editor the 3D page PR adds beside it.
         case "--manifest": return .musicManifest
         case "--face-index", "--reference-face-index", "--candidate-face-index": return .faceIndex
-        case "--instruments": return .instruments
+        // `--list-instruments` is how the editor reads its choices, not a setting of the run.
+        case "--instruments", "--list-instruments": return .instruments
         case "--renoise", "--renoise-strength": return .renoise
         case "--target-rank": return .targetRanks
         default: return nil
