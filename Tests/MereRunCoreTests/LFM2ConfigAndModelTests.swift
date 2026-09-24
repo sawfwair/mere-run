@@ -24,6 +24,7 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
 
     private func makeDSparkConfig(
         vocabularySize: Int = 128_000,
+        maskTokenID: Int = 125_017,
         targetLayerCount: Int = 30,
         targetLayerIDs: [Int] = [2, 9, 17, 21, 27]
     ) -> [String: Any] {
@@ -43,7 +44,7 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
             "layer_types": Array(repeating: "full_attention", count: 5),
             "block_size": 9,
             "dflash_config": [
-                "mask_token_id": 125_017,
+                "mask_token_id": maskTokenID,
                 "target_layer_ids": targetLayerIDs,
                 "num_target_layers": targetLayerCount,
             ],
@@ -422,6 +423,7 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         )
         var draftObject = makeDSparkConfig(
             vocabularySize: 64,
+            maskTokenID: 63,
             targetLayerCount: 2,
             targetLayerIDs: [0, 1, 0, 1, 0]
         )

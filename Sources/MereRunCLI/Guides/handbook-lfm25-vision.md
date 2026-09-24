@@ -84,8 +84,22 @@ documentation. Check the local controls before applying provider examples.
 
 Editorial review date: September 24, 2026.
 
-These recipes have not been validated with model inference. Review generated
+The BF16 target and DSpark companion completed local checkpoint validation on
+September 24, 2026, using the source-built CLI on an Apple M4 Max with 128 GB
+of unified memory. The target answered all three `synthetic-vqa-v1` image
+questions correctly. For a separate 101-token image description, DSpark used
+eight-token verification blocks and returned byte-identical text to two serial
+decoding runs. The two DSpark decode measurements were 0.89 and 0.62 seconds;
+both serial runs took 1.51 seconds. This small local comparison does not
+establish throughput across other images, prompts, or hardware. Review generated
 results before relying on a recipe.
+
+To repeat the three-image check with an installed BF16 model, run:
+
+```bash
+mere.run model benchmark vlm --models vision-chat-lfm25-3b-bf16 \
+  --dataset synthetic-vqa-v1 --max-tokens 32 --temperature 0 --json
+```
 
 For model and runtime details, see the following sources:
 
