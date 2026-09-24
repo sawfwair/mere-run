@@ -740,7 +740,8 @@ private struct StudioWorkspaceView: View {
         case .threeDFromImage:
             Studio3DCreationView()
         case .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive:
-            StudioVisionLabView(task: visionLabBinding)
+            // Migrated: `domainContent` renders these on the shared task workspace.
+            EmptyView()
         case .audioWhoSpoke, .audioLive:
             StudioVoiceView(task: voiceTaskBinding, tasks: [.diarize, .listen], initialDraft: draft)
         case .audioEnhance, .audioSeparate:
@@ -910,13 +911,6 @@ private struct StudioWorkspaceView: View {
                 case .olmoEarth: navigation.open(task: .earthOlmoEarth)
                 }
             }
-        )
-    }
-
-    private var visionLabBinding: Binding<StudioVisionTask> {
-        Binding(
-            get: { navigation.visionLabTask },
-            set: { navigation.selectVisionLabVariant($0) }
         )
     }
 

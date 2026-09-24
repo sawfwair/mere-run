@@ -93,15 +93,25 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertEqual(StudioMode.code.destination, StudioDestination(domain: .chat, task: .chatCode))
     }
 
-    func testVisionLabVariantsRoundTripThroughToolbarTasks() {
-        for variant in StudioVisionTask.allCases {
-            let task = variant.studioTask
+    /// The Vision Lab's variants are the templates of the tasks that replaced it: every one maps
+    /// back to its task, and each task opens on the variant its page opened on.
+    func testVisionVariantsRoundTripThroughTheirTasks() {
+        let visionTasks: [StudioTask] = [.visionFaces, .visionPose, .visionFlow, .visionDepth, .visionGeometry, .visionLive]
+        for task in visionTasks {
             XCTAssertEqual(task.domain, .vision)
-            XCTAssertEqual(task.visionLabTask?.studioTask, task)
+            XCTAssertFalse(task.variantTemplates.isEmpty, "\(task) has no template")
+            for template in task.variantTemplates {
+                XCTAssertEqual(template.id.studioTask, task, "\(template.id) belongs to another task")
+            }
         }
-        XCTAssertEqual(StudioVisionTask.faceCompare.studioTask, .visionFaces)
-        XCTAssertEqual(StudioTask.visionFaces.visionLabTask, .faceDetect)
-        XCTAssertNil(StudioTask.visionRead.visionLabTask)
+        XCTAssertEqual(StudioTask.visionFaces.variantTemplates.map(\.id),
+                       [.visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionFaceBatch])
+        XCTAssertEqual(StudioTask.visionDepth.variantTemplates.map(\.id), [.visionDepth, .visionDepthVideo])
+        XCTAssertEqual(StudioTask.visionGeometry.variantTemplates.map(\.id), [.visionGeometry, .visionGeometryMultiview])
+        XCTAssertEqual(CommandTemplateID.visionFaceCompare.studioTask, .visionFaces)
+        XCTAssertEqual(StudioTaskDraft(task: .visionFaces)?.templateID, .visionFaceDetect)
+        XCTAssertEqual(StudioTaskDraft(task: .visionLive)?.templateID, .visionTrackLive)
+        XCTAssertTrue(StudioTask.visionRead.variantTemplates.allSatisfy { $0.id.studioTask == .visionRead })
     }
 
     // MARK: - Library attribution
@@ -175,18 +185,17 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertTrue(navigation.shouldSyncComposerToConsole(requested: true))
     }
 
-    func testRestoreReconcilesRememberedTaskVisionVariantAndPromptMode() {
+    func testRestoreReconcilesRememberedTaskAndPromptMode() {
         let navigation = NavigationModel()
 
         // A v1 upgrader: studio.mode says chat while the destination defaults to Image.
         XCTAssertEqual(navigation.restore(destination: .default, lastPromptMode: .chat), .createImage)
         XCTAssertEqual(navigation.destination, .default)
 
-        // A persisted Vision ▸ Pose destination sets the rail variant and remembers the task.
+        // A persisted Vision ▸ Pose destination remembers the task.
         let pose = StudioDestination(domain: .vision, task: .visionPose)
         XCTAssertEqual(navigation.restore(destination: pose, lastPromptMode: .music), .music)
         XCTAssertEqual(navigation.destination, pose)
-        XCTAssertEqual(navigation.visionLabTask, .pose)
         XCTAssertEqual(navigation.rememberedTasks[.vision], .visionPose)
 
         // A System destination keeps the persisted prompt mode.
@@ -196,22 +205,26 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertEqual(navigation.destination.task, .visionPose)
     }
 
-    func testVisionLabVariantFollowsTheToolbarAndTheRail() {
+    /// The variant a Vision task shows is its parked draft's template, not navigation state: it
+    /// survives leaving for another task and coming back, and switching keeps the picture.
+    func testVisionVariantIsTheTaskDraftsTemplate() throws {
+        let sessions = StudioTaskSessions()
         let navigation = NavigationModel(destination: StudioDestination(domain: .vision, task: .visionRead))
         navigation.open(task: .visionFaces)
-        XCTAssertEqual(navigation.visionLabTask, .faceDetect)
+        XCTAssertEqual(sessions.taskDraft(for: .visionFaces)?.templateID, .visionFaceDetect, "Faces opens on Detect")
 
-        navigation.selectVisionLabVariant(.faceCompare)
-        XCTAssertEqual(navigation.visionLabTask, .faceCompare)
+        var draft = try XCTUnwrap(sessions.taskDraft(for: .visionFaces))
+        draft.setArgument(0, "/tmp/portrait.png")
+        draft.switchTemplate(to: .visionFaceCompare)
+        sessions.setTaskDraft(draft, for: .visionFaces)
         XCTAssertEqual(navigation.destination.task, .visionFaces)
 
-        navigation.open(task: .visionFaces)
-        XCTAssertEqual(navigation.visionLabTask, .faceCompare, "re-picking the same toolbar task keeps the variant")
-
-        navigation.selectVisionLabVariant(.geometryMultiview)
-        XCTAssertEqual(navigation.destination.task, .visionGeometry)
         navigation.open(task: .visionRead)
-        XCTAssertEqual(navigation.visionLabTask, .geometryMultiview, "prompt tasks leave the lab variant alone")
+        navigation.open(task: .visionFaces)
+        let parked = try XCTUnwrap(sessions.taskDraft(for: .visionFaces))
+        XCTAssertEqual(parked.templateID, .visionFaceCompare, "coming back keeps the variant")
+        XCTAssertEqual(parked.argument(0), "/tmp/portrait.png", "and the picture")
+        XCTAssertEqual(sessions.taskDraft(for: .visionGeometry)?.templateID, .visionGeometry, "another task keeps its own")
     }
 
     func testOpenDomainRemembersTheLastTaskShownThere() {

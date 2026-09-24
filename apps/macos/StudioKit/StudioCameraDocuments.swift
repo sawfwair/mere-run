@@ -318,6 +318,14 @@ package enum StudioCameraDocuments {
         try StudioDraftFiles.store(content, in: draftFolder(page: page, fileManager: fileManager), prefix: "cameras-", fileExtension: "json", fileManager: fileManager)
     }
 
+    /// Whether `path` is a camera draft this app wrote for `page`, as opposed to a file the user
+    /// picked; an editor only forgets its own files.
+    package static func isDraft(_ path: String, page: String, fileManager: FileManager = .default) -> Bool {
+        let folder = draftFolder(page: page, fileManager: fileManager).standardizedFileURL.path
+        let candidate = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL
+        return candidate.deletingLastPathComponent().path == folder && candidate.lastPathComponent.hasPrefix("cameras-")
+    }
+
     /// Removes old camera drafts for `page`, keeping `current` and every path in `referenced` (the
     /// camera files the Library's rows still name).
     package static func pruneDrafts(page: String, current: URL, referenced: Set<String>, keeping: Int = 8, fileManager: FileManager = .default) {

@@ -50,9 +50,10 @@ extension StudioTask {
 
     /// The mode-less tasks that have moved onto the shared task workspace
     /// (`StudioTaskWorkspace`). A page PR adds its task here, deletes its page, and the root
-    /// renders the archetype's canvas over the task's `StudioTaskDraft` instead. Empty until the
-    /// first page lands, so the app looks and behaves exactly as before.
-    package static let migratedTasks: Set<StudioTask> = []
+    /// renders the archetype's canvas over the task's `StudioTaskDraft` instead.
+    package static let migratedTasks: Set<StudioTask> = [
+        .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive,
+    ]
 
     /// Temporary gate: true while this task still renders its bespoke page. A mode-backed task
     /// never does — its prompt workspace is the shared surface already.

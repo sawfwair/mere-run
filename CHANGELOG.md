@@ -209,6 +209,24 @@ The format is based on Keep a Changelog.
   or were denied. `/runtime/status` now reads installed models from a
   background-refreshed scan instead of scanning on every request. The macOS
   app declares removable- and network-volume usage descriptions.
+- Move Studio's Vision ▸ Depth, Pose, Faces, Flow, and Geometry from the Vision
+  Lab form onto the shared task workspace: the picture in the composer's well,
+  the variant (Detect, Embed, Compare, Batch; still or video depth; single or
+  multi-view geometry) as a chip, the command's options in the inspector, the
+  Library column with "Use these settings", and a destination named by routing
+  instead of an output-directory field. Faces draws its boxes and landmarks on
+  the picture and reads the embedding, comparison, and batch documents; Pose
+  draws its landmarks; Flow draws the field as vectors with its motion
+  statistics; Depth shows the preview or review clip from the run's folder;
+  Geometry embeds Quick Look over the point cloud with the depth and normal
+  previews beside it. The face is still picked by clicking it (now in the
+  inspector, one picker per picture for Compare) and multi-view cameras are
+  still edited per view, with the camera file written only while it matches
+  the views. Vision ▸ Live becomes a Session page: Start/Stop, the camera and
+  model as chips, the prompts one per line, the capture's progress while it
+  runs, and the annotated clip with its track spans when it lands. A fresh
+  Depth or Geometry draft on the workspace runs for real; the Command Console
+  keeps its dry-run default and the inspector keeps a Dry run row.
 
 ## 0.55.0 - 2026-09-22
 

@@ -1402,6 +1402,105 @@ final class StudioSnapshotTests: XCTestCase {
                             appearance: .light, name: "task-workspace-enhance-inspector-light", settle: 1.5)
     }
 
+    /// The Vision tasks on the task workspace, each with a finished run on a drawn picture so
+    /// the input strip, the result view, the panel rows, and the canvas renderer draw: Faces
+    /// (boxes, then the Points overlay and the Compare inspector with its click-to-pick face
+    /// picker), Pose, Flow, Depth (the preview PNG in the input column), Geometry (the scene
+    /// strip, and the multi-view inspector's camera editor), light and dark, and the Live session
+    /// idle and after a capture. Nothing runs; the rows and files are seeded.
+    func testVisionWorkspaceSnapshots() throws {
+        let vision = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { vision.tearDown() }
+        let seeded = try vision.seedVisionRuns()
+        let sessions = vision.controller.taskSessions
+        let runner = StudioTaskRunner(controller: vision.controller, library: vision.library)
+        let wide = CGSize(width: 1_440, height: 820)
+        let narrow = CGSize(width: 960, height: 760)
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize, view: StudioAnalyzeResultView? = nil) throws {
+            let navigation = NavigationModel(destination: task.destination)
+            navigation.selectedLibraryID = seeded[task]
+            let workspace = StudioTaskWorkspace(task: task, models: vision.controller.modelStore)
+                .environmentObject(vision.controller)
+                .environmentObject(vision.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: size.width, height: size.height)
+            try vision.write(workspace, size: size, appearance: appearance, name: name, settle: 3)
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let suffix = appearance.rawValue
+            try render(.visionFaces, name: "vision-faces-\(suffix)", appearance: appearance, size: wide)
+            try render(.visionPose, name: "vision-pose-\(suffix)", appearance: appearance, size: wide)
+            try render(.visionFlow, name: "vision-flow-\(suffix)", appearance: appearance, size: wide)
+            try render(.visionDepth, name: "vision-depth-\(suffix)", appearance: appearance, size: wide)
+            try render(.visionGeometry, name: "vision-geometry-\(suffix)", appearance: appearance, size: wide)
+        }
+        try render(.visionFaces, name: "vision-faces-narrow-light", appearance: .light, size: narrow)
+        try render(.visionGeometry, name: "vision-geometry-narrow-light", appearance: .light, size: narrow)
+
+        // Faces ▸ Compare in the inspector: the reference picker shows the Detect run's boxes on
+        // the portrait; the candidate has no detection yet and keeps the plain field.
+        var compare = try XCTUnwrap(sessions.taskDraft(for: .visionFaces))
+        compare.switchTemplate(to: .visionFaceCompare)
+        StudioTaskSchema.slots(for: .visionFaceCompare)[1].attach([vision.secondPortraitURL], to: &compare)
+        compare.form["--reference-face-index"] = .integer(1)
+        func inspector(_ task: StudioTask, draft: StudioTaskDraft, name: String) throws {
+            let view = StudioTaskInspector(
+                task: task, draft: .constant(draft), modelInventory: vision.controller.modelStore.rows,
+                readiness: .ready, onShowModels: {}, onClose: {}
+            )
+            .environmentObject(vision.controller)
+            .environmentObject(vision.library)
+            .environment(\.studioTaskSessions, sessions)
+            .environment(\.studioTaskScope, task.rawValue)
+            .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+            try vision.write(view, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                             appearance: .light, name: name, settle: 2.5)
+        }
+        try inspector(.visionFaces, draft: compare, name: "vision-faces-compare-inspector-light")
+
+        // Geometry ▸ Multi-view in the inspector: two ordered views and a camera per view. The
+        // cameras are sized for another picture, so the editor shows the CLI's checks and writes
+        // no draft file while rendering.
+        var multiview = try XCTUnwrap(sessions.taskDraft(for: .visionGeometry))
+        multiview.switchTemplate(to: .visionGeometryMultiview)
+        StudioTaskSchema.slots(for: .visionGeometryMultiview)[0]
+            .attach([vision.portraitURL, vision.secondPortraitURL], to: &multiview)
+        let cameras = StudioGeometryCameraDocument(cameras: [.identity(), .identity()])
+        sessions.set(cameras, for: StudioTask.visionGeometry.rawValue + ".geometryCameras")
+        sessions.set(true, for: StudioTask.visionGeometry.rawValue + ".suppliesCameras")
+        try inspector(.visionGeometry, draft: multiview, name: "vision-geometry-multiview-inspector-light")
+
+        // Live: idle with the example prompts, then the finished capture with its clip.
+        let liveKey = StudioTask.visionLive.rawValue + ".requestID"
+        let liveRun = sessions.value(for: liveKey, default: Optional<UUID>.none)
+        func renderLive(name: String, appearance: StudioSnapshotAppearance) throws {
+            let navigation = NavigationModel(destination: StudioTask.visionLive.destination)
+            let view = StudioLiveTrackSession(models: vision.controller.modelStore)
+                .environmentObject(vision.controller)
+                .environmentObject(vision.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, StudioTask.visionLive.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: wide.width, height: wide.height)
+            try vision.write(view, size: wide, appearance: appearance, name: name, settle: 3)
+        }
+        sessions.set(Optional<UUID>.none, for: liveKey)
+        try renderLive(name: "vision-live-idle-light", appearance: .light)
+        sessions.set(liveRun, for: liveKey)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try renderLive(name: "vision-live-ended-\(appearance.rawValue)", appearance: appearance)
+        }
+    }
+
     /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
     /// with its own state, the outputs with Reveal, and the raw report folded away. `executor
     /// list`, `run list`, and `run inspect` are answered by a scripted runner; no CLI runs.
@@ -1455,6 +1554,9 @@ private final class SnapshotFixture {
     private(set) var clipURL: URL!
     /// A 720×1280 portrait picture, the shape that has to fit the column above the composer.
     private(set) var portraitURL: URL!
+    /// A second picture for the Vision boards' two-image tasks (Compare's candidate, Flow's
+    /// target, the second multi-view frame).
+    private(set) var secondPortraitURL: URL!
 
     /// The prompts the region-editor renders draw on the 1024×1024 mug: the cup's box (labeled,
     /// selected in the shot), the saucer's, a positive point on the handle, a negative one on
@@ -2825,6 +2927,231 @@ private final class SnapshotFixture {
         controller.taskSessions.set(Optional(row.id), for: StudioTask.audioEnhance.rawValue + ".requestID")
     }
 
+    /// One finished run per Vision task on the task workspace — Detect faces, Pose, Flow, Depth,
+    /// Geometry, and a Live capture — on a drawn 960×720 picture, with each task's draft pointed
+    /// at its input and its run remembered the way the workspace leaves them. Returns the row id
+    /// per task so a board can select it.
+    @discardableResult
+    func seedVisionRuns() throws -> [StudioTask: UUID] {
+        let directory = root.appendingPathComponent("vision", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let size = CGSize(width: 960, height: 720)
+        let portrait = directory.appendingPathComponent("portrait.png", isDirectory: false)
+        try Self.writeFixturePNG(to: portrait, size: size, hueOffset: 0.15)
+        portraitURL = portrait
+        let second = directory.appendingPathComponent("portrait-later.png", isDirectory: false)
+        try Self.writeFixturePNG(to: second, size: size, hueOffset: 0.32)
+        secondPortraitURL = second
+        var seeded: [StudioTask: UUID] = [:]
+
+        func seed(
+            _ templateID: CommandTemplateID, task: StudioTask, inputs: [URL], output: URL?, artifacts: [URL],
+            prompt: String = "", minute: Int
+        ) throws {
+            guard let template = CommandCatalog.template(id: templateID) else { throw StudioSnapshotError.noContentView }
+            var draft = StudioTaskDraft(templateID: templateID)
+            draft.form["--dry-run"] = .unset
+            let slots = StudioTaskSchema.slots(for: templateID)
+            if let first = slots.first {
+                if first.allowsMultiple {
+                    first.attach(inputs, to: &draft)
+                } else {
+                    for (slot, input) in zip(slots, inputs) { slot.attach([input], to: &draft) }
+                }
+            }
+            if !prompt.isEmpty { draft.prompt = prompt }
+            if let output, let flag = draft.capability?.output.flag { draft.form[flag] = .text(output.path) }
+            if let document = artifacts.first(where: { $0.pathExtension == "json" }),
+               draft.capability?.options.contains(where: { $0.flag == "--json-output" }) == true,
+               draft.text("--json-output").isEmpty {
+                draft.form["--json-output"] = .text(document.path)
+            }
+            let startedAt = Self.mockupTime(hour: 14, minute: minute)
+            var row = StudioLibraryItem(
+                id: UUID(),
+                mode: template.libraryMode,
+                prompt: prompt,
+                inputURL: inputs.first,
+                outputURL: output,
+                createdAt: startedAt,
+                updatedAt: startedAt.addingTimeInterval(2.6),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run " + draft.arguments.joined(separator: " "),
+                outputText: nil,
+                templateID: templateID,
+                commandDraft: draft.run?.commandDraft,
+                commandArguments: draft.arguments,
+                artifactURLs: artifacts
+            )
+            if let input = inputs.first { row.inputIdentity = StudioInputIdentity.read(input) }
+            library.upsert(row)
+            controller.taskSessions.setTaskDraft(draft, for: task)
+            controller.taskSessions.set(Optional(row.id), for: task.rawValue + ".requestID")
+            seeded[task] = row.id
+        }
+
+        let faces = directory.appendingPathComponent("portrait-faces.json", isDirectory: false)
+        try Self.faceDocument(size: size).write(to: faces, atomically: true, encoding: .utf8)
+        try seed(.visionFaceDetect, task: .visionFaces, inputs: [portrait], output: nil, artifacts: [faces], minute: 2)
+
+        let pose = directory.appendingPathComponent("portrait-pose.json", isDirectory: false)
+        try Self.poseDocument(size: size).write(to: pose, atomically: true, encoding: .utf8)
+        try seed(.visionPose, task: .visionPose, inputs: [portrait], output: pose, artifacts: [pose], minute: 4)
+
+        let flow = directory.appendingPathComponent("portrait-motion.flo", isDirectory: false)
+        try Self.flowField(width: 96, height: 72).write(to: flow, options: .atomic)
+        let flowDocument = directory.appendingPathComponent("portrait-motion.json", isDirectory: false)
+        try "{\"width\":96,\"height\":72}".write(to: flowDocument, atomically: true, encoding: .utf8)
+        try seed(.visionFlow, task: .visionFlow, inputs: [portrait, second], output: flow, artifacts: [flow, flowDocument], minute: 6)
+
+        let depthDirectory = directory.appendingPathComponent("portrait-depth", isDirectory: true)
+        try FileManager.default.createDirectory(at: depthDirectory, withIntermediateDirectories: true)
+        let depthPreview = depthDirectory.appendingPathComponent("portrait-depth.png", isDirectory: false)
+        try Self.writeDepthPNG(to: depthPreview, size: size)
+        let depthManifest = depthDirectory.appendingPathComponent("portrait-depth.json", isDirectory: false)
+        try Self.depthManifest(size: size, outputDirectory: depthDirectory).write(to: depthManifest, atomically: true, encoding: .utf8)
+        try seed(.visionDepth, task: .visionDepth, inputs: [portrait], output: depthDirectory,
+                 artifacts: [depthPreview, depthManifest], minute: 8)
+
+        let sceneDirectory = directory.appendingPathComponent("portrait-scene", isDirectory: true)
+        try FileManager.default.createDirectory(at: sceneDirectory, withIntermediateDirectories: true)
+        let points = sceneDirectory.appendingPathComponent("portrait-points.ply", isDirectory: false)
+        try Self.pointCloudPLY().write(to: points, atomically: true, encoding: .utf8)
+        let sceneDepth = sceneDirectory.appendingPathComponent("portrait-depth.png", isDirectory: false)
+        try Self.writeDepthPNG(to: sceneDepth, size: size)
+        let sceneNormal = sceneDirectory.appendingPathComponent("portrait-normal.png", isDirectory: false)
+        try Self.writeFixturePNG(to: sceneNormal, size: size, hueOffset: 0.55)
+        try seed(.visionGeometry, task: .visionGeometry, inputs: [portrait], output: sceneDirectory,
+                 artifacts: [points, sceneDepth, sceneNormal], minute: 10)
+
+        let clip = directory.appendingPathComponent("live-tracking.mp4", isDirectory: false)
+        try Self.writeFixtureMP4(to: clip, size: CGSize(width: 640, height: 360), frames: 24)
+        let tracking = directory.appendingPathComponent("live-tracking.json", isDirectory: false)
+        try Self.trackingDocument(clip: clip).write(to: tracking, atomically: true, encoding: .utf8)
+        try seed(.visionTrackLive, task: .visionLive, inputs: [], output: clip, artifacts: [clip, tracking],
+                 prompt: "the person", minute: 12)
+        return seeded
+    }
+
+    /// `vision face detect --json-output` for the drawn portrait: two faces with five landmarks
+    /// each, in stored pixels, numbered the way `--face-index` counts them.
+    private static func faceDocument(size: CGSize) -> String {
+        func face(_ index: Int, x: Double, y: Double, width: Double, height: Double, score: Double) -> String {
+            let landmarks = [(0.3, 0.38), (0.7, 0.38), (0.5, 0.58), (0.35, 0.78), (0.65, 0.78)]
+                .map { "{\"x\":\(x + $0.0 * width),\"y\":\(y + $0.1 * height)}" }
+                .joined(separator: ",")
+            return """
+            {"index":\(index),"detection":{"score":\(score),"boundingBox":{"x":\(x),"y":\(y),"width":\(width),"height":\(height)},"landmarks":[\(landmarks)]}}
+            """
+        }
+        return """
+        {"elapsedMilliseconds":412.5,"height":\(Int(size.height)),"image":"portrait.png","modelID":"vision-face-buffalo-l","width":\(Int(size.width)),
+         "faces":[\(face(0, x: 268, y: 150, width: 196, height: 236, score: 0.93)),\(face(1, x: 560, y: 210, width: 150, height: 184, score: 0.81))]}
+        """
+    }
+
+    /// `vision pose --json-output`: a body and a hand, normalized with the origin top-left.
+    private static func poseDocument(size: CGSize) -> String {
+        let body = [
+            ("nose", 0.38, 0.28), ("leftShoulder", 0.30, 0.42), ("rightShoulder", 0.47, 0.42), ("leftElbow", 0.24, 0.56),
+            ("rightElbow", 0.53, 0.55), ("leftWrist", 0.22, 0.70), ("rightWrist", 0.58, 0.66), ("leftHip", 0.33, 0.72),
+            ("rightHip", 0.44, 0.72), ("leftKnee", 0.32, 0.88), ("rightKnee", 0.45, 0.88),
+        ]
+        let hand = [("wrist", 0.58, 0.66), ("thumbTip", 0.62, 0.62), ("indexTip", 0.63, 0.66), ("middleTip", 0.63, 0.69), ("littleTip", 0.61, 0.72)]
+        func points(_ list: [(String, Double, Double)]) -> String {
+            list.map { "{\"name\":\"\($0.0)\",\"x\":\($0.1),\"y\":\($0.2),\"confidence\":0.86}" }.joined(separator: ",")
+        }
+        return """
+        {"imageWidth":\(Int(size.width)),"imageHeight":\(Int(size.height)),"coordinateSpace":"normalized",
+         "subjects":[{"kind":"body","index":0,"points":[\(points(body))]},{"kind":"hand","index":0,"points":[\(points(hand))]}]}
+        """
+    }
+
+    /// A Middlebury `.flo` with a gentle swirl, so the vectors read as motion.
+    private static func flowField(width: Int, height: Int) -> Data {
+        var data = Data()
+        func append(_ value: UInt32) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        append(Float(202_021.25).bitPattern)
+        append(UInt32(width))
+        append(UInt32(height))
+        for y in 0..<height {
+            for x in 0..<width {
+                let dx = Double(x) / Double(width) - 0.5
+                let dy = Double(y) / Double(height) - 0.5
+                append(Float(-dy * 6).bitPattern)
+                append(Float(dx * 6).bitPattern)
+            }
+        }
+        return data
+    }
+
+    /// A grayscale ramp with a brighter oval, the shape a depth preview has.
+    private static func writeDepthPNG(to url: URL, size: CGSize) throws {
+        let width = Int(size.width)
+        let height = Int(size.height)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            throw StudioSnapshotError.noBitmap
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSGradient(starting: NSColor(calibratedWhite: 0.08, alpha: 1), ending: NSColor(calibratedWhite: 0.82, alpha: 1))?
+            .draw(in: CGRect(x: 0, y: 0, width: width, height: height), angle: 90)
+        NSColor(calibratedWhite: 0.96, alpha: 1).setFill()
+        NSBezierPath(ovalIn: CGRect(x: width / 4, y: height / 5, width: width / 3, height: height / 2)).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            throw StudioSnapshotError.pngEncodingFailed
+        }
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// `vision depth`'s `<stem>-depth.json` (`MarigoldV2DepthManifest`) for the seeded run.
+    private static func depthManifest(size: CGSize, outputDirectory: URL) -> String {
+        """
+        {"schemaVersion":1,"createdAt":"2026-09-04T14:08:02Z","inputPath":"portrait.png","inputByteCount":40960,"inputSHA256":"0",
+         "outputDirectory":"\(outputDirectory.path)","width":\(Int(size.width)),"height":\(Int(size.height)),
+         "inferenceWidth":1024,"inferenceHeight":768,"semantics":"affine-relative","parameterization":"log",
+         "checkpoint":"log-stage2","seeThrough":false,
+         "depthStatistics":{"rawMinimum":0.018,"rawMaximum":0.974,"normalizationNear":0.01,"normalizationFar":0.99},
+         "model":{"modelID":"vision-depth-marigold-v2","upstreamRepository":"prs-eth/marigold-depth-v2","upstreamRevision":"main",
+                  "license":"Apache-2.0","inferenceBackend":"mlx"},
+         "artifacts":[]}
+        """
+    }
+
+    /// A small colored point cloud, as `vision geometry` writes its PLY.
+    private static func pointCloudPLY() -> String {
+        var lines = ["ply", "format ascii 1.0", "element vertex 64", "property float x", "property float y", "property float z",
+                     "property uchar red", "property uchar green", "property uchar blue", "end_header"]
+        for index in 0..<64 {
+            let x = Double(index % 8) / 7 - 0.5
+            let y = Double(index / 8) / 7 - 0.5
+            let z = (x * x + y * y) * 0.6
+            lines.append(String(format: "%.3f %.3f %.3f %d %d %d", x, y, z, 90 + index * 2, 120, 200 - index))
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// `vision track-live --json-output` (`SAM31TrackingRun`) for the seeded clip: one object,
+    /// visible for the first three quarters of the capture.
+    private static func trackingDocument(clip: URL) -> String {
+        let frames = (0..<24).map { index -> String in
+            let visible = index < 18
+            let x = 200 + index * 8
+            return """
+            {"frameIndex":\(index),"timestampSeconds":\(Double(index) / 12),"detections":[{"objectID":"obj-1","label":"the person","score":\(visible ? 0.91 : 0),"visible":\(visible),"box":{"x1":\(x),"y1":80,"x2":\(x + 140),"y2":330}}]}
+            """
+        }.joined(separator: ",")
+        return """
+        {"schemaVersion":1,"modelID":"vision-segment-sam31","inputVideoPath":"camera:0","annotatedVideoPath":"\(clip.path)",
+         "fps":12,"frameWidth":640,"frameHeight":360,"objects":[{"objectID":"obj-1","label":"the person","seedFrameIndex":0}],"frames":[\(frames)]}
+        """
+    }
+
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
     /// as the row's output text the way the Library keeps stdout.
     func seedMusicAnalysisRun() throws {
@@ -3283,7 +3610,12 @@ private enum ModelsInventoryScript {
     static var analyzeReadinessResponses: [SnapshotProcessRunner.Response] {
         let extraModels = [
             (id: "vision-ground-falcon-perception", category: "vision-ground", title: "Falcon Perception"),
-            (id: "speech-asr-parakeet", category: "speech-asr", title: "Parakeet")
+            (id: "speech-asr-parakeet", category: "speech-asr", title: "Parakeet"),
+            (id: "vision-face-buffalo-l", category: "vision-face", title: "Face Buffalo L"),
+            (id: "vision-depth-marigold-v2", category: "vision-depth", title: "Depth Marigold V2"),
+            (id: "vision-geometry-moge2-small", category: "vision-geometry", title: "Geometry MoGe2 Small"),
+            (id: "vision-geometry-da3-small", category: "vision-geometry", title: "Geometry DA3 Small"),
+            (id: "vision-segment-sam31", category: "vision-segment", title: "SAM 3.1")
         ]
         let list = modelList.replacingOccurrences(
             of: "image-zimage-nano          image        installed  2.1 GB",
