@@ -241,12 +241,15 @@ struct StudioInstantMeshCamerasOverride: View {
         let viewCount: Int
     }
 
-    /// Keeps `--cameras` current a moment after editing stops: the document as a content-named
-    /// file while cameras are on (an incomplete one too, so the run is refused with the reason
-    /// rather than run without cameras), nothing while they are off.
+    /// Keeps `--cameras` current a moment after editing stops. Cameras on: the document is saved
+    /// as a content-named file that `--cameras` names — an incomplete document too, so the run is
+    /// refused with the reason rather than run without cameras — unless the file the draft
+    /// already names holds these very bytes (a restored file is not renamed). Cameras off: the
+    /// editor's own file is dropped from the draft; a file it did not write (one that would not
+    /// import) stays, so `StudioCommandChecks` refuses the run instead of running without it.
     private func save() async {
         guard suppliesCameras else {
-            if !camerasPath.isEmpty {
+            if !camerasPath.isEmpty, camerasPath == savedPath {
                 savedPath = ""
                 draft.form[Self.camerasFlag] = .unset
             }
@@ -255,7 +258,12 @@ struct StudioInstantMeshCamerasOverride: View {
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
         do {
-            let url = try StudioCameraDocuments.storeDraft(page: Self.draftPage, content: cameras.json())
+            let content = try cameras.json()
+            if !camerasPath.isEmpty, (try? Data(contentsOf: URL(fileURLWithPath: camerasPath))) == content {
+                savedPath = camerasPath
+                return
+            }
+            let url = try StudioCameraDocuments.storeDraft(page: Self.draftPage, content: content)
             // Rows the Library still names (queued Command-view runs included) keep their files.
             StudioCameraDocuments.pruneDrafts(page: Self.draftPage, current: url, referenced: referencedCameraFiles())
             savedPath = url.path

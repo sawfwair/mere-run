@@ -217,7 +217,9 @@ The format is based on Keep a Changelog.
   cameras edited in the inspector; a run without four or six views, or with a
   camera file that does not match them, is refused with the reason before
   anything is created. Runs land in a fresh directory under the 3D folder
-  named after the picture; the output-directory field is gone.
+  named after the picture; the output-directory field is gone. The old page's
+  typed settings (engine, resolution, seeds, token ceiling, remesh band) start
+  fresh at the contract's defaults; an edited camera document carries over.
 
 ## 0.55.0 - 2026-09-22
 

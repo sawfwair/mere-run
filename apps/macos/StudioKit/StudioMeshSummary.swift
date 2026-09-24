@@ -35,8 +35,18 @@ package struct StudioMeshSummary: Decodable, Equatable {
     }
 
     /// The summary of a Library row's mesh: read from its run manifest first (the only one that
-    /// counts PBR voxels), else from the shared mesh manifest; nil for a row without one.
+    /// counts PBR voxels), else from the shared mesh manifest; nil for a row without one. The
+    /// feed asks on every render, so the reading is kept per row until the row changes.
     package static func load(item: StudioLibraryItem) -> StudioMeshSummary? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let known = cache[item.id], known.updatedAt == item.updatedAt { return known.summary }
+        let summary = read(item: item)
+        cache[item.id] = (item.updatedAt, summary)
+        return summary
+    }
+
+    private static func read(item: StudioLibraryItem) -> StudioMeshSummary? {
         let manifests = item.allArtifactURLs.filter { $0.lastPathComponent.lowercased().hasSuffix("-manifest.json") }
         let runManifests = manifests.filter { $0.lastPathComponent.lowercased().hasSuffix("-run-manifest.json") }
         return (runManifests + manifests.filter { !runManifests.contains($0) }).lazy
@@ -44,6 +54,9 @@ package struct StudioMeshSummary: Decodable, Equatable {
             .compactMap(decode)
             .first
     }
+
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cache: [UUID: (updatedAt: Date, summary: StudioMeshSummary?)] = [:]
 
     private struct RunManifest: Decodable {
         let mesh: StudioMeshSummary

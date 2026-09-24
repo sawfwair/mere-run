@@ -30,10 +30,10 @@ enum StudioResultRenderers {
         }
     }
 
-    /// The rendering a Generate feed card adds under its outputs for one finished row, read
+    /// The rendering a Generate feed card adds under its output tiles for one finished row, read
     /// from the files the run left: a mesh summary for a 3D run's manifests. Nil for a row whose
-    /// tiles say everything.
-    static func cardRendering(for item: StudioLibraryItem) -> StudioResultRendering? {
+    /// tiles say everything. (A rendering that replaces the tiles is another registry entry.)
+    static func cardFooterRendering(for item: StudioLibraryItem) -> StudioResultRendering? {
         if item.templateID?.studioTask == .threeDFromImage, let summary = StudioMeshSummary.load(item: item) {
             return .meshSummary(summary)
         }
