@@ -423,11 +423,16 @@ of running under the composer. Once a tracked clip exists it plays in place,
 with "Adjust prompts and frames" bringing the scrubber back.
 
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
-steps — for twenty-two tasks, seventeen of which still render their own form
+steps — for twenty-two tasks. Text ▸ Embeddings, Text ▸ Anonymize, and Image ▸
+Datasets render on it through the shared task workspace: the typed text or the
+folder, plan file, or nothing a Datasets variant takes on the left, and the
+cosine matrix, the protected text and spans, the candidate folders (each with
+"Train on it"), the run plan report, or the validation artifacts as the result
+panel's rows (`StudioUI/Renderers/`). Fourteen tasks still render their own form
 inside their task rather than this canvas (Vision ▸ Depth, Pose, Faces, Flow,
-Geometry, Live; Audio ▸ Who Spoke, Enhance, Separate; Text ▸ Embeddings,
-Anonymize; the four Earth tasks; Sound ▸ Score and Condition). Migrating one is
-a view change, not a design decision.
+Geometry, Live; Audio ▸ Who Spoke, Enhance, Separate; the four Earth tasks;
+Sound ▸ Score and Condition). Migrating one is a view change, not a design
+decision.
 
 **Chat** is the Converse surface (`StudioUI/StudioConversationView.swift`,
 `StudioUI/StudioThreadList.swift`). A **thread list** replaces the Library column there —
@@ -649,13 +654,20 @@ multi-reference editing, structured prompts, LoRA catalog IDs or local adapters,
 Krea tuning, and preflight. Image ▸ Train adds dataset previews, preflight,
 launch and resume, loss metrics, samples, checkpoints, and run comparison for
 Krea 2 and FLUX.2 Klein; Klein's per-target ranks are rows of module suffix and
-rank rather than a typed `suffix=rank` list. Image ▸ Datasets renders validation
-artifacts, candidate dataset diagnostics, and the run plan as a report
-(`StudioKit/StudioRunPlanReport.swift`, `StudioUI/StudioRunPlanReportView.swift`):
-a preflight's steps, resolution, batch, rank, learning rate, checkpoint and
-preview cadence, schedule, memory switches, dataset counts, model, and output,
-read from the CLI's typed envelope, or a materialized run's files, each
-revealable in Finder.
+rank rather than a typed `suffix=rank` list. Image ▸ Datasets is one Analyze task
+over three commands — Discover, Validate, and Run plan — picked by the
+Operation chip. Discover takes a folder in the well and lists the candidate
+datasets it found with their counts and problems
+(`StudioKit/StudioTextDatasetResults.swift`, `StudioUI/Renderers/StudioDatasetCandidates.swift`);
+"Train on it" on a row opens Image ▸ Train with that folder as the dataset.
+Validate takes no input and lists the artifacts it wrote. Run plan takes a plan
+file and renders the report (`StudioKit/StudioRunPlanReport.swift`,
+`StudioUI/Renderers/StudioRunPlanReportView.swift`): a preflight's steps,
+resolution, batch, rank, learning rate, checkpoint and preview cadence,
+schedule, memory switches, dataset counts, model, and output, read from the
+CLI's typed envelope, or a materialized run's files, each revealable in
+Finder; Preflight is a chip and the run directory for Materialize is an
+Output-section row in the inspector.
 
 **Video** ▸ Generate uses model-family-aware controls: LTX uses `--quality` and
 `--output-mode`, while native MiniMax-H3 exposes its exact `17n+5` frame
@@ -770,8 +782,13 @@ embedded CLI carry the
 microphone usage description and audio-input entitlement those capture paths
 require.
 
-**Text** ▸ Embeddings adds vector norms and cosine-similarity inspection;
-Text ▸ Anonymize shows original and protected PII spans. Text ▸ Decisions
+**Text** ▸ Embeddings and Text ▸ Anonymize are Analyze tasks whose input is
+typed on the canvas: Embeddings takes one text per line and shows each vector's
+norm with the cosine similarity of every pair
+(`StudioUI/Renderers/StudioEmbeddingsMatrix.swift`); Anonymize takes the paste
+as one text and shows it beside the protected text with every span the filter
+marked (`StudioUI/Renderers/StudioAnonymizationSpans.swift`), or the protected
+text alone in its Text view. Both file their JSON under Text. Text ▸ Decisions
 (`StudioUI/StudioLayaDecisionView.swift`, `StudioKit/StudioDecisions.swift`) builds
 the Laya request instead of asking for one: the text to judge, then ordered
 choice, score (levels lowest first), and yes-or-no questions, with optional

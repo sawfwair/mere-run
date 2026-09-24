@@ -1012,39 +1012,199 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
-    /// Image ▸ Datasets ▸ Run plan after a training-plan preflight with one warning: the report's
-    /// sections in place of the old path list, light and dark.
+    /// Image ▸ Datasets ▸ Run plan on the shared task workspace, through the root, after a
+    /// training-plan preflight with one warning: the plan file in the input column, the report's
+    /// status, warning, and sections as the result panel's rows, the variant and Preflight chips
+    /// in the composer, light and dark.
     func testImageRunPlanReportSnapshots() throws {
-        var item = StudioLibraryItem(
+        let plan = fixture.root.appendingPathComponent("plan.json")
+        try Data("{\"schema_version\": 1, \"kind\": \"image.train_lora\"}".utf8).write(to: plan)
+        let startedAt = Self.boardTime(hour: 10, minute: 0)
+        let item = StudioLibraryItem(
             id: UUID(),
             mode: .createImage,
-            prompt: "Run plan",
-            inputURL: fixture.root.appendingPathComponent("plan.json"),
+            prompt: "",
+            inputURL: plan,
             outputURL: nil,
-            createdAt: StudioSnapshotRenderer.referenceDate,
-            updatedAt: StudioSnapshotRenderer.referenceDate,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(0.8),
             status: .completed,
             exitCode: 0,
             commandPreview: "mere.run image run-plan plan.json --preflight --json",
             outputText: Self.trainingPlanPreflight,
+            templateID: .imageRunPlan,
             artifactURLs: []
         )
-        item.templateID = .imageRunPlan
         fixture.library.upsert(item)
-        let sessions = fixture.controller.taskSessions
-        sessions.set(Optional(item.id), for: StudioTask.imageDatasets.rawValue + ".requestID")
-        sessions.set(fixture.root.appendingPathComponent("plan.json").path, for: StudioTask.imageDatasets.rawValue + ".UtilityLab.planPath")
+        var draft = StudioTaskDraft(templateID: .imageRunPlan)
+        draft.setArgument(0, plan.path)
+        fixture.controller.taskSessions.setTaskDraft(draft, for: .imageDatasets)
+        fixture.controller.taskSessions.set(Optional(item.id), for: StudioTask.imageDatasets.rawValue + ".requestID")
 
         for appearance in StudioSnapshotAppearance.allCases {
-            let view = StudioUtilityLabView(task: .constant(.runPlan), tasks: [.datasetDiscovery, .imageValidation, .runPlan], showsTaskPicker: true)
+            let navigation = NavigationModel()
+            let view = StudioRootView()
                 .environmentObject(fixture.controller)
                 .environmentObject(fixture.library)
-                .environment(\.studioTaskSessions, sessions)
-                .environment(\.studioTaskScope, StudioTask.imageDatasets.rawValue)
+                .environmentObject(navigation)
                 .frame(width: 1_200, height: 820)
             try fixture.write(view, size: CGSize(width: 1_200, height: 820), appearance: appearance,
-                              name: "image-run-plan-\(appearance.rawValue)", settle: 1.5)
+                              name: "image-run-plan-\(appearance.rawValue)", settle: 2.0,
+                              afterAppear: { navigation.open(task: .imageDatasets) })
         }
+    }
+
+    /// Text ▸ Embeddings, Text ▸ Anonymize, and Image ▸ Datasets ▸ Discover and Validate on the
+    /// shared task workspace, through the root. Embeddings with three texts in the editor and
+    /// the cosine matrix beside them (light and dark, and at a narrower window); Anonymize with
+    /// a paste and its protected text and spans; Discover with a scanned folder and three
+    /// candidates, one blocked; Validate before any run, with no input column to fill.
+    func testTextAndDatasetsWorkspaceSnapshots() throws {
+        let sessions = fixture.controller.taskSessions
+
+        // Embeddings: the run wrote its vectors beside the Text folder; the row keeps the file.
+        let texts = ["semantic search query", "related document", "an unrelated recipe for soup"]
+        let vectors = fixture.root.appendingPathComponent("embeddings.json")
+        try Data(Self.embeddingsOutput.utf8).write(to: vectors)
+        let embeddingsStart = Self.boardTime(hour: 9, minute: 12)
+        fixture.library.upsert(StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: texts.joined(separator: "\n"), inputURL: nil, outputURL: vectors,
+            createdAt: embeddingsStart, updatedAt: embeddingsStart.addingTimeInterval(2.4), status: .completed, exitCode: 0,
+            commandPreview: "mere.run text embed … --output embeddings.json --pretty", outputText: Self.embeddingsOutput,
+            templateID: .textEmbed, artifactURLs: [vectors]
+        ))
+        var embeddings = StudioTaskDraft(templateID: .textEmbed)
+        embeddings.prompt = texts.joined(separator: "\n")
+        sessions.setTaskDraft(embeddings, for: .textEmbeddings)
+
+        // Anonymize: the paste as one text, three spans found.
+        let paste = "My name is Alice Smith and my email is alice@example.com. Call me on 555-0134."
+        let anonymizeStart = Self.boardTime(hour: 9, minute: 20)
+        fixture.library.upsert(StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: paste, inputURL: nil, outputURL: nil,
+            createdAt: anonymizeStart, updatedAt: anonymizeStart.addingTimeInterval(1.1), status: .completed, exitCode: 0,
+            commandPreview: "mere.run text anonymize … --json --pretty", outputText: Self.anonymizationOutput(paste),
+            templateID: .textAnonymize
+        ))
+        var anonymize = StudioTaskDraft(templateID: .textAnonymize)
+        anonymize.prompt = paste
+        sessions.setTaskDraft(anonymize, for: .textAnonymize)
+
+        // Discover: a scanned folder with three candidate leaves.
+        let datasets = fixture.root.appendingPathComponent("datasets", isDirectory: true)
+        try FileManager.default.createDirectory(at: datasets, withIntermediateDirectories: true)
+        let discoverStart = Self.boardTime(hour: 11, minute: 5)
+        fixture.library.upsert(StudioLibraryItem(
+            id: UUID(), mode: .createImage, prompt: "", inputURL: datasets, outputURL: nil,
+            createdAt: discoverStart, updatedAt: discoverStart.addingTimeInterval(0.6), status: .completed, exitCode: 0,
+            commandPreview: "mere.run image dataset discover --root datasets --max-depth 4 --min-usable-pairs 1 --json",
+            outputText: Self.discoveryOutput(root: datasets), templateID: .imageDatasetDiscover
+        ))
+        var discover = StudioTaskDraft(templateID: .imageDatasetDiscover)
+        discover.form["--root"] = .text(datasets.path)
+        sessions.setTaskDraft(discover, for: .imageDatasets)
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: size.width, height: size.height)
+            try fixture.write(view, size: size, appearance: appearance, name: name, settle: 2.0,
+                              afterAppear: { navigation.open(task: task) })
+        }
+
+        let board = CGSize(width: 1_440, height: 820)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.textEmbeddings, name: "text-embeddings-\(appearance.rawValue)", appearance: appearance, size: board)
+            try render(.textAnonymize, name: "text-anonymize-\(appearance.rawValue)", appearance: appearance, size: board)
+            try render(.imageDatasets, name: "image-datasets-discover-\(appearance.rawValue)", appearance: appearance, size: board)
+        }
+        try render(.textEmbeddings, name: "text-embeddings-narrow-light", appearance: .light, size: CGSize(width: 1_024, height: 760))
+
+        // Validate: no input, nothing run yet.
+        var validate = discover
+        validate.switchTemplate(to: .imageValidate)
+        sessions.setTaskDraft(validate, for: .imageDatasets)
+        try render(.imageDatasets, name: "image-datasets-validate-empty-light", appearance: .light, size: CGSize(width: 1_200, height: 820))
+    }
+
+    /// A clock time on the reference day, for the rows the text and dataset boards seed.
+    private static func boardTime(hour: Int, minute: Int) -> Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: StudioSnapshotRenderer.referenceDate)
+        return calendar.date(byAdding: DateComponents(hour: hour, minute: minute), to: today) ?? today
+    }
+
+    /// `text embed` for three texts at eight dimensions: the first two close, the third apart.
+    private static let embeddingsOutput = """
+    {
+      "object": "list",
+      "model": "text-embed-qwen3-0.6b",
+      "data": [
+        {"object": "embedding", "index": 0, "embedding": [0.61, 0.42, -0.18, 0.33, 0.07, -0.29, 0.44, 0.12]},
+        {"object": "embedding", "index": 1, "embedding": [0.58, 0.39, -0.22, 0.30, 0.11, -0.25, 0.47, 0.09]},
+        {"object": "embedding", "index": 2, "embedding": [-0.21, 0.08, 0.66, -0.12, 0.51, 0.34, -0.19, 0.27]}
+      ],
+      "usage": {"prompt_tokens": 19, "total_tokens": 19}
+    }
+    """
+
+    /// `text anonymize --json --pretty` for one paste with a name, an email, and a phone number.
+    private static func anonymizationOutput(_ text: String) -> String {
+        """
+        {
+          "object": "list",
+          "model": "text-anonymize-privacy-filter",
+          "data": [
+            {
+              "text": "\(text)",
+              "anonymized_text": "My name is [NAME] and my email is [EMAIL]. Call me on [PHONE].",
+              "token_count": 24,
+              "spans": [
+                {"label": "NAME", "text": "Alice Smith", "startToken": 3, "endToken": 5},
+                {"label": "EMAIL", "text": "alice@example.com", "startToken": 10, "endToken": 16},
+                {"label": "PHONE", "text": "555-0134", "startToken": 21, "endToken": 24}
+              ]
+            }
+          ]
+        }
+        """
+    }
+
+    /// `image dataset discover --json` over a folder with a ready leaf, one with warnings, and one
+    /// blocked for want of captions, plus one note about preview images.
+    private static func discoveryOutput(root: URL) -> String {
+        func candidate(_ id: String, _ name: String, status: String, trainable: Bool, images: Int, captions: Int, usable: Int, diagnostics: String) -> String {
+            """
+            {"id": "\(id)", "name": "\(name)", "path": "\(root.appendingPathComponent(id).path)", "relative_path": "\(id)", "depth": 1,
+             "status": "\(status)", "trainable": \(trainable), "image_count": \(images), "caption_count": \(captions), "usable_pair_count": \(usable),
+             "missing_caption_count": \(images - captions), "empty_caption_count": 0, "duplicate_caption_group_count": 0, "placeholder_caption_count": 0,
+             "diagnostics": [\(diagnostics)]}
+            """
+        }
+        let warning = """
+        {"id": "missing_captions", "severity": "warning", "title": "Missing captions", "message": "2 images have no caption and will be skipped.", "locations": [], "suggested_action_ids": []}
+        """
+        let blocker = """
+        {"id": "missing_captions", "severity": "blocker", "title": "Missing captions", "message": "No image has a caption.", "locations": [], "suggested_action_ids": []}
+        """
+        return """
+        {"schema_version": 1, "mere_run_version": "0.55.0", "command": ["image", "dataset", "discover"], "mode": "inspection",
+         "status": "warning", "created_at": "2026-09-23T11:05:00Z", "cwd": "\(root.path)",
+         "summary": "Found 3 dataset candidates under \(root.lastPathComponent); 2 are trainable.",
+         "request": {"root": "\(root.path)", "max_depth": 4, "min_usable_pairs": 1, "exclude_preview_images": false},
+         "result": {"root": "\(root.path)", "scanned_directory_count": 14, "candidate_count": 3, "trainable_candidate_count": 2,
+           "candidates": [
+             \(candidate("ceramic-mugs", "Ceramic mugs", status: "ok", trainable: true, images: 48, captions: 48, usable: 48, diagnostics: "")),
+             \(candidate("portraits", "Portraits", status: "warning", trainable: true, images: 32, captions: 30, usable: 30, diagnostics: warning)),
+             \(candidate("sketches", "Sketches", status: "blocked", trainable: false, images: 6, captions: 0, usable: 0, diagnostics: blocker))
+           ]},
+         "diagnostics": [{"id": "preview_images", "severity": "note", "title": "Preview images",
+                          "message": "3 preview images were counted; exclude them to train on originals only.", "locations": [], "suggested_action_ids": []}],
+         "actions": []}
+        """
     }
 
     /// The camera editors at the width of the 3D and Vision columns: InstantMesh with four views and
