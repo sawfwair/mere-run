@@ -33,7 +33,7 @@ final class StudioThreeDTaskTests: XCTestCase {
     // MARK: Engine picker
 
     func testTheEnginePickerStartsOnTrellisAndOffersTheThreeEngines() throws {
-        XCTAssertTrue(StudioTask.migratedTasks.contains(.threeDFromImage))
+        XCTAssertTrue(StudioTask.taskDraftTasks.contains(.threeDFromImage))
         XCTAssertTrue(StudioTask.threeDFromImage.usesTaskDraft)
         XCTAssertEqual(StudioTask.threeDFromImage.archetype, .generate)
         XCTAssertEqual(

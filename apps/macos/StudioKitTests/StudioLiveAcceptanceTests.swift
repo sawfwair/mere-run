@@ -13,7 +13,7 @@ import XCTest
 ///
 /// Each test builds the command exactly the way its Studio page does (`StudioCommandAdapter` for
 /// composer tasks, a `StudioTaskDraft` through `StudioTaskRunner.prepare` for tasks on the shared
-/// task workspace, the page's own `CommandDraft` for the remaining specialist pages), runs the CLI, and decodes
+/// task workspace, a task-specific page's `CommandDraft`), runs the CLI, and decodes
 /// the real output with the Studio decoder the page uses. Inputs are drawn or synthesized here, or
 /// generated with the CLI (a portrait for Faces and Find, a photo of an apple for Segment), so
 /// nothing binary is committed. The CLI's argv, streams, and exit code for every step are kept
@@ -1039,7 +1039,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             materialize.inputPath = plan.path
             materialize.materializePath = target.path
             materialize.json = true
-            let (_, argv) = try specialistRequest(templateID: .imageRunPlan, mode: .createImage, draft: materialize)
+            let (_, argv) = try pageRequest(templateID: .imageRunPlan, mode: .createImage, draft: materialize)
             let run = try runCLI(flow, argv, timeout: 600)
             XCTAssertEqual(run.exitCode, 0, run.failureDescription)
             return target
@@ -1333,7 +1333,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(StudioOutputLocation.specialistFile(domain: .sound, name: "sfx", fileExtension: "wav", now: stamp, configuredRoot: "", home: home).path, "/Users/example/Music/mere.run/Sound/sfx-\(expectedStamp).wav")
         XCTAssertEqual(StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision", now: stamp, configuredRoot: "", home: home).path, "/Users/example/Documents/mere.run/Vision/vision-\(expectedStamp)")
 
-        // What StudioSpecialistRunner does before launching: the destination's folder is created.
+        // What StudioTaskRunner does before launching: the destination's folder is created.
         var directoryDraft = CommandDraft()
         directoryDraft.outputPath = directory.path
         let preparedDirectory = StudioOutputLocation.preparingDestination(of: directoryDraft)
@@ -1687,9 +1687,9 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         return (prepared.request, argv)
     }
 
-    /// A specialist page's request, prepared the way `StudioTaskRunner` prepares every run
+    /// A task-specific page's request, prepared the way `StudioTaskRunner` prepares every run
     /// (Command edits, validation, destination), so the tests build exactly what the app runs.
-    private func specialistRequest(templateID: CommandTemplateID, mode: StudioMode, draft: CommandDraft) throws -> (request: StudioRunRequest, argv: [String]) {
+    private func pageRequest(templateID: CommandTemplateID, mode: StudioMode, draft: CommandDraft) throws -> (request: StudioRunRequest, argv: [String]) {
         let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
         return try preparedRequest(StudioRunRequest(mode: mode, templateID: templateID, template: template, draft: draft))
     }

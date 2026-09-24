@@ -362,29 +362,25 @@ final class StudioAnalyzeTests: XCTestCase {
         XCTAssertEqual(depth.inputKind(for: .visionDepth), .image)
     }
 
-    /// Every task is shelled by exactly one archetype, and until a page PR flips its gate a
-    /// mode-less task keeps its page: no Library column, no inspector, no task draft. A migrated
-    /// Analyze or Generate task shows the prompt chrome; a migrated Session, Manage, or Project
-    /// task keeps the full width for its own page over the same draft.
-    func testArchetypeGatesKeepEveryLegacyPageInPlace() {
+    /// Every task has one archetype. Prompt and contract-backed Generate or Analyze tasks show
+    /// the shared chrome; Session, Manage, and Project tasks keep their own full-width surfaces.
+    func testArchetypesAndDraftsClassifyEveryTask() {
         let chromeArchetypes: Set<StudioSurfaceArchetype> = [.generate, .converse, .analyze]
         for task in StudioTask.allCases {
             if task.mode != nil {
-                XCTAssertFalse(task.usesLegacyPage, "\(task)")
                 XCTAssertTrue(task.showsPromptChrome, "\(task)")
                 XCTAssertFalse(task.usesTaskDraft, "\(task)")
             } else {
-                XCTAssertEqual(task.usesLegacyPage, !StudioTask.migratedTasks.contains(task), "\(task)")
+                XCTAssertEqual(task.usesTaskDraft, StudioTask.taskDraftTasks.contains(task), "\(task)")
             }
             XCTAssertEqual(
                 task.showsPromptChrome,
                 task.isPromptTask || (task.usesTaskDraft && chromeArchetypes.contains(task.archetype)), "\(task)"
             )
         }
-        // Whatever set of tasks has moved so far, each is a mode-less task with a shell: Generate
-        // or Analyze on the shared workspace's two canvases, or a Session, Manage, or Project page
-        // of its own over the same task draft (Live, Voices, the trainers).
-        for task in StudioTask.migratedTasks {
+        // Contract-backed tasks use the shared Generate or Analyze workspace, or their own
+        // Session, Manage, or Project surface over the same draft.
+        for task in StudioTask.taskDraftTasks {
             XCTAssertNil(task.mode, "\(task) is a prompt task; it has a workspace already")
             XCTAssertTrue([.generate, .analyze, .session, .manage, .project].contains(task.archetype), "\(task) has no shell yet")
             XCTAssertTrue(task.usesTaskDraft, "\(task)")

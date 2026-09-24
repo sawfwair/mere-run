@@ -22,8 +22,7 @@ extension EnvironmentValues {
 /// and Command view edit — so the workspace owns no draft state of its own and survives being
 /// replaced.
 ///
-/// A task reaches this view once its page PR adds it to `StudioTask.migratedTasks`; the root
-/// then renders it instead of the task's legacy page.
+/// The root routes every contract-backed Generate or Analyze task here.
 struct StudioTaskWorkspace: View {
     let task: StudioTask
 

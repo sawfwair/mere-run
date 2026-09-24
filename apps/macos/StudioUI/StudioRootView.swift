@@ -127,7 +127,7 @@ private struct StudioWorkspaceView: View {
 
     /// The Library column belongs to the Generate, Converse, and Analyze tasks: Subjects,
     /// Realtime, Models, and the other Project, Session, and Manage tasks take the full width
-    /// even inside a Create domain, as does a task still on its legacy page.
+    /// even inside a Create domain, as does Decisions' custom Analyze editor.
     private var showsLibraryColumn: Bool {
         navigation.showLibrary && destination.task.showsPromptChrome
     }
@@ -148,7 +148,7 @@ private struct StudioWorkspaceView: View {
     }
 
     private var showsCommandColumn: Bool {
-        navigation.showsCommandColumn(for: destination.task)
+        navigation.showCommandColumn
     }
 
     /// The feed's cards for the current mode: the Library rows plus the jobs still alive.
@@ -273,9 +273,9 @@ private struct StudioWorkspaceView: View {
 
     private var showCommandBinding: Binding<Bool> {
         Binding(
-            get: { navigation.showsCommandColumn(for: destination.task) },
+            get: { navigation.showCommandColumn },
             set: { shown in
-                if shown != navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
+                if shown != navigation.showCommandColumn { toggleCommand() }
             }
         )
     }
@@ -578,7 +578,7 @@ private struct StudioWorkspaceView: View {
             showsPanelToggles: destination.task.showsPromptChrome,
             isLibraryShown: layout.showsLibrary || libraryOverlay,
             isInspectorShown: navigation.showsInspector(for: destination.task),
-            isCommandShown: navigation.showsCommandColumn(for: destination.task),
+            isCommandShown: navigation.showCommandColumn,
             isSidebarShown: columnVisibility != .detailOnly,
             onToggleSidebar: {
                 columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
@@ -674,7 +674,7 @@ private struct StudioWorkspaceView: View {
     }
 
     /// Whether Run is available for the current task: the prompt workspace's readiness and
-    /// conversation gates, the task workspace's readiness, or a legacy page's command.
+    /// conversation gates, the task workspace's readiness, or a task-specific command.
     private var canRunCurrentTask: Bool {
         if showsPromptWorkspace {
             return !readiness.blocksRun && !(mode.isConversational && activeConversationRunning)
@@ -695,26 +695,23 @@ private struct StudioWorkspaceView: View {
 
     // MARK: - Domain content
 
-    /// The task's surface by archetype: the prompt workspace for a mode-backed task, the shared
-    /// task workspace for an Analyze or Generate task whose page PR has landed
-    /// (`StudioTask.migratedTasks`), and the task's own page for everything else — a migrated
-    /// Session or Manage task included, whose page reads the same task draft. A page PR flips its
-    /// task's gate and deletes its case below; the switch's default is the workspace, so nothing
-    /// else in this file changes.
+    /// Every destination's surface. Prompt tasks share their composer; contract-backed Generate
+    /// and Analyze tasks share the task workspace. Session, Project, and Manage tasks keep their
+    /// purpose-built surfaces, with no fallback route for a task the switch has not classified.
     @ViewBuilder
     private var domainContent: some View {
-        if destination.task.mode != nil {
-            promptWorkspace
-        } else if destination.task.usesTaskDraft, destination.task.showsPromptChrome {
-            StudioTaskWorkspace(task: destination.task, models: models)
-        } else {
-            legacyContent
-        }
-    }
-
-    @ViewBuilder
-    private var legacyContent: some View {
         switch destination.task {
+        case .imageGenerate, .videoGenerate, .musicCompose, .soundGenerate, .voiceSpeak,
+             .chatChat, .chatCode, .visionRead, .visionFind, .visionSegment, .visionTrack,
+             .audioTranscribe:
+            promptWorkspace
+        case .imageDatasets, .musicAnalyze, .musicTranscribe, .musicSeparate,
+             .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore,
+             .threeDFromImage, .visionDepth, .visionPose, .visionFaces, .visionFlow,
+             .visionGeometry, .audioWhoSpoke, .audioEnhance, .audioSeparate,
+             .textEmbeddings, .textAnonymize, .earthFlood, .earthFire, .earthTessera,
+             .earthOlmoEarth:
+            StudioTaskWorkspace(task: destination.task, models: models)
         case .imageTrain:
             StudioTrainingView(kind: .image, models: models)
         case .chatTrain:
@@ -774,14 +771,8 @@ private struct StudioWorkspaceView: View {
             StudioOperationsView()
         case .pluginsCatalog:
             StudioPluginsView()
-        default:
-            // The prompt tasks never reach here (`domainContent` routes them first); a task whose
-            // page has been deleted is on the shared workspace.
-            StudioTaskWorkspace(task: destination.task, models: models)
         }
     }
-
-    // MARK: Task bindings for re-hosted views
 
     // MARK: - Prompt workspace
 
@@ -1344,10 +1335,10 @@ private struct StudioWorkspaceView: View {
     /// Every task exposes its current editable command in the same workspace.
     private func toggleCommand() {
         if reduceMotion {
-            navigation.toggleCommandColumn(for: destination.task)
+            navigation.toggleCommandColumn()
         } else {
             withAnimation(MereRunTheme.Motion.standard) {
-                navigation.toggleCommandColumn(for: destination.task)
+                navigation.toggleCommandColumn()
             }
         }
     }

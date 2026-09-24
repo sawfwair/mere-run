@@ -95,24 +95,24 @@ final class StudioInspectorSchemaTests: XCTestCase {
         XCTAssertTrue(navigation.showsInspector(for: .imageGenerate))
         XCTAssertFalse(navigation.showsInspector(for: .videoGenerate), "remembered per task")
 
-        navigation.toggleCommandColumn(for: .imageGenerate)
-        XCTAssertTrue(navigation.showsCommandColumn(for: .imageGenerate))
+        navigation.toggleCommandColumn()
+        XCTAssertTrue(navigation.showCommandColumn)
         XCTAssertFalse(navigation.showsInspector(for: .imageGenerate), "never side by side")
 
         navigation.toggleInspector(for: .imageGenerate)
-        XCTAssertFalse(navigation.showsCommandColumn(for: .imageGenerate))
+        XCTAssertFalse(navigation.showCommandColumn)
         XCTAssertTrue(navigation.showsInspector(for: .imageGenerate))
 
-        navigation.toggleCommandColumn(for: .imageGenerate)
+        navigation.toggleCommandColumn()
         navigation.open(task: .videoGenerate)
-        XCTAssertFalse(navigation.showsCommandColumn(for: .videoGenerate), "the Command view closes with its task")
+        XCTAssertFalse(navigation.showCommandColumn, "the Command view closes with its task")
         navigation.open(task: .imageGenerate)
         XCTAssertTrue(navigation.showsInspector(for: .imageGenerate), "the inspector memory survives the detour")
 
         navigation.toggleInspector(for: .videoSubjects)
         XCTAssertFalse(navigation.showsInspector(for: .videoSubjects), "only prompt tasks have an inspector")
-        navigation.toggleCommandColumn(for: .modelsInstalled)
-        XCTAssertTrue(navigation.showsCommandColumn(for: .modelsInstalled), "specialist tasks expose the same Command panel")
+        navigation.toggleCommandColumn()
+        XCTAssertTrue(navigation.showCommandColumn, "specialist tasks expose the same Command panel")
     }
 
     func testInspectorTaskMemoryRoundTripsAsSceneStorageText() {

@@ -86,7 +86,7 @@ final class StudioSnapshotTests: XCTestCase {
                 afterAppear: {
                     if render.command {
                         navigation.showLibrary = false
-                        navigation.toggleCommandColumn(for: .imageGenerate)
+                        navigation.toggleCommandColumn()
                     } else {
                         navigation.toggleInspector(for: .imageGenerate)
                     }
@@ -1416,7 +1416,7 @@ final class StudioSnapshotTests: XCTestCase {
         let view = StudioRootView().environmentObject(fixture.controller)
             .environmentObject(fixture.library).environmentObject(navigation)
         try fixture.write(view, size: CGSize(width: 768, height: 760), appearance: .light,
-            name: "completion-compact-command", settle: 2, afterAppear: { navigation.toggleCommandColumn(for: .imageGenerate) })
+            name: "completion-compact-command", settle: 2, afterAppear: { navigation.toggleCommandColumn() })
     }
 
     /// Compare, "Use these settings", and the readiness card's next steps, light and dark. First
@@ -1645,8 +1645,7 @@ final class StudioSnapshotTests: XCTestCase {
                    size: CGSize(width: 960, height: 760), inspector: false)
     }
 
-    /// The shared task workspace, rendered directly because no task has moved onto it yet (every
-    /// `usesLegacyPage` gate is on, so the root cannot show it): Audio ▸ Enhance as an Analyze
+    /// The shared task workspace, rendered directly: Audio ▸ Enhance as an Analyze
     /// task with an audio well, once with a finished enhance run seeded so the input strip, the
     /// player, and the result column draw, light and dark; its inspector column beside it; and
     /// Vision ▸ Pose empty, so the serif empty state and the well's attach button show. The page

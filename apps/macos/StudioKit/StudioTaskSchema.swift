@@ -189,15 +189,14 @@ package enum StudioTaskSchema {
     }
 
     /// The composite editors a template's options render as, keyed by flag. `--model` is the
-    /// filtered picker everywhere; the rest are the editors the pages drew by hand, which the
-    /// task inspector renders through its override builder (falling back to the plain control
-    /// until a page PR lands the editor).
+    /// filtered picker everywhere; the task inspector renders the other composite editors
+    /// through its override builder.
     package static func overrideID(forFlag flag: String, templateID: CommandTemplateID) -> StudioContractOverrideID? {
         switch flag {
         case "--model": return .model
         case "--cameras": return .cameras
         // `--view` stays a well slot (an ordered list the filmstrip draws); `.orderedViews` is
-        // the reordering editor the 3D page PR adds beside it.
+        // the reordering editor the 3D inspector draws beside it.
         case "--manifest": return .musicManifest
         // Music ▸ Train's dataset is the clip list the page edits and writes beside the adapter.
         case "--dataset" where templateID == .musicTrainAdapter: return .musicManifest

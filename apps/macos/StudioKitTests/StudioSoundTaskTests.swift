@@ -13,7 +13,6 @@ final class StudioSoundTaskTests: XCTestCase {
 
     func testTheSoundTasksRenderOnTheSharedWorkspace() {
         for task in soundTasks {
-            XCTAssertFalse(task.usesLegacyPage, "\(task) still has a page")
             XCTAssertTrue(task.usesTaskDraft, "\(task)")
             XCTAssertTrue(task.showsPromptChrome, "\(task)")
             XCTAssertEqual(task.variantTemplates.count, 1, "\(task) has one template, so no variant chip")

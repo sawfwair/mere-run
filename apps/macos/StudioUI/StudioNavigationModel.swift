@@ -32,10 +32,10 @@ package final class NavigationModel: ObservableObject {
     /// Set by the Command Console scene while its window exists. Opening the console syncs the
     /// composer draft only when this is false, so raising an open console never clobbers edits.
     @Published package var isConsoleOpen = false
-    /// The prompt tasks whose inspector column is shown. Remembered per task, so Image ▸ Generate
-    /// can keep its inspector open while Chat stays a plain thread.
+    /// Tasks whose inspector column is shown. Remembered per task, so Image ▸ Generate can keep
+    /// its inspector open while Chat stays a plain thread.
     @Published package var inspectorTasks: Set<StudioTask> = []
-    /// Whether the Command view column is shown for the current prompt task. It takes the
+    /// Whether the Command view column is shown for the current task. It takes the
     /// inspector's place while open (the two are never side by side) and is not remembered.
     @Published package var showCommandColumn = false
     /// Help ▸ mere.run Guide presents the Guide sheet on the Studio window from any key window.
@@ -94,11 +94,6 @@ package final class NavigationModel: ObservableObject {
         task.showsPromptChrome && inspectorTasks.contains(task) && !showCommandColumn
     }
 
-    /// Whether the Command view column is shown for `task`.
-    package func showsCommandColumn(for task: StudioTask) -> Bool {
-        showCommandColumn
-    }
-
     /// Shows or hides the inspector for `task`. Showing it closes the Command view column.
     package func toggleInspector(for task: StudioTask) {
         guard task.showsPromptChrome else { return }
@@ -111,7 +106,7 @@ package final class NavigationModel: ObservableObject {
     }
 
     /// Shows or hides the Command view column; the inspector's memory for the task survives.
-    package func toggleCommandColumn(for task: StudioTask) {
+    package func toggleCommandColumn() {
         showCommandColumn.toggle()
     }
 

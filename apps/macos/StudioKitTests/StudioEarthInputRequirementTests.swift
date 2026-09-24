@@ -37,7 +37,7 @@ final class StudioEarthInputRequirementTests: XCTestCase {
         )
         XCTAssertNil(StudioEarthInputRequirement.requirement(for: .audioEnhance))
         for task in [StudioTask.earthFlood, .earthFire, .earthTessera, .earthOlmoEarth] {
-            XCTAssertTrue(StudioTask.migratedTasks.contains(task), "\(task) is on the shared workspace")
+            XCTAssertTrue(StudioTask.taskDraftTasks.contains(task), "\(task) is on the shared workspace")
             XCTAssertEqual(task.variantTemplates.count, 1, "\(task) has one command; no variant chip")
         }
     }

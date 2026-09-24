@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 // Every task declares the surface archetype that shells it. The archetype decides the chrome
 // (Library column, inspector, composer) and which canvas the shared task workspace renders; the
 // per-task tables in `StudioAnalyzeSchema.swift` and `StudioTaskSchema.swift` fill in the rest.
-// Until a task's page PR lands it keeps its bespoke page (`usesLegacyPage`), so a task can move
-// onto the shared workspace by flipping one line here.
+// Generate and Analyze tasks use a shared workspace; the other archetypes have purpose-built
+// surfaces. The contract-backed tasks keep one draft across the workspace, Command view, and Run.
 
 /// The six shells of the v2 design (`docs/macos-studio-v2.md` §6).
 package enum StudioSurfaceArchetype: String, CaseIterable, Hashable {
@@ -48,12 +48,10 @@ extension StudioTask {
         }
     }
 
-    /// The mode-less tasks that have moved off their bespoke pages onto a `StudioTaskDraft`. A
-    /// page PR adds its task here and deletes its page: an Analyze or Generate task then renders
-    /// the shared task workspace (`StudioTaskWorkspace`), and a Session or Manage task its own
-    /// page over the same draft, so the Command view, Library restoration, and Stop read one
-    /// value for all of them.
-    package static let migratedTasks: Set<StudioTask> = [
+    /// Tasks with a contract-backed `StudioTaskDraft`. Generate and Analyze tasks use the shared
+    /// workspace; Live, Voices, and Training use their own Session, Manage, and Project surfaces
+    /// over the same draft.
+    package static let taskDraftTasks: Set<StudioTask> = [
         .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore,
         .musicAnalyze, .musicTranscribe,
         .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive,
@@ -64,24 +62,16 @@ extension StudioTask {
         .imageTrain, .chatTrain, .musicTrain,
     ]
 
-    /// Temporary gate: true while this task still renders its bespoke page. A mode-backed task
-    /// never does — its prompt workspace is the shared surface already.
-    package var usesLegacyPage: Bool {
-        mode == nil && !Self.migratedTasks.contains(self)
-    }
-
     /// Whether this task's draft is a `StudioTaskDraft` (a contract form for its template)
-    /// rather than the prompt tasks' `StudioDraft` or a page's own state.
+    /// rather than the prompt tasks' `StudioDraft` or a Session, Project, or Manage page's state.
     package var usesTaskDraft: Bool {
-        mode == nil && !usesLegacyPage
+        Self.taskDraftTasks.contains(self)
     }
 
-    /// Generate, Converse, and Analyze show the Library column and the inspector. A task that
-    /// still renders its legacy page takes the full width whatever its archetype says, so the
-    /// shell is unchanged until the page moves.
+    /// Generate, Converse, and Analyze show the Library column and inspector. Other archetypes
+    /// fill the detail area with their own surface.
     package var showsPromptChrome: Bool {
-        guard !usesLegacyPage else { return false }
-        return [.generate, .converse, .analyze].contains(archetype)
+        (mode != nil || usesTaskDraft) && [.generate, .converse, .analyze].contains(archetype)
     }
 
     /// The templates this task can run, in picker order. One for most tasks; Vision ▸ Faces or
