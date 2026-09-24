@@ -6,6 +6,34 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.56.0 - 2026-09-24
+
+- Add pinned LFM2.5-VL 3B BF16 and vision DSpark checkpoints with managed
+  license acceptance, CLI and Studio discovery, and native Swift/MLX greedy
+  draft verification. On an M4 Max, installed-checkpoint image requests matched
+  serial decoding byte for byte; a warmed synthetic prompt improved decode
+  speed by 2.44×. This does not establish speed or quality across workloads,
+  and the 8-bit vision model does not use DSpark.
+- Add pinned NVIDIA Nemotron 3 Diarization as a native Swift/MLX,
+  eight-speaker model. `speech diarize` supports file inference, and
+  `speech diarize-live` emits speaker activity from microphone or 16 kHz mono
+  PCM input. Authenticated file and streaming HTTP routes, macOS Studio views,
+  managed-model metadata, and guides use the same runtime. Real-checkpoint
+  chunked inference and streaming API checks passed; the 60-second speech smoke
+  does not establish labeled diarization accuracy, and physical microphone
+  capture remains unverified.
+- Align Falcon Perception model-layout preflight, coordinate selection and
+  query stopping, functional normalization, and file and batch RGB resizing
+  with its pinned reference. Match LightOn OCR's installed chat template and
+  reclaim unused MLX buffers during decoding. Focused reference fixtures and
+  installed-checkpoint OCR runs passed; they do not establish full Falcon
+  checkpoint accuracy, camera-scene OCR quality, or a process-memory bound.
+- Update the docs site's pinned `postcss`, `vite`, `nanoid`, and `esbuild`
+  packages to resolve seven reported dependency advisories. The frozen
+  install, docs build, and dependency audit pass. This update does not change
+  Swift dependencies.
+- Keep model-path and Studio tests from leaving empty preferences files in
+  `~/Library/Preferences` after the test suite runs.
 - Show a benchmark's or quality gate's printed report in Studio's Models
   pages and Train dashboard as printed, in a fixed-width font, instead of
   reading its `*`, `_`, and `|` as Markdown.
