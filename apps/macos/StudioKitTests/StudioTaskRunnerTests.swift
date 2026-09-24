@@ -172,6 +172,22 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertEqual(controller.jobs.job(requestID: request.id)?.state.isPreflightFailure, true)
     }
 
+    func testALaunchRefusalFailsTheLibraryRow() async throws {
+        controller.readinessByTask[.audioEnhance] = .ready
+        processRunner.launchError = NSError(domain: "StudioTaskRunnerTests", code: 1)
+        let detachedLibrary = StudioLibraryStore(libraryURL: root.appendingPathComponent("refused-library.json"))
+        let detachedRunner = StudioTaskRunner(controller: controller, library: detachedLibrary)
+
+        let request = try detachedRunner.run(try enhanceDraft(), task: .audioEnhance)
+        for _ in 0..<6 { await Task.yield() }
+
+        let row = try XCTUnwrap(detachedLibrary.items.first { $0.id == request.id })
+        XCTAssertEqual(row.status, .failed)
+        XCTAssertEqual(row.exitCode, -1)
+        XCTAssertEqual(row.outputText, controller.jobs.job(requestID: request.id)?.result?.outputText)
+        XCTAssertTrue(processRunner.starts.isEmpty)
+    }
+
     /// The same announcement the prompt controller makes: a destination that cannot be created
     /// moves the run to App Outputs and the reason reaches the shell's banner.
     func testAnUnwritableDestinationFallsBackAndIsAnnounced() throws {

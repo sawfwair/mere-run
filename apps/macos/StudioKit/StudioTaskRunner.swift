@@ -131,22 +131,31 @@ package final class StudioTaskRunner {
     private func submit(_ request: StudioRunRequest, task: StudioTask) -> Bool {
         sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
         let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft)
-        library.start(request: request, commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true),
+        let preview = controller.commandPreview(arguments: arguments, masksSecrets: true)
+        library.start(request: request, commandPreview: preview,
                       status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued)
         // `run(studio:)` keeps the camera-access gate in front of `vision track-live`. While the
-        // system is still asking, the controller retries once the answer comes; once access is
-        // denied or restricted nothing will ever launch, so the row fails with the reason instead
-        // of staying "running" forever.
+        // system is still asking, the controller retries once the answer comes.
         let launched = controller.run(studio: request)
-        if !launched, request.template.id == .visionTrackLive,
-           AVCaptureDevice.authorizationStatus(for: .video) != .notDetermined {
+        guard !launched else { return true }
+        if request.template.id == .visionTrackLive,
+           AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined { return false }
+        // A synchronous refusal already has a terminal job result. Record it here as well as
+        // through the Library observer, so this row cannot remain queued or running.
+        if let row = library.items.first(where: { $0.id == request.id }),
+           row.status == .running || row.status == .queued {
+            let result = controller.jobs.job(requestID: request.id)?.result
+            let reason = request.template.id == .visionTrackLive
+                && AVCaptureDevice.authorizationStatus(for: .video) != .authorized
+                ? Self.cameraDeniedMessage
+                : (result?.outputText ?? "The run could not be started.")
             library.complete(
-                id: request.id, exitCode: 1, outputURL: nil,
-                outputText: Self.cameraDeniedMessage,
-                commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true)
+                id: request.id, exitCode: result?.exitCode ?? 1, outputURL: result?.outputURL,
+                outputText: reason, commandPreview: preview,
+                artifactURLs: result?.artifactURLs ?? [], artifactRoles: result?.artifactRoles ?? [:]
             )
         }
-        return launched
+        return false
     }
 
     /// What a Live row says when the Mac will not give mere.run the camera.
