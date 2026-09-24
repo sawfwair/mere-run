@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio's Faces ▸ Embed and Compare running on the largest face while the
+  face picker showed face 1: a fresh draft names face 0 as the Faces page
+  did. 3D ▸ InstantMesh starts at the 3D page's grid resolution of 256 again,
+  in the task and the Command Console.
 - Fix Studio checks before a run: Image ▸ Datasets ▸ Run plan's Materialize
   and Preflight clear each other (the CLI refuses both, and a fresh Run plan
   starts with Preflight on), Validate with Compare asks for its reference

@@ -18,10 +18,10 @@ final class StudioTaskSchemaTests: XCTestCase {
     // MARK: Identity
 
     /// A fresh task draft runs the template's own default command (the same option/value pairs
-    /// the catalog builder emits, plus the `--json` a page set on every run, minus the stamped
-    /// destination that routing names at submit time instead), and a populated draft's argv is
-    /// exactly what `StudioTaskCommandView` shows as "Will run" (`StudioConsoleRun`), so the
-    /// composer, the inspector, and the Command view cannot disagree.
+    /// the catalog builder emits, plus the `--json` and face numbers a page set on every run,
+    /// minus the stamped destination that routing names at submit time instead), and a
+    /// populated draft's argv is exactly what `StudioTaskCommandView` shows as "Will run"
+    /// (`StudioConsoleRun`), so the composer, the inspector, and the Command view cannot disagree.
     func testEveryTaskDraftBuildsTheCommandViewsArgv() throws {
         for task in migratingTasks {
             XCTAssertFalse(task.variantTemplates.isEmpty, "\(task) has no template to run")
@@ -31,8 +31,9 @@ final class StudioTaskSchemaTests: XCTestCase {
                 let launcher = Set(StudioTaskDraft.launcherDefaults(for: template.id))
                 let consoleOnly = Set(StudioTaskDraft.consoleOnlyDefaults(for: template.id))
                 let destinations = StudioTaskSchema.outputFlags(for: capability)
+                let pageValues = Set(StudioTaskDraft.pageValues(for: template.id).keys.map { "\($0)=\(draft.text($0))" })
                 XCTAssertEqual(
-                    Self.pairs(of: draft.arguments, capability: capability).subtracting(launcher),
+                    Self.pairs(of: draft.arguments, capability: capability).subtracting(launcher).subtracting(pageValues),
                     Self.pairs(of: template.arguments(from: template.defaultDraft()), capability: capability)
                         .subtracting(launcher).subtracting(consoleOnly)
                         .filter { pair in !destinations.contains { pair.hasPrefix($0 + "=") } },
@@ -308,6 +309,20 @@ final class StudioTaskSchemaTests: XCTestCase {
         named.switchTemplate(to: .imageReconstruct3DMultiview)
         XCTAssertEqual(named.withoutDestinations().parked[.imageReconstruct3DTrellis2]?.text("--output"), "",
                        "nor with a destination")
+    }
+
+    /// Faces ▸ Embed and Compare start on face 0, the face their picker shows as face 1 and the
+    /// one the Faces page always sent, rather than leaving the CLI to take the largest face; 3D ▸
+    /// InstantMesh starts at the 3D page's grid resolution of 256.
+    func testFacesAndInstantMeshStartWhereTheirPagesDid() {
+        let embed = StudioTaskDraft(templateID: .visionFaceEmbed)
+        XCTAssertEqual(embed.text("--face-index"), "0")
+        XCTAssertEqual(embed.arguments.firstIndex(of: "--face-index").map { embed.arguments[$0 + 1] }, "0", "and the argv says so")
+        let compare = StudioTaskDraft(templateID: .visionFaceCompare)
+        XCTAssertEqual(compare.text("--reference-face-index"), "0")
+        XCTAssertEqual(compare.text("--candidate-face-index"), "0")
+        XCTAssertEqual(StudioTaskDraft(templateID: .visionFaceDetect).text("--face-index"), "", "Detect has no face to choose")
+        XCTAssertEqual(StudioTaskDraft(templateID: .imageReconstruct3DMultiview).text("--resolution"), "256")
     }
 
     /// The pages turned `--json` on for every run whose surface reads the printed result; a fresh

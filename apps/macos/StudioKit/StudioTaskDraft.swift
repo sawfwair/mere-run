@@ -68,6 +68,9 @@ package struct StudioTaskDraft: Codable, Equatable {
         for flag in Self.launcherDefaults(for: templateID) where form.values[flag] == nil {
             form[flag] = .flag(true)
         }
+        for (flag, value) in Self.pageValues(for: templateID) where form.values[flag] == nil {
+            form[flag] = value
+        }
         for flag in Self.consoleOnlyDefaults(for: templateID) {
             form.values[flag] = nil
         }
@@ -105,6 +108,20 @@ package struct StudioTaskDraft: Codable, Equatable {
             return ["--json", "--pretty"]
         default:
             return []
+        }
+    }
+
+    /// The values a page sent on every run where the template leaves the option to the CLI:
+    /// the Faces page always named face 0, the one its picker shows as face 1, while the CLI on
+    /// its own takes the largest face, which nothing on the page could show.
+    package static func pageValues(for templateID: CommandTemplateID) -> [String: StudioContractValue] {
+        switch templateID {
+        case .visionFaceEmbed:
+            return ["--face-index": .integer(0)]
+        case .visionFaceCompare:
+            return ["--reference-face-index": .integer(0), "--candidate-face-index": .integer(0)]
+        default:
+            return [:]
         }
     }
 
