@@ -373,20 +373,30 @@ final class StudioAnalyzeTests: XCTestCase {
             } else {
                 XCTAssertEqual(task.usesLegacyPage, !StudioTask.migratedTasks.contains(task), "\(task)")
             }
-            XCTAssertEqual(task.showsPromptChrome, task.isPromptTask || task.usesTaskDraft, "\(task)")
+            // A migrated Project task (the trainers) keeps a task draft but takes the full width.
+            XCTAssertEqual(
+                task.showsPromptChrome,
+                (task.isPromptTask || task.usesTaskDraft) && [.generate, .converse, .analyze].contains(task.archetype),
+                "\(task)"
+            )
         }
-        // Whatever set of tasks has moved so far, each is a mode-less task the shared workspace
-        // can shell: Generate or Analyze (the workspace's two canvases). A Session, Project, or
-        // Manage task keeps its own page until it has a shell of its own.
+        // Whatever set of tasks has moved so far, each is a mode-less task with a shell: Generate
+        // or Analyze on the shared workspace, or a Project task with a page of its own over the
+        // task draft (the trainers). A Session or Manage task keeps its own page until it has a
+        // shell of its own.
         for task in StudioTask.migratedTasks {
             XCTAssertNil(task.mode, "\(task) is a prompt task; it has a workspace already")
-            XCTAssertTrue([.generate, .analyze].contains(task.archetype), "\(task) has no shared canvas yet")
-            XCTAssertTrue(task.usesTaskDraft && task.showsPromptChrome, "\(task)")
+            XCTAssertTrue([.generate, .analyze, .project].contains(task.archetype), "\(task) has no shell yet")
+            XCTAssertTrue(task.usesTaskDraft, "\(task)")
+            XCTAssertEqual(task.showsPromptChrome, task.archetype != .project, "\(task): a Project task takes the full width")
             XCTAssertFalse(task.variantTemplates.isEmpty, "\(task) has nothing to run")
-            if task.archetype == .analyze {
+            switch task.archetype {
+            case .analyze:
                 XCTAssertNotNil(task.analyzeArchetype, "\(task) declares no Analyze shape")
-            } else {
+            case .generate:
                 XCTAssertNotNil(task.generateArchetype, "\(task) declares no Generate shape")
+            default:
+                break
             }
         }
         XCTAssertEqual(StudioTask.visionDepth.archetype, .analyze)

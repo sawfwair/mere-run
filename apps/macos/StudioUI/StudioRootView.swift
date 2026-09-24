@@ -700,7 +700,19 @@ private struct StudioWorkspaceView: View {
         if destination.task.mode != nil {
             promptWorkspace
         } else if destination.task.usesTaskDraft {
-            StudioTaskWorkspace(task: destination.task, models: models)
+            // A Project task has a page of its own over the task draft (the trainers' settings
+            // column and dashboard); the cleanup PR generalizes this dispatch once every
+            // Session, Project, and Manage page has moved.
+            switch destination.task {
+            case .imageTrain:
+                StudioTrainingView(kind: .image, models: models)
+            case .chatTrain:
+                StudioTrainingView(kind: .text, models: models)
+            case .musicTrain:
+                StudioTrainingView(kind: .music, models: models)
+            default:
+                StudioTaskWorkspace(task: destination.task, models: models)
+            }
         } else {
             legacyContent
         }
@@ -715,12 +727,6 @@ private struct StudioWorkspaceView: View {
                 tasks: [.datasetDiscovery, .imageValidation, .runPlan],
                 showsTaskPicker: true
             )
-        case .imageTrain:
-            StudioTrainingView(kind: .image)
-        case .chatTrain:
-            StudioTrainingView(kind: .text)
-        case .musicTrain:
-            StudioTrainingView(kind: .music)
         case .videoSubjects:
             StudioSCAILView()
         case .musicRealtime:
