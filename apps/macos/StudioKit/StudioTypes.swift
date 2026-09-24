@@ -1114,7 +1114,10 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
         }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
-        return mode.title
+        // A run without a prompt is known by what it read (the folder Discover scanned, the
+        // plan Run plan checked), else by its command rather than the mode it files under.
+        if let inputURL, !inputURL.lastPathComponent.isEmpty { return inputURL.lastPathComponent }
+        return displayKindTitle
     }
 
     package var displayKindTitle: String {
