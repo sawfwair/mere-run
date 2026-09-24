@@ -1,4 +1,5 @@
 @testable import StudioKit
+import StudioTestSupport
 import MereRunContract
 import UniformTypeIdentifiers
 import XCTest
@@ -355,13 +356,9 @@ final class StudioTrainingRunTests: XCTestCase {
     private func withConfiguredRoot<Result>(_ body: (URL) throws -> Result) throws -> Result {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("training-run-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let suiteName = "StudioTrainingRunTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set(root.path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = defaults
+        StudioTestDefaults.redirectOutputs(under: root, outputs: root)
         defer {
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
+            StudioTestDefaults.restore()
             try? FileManager.default.removeItem(at: root)
         }
         return try body(root)

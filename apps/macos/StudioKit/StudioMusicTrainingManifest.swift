@@ -174,9 +174,7 @@ package struct StudioMusicTrainingManifest: Codable, Equatable {
     }
 
     private static func draftFolder(fileManager: FileManager) -> URL {
-        StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Music Training", isDirectory: true)
+        StudioOutputLocation.supportRoot(fileManager: fileManager).appendingPathComponent("Music Training", isDirectory: true)
     }
 
     /// Reads a manifest written by hand or by this page, the way the trainer does: a JSON array of

@@ -1841,9 +1841,9 @@ final class StudioSnapshotTests: XCTestCase {
         )
         defer { workspace.tearDown() }
         // The camera editor saves its document as a draft file while cameras are on; keep that
-        // in the fixture's folder rather than the user's Application Support. The registration
-        // domain is never written to disk.
-        UserDefaults.standard.register(defaults: [StudioCameraDocuments.draftRootDefaultsKey: workspace.root.path])
+        // in the fixture's folder rather than the user's Application Support.
+        StudioTestDefaults.register([StudioOutputLocation.supportRootDefaultsKey: workspace.root.path])
+        defer { StudioTestDefaults.restore() }
         let views = try workspace.seedMeshRun()
         let task = StudioTask.threeDFromImage
         let sessions = workspace.controller.taskSessions

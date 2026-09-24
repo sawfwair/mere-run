@@ -319,13 +319,10 @@ final class StudioAudioVoiceTests: XCTestCase {
         let controller: MereRunController
         let library: StudioLibraryStore
         let runner: StudioTaskRunner
-        let defaults: UserDefaults
-        let suiteName: String
 
         func tearDown() {
             controller.terminateAllProcesses()
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
+            StudioTestDefaults.restore()
             try? FileManager.default.removeItem(at: root)
         }
     }
@@ -334,10 +331,7 @@ final class StudioAudioVoiceTests: XCTestCase {
     private func makeFixture() throws -> Fixture {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("audio-voice-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let suiteName = "StudioAudioVoiceTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set(root.appendingPathComponent("outputs").path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = defaults
+        StudioTestDefaults.redirectOutputs(under: root)
         let processRunner = RecordingProcessRunner()
         let controller = MereRunController(
             secretStore: InMemorySecretStore(), processRunner: processRunner, resolvesCLIOnInit: false,
@@ -347,7 +341,7 @@ final class StudioAudioVoiceTests: XCTestCase {
         library.observe(controller: controller)
         return Fixture(
             root: root, processRunner: processRunner, controller: controller, library: library,
-            runner: StudioTaskRunner(controller: controller, library: library), defaults: defaults, suiteName: suiteName
+            runner: StudioTaskRunner(controller: controller, library: library)
         )
     }
 

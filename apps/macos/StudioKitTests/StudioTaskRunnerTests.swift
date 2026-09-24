@@ -13,17 +13,12 @@ final class StudioTaskRunnerTests: XCTestCase {
     private var controller: MereRunController!
     private var library: StudioLibraryStore!
     private var runner: StudioTaskRunner!
-    private var defaults: UserDefaults!
-    private var suiteName: String!
 
     override func setUp() async throws {
         try await MainActor.run {
             root = FileManager.default.temporaryDirectory.appendingPathComponent("task-runner-\(UUID())")
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-            suiteName = "StudioTaskRunnerTests-\(UUID().uuidString)"
-            defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-            defaults.set(root.appendingPathComponent("outputs").path, forKey: StudioOutputLocation.rootDefaultsKey)
-            StudioOutputLocation.defaults = defaults
+            StudioTestDefaults.redirectOutputs(under: root)
             processRunner = RecordingProcessRunner()
             controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: processRunner, resolvesCLIOnInit: false,
                 taskSessions: StudioTaskSessions(url: root.appendingPathComponent("sessions.json")))
@@ -36,8 +31,7 @@ final class StudioTaskRunnerTests: XCTestCase {
     override func tearDown() async throws {
         try await MainActor.run {
             controller.terminateAllProcesses()
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
+            StudioTestDefaults.restore()
             runner = nil
             library = nil
             controller = nil

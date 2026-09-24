@@ -1,5 +1,6 @@
 import AppKit
 @testable import StudioKit
+import StudioTestSupport
 @testable import StudioUI
 import XCTest
 
@@ -89,10 +90,10 @@ final class StudioMenuBarTests: XCTestCase {
         XCTAssertFalse(StudioMenuBar.hidesDockIcon(showsMenuBarExtra: false, hidesWithoutWindows: true, hasOpenWindow: false))
         XCTAssertFalse(StudioMenuBar.hidesDockIcon(showsMenuBarExtra: true, hidesWithoutWindows: false, hasOpenWindow: false))
 
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "StudioMenuBarTests-\(UUID().uuidString)"))
-        XCTAssertTrue(StudioMenuBar.isOn("unset", defaults: defaults), "an unset preference is on")
-        defaults.set(false, forKey: "off")
-        XCTAssertFalse(StudioMenuBar.isOn("off", defaults: defaults))
+        StudioTestDefaults.register(["mererun.test.menuBar.off": false])
+        defer { StudioTestDefaults.restore() }
+        XCTAssertTrue(StudioMenuBar.isOn("mererun.test.menuBar.unset", defaults: .standard), "an unset preference is on")
+        XCTAssertFalse(StudioMenuBar.isOn("mererun.test.menuBar.off", defaults: .standard))
     }
 
     func testSparklinePutsTheNewestReadingAtTheRightEdge() {

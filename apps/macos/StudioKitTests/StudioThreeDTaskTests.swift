@@ -10,22 +10,16 @@ import XCTest
 @MainActor
 final class StudioThreeDTaskTests: XCTestCase {
     private var root: URL!
-    private var defaults: UserDefaults!
-    private var suiteName: String!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         root = FileManager.default.temporaryDirectory.appendingPathComponent("three-d-task-\(UUID())", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        suiteName = "StudioThreeDTaskTests-\(UUID().uuidString)"
-        defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set(root.appendingPathComponent("outputs").path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = defaults
+        StudioTestDefaults.redirectOutputs(under: root)
     }
 
     override func tearDownWithError() throws {
-        StudioOutputLocation.defaults = .standard
-        defaults.removePersistentDomain(forName: suiteName)
+        StudioTestDefaults.restore()
         try FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
     }

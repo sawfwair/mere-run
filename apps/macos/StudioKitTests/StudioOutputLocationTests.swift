@@ -1,14 +1,20 @@
 @testable import StudioKit
+import StudioTestSupport
 import XCTest
 
 final class StudioOutputLocationTests: XCTestCase {
     private let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
 
-    override func setUp() {
-        super.setUp()
-        // The per-media defaults are what these assertions describe; a root someone configured in
-        // this process's defaults would move every path.
-        UserDefaults.standard.removeObject(forKey: StudioOutputLocation.rootDefaultsKey)
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // The per-media defaults are what these assertions describe, so no root is configured;
+        // App Outputs, where a run that cannot be written falls back, is a throwaway folder.
+        StudioTestDefaults.redirectSupport(under: try temporaryDirectory())
+    }
+
+    override func tearDown() {
+        StudioTestDefaults.restore()
+        super.tearDown()
     }
 
     // MARK: - Slugs
@@ -167,6 +173,22 @@ final class StudioOutputLocationTests: XCTestCase {
             atPath: root.appendingPathComponent("Pictures/mere.run/Image").path, isDirectory: &isDirectory
         ))
         XCTAssertTrue(isDirectory.boolValue)
+    }
+
+    /// App Outputs and every page's draft folder live under one support root, which a test (or
+    /// anything else that must not write into the user's Application Support) can move.
+    func testAppOutputsAndDraftFilesFollowTheSupportRoot() throws {
+        let root = try temporaryDirectory()
+        StudioTestDefaults.redirectSupport(under: root)
+        defer { StudioTestDefaults.restore() }
+        let support = root.appendingPathComponent("support", isDirectory: true).standardizedFileURL.path
+
+        XCTAssertEqual(StudioOutputLocation.supportRoot().standardizedFileURL.path, support)
+        XCTAssertEqual(StudioOutputLocation.appOutputsRoot().deletingLastPathComponent().standardizedFileURL.path, support)
+        let camera = try StudioCameraDocuments.storeDraft(page: "Vision Geometry", content: Data("{}".utf8))
+        XCTAssertTrue(camera.standardizedFileURL.path.hasPrefix(support + "/Vision Geometry/"), camera.path)
+        XCTAssertTrue(StudioMusicTrainingManifest.draftFolderURL().standardizedFileURL.path.hasPrefix(support + "/"))
+        XCTAssertTrue(StudioDecisionDocument.draftRequestURL().standardizedFileURL.path.hasPrefix(support + "/"))
     }
 
     func testAnUncreatableDestinationFallsBackToAppOutputsWithItsSidecars() throws {
@@ -455,14 +477,8 @@ final class StudioOutputLocationTests: XCTestCase {
     /// files under it and its "app-chosen folder" reading is about that folder.
     private func withConfiguredRoot<Result>(_ body: (URL) throws -> Result) throws -> Result {
         let root = try temporaryDirectory()
-        let suiteName = "StudioOutputLocationTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set(root.path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = defaults
-        defer {
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
-        }
+        StudioTestDefaults.redirectOutputs(under: root, outputs: root)
+        defer { StudioTestDefaults.restore() }
         return try body(root)
     }
 

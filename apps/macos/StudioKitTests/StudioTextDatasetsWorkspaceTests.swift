@@ -1,4 +1,5 @@
 @testable import StudioKit
+import StudioTestSupport
 import Foundation
 import XCTest
 
@@ -8,22 +9,16 @@ import XCTest
 /// result the CLI prints decodes into the Analyze document the renderers draw from.
 final class StudioTextDatasetsWorkspaceTests: XCTestCase {
     private var root: URL!
-    private var suite: UserDefaults!
-    private let suiteName = "run.mere.studio.text-datasets-tests"
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         root = FileManager.default.temporaryDirectory.appendingPathComponent("text-datasets-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        suite.removePersistentDomain(forName: suiteName)
-        suite.set(root.path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = suite
+        StudioTestDefaults.redirectOutputs(under: root, outputs: root)
     }
 
     override func tearDownWithError() throws {
-        StudioOutputLocation.defaults = .standard
-        suite.removePersistentDomain(forName: suiteName)
+        StudioTestDefaults.restore()
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
     }

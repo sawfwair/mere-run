@@ -286,14 +286,8 @@ final class StudioEarthInputRequirementTests: XCTestCase {
 
     /// Routing files the run under Earth, named after the bundle, as a safetensors file.
     func testTheDestinationLandsUnderEarth() throws {
-        let suiteName = "StudioEarthInputRequirementTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set(root.path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = defaults
-        defer {
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
-        }
+        StudioTestDefaults.redirectOutputs(under: root, outputs: root)
+        defer { StudioTestDefaults.restore() }
         var draft = StudioTaskDraft(templateID: .geoOlmoEarth)
         draft.setArgument(0, "/tiles/valley-2024.safetensors")
         let named = StudioOutputLocation.destination(for: draft)

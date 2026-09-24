@@ -1,4 +1,5 @@
 @testable import StudioKit
+import StudioTestSupport
 import MereRunContract
 import XCTest
 
@@ -225,13 +226,9 @@ final class StudioMusicTasksTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("StudioMusicTasksTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let suiteName = "StudioMusicTasksTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set(root.path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = defaults
+        StudioTestDefaults.redirectOutputs(under: root, outputs: root)
         defer {
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
+            StudioTestDefaults.restore()
             try? FileManager.default.removeItem(at: root)
         }
         try body(root)

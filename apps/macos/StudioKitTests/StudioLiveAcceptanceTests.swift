@@ -48,7 +48,11 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         // domain, which cfprefsd never persists — so two `swift test --filter …/testNN` processes
         // running at once cannot overwrite or clear each other's root.
         let suite = try XCTUnwrap(UserDefaults(suiteName: "run.mere.studio.live-acceptance.\(UUID().uuidString)"))
-        suite.register(defaults: [StudioOutputLocation.rootDefaultsKey: directory.path])
+        suite.register(defaults: [
+            StudioOutputLocation.rootDefaultsKey: directory.path,
+            // The pages' draft files (cameras, clip lists, requests) and App Outputs too.
+            StudioOutputLocation.supportRootDefaultsKey: directory.appendingPathComponent("support", isDirectory: true).path,
+        ])
         StudioOutputLocation.defaults = suite
         let probe = StudioOutputLocation.outputDirectoryURL(domain: .sound, prompt: "probe", fallbackStem: "probe").path
         XCTAssertTrue(probe.hasPrefix(directory.path), "The configured root did not take: destinations would file under \(probe)")

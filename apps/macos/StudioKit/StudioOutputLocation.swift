@@ -62,15 +62,27 @@ package enum StudioOutputLocation {
         }
     }
 
-    /// `~/Library/Application Support/MereRun/App Outputs` — the pre-v2 destination, kept as the
-    /// fallback when a user-visible folder cannot be written.
-    package static func appOutputsRoot(fileManager: FileManager = .default) -> URL {
+    /// The defaults key a test registers (in the suite `defaults` names, never persisted) to keep
+    /// the app's own folder — App Outputs and the pages' draft files — out of the user's
+    /// Application Support.
+    package static let supportRootDefaultsKey = "mererun.app.supportRoot"
+
+    /// `~/Library/Application Support/MereRun`: App Outputs and the pages' draft files, unless
+    /// the defaults redirect it.
+    package static func supportRoot(fileManager: FileManager = .default) -> URL {
+        if let redirected = defaults.string(forKey: supportRootDefaultsKey) {
+            return URL(fileURLWithPath: redirected, isDirectory: true)
+        }
         let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
                 .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return support
-            .appendingPathComponent("MereRun", isDirectory: true)
-            .appendingPathComponent("App Outputs", isDirectory: true)
+        return support.appendingPathComponent("MereRun", isDirectory: true)
+    }
+
+    /// `~/Library/Application Support/MereRun/App Outputs` — the pre-v2 destination, kept as the
+    /// fallback when a user-visible folder cannot be written.
+    package static func appOutputsRoot(fileManager: FileManager = .default) -> URL {
+        supportRoot(fileManager: fileManager).appendingPathComponent("App Outputs", isDirectory: true)
     }
 
     private static func configuredRoot() -> String {
