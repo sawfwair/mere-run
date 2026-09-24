@@ -79,9 +79,7 @@ struct StudioCardRendering: Equatable {
 /// strip has selected and the decoded document, the bespoke rendering for that pair, or nil
 /// when the panel's generic rows (detections, speech turns, text) already say it.
 ///
-/// A page PR moves its renderer into this folder, adds a `StudioResultRendering` case, a match
-/// here, and a branch in `StudioResultRendererView`; the panel, the canvas, and the schema never
-/// change for it. Rendering is keyed by `(view, document)` rather than by task, so a document
+/// Rendering is keyed by `(view, document)` rather than by task, so a document
 /// drawn the same way for two tasks (a tensor header from Earth or from `sfx ae encode`) is
 /// drawn once.
 enum StudioResultRenderers {

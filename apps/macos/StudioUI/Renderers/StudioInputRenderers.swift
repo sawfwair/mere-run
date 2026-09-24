@@ -12,8 +12,7 @@ enum StudioInputRendering: Equatable {
 /// The registry the Analyze canvas asks before drawing a `.file` input as an icon and a name:
 /// given the draft's template and the attached file, the bespoke rendering for it, or nil when
 /// the generic file block already says everything there is to say. Keyed by template rather
-/// than by task, like `StudioResultRenderers`, so a page PR adds a case, a match, and a branch
-/// in `StudioInputRendererView` without touching the canvas.
+/// than by task, like `StudioResultRenderers`.
 enum StudioInputRenderers {
     static func rendering(for templateID: CommandTemplateID?, url: URL?) -> StudioInputRendering? {
         guard let templateID, let requirement = StudioEarthInputRequirement.requirement(for: templateID) else { return nil }

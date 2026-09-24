@@ -854,11 +854,8 @@ struct StudioTrainingView: View {
                         .font(MereRunTheme.sectionFont)
                     artifactStrip(snapshot.checkpoints)
                 }
-            } else if let requestID {
-                StudioSpecialistResultView(
-                    requestID: requestID,
-                    preferredKinds: [.image, .text, .audio]
-                )
+            } else if let requestID, let item = library.items.first(where: { $0.id == requestID }) {
+                StudioRunDetailView(item: item, preferredKinds: [.image, .text, .audio])
                 .frame(minHeight: 300)
             } else {
                 ContentUnavailableView(

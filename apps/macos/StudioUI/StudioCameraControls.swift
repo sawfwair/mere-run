@@ -3,8 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 // The numeric pieces the two camera editors (`StudioGeometryCameraEditor`,
-// `StudioInstantMeshCameraEditor`) are built from, kept apart so the Vision and 3D page PRs
-// never touch the same file.
+// `StudioInstantMeshCameraEditor`) are built from and share in one place.
 
 /// The section frame both editors share: the toggle, the cards, a Match views button when the
 /// counts differ, the import and export menu, and the CLI's checks.

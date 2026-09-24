@@ -235,7 +235,7 @@ struct StudioModelLocationsView: View {
                 TextField("Model directory", text: $bindPath)
                     .mereField(cornerRadius: MereRunTheme.Radius.sm)
                 Button("Choose…") {
-                    if let url = StudioSpecialistFiles.chooseDirectory(title: "Model directory") {
+                    if let url = StudioFilePanels.chooseDirectory(title: "Model directory") {
                         bindPath = url.path
                     }
                 }
@@ -343,7 +343,7 @@ struct StudioModelLocationsView: View {
     }
 
     private func addSearchRoot() {
-        guard let url = StudioSpecialistFiles.chooseDirectory(title: "Read-only model search root") else {
+        guard let url = StudioFilePanels.chooseDirectory(title: "Read-only model search root") else {
             return
         }
         Task { await runLocationCommand(["model", "location", "add", url.path], success: "Added \(url.path)") }

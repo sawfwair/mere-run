@@ -71,7 +71,7 @@ struct StudioSCAILView: View {
     @StudioStoredValue("Subjects.modelRoot") private var modelRoot = ""
     @StudioStoredValue("Subjects.adapterPath") private var adapterPath = ""
     @StudioStoredValue("Subjects.adapterStrength") private var adapterStrength = 1.0
-    @StudioStoredValue("Subjects.outputPath") private var outputPath = StudioSpecialistFiles
+    @StudioStoredValue("Subjects.outputPath") private var outputPath = StudioFilePanels
         .outputFile(domain: .video, name: "scail", fileExtension: "mp4")
         .path
 
@@ -441,7 +441,7 @@ struct StudioSCAILView: View {
                     .mereField()
                     .accessibilityLabel("Driving video")
                 ProjectSecondaryButton("Choose…") {
-                    if let url = StudioSpecialistFiles.chooseFile(
+                    if let url = StudioFilePanels.chooseFile(
                         title: "Driving video",
                         allowedContentTypes: [.movie]
                     ).first {
@@ -579,7 +579,7 @@ struct StudioSCAILView: View {
                 TextField("Painted binary correction PNG", text: correction.paintedMaskPath)
                     .mereField()
                 ProjectSecondaryButton("Choose…") {
-                    if let url = StudioSpecialistFiles.chooseFile(
+                    if let url = StudioFilePanels.chooseFile(
                         title: "Painted binary correction",
                         allowedContentTypes: [.png]
                     ).first {
@@ -689,16 +689,16 @@ struct StudioSCAILView: View {
                 Toggle("Carry driving audio", isOn: $carryDrivingAudio)
             }
             labeledField("Model", text: $model, placeholder: "video-scail2-14b-mlx")
-            StudioPathField(
+            ContractFormPathRow(
                 label: "Model root override",
-                placeholder: "Managed model",
                 path: $modelRoot,
-                picksDirectory: true
+                isDirectory: true,
+                placeholder: "Managed model"
             )
-            StudioPathField(
+            ContractFormPathRow(
                 label: "Distilled adapter override",
-                placeholder: "Fast profile uses the managed adapter automatically",
-                path: $adapterPath
+                path: $adapterPath,
+                placeholder: "Fast profile uses the managed adapter automatically"
             )
             if !adapterPath.isBlank {
                 valueSlider("Adapter strength", value: $adapterStrength, range: 0...2)
@@ -711,7 +711,7 @@ struct StudioSCAILView: View {
                     TextField("/path/to/output.mp4", text: $outputPath)
                         .mereField()
                     ProjectSecondaryButton("Choose…") {
-                        if let url = StudioSpecialistFiles.saveFile(
+                        if let url = StudioFilePanels.saveFile(
                             title: "Save SCAIL video",
                             suggestedName: "scail.mp4",
                             allowedContentTypes: [.mpeg4Movie]
@@ -842,11 +842,11 @@ struct StudioSCAILView: View {
                     .accessibilityLabel("Remove subject")
                 }
             }
-            StudioPathField(
+            ContractFormPathRow(
                 label: "Reference image",
-                placeholder: "/path/to/reference.png",
                 path: subject.referenceImage,
-                allowedContentTypes: [.image]
+                allowedTypes: [.image],
+                placeholder: "/path/to/reference.png"
             )
             labeledField("Reference selector", text: subject.referencePrompt, placeholder: "woman in red")
             labeledField("Driving selector", text: subject.drivingPrompt, placeholder: "dancer")
@@ -1182,7 +1182,7 @@ struct StudioSCAILView: View {
             notice = Notice(severity: .error, text: "Track the whole clip before animating.")
             return
         }
-        guard CommandCatalog.template(id: .videoAnimate) != nil else {
+        guard let template = CommandCatalog.template(id: .videoAnimate) else {
             notice = Notice(severity: .error, text: "The SCAIL animation command is unavailable.")
             return
         }

@@ -502,7 +502,7 @@ struct StudioLiveTrackSession: View {
     }
 
     private func saveOutput(_ url: URL) {
-        guard let destination = StudioSpecialistFiles.saveFile(title: "Save clip", suggestedName: url.lastPathComponent) else {
+        guard let destination = StudioFilePanels.saveFile(title: "Save clip", suggestedName: url.lastPathComponent) else {
             return
         }
         do {

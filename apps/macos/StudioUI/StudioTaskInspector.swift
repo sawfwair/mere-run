@@ -9,10 +9,8 @@ import SwiftUI
 /// the composer's chips edit, so a value changed in either shows in both, and the header counts
 /// what differs from the template's defaults.
 ///
-/// The composite editors a page drew by hand (cameras, ordered views, the manifest, face picks,
-/// instruments, renoise, target ranks) come through the override builder. Until a page PR moves
-/// its editor here, the builder draws each of the override's flags with the plain contract
-/// control, so nothing the command takes is out of reach.
+/// Composite editors (cameras, ordered views, face picks, instruments, and renoise) come through
+/// the override builder. Other task-specific overrides retain their plain contract controls.
 struct StudioTaskInspector: View {
     let task: StudioTask
     @Binding var draft: StudioTaskDraft
@@ -204,8 +202,7 @@ struct StudioTaskInspector: View {
         case .earthSampling:
             StudioEarthSamplingControl(draft: $draft)
         case .cameras, .orderedViews, .musicManifest, .targetRanks:
-            // The page PR that owns the editor replaces this with it; until then every flag the
-            // editor would write stays reachable as its plain control.
+            // These editors live on task-specific surfaces; their flags remain reachable here.
             plainControls(for: override, in: fields)
         case .dimensions, .seed, .steps, .guidance, .duration, .voiceProfile, .lora, .imageCanvas, .musicAdapters,
              .musicLMMode, .thinking, .orderedReferences, .readImageAction, .attachment, .regionPrompts:

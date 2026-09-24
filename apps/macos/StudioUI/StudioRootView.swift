@@ -1614,7 +1614,7 @@ private struct StudioWorkspaceView: View {
             studioError = "This run left no text to save."
             return
         }
-        guard let destination = StudioSpecialistFiles.saveFile(
+        guard let destination = StudioFilePanels.saveFile(
             title: "Save result",
             suggestedName: suggestedName
         ) else { return }
@@ -1637,7 +1637,7 @@ private struct StudioWorkspaceView: View {
 
     /// Copies an output to a location the user picks.
     private func saveOutput(_ url: URL) {
-        guard let destination = StudioSpecialistFiles.saveFile(
+        guard let destination = StudioFilePanels.saveFile(
             title: "Save output",
             suggestedName: url.lastPathComponent
         ) else { return }

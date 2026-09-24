@@ -16,15 +16,22 @@ struct StudioMusicServerView: View {
     private static let symbol = "bolt.horizontal.circle"
 
     var body: some View {
-        StudioAnalysisLayout { configuration } result: { status }
-        .studioTaskCommand(.musicServe, draft: draft)
+        ScrollView {
+            VStack(alignment: .leading, spacing: MereRunTheme.Spacing.lg) {
+                StudioServingCard { configuration }
+                StudioServingCard { status }
+            }
+            .frame(maxWidth: 760, alignment: .leading)
+            .padding(MereRunTheme.Spacing.xl)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
+        .studioTaskCommand(.musicServe, draft: draft)
     }
 
     private var configuration: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
+        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
                 Text("Keep ACE-Step, its language model, and adapter stack warm behind a local API.")
                     .font(MereRunTheme.bodyFont)
                     .foregroundStyle(MereRunTheme.textSecondary)
@@ -34,12 +41,11 @@ struct StudioMusicServerView: View {
                 }
                 labeledTextField("ACE-Step model", placeholder: "music-acestep", text: $draft.model)
                 checkpointControls
-                StudioPathField(
+                ContractFormPathRow(
                     label: "Adapters",
-                    placeholder: "One adapter path per line",
                     path: $draft.musicAdapterPaths,
                     allowsMultipleSelection: true,
-                    allowedContentTypes: [.data]
+                    placeholder: "One adapter path per line"
                 )
                 if !draft.musicAdapterPaths.isBlank {
                     Picker("Adapter format", selection: $draft.musicAdapterKind) {
@@ -59,19 +65,17 @@ struct StudioMusicServerView: View {
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
                 StudioMusicServerControl(server: server, draft: draft, symbol: Self.symbol)
-            }
-            .padding(18)
         }
     }
 
     private var checkpointControls: some View {
         DisclosureGroup("Checkpoint layout") {
             VStack(alignment: .leading, spacing: 10) {
-                StudioPathField(
+                ContractFormPathRow(
                     label: "Checkpoint root",
-                    placeholder: "Auto-discover",
                     path: $draft.musicCheckpointsRoot,
-                    picksDirectory: true
+                    isDirectory: true,
+                    placeholder: "Auto-discover"
                 )
                 HStack {
                     labeledTextField(
@@ -111,7 +115,7 @@ struct StudioMusicServerView: View {
             }
             StudioMusicServerStatus(server: server, host: draft.host, port: draft.port)
         }
-        .padding(18)
+        .frame(minHeight: 300)
     }
 
     private func labeledTextField(

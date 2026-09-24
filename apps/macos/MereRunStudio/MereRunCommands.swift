@@ -22,7 +22,7 @@ struct MereRunCommands: Commands {
     /// Writes a secret-free support report the user can attach to an issue.
     private func exportDiagnostics() {
         let report = controller.diagnosticsReport(libraryItems: library.items)
-        guard let url = StudioSpecialistFiles.saveFile(
+        guard let url = StudioFilePanels.saveFile(
             title: "Export diagnostics",
             suggestedName: StudioDiagnostics.suggestedFilename(),
             allowedContentTypes: [.plainText]

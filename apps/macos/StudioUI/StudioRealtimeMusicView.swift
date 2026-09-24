@@ -64,7 +64,7 @@ struct StudioRealtimeMusicView: View {
         _promptA = StudioStoredValue(initialValue: initialDraft.prompt, "RealtimeMusic.promptA")
         _model = StudioStoredValue(initialValue: Self.preferredModel(from: initialDraft.model), "RealtimeMusic.model")
         _outputPath = StudioStoredValue(
-            initialValue: StudioSpecialistFiles.outputFile(domain: .music, name: "realtime", fileExtension: "wav").path,
+            initialValue: StudioFilePanels.outputFile(domain: .music, name: "realtime", fileExtension: "wav").path,
             "RealtimeMusic.outputPath")
     }
 

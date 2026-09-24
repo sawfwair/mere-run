@@ -75,7 +75,7 @@ struct StudioInstantMeshCameraEditor: View {
     }
 
     private func importDocument() {
-        guard let url = StudioSpecialistFiles.chooseFile(title: "Import a camera file", allowedContentTypes: [.json]).first else { return }
+        guard let url = StudioFilePanels.chooseFile(title: "Import a camera file", allowedContentTypes: [.json]).first else { return }
         do {
             document = try StudioInstantMeshCameraDocument.importing(Data(contentsOf: url))
             enabled = true
@@ -86,7 +86,7 @@ struct StudioInstantMeshCameraEditor: View {
     }
 
     private func exportDocument() {
-        guard let url = StudioSpecialistFiles.saveFile(title: "Export the camera file", suggestedName: "cameras.json", allowedContentTypes: [.json]) else {
+        guard let url = StudioFilePanels.saveFile(title: "Export the camera file", suggestedName: "cameras.json", allowedContentTypes: [.json]) else {
             return
         }
         do {

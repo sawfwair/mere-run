@@ -403,7 +403,7 @@ private struct StudioLiveListenSessionContent: View {
         let suggested = StudioOutputLocation.specialistFile(
             domain: .audio, name: stem, fileExtension: "txt", now: StudioDisplayClock.now
         ).lastPathComponent
-        guard let url = StudioSpecialistFiles.saveFile(
+        guard let url = StudioFilePanels.saveFile(
             title: showsSpeakers ? "Save live speaker activity" : "Save live transcript",
             suggestedName: suggested,
             allowedContentTypes: [.plainText]

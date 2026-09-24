@@ -393,7 +393,7 @@ struct StudioTaskWorkspace: View {
     }
 
     private func saveOutput(_ url: URL) {
-        guard let destination = StudioSpecialistFiles.saveFile(title: "Save output", suggestedName: url.lastPathComponent) else {
+        guard let destination = StudioFilePanels.saveFile(title: "Save output", suggestedName: url.lastPathComponent) else {
             return
         }
         do {
@@ -438,7 +438,7 @@ struct StudioTaskWorkspace: View {
                 error = "This run left no text to save."
                 return
             }
-            guard let destination = StudioSpecialistFiles.saveFile(title: "Save result", suggestedName: "result.txt") else { return }
+            guard let destination = StudioFilePanels.saveFile(title: "Save result", suggestedName: "result.txt") else { return }
             do {
                 try text.write(to: destination, atomically: true, encoding: .utf8)
             } catch {

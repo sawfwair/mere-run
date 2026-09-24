@@ -392,16 +392,39 @@ struct ContractFormPathRow: View {
     @Binding var path: String
     var isDirectory = false
     var allowedTypes: [UTType] = [.data]
+    var allowsMultipleSelection = false
+    /// Project and Manage pages also let a user paste a path directly.
+    var placeholder: String? = nil
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if let placeholder {
+                Text(label)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                pathControls(placeholder: placeholder)
+            } else {
+                pathControls(placeholder: nil)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
+    }
+
+    private func pathControls(placeholder: String?) -> some View {
         HStack(spacing: 8) {
-            Text(path.isBlank ? "No \(label.lowercased())" : URL(fileURLWithPath: path).lastPathComponent)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(path.isBlank ? MereRunTheme.textMuted : MereRunTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(path.isBlank ? label : path)
-            Spacer(minLength: 4)
+            if let placeholder {
+                TextField(placeholder, text: $path)
+                    .mereField()
+            } else {
+                Text(path.isBlank ? "No \(label.lowercased())" : URL(fileURLWithPath: path).lastPathComponent)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(path.isBlank ? MereRunTheme.textMuted : MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(path.isBlank ? label : path)
+                Spacer(minLength: 4)
+            }
             Button(path.isBlank ? "Choose…" : "Change…") { choose() }
                 .buttonStyle(.mereSecondary)
                 .accessibilityLabel("Choose \(label.lowercased())")
@@ -418,18 +441,16 @@ struct ContractFormPathRow: View {
             }
         }
         .frame(minHeight: 24)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(label)
     }
 
     private func choose() {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = allowsMultipleSelection
         panel.canChooseDirectories = isDirectory
         panel.canChooseFiles = !isDirectory
         if !isDirectory { panel.allowedContentTypes = allowedTypes }
-        if panel.runModal() == .OK, let url = panel.url {
-            path = url.path
+        if panel.runModal() == .OK {
+            path = panel.urls.map(\.path).joined(separator: "\n")
         }
     }
 }
