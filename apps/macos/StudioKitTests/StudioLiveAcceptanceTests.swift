@@ -41,21 +41,21 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         }
         // Every Studio destination (composer and specialist pages alike) files under the configured
         // root, so the run's outputs land in the live directory instead of ~/Pictures etc. The root
-        // lives in a throwaway suite, never in the user's own settings.
-        let suite = try XCTUnwrap(UserDefaults(suiteName: Self.defaultsSuiteName))
-        suite.removePersistentDomain(forName: Self.defaultsSuiteName)
-        suite.set(directory.path, forKey: StudioOutputLocation.rootDefaultsKey)
+        // lives in this process only: a suite named once per process, set through its registration
+        // domain, which cfprefsd never persists — so two `swift test --filter …/testNN` processes
+        // running at once cannot overwrite or clear each other's root.
+        let suite = try XCTUnwrap(UserDefaults(suiteName: "run.mere.studio.live-acceptance.\(UUID().uuidString)"))
+        suite.register(defaults: [StudioOutputLocation.rootDefaultsKey: directory.path])
         StudioOutputLocation.defaults = suite
+        let probe = StudioOutputLocation.outputDirectoryURL(domain: .text, prompt: "probe", fallbackStem: "probe").path
+        XCTAssertTrue(probe.hasPrefix(directory.path), "The configured root did not take: destinations would file under \(probe)")
         continueAfterFailure = true
     }
 
     override func tearDownWithError() throws {
         StudioOutputLocation.defaults = .standard
-        UserDefaults(suiteName: Self.defaultsSuiteName)?.removePersistentDomain(forName: Self.defaultsSuiteName)
         try super.tearDownWithError()
     }
-
-    private static let defaultsSuiteName = "run.mere.studio.live-acceptance"
 
     // MARK: - Text ▸ Decisions
 
@@ -1111,16 +1111,29 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request(), "\(task) cannot run from Studio")
         let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        let argv = prepared.request.execution?.arguments ?? prepared.request.template.arguments(from: prepared.request.draft)
-        let capability = try XCTUnwrap(draft.capability)
+        let argv = try XCTUnwrap(prepared.request.execution).arguments
+        assertDestinations(of: draft, in: argv, stayUnder: live)
+        return (prepared.request, argv)
+    }
+
+    /// Every destination the argv names — the output routing filled, the sidecars beside it, and
+    /// a folder the draft chose (`--materialize`) — is under the live directory, so a run can
+    /// never write into the user's own folders.
+    private func assertDestinations(of draft: StudioTaskDraft, in argv: [String], stayUnder root: URL, file: StaticString = #filePath, line: UInt = #line) {
+        guard let capability = draft.capability else { return XCTFail("\(draft.templateID) has no contract", file: file, line: line) }
         let destinationFlags = StudioTaskSchema.outputFlags(for: capability).union(StudioTaskSchema.chosenOutputFlags)
         for (index, word) in argv.enumerated() where destinationFlags.contains(word) && index + 1 < argv.count {
-            let destination = argv[index + 1]
-            guard destination.hasPrefix(live.path) else {
-                throw XCTSkip("Refusing to run: \(word) \(destination) is outside the live directory \(live.path)")
-            }
+            XCTAssertTrue(argv[index + 1].hasPrefix(root.path), "\(word) escaped the configured root: \(argv[index + 1])", file: file, line: line)
         }
-        return (prepared.request, argv)
+    }
+
+    /// The user's own media folders. A CLI launch naming a file under one of them, outside the
+    /// live directory, is a harness fault (the root did not take) and never runs.
+    private var fencedFolders: [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return ["Music", "Pictures", "Documents", "Movies", "Desktop", "Downloads"].map {
+            home.appendingPathComponent($0, isDirectory: true)
+        }
     }
 
     /// The word after `flag` in an argv, or nil when the flag is absent.
@@ -1563,6 +1576,19 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// Runs the CLI, capturing both streams to files under `live/<flow>/` as evidence.
     @discardableResult
     private func runCLI(_ flow: String, _ argv: [String], timeout: TimeInterval) throws -> CLIResult {
+        struct EscapedRoot: LocalizedError {
+            let path: String
+            var errorDescription: String? { "The CLI would write outside the live directory: \(path)" }
+        }
+        let livePath = live.standardizedFileURL.path
+        for token in argv where token.hasPrefix("/") {
+            let path = URL(fileURLWithPath: token).standardizedFileURL.path
+            guard !path.hasPrefix(livePath + "/"), fencedFolders.contains(where: { path.hasPrefix($0.standardizedFileURL.path + "/") }) else {
+                continue
+            }
+            XCTFail("Refusing to launch the CLI with \(token): it is under the user's own folders, not \(live.path)")
+            throw EscapedRoot(path: token)
+        }
         stepCounter += 1
         let folder = live.appendingPathComponent(flow, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

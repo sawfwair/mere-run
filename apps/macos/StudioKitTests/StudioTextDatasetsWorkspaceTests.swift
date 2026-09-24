@@ -168,6 +168,7 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         var page = template.defaultDraft()
         page.prompt = "first\nsecond"
         page.force = true
+        page.outputPath = root.appendingPathComponent("Text/first-second-ab12cd.json").path
         let item = StudioLibraryItem(
             id: UUID(), mode: .chat, prompt: "first\nsecond", inputURL: nil, outputURL: nil,
             createdAt: Date(), updatedAt: Date(), status: .completed, exitCode: 0,
@@ -178,6 +179,9 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: item))
         XCTAssertEqual(restored.templateID, .textEmbed)
         XCTAssertEqual(restored.prompt, "first\nsecond")
+        // The recorded run's destination was that run's, not a setting: routing names a new one.
+        XCTAssertFalse(restored.arguments.contains("--output"))
+        page.outputPath = ""
         XCTAssertEqual(restored.arguments, template.arguments(from: page))
     }
 
