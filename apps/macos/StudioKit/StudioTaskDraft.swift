@@ -34,6 +34,21 @@ package struct StudioTaskDraft: Codable, Equatable {
         for flag in Self.launcherDefaults(for: templateID) where form.values[flag] == nil {
             form[flag] = .flag(true)
         }
+        for flag in Self.consoleOnlyDefaults(for: templateID) {
+            form.values[flag] = nil
+        }
+    }
+
+    /// The switches the catalog turns on so the Command Console opens a heavy command safely
+    /// (`--dry-run` on the depth and geometry commands) but a page never ran with: a fresh draft
+    /// on the workspace runs for real, and the inspector's Dry run row stays for a preflight.
+    package static func consoleOnlyDefaults(for templateID: CommandTemplateID) -> [String] {
+        switch templateID {
+        case .visionDepth, .visionDepthVideo, .visionGeometry, .visionGeometryMultiview:
+            return ["--dry-run"]
+        default:
+            return []
+        }
     }
 
     /// The switches a page turned on for every run of a template because the surface reads the
@@ -44,8 +59,11 @@ package struct StudioTaskDraft: Codable, Equatable {
         switch templateID {
         case .imageDatasetDiscover, .imageRunPlan,
              .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionPose, .visionFlow,
-             .visionDepth, .visionDepthVideo, .visionGeometry, .visionGeometryMultiview, .visionTrackLive:
+             .visionDepth, .visionDepthVideo, .visionGeometry, .visionGeometryMultiview:
             return ["--json"]
+        case .visionTrackLive:
+            // The Live page drew boxes and labels on the clip unless they were turned off.
+            return ["--json", "--show-boxes", "--show-labels"]
         default:
             return []
         }

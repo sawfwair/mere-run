@@ -27,13 +27,19 @@ final class StudioTaskSchemaTests: XCTestCase {
                 let capability = try XCTUnwrap(template.id.capability, "\(template.id) has no contract")
                 let draft = StudioTaskDraft(templateID: template.id)
                 let launcher = Set(StudioTaskDraft.launcherDefaults(for: template.id))
+                let consoleOnly = Set(StudioTaskDraft.consoleOnlyDefaults(for: template.id))
                 XCTAssertEqual(
                     Self.pairs(of: draft.arguments, capability: capability).subtracting(launcher),
-                    Self.pairs(of: template.arguments(from: template.defaultDraft()), capability: capability).subtracting(launcher),
+                    Self.pairs(of: template.arguments(from: template.defaultDraft()), capability: capability)
+                        .subtracting(launcher).subtracting(consoleOnly),
                     "\(template.id) fresh draft is the template's own command"
                 )
                 for flag in launcher {
                     XCTAssertTrue(draft.arguments.contains(flag), "\(template.id) launcher default \(flag)")
+                    XCTAssertTrue(capability.options.contains { $0.flag == flag }, "\(template.id) declares \(flag)")
+                }
+                for flag in consoleOnly {
+                    XCTAssertFalse(draft.arguments.contains(flag), "\(template.id) fresh draft runs for real, without \(flag)")
                     XCTAssertTrue(capability.options.contains { $0.flag == flag }, "\(template.id) declares \(flag)")
                 }
 
