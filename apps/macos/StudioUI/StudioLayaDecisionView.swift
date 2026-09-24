@@ -219,9 +219,10 @@ struct StudioLayaDecisionView: View {
         command.outputPath = directory.appendingPathComponent(preflight ? "fit.json" : "decisions.json").path
         command.preflight = preflight
         command.force = true
-        requestID = StudioSpecialistRunner.submit(
-            templateID: .textDecide, mode: .chat, draft: command, controller: controller, library: library
-        )
+        guard let template = CommandCatalog.template(id: .textDecide) else { return }
+        let request = StudioRunRequest(mode: .chat, templateID: template.id, template: template, draft: command)
+        requestID = (try? StudioTaskRunner(controller: controller, library: library)
+            .run(request: request, task: .textDecide, validating: false))?.id
     }
 
     /// Loads the example, asking first when it would replace work.

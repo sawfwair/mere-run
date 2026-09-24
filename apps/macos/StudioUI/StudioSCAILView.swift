@@ -15,7 +15,7 @@ private let segmentedSelection = MereRunTheme.dynamic(light: "FFFFFF", dark: "3A
 /// plan is written to `plan.json` and handed to `video prepare-masks`; the manifest, tracking, and
 /// quality reports it writes back drive the preview, the subject rows, and the stats. Animation
 /// hands the tracked masks to `video animate`. Every job is a durable Library row through
-/// `StudioSpecialistRunner`, and a fingerprint of the mask inputs invalidates prepared masks the
+/// `StudioTaskRunner`, and a fingerprint of the mask inputs invalidates prepared masks the
 /// moment any of them changes.
 struct StudioSCAILView: View {
     @EnvironmentObject private var controller: MereRunController
@@ -1127,13 +1127,9 @@ struct StudioSCAILView: View {
         draft.previewFrame = previewOnly ? String(previewFrame) : ""
         draft.model = maskModel
         maskJob = previewOnly ? .preview(frame: previewFrame) : .track
-        maskRequestID = StudioSpecialistRunner.submit(
-            templateID: .videoPrepareMasks,
-            mode: .video,
-            draft: draft,
-            controller: controller,
-            library: library
-        )
+        let request = StudioRunRequest(mode: .video, templateID: template.id, template: template, draft: draft)
+        maskRequestID = (try? StudioTaskRunner(controller: controller, library: library)
+            .run(request: request, task: .videoSubjects, validating: false))?.id
         if selectedStage == .plan {
             selectedStage = .track
         }
@@ -1195,13 +1191,9 @@ struct StudioSCAILView: View {
         draft.preflight = preflight
         draft.json = preflight
         animateJob = preflight ? .validate : .animate
-        animateRequestID = StudioSpecialistRunner.submit(
-            templateID: .videoAnimate,
-            mode: .video,
-            draft: draft,
-            controller: controller,
-            library: library
-        )
+        let request = StudioRunRequest(mode: .video, templateID: template.id, template: template, draft: draft)
+        animateRequestID = (try? StudioTaskRunner(controller: controller, library: library)
+            .run(request: request, task: .videoSubjects, validating: false))?.id
     }
 
     private func validateInputs(includeRender: Bool, preflight: Bool = false) -> Bool {

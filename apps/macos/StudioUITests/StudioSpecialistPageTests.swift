@@ -14,11 +14,11 @@ final class StudioSpecialistPageTests: XCTestCase {
         XCTAssertNil(StudioCLAPScore.parse("error: model missing after 3 tries"))
     }
 
-    /// A page's Run with an incomplete form goes through the runner shim and still ends as a
+    /// A project's Run with an incomplete form goes through the shared runner and ends as a
     /// failed Library row the page's result view shows, rather than vanishing.
     @MainActor
-    func testTheSpecialistRunnerShimRecordsAnInvalidRunAsAFailedRow() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("shim-\(UUID())")
+    func testTheTaskRunnerRecordsAnInvalidProjectRunAsAFailedRow() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("project-run-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let processRunner = RecordingProcessRunner()
@@ -31,9 +31,9 @@ final class StudioSpecialistPageTests: XCTestCase {
         var draft = template.defaultDraft()
         draft.outputPath = root.appendingPathComponent("animated.mp4").path
 
-        let id = try XCTUnwrap(StudioSpecialistRunner.submit(
-            templateID: .videoAnimate, mode: .readImage, draft: draft, controller: controller, library: library
-        ))
+        let request = StudioRunRequest(mode: .readImage, templateID: template.id, template: template, draft: draft)
+        let id = try StudioTaskRunner(controller: controller, library: library)
+            .run(request: request, task: .videoSubjects, validating: false).id
         for _ in 0..<6 { await Task.yield() }
 
         let row = try XCTUnwrap(library.items.first { $0.id == id })

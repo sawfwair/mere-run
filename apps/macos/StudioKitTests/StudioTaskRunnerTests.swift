@@ -151,10 +151,9 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertEqual(runner.currentJob(for: .soundEncode)?.request.requestID, request.id)
     }
 
-    /// A legacy page's Run with an incomplete command (the shim's path, `validating: false`)
-    /// still records the row and lets admission fail it, so the page's result view shows the
-    /// failure with its reason as it always did; the Command view's path throws instead.
-    func testALegacyPagesInvalidRequestIsRecordedAndFailedByAdmission() async throws {
+    /// A task-specific page's Run with an incomplete command (`validating: false`) records the
+    /// row and lets admission fail it; the Command view's validated path throws instead.
+    func testAnInvalidPageRequestIsRecordedAndFailedByAdmission() async throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .sfxAEEncode))
         var draft = template.defaultDraft()
         draft.outputPath = root.appendingPathComponent("outputs/Sound/hit.npy").path

@@ -1030,13 +1030,7 @@ struct StudioServingConsoleView: View {
 
     private func installPi() {
         guard let template = CommandCatalog.template(id: .agentInstallPi) else { return }
-        agentRequestID = StudioSpecialistRunner.submit(
-            templateID: template.id,
-            mode: .chat,
-            draft: template.defaultDraft(),
-            controller: controller,
-            library: library
-        )
+        agentRequestID = submitAgent(template: template, draft: template.defaultDraft())
         monitor.note("Pi installation submitted")
     }
 
@@ -1047,13 +1041,7 @@ struct StudioServingConsoleView: View {
         agentDraft.model = selectedAgentModel
         agentDraft.host = controller.runtimeHost
         agentDraft.port = controller.runtimePort
-        agentRequestID = StudioSpecialistRunner.submit(
-            templateID: template.id,
-            mode: .chat,
-            draft: agentDraft,
-            controller: controller,
-            library: library
-        )
+        agentRequestID = submitAgent(template: template, draft: agentDraft)
         monitor.note("Pi provider configuration submitted", detail: selectedAgentModel)
     }
 
@@ -1065,13 +1053,7 @@ struct StudioServingConsoleView: View {
         agentDraft.host = controller.runtimeHost
         agentDraft.port = controller.runtimePort
         agentDraft.stream = monitor.isReachable
-        agentRequestID = StudioSpecialistRunner.submit(
-            templateID: template.id,
-            mode: .chat,
-            draft: agentDraft,
-            controller: controller,
-            library: library
-        )
+        agentRequestID = submitAgent(template: template, draft: agentDraft)
         monitor.note("Agent session submitted", detail: selectedAgentModel)
     }
 
@@ -1083,14 +1065,14 @@ struct StudioServingConsoleView: View {
         webDraft.apiKey = controller.runtimeAPIKey
         webDraft.model = selectedClientModel
         webDraft.openWebUISkipServer = monitor.isReachable
-        agentRequestID = StudioSpecialistRunner.submit(
-            templateID: template.id,
-            mode: .chat,
-            draft: webDraft,
-            controller: controller,
-            library: library
-        )
+        agentRequestID = submitAgent(template: template, draft: webDraft)
         monitor.note("Open WebUI setup submitted")
+    }
+
+    private func submitAgent(template: CommandTemplate, draft: CommandDraft) -> UUID? {
+        let request = StudioRunRequest(mode: .chat, templateID: template.id, template: template, draft: draft)
+        return (try? StudioTaskRunner(controller: controller, library: library)
+            .run(request: request, task: .serverServing, validating: false))?.id
     }
 
     private func agentOutput(for requestID: UUID) -> String {

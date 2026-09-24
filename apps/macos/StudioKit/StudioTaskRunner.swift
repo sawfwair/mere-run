@@ -12,10 +12,9 @@ package struct StudioValidationError: LocalizedError, Equatable {
     package var errorDescription: String? { message }
 }
 
-/// The one way a task's run reaches the Library and the job store. The prompt controller's
-/// `runTask`, the shared task workspace's Run, and — until the last page moves —
-/// `StudioSpecialistRunner.submit` all come through here, so every run is named, validated,
-/// prepared, attributed, recorded, and remembered for Stop the same way.
+/// The one way a task's run reaches the Library and the job store. The prompt controller,
+/// shared task workspace, and project, session, and manage pages all come through here, so
+/// every run is prepared, attributed, recorded, and remembered for Stop the same way.
 @MainActor
 package final class StudioTaskRunner {
     package let controller: MereRunController
@@ -34,8 +33,7 @@ package final class StudioTaskRunner {
     /// tests build exactly what the app runs.
     ///
     /// `validating: false` skips the throw and lets job admission fail the run instead, which
-    /// records a failed Library row with the reason — what the legacy pages show, since they have
-    /// no banner of their own to put a thrown message in.
+    /// records a failed Library row with the reason for pages that show errors in their own pane.
     package static func prepare(
         _ base: StudioRunRequest,
         sessions: StudioTaskSessions,
@@ -110,21 +108,27 @@ package final class StudioTaskRunner {
         return request
     }
 
-    /// Runs a request a page built from its own `CommandDraft` (the legacy pages and the Command
-    /// view's Run on them), prepared the same way. The Command view validates first and shows
-    /// the reason in its banner; a legacy page's own Run passes `validating: false` so an
-    /// incomplete command becomes a failed row in its result view, as it always did.
+    /// Runs a request a project, session, or manage page built from its own `CommandDraft`,
+    /// prepared the same way. The Command view validates first and shows the reason in its
+    /// banner; pages with their own result pane pass `validating: false` so an incomplete
+    /// command becomes a failed row with the reason.
     @discardableResult
-    package func run(request base: StudioRunRequest, task: StudioTask, validating: Bool = true) throws -> StudioRunRequest {
+    package func run(
+        request base: StudioRunRequest,
+        task: StudioTask,
+        validating: Bool = true,
+        onLaunchRefused: (() -> Void)? = nil
+    ) throws -> StudioRunRequest {
         let prepared = try Self.prepare(base, sessions: sessions, validating: validating)
         if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
-        submit(prepared.request, task: task)
+        if !submit(prepared.request, task: task) { onLaunchRefused?() }
         return prepared.request
     }
 
     /// Records the run and launches it. The Library row starts as running or queued by whether
     /// the inference lane has a slot, the same reading the feed's cards make.
-    private func submit(_ request: StudioRunRequest, task: StudioTask) {
+    @discardableResult
+    private func submit(_ request: StudioRunRequest, task: StudioTask) -> Bool {
         sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
         let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft)
         library.start(request: request, commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true),
@@ -142,6 +146,7 @@ package final class StudioTaskRunner {
                 commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true)
             )
         }
+        return launched
     }
 
     /// What a Live row says when the Mac will not give mere.run the camera.

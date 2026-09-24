@@ -693,22 +693,21 @@ struct StudioRealtimeMusicView: View {
             banner = Banner(severity: .error, text: "Enable playback or recording (Record to file) before starting.")
             return
         }
-        let request = controller.taskSessions.resolving(StudioRunRequest(
+        let request = StudioRunRequest(
             mode: .music,
             templateID: .musicRealtime,
             template: template,
             draft: commandDraft
-        ))
-        let preview = controller.commandPreview(arguments: request.execution?.arguments ?? template.arguments(from: request.draft), masksSecrets: true)
-        let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
-            ? .queued
-            : .running
-        library.start(request: request, commandPreview: preview, status: status)
-        requestID = request.id
+        )
         peaks = []
         banner = nil
-        if !controller.run(studio: request) {
-            banner = Banner(severity: .error, text: "The session could not be started. Check the CLI path in Settings.")
+        do {
+            requestID = try StudioTaskRunner(controller: controller, library: library)
+                .run(request: request, task: .musicRealtime, validating: false, onLaunchRefused: {
+                    banner = Banner(severity: .error, text: "The session could not be started. Check the CLI path in Settings.")
+                }).id
+        } catch {
+            banner = Banner(severity: .error, text: error.localizedDescription)
         }
     }
 
