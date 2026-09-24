@@ -91,13 +91,36 @@ final class StudioTaskRunnerTests: XCTestCase {
             XCTAssertTrue(error.localizedDescription.contains("isn't on this Mac"))
         }
         controller.readinessByTask[.audioEnhance] = .ready
+        // The well gate speaks first for an empty input; the contract's own validation still
+        // guards the rest (`testALegacyPagesInvalidRequestIsRecordedAndFailedByAdmission`).
         XCTAssertThrowsError(try runner.run(StudioTaskDraft(templateID: .audioEnhance), task: .audioEnhance)) { error in
-            XCTAssertEqual(error as? StudioValidationError, StudioValidationError(message: "Audio is required."))
+            XCTAssertEqual(error as? StudioValidationError, StudioValidationError(message: "Attach audio first."))
+        }
+        var badOverlap = try enhanceDraft()
+        badOverlap.form["--overlap"] = .text("not-a-number")
+        XCTAssertThrowsError(try runner.run(badOverlap, task: .audioEnhance)) { error in
+            XCTAssertEqual(error as? StudioValidationError, StudioValidationError(message: "AP-BWE overlap must be a whole number."))
         }
         XCTAssertTrue(library.items.isEmpty)
         XCTAssertTrue(controller.jobs.all.isEmpty)
         XCTAssertTrue(processRunner.starts.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("outputs").path), "no folder before a run")
+    }
+
+    /// `music transcribe`'s positional is optional in the contract only because of
+    /// `--list-instruments`; the task's surface requires the well filled, so an empty one is
+    /// refused with the composer's own words before anything is recorded or launched.
+    func testAnEmptyWellIsRefusedWhenTheTaskRequiresAnInput() throws {
+        controller.readinessByTask[.musicTranscribe] = .ready
+        XCTAssertThrowsError(try runner.run(StudioTaskDraft(templateID: .musicTranscribe), task: .musicTranscribe)) { error in
+            XCTAssertEqual(error as? StudioValidationError, StudioValidationError(message: "Attach audio first."))
+        }
+        XCTAssertTrue(library.items.isEmpty)
+        XCTAssertTrue(processRunner.starts.isEmpty)
+
+        controller.readinessByTask[.soundCondition] = .ready
+        let condition = try runner.run(StudioTaskDraft(templateID: .sfxConditionText), task: .soundCondition)
+        XCTAssertEqual(condition.templateID, .sfxConditionText, "a task with no input slot runs on its prompt")
     }
 
     func testALegacyPagesRequestRunsThroughTheSamePath() throws {

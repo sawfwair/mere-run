@@ -464,23 +464,35 @@ package enum StudioOutputLocation {
 
     // MARK: - Task drafts
 
-    /// The sidecars `destination(for:)` derives beside a primary output, with the extension each
-    /// takes. `--mask-output-dir` is derived too, as a directory. `StudioExecution.replay` moves
-    /// these same flags (plus the music sidecars it re-derives from a recorded run) when a run is
-    /// replayed, so a replay keeps its documents together.
-    package static let derivedSidecars: [(flag: String, fileExtension: String)] = [
-        ("--json-output", "json"), ("--jsonl-output", "jsonl"), ("--context-output", "json"), ("--timings-output", "json"),
+    /// The sidecars `destination(for:)` derives beside a primary output: the flag, the extension
+    /// the file takes, and the suffix that keeps it apart from a primary of the same extension
+    /// (`--context-output` beside a `.json` transcription is `<stem>-context.json`; the vision
+    /// result document keeps the bare `<stem>.json` the Analyze canvas has always read).
+    /// `--mask-output-dir` is derived too, as `<stem>-masks`. `StudioExecution.replay` renames
+    /// these same flags, the mask directory, and `StudioTaskSchema.chosenOutputFlags` when a run
+    /// is replayed, so a replay never writes over the original's documents.
+    package static let derivedSidecars: [(flag: String, fileExtension: String, suffix: String)] = [
+        ("--json-output", "json", ""), ("--jsonl-output", "jsonl", ""),
+        ("--context-output", "json", "-context"), ("--timings-output", "json", "-timings"),
     ]
+
+    /// Every flag `destination(for:)` and `StudioExecution.replay` treat as a destination.
+    package static var sidecarFlags: Set<String> {
+        Set(derivedSidecars.map(\.flag)).union(["--mask-output-dir"])
+    }
 
     /// The draft with its destination filled the way the composer names a prompt run's: the
     /// capability's output flag set to `namedOutputPath` (the domain's folder, the prompt's slug
     /// or the input's name, a derived identifier), and every sidecar in `derivedSidecars` the
     /// capability declares beside it with the same stem, plus `--mask-output-dir`. A destination
-    /// the user pointed outside the app's folder in the Command view is kept; sidecars already
-    /// named are kept too. The identifier is derived from what the run does (template, prompt,
-    /// model, inputs, options) and never from where it writes, so calling this again on its own
-    /// result names the same file: the Command view's "Will run" and the run agree. The task
-    /// runner calls it at submit time, when `reserve` makes two runs in one second step apart.
+    /// the user pointed outside the app's folder in the Command view is kept, as is a sidecar
+    /// pointed anywhere but beside the app's own primary; a sidecar the app named earlier moves
+    /// with the primary, and an app-named `--context-output` is dropped once
+    /// `--no-musical-context` is on. The identifier is derived from what the run does
+    /// (template, prompt, model, inputs, options) and never from where it writes, so calling
+    /// this again on its own result names the same files: the Command view's "Will run" and the
+    /// run agree. The task runner calls it at submit time, when `reserve` makes two runs in one
+    /// second step apart.
     package static func destination(
         for draft: StudioTaskDraft,
         fileManager: FileManager = .default
@@ -522,11 +534,27 @@ package enum StudioOutputLocation {
         guard !output.isBlank else { return named }
         let stem = URL(fileURLWithPath: output).deletingPathExtension()
         let declared = Set(capability.options.map(\.flag))
-        for (sidecar, ext) in derivedSidecars
-        where sidecar != flag && declared.contains(sidecar) && named.text(sidecar).isBlank {
-            named.form[sidecar] = .text(stem.appendingPathExtension(ext).path)
+        // A sidecar the app named sits beside the primary it was derived from — the one the
+        // draft carried in, or the one just named; anywhere else is the user's choice.
+        let appFolders = Set([existing, output].filter { !$0.isBlank }
+            .map { URL(fileURLWithPath: $0).deletingLastPathComponent().standardizedFileURL.path })
+        func isAppNamed(_ path: String) -> Bool {
+            path.isBlank || appFolders.contains(URL(fileURLWithPath: path).deletingLastPathComponent().standardizedFileURL.path)
         }
-        if flag != "--mask-output-dir", declared.contains("--mask-output-dir"), named.text("--mask-output-dir").isBlank {
+        let skipsContext = named.form["--no-musical-context"].flag == true
+        for sidecar in derivedSidecars where sidecar.flag != flag && declared.contains(sidecar.flag) {
+            guard isAppNamed(named.text(sidecar.flag)) else { continue }
+            if sidecar.flag == "--context-output", skipsContext {
+                named.form[sidecar.flag] = .unset
+                continue
+            }
+            named.form[sidecar.flag] = .text(
+                stem.deletingLastPathComponent()
+                    .appendingPathComponent(stem.lastPathComponent + sidecar.suffix)
+                    .appendingPathExtension(sidecar.fileExtension).path
+            )
+        }
+        if flag != "--mask-output-dir", declared.contains("--mask-output-dir"), isAppNamed(named.text("--mask-output-dir")) {
             named.form["--mask-output-dir"] = .text(
                 stem.deletingLastPathComponent().appendingPathComponent("\(stem.lastPathComponent)-masks", isDirectory: true).path
             )

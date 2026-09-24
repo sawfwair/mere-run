@@ -375,7 +375,20 @@ final class StudioAnalyzeTests: XCTestCase {
             }
             XCTAssertEqual(task.showsPromptChrome, task.isPromptTask || task.usesTaskDraft, "\(task)")
         }
-        XCTAssertTrue(StudioTask.migratedTasks.isEmpty, "PR 0 migrates nothing user-visible")
+        // Whatever set of tasks has moved so far, each is a mode-less task the shared workspace
+        // can shell: Generate or Analyze (the workspace's two canvases). A Session, Project, or
+        // Manage task keeps its own page until it has a shell of its own.
+        for task in StudioTask.migratedTasks {
+            XCTAssertNil(task.mode, "\(task) is a prompt task; it has a workspace already")
+            XCTAssertTrue([.generate, .analyze].contains(task.archetype), "\(task) has no shared canvas yet")
+            XCTAssertTrue(task.usesTaskDraft && task.showsPromptChrome, "\(task)")
+            XCTAssertFalse(task.variantTemplates.isEmpty, "\(task) has nothing to run")
+            if task.archetype == .analyze {
+                XCTAssertNotNil(task.analyzeArchetype, "\(task) declares no Analyze shape")
+            } else {
+                XCTAssertNotNil(task.generateArchetype, "\(task) declares no Generate shape")
+            }
+        }
         XCTAssertEqual(StudioTask.visionDepth.archetype, .analyze)
         XCTAssertEqual(StudioTask.threeDFromImage.archetype, .generate)
         XCTAssertEqual(StudioTask.audioLive.archetype, .session)

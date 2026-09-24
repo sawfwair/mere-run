@@ -255,7 +255,27 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertEqual(restored.templateID, .audioEnhance)
         XCTAssertEqual(restored.primaryInputPath, recorded.inputPath)
         XCTAssertEqual(restored.model, "audio-enhance-universr")
-        XCTAssertEqual(restored.arguments, item.commandArguments, "the row's exact argv, read back")
+        XCTAssertEqual(restored.text("--output"), "", "a restored run gets a fresh destination, never the row's file")
+        XCTAssertEqual(
+            restored.arguments,
+            try XCTUnwrap(item.commandArguments).filter { $0 != "--output" && $0 != recorded.outputPath },
+            "everything but the destination is the row's exact argv, read back"
+        )
+
+        // A transcribe row carries a sidecar as well; both destinations go.
+        let transcribeTemplate = try XCTUnwrap(CommandCatalog.template(id: .musicTranscribe))
+        var transcribe = transcribeTemplate.defaultDraft()
+        transcribe.inputPath = root.appendingPathComponent("harbor-lights.wav").path
+        transcribe.outputPath = root.appendingPathComponent("harbor-lights.mid").path
+        transcribe.musicContextOutput = root.appendingPathComponent("harbor-lights-context.json").path
+        let transcribeRow = library.start(
+            request: StudioRunRequest(mode: .music, templateID: .musicTranscribe, template: transcribeTemplate, draft: transcribe),
+            commandPreview: "fixture"
+        )
+        let restoredTranscribe = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: transcribeRow))
+        XCTAssertEqual(restoredTranscribe.primaryInputPath, transcribe.inputPath)
+        XCTAssertEqual(restoredTranscribe.text("--output"), "")
+        XCTAssertEqual(restoredTranscribe.text("--context-output"), "")
 
         XCTAssertTrue(prompt.useTaskSettings(from: item, task: .audioEnhance))
         XCTAssertEqual(controller.taskSessions.taskDraft(for: .audioEnhance), restored)

@@ -119,6 +119,17 @@ package struct StudioTaskDraft: Codable, Equatable {
         }
     }
 
+    /// The same draft with every destination routing fills cleared, so
+    /// `StudioOutputLocation.destination(for:)` names fresh ones at submit time. A recorded run's
+    /// or a legacy page's `--output` and sidecars were that run's, never settings: carrying them
+    /// into a draft would write the next run over the last one's files.
+    package func withoutDestinations() -> StudioTaskDraft {
+        guard let capability else { return self }
+        var cleared = self
+        for flag in StudioTaskSchema.outputFlags(for: capability) { cleared.form.values[flag] = nil }
+        return cleared
+    }
+
     // MARK: Positionals and flags as text
 
     package func text(_ flag: String) -> String {
@@ -235,6 +246,8 @@ package enum StudioTaskDraftMigration {
     }
 
     /// The imported draft for `task`, or nil when no page draft exists for its first variant.
+    /// The page stamped a per-run destination (and its sidecars) into the draft it kept; those
+    /// were never settings, so they are cleared and routing names fresh ones.
     package static func imported(for task: StudioTask, from sessions: StudioTaskSessions) -> StudioTaskDraft? {
         guard let template = task.variantTemplates.first,
               let key = legacyKey(for: template.id),
@@ -242,6 +255,7 @@ package enum StudioTaskDraftMigration {
             return nil
         }
         return StudioTaskDraft(templateID: template.id, form: StudioConsoleCommand.seed(template: template, draft: draft))
+            .withoutDestinations()
     }
 }
 

@@ -317,4 +317,35 @@ final class StudioTaskSchemaTests: XCTestCase {
         sessions.setTaskDraft(StudioTaskDraft(templateID: .audioEdit), for: .audioEnhance)
         XCTAssertEqual(sessions.taskDraft(for: .audioEnhance)?.templateID, .audioEdit, "a parked draft wins")
     }
+
+    /// The Music Tools page stamped a timestamped `--output` and `--context-output` into the
+    /// draft it kept, the way it named every run's files; importing that draft keeps the
+    /// settings (input, format, model) and drops the destinations, so routing names the next run
+    /// afresh instead of writing over the page's last files.
+    @MainActor
+    func testImportedPageDraftsDropTheirPerRunDestinations() throws {
+        let sessions = StudioTaskSessions()
+        var page = try XCTUnwrap(CommandCatalog.template(id: .musicTranscribe)).defaultDraft()
+        page.inputPath = "/Users/example/Music/harbor-lights.wav"
+        page.outputPath = "/Users/example/Music/mere.run/Music/music-transcribe-20260903-101500.mid"
+        page.musicContextOutput = "/Users/example/Music/mere.run/Music/music-transcribe-20260903-101500-context.json"
+        page.musicTranscribeFormat = "midi"
+        page.musicInstruments = "piano"
+        sessions.set(page, for: StudioTask.musicTranscribe.rawValue + ".MusicTools.transcribeDraft")
+
+        let imported = try XCTUnwrap(sessions.taskDraft(for: .musicTranscribe))
+        XCTAssertEqual(imported.primaryInputPath, page.inputPath)
+        XCTAssertEqual(imported.text("--instruments"), "piano")
+        XCTAssertEqual(imported.text("--output"), "", "the page's per-run file is not a setting")
+        XCTAssertEqual(imported.text("--context-output"), "")
+        XCTAssertFalse(imported.arguments.contains(where: { $0.contains("20260903-101500") }))
+
+        var encode = try XCTUnwrap(CommandCatalog.template(id: .sfxAEEncode)).defaultDraft()
+        encode.inputPath = "/tmp/hit.wav"
+        encode.outputPath = "/Users/example/Music/mere.run/Sound/sfx-encode-20260903-101500.npy"
+        sessions.set(encode, for: StudioTask.soundEncode.rawValue + ".SFXLab.encodeDraft")
+        let encodeDraft = try XCTUnwrap(sessions.taskDraft(for: .soundEncode))
+        XCTAssertEqual(encodeDraft.primaryInputPath, "/tmp/hit.wav")
+        XCTAssertEqual(encodeDraft.text("--output"), "")
+    }
 }

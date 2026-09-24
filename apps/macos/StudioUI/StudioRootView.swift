@@ -693,11 +693,13 @@ private struct StudioWorkspaceView: View {
 
     /// The task's surface by archetype: the prompt workspace for a mode-backed task, the shared
     /// task workspace for a task whose page PR has landed (`StudioTask.migratedTasks`), and the
-    /// task's own page for everything else. A page PR flips its task's gate and the switch below
-    /// stops being reached for it.
+    /// task's own page for everything else. A page PR flips its task's gate and deletes its case
+    /// below; the switch's default is the workspace, so nothing else in this file changes.
     @ViewBuilder
     private var domainContent: some View {
-        if destination.task.usesTaskDraft {
+        if destination.task.mode != nil {
+            promptWorkspace
+        } else if destination.task.usesTaskDraft {
             StudioTaskWorkspace(task: destination.task, models: models)
         } else {
             legacyContent
@@ -707,10 +709,6 @@ private struct StudioWorkspaceView: View {
     @ViewBuilder
     private var legacyContent: some View {
         switch destination.task {
-        case .imageGenerate, .videoGenerate, .musicCompose, .soundGenerate, .voiceSpeak,
-             .chatChat, .chatCode, .visionRead, .visionFind, .visionSegment, .visionTrack,
-             .audioTranscribe:
-            promptWorkspace
         case .imageDatasets:
             StudioUtilityLabView(
                 task: $imageDatasetTask,
@@ -798,6 +796,10 @@ private struct StudioWorkspaceView: View {
             StudioOperationsView()
         case .pluginsCatalog:
             StudioPluginsView()
+        default:
+            // The prompt tasks never reach here (`domainContent` routes them first); a task whose
+            // page has been deleted is on the shared workspace.
+            StudioTaskWorkspace(task: destination.task, models: models)
         }
     }
 

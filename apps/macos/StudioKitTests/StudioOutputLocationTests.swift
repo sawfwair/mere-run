@@ -487,8 +487,8 @@ final class StudioOutputLocationTests: XCTestCase {
             XCTAssertEqual(URL(fileURLWithPath: midi.text("--output")).pathExtension, "mid", "the format decides the extension")
             XCTAssertEqual(
                 midi.text("--context-output"),
-                URL(fileURLWithPath: midi.text("--output")).deletingPathExtension().appendingPathExtension("json").path,
-                "the context document sits beside the MIDI with the same stem"
+                URL(fileURLWithPath: midi.text("--output")).deletingPathExtension().path + "-context.json",
+                "the context document sits beside the MIDI, its stem plus what it is"
             )
             transcribe.form["--format"] = .text("json")
             XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: transcribe).text("--output")).pathExtension, "json")
@@ -523,6 +523,53 @@ final class StudioOutputLocationTests: XCTestCase {
             XCTAssertEqual(URL(fileURLWithPath: condition.text("--output")).pathExtension, "safetensors")
             XCTAssertTrue(URL(fileURLWithPath: condition.text("--output")).lastPathComponent.hasPrefix("conditioning"),
                           "no input and no prompt: the template's title names it")
+        }
+    }
+
+    /// Sidecars take a suffix where the primary shares their extension, follow the primary when
+    /// the app named them, stay where the user pointed them, and the context document goes away
+    /// once the run is told not to write one.
+    func testTaskDraftSidecarsFollowThePrimaryAndKeepApartFromIt() throws {
+        try withConfiguredRoot { root in
+            var transcribe = StudioTaskDraft(templateID: .musicTranscribe)
+            transcribe.setArgument(0, "/tmp/harbor-lights.wav")
+            transcribe.form["--format"] = .text("json")
+            let named = StudioOutputLocation.destination(for: transcribe)
+            let output = URL(fileURLWithPath: named.text("--output"))
+            let context = URL(fileURLWithPath: named.text("--context-output"))
+            XCTAssertEqual(output.pathExtension, "json")
+            XCTAssertEqual(context.lastPathComponent, output.deletingPathExtension().lastPathComponent + "-context.json",
+                           "the context document never shares the transcription's name")
+            XCTAssertEqual(context.deletingLastPathComponent(), output.deletingLastPathComponent())
+
+            // The app-named sidecar moves with a renamed primary.
+            var moved = named
+            moved.setArgument(0, "/tmp/other-song.wav")
+            let renamed = StudioOutputLocation.destination(for: moved)
+            XCTAssertTrue(URL(fileURLWithPath: renamed.text("--output")).lastPathComponent.hasPrefix("other-song-"))
+            XCTAssertEqual(
+                URL(fileURLWithPath: renamed.text("--context-output")).lastPathComponent,
+                URL(fileURLWithPath: renamed.text("--output")).deletingPathExtension().lastPathComponent + "-context.json"
+            )
+
+            // A sidecar the user pointed elsewhere stays.
+            var chosen = named
+            chosen.form["--context-output"] = .text("/Volumes/Work/keep/context.json")
+            XCTAssertEqual(StudioOutputLocation.destination(for: chosen).text("--context-output"), "/Volumes/Work/keep/context.json")
+
+            // No musical context: the app-named document is dropped, a user-named one kept.
+            var silent = named
+            silent.form["--no-musical-context"] = .flag(true)
+            XCTAssertEqual(StudioOutputLocation.destination(for: silent).text("--context-output"), "")
+            XCTAssertFalse(StudioOutputLocation.destination(for: silent).arguments.contains("--context-output"))
+            chosen.form["--no-musical-context"] = .flag(true)
+            XCTAssertEqual(StudioOutputLocation.destination(for: chosen).text("--context-output"), "/Volumes/Work/keep/context.json")
+
+            // The vision document keeps its bare `<stem>.json` beside a `.png` primary.
+            var faces = StudioTaskDraft(templateID: .visionFaceDetect)
+            faces.setArgument(0, "/tmp/portrait.png")
+            XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: faces).text("--json-output")).pathExtension, "json")
+            _ = root
         }
     }
 

@@ -61,15 +61,18 @@ package struct StudioExecution: Codable, Equatable {
         return StudioExecution(templateID: templateID, arguments: result)
     }
 
-    /// Every replay owns fresh output paths, including explicitly named sidecars.
+    /// Every replay owns fresh output paths, including explicitly named sidecars: the ones
+    /// routing derives (`StudioOutputLocation.sidecarFlags`) and the ones the user chooses
+    /// (`StudioTaskSchema.chosenOutputFlags`), so Run again and Vary never write over the
+    /// original row's documents.
     package func replay(outputPath: String, seed: String? = nil) -> StudioExecution {
         guard let capability = templateID.capability, let form else { return self }
         var replay = self
         let sidecarStem = outputPath.isBlank ? "rerun-" + UUID().uuidString
             : URL(fileURLWithPath: outputPath).deletingPathExtension().lastPathComponent
         let outputFlags = Set([capability.output.flag].compactMap { $0 })
-            .union(["--json-output", "--mask-output-dir", "--structured-prompt-output", "--lrc-output",
-                    "--recipe-output", "--daw-bundle", "--timings-output"])
+            .union(StudioOutputLocation.sidecarFlags)
+            .union(StudioTaskSchema.chosenOutputFlags)
         for option in capability.options where outputFlags.contains(option.flag) {
             let old = form.text(option.flag)
             guard !old.isEmpty else { continue }
@@ -143,15 +146,17 @@ package enum StudioLibraryDraftRestoration {
     }
 
     /// The task draft a row restores to: the recorded argv read back into the contract form,
-    /// exactly as "Edit command" reopens it. nil for a thread or a row with no recorded command.
-    /// Not gated on the task's page: the workspace reads it once its gate flips, and the tests
-    /// prove the reading before then.
+    /// as "Edit command" reopens it, minus the run's own destinations — the next run is named
+    /// afresh rather than written over this one's files. nil for a thread or a row with no
+    /// recorded command. Not gated on the task's page: the workspace reads it once its gate
+    /// flips, and the tests prove the reading before then.
     package static func taskDraft(from item: StudioLibraryItem) -> StudioTaskDraft? {
         guard !item.isConversation, let templateID = item.templateID,
               let recorded = item.commandDraft, let template = CommandCatalog.template(id: templateID),
               let capability = templateID.capability else { return nil }
         let arguments = item.commandArguments ?? template.arguments(from: recorded)
         return StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
+            .withoutDestinations()
     }
 
     /// nil exactly when `canRestore` is false.

@@ -65,6 +65,13 @@ package final class StudioTaskRunner {
     package func run(_ draft: StudioTaskDraft, task: StudioTask) throws -> StudioRunRequest {
         let readiness = controller.readiness(for: task)
         if readiness.blocksRun { throw StudioValidationError(message: readiness.message(titles: controller.modelStore.titles)) }
+        // The contract leaves an input optional when the command has another mode without one
+        // (`music transcribe --list-instruments`); the task's surface says whether a run needs
+        // the well filled, so an empty well never launches the CLI to fail on its own.
+        if let slot = StudioTaskSchema.primarySlot(for: draft.templateID),
+           task.presentation.attaching(slot).requiresAttachment, draft.primaryInputPath.isBlank {
+            throw StudioValidationError(message: "Attach \(slot.label.lowercased()) first.")
+        }
         let request = try self.request(for: draft, task: task)
         submit(request, task: task)
         return request

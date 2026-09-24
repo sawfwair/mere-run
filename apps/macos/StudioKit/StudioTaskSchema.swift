@@ -148,8 +148,7 @@ package enum StudioTaskSchema {
     /// The destination flags routing fills (`StudioOutputLocation.destination(for:)`): the
     /// capability's own output flag and every sidecar derived beside it.
     package static func outputFlags(for capability: MereRunCommandCapability) -> Set<String> {
-        var flags = Set(StudioOutputLocation.derivedSidecars.map(\.flag))
-        flags.insert("--mask-output-dir")
+        var flags = StudioOutputLocation.sidecarFlags
         if let flag = capability.output.flag { flags.insert(flag) }
         return flags.intersection(capability.options.map(\.flag))
     }
