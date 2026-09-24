@@ -252,6 +252,23 @@ final class StudioConsoleDraftTests: XCTestCase {
         XCTAssertNil(StudioConsoleRun(template: external, draft: StudioConsoleDraft(), seed: CommandDraft()))
     }
 
+    /// A number a control wrote reaches the argv with every digit it has: the two-decimal chip
+    /// formatter would send a learning rate of 0.0001 to the CLI as "0".
+    func testNumberValuesReachTheArgvExactly() throws {
+        XCTAssertEqual(StudioComposerPresets.argumentText(0.0001), "0.0001")
+        XCTAssertEqual(StudioComposerPresets.argumentText(1e-5), "0.00001")
+        XCTAssertEqual(StudioComposerPresets.argumentText(0.125), "0.125")
+        XCTAssertEqual(StudioComposerPresets.argumentText(1), "1")
+        XCTAssertEqual(StudioComposerPresets.argumentText(0.1 + 0.2), "0.3")
+        XCTAssertEqual(StudioComposerPresets.decimalText(0.0001), "0", "the chip formatter still rounds for display")
+        var draft = StudioConsoleDraft()
+        draft["--learning-rate"] = .number(0.0001)
+        XCTAssertEqual(draft.text("--learning-rate"), "0.0001")
+        let capability = try XCTUnwrap(CommandTemplateID.textTrainLoRA.capability)
+        let argv = StudioConsoleCommand.arguments(for: capability, draft: draft)
+        XCTAssertEqual(argv.firstIndex(of: "--learning-rate").map { argv[$0 + 1] }, "0.0001")
+    }
+
     /// A run the console starts is a normal inference job: the same queue, progress, artifact
     /// resolution and Library row a run from a designed surface gets.
     @MainActor

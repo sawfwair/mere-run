@@ -41,7 +41,7 @@ package struct StudioConsoleDraft: Codable, Equatable, Sendable {
         switch self[flag] {
         case .text(let text): return text
         case .integer(let value): return String(value)
-        case .number(let value): return StudioComposerPresets.decimalText(value)
+        case .number(let value): return StudioComposerPresets.argumentText(value)
         case .flag(let on): return on ? "true" : ""
         case .unset: return ""
         }

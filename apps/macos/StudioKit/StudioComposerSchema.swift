@@ -589,6 +589,20 @@ package enum StudioComposerPresets {
         seconds.rounded() == seconds ? String(Int(seconds)) : decimalText(seconds)
     }
 
+    /// A number as the argv carries it: the POSIX locale, no grouping, every fraction digit the
+    /// value has (up to fifteen), and a whole number without a fraction. `decimalText` is for
+    /// chips and labels only; a learning rate of 0.0001 must reach the CLI as typed, not as "0".
+    package static func argumentText(_ value: Double) -> String {
+        if value.rounded() == value, abs(value) < 1e15 { return String(Int(value)) }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.usesGroupingSeparator = false
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 15
+        return formatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+
     package static func decimalText(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.minimumFractionDigits = 0
