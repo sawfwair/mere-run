@@ -63,6 +63,23 @@ The format is based on Keep a Changelog.
   adapters included. Run again keeps the extension a run's `--format` wrote,
   a run that falls back to App Outputs moves every sidecar in its command with
   it, and the Command view's "Will run" shows the destination the run writes.
+- `vision track-live` now removes its temporary camera recording on SIGINT
+  (Ctrl-C, or Studio's Stop) as well as SIGTERM, and exits with status 128 plus
+  the signal number.
+- `plugin install --yes` now runs a channel's declared `setup --yes` step after
+  a verified signed-bundle install too, not only after a pipx source install.
+  Every dry run and `plugin info` show the setup step; for a managed bundle it
+  runs as `mere.run plugin run ENTRYPOINT -- setup --yes`.
+- `plugin install --yes` registers a graph-provider plugin before it runs
+  setup, so a failed setup leaves the provider registered and only the printed
+  setup command needs retrying.
+- `model pull MODEL --accept-model-license` on an installed restricted model now
+  prints the same terms notice, `source:` lines, and confirmation statement as
+  a download, records the current component terms in the manifest with the
+  acceptance, and prints nothing under `--quiet`.
+- `mere.run catalog --json` now reports `audio enhance --input-rate` as a
+  `choice` of `8000`, `12000`, `16000`, and `24000` instead of an `integer`.
+  Clients that build controls from the catalog should read its `choices`.
 - Let a plugin catalog declare a setup step that runs through its verified
   entrypoint after installation. For an installed restricted model,
   `mere.run model pull MODEL --accept-model-license` now records explicit terms

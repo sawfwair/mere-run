@@ -128,25 +128,29 @@ struct VisionTrackLive: AsyncParsableCommand {
     }
 }
 
-/// Owns the camera recording through tracking, including a termination while capture is blocked.
-/// A dispatch signal source runs cleanup off the POSIX signal handler before the process exits.
+/// Owns the camera recording through tracking, including an interrupt or termination while capture is blocked.
+/// One dispatch signal source per signal runs cleanup off the POSIX signal handler before the process exits.
 final class LiveCaptureFile: @unchecked Sendable {
+    static let handledSignals = [SIGINT, SIGTERM]
+
     let url: URL
 
     private let lock = NSLock()
-    private let source: DispatchSourceSignal
-    private let previousSignalHandler: sig_t?
+    private let sources: [DispatchSourceSignal]
+    private let previousSignalHandlers: [sig_t?]
     private var active = true
 
     init(url: URL) {
         self.url = url
-        previousSignalHandler = signal(SIGTERM, SIG_IGN)
-        source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
-        source.setEventHandler { [weak self] in
-            guard self?.remove() == true else { return }
-            _exit(128 + SIGTERM)
+        previousSignalHandlers = Self.handledSignals.map { signal($0, SIG_IGN) }
+        sources = Self.handledSignals.map { DispatchSource.makeSignalSource(signal: $0, queue: .global()) }
+        for (signo, source) in zip(Self.handledSignals, sources) {
+            source.setEventHandler { [weak self] in
+                guard self?.remove() == true else { return }
+                _exit(128 + signo)
+            }
+            source.resume()
         }
-        source.resume()
     }
 
     @discardableResult
@@ -156,8 +160,10 @@ final class LiveCaptureFile: @unchecked Sendable {
         guard active else { return false }
         active = false
         try? FileManager.default.removeItem(at: url)
-        source.cancel()
-        _ = signal(SIGTERM, previousSignalHandler)
+        for (signo, (source, handler)) in zip(Self.handledSignals, zip(sources, previousSignalHandlers)) {
+            source.cancel()
+            _ = signal(signo, handler)
+        }
         return true
     }
 }

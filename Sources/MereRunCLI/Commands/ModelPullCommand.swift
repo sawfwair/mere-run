@@ -136,10 +136,8 @@ struct ModelPull: AsyncParsableCommand {
 
     private func pull(_ spec: ManagedModelSpec) async throws {
         let modelDir = spec.managedInstallRootURL()
-        if !force, acceptModelLicense,
-           ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir),
-           try acknowledgeInstalledUsageTerms(for: spec, at: modelDir) {
-            stderr("[\(spec.id)] recorded acceptance of installed model terms without downloading")
+        if !force, acceptModelLicense, ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir) {
+            try acknowledgeInstalledUsageTerms(for: spec, at: modelDir)
         }
         if !force, isInstalledInUnifiedCatalog(spec) {
             if !quiet {
@@ -168,17 +166,7 @@ struct ModelPull: AsyncParsableCommand {
             throw ValidationError(message)
         }
         if let restriction = spec.usageRestriction, !quiet {
-            stderr("[\(spec.id)] third-party usage terms: \(restriction.summary)")
-            for term in restriction.terms {
-                stderr("  \(term.component): \(term.license)")
-                stderr("    source: \(term.sourceRepoId)@\(term.sourceRevision)")
-                stderr("    terms: \(term.licenseURL)")
-            }
-            stderr("  You are responsible for determining whether your use complies with these terms.")
-            stderr(
-                "  By continuing, you confirm that you reviewed and accept these terms "
-                    + "and agree to comply with them."
-            )
+            Self.usageTermsNotice(modelID: spec.id, restriction: restriction).forEach(stderr)
         }
         let incrementalDownloadBytes: Int64?
         if force {
@@ -287,23 +275,41 @@ struct ModelPull: AsyncParsableCommand {
         )
     }
 
-    func acknowledgeInstalledUsageTerms(for spec: ManagedModelSpec, at modelDir: URL) throws -> Bool {
+    /// Records acceptance on an installed managed model, with the same terms notice a download shows.
+    @discardableResult
+    func acknowledgeInstalledUsageTerms(
+        for spec: ManagedModelSpec,
+        at modelDir: URL,
+        emit: (String) -> Void = { CLIStderr.write($0 + "\n") }
+    ) throws -> Bool {
         guard let restriction = spec.usageRestriction else { return false }
         var manifest = try MereRunModelManifest.loadRequired(from: modelDir)
-        guard manifest.id == spec.id else {
-            throw ValidationError("Installed manifest identifies \(manifest.id), expected \(spec.id).")
-        }
         guard manifest.usageTermsAcknowledged != true else { return false }
         if !quiet {
-            stderr("[\(spec.id)] third-party usage terms: \(restriction.summary)")
-            for term in restriction.terms {
-                stderr("  \(term.component): \(term.license)")
-                stderr("    terms: \(term.licenseURL)")
-            }
+            Self.usageTermsNotice(modelID: spec.id, restriction: restriction).forEach(emit)
         }
+        manifest.usageTerms = restriction.terms
         manifest.usageTermsAcknowledged = true
         try manifest.write(to: modelDir)
+        if !quiet {
+            emit("[\(spec.id)] recorded acceptance of installed model terms without downloading")
+        }
         return true
+    }
+
+    static func usageTermsNotice(modelID: String, restriction: ManagedModelUsageRestriction) -> [String] {
+        ["[\(modelID)] third-party usage terms: \(restriction.summary)"]
+            + restriction.terms.flatMap { term in
+                [
+                    "  \(term.component): \(term.license)",
+                    "    source: \(term.sourceRepoId)@\(term.sourceRevision)",
+                    "    terms: \(term.licenseURL)",
+                ]
+            }
+            + [
+                "  You are responsible for determining whether your use complies with these terms.",
+                "  By continuing, you confirm that you reviewed and accept these terms and agree to comply with them.",
+            ]
     }
 
     private func stderr(_ message: String) {

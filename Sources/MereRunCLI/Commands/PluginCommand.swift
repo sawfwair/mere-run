@@ -93,17 +93,27 @@ struct PluginInfo: ParsableCommand {
             return
         }
 
-        print("\(plugin.id): \(plugin.name)")
-        print(plugin.description)
-        print("")
-        print("Repository: \(plugin.repo)")
-        print("Package: \(plugin.package)")
-        print("Entrypoint: \(plugin.entrypoint)")
-        print("Capabilities: \(plugin.capabilities.joined(separator: ", "))")
-        print("Channel: \(resolvedChannel)")
-        print("")
-        print("Install command:")
-        print("  \(PluginInstallCommand.render(install: install))")
+        print(Self.summary(plugin: plugin, install: install, channel: resolvedChannel).joined(separator: "\n"))
+    }
+
+    static func summary(plugin: PluginCatalogEntry, install: PluginCatalogInstall, channel: String) -> [String] {
+        var lines = [
+            "\(plugin.id): \(plugin.name)",
+            plugin.description,
+            "",
+            "Repository: \(plugin.repo)",
+            "Package: \(plugin.package)",
+            "Entrypoint: \(plugin.entrypoint)",
+            "Capabilities: \(plugin.capabilities.joined(separator: ", "))",
+            "Channel: \(channel)",
+            "",
+            "Install command:",
+            "  \(PluginInstallCommand.render(install: install))",
+        ]
+        if let setup = PluginSetupCommand.render(install: install, entrypoint: plugin.entrypoint) {
+            lines += ["Setup command (plugin install --yes runs it after verification):", "  \(setup)"]
+        }
+        return lines
     }
 }
 
@@ -138,6 +148,10 @@ struct PluginInstall: ParsableCommand {
     var bundleArchive: String?
 
     func run() throws {
+        try run(actions: PluginInstallActions())
+    }
+
+    func run(actions: PluginInstallActions) throws {
         let catalog = try PluginCatalogClient.load(catalogURL: catalogURL)
         let plugin = try catalog.requirePlugin(id)
         let resolvedChannel = channel ?? catalog.defaultChannel
@@ -158,29 +172,45 @@ struct PluginInstall: ParsableCommand {
             guard bundleManifest != nil || URL(string: bundle)?.scheme == "https" else {
                 throw ValidationError("Catalog bundle manifests must use HTTPS. Use --bundle-manifest for an explicit local file.")
             }
-            guard yes else {
-                print("Install signed bundle for \(plugin.package) from \(bundle).")
-                print("Verify publisher, platform, notarization, and entrypoints before activation; retain the previous version.")
-                print("  \(confirmationCommand(channel: resolvedChannel))")
-                return
-            }
-            try PluginBundleInstaller.install(plugin: plugin, source: bundle, archive: bundleArchive,
-                                               allowLocalManifest: bundleManifest != nil)
+        }
+        guard yes else {
+            print(dryRun(plugin: plugin, install: install, bundle: bundle, channel: resolvedChannel).joined(separator: "\n"))
+            return
+        }
+        if let bundle {
+            try actions.installBundle(plugin, bundle, bundleArchive, bundleManifest != nil)
+            // Managed bundle entrypoints are discovered as graph providers without registration.
+            try PluginSetupCommand.run(plugin: plugin, install: install, managed: true, execute: actions.execute)
             return
         }
 
-        if !yes {
-            print("Install command:")
-            print("  \(command.render())")
-            if install.setup == true {
-                print("  \(plugin.entrypoint) setup --yes")
-            }
-            print("")
-            print("Run with --yes to execute it:")
-            print("  \(confirmationCommand(channel: resolvedChannel))")
-            return
+        let manifest = try actions.installSource(plugin, command)
+        // Register first so a failed setup only needs the setup retry.
+        if manifest.graphProvider != nil {
+            try actions.registerGraphProvider(plugin.entrypoint)
         }
+        try PluginSetupCommand.run(plugin: plugin, install: install, managed: false, execute: actions.execute)
+        print("Installed \(plugin.id) with \(install.manager).")
+        print("Verified \(plugin.entrypoint) manifest version \(manifest.version).")
+    }
 
+    func dryRun(plugin: PluginCatalogEntry, install: PluginCatalogInstall, bundle: String?, channel: String) -> [String] {
+        var lines: [String]
+        if let bundle {
+            lines = [
+                "Install signed bundle for \(plugin.package) from \(bundle).",
+                "Verify publisher, platform, notarization, and entrypoints before activation; retain the previous version.",
+            ]
+        } else {
+            lines = ["Install command:", "  \(PluginInstallCommand(install: install, force: force).render())"]
+        }
+        if let setup = PluginSetupCommand.render(install: install, entrypoint: plugin.entrypoint, managed: bundle != nil) {
+            lines += ["Then set up:", "  \(setup)"]
+        }
+        return lines + ["", "Run with --yes to execute it:", "  \(confirmationCommand(channel: channel))"]
+    }
+
+    static func installSource(plugin: PluginCatalogEntry, command: PluginInstallCommand) throws -> PluginManifest {
         guard try PluginBundleStore.standard.state(plugin.package) == nil else {
             throw ValidationError(
                 "A signed bundle is active for \(plugin.package). Supply its signed release manifest or use plugin rollback. "
@@ -194,18 +224,7 @@ struct PluginInstall: ParsableCommand {
                 "Installed plugin manifest name mismatch: expected \(plugin.id), got \(manifest.name)"
             )
         }
-        do {
-            try PluginSetupCommand.run(install: install, entrypoint: plugin.entrypoint)
-        } catch {
-            throw ValidationError(
-                "Installed \(plugin.id), but setup failed: \(error). Retry with \(plugin.entrypoint) setup --yes."
-            )
-        }
-        if manifest.graphProvider != nil {
-            try WorkflowGraphProviderRegistry.register(entrypoint: plugin.entrypoint)
-        }
-        print("Installed \(plugin.id) with \(install.manager).")
-        print("Verified \(plugin.entrypoint) manifest version \(manifest.version).")
+        return manifest
     }
 
     func confirmationCommand(channel: String) -> String {
@@ -309,15 +328,40 @@ struct PluginCatalogInstall: Codable, Equatable {
     var setup: Bool?
 }
 
+/// The optional fixed `setup --yes` verb a verified plugin runs after installation.
 enum PluginSetupCommand {
-    static func run(
-        install: PluginCatalogInstall,
-        entrypoint: String,
-        execute: (String, [String]) throws -> Void = PluginProcess.runExecutable
-    ) throws {
-        guard install.setup == true else { return }
-        try execute(entrypoint, ["setup", "--yes"])
+    static let arguments = ["setup", "--yes"]
+
+    /// The setup step as a user would run it: bare on PATH, or through `plugin run` for a managed bundle.
+    static func render(install: PluginCatalogInstall, entrypoint: String, managed: Bool = false) -> String? {
+        guard install.setup == true else { return nil }
+        let verb = arguments.joined(separator: " ")
+        return managed ? CLICommandDisplay.command("plugin run \(entrypoint) -- \(verb)") : "\(entrypoint) \(verb)"
     }
+
+    static func run(
+        plugin: PluginCatalogEntry,
+        install: PluginCatalogInstall,
+        managed: Bool,
+        execute: (String, [String]) throws -> Void
+    ) throws {
+        guard let retry = render(install: install, entrypoint: plugin.entrypoint, managed: managed) else { return }
+        do {
+            try execute(plugin.entrypoint, arguments)
+        } catch {
+            throw ValidationError("Installed \(plugin.id), but setup failed: \(error). Retry with \(retry).")
+        }
+    }
+}
+
+/// The side effects of `plugin install --yes`, replaceable in tests.
+struct PluginInstallActions {
+    var installBundle: (PluginCatalogEntry, String, String?, Bool) throws -> Void = { plugin, source, archive, local in
+        try PluginBundleInstaller.install(plugin: plugin, source: source, archive: archive, allowLocalManifest: local)
+    }
+    var installSource: (PluginCatalogEntry, PluginInstallCommand) throws -> PluginManifest = PluginInstall.installSource
+    var registerGraphProvider: (String) throws -> Void = { try WorkflowGraphProviderRegistry.register(entrypoint: $0) }
+    var execute: (String, [String]) throws -> Void = PluginProcess.runExecutable
 }
 
 struct PluginCatalogSnapshot: Codable, Equatable {
