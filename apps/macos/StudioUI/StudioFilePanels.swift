@@ -47,15 +47,8 @@ package enum StudioFilePanels {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
-    /// A fresh directory for a specialist run, in `domain`'s folder wherever Settings ▸ General
-    /// says generations go, stamped with the display clock so the snapshot boards render a
-    /// stable path.
-    @MainActor
-    static func outputDirectory(domain: StudioDomain, name: String) -> URL {
-        StudioOutputLocation.specialistDirectory(domain: domain, name: name, now: StudioDisplayClock.now)
-    }
-
-    /// One output file for a specialist run, filed the same way as `outputDirectory`.
+    /// One output file in the domain's configured folder, stamped with the display clock so
+    /// snapshot boards render a stable path.
     @MainActor
     static func outputFile(domain: StudioDomain, name: String, fileExtension: String) -> URL {
         StudioOutputLocation.specialistFile(

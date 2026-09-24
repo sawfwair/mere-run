@@ -198,14 +198,11 @@ final class StudioOutputLocationTests: XCTestCase {
         )
     }
 
-    /// Proposing a destination is naming, not making: a template's timestamped folder, a
-    /// specialist page's directory, and a named file all stay off the disk until a run starts,
-    /// so opening a task or a page never litters the output folder with empty directories.
+    /// Proposing a destination is naming, not making: a task's output folder and named file
+    /// stay off the disk until a run starts, so opening a task creates no empty directories.
     func testProposingADestinationCreatesNothing() throws {
         let root = try temporaryDirectory()
-        let stamp = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2001, month: 1, day: 1)))
         let proposals = [
-            StudioOutputLocation.specialistDirectory(domain: .vision, name: "caption", now: stamp, configuredRoot: root.path, home: root),
             StudioOutputLocation.outputDirectoryURL(
                 domain: .vision, prompt: "", fallbackStem: "Caption", identifierOverride: "20010101-000000",
                 configuredRoot: root.path, home: root
@@ -329,7 +326,10 @@ final class StudioOutputLocationTests: XCTestCase {
         let stamp = DateFormatter.mereRunTimestamp.string(from: now)
 
         XCTAssertEqual(
-            StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision", now: now, configuredRoot: "", home: home).path,
+            StudioOutputLocation.outputDirectoryURL(
+                domain: .vision, prompt: "", fallbackStem: "vision", identifierOverride: stamp,
+                configuredRoot: "", home: home
+            ).path,
             "/Users/example/Documents/mere.run/Vision/vision-\(stamp)"
         )
         XCTAssertEqual(
@@ -350,7 +350,10 @@ final class StudioOutputLocationTests: XCTestCase {
             "/Users/example/Documents/mere.run/Image/image-adapter-\(stamp).safetensors"
         )
         XCTAssertEqual(
-            StudioOutputLocation.specialistDirectory(domain: .threeD, name: "3d-asset", now: now, configuredRoot: "", home: home).path,
+            StudioOutputLocation.outputDirectoryURL(
+                domain: .threeD, prompt: "", fallbackStem: "3d-asset", identifierOverride: stamp,
+                configuredRoot: "", home: home
+            ).path,
             "/Users/example/Documents/mere.run/3D/3d-asset-\(stamp)"
         )
     }
@@ -365,7 +368,10 @@ final class StudioOutputLocationTests: XCTestCase {
             "/Volumes/Work/mere.run/Music/realtime-\(stamp).wav"
         )
         XCTAssertEqual(
-            StudioOutputLocation.specialistDirectory(domain: .text, name: "decisions", now: now, configuredRoot: root, home: home).path,
+            StudioOutputLocation.outputDirectoryURL(
+                domain: .text, prompt: "", fallbackStem: "decisions", identifierOverride: stamp,
+                configuredRoot: root, home: home
+            ).path,
             "/Volumes/Work/mere.run/Text/decisions-\(stamp)"
         )
     }

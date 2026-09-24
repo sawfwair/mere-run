@@ -986,7 +986,10 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         // section (the page's default run-plan folder).
         var materialize = preflight
         materialize.form["--preflight"] = .flag(false)
-        let runDirectory = StudioOutputLocation.specialistDirectory(domain: .image, name: "run-plan", configuredRoot: live.path).path
+        let runDirectory = StudioOutputLocation.outputDirectoryURL(
+            domain: .image, prompt: "", fallbackStem: "run-plan",
+            identifierOverride: DateFormatter.mereRunTimestamp.string(from: Date()), configuredRoot: live.path
+        ).path
         materialize.form["--materialize"] = .text(runDirectory)
         let (_, materializeArgv) = try taskRequest(materialize, task: .imageDatasets)
         XCTAssertEqual(materializeArgv, ["image", "run-plan", plan.path, "--json", "--materialize", runDirectory])
@@ -1034,7 +1037,10 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         // A materialized run directory (made by test14 or here).
         let directory = try Self.materializedRunDirectory ?? {
-            let target = StudioOutputLocation.specialistDirectory(domain: .image, name: "run-plan", configuredRoot: live.path)
+            let target = StudioOutputLocation.outputDirectoryURL(
+                domain: .image, prompt: "", fallbackStem: "run-plan",
+                identifierOverride: DateFormatter.mereRunTimestamp.string(from: Date()), configuredRoot: live.path
+            )
             var materialize = CommandDraft()
             materialize.inputPath = plan.path
             materialize.materializePath = target.path
@@ -1324,14 +1330,20 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let flow = "19-specialist-routing"
         let stamp = Date(timeIntervalSince1970: 1_800_000_000)
         let expectedStamp = DateFormatter.mereRunTimestamp.string(from: stamp)
-        let directory = StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision", now: stamp, configuredRoot: live.path)
+        let directory = StudioOutputLocation.outputDirectoryURL(
+            domain: .vision, prompt: "", fallbackStem: "vision",
+            identifierOverride: expectedStamp, configuredRoot: live.path
+        )
         XCTAssertEqual(directory.path, live.appendingPathComponent("Vision/vision-\(expectedStamp)").path)
         let file = StudioOutputLocation.specialistFile(domain: .sound, name: "sfx", fileExtension: "wav", now: stamp, configuredRoot: live.path)
         XCTAssertEqual(file.path, live.appendingPathComponent("Sound/sfx-\(expectedStamp).wav").path)
         // Without a configured root the same call files under the media folder for the extension.
         let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
         XCTAssertEqual(StudioOutputLocation.specialistFile(domain: .sound, name: "sfx", fileExtension: "wav", now: stamp, configuredRoot: "", home: home).path, "/Users/example/Music/mere.run/Sound/sfx-\(expectedStamp).wav")
-        XCTAssertEqual(StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision", now: stamp, configuredRoot: "", home: home).path, "/Users/example/Documents/mere.run/Vision/vision-\(expectedStamp)")
+        XCTAssertEqual(StudioOutputLocation.outputDirectoryURL(
+            domain: .vision, prompt: "", fallbackStem: "vision", identifierOverride: expectedStamp,
+            configuredRoot: "", home: home
+        ).path, "/Users/example/Documents/mere.run/Vision/vision-\(expectedStamp)")
 
         // What StudioTaskRunner does before launching: the destination's folder is created.
         var directoryDraft = CommandDraft()

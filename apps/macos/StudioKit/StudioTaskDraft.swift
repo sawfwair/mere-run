@@ -254,7 +254,6 @@ package enum StudioTaskDraftMigration {
         case .speechDiarizeLive: return "Voice.liveDiarizationDraft"
         case .musicAnalyze: return "MusicTools.analyzeDraft"
         case .musicTranscribe: return "MusicTools.transcribeDraft"
-        case .musicServe: return "MusicTools.serveDraft"
         case .audioEnhance: return "AudioTools.enhanceDraft"
         case .musicSeparate: return "AudioTools.separationDraft"
         case .sfxVideo: return "SFXLab.videoDraft"

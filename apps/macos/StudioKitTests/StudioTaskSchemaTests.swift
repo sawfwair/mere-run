@@ -324,6 +324,7 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertEqual(imported.primaryInputPath, "/tmp/voice.wav")
         XCTAssertEqual(imported.model, "audio-enhance-universr")
         XCTAssertNil(StudioTaskDraftMigration.legacyKey(for: .visionDepth), "Vision persisted scalars, not a draft")
+        XCTAssertNil(StudioTaskDraftMigration.legacyKey(for: .musicServe), "Music server keeps its own draft")
         XCTAssertEqual(sessions.taskDraft(for: .visionPose)?.templateID, .visionPose, "a fresh draft otherwise")
         sessions.setTaskDraft(StudioTaskDraft(templateID: .audioEdit), for: .audioEnhance)
         XCTAssertEqual(sessions.taskDraft(for: .audioEnhance)?.templateID, .audioEdit, "a parked draft wins")
