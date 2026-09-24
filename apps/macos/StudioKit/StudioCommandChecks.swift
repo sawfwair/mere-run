@@ -4,7 +4,7 @@ import MereRunContract
 /// The checks a command needs beyond what its contract can say — the ones a page used to make
 /// before Run — applied to the console form every task-draft and Command-view run validates
 /// through (`StudioConsoleCommand.validationMessage`), so the workspace's banner and the Command
-/// view's agree, and an incomplete InstantMesh run never reaches the CLI.
+/// view's agree, and a run the CLI would refuse never reaches it.
 package enum StudioCommandChecks {
     /// What the catalog's own validation and this check both say when InstantMesh has the wrong
     /// number of views.
@@ -12,12 +12,44 @@ package enum StudioCommandChecks {
 
     /// The reason `draft` cannot run `capability` yet, or nil.
     package static func message(for capability: MereRunCommandCapability, draft: StudioConsoleDraft) -> String? {
+        if let problem = renoiseMessage(for: capability, draft: draft) { return problem }
         switch capability.id {
         case MereRunCapabilityCatalog.imageReconstruct3DMultiview.id:
             return instantMeshMessage(draft: draft)
+        case MereRunCapabilityCatalog.visionGeometryMultiview.id:
+            return geometryMultiviewMessage(draft: draft)
+        case MereRunCapabilityCatalog.speechDiarize.id:
+            return diarizeMessage(draft: draft)
         default:
             return nil
         }
+    }
+
+    /// Woosh's renoise is one amount or one amount per step; the CLI rejects anything else
+    /// (`parseRenoiseSchedule`), so the run is refused with the same objection first.
+    private static func renoiseMessage(for capability: MereRunCommandCapability, draft: StudioConsoleDraft) -> String? {
+        guard capability.options.contains(where: { $0.flag == "--renoise" }) else { return nil }
+        let argument = draft.text("--renoise")
+        guard !argument.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let schedule = StudioRenoise(mode: StudioRenoise.inferredMode(argument: argument), argument: argument)
+        let templateID = CommandTemplateID.allCases.first { $0.capability?.id == capability.id }
+        return schedule.problems(steps: StudioRenoise.stepCount(in: draft, templateID: templateID)).first
+    }
+
+    /// Multi-view geometry solves relative cameras between views; one picture is the
+    /// single-view command's job, so Studio asks for two, as its page did.
+    private static func geometryMultiviewMessage(draft: StudioConsoleDraft) -> String? {
+        let views = draft.arguments.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return views.count < 2 ? "Add at least two ordered views." : nil
+    }
+
+    /// `speech diarize` rejects a streaming input buffer for any model but Nemotron 3, which
+    /// the Sortformer default is; the message names the fix before the CLI does.
+    private static func diarizeMessage(draft: StudioConsoleDraft) -> String? {
+        let latency = draft.text("--latency")
+        let model = draft.text("--model")
+        guard !latency.isEmpty, latency != "offline", !model.localizedCaseInsensitiveContains("nemotron") else { return nil }
+        return "Input buffer latency applies to Nemotron 3 only; choose Offline for \(model.isEmpty ? "Sortformer" : model)."
     }
 
     /// InstantMesh reconstructs from exactly four or six ordered views, and a supplied camera

@@ -205,31 +205,6 @@ package enum StudioConsoleCommand {
                 }
             }
         }
-        // Woosh's renoise is one amount or one amount per step; the CLI rejects anything else
-        // (`parseRenoiseSchedule`), so the run is refused with the same objection first.
-        if let renoise = capability.options.first(where: { $0.flag == "--renoise" }), carries(renoise, in: draft) {
-            let argument = draft.text(renoise.flag)
-            let schedule = StudioRenoise(mode: StudioRenoise.inferredMode(argument: argument), argument: argument)
-            let templateID = CommandTemplateID.allCases.first { $0.capability?.id == capability.id }
-            if let problem = schedule.problems(steps: StudioRenoise.stepCount(in: draft, templateID: templateID)).first {
-                return problem
-            }
-        }
-        // Multi-view geometry solves relative cameras between views; one picture is the
-        // single-view command's job, so Studio asks for two, as its page did.
-        if capability.id == "vision.geometry-multiview",
-           draft.arguments.filter({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }).count < 2 {
-            return "Add at least two ordered views."
-        }
-        // `speech diarize` rejects a streaming input buffer for any model but Nemotron 3, which
-        // the Sortformer default is; the message names the fix before the CLI does.
-        if capability.id == "speech.diarize" {
-            let latency = draft.text("--latency")
-            let model = draft.text("--model")
-            if !latency.isEmpty, latency != "offline", !model.localizedCaseInsensitiveContains("nemotron") {
-                return "Input buffer latency applies to Nemotron 3 only; choose Offline for \(model.isEmpty ? "Sortformer" : model)."
-            }
-        }
         // Any command that declares a reply budget shares the runtime's bounds: Chat, Code, and
         // the vision commands all reject a zero or negative budget, and Chat's context size caps
         // it. Capabilities without `--context-size` read as unbounded above.
