@@ -264,10 +264,16 @@ struct StudioAnalyzeCanvas: View {
             StudioAnalyzeDocumentView(url: loaded?.url, text: loaded?.raw)
                 .frame(height: mediaHeight)
                 .mereMediaFrame()
-        case .transcript, .timeline, .text, .score, .stems, .vectors:
-            mediaView
         default:
-            mediaView
+            // A view about the result rather than the input (landmarks, a flow field, a depth
+            // map, a scene) takes the column from a registered renderer.
+            if let rendering = StudioResultRenderers.canvasRendering(
+                for: view, document: document, item: resultDescribesInput ? resultCard?.item : nil, inputURL: inputURL
+            ) {
+                StudioResultCanvasView(rendering: rendering, maxHeight: mediaHeight)
+            } else {
+                mediaView
+            }
         }
     }
 
