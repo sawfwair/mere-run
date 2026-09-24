@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Show essential Music, Sound ▸ Video Foley, and 3D settings in Studio's
+  composer and result chips. Stack Audio Analyze's result below its input
+  when the Library narrows the workspace.
+- Mark a Studio run that cannot launch as failed in the Library, and remove
+  the temporary camera recording when `vision track-live` receives SIGTERM.
 - Fix a Library row started from Studio's Command Console or a Command view for
   a command whose input is a positional file (`audio enhance`, `sfx ae encode`,
   `vision depth`, the Earth commands): the row now records that file as its

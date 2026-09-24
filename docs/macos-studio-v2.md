@@ -74,15 +74,11 @@ Plugins pages remain intentional surfaces. Task runs use `StudioTaskRunner`,
 and the root routes every task explicitly. Inspector choices use segments only
 when the entire row fits; otherwise they use a menu.
 
-The remaining follow-ups are:
-
-- Assign essential contract tiers to Music and Sound options and to 3D
-  resolution and seed, so their composer and result chips show those values.
-- Keep the Audio Analyze canvas within a 960 pt window when the Library is open.
-- Make the menu bar snapshot fixture use the configured server host.
-- Remove the temporary `.mov` left by `vision track-live` after SIGTERM.
-- Mark a non-camera launch refusal as failed in the Library instead of leaving
-  the row running.
+The migration follow-ups are complete: Music, Sound, and 3D essential settings
+appear in composer and result chips; the Audio Analyze canvas stacks within a
+960 pt window with the Library open; menu bar snapshots use an isolated runtime
+endpoint; `vision track-live` removes its temporary recording after SIGTERM;
+and a synchronous launch refusal marks its Library row failed.
 
 ### Remaining architectural and runtime scope
 

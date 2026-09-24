@@ -324,9 +324,9 @@ Voice: reference audio; Vision and Audio tasks: their required input; Chat: a
 per-turn image that stays behind the paperclip until attached — and every slot
 takes a drop, a paste (⌘V), or a click to pick, storing straight into the draft
 field the CLI flag reads. Code and Sound ▸ Generate declare no slots. Under the
-prompt, a **chip strip** shows up to four essentials (size, length, steps, seed,
-threshold, task, voice mode, thinking) as menus with popover editors for custom
-values; some modes show only the model chip. The **model chip** is the only
+prompt, a **chip strip** shows up to four contract essentials (size, length,
+duration, steps, seed, resolution, task, voice mode, thinking) as menus with
+popover editors for custom values; some modes show only the model chip. The **model chip** is the only
 model control: it lists `model list` rows filtered to the mode's category,
 installed first, with "Auto" for the mode's default. A fresh draft starts on the
 model the user made the task's default in Models ▸ Installed ("Use for Chat by
@@ -371,7 +371,7 @@ row scrolls to its card and outlines it briefly.
 The input-first tasks render the **Analyze canvas**
 (`StudioUI/StudioAnalyzeCanvas.swift`, `StudioUI/StudioAnalyzeViews.swift`) instead of the feed,
 because the answer belongs beside the thing it is about rather than in a stream.
-It is one 940pt column: an input strip naming the attached file with its
+It uses up to 940pt of canvas width: an input strip naming the attached file with its
 dimensions or duration, a Replace button that writes the same composer well, and
 a view switch whose segments come from the task's own result kind (Boxes /
 Masks / JSON for Find and Segment, Video / JSON for Track, Transcript /
@@ -379,8 +379,10 @@ Timeline / JSON for Transcribe); below it the input rendered large on the left �
 the image with the result drawn over it, a video with its scrubber and
 per-object track spans, audio with the waveform player — and a 360pt result
 column on the right holding what the model found, the contextual next steps, and
-the prompt it ran with. Results are read from the documents the CLI actually
-writes (`StudioKit/StudioAnalyzeResults.swift`): `vision ground`'s normalized boxes,
+the prompt it ran with. When the Library leaves less room, the result stacks
+below the input and the view switch moves under the input strip. Results are
+read from the documents the CLI actually writes
+(`StudioKit/StudioAnalyzeResults.swift`): `vision ground`'s normalized boxes,
 `vision segment`'s pixel boxes with their mask PNGs, `vision track`'s per-frame
 detections, `speech diarize`'s speaker turns, and the timestamped transcript
 `speech transcribe` prints. Studio always asks for that document, passing
