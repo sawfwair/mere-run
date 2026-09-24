@@ -86,6 +86,8 @@ package struct StudioFaceOverlayResult: Decodable, Equatable {
 
         package let index: Int
         package let detection: Detection
+        /// The normalized ArcFace vector, when the run asked for embeddings.
+        package let embedding: [Float]?
     }
 
     package let width: Int
