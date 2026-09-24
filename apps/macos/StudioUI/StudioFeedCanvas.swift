@@ -32,7 +32,8 @@ struct StudioFeedActions {
 /// the chip's menu rather than a second one; the shell owns getting a model (with the terms
 /// sheet when the publisher asks for one), opening Models, and checking again.
 struct StudioReadinessActions {
-    let mode: StudioMode
+    /// Which models the picker offers and what "Auto" means: the mode's, or a task template's.
+    let scope: StudioModelScope
     let model: Binding<String>
     let modelInventory: [StudioModelInventoryRow]
     let pullModel: () -> Void
@@ -44,7 +45,10 @@ struct StudioReadinessActions {
 /// composer, each run its own card with its own progress, Cancel, or Remove. The readiness
 /// state is a card at the bottom rather than an overlay, so it never hides earlier work.
 struct StudioFeedCanvas: View {
-    let mode: StudioMode
+    /// The task's glyph and empty-state words: the mode's, or a shared-workspace task's own.
+    let presentation: StudioTaskPresentation
+    /// The composer's slots, so a card knows whether "Use as input" can take its output.
+    let slots: [StudioAttachmentSlot]
     let cards: [StudioFeedCard]
     let readiness: ModelReadinessState
     /// The `model pull` the readiness card reports, while one runs for this mode's model.
@@ -77,7 +81,7 @@ struct StudioFeedCanvas: View {
     var body: some View {
         Group {
             if cards.isEmpty && !showsReadinessCard {
-                StudioEmptyState(mode: mode, onUseExample: actions.useExample, onAttach: actions.attach)
+                StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, onAttach: actions.attach)
                     .padding(MereRunTheme.Spacing.xxxl)
             } else {
                 feed
@@ -107,7 +111,7 @@ struct StudioFeedCanvas: View {
                 ScrollView {
                     LazyVStack(spacing: Metrics.cardSpacing) {
                         if cards.isEmpty {
-                            StudioEmptyState(mode: mode, onUseExample: actions.useExample, onAttach: actions.attach)
+                            StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, onAttach: actions.attach)
                                 .padding(.vertical, MereRunTheme.Spacing.xl)
                         }
                         ForEach(cards) { card in
@@ -174,7 +178,7 @@ struct StudioFeedCanvas: View {
         switch card.kind {
         case .generation:
             StudioGenerationCard(
-                mode: mode,
+                slots: slots,
                 item: card.item,
                 isHighlighted: highlighted,
                 actions: actions
@@ -367,7 +371,8 @@ enum StudioFeedChips {
 struct StudioGenerationCard: View {
     @Environment(\.studioReferenceDate) private var referenceDate
 
-    let mode: StudioMode
+    /// The composer's slots: "Use as input" is offered when one of them takes the output.
+    let slots: [StudioAttachmentSlot]
     let item: StudioLibraryItem
     let isHighlighted: Bool
     let actions: StudioFeedActions
@@ -421,7 +426,7 @@ struct StudioGenerationCard: View {
 
     private var canUseAsInput: Bool {
         guard let primaryURL else { return false }
-        return mode.attachmentSlots.contains { $0.accepts(primaryURL) }
+        return slots.contains { $0.accepts(primaryURL) }
     }
 
     var body: some View {
@@ -1053,7 +1058,7 @@ struct StudioReadinessCard: View {
     /// the model chip and readiness re-checks the new choice.
     private var chooseModelMenu: some View {
         StudioModelPicker(
-            mode: actions.mode,
+            scope: actions.scope,
             model: actions.model,
             modelInventory: actions.modelInventory,
             onShowModels: actions.openModels

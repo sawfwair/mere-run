@@ -9,14 +9,31 @@ import SwiftUI
 /// A blank canvas that teaches: serif headline, one line of guidance, and prompts you can
 /// click straight into the composer.
 struct StudioEmptyState: View {
-    let mode: StudioMode
+    let presentation: StudioTaskPresentation
     var isCompact = false
     var onUseExample: ((String) -> Void)?
     var onAttach: (() -> Void)?
 
+    init(
+        presentation: StudioTaskPresentation,
+        isCompact: Bool = false,
+        onUseExample: ((String) -> Void)? = nil,
+        onAttach: (() -> Void)? = nil
+    ) {
+        self.presentation = presentation
+        self.isCompact = isCompact
+        self.onUseExample = onUseExample
+        self.onAttach = onAttach
+    }
+
+    init(mode: StudioMode, isCompact: Bool = false, onUseExample: ((String) -> Void)? = nil, onAttach: (() -> Void)? = nil) {
+        self.init(presentation: StudioTaskPresentation(mode: mode), isCompact: isCompact,
+                  onUseExample: onUseExample, onAttach: onAttach)
+    }
+
     var body: some View {
         VStack(spacing: isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.xl) {
-            Image(systemName: mode.systemImage)
+            Image(systemName: presentation.systemImage)
                 .font(.system(size: isCompact ? 28 : 42, weight: .medium))
                 .foregroundStyle(MereRunTheme.accent)
                 .frame(width: isCompact ? 64 : 96, height: isCompact ? 64 : 96)
@@ -28,25 +45,25 @@ struct StudioEmptyState: View {
                 }
 
             VStack(spacing: MereRunTheme.Spacing.xs) {
-                Text(mode.emptyTitle)
+                Text(presentation.emptyTitle)
                     .font(isCompact ? MereRunTheme.displaySmallFont : MereRunTheme.displayFont)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .multilineTextAlignment(.center)
-                Text(mode.emptyMessage)
+                Text(presentation.emptyMessage)
                     .font(MereRunTheme.bodyFont)
                     .foregroundStyle(MereRunTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 460)
             }
 
-            if mode.requiresAttachment, let onAttach {
+            if presentation.requiresAttachment, let onAttach {
                 Button(action: onAttach) {
-                    Label(attachLabel, systemImage: "paperclip")
+                    Label(presentation.attachLabel, systemImage: "paperclip")
                 }
                 .buttonStyle(.merePrimary)
             }
 
-            if !mode.examplePrompts.isEmpty, let onUseExample {
+            if !presentation.examplePrompts.isEmpty, let onUseExample {
                 FlowLayout(spacing: MereRunTheme.Spacing.xs, lineSpacing: 8) {
                     examplePrompts(onUseExample: onUseExample)
                 }
@@ -58,16 +75,8 @@ struct StudioEmptyState: View {
 
     @ViewBuilder
     private func examplePrompts(onUseExample: @escaping (String) -> Void) -> some View {
-        ForEach(mode.examplePrompts, id: \.self) { example in
+        ForEach(presentation.examplePrompts, id: \.self) { example in
             StudioExampleChip(text: example) { onUseExample(example) }
-        }
-    }
-
-    private var attachLabel: String {
-        switch mode {
-        case .listen: return "Choose audio…"
-        case .track: return "Choose video…"
-        default: return "Choose image…"
         }
     }
 }

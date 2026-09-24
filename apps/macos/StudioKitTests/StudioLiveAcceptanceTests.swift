@@ -1030,11 +1030,13 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         return (prepared.request, prepared.request.template.arguments(from: prepared.request.draft))
     }
 
-    /// A specialist page's request, as `StudioSpecialistRunner.submit` prepares it.
+    /// A specialist page's request, prepared the way `StudioTaskRunner` prepares every run
+    /// (Command edits, validation, destination), so the tests build exactly what the app runs.
     private func specialistRequest(templateID: CommandTemplateID, mode: StudioMode, draft: CommandDraft) throws -> (request: StudioRunRequest, argv: [String]) {
         let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
         let base = StudioRunRequest(mode: mode, templateID: templateID, template: template, draft: draft)
-        let prepared = StudioOutputLocation.preparing(base)
+        // XCTest runs these on the main thread; the runner and the session store are main-actor.
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
         return (prepared.request, template.arguments(from: prepared.request.draft))
     }

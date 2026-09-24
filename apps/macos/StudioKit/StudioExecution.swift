@@ -136,7 +136,22 @@ package enum StudioLibraryDraftRestoration {
     package static func canRestore(_ item: StudioLibraryItem) -> Bool {
         guard !item.isConversation, let templateID = item.templateID, item.commandDraft != nil,
               templateID.capability != nil else { return false }
+        // A task on the shared task workspace restores any of its templates through its task
+        // draft; a task still on its legacy page has no draft the recorded command could land in.
+        if templateID.studioTask.usesTaskDraft { return true }
         return composerBuilds(templateID, for: item.mode)
+    }
+
+    /// The task draft a row restores to: the recorded argv read back into the contract form,
+    /// exactly as "Edit command" reopens it. nil for a thread or a row with no recorded command.
+    /// Not gated on the task's page: the workspace reads it once its gate flips, and the tests
+    /// prove the reading before then.
+    package static func taskDraft(from item: StudioLibraryItem) -> StudioTaskDraft? {
+        guard !item.isConversation, let templateID = item.templateID,
+              let recorded = item.commandDraft, let template = CommandCatalog.template(id: templateID),
+              let capability = templateID.capability else { return nil }
+        let arguments = item.commandArguments ?? template.arguments(from: recorded)
+        return StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
     }
 
     /// nil exactly when `canRestore` is false.

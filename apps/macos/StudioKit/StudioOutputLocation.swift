@@ -461,4 +461,98 @@ package enum StudioOutputLocation {
         guard !home.isEmpty, path == home || path.hasPrefix(home + "/") else { return path }
         return "~" + path.dropFirst(home.count)
     }
+
+    // MARK: - Task drafts
+
+    /// The draft with its destination filled the way the composer names a prompt run's: the
+    /// capability's output flag set to `namedOutputPath` (the domain's folder, the prompt's slug
+    /// or the input's name, a derived identifier), and every sidecar the capability declares
+    /// (`--json-output`, `--jsonl-output`, `--context-output`, `--timings-output`,
+    /// `--mask-output-dir`) beside it with the same stem — the list `StudioExecution.replay`
+    /// re-derives. A destination the user pointed outside the app's folder in the Command view
+    /// is kept; sidecars already named are kept too. The task runner calls this at submit time
+    /// so two runs in one second still get distinct names (`reserve` treats a submitted path as
+    /// taken), and the Command view's "Will run" shows the resolved path because it previews the
+    /// same form.
+    package static func destination(
+        for draft: StudioTaskDraft,
+        fileManager: FileManager = .default
+    ) -> StudioTaskDraft {
+        guard let capability = draft.capability, let template = draft.template,
+              let flag = capability.output.flag,
+              let option = capability.options.first(where: { $0.flag == flag }) else { return draft }
+        var named = draft
+        let templateID = draft.templateID
+        let outputKind: CommandOutputKind
+        if option.kind == .directory || capability.output.kind == .directory {
+            outputKind = .directory
+        } else if let ext = capability.output.fileExtension ?? formatExtension(in: draft) {
+            outputKind = .file(ext)
+        } else {
+            outputKind = .none
+        }
+        let primaryInput = draft.primaryInputPath
+        let existing = draft.text(flag)
+        if outputKind != .none, existing.isBlank || isAppChosen(existing, templateID: templateID, kind: outputKind) {
+            let path = namedOutputPath(
+                templateID: templateID,
+                outputKind: outputKind,
+                prompt: draft.prompt,
+                seed: draft.text("--seed"),
+                fingerprint: ([templateID.rawValue] + draft.arguments).joined(separator: "\u{1}"),
+                fallbackStem: primaryInput.isBlank
+                    ? template.title
+                    : URL(fileURLWithPath: primaryInput).deletingPathExtension().lastPathComponent,
+                existing: existing
+            )
+            named.form[flag] = .text(path)
+        }
+        let output = named.text(flag)
+        guard !output.isBlank else { return named }
+        let stem = URL(fileURLWithPath: output).deletingPathExtension()
+        let declared = Set(capability.options.map(\.flag))
+        for (sidecar, ext) in [("--json-output", "json"), ("--jsonl-output", "jsonl"),
+                               ("--context-output", "json"), ("--timings-output", "json")]
+        where sidecar != flag && declared.contains(sidecar) && named.text(sidecar).isBlank {
+            named.form[sidecar] = .text(stem.appendingPathExtension(ext).path)
+        }
+        if flag != "--mask-output-dir", declared.contains("--mask-output-dir"), named.text("--mask-output-dir").isBlank {
+            named.form["--mask-output-dir"] = .text(
+                stem.deletingLastPathComponent().appendingPathComponent("\(stem.lastPathComponent)-masks", isDirectory: true).path
+            )
+        }
+        return named
+    }
+
+    /// The extension a command whose output follows its `--format` writes (`speech diarize`,
+    /// `music transcribe`): the chosen format, with MIDI's conventional extension; nil when the
+    /// capability has no such option.
+    private static func formatExtension(in draft: StudioTaskDraft) -> String? {
+        guard let option = draft.capability?.options.first(where: { $0.flag == "--format" }) else { return nil }
+        let chosen = draft.text("--format")
+        let format = chosen.isEmpty ? (option.defaultValue ?? option.choices.first ?? "") : chosen
+        switch format {
+        case "": return nil
+        case "midi": return "mid"
+        default: return format
+        }
+    }
+
+    /// Whether `path` is one the app proposed (the template's stamped default, or an earlier
+    /// naming) rather than a folder the user picked: it sits directly in the domain's folder.
+    private static func isAppChosen(_ path: String, templateID: CommandTemplateID, kind: CommandOutputKind) -> Bool {
+        let fileExtension: String
+        switch kind {
+        case .file(let ext): fileExtension = ext
+        case .directory, .none: fileExtension = ""
+        }
+        let folder = directory(
+            domain: templateID.studioDomain,
+            kind: StudioOutputFileKind.classify(URL(fileURLWithPath: "output.\(fileExtension)")),
+            configuredRoot: configuredRoot(),
+            home: URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        )
+        return URL(fileURLWithPath: path).deletingLastPathComponent().standardizedFileURL.path
+            == folder.standardizedFileURL.path
+    }
 }

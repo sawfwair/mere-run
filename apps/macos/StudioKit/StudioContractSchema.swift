@@ -674,6 +674,23 @@ package enum StudioContractOverrideID: String, CaseIterable, Hashable {
     /// Boxes and points drawn on the picture, and Track's frames picked on its scrubber; the
     /// canvas owns them, so the inspector never shows them as text.
     case regionPrompts
+    /// Which of a task's templates runs (Vision ▸ Faces: detect, embed, compare, batch; 3D: the
+    /// engine); it picks the capability rather than an argument of one. Task drafts only.
+    case variant
+    /// The per-view camera editor over `--cameras` (multi-view geometry, InstantMesh).
+    case cameras
+    /// The ordered view list over a repeatable `--view` (InstantMesh).
+    case orderedViews
+    /// The music training manifest editor over `--manifest`.
+    case musicManifest
+    /// Click-to-pick a face on the detection result, over the `--*face-index` options.
+    case faceIndex
+    /// The instrument picker over `--instruments`.
+    case instruments
+    /// The renoise mode control over its flag pair.
+    case renoise
+    /// Per-target LoRA ranks over `--target-rank`.
+    case targetRanks
 }
 
 /// One composite editor: the flags it owns, and any draft field behind it that has no flag of its

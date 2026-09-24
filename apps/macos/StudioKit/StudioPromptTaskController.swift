@@ -15,6 +15,9 @@ package final class StudioPromptTaskController {
     private var active = ActiveTask()
     @ObservationIgnored let controller: MereRunController
     @ObservationIgnored let library: StudioLibraryStore
+    /// The one submission path for every task that is not a conversation turn; the shared task
+    /// workspace reaches it through the environment.
+    @ObservationIgnored package let runner: StudioTaskRunner
     @ObservationIgnored private let seededDrafts: [StudioMode: StudioDraft]
     @ObservationIgnored private var pendingAnalyzeHandoff: StudioAnalyzeHandoff?
 
@@ -22,6 +25,7 @@ package final class StudioPromptTaskController {
                  seededDrafts: [StudioMode: StudioDraft] = [:]) {
         self.controller = controller
         self.library = library
+        self.runner = StudioTaskRunner(controller: controller, library: library)
         self.seededDrafts = seededDrafts
     }
 
@@ -178,12 +182,27 @@ package final class StudioPromptTaskController {
     /// place of any Command view edits, so the composer shows exactly what ran. false when the
     /// row has nothing to restore.
     package func useSettings(from item: StudioLibraryItem) -> Bool {
+        if let task = item.templateID?.studioTask, task.usesTaskDraft {
+            return useTaskSettings(from: item, task: task)
+        }
         let mode = item.mode
         guard let next = StudioLibraryDraftRestoration.draft(from: item, baseline: freshDraft(for: mode)) else { return false }
         sessions.set(next, for: mode.task.rawValue + ".draft")
         sessions.set(Optional<StudioTaskCommandState>.none, for: mode.task.rawValue + ".commandOverride")
         sessions.setFocus(nil, for: mode.task)
         if mode == activatedMode { draft = next }
+        return true
+    }
+
+    /// "Use these settings" for a row of a task on the shared task workspace: the recorded
+    /// command becomes the task's draft (`"<task>.taskDraft"`), in place of any Command edits,
+    /// so its composer and inspector show exactly what ran. The workspace reads the parked draft
+    /// when it appears, so nothing here depends on which task is open.
+    package func useTaskSettings(from item: StudioLibraryItem, task: StudioTask) -> Bool {
+        guard let next = StudioLibraryDraftRestoration.taskDraft(from: item) else { return false }
+        sessions.setTaskDraft(next, for: task)
+        sessions.set(Optional<StudioTaskCommandState>.none, for: task.rawValue + ".commandOverride")
+        sessions.setFocus(nil, for: task)
         return true
     }
 

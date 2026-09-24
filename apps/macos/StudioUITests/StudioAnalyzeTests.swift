@@ -323,33 +323,76 @@ final class StudioAnalyzeTests: XCTestCase {
         )
     }
 
-    func testEveryInputFirstTaskDeclaresAnArchetypeAndTheOthersDoNot() {
-        let expected: Set<StudioTask> = [
-            .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth, .visionPose,
-            .visionFaces, .visionFlow, .visionGeometry, .visionLive,
-            .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioSeparate,
-            .textEmbeddings, .textAnonymize, .textDecide,
-            .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth,
-            .soundScore, .soundCondition
-        ]
-        XCTAssertEqual(Set(StudioTask.allCases.filter(\.isAnalyzeTask)), expected)
-        for task in expected {
+    /// The Analyze table is complete for every task whose archetype is Analyze, the Generate
+    /// table for every mode-less Generate task, and neither says anything about the rest — so a
+    /// page PR never has to edit either table, and a task cannot silently lose its surface.
+    func testEveryArchetypeTaskDeclaresItsShapeAndTheOthersDoNot() {
+        let analyze = Set(StudioTask.allCases.filter { $0.archetype == .analyze })
+        let generate = Set(StudioTask.allCases.filter { $0.archetype == .generate && $0.mode == nil })
+        XCTAssertEqual(Set(StudioTask.allCases.filter(\.isAnalyzeTask)), analyze.union([.visionLive]),
+                       "Live keeps its Analyze declaration for the tracked clip until its Session page lands")
+        XCTAssertEqual(Set(StudioGenerateArchetype.archetypes.keys), generate)
+        for task in analyze {
             let archetype = StudioAnalyzeArchetype.archetypes[task]
             XCTAssertEqual(archetype?.task, task, "\(task) archetype records the wrong task")
             XCTAssertFalse(archetype?.views.isEmpty ?? true, "\(task) declares no result view")
             XCTAssertEqual(archetype?.defaultView, archetype?.views.first)
+            for (templateID, variant) in archetype?.variants ?? [:] {
+                XCTAssertEqual(templateID.studioTask, task, "\(task) declares a variant of another task")
+                XCTAssertFalse(variant.views.isEmpty, "\(task) variant \(templateID) declares no view")
+            }
         }
         XCTAssertFalse(StudioTask.imageGenerate.isAnalyzeTask)
         XCTAssertFalse(StudioTask.chatChat.isAnalyzeTask)
         XCTAssertFalse(StudioTask.musicRealtime.isAnalyzeTask)
+        XCTAssertFalse(StudioTask.soundCondition.isAnalyzeTask, "Condition is prompt-first")
+        XCTAssertNil(StudioTask.soundScore.generateArchetype)
+    }
+
+    /// Image ▸ Datasets is one task control segment over three commands with different inputs.
+    func testVariantsPickTheirOwnInputKindAndViews() throws {
+        let datasets = try XCTUnwrap(StudioTask.imageDatasets.analyzeArchetype)
+        XCTAssertEqual(datasets.inputKind(for: .imageDatasetDiscover), .directory)
+        XCTAssertEqual(datasets.inputKind(for: .imageRunPlan), .file)
+        XCTAssertEqual(datasets.inputKind(for: .imageValidate), .none)
+        XCTAssertEqual(datasets.views(for: .imageRunPlan), [.report, .json])
+        XCTAssertEqual(datasets.views(for: nil), [.candidates, .json])
+        let depth = try XCTUnwrap(StudioTask.visionDepth.analyzeArchetype)
+        XCTAssertEqual(depth.inputKind(for: .visionDepthVideo), .video)
+        XCTAssertEqual(depth.inputKind(for: .visionDepth), .image)
+    }
+
+    /// Every task is shelled by exactly one archetype, and until a page PR flips its gate a
+    /// mode-less task keeps its page: no Library column, no inspector, no task draft.
+    func testArchetypeGatesKeepEveryLegacyPageInPlace() {
+        for task in StudioTask.allCases {
+            if task.mode != nil {
+                XCTAssertFalse(task.usesLegacyPage, "\(task)")
+                XCTAssertTrue(task.showsPromptChrome, "\(task)")
+                XCTAssertFalse(task.usesTaskDraft, "\(task)")
+            } else {
+                XCTAssertEqual(task.usesLegacyPage, !StudioTask.migratedTasks.contains(task), "\(task)")
+            }
+            XCTAssertEqual(task.showsPromptChrome, task.isPromptTask || task.usesTaskDraft, "\(task)")
+        }
+        XCTAssertTrue(StudioTask.migratedTasks.isEmpty, "PR 0 migrates nothing user-visible")
+        XCTAssertEqual(StudioTask.visionDepth.archetype, .analyze)
+        XCTAssertEqual(StudioTask.threeDFromImage.archetype, .generate)
+        XCTAssertEqual(StudioTask.audioLive.archetype, .session)
+        XCTAssertEqual(StudioTask.imageTrain.archetype, .project)
+        XCTAssertEqual(StudioTask.voiceVoices.archetype, .manage)
+        XCTAssertEqual(StudioTask.chatCode.archetype, .converse)
     }
 
     func testInputKindsMatchWhatEachTaskTakes() {
         XCTAssertEqual(StudioTask.visionFind.analyzeArchetype?.inputKind, .image)
         XCTAssertEqual(StudioTask.visionTrack.analyzeArchetype?.inputKind, .video)
         XCTAssertEqual(StudioTask.audioTranscribe.analyzeArchetype?.inputKind, .audio)
-        XCTAssertEqual(StudioTask.textEmbeddings.analyzeArchetype?.inputKind, .file)
+        XCTAssertEqual(StudioTask.textEmbeddings.analyzeArchetype?.inputKind, .text, "Embeddings takes typed text, not a file")
+        XCTAssertEqual(StudioTask.earthFlood.analyzeArchetype?.inputKind, .file)
+        XCTAssertEqual(StudioTask.imageDatasets.analyzeArchetype?.inputKind, .directory)
         XCTAssertEqual(StudioAnalyzeInputKind.audio.noun, "audio file")
+        XCTAssertEqual(StudioAnalyzeInputKind.directory.noun, "folder")
     }
 
     // MARK: - Next actions

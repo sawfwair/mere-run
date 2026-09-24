@@ -234,6 +234,38 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertTrue(runner.starts.isEmpty)
     }
 
+    /// A specialist row restores into the task draft the shared workspace reads
+    /// (`"<task>.taskDraft"`): the recorded argv comes back as the contract form, replacing any
+    /// Command edits. The Library offers it only once the task's page has moved; the reading and
+    /// the write are proven here so a page PR flips its gate onto a working path.
+    func testUseTheseSettingsRestoresASpecialistRowIntoItsTaskDraft() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .audioEnhance))
+        var recorded = template.defaultDraft()
+        recorded.inputPath = root.appendingPathComponent("voice-memo.wav").path
+        recorded.model = "audio-enhance-universr"
+        recorded.outputPath = root.appendingPathComponent("voice-memo-enhanced.wav").path
+        let request = StudioRunRequest(mode: .listen, templateID: .audioEnhance, template: template, draft: recorded)
+        let item = library.start(request: request, commandPreview: "fixture")
+        controller.taskSessions.set(
+            StudioTaskCommandState(templateID: .audioEnhance, sourceArguments: [], form: StudioConsoleDraft()),
+            for: StudioTask.audioEnhance.rawValue + ".commandOverride"
+        )
+
+        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: item))
+        XCTAssertEqual(restored.templateID, .audioEnhance)
+        XCTAssertEqual(restored.primaryInputPath, recorded.inputPath)
+        XCTAssertEqual(restored.model, "audio-enhance-universr")
+        XCTAssertEqual(restored.arguments, item.commandArguments, "the row's exact argv, read back")
+
+        XCTAssertTrue(prompt.useTaskSettings(from: item, task: .audioEnhance))
+        XCTAssertEqual(controller.taskSessions.taskDraft(for: .audioEnhance), restored)
+        XCTAssertNil(controller.taskSessions.value(for: StudioTask.audioEnhance.rawValue + ".commandOverride",
+                                                   default: Optional<StudioTaskCommandState>.none))
+        XCTAssertFalse(StudioLibraryDraftRestoration.canRestore(item), "not offered while the page is the surface")
+        XCTAssertFalse(prompt.useSettings(from: item))
+        XCTAssertTrue(runner.starts.isEmpty)
+    }
+
     /// A Console run of a template the composer does not build (an upscale, an edit) records a
     /// command but has no composer to land in, so the action is not offered rather than failing.
     func testUseTheseSettingsIsOnlyOfferedForCommandsTheComposerBuilds() throws {

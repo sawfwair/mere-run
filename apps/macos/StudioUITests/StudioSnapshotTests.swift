@@ -1265,7 +1265,8 @@ final class StudioSnapshotTests: XCTestCase {
             let shown = [cards.last { $0.kind == .generation }, cards.first { $0.item.status == .failed }].compactMap { $0 }
             let noop: (StudioLibraryItem) -> Void = { _ in }
             return StudioFeedCanvas(
-                mode: .createImage,
+                presentation: StudioTaskPresentation(mode: .createImage),
+                slots: StudioMode.createImage.attachmentSlots,
                 cards: shown,
                 readiness: readiness,
                 pullJob: nil,
@@ -1277,7 +1278,7 @@ final class StudioSnapshotTests: XCTestCase {
                     useExample: { _ in }, attach: {}
                 ),
                 readinessActions: StudioReadinessActions(
-                    mode: .createImage, model: .constant("image-zimage-turbo"), modelInventory: inventory,
+                    scope: StudioModelScope(mode: .createImage), model: .constant("image-zimage-turbo"), modelInventory: inventory,
                     pullModel: {}, openModels: {}, recheck: {}
                 )
             )
@@ -1353,6 +1354,52 @@ final class StudioSnapshotTests: XCTestCase {
                 afterAppear: { navigation.open(task: .musicAnalyze) }
             )
         }
+    }
+
+    /// The shared task workspace, rendered directly because no task has moved onto it yet (every
+    /// `usesLegacyPage` gate is on, so the root cannot show it): Audio ▸ Enhance as an Analyze
+    /// task with an audio well, once with a finished enhance run seeded so the input strip, the
+    /// player, and the result column draw, light and dark; its inspector column beside it; and
+    /// Vision ▸ Pose empty, so the serif empty state and the well's attach button show. The page
+    /// PRs render their own boards the same way once their gates flip.
+    func testTaskWorkspaceSnapshots() throws {
+        let workspace = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { workspace.tearDown() }
+        try workspace.seedEnhanceRun()
+        let sessions = workspace.controller.taskSessions
+        let runner = StudioTaskRunner(controller: workspace.controller, library: workspace.library)
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel(destination: task.destination)
+            let view = StudioTaskWorkspace(task: task, models: workspace.controller.modelStore)
+                .environmentObject(workspace.controller)
+                .environmentObject(workspace.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: size.width, height: size.height)
+            try workspace.write(view, size: size, appearance: appearance, name: name, settle: 2.5)
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.audioEnhance, name: "task-workspace-enhance-\(appearance.rawValue)", appearance: appearance,
+                       size: CGSize(width: 1_140, height: 820))
+        }
+        try render(.visionPose, name: "task-workspace-pose-empty-light", appearance: .light, size: CGSize(width: 960, height: 760))
+
+        let draft = try XCTUnwrap(sessions.taskDraft(for: .audioEnhance))
+        let inspector = StudioTaskInspector(
+            task: .audioEnhance, draft: .constant(draft), modelInventory: workspace.controller.modelStore.rows,
+            readiness: .ready, onShowModels: {}, onClose: {}
+        )
+        .environmentObject(workspace.controller)
+        .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+        try workspace.write(inspector, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                            appearance: .light, name: "task-workspace-enhance-inspector-light", settle: 1.5)
     }
 
     /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
@@ -2734,6 +2781,48 @@ private final class SnapshotFixture {
         let scope = StudioTask.audioWhoSpoke.rawValue
         controller.taskSessions.set(Optional(row.id), for: scope + ".requestID")
         controller.taskSessions.set(draft, for: scope + ".Voice.diarizationDraft")
+    }
+
+    /// A finished Audio ▸ Enhance run for the task workspace: a narrow-band memo and the 48 kHz
+    /// file `audio enhance` wrote beside it, with the task draft pointed at the memo the way the
+    /// workspace leaves it after a run.
+    func seedEnhanceRun() throws {
+        guard let template = CommandCatalog.template(id: .audioEnhance) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let memo = root.appendingPathComponent("voice-memo.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: memo, seconds: 12)
+        let enhanced = root.appendingPathComponent("voice-memo-48k.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: enhanced, seconds: 12)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = memo.path
+        draft.outputPath = enhanced.path
+        let startedAt = Self.mockupTime(hour: 9, minute: 41)
+        let request = StudioRunRequest(mode: .listen, templateID: .audioEnhance, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: .listen,
+            prompt: "",
+            inputURL: memo,
+            outputURL: enhanced,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(8.4),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run audio enhance voice-memo.wav --output voice-memo-48k.wav",
+            outputText: nil,
+            templateID: .audioEnhance,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft),
+            artifactURLs: [enhanced]
+        )
+        row.inputIdentity = StudioInputIdentity.read(memo)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .audioEnhance)
+        taskDraft.setArgument(0, memo.path)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .audioEnhance)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.audioEnhance.rawValue + ".requestID")
     }
 
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept

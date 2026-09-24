@@ -304,6 +304,10 @@ struct StudioSpecialistResultView: View {
     }
 }
 
+/// The legacy pages' submit, now a shim over `StudioTaskRunner` so every run is prepared and
+/// recorded the one way. It keeps the page's hand-picked Library `mode`, so history files as it
+/// did; a task on the shared workspace runs through the runner directly with its template's own
+/// attribution. Deleted with the last page.
 enum StudioSpecialistRunner {
     @MainActor
     static func submit(
@@ -314,24 +318,16 @@ enum StudioSpecialistRunner {
         library: StudioLibraryStore
     ) -> UUID? {
         guard let template = CommandCatalog.template(id: templateID) else { return nil }
-        let base = StudioRunRequest(
-            mode: mode,
-            templateID: templateID,
-            template: template,
-            draft: draft
-        )
-        // The same destination preparation a prompt task gets: the folder is created, or the run
-        // moves to App Outputs and the shell says why.
-        let prepared = StudioOutputLocation.preparing(controller.taskSessions.resolving(base))
-        if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
-        let request = prepared.request
-        let preview = controller.commandPreview(arguments: request.execution?.arguments ?? template.arguments(from: request.draft), masksSecrets: true)
-        let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
-            ? .queued
-            : .running
-        library.start(request: request, commandPreview: preview, status: status)
-        _ = controller.run(studio: request)
-        return request.id
+        let base = StudioRunRequest(mode: mode, templateID: templateID, template: template, draft: draft)
+        let runner = StudioTaskRunner(controller: controller, library: library)
+        // The pages validated their own forms before calling; a request the contract still
+        // rejects is reported in the console status, where the pages' own Run already looks.
+        do {
+            return try runner.run(request: base, task: templateID.studioTask).id
+        } catch {
+            controller.status = error.localizedDescription
+            return nil
+        }
     }
 }
 

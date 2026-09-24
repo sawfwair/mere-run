@@ -288,8 +288,15 @@ package enum StudioConsoleCommand {
         var command = seed
         let defaults = Dictionary(capability.options.map { ($0.flag, $0.defaultValue ?? "") }, uniquingKeysWith: { first, _ in first })
         func value(_ flag: String) -> String { draft.values[flag] == nil ? (defaults[flag] ?? "") : draft.text(flag) }
+        func argument(ofKind kinds: [MereRunCapabilityValueKind]) -> String? {
+            guard let index = capability.arguments.firstIndex(where: { kinds.contains($0.kind) }),
+                  index < draft.arguments.count else { return nil }
+            return draft.arguments[index]
+        }
+        // A positional is the prompt only when the contract says it is text; a file positional
+        // (`audio enhance <audio>`) is the run's input, so the Library row knows what it read.
         command.prompt = ["--prompt", "--text", "--query"].first(where: { defaults[$0] != nil }).map(value)
-            ?? draft.arguments.first ?? ""
+            ?? argument(ofKind: [.string, .choice]) ?? ""
         command.secondaryText = ["--negative-prompt", "--system", "--system-prompt", "--lyrics"]
             .first(where: { defaults[$0] != nil }).map(value) ?? ""
         command.model = value("--model")
@@ -301,7 +308,8 @@ package enum StudioConsoleCommand {
             command.model = draft.arguments.first ?? ""
         }
         command.inputPath = ["--input", "--image", "--audio", "--video", "--data"]
-            .first(where: { defaults[$0] != nil }).map(value) ?? ""
+            .first(where: { defaults[$0] != nil }).map(value)
+            ?? argument(ofKind: [.file, .directory]) ?? ""
         command.outputPath = outputPath(for: capability, draft: draft)
         command.width = Int(value("--width")) ?? 0
         command.height = Int(value("--height")) ?? 0

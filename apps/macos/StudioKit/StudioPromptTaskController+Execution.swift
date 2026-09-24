@@ -6,10 +6,7 @@ extension StudioPromptTaskController {
         package let outputFallbackReason: String?
     }
 
-    package struct ValidationError: LocalizedError, Equatable {
-        package let message: String
-        package var errorDescription: String? { message }
-    }
+    package typealias ValidationError = StudioValidationError
 
     /// Resolves Command edits and validates before a request can change history or create output
     /// directories. The existing adapter, contract, and sessions own those decisions.
@@ -56,16 +53,10 @@ extension StudioPromptTaskController {
         return Submission(request: effective, outputFallbackReason: prepared.fallbackReason)
     }
 
-    /// Specialist forms use the same stored Command override as their Command panel.
+    /// Specialist forms use the same stored Command override as their Command panel. The task
+    /// runner does the work; this stays so the shell has one call for either kind of task.
     package func runTask(_ base: StudioRunRequest, task: StudioTask) throws -> StudioRunRequest {
-        let resolved = sessions.resolving(base)
-        try validate(resolved)
-        let prepared = StudioOutputLocation.preparing(resolved)
-        if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
-        let request = prepared.request
-        sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
-        submitLibraryRequest(request)
-        return request
+        try runner.run(request: base, task: task)
     }
 
     /// Historical replay uses its recorded command, never the current task's Command edits.
@@ -100,9 +91,7 @@ extension StudioPromptTaskController {
             guard let id = activeConversationID else { return nil }
             return controller.jobs.all.first { $0.state.isActive && $0.request.conversationID == id }
         }
-        let remembered = sessions.value(for: task.rawValue + ".requestID", default: Optional<UUID>.none)
-        if let remembered, let job = controller.jobs.job(requestID: remembered), job.state.isActive { return job }
-        return controller.jobs.all.last { $0.state.isActive && $0.request.templateID?.studioTask == task }
+        return runner.currentJob(for: task)
     }
 
     package func stop(task: StudioTask) {

@@ -263,6 +263,9 @@ package final class MereRunController: ObservableObject {
     @Published package private(set) var serverStatus: StudioServerStatus?
     @Published package private(set) var queuedRunCount = 0
     @Published package var readinessByMode: [StudioMode: ModelReadinessState] = [:]
+    /// Readiness for the mode-less tasks on the shared task workspace, keyed by task; prompt
+    /// tasks stay in `readinessByMode`. `readiness(for:)` reads whichever applies.
+    @Published package var readinessByTask: [StudioTask: ModelReadinessState] = [:]
     @Published package var modelCapabilitiesByID: [String: StudioModelCapability] = [:]
     @Published package private(set) var recommendedChatModelID: String? = nil {
         didSet {
@@ -345,10 +348,10 @@ package final class MereRunController: ObservableObject {
     /// The model and settings each mode's readiness was last asked about. A probe's result is
     /// evaluated against the request current when it completes, so a model change while the
     /// (model-independent) probe runs reuses it instead of relaunching an identical process.
-    private var readinessRequests: [StudioMode: ReadinessRequest] = [:]
-    /// The readiness probe in flight per mode. A completion whose job id no longer matches was
-    /// superseded (settings changed) or cleared (mode no longer needs a model) and is ignored.
-    private var readinessProbes: [StudioMode: JobID] = [:]
+    private var readinessRequests: [StudioTask: ReadinessRequest] = [:]
+    /// The readiness probe in flight per task. A completion whose job id no longer matches was
+    /// superseded (settings changed) or cleared (task no longer needs a model) and is ignored.
+    private var readinessProbes: [StudioTask: JobID] = [:]
     /// Owns every child process the app launches: Studio runs in the inference lane, hand-built
     /// CLI reads and writes in the utility lane, readiness and status probes in the probe lane.
     /// The controller mirrors the foreground inference job into its published console fields and
@@ -1066,11 +1069,36 @@ package final class MereRunController: ObservableObject {
     /// lane under the mode's dedupe key, so at most one readiness process runs per mode and a
     /// probe launched with stale Settings is superseded rather than raced.
     package func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
-        let requirement = StudioCommandAdapter.capabilityRequirement(for: mode, draft: studioDraft)
+        checkReadiness(task: mode.task, requirement: StudioCommandAdapter.capabilityRequirement(for: mode, draft: studioDraft))
+    }
+
+    /// The same check for a task on the shared task workspace, whose draft names its model
+    /// directly (`StudioTaskSchema.modelID(for:)`). A blank model means the template runs no
+    /// managed model and is ready as it is. The answer lands in `readinessByTask`.
+    package func checkReadiness(for task: StudioTask, modelID: String) {
+        let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        checkReadiness(task: task, requirement: trimmed.isEmpty ? nil : .managedModel(trimmed))
+    }
+
+    /// Readiness for any task: the mode's entry for a prompt task, the task's own otherwise.
+    package func readiness(for task: StudioTask) -> ModelReadinessState {
+        if let mode = task.mode { return readinessByMode[mode] ?? .notChecked }
+        return readinessByTask[task] ?? .notChecked
+    }
+
+    private func setReadiness(_ state: ModelReadinessState, for task: StudioTask) {
+        if let mode = task.mode {
+            readinessByMode[mode] = state
+        } else {
+            readinessByTask[task] = state
+        }
+    }
+
+    private func checkReadiness(task: StudioTask, requirement: StudioCapabilityRequirement?) {
         guard let requirement else {
-            cancelReadinessProbe(for: mode)
-            readinessRequests[mode] = nil
-            readinessByMode[mode] = .ready
+            cancelReadinessProbe(for: task)
+            readinessRequests[task] = nil
+            setReadiness(.ready, for: task)
             return
         }
 
@@ -1079,9 +1107,9 @@ package final class MereRunController: ObservableObject {
         case .managedModel(let id):
             modelID = id
         case .unavailable(let message):
-            cancelReadinessProbe(for: mode)
-            readinessRequests[mode] = nil
-            readinessByMode[mode] = .unsupported(message)
+            cancelReadinessProbe(for: task)
+            readinessRequests[task] = nil
+            setReadiness(.unsupported(message), for: task)
             return
         }
 
@@ -1091,45 +1119,45 @@ package final class MereRunController: ObservableObject {
             modelsRoot: modelsRoot,
             hubCache: hubCache
         )
-        if readinessRequests[mode] == request, let id = readinessProbes[mode], jobs.job(id)?.state.isActive == true {
+        if readinessRequests[task] == request, let id = readinessProbes[task], jobs.job(id)?.state.isActive == true {
             return
         }
 
-        readinessRequests[mode] = request
-        readinessByMode[mode] = .checking
+        readinessRequests[task] = request
+        setReadiness(.checking, for: task)
 
         if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
-            cancelReadinessProbe(for: mode)
-            readinessByMode[mode] = .unsupported(message)
+            cancelReadinessProbe(for: task)
+            setReadiness(.unsupported(message), for: task)
             return
         }
 
         if modelCapabilitiesByID[modelID] != nil {
-            probeModelList(for: mode)
+            probeModelList(for: task)
         } else {
-            probeCapabilities(for: mode)
+            probeCapabilities(for: task)
         }
     }
 
     /// Recheck current model requests after installation changes; never restore a captured draft.
     package func refreshRequestedReadiness() {
-        for mode in readinessRequests.keys {
-            readinessByMode[mode] = .checking
-            probeModelList(for: mode)
+        for task in readinessRequests.keys {
+            setReadiness(.checking, for: task)
+            probeModelList(for: task)
         }
     }
 
-    private func probeCapabilities(for mode: StudioMode) {
+    private func probeCapabilities(for task: StudioTask) {
         guard let template = CommandCatalog.template(id: .modelCapabilities) else { return }
         var draft = template.defaultDraft()
         draft.all = true
         draft.json = true
-        submitReadinessProbe(for: mode, args: template.arguments(from: draft)) { [weak self] result in
-            self?.finishCapabilitiesProbe(for: mode, result: result)
+        submitReadinessProbe(for: task, args: template.arguments(from: draft)) { [weak self] result in
+            self?.finishCapabilitiesProbe(for: task, result: result)
         }
     }
 
-    private func finishCapabilitiesProbe(for mode: StudioMode, result: JobResult) {
+    private func finishCapabilitiesProbe(for task: StudioTask, result: JobResult) {
         let report = ModelCapabilitiesParser.report(from: result.standardOutput ?? "")
         if !report.capabilitiesByID.isEmpty {
             modelCapabilitiesByID = report.capabilitiesByID
@@ -1141,18 +1169,18 @@ package final class MereRunController: ObservableObject {
             self.recommendedCodeModelID = recommendedCodeModelID
         }
 
-        guard let modelID = readinessRequests[mode]?.modelID else { return }
+        guard let modelID = readinessRequests[task]?.modelID else { return }
         if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
-            readinessProbes[mode] = nil
-            readinessByMode[mode] = .unsupported(message)
+            readinessProbes[task] = nil
+            setReadiness(.unsupported(message), for: task)
             return
         }
         if result.exitCode != 0, report.capabilitiesByID.isEmpty {
-            readinessProbes[mode] = nil
-            readinessByMode[mode] = .unknown(Self.capabilitiesUnavailableMessage, detail: Self.probeDetail(result))
+            readinessProbes[task] = nil
+            setReadiness(.unknown(Self.capabilitiesUnavailableMessage, detail: Self.probeDetail(result)), for: task)
             return
         }
-        probeModelList(for: mode)
+        probeModelList(for: task)
     }
 
     /// The CLI's last meaningful stderr line, for the readiness card's muted second line.
@@ -1160,26 +1188,26 @@ package final class MereRunController: ObservableObject {
         StudioFailureSummary.lastMeaningfulLine(in: result.standardError ?? "")
     }
 
-    private func probeModelList(for mode: StudioMode) {
+    private func probeModelList(for task: StudioTask) {
         guard let template = CommandCatalog.template(id: .modelList) else { return }
         let args = template.arguments(from: template.defaultDraft())
-        submitReadinessProbe(for: mode, args: args) { [weak self] result in
+        submitReadinessProbe(for: task, args: args) { [weak self] result in
             guard let self else { return }
-            readinessProbes[mode] = nil
-            guard let modelID = readinessRequests[mode]?.modelID else { return }
+            readinessProbes[task] = nil
+            guard let modelID = readinessRequests[task]?.modelID else { return }
             if let message = modelCapabilitiesByID[modelID]?.unavailableMessage(titles: modelStore.titles) {
-                readinessByMode[mode] = .unsupported(message)
+                setReadiness(.unsupported(message), for: task)
                 return
             }
             guard result.exitCode == 0 else {
-                readinessByMode[mode] = .unknown(Self.modelListUnavailableMessage, detail: Self.probeDetail(result))
+                setReadiness(.unknown(Self.modelListUnavailableMessage, detail: Self.probeDetail(result)), for: task)
                 return
             }
-            readinessByMode[mode] = ModelReadinessParser.state(
+            setReadiness(ModelReadinessParser.state(
                 for: modelID,
                 modelListOutput: result.standardOutput ?? "",
                 titles: modelStore.titles
-            )
+            ), for: task)
         }
     }
 
@@ -1190,31 +1218,31 @@ package final class MereRunController: ObservableObject {
     nonisolated package static let modelListUnavailableMessage =
         "Couldn't read the model list. Check the mere.run install in Settings, then check again."
 
-    /// Submits one readiness probe for `mode` and runs `completion` with its result unless a later
+    /// Submits one readiness probe for `task` and runs `completion` with its result unless a later
     /// probe replaced it. A submission the store deduplicated onto the probe already tracked for
-    /// the mode returns without a second continuation: that probe's completion will evaluate the
-    /// updated request.
+    /// the task returns without a second continuation: that probe's completion will evaluate the
+    /// updated request. A prompt task keeps its mode's name as the dedupe key.
     private func submitReadinessProbe(
-        for mode: StudioMode,
+        for task: StudioTask,
         args: [String],
         completion: @escaping @MainActor (JobResult) -> Void
     ) {
-        let id = jobs.submit(rawRequest(args: args, probeKey: mode.rawValue))
-        guard readinessProbes[mode] != id else { return }
-        readinessProbes[mode] = id
+        let id = jobs.submit(rawRequest(args: args, probeKey: task.mode?.rawValue ?? task.rawValue))
+        guard readinessProbes[task] != id else { return }
+        readinessProbes[task] = id
         Task { @MainActor [weak self] in
             guard let self, let result = await self.jobs.result(for: id) else { return }
-            guard self.readinessProbes[mode] == id else { return }
+            guard self.readinessProbes[task] == id else { return }
             completion(result)
         }
     }
 
-    /// Stops the probe in flight for `mode`, if any; its result is then ignored.
-    private func cancelReadinessProbe(for mode: StudioMode) {
-        if let id = readinessProbes[mode] {
+    /// Stops the probe in flight for `task`, if any; its result is then ignored.
+    private func cancelReadinessProbe(for task: StudioTask) {
+        if let id = readinessProbes[task] {
             jobs.cancel(id)
         }
-        readinessProbes[mode] = nil
+        readinessProbes[task] = nil
     }
 
     @discardableResult

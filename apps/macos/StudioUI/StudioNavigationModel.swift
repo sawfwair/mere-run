@@ -104,7 +104,7 @@ package final class NavigationModel: ObservableObject {
     /// Whether the inspector column is shown for `task`: remembered on, and not displaced by the
     /// Command view column.
     package func showsInspector(for task: StudioTask) -> Bool {
-        task.isPromptTask && inspectorTasks.contains(task) && !showCommandColumn
+        task.showsPromptChrome && inspectorTasks.contains(task) && !showCommandColumn
     }
 
     /// Whether the Command view column is shown for `task`.
@@ -114,7 +114,7 @@ package final class NavigationModel: ObservableObject {
 
     /// Shows or hides the inspector for `task`. Showing it closes the Command view column.
     package func toggleInspector(for task: StudioTask) {
-        guard task.isPromptTask else { return }
+        guard task.showsPromptChrome else { return }
         if showsInspector(for: task) {
             inspectorTasks.remove(task)
         } else {

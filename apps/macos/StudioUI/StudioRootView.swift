@@ -126,14 +126,26 @@ private struct StudioWorkspaceView: View {
         destination.task.mode != nil
     }
 
-    /// The Library column belongs to prompt tasks only: Subjects, Realtime, Models, and the other
-    /// Project, Session, and Manage tasks take the full width even inside a Create domain.
+    /// The Library column belongs to the Generate, Converse, and Analyze tasks: Subjects,
+    /// Realtime, Models, and the other Project, Session, and Manage tasks take the full width
+    /// even inside a Create domain, as does a task still on its legacy page.
     private var showsLibraryColumn: Bool {
-        navigation.showLibrary && destination.task.isPromptTask
+        navigation.showLibrary && destination.task.showsPromptChrome
     }
 
     private var showsInspectorColumn: Bool {
-        showsPromptWorkspace && navigation.showsInspector(for: destination.task)
+        destination.task.showsPromptChrome && navigation.showsInspector(for: destination.task)
+    }
+
+    /// The task's draft on the shared task workspace, read and written through the session store
+    /// so the inspector column, the Command view, and the workspace edit one value.
+    private var taskDraftBinding: Binding<StudioTaskDraft>? {
+        let task = destination.task
+        guard task.usesTaskDraft, let initial = controller.taskSessions.taskDraft(for: task) else { return nil }
+        return Binding(
+            get: { controller.taskSessions.taskDraft(for: task) ?? initial },
+            set: { controller.taskSessions.setTaskDraft($0, for: task) }
+        )
     }
 
     private var showsCommandColumn: Bool {
@@ -209,7 +221,7 @@ private struct StudioWorkspaceView: View {
     /// terms send the user to Models first, and the shell's pull, navigate, and recheck.
     private var readinessActions: StudioReadinessActions {
         StudioReadinessActions(
-            mode: mode,
+            scope: StudioModelScope(mode: mode),
             model: $prompt.draft.model,
             modelInventory: modelInventory,
             pullModel: pullModel,
@@ -288,6 +300,7 @@ private struct StudioWorkspaceView: View {
     var body: some View {
         observedShell
             .environment(\.studioTaskSessions, controller.taskSessions)
+            .environment(\.studioTaskRunner, prompt.runner)
             .environment(\.studioTaskScope, destination.task.rawValue)
     }
 
@@ -563,7 +576,7 @@ private struct StudioWorkspaceView: View {
             domain: destination.domain,
             subtitle: domainSubtitle,
             task: taskBinding,
-            showsPanelToggles: destination.task.isPromptTask,
+            showsPanelToggles: destination.task.showsPromptChrome,
             isLibraryShown: layout.showsLibrary || libraryOverlay,
             isInspectorShown: navigation.showsInspector(for: destination.task),
             isCommandShown: navigation.showsCommandColumn(for: destination.task),
@@ -580,23 +593,40 @@ private struct StudioWorkspaceView: View {
 
     // MARK: - Inspector and Command view
 
+    @ViewBuilder
     private var inspectorColumn: some View {
-        StudioInspector(
-            mode: mode,
-            draft: $prompt.draft,
-            baseline: freshDraft(for: mode),
-            modelInventory: modelInventory,
-            readiness: readiness,
-            lastSeed: lastSeed,
-            onShowModels: { navigation.open(task: .modelsInstalled) },
-            onShowAdapters: { navigation.open(task: .modelsAdapters) },
-            onClose: toggleInspector
-        )
+        if let taskDraft = taskDraftBinding {
+            StudioTaskInspector(
+                task: destination.task,
+                draft: taskDraft,
+                modelInventory: modelInventory,
+                readiness: controller.readiness(for: destination.task),
+                onShowModels: { navigation.open(task: .modelsInstalled) },
+                onClose: toggleInspector
+            )
+        } else {
+            StudioInspector(
+                mode: mode,
+                draft: $prompt.draft,
+                baseline: freshDraft(for: mode),
+                modelInventory: modelInventory,
+                readiness: readiness,
+                lastSeed: lastSeed,
+                onShowModels: { navigation.open(task: .modelsInstalled) },
+                onShowAdapters: { navigation.open(task: .modelsAdapters) },
+                onClose: toggleInspector
+            )
+        }
     }
 
     private var baseTaskRequest: StudioRunRequest? {
         if showsPromptWorkspace {
             return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false)
+        }
+        if let taskDraft = taskDraftBinding {
+            // The Command view previews the task draft's own form; `destination(for:)` names the
+            // output at submit time, so the preview shows the folder the run will write to.
+            return taskDraft.wrappedValue.request()
         }
         let key = destination.task.rawValue
         let chosen = controller.taskSessions.value(for: key + ".commandTemplate", default: Optional<CommandTemplateID>.none)
@@ -619,6 +649,13 @@ private struct StudioWorkspaceView: View {
             StudioTaskCommandView(template: request.template, seed: request.draft, form: Binding(
                 get: { commandForm(for: request) },
                 set: { edited in
+                    if let taskDraft = taskDraftBinding {
+                        // A task draft has no separate override: the form is the draft.
+                        var next = taskDraft.wrappedValue
+                        next.form = edited
+                        taskDraft.wrappedValue = next
+                        return
+                    }
                     if showsPromptWorkspace {
                         edited.applyingChanges(from: commandForm(for: request), to: &draft,
                                                mode: mode, templateID: request.templateID)
@@ -628,9 +665,20 @@ private struct StudioWorkspaceView: View {
                         sourceArguments: source.template.arguments(from: source.draft), form: edited),
                         for: request.templateID.studioTask.rawValue + ".commandOverride")
                 }
-            ), onRun: runStudioCommand, onClose: toggleCommand,
-               canRun: !showsPromptWorkspace || (!readiness.blocksRun && !(mode.isConversational && activeConversationRunning)))
+            ), onRun: runStudioCommand, onClose: toggleCommand, canRun: canRunCurrentTask)
         }
+    }
+
+    /// Whether Run is available for the current task: the prompt workspace's readiness and
+    /// conversation gates, the task workspace's readiness, or a legacy page's command.
+    private var canRunCurrentTask: Bool {
+        if showsPromptWorkspace {
+            return !readiness.blocksRun && !(mode.isConversational && activeConversationRunning)
+        }
+        if destination.task.usesTaskDraft {
+            return !controller.readiness(for: destination.task).blocksRun
+        }
+        return baseTaskRequest != nil
     }
 
     /// Models reports its installed count and store size; every other domain keeps its tagline.
@@ -643,8 +691,21 @@ private struct StudioWorkspaceView: View {
 
     // MARK: - Domain content
 
+    /// The task's surface by archetype: the prompt workspace for a mode-backed task, the shared
+    /// task workspace for a task whose page PR has landed (`StudioTask.migratedTasks`), and the
+    /// task's own page for everything else. A page PR flips its task's gate and the switch below
+    /// stops being reached for it.
     @ViewBuilder
     private var domainContent: some View {
+        if destination.task.usesTaskDraft {
+            StudioTaskWorkspace(task: destination.task, models: models)
+        } else {
+            legacyContent
+        }
+    }
+
+    @ViewBuilder
+    private var legacyContent: some View {
         switch destination.task {
         case .imageGenerate, .videoGenerate, .musicCompose, .soundGenerate, .voiceSpeak,
              .chatChat, .chatCode, .visionRead, .visionFind, .visionSegment, .visionTrack,
@@ -939,7 +1000,7 @@ private struct StudioWorkspaceView: View {
         } else if let archetype = destination.task.analyzeArchetype {
             StudioAnalyzeCanvas(
                 archetype: archetype,
-                mode: mode,
+                presentation: StudioTaskPresentation(mode: mode),
                 cards: feedCards,
                 selectedID: navigation.selectedLibraryID,
                 inputPath: draft.inputPath,
@@ -952,7 +1013,8 @@ private struct StudioWorkspaceView: View {
             )
         } else {
             StudioFeedCanvas(
-                mode: mode,
+                presentation: StudioTaskPresentation(mode: mode),
+                slots: mode.attachmentSlots,
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,
@@ -1003,7 +1065,10 @@ private struct StudioWorkspaceView: View {
         libraryOverlay = false
         navigation.selectedLibraryID = item.id
         controller.taskSessions.rememberSelection(item.id, for: item.mode)
-        if item.mode != mode || !showsPromptWorkspace {
+        if let task = item.templateID?.studioTask, task.usesTaskDraft {
+            // The task workspace reads the draft this wrote when it appears.
+            navigation.open(destination: task.destination)
+        } else if item.mode != mode || !showsPromptWorkspace {
             navigation.open(destination: item.mode.destination)
         } else {
             refreshReadiness()
@@ -1177,9 +1242,9 @@ private struct StudioWorkspaceView: View {
         StudioSceneActions(
             destination: destination,
             showLibrary: showLibraryBinding,
-            canShowLibrary: destination.task.isPromptTask,
+            canShowLibrary: destination.task.showsPromptChrome,
             showInspector: showInspectorBinding,
-            canShowInspector: destination.task.isPromptTask,
+            canShowInspector: destination.task.showsPromptChrome,
             showCommand: showCommandBinding,
             canShowCommand: baseTaskRequest != nil,
             open: { navigation.open(destination: $0) },
@@ -1187,9 +1252,7 @@ private struct StudioWorkspaceView: View {
             newChat: startNewConversation,
             canNewChat: showsPromptWorkspace && mode.isConversational,
             runComposer: runStudioCommand,
-            canRun: showsPromptWorkspace
-                ? !readiness.blocksRun && !(mode.isConversational && activeConversationRunning)
-                : baseTaskRequest != nil,
+            canRun: canRunCurrentTask,
             stop: stopCurrentRun,
             canStop: currentTaskJob != nil,
             openConsole: { openConsole() },
@@ -1568,6 +1631,11 @@ private struct StudioWorkspaceView: View {
     private func runStudioCommand() {
         studioError = nil
         do {
+            if let taskDraft = taskDraftBinding {
+                // The task workspace's Run and the Command view's Run submit the same draft.
+                navigation.selectedLibraryID = try prompt.runner.run(taskDraft.wrappedValue, task: destination.task).id
+                return
+            }
             if !showsPromptWorkspace {
                 guard let base = baseTaskRequest else { return }
                 if !runServer(base) { _ = try prompt.runTask(base, task: destination.task) }
