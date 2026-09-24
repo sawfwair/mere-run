@@ -334,10 +334,8 @@ final class StudioSoundTaskTests: XCTestCase {
     /// nothing for Score, which prints its result.
     func testRoutingNamesEachSoundOutputUnderSound() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("sound-routing-\(UUID().uuidString)", isDirectory: true)
-        let suite = try XCTUnwrap(UserDefaults(suiteName: "StudioSoundTaskTests-\(UUID().uuidString)"))
-        suite.register(defaults: [StudioOutputLocation.rootDefaultsKey: root.path])
-        StudioOutputLocation.defaults = suite
-        defer { StudioOutputLocation.defaults = .standard }
+        StudioTestDefaults.redirectOutputs(under: root, outputs: root)
+        defer { StudioTestDefaults.restore() }
         let sound = root.appendingPathComponent("Sound", isDirectory: true).path
 
         var foley = StudioTaskDraft(templateID: .sfxVideo)

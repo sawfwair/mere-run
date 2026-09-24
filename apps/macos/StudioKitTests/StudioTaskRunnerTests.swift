@@ -13,17 +13,12 @@ final class StudioTaskRunnerTests: XCTestCase {
     private var controller: MereRunController!
     private var library: StudioLibraryStore!
     private var runner: StudioTaskRunner!
-    private var defaults: UserDefaults!
-    private var suiteName: String!
 
     override func setUp() async throws {
         try await MainActor.run {
             root = FileManager.default.temporaryDirectory.appendingPathComponent("task-runner-\(UUID())")
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-            suiteName = "StudioTaskRunnerTests-\(UUID().uuidString)"
-            defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-            defaults.set(root.appendingPathComponent("outputs").path, forKey: StudioOutputLocation.rootDefaultsKey)
-            StudioOutputLocation.defaults = defaults
+            StudioTestDefaults.redirectOutputs(under: root)
             processRunner = RecordingProcessRunner()
             controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: processRunner, resolvesCLIOnInit: false,
                 taskSessions: StudioTaskSessions(url: root.appendingPathComponent("sessions.json")))
@@ -36,8 +31,7 @@ final class StudioTaskRunnerTests: XCTestCase {
     override func tearDown() async throws {
         try await MainActor.run {
             controller.terminateAllProcesses()
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
+            StudioTestDefaults.restore()
             runner = nil
             library = nil
             controller = nil
@@ -85,6 +79,45 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertNil(runner.currentJob(for: .audioEnhance), "a cancelled job is no longer the task's current one")
     }
 
+    /// The Command view's "Will run" is the launch preview: the draft's own blank destination
+    /// named the way the runner names it, so the argv it shows is the argv that runs.
+    func testTheLaunchPreviewShowsTheDestinationTheRunWrites() throws {
+        controller.readinessByTask[.audioEnhance] = .ready
+        let draft = try enhanceDraft()
+        XCTAssertEqual(draft.text("--output"), "", "the draft keeps no destination")
+
+        let preview = StudioTaskRunner.launchPreview(draft)
+        let previewed = preview.text("--output")
+        XCTAssertTrue(previewed.hasPrefix(root.appendingPathComponent("outputs/Audio").path), previewed)
+        let request = try runner.run(draft, task: .audioEnhance)
+        XCTAssertEqual(request.draft.outputPath, previewed)
+        XCTAssertEqual(request.execution?.arguments, preview.arguments)
+    }
+
+    /// Audio ▸ Separate runs Music ▸ Separate's command. Stop on either acts on that task's own
+    /// run: ⌘. in one never cancels the other's, even once its own run has ended.
+    func testStopActsOnlyOnTheTasksOwnRunWhenTwoTasksShareACommand() async throws {
+        controller.readinessByTask[.musicSeparate] = .ready
+        controller.readinessByTask[.audioSeparate] = .ready
+        let input = root.appendingPathComponent("harbor-lights.wav")
+        try Data().write(to: input)
+        var draft = StudioTaskDraft(templateID: .musicSeparate)
+        let slot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .musicSeparate))
+        draft.setAttachmentText(input.path, for: slot.storage)
+
+        let music = try runner.run(draft, task: .musicSeparate)
+        XCTAssertNil(runner.currentJob(for: .audioSeparate), "Music ▸ Separate's run is not Audio ▸ Separate's to stop")
+        runner.stop(task: .audioSeparate)
+        XCTAssertEqual(processRunner.processes[0].terminateCallCount, 0)
+
+        let audio = try runner.run(draft, task: .audioSeparate)
+        XCTAssertEqual(runner.currentJob(for: .audioSeparate)?.request.requestID, audio.id)
+        XCTAssertEqual(runner.currentJob(for: .musicSeparate)?.request.requestID, music.id)
+        processRunner.starts[0].termination(0)
+        for _ in 0..<6 { await Task.yield() }
+        XCTAssertNil(runner.currentJob(for: .musicSeparate), "Audio ▸ Separate's run does not become Music ▸ Separate's")
+    }
+
     func testBlockedReadinessAndAnIncompleteCommandLeaveHistoryUntouched() throws {
         controller.readinessByTask[.audioEnhance] = .missingModel("audio-enhance-ap-bwe-16kto48k")
         XCTAssertThrowsError(try runner.run(try enhanceDraft(), task: .audioEnhance)) { error in
@@ -121,6 +154,21 @@ final class StudioTaskRunnerTests: XCTestCase {
         controller.readinessByTask[.soundCondition] = .ready
         let condition = try runner.run(StudioTaskDraft(templateID: .sfxConditionText), task: .soundCondition)
         XCTAssertEqual(condition.templateID, .sfxConditionText, "a task with no input slot runs on its prompt")
+    }
+
+    /// Faces ▸ Batch takes its pictures in the well or as a list file (`--input-list`); a run
+    /// with only the list is not refused as an empty well, one with neither still is.
+    func testAListFileFillsFacesBatchesWell() throws {
+        controller.readinessByTask[.visionFaces] = .ready
+        var batch = StudioTaskDraft(templateID: .visionFaceBatch)
+        XCTAssertThrowsError(try runner.run(batch, task: .visionFaces)) { error in
+            XCTAssertEqual((error as? StudioValidationError)?.message.hasPrefix("Attach"), true, error.localizedDescription)
+        }
+        let list = root.appendingPathComponent("portraits.txt")
+        try Data("/tmp/a.png\n/tmp/b.png\n".utf8).write(to: list)
+        batch.form["--input-list"] = .text(list.path)
+        let request = try runner.run(batch, task: .visionFaces)
+        XCTAssertEqual(request.templateID, .visionFaceBatch)
     }
 
     /// A typed input is the run's whole subject: `text anonymize` with nothing typed would launch

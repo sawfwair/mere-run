@@ -56,10 +56,19 @@ final class StudioPromptTaskControllerTests: XCTestCase {
             for: request.templateID.studioTask.rawValue + ".commandOverride")
     }
 
+    /// Files the run in this test's folder instead of the user's Pictures, the way a fallback
+    /// moves it, so the launched argv and the Library row move with it.
     private func temporaryOutput(_ draft: CommandDraft) -> StudioOutputLocation.Preparation {
+        moving(draft, to: root.appendingPathComponent("output-\(UUID())", isDirectory: true))
+    }
+
+    private func moving(_ draft: CommandDraft, to folder: URL, reason: String? = nil) -> StudioOutputLocation.Preparation {
+        let move = StudioOutputLocation.Move(
+            from: URL(fileURLWithPath: draft.outputPath).deletingLastPathComponent().standardizedFileURL.path, to: folder
+        )
         var moved = draft
-        moved.outputPath = root.appendingPathComponent("output-\(UUID()).png").path
-        return StudioOutputLocation.Preparation(draft: moved)
+        moved.outputPath = move.applied(to: draft.outputPath)
+        return StudioOutputLocation.Preparation(draft: moved, fallbackReason: reason, move: move)
     }
 
     func testEditsPersistSynchronouslyAndEachPromptTaskRestoresItsFullDraft() throws {
@@ -715,12 +724,14 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         prompt.draft.prompt = "Fallback output"
         let base = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: prompt.draft)
         override(base, flag: "--width", value: "768")
-        let fallback = root.appendingPathComponent("fallback.png").path
+        let fallbackFolder = root.appendingPathComponent("fallback", isDirectory: true)
+        var fallback = ""
         let submission = try XCTUnwrap(prompt.runPrompt(inventory: [], prepareOutput: { draft in
-            var moved = draft
-            moved.outputPath = fallback
-            return StudioOutputLocation.Preparation(draft: moved, fallbackReason: "Fixture destination is read-only.")
+            let prepared = self.moving(draft, to: fallbackFolder, reason: "Fixture destination is read-only.")
+            fallback = prepared.draft.outputPath
+            return prepared
         }))
+        XCTAssertTrue(fallback.hasPrefix(fallbackFolder.path + "/"), fallback)
         XCTAssertEqual(submission.outputFallbackReason, "Fixture destination is read-only.")
         XCTAssertEqual(submission.request.draft.outputPath, fallback)
         XCTAssertTrue(try XCTUnwrap(submission.request.execution).arguments.contains(fallback))

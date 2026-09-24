@@ -243,10 +243,15 @@ A valid model in a registered location satisfies a normal pull and prevents a
 duplicate download. `--force` always installs or replaces the primary-store
 copy; it never modifies the external payload.
 
-For an already installed restricted model whose receipt does not record term
-acceptance, review its terms with `mere.run model info MODEL`, then run
-`mere.run model pull MODEL --accept-model-license`. This updates the manifest in
-the primary model store without downloading the model again.
+For a restricted model already installed in the primary model store whose
+receipt does not record term acceptance, review its terms with
+`mere.run model info MODEL`, then run
+`mere.run model pull MODEL --accept-model-license`. The command prints the same
+terms notice and confirmation on stderr as a download, unless `--quiet` is set.
+It then records the current component terms and your acceptance in the
+installed `mererun_model.json` without downloading the model again. A copy in a
+registered external location is read-only; record acceptance for it with
+`mere.run model location bind MODEL PATH --accept-model-license`.
 
 Pass `--cache-dir PATH` to put one pull's content-addressed payload on a
 specific volume. Preflight, disk estimates, downloads, and the installed links

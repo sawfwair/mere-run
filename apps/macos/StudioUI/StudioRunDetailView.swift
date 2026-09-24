@@ -98,8 +98,12 @@ struct StudioRunDetailView: View {
                 StudioResultFileRow(url: activeURL)
             }
         } else if let output = item.outputText, !output.isBlank {
+            // What the CLI printed — a benchmark's table, a quality gate's report — shown as
+            // printed: Markdown would read its `*`, `_`, and `|` as formatting.
             ScrollView {
-                StudioMarkdownText(content: output, bodyFont: .callout)
+                Text(output)
+                    .font(MereRunTheme.monoFont)
+                    .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {

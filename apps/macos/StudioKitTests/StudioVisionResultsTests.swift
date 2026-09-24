@@ -1,4 +1,5 @@
 @testable import StudioKit
+import StudioTestSupport
 import CoreGraphics
 import Foundation
 import XCTest
@@ -405,14 +406,8 @@ final class StudioVisionResultsTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("cameras-beside-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let suiteName = "StudioVisionResultsTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set(root.appendingPathComponent("outputs").path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = defaults
-        defer {
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
-        }
+        StudioTestDefaults.redirectOutputs(under: root)
+        defer { StudioTestDefaults.restore() }
         let viewA = root.appendingPathComponent("a.png")
         let viewB = root.appendingPathComponent("b.png")
         try Data([0x89]).write(to: viewA)

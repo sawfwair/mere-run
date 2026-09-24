@@ -47,12 +47,23 @@ package final class StudioTaskRunner {
         return StudioOutputLocation.preparing(resolved, fileManager: fileManager)
     }
 
-    /// The draft as a run launches it: the launch-time defaults a task's page applies (Image ▸
-    /// Train's recipe clears the options it governs and a Klein base gets its checkpoint and
-    /// preview cadence). The runner and the Command view's "Will run" both go through this, so a
-    /// Run from either surface and the preview agree; every other task's draft is left as it is.
+    /// The draft as a run launches it: the launch-time defaults a task's page applies (a Klein
+    /// base gets its checkpoint and preview cadence; Audio ▸ Live's commands print events only,
+    /// as JSON lines where the transcript reads them). The runner and the Command view's
+    /// "Will run" both go through this, so a Run from either surface and the preview agree;
+    /// every other task's draft is left as it is.
     package static func launching(_ draft: StudioTaskDraft) -> StudioTaskDraft {
-        StudioTrainingRun.launchDraft(draft)
+        switch draft.templateID {
+        case .speechListen, .speechDiarizeLive: return draft.liveListenLaunch()
+        default: return StudioTrainingRun.launchDraft(draft)
+        }
+    }
+
+    /// The draft a Run launches, destinations and all: `launching`, then named by
+    /// `StudioOutputLocation.destination(for:)`. The Command view's "Will run" reads this, so it
+    /// shows the files the run will write rather than the draft's blank destination.
+    package static func launchPreview(_ draft: StudioTaskDraft) -> StudioTaskDraft {
+        StudioOutputLocation.destination(for: launching(draft))
     }
 
     /// The request a task draft runs: its launch-time defaults applied, its destination named,
@@ -92,10 +103,13 @@ package final class StudioTaskRunner {
         let readiness = controller.readiness(for: task)
         if readiness.blocksRun { throw StudioValidationError(message: readiness.message(titles: controller.modelStore.titles)) }
         // The contract leaves an input optional when the command has another mode without one
-        // (`music transcribe --list-instruments`); the task's surface says whether a run needs
-        // the well filled, so an empty well never launches the CLI to fail on its own.
+        // (`music transcribe --list-instruments`) or another way to take it (Faces ▸ Batch's
+        // pictures or its `--input-list` file); the task's surface says whether a run needs the
+        // well filled, so an empty well never launches the CLI to fail on its own. Where the
+        // contract itself requires the first slot, only that slot fills the well.
         if let slot = StudioTaskSchema.primarySlot(for: draft.templateID),
-           task.presentation.attaching(slot).requiresAttachment, draft.primaryInputPath.isBlank {
+           task.presentation.attaching(slot).requiresAttachment,
+           slot.isRequired ? draft.primaryInputPath.isBlank : draft.slots.allSatisfy({ $0.paths(in: draft).isEmpty }) {
             throw StudioValidationError(message: "Attach \(slot.label.lowercased()) first.")
         }
         // A typed input is the run's whole subject; `text anonymize` would otherwise launch and
@@ -130,13 +144,17 @@ package final class StudioTaskRunner {
     @discardableResult
     private func submit(_ request: StudioRunRequest, task: StudioTask) -> Bool {
         sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
+        sessions.noteSubmission(request.id, from: task)
         let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft)
         let preview = controller.commandPreview(arguments: arguments, masksSecrets: true)
         library.start(request: request, commandPreview: preview,
                       status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued)
         // `run(studio:)` keeps the camera-access gate in front of `vision track-live`. While the
-        // system is still asking, the controller retries once the answer comes.
-        let launched = controller.run(studio: request)
+        // system is still asking, the controller retries once the answer comes — unless Stop
+        // cancelled the row in the meantime.
+        let launched = controller.run(studio: request, stillWanted: { [controller, library] in
+            Self.isAwaitingLaunch(request.id, controller: controller, library: library)
+        })
         guard !launched else { return true }
         if request.template.id == .visionTrackLive,
            AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined { return false }
@@ -163,12 +181,16 @@ package final class StudioTaskRunner {
         "Camera access is off for mere.run. Turn it on in System Settings ▸ Privacy & Security ▸ Camera, then start again."
 
     /// The job Stop acts on: the run this task last submitted while it is alive, else the newest
-    /// live run of any of the task's templates.
+    /// live run that belongs to the task — submitted from it, or, for a run no task submitted
+    /// (the Command Console), one of the commands the task owns. Audio ▸ Separate runs
+    /// Music ▸ Separate's command, so the command alone never makes another task's run its own.
     package func currentJob(for task: StudioTask) -> Job? {
         let remembered = sessions.value(for: task.rawValue + ".requestID", default: Optional<UUID>.none)
         if let remembered, let job = controller.jobs.job(requestID: remembered), job.state.isActive { return job }
         return controller.jobs.all.last { job in
-            job.state.isActive && (job.request.templateID.map(task.runs) ?? false)
+            guard job.state.isActive else { return false }
+            let owner = job.request.requestID.flatMap(sessions.submittingTask(of:)) ?? job.request.templateID?.studioTask
+            return owner == task
         }
     }
 
@@ -176,13 +198,31 @@ package final class StudioTaskRunner {
     package static let sessionStopGrace: Duration = .seconds(4)
 
     /// Stops the task's current job: a session the way Ctrl-C does, so the CLI flushes what it
-    /// has (then terminated after `sessionStopGrace`); anything else terminated at once.
+    /// has (then terminated after `sessionStopGrace`); anything else terminated at once. A run
+    /// submitted but not launched yet — Vision ▸ Live while macOS asks for the camera — has no
+    /// job to stop; its row is cancelled, so the launch waiting on the answer never happens.
     package func stop(task: StudioTask) {
-        guard let job = currentJob(for: task) else { return }
+        guard let job = currentJob(for: task) else {
+            let remembered = sessions.value(for: task.rawValue + ".requestID", default: Optional<UUID>.none)
+            if let remembered, isAwaitingLaunch(remembered) { library.setStatus(.cancelled, id: remembered) }
+            return
+        }
         if task.archetype == .session {
             controller.jobs.interruptThenCancel(job.id, after: Self.sessionStopGrace)
         } else {
             controller.jobs.cancel(job.id)
         }
+    }
+
+    /// Whether a submitted run is still waiting to launch: its row is running or queued and no
+    /// job exists for it yet.
+    package func isAwaitingLaunch(_ requestID: UUID) -> Bool {
+        Self.isAwaitingLaunch(requestID, controller: controller, library: library)
+    }
+
+    private static func isAwaitingLaunch(_ requestID: UUID, controller: MereRunController, library: StudioLibraryStore) -> Bool {
+        guard controller.jobs.job(requestID: requestID) == nil,
+              let row = library.items.first(where: { $0.id == requestID }) else { return false }
+        return row.status == .running || row.status == .queued
     }
 }

@@ -135,7 +135,9 @@ Analyze tasks use one **shared task workspace**
 draft is a `StudioTaskDraft` (`StudioKit/StudioTaskDraft.swift`): the chosen
 template plus the same per-flag `StudioConsoleDraft` the Command view edits, so
 the well, the chips, the inspector, the Command view, Library restoration, and
-the argv read one value. The well's slots, the chips, and the inspector sections
+the argv read one value. The task's other variants are parked in it as they were
+left, so switching back — from the variant chip or by picking another variant's
+Library row — restores that variant's views, second picture, or cameras. The well's slots, the chips, and the inspector sections
 come from the template's contract (`StudioKit/StudioTaskSchema.swift`); the
 destination is filled at submit time by
 `StudioOutputLocation.destination(for:)`; the prompt controller, shared
@@ -638,7 +640,13 @@ path the run writes. Settings ▸ General takes one root that overrides all thre
 (`mererun.app.outputRoot`). A task on the shared task workspace (Music ▸
 Transcribe, the Vision and Audio tasks) has no path field:
 `StudioOutputLocation.destination(for:)` names its output after the input in
-the domain's folder when the run starts, with its sidecars beside it. The
+the domain's folder when the run starts, with its sidecars beside it. Its draft
+never keeps a destination Studio named: a fresh draft starts without one, and a
+saved draft is read without any that sits in one of Studio's folders (under the
+root, a per-media `mere.run` folder, or App Outputs). A destination typed into
+the Command view elsewhere keeps its folder, with `-2`, `-3`… added while that
+path exists or a submitted run holds it, so no run writes over another's. The
+Command view's "Will run" shows the destination the run will write. The
 task-specific pages use the same domain roots: training adapters are filed under
 the domain they train for, Decisions uses `outputDirectoryURL`, and Music ▸
 Realtime, Video ▸ Subjects, and the audio recorder use timestamped file names
@@ -842,8 +850,12 @@ multi-view variant edits optional calibrated cameras per view in the inspector �
 image size, normalized focal length and center, and a world-to-camera rotation
 and translation — with the CLI's own checks (positive size and focal length, a
 proper rotation, and an image size equal to the image's decoded size, which new
-cameras take from the image), writing its saved draft file into `--cameras` only
-while the cameras match the views; at submit the runner copies that file beside
+cameras take from the image), writing its saved draft file into `--cameras`
+whenever cameras are on; a camera file that does not match the views, or will
+not read, refuses the run with the reason rather than letting the model estimate
+cameras (`StudioCommandChecks`). A camera file the draft names from elsewhere — a
+restored run, the Command view — is read into the editor, not overwritten. At
+submit the runner copies the file beside
 the run's output directory as `<folder>.cameras.json` and points `--cameras`
 there, so the run's folder is self-contained. Camera files import and export.
 Faces are numbered from one everywhere the picture is read; the flag counts
@@ -855,8 +867,10 @@ order the CLI numbers them) and the model as chips in the transport row, the
 things to track one per line, the capture's progress and log while it runs, and
 the annotated clip with its track spans once it lands in the Library; the
 settings column holds the rest of the contract. Runs go through the task runner,
-which keeps the camera-access prompt in front of the CLI. Stop ends the capture
-without a clip; the session ends on its own after the duration.
+which keeps the camera-access prompt in front of the CLI; Stop while macOS is
+still asking cancels the run, so the capture does not start once access is
+granted. Stop ends the capture without a clip; the session ends on its own after
+the duration.
 
 **Audio** ▸ Transcribe, Who Spoke, Enhance, and Separate are Analyze tasks on
 the shared task workspace. Who Spoke runs `speech diarize` with native
@@ -876,9 +890,11 @@ surface over `speech listen` and `speech diarize-live`: Start submits the task
 draft through the task runner as an inference job with a Library row, the
 transport row carries the operation, microphone, options, and model chips,
 events stream into the transcript or the speaker activity as they arrive, and
-Stop interrupts the CLI the way Ctrl-C does (terminating it if it does not
-finish). The session belongs to the controller, so leaving the page loses
-nothing; when it ends, its text is written to the Audio folder and becomes the
+Stop — the page's, the Library's, or the menu's ⌘. — interrupts the CLI the way
+Ctrl-C does (terminating it if it does not finish). The runner adds the
+session's `--jsonl --quiet` at launch, so a session the Command view runs streams
+into the page too, and the page adopts it as it starts. The session belongs to
+the controller, so leaving the page loses nothing; when it ends, its text is written to the Audio folder and becomes the
 Library row's artifact, so the row reads like Transcribe's. The packaged
 app and embedded CLI carry the microphone usage description and audio-input
 entitlement those capture paths require.

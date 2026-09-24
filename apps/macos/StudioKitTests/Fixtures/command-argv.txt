@@ -482,28 +482,28 @@ imageReconstruct3D	videoOutputMode=video-only	image reconstruct-3d 1 --output 1 
 imageReconstruct3D	videoQuality=draft	image reconstruct-3d 1 --output 1 --model 1 --resolution 257 --density-threshold 25.5 --foreground-ratio 1.35 --already-framed --no-vertex-colors --dry-run --json 1
 imageReconstruct3D	videoQuality=final	image reconstruct-3d 1 --output 1 --model 1 --resolution 257 --density-threshold 25.5 --foreground-ratio 1.35 --already-framed --no-vertex-colors --dry-run --json 1
 imageReconstruct3D	voiceMode=clone	image reconstruct-3d 1 --output 1 --model 1 --resolution 257 --density-threshold 25.5 --foreground-ratio 1.35 --already-framed --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	default	image reconstruct-3d-multiview --output ~/Documents/mere.run/3D/instantmesh-multiview-<stamp> --model image-3d-instantmesh-base --resolution 128
-imageReconstruct3DMultiview	maximal	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	maximal-booleans-off	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 1
-imageReconstruct3DMultiview	modelRoot=video-minimax-h3-ref2va	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	modelRoot=video-wan22-ti2v-5b-mlx	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	musicLMMode=disable	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	musicLMMode=use	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	musicMIDINoteOffset=-12	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	musicTask=lego	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	musicTask=repaint	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	musicTrainingKind=lokr	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	renderProfile=quality	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	responseFormat=json_object	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	responseFormat=text	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	thinkingMode=automatic	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	thinkingMode=hide	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	thinkingMode=show	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	videoOutputMode=audio-video	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	videoOutputMode=video-only	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	videoQuality=draft	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	videoQuality=final	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
-imageReconstruct3DMultiview	voiceMode=clone	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 129 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	default	image reconstruct-3d-multiview --output ~/Documents/mere.run/3D/instantmesh-multiview-<stamp> --model image-3d-instantmesh-base --resolution 256
+imageReconstruct3DMultiview	maximal	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	maximal-booleans-off	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 1
+imageReconstruct3DMultiview	modelRoot=video-minimax-h3-ref2va	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	modelRoot=video-wan22-ti2v-5b-mlx	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	musicLMMode=disable	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	musicLMMode=use	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	musicMIDINoteOffset=-12	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	musicTask=lego	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	musicTask=repaint	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	musicTrainingKind=lokr	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	renderProfile=quality	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	responseFormat=json_object	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	responseFormat=text	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	thinkingMode=automatic	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	thinkingMode=hide	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	thinkingMode=show	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	videoOutputMode=audio-video	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	videoOutputMode=video-only	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	videoQuality=draft	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	videoQuality=final	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
+imageReconstruct3DMultiview	voiceMode=clone	image reconstruct-3d-multiview --view 1 --output 1 --model 1 --cameras 1 --resolution 257 --no-vertex-colors --dry-run --json 1
 imageReconstruct3DTrellis2	default	image reconstruct-3d-trellis2 '' --output ~/Documents/mere.run/3D/trellis-2-pbr-3d-<stamp> --model image-3d-trellis2-4b --seed 42 --texture-seed 42 --max-tokens 2097152 --remesh-band 1 --seal-radius 12
 imageReconstruct3DTrellis2	maximal	image reconstruct-3d-trellis2 1 --output 1 --model 1 --seed 1 --texture-seed 1 --max-tokens 2097153 --already-framed --no-remesh --remesh-band 1.5 --seal-radius 13 --dry-run --json 1
 imageReconstruct3DTrellis2	maximal-booleans-off	image reconstruct-3d-trellis2 1 --output 1 --model 1 --seed 1 --texture-seed 1 --max-tokens 2097153 --remesh-band 1.5 --seal-radius 13 1

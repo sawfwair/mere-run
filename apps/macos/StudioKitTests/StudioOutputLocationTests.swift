@@ -1,14 +1,20 @@
 @testable import StudioKit
+import StudioTestSupport
 import XCTest
 
 final class StudioOutputLocationTests: XCTestCase {
     private let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
 
-    override func setUp() {
-        super.setUp()
-        // The per-media defaults are what these assertions describe; a root someone configured in
-        // this process's defaults would move every path.
-        UserDefaults.standard.removeObject(forKey: StudioOutputLocation.rootDefaultsKey)
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // The per-media defaults are what these assertions describe, so no root is configured;
+        // App Outputs, where a run that cannot be written falls back, is a throwaway folder.
+        StudioTestDefaults.redirectSupport(under: try temporaryDirectory())
+    }
+
+    override func tearDown() {
+        StudioTestDefaults.restore()
+        super.tearDown()
     }
 
     // MARK: - Slugs
@@ -167,6 +173,22 @@ final class StudioOutputLocationTests: XCTestCase {
             atPath: root.appendingPathComponent("Pictures/mere.run/Image").path, isDirectory: &isDirectory
         ))
         XCTAssertTrue(isDirectory.boolValue)
+    }
+
+    /// App Outputs and every page's draft folder live under one support root, which a test (or
+    /// anything else that must not write into the user's Application Support) can move.
+    func testAppOutputsAndDraftFilesFollowTheSupportRoot() throws {
+        let root = try temporaryDirectory()
+        StudioTestDefaults.redirectSupport(under: root)
+        defer { StudioTestDefaults.restore() }
+        let support = root.appendingPathComponent("support", isDirectory: true).standardizedFileURL.path
+
+        XCTAssertEqual(StudioOutputLocation.supportRoot().standardizedFileURL.path, support)
+        XCTAssertEqual(StudioOutputLocation.appOutputsRoot().deletingLastPathComponent().standardizedFileURL.path, support)
+        let camera = try StudioCameraDocuments.storeDraft(page: "Vision Geometry", content: Data("{}".utf8))
+        XCTAssertTrue(camera.standardizedFileURL.path.hasPrefix(support + "/Vision Geometry/"), camera.path)
+        XCTAssertTrue(StudioMusicTrainingManifest.draftFolderURL().standardizedFileURL.path.hasPrefix(support + "/"))
+        XCTAssertTrue(StudioDecisionDocument.draftRequestURL().standardizedFileURL.path.hasPrefix(support + "/"))
     }
 
     func testAnUncreatableDestinationFallsBackToAppOutputsWithItsSidecars() throws {
@@ -407,6 +429,30 @@ final class StudioOutputLocationTests: XCTestCase {
         XCTAssertTrue(StudioOutputLocation.fallbackNotice("Could not write.").hasSuffix("instead."))
     }
 
+    /// A task draft's run that falls back takes every sidecar routing derived beside its output
+    /// along in the argv it launches, not just the output.
+    func testAFallbackMovesEverySidecarInTheLaunchedCommand() throws {
+        let root = try temporaryDirectory()
+        let blocker = root.appendingPathComponent("blocked")
+        try Data("not a folder".utf8).write(to: blocker)
+        let intended = blocker.appendingPathComponent("Music", isDirectory: true)
+        var draft = StudioTaskDraft(templateID: .musicTranscribe)
+        let slot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .musicTranscribe))
+        draft.setAttachmentText("/tmp/harbor-lights.wav", for: slot.storage)
+        draft.form["--output"] = .text(intended.appendingPathComponent("harbor-lights-a1b2c3.mid").path)
+        draft.form["--context-output"] = .text(intended.appendingPathComponent("harbor-lights-a1b2c3-context.json").path)
+        let request = try XCTUnwrap(draft.request())
+
+        let prepared = StudioOutputLocation.preparing(request)
+
+        let fallback = StudioOutputLocation.appOutputsRoot()
+        let form = try XCTUnwrap(prepared.request.execution?.form)
+        XCTAssertNotNil(prepared.fallbackReason)
+        XCTAssertEqual(form.text("--output"), fallback.appendingPathComponent("harbor-lights-a1b2c3.mid").path)
+        XCTAssertEqual(form.text("--context-output"), fallback.appendingPathComponent("harbor-lights-a1b2c3-context.json").path)
+        XCTAssertFalse(prepared.request.execution?.arguments.contains { $0.hasPrefix(intended.path) } ?? true)
+    }
+
     func testPreparingAWritableSpecialistRequestLeavesItAlone() throws {
         let root = try temporaryDirectory()
         let template = try XCTUnwrap(CommandCatalog.template(id: .sfxGenerate))
@@ -455,14 +501,8 @@ final class StudioOutputLocationTests: XCTestCase {
     /// files under it and its "app-chosen folder" reading is about that folder.
     private func withConfiguredRoot<Result>(_ body: (URL) throws -> Result) throws -> Result {
         let root = try temporaryDirectory()
-        let suiteName = "StudioOutputLocationTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.set(root.path, forKey: StudioOutputLocation.rootDefaultsKey)
-        StudioOutputLocation.defaults = defaults
-        defer {
-            StudioOutputLocation.defaults = .standard
-            defaults.removePersistentDomain(forName: suiteName)
-        }
+        StudioTestDefaults.redirectOutputs(under: root, outputs: root)
+        defer { StudioTestDefaults.restore() }
         return try body(root)
     }
 
@@ -597,6 +637,98 @@ final class StudioOutputLocationTests: XCTestCase {
                 URL(fileURLWithPath: renamed).deletingPathExtension().lastPathComponent + "-2.wav",
                 "a submitted run's file is taken even before the CLI writes it"
             )
+        }
+    }
+
+    /// A folder the user chose is kept, but a run never writes over what is already there: a
+    /// file or a directory that exists, or a path a submitted run reserved, steps aside to
+    /// `-2`, `-3`…, and the naming is stable once it has stepped aside.
+    func testAUserChosenDestinationStepsAsideFromExistingAndReservedPaths() throws {
+        try withConfiguredRoot { _ in
+            let chosen = try temporaryDirectory()
+            var enhance = StudioTaskDraft(templateID: .audioEnhance)
+            enhance.setArgument(0, "/tmp/voice-memo.wav")
+            let file = chosen.appendingPathComponent("voice.wav")
+            enhance.form["--output"] = .text(file.path)
+            XCTAssertEqual(StudioOutputLocation.destination(for: enhance).text("--output"), file.path, "a free path is kept")
+
+            try Data([0x52]).write(to: file)
+            let stepped = StudioOutputLocation.destination(for: enhance).text("--output")
+            XCTAssertEqual(stepped, chosen.appendingPathComponent("voice-2.wav").path, "an earlier run's file is not overwritten")
+            var named = enhance
+            named.form["--output"] = .text(stepped)
+            XCTAssertEqual(StudioOutputLocation.destination(for: named).text("--output"), stepped, "naming again changes nothing")
+
+            StudioOutputLocation.reserve(stepped)
+            XCTAssertEqual(StudioOutputLocation.destination(for: enhance).text("--output"), chosen.appendingPathComponent("voice-3.wav").path)
+
+            var separate = StudioTaskDraft(templateID: .musicSeparate)
+            separate.setArgument(0, "/tmp/harbor-lights.wav")
+            let folder = chosen.appendingPathComponent("stems.v1", isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            separate.form["--output-dir"] = .text(folder.path)
+            XCTAssertEqual(
+                StudioOutputLocation.destination(for: separate).text("--output-dir"),
+                chosen.appendingPathComponent("stems.v1-2").path,
+                "a directory keeps its whole name, dots included"
+            )
+        }
+    }
+
+    /// A fresh draft carries no destination at all: the one the template stamps is named once,
+    /// for the kind of file and the root of the moment it was made, so a draft that kept it would
+    /// write every run to that one file — with the wrong extension once `--format` changes, and
+    /// in the old folder once the root moves.
+    func testAFreshTaskDraftCarriesNoDestination() throws {
+        for task in StudioTask.allCases where task.usesTaskDraft {
+            for template in task.variantTemplates {
+                let draft = StudioTaskDraft(templateID: template.id)
+                guard let capability = template.id.capability else { continue }
+                for flag in StudioTaskSchema.outputFlags(for: capability) {
+                    XCTAssertEqual(draft.text(flag), "", "\(template.id) starts with \(flag) set")
+                }
+            }
+        }
+    }
+
+    /// Music ▸ Transcribe in JSON, with the draft made before the root was configured: every run
+    /// gets its own `.json` file under the root, not the stamped `.mid` in the old folder.
+    func testATranscriptionNamesAFreshFileWithItsFormatsExtensionEachRun() throws {
+        var draft = StudioTaskDraft(templateID: .musicTranscribe)
+        let slot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .musicTranscribe))
+        draft.setAttachmentText("/tmp/harbor-lights.wav", for: slot.storage)
+        draft.form["--format"] = .text("json")
+        try withConfiguredRoot { root in
+            let first = StudioOutputLocation.destination(for: draft).text("--output")
+            StudioOutputLocation.reserve(first)
+            let second = StudioOutputLocation.destination(for: draft).text("--output")
+            XCTAssertNotEqual(first, second, "the second run does not write over the first")
+            for path in [first, second] {
+                XCTAssertEqual(URL(fileURLWithPath: path).pathExtension, "json", path)
+                XCTAssertEqual(URL(fileURLWithPath: path).deletingLastPathComponent().path, root.appendingPathComponent("Music").path)
+            }
+        }
+    }
+
+    /// A parked draft is read without the destinations the app named into it — under the
+    /// configured root, or under a per-media folder from before a root was configured — while a
+    /// destination the user chose elsewhere stays.
+    @MainActor
+    func testAParkedDraftDropsTheDestinationsTheAppNamed() throws {
+        try withConfiguredRoot { root in
+            let sessions = StudioTaskSessions()
+            let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+            var draft = StudioTaskDraft(templateID: .musicTranscribe)
+            draft.form["--output"] = .text(home.appendingPathComponent("Music/mere.run/Music/transcription-20260903-101500.mid").path)
+            draft.form["--context-output"] = .text(root.appendingPathComponent("Music/harbor-lights-a1b2c3-context.json").path)
+            sessions.setTaskDraft(draft, for: .musicTranscribe)
+            let loaded = try XCTUnwrap(sessions.taskDraft(for: .musicTranscribe))
+            XCTAssertEqual(loaded.text("--output"), "", "a stamped path under the old per-media folder")
+            XCTAssertEqual(loaded.text("--context-output"), "", "a sidecar under the configured root")
+
+            draft.form["--output"] = .text("/Volumes/Work/transcriptions/harbor.mid")
+            sessions.setTaskDraft(draft, for: .musicTranscribe)
+            XCTAssertEqual(sessions.taskDraft(for: .musicTranscribe)?.text("--output"), "/Volumes/Work/transcriptions/harbor.mid")
         }
     }
 

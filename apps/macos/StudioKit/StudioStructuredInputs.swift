@@ -204,7 +204,15 @@ package enum StudioRenoise: Equatable {
         return values.count == tokens.count ? values : nil
     }
 
-    /// The CLI's checks against the run's step count.
+    /// What the CLI objects to in `--renoise` for a run of `steps` steps, read the way it reads
+    /// the argument (`parseRenoiseSchedule`): one number is an amount, several a schedule,
+    /// whatever mode the page shows. The inspector and the run's validation both ask this, so
+    /// the inspector never objects to a run the runner lets through, or the reverse.
+    package static func problems(argument: String, steps: Int) -> [String] {
+        StudioRenoise(mode: inferredMode(argument: argument), argument: argument).problems(steps: steps)
+    }
+
+    /// The checks for this reading of the argument against the run's step count.
     package func problems(steps: Int) -> [String] {
         switch self {
         case .automatic:

@@ -15,15 +15,49 @@ package struct StudioTaskDraft: Codable, Equatable {
     package var templateID: CommandTemplateID
     /// One entry per flag the run carries, plus the positionals and anything typed by hand.
     package var form: StudioConsoleDraft
+    /// The task's other variants as the user left them: switching back to one restores its form
+    /// whole — InstantMesh's ordered views and cameras, Compare's second picture — rather than
+    /// only what the two templates share.
+    package private(set) var parked: [CommandTemplateID: StudioConsoleDraft] = [:]
 
     package init(templateID: CommandTemplateID, form: StudioConsoleDraft) {
         self.templateID = templateID
         self.form = form
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case templateID, form, parked
+    }
+
+    /// A draft saved before variants were parked has no `parked` entry; one parked for a
+    /// template this build no longer has drops that form.
+    package init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        templateID = try container.decode(CommandTemplateID.self, forKey: .templateID)
+        form = try container.decode(StudioConsoleDraft.self, forKey: .form)
+        let parked = try container.decodeIfPresent([String: StudioConsoleDraft].self, forKey: .parked) ?? [:]
+        for (key, form) in parked {
+            guard let id = CommandTemplateID(rawValue: key) else { continue }
+            self.parked[id] = form
+        }
+    }
+
+    /// Parked forms are keyed by template id, so the file reads as an object of forms.
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(templateID, forKey: .templateID)
+        try container.encode(form, forKey: .form)
+        if !parked.isEmpty {
+            try container.encode(Dictionary(uniqueKeysWithValues: parked.map { ($0.key.rawValue, $0.value) }), forKey: .parked)
+        }
+    }
+
     /// A fresh draft for `templateID`: the console's reading of the template's default draft, so
     /// the workspace starts on exactly the command the page and the Command view already ran,
-    /// plus the launcher switches the page set on every run (`launcherDefaults`).
+    /// plus the launcher switches the page set on every run (`launcherDefaults`). The default
+    /// draft's stamped destination is not carried: a draft never holds a destination the app
+    /// names, so routing names a fresh one for each run, with the extension its `--format` asks
+    /// for and under whatever root is configured when it runs.
     package init(templateID: CommandTemplateID) {
         self.templateID = templateID
         guard let template = CommandCatalog.template(id: templateID) else {
@@ -34,9 +68,13 @@ package struct StudioTaskDraft: Codable, Equatable {
         for flag in Self.launcherDefaults(for: templateID) where form.values[flag] == nil {
             form[flag] = .flag(true)
         }
+        for (flag, value) in Self.pageValues(for: templateID) where form.values[flag] == nil {
+            form[flag] = value
+        }
         for flag in Self.consoleOnlyDefaults(for: templateID) {
             form.values[flag] = nil
         }
+        self = withoutDestinations()
     }
 
     /// The switches the catalog turns on so the Command Console opens a heavy command safely
@@ -70,6 +108,20 @@ package struct StudioTaskDraft: Codable, Equatable {
             return ["--json", "--pretty"]
         default:
             return []
+        }
+    }
+
+    /// The values a page sent on every run where the template leaves the option to the CLI:
+    /// the Faces page always named face 0, the one its picker shows as face 1, while the CLI on
+    /// its own takes the largest face, which nothing on the page could show.
+    package static func pageValues(for templateID: CommandTemplateID) -> [String: StudioContractValue] {
+        switch templateID {
+        case .visionFaceEmbed:
+            return ["--face-index": .integer(0)]
+        case .visionFaceCompare:
+            return ["--reference-face-index": .integer(0), "--candidate-face-index": .integer(0)]
+        default:
+            return [:]
         }
     }
 
@@ -116,13 +168,23 @@ package struct StudioTaskDraft: Codable, Equatable {
         )
     }
 
-    /// Switches the variant, carrying the values whose flags the new template also declares
-    /// (the input, the model, the output) and dropping the rest, so Faces ▸ Compare keeps the
-    /// picture Detect was pointed at. The model is cleared when the templates default to
-    /// different models: a face model is no use to the pose command.
+    /// Switches the variant. The form being left is parked; a variant the user has had before
+    /// comes back exactly as it was left. One opened for the first time starts fresh and
+    /// carries the values whose flags the new template also declares (the input, the model)
+    /// and drops the rest, so Faces ▸ Compare keeps the picture Detect was pointed at. The model
+    /// is cleared when the templates default to different models: a face model is no use to the
+    /// pose command.
     package mutating func switchTemplate(to next: CommandTemplateID) {
         guard next != templateID else { return }
         let previous = self
+        var parked = previous.parked
+        parked[previous.templateID] = previous.form
+        defer { self.parked = parked }
+        if let restored = parked.removeValue(forKey: next) {
+            templateID = next
+            form = restored
+            return
+        }
         self = StudioTaskDraft(templateID: next)
         guard let capability, let before = previous.capability else { return }
         let declared = Set(capability.options.map(\.flag))
@@ -146,9 +208,42 @@ package struct StudioTaskDraft: Codable, Equatable {
     /// or a legacy page's `--output` and sidecars were that run's, never settings: carrying them
     /// into a draft would write the next run over the last one's files.
     package func withoutDestinations() -> StudioTaskDraft {
-        guard let capability else { return self }
+        clearingDestinations { _ in true }
+    }
+
+    /// The same draft without the destinations that sit in one of the app's own folders
+    /// (`StudioOutputLocation.isAppOwned`), whatever the kind of file: a saved draft from before
+    /// drafts stopped keeping them, or one named under a root the settings have since moved.
+    /// A destination the user chose elsewhere is a setting and stays.
+    package func withoutAppDestinations() -> StudioTaskDraft {
+        clearingDestinations { StudioOutputLocation.isAppOwned($0) }
+    }
+
+    /// Takes a recorded run's settings as the draft ("Use these settings"): its variant and
+    /// form, with the variant being left parked like any switch, and the other parked variants
+    /// kept.
+    package mutating func adopt(_ restored: StudioTaskDraft) {
+        switchTemplate(to: restored.templateID)
+        form = restored.form
+    }
+
+    private func clearingDestinations(where clears: (String) -> Bool) -> StudioTaskDraft {
         var cleared = self
-        for flag in StudioTaskSchema.outputFlags(for: capability) { cleared.form.values[flag] = nil }
+        cleared.form = Self.clearingDestinations(of: form, templateID: templateID, where: clears)
+        for (id, form) in parked {
+            cleared.parked[id] = Self.clearingDestinations(of: form, templateID: id, where: clears)
+        }
+        return cleared
+    }
+
+    private static func clearingDestinations(
+        of form: StudioConsoleDraft, templateID: CommandTemplateID, where clears: (String) -> Bool
+    ) -> StudioConsoleDraft {
+        guard let capability = templateID.capability else { return form }
+        var cleared = form
+        for flag in StudioTaskSchema.outputFlags(for: capability) where clears(form.text(flag)) {
+            cleared.values[flag] = nil
+        }
         return cleared
     }
 
@@ -199,15 +294,22 @@ extension StudioTaskDraft: StudioAttachmentDraft {
 }
 
 extension StudioTaskDraft: StudioSessionPersistable {
-    /// Persisted settings never contain launch credentials: the same masking the Command
-    /// override applies to its form.
+    /// Persisted settings never contain launch credentials, the parked variants' included: the
+    /// same masking the Command override applies to its form.
     package var withoutSessionSecrets: StudioTaskDraft {
         var saved = self
+        saved.form = Self.withoutSecrets(form, templateID: templateID)
+        for (id, form) in parked { saved.parked[id] = Self.withoutSecrets(form, templateID: id) }
+        return saved
+    }
+
+    private static func withoutSecrets(_ form: StudioConsoleDraft, templateID: CommandTemplateID) -> StudioConsoleDraft {
+        var saved = form
         for flag in Set(CommandLaunchEnvironment.secretFlags(for: templateID).keys)
             .union(["--api-key", "--infinity-api-key", "--admin-password", "--hf-token"]) {
-            saved.form.values[flag] = nil
+            saved.values[flag] = nil
         }
-        saved.form.extraArguments = ShellWords.split(saved.form.extraArguments).maskingSecrets().shellQuoted()
+        saved.extraArguments = ShellWords.split(saved.extraArguments).maskingSecrets().shellQuoted()
         return saved
     }
 }
@@ -235,82 +337,6 @@ extension StudioTaskSessions {
 
     package static func taskDraftKey(_ task: StudioTask) -> String {
         task.rawValue + ".taskDraft"
-    }
-}
-
-/// Reads the `CommandDraft` a legacy page persisted for a task into the task draft the workspace
-/// keeps, once, the first time the workspace opens a task with no draft of its own. Pages that
-/// persisted scalar keys rather than a whole draft (Vision, 3D, Utility) start fresh.
-@MainActor
-package enum StudioTaskDraftMigration {
-    /// The session key a legacy page kept a template's `CommandDraft` under, scoped by the task
-    /// the way `@StudioStoredValue` scopes it.
-    package static func legacyKey(for templateID: CommandTemplateID) -> String? {
-        switch templateID {
-        case .speechDiarize: return "Voice.diarizationDraft"
-        case .speechSynthesize: return "Voice.synthesisDraft"
-        case .speechProfileCreate: return "Voice.profileDraft"
-        case .speechListen: return "Voice.listenDraft"
-        case .speechDiarizeLive: return "Voice.liveDiarizationDraft"
-        case .musicAnalyze: return "MusicTools.analyzeDraft"
-        case .musicTranscribe: return "MusicTools.transcribeDraft"
-        case .audioEnhance: return "AudioTools.enhanceDraft"
-        case .musicSeparate: return "AudioTools.separationDraft"
-        case .sfxVideo: return "SFXLab.videoDraft"
-        case .sfxConditionText: return "SFXLab.conditionDraft"
-        case .sfxAEEncode: return "SFXLab.encodeDraft"
-        case .sfxAEDecode: return "SFXLab.decodeDraft"
-        case .sfxClapScore: return "SFXLab.scoreDraft"
-        case .imageTrainLoRA: return "Training.imageDraft"
-        case .textTrainLoRA: return "Training.textDraft"
-        case .musicTrainAdapter: return "Training.musicDraft"
-        default: return nil
-        }
-    }
-
-    /// The imported draft for `task`, or nil when no page draft exists for its first variant.
-    /// The page stamped a per-run destination (and its sidecars) into the draft it kept; those
-    /// were never settings, so they are cleared and routing names fresh ones.
-    package static func imported(for task: StudioTask, from sessions: StudioTaskSessions) -> StudioTaskDraft? {
-        guard let template = task.variantTemplates.first, let draft = pageDraft(for: template.id, task: task, in: sessions) else {
-            return nil
-        }
-        return StudioTaskDraft(templateID: template.id, form: StudioConsoleCommand.seed(template: template, draft: draft))
-            .withoutDestinations()
-    }
-
-    /// The Earth page kept one `CommandDraft` per workflow in one dictionary, scoped by the task
-    /// like every page key; each Earth task reads its own entry.
-    package static let earthPageKey = "GeoLab.drafts"
-
-    /// The page's dictionary key, `StudioGeoTool`, was a `String` enum without
-    /// `CodingKeyRepresentable`, so `JSONEncoder` wrote the dictionary as an array of alternating
-    /// keys and drafts; decoding through the same kind of key reads that shape back.
-    private enum LegacyGeoTool: String, Codable, Hashable {
-        case flood
-        case fire
-        case tessera
-        case olmoEarth
-
-        init?(templateID: CommandTemplateID) {
-            switch templateID {
-            case .geoFlood: self = .flood
-            case .geoFire: self = .fire
-            case .geoTessera: self = .tessera
-            case .geoOlmoEarth: self = .olmoEarth
-            default: return nil
-            }
-        }
-    }
-
-    private static func pageDraft(for templateID: CommandTemplateID, task: StudioTask, in sessions: StudioTaskSessions) -> CommandDraft? {
-        if let key = legacyKey(for: templateID) {
-            return sessions.value(for: task.rawValue + "." + key, default: Optional<CommandDraft>.none)
-        }
-        if let tool = LegacyGeoTool(templateID: templateID) {
-            return sessions.value(for: task.rawValue + "." + earthPageKey, default: [LegacyGeoTool: CommandDraft]())[tool]
-        }
-        return nil
     }
 }
 

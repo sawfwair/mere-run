@@ -111,8 +111,17 @@ package enum StudioLibraryReplay {
         let original = StudioExecution(templateID: templateID,
                                        arguments: item.commandArguments ?? template.arguments(from: stored))
         let draft = original.project(onto: stored)
+        // A command whose file follows its `--format` (a JSON transcription, an RTTM diarization)
+        // wrote the recorded file's extension, not the template's default one.
+        let recordedExtension = URL(fileURLWithPath: draft.outputPath).pathExtension
+        let outputKind: CommandOutputKind
+        if case .file = template.outputKind, !recordedExtension.isEmpty {
+            outputKind = .file(recordedExtension)
+        } else {
+            outputKind = template.outputKind
+        }
         let namedOutput = draft.outputPath.isBlank ? "" : StudioOutputLocation.namedOutputPath(
-            templateID: templateID, outputKind: template.outputKind,
+            templateID: templateID, outputKind: outputKind,
             prompt: draft.prompt, seed: variationSeed ?? draft.seed,
             fingerprint: UUID().uuidString, fallbackStem: template.title, existing: draft.outputPath
         )
@@ -147,15 +156,17 @@ package enum StudioLibraryDraftRestoration {
 
     /// The task draft a row restores to: the recorded argv read back into the contract form,
     /// as "Edit command" reopens it, minus the run's own destinations — the next run is named
-    /// afresh rather than written over this one's files. nil for a thread or a row with no
-    /// recorded command. The workspace reads the same form the Command view edits.
+    /// afresh rather than written over this one's files — and, for a trainer's preflight or dry
+    /// run, minus the check-only switches. nil for a thread or a row with no recorded command.
+    /// The workspace reads the same form the Command view edits.
     package static func taskDraft(from item: StudioLibraryItem) -> StudioTaskDraft? {
         guard !item.isConversation, let templateID = item.templateID,
               let recorded = item.commandDraft, let template = CommandCatalog.template(id: templateID),
               let capability = templateID.capability else { return nil }
         let arguments = item.commandArguments ?? template.arguments(from: recorded)
-        return StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
-            .withoutDestinations()
+        let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
+        // A trainer's preflight row restores as the training run it checked.
+        return StudioTrainingRun.withoutCheckSwitches(draft).withoutDestinations()
     }
 
     /// nil exactly when `canRestore` is false.

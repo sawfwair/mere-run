@@ -44,11 +44,14 @@ package final class StudioTaskSessions {
     @ObservationIgnored private var taskDraftCache: [String: (data: Data?, draft: StudioTaskDraft)] = [:]
 
     /// The task draft under `key`: the parked one decoded once per stored value, or the fresh
-    /// one `remember` handed out while nothing is parked.
+    /// one `remember` handed out while nothing is parked. A parked draft is read without the
+    /// destinations the app named into it (`withoutAppDestinations`), so the next run is named
+    /// afresh rather than written over an earlier one's file.
     func cachedTaskDraft(for key: String) -> StudioTaskDraft? {
         let data = entries[key]
         if let cached = taskDraftCache[key], cached.data == data { return cached.draft }
-        guard let data, let draft = try? JSONDecoder.mereRunApp.decode(StudioTaskDraft.self, from: data) else { return nil }
+        guard let data, let parked = try? JSONDecoder.mereRunApp.decode(StudioTaskDraft.self, from: data) else { return nil }
+        let draft = parked.withoutAppDestinations()
         taskDraftCache[key] = (data, draft)
         return draft
     }
@@ -59,6 +62,23 @@ package final class StudioTaskSessions {
     }
 
     package func contains(_ key: String) -> Bool { entries[key] != nil }
+
+    package func containsKey(withPrefix prefix: String) -> Bool {
+        entries.keys.contains { $0.hasPrefix(prefix) }
+    }
+
+    /// The task each run launched in this process was submitted from. A job lives no longer
+    /// than the process, so this is never persisted; Stop reads it to tell apart two tasks that
+    /// run the same command (Audio ▸ Separate and Music ▸ Separate).
+    @ObservationIgnored private var submittingTasks: [UUID: StudioTask] = [:]
+
+    package func noteSubmission(_ requestID: UUID, from task: StudioTask) {
+        submittingTasks[requestID] = task
+    }
+
+    package func submittingTask(of requestID: UUID) -> StudioTask? {
+        submittingTasks[requestID]
+    }
 
     package func set<Value: Codable>(_ value: Value, for key: String) {
         do {

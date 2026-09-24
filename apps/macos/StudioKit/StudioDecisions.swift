@@ -82,8 +82,7 @@ package struct StudioDecisionDocument: Codable, Equatable {
     /// Where the page keeps the request it is editing, so the Command view's Run has a real file
     /// to pass as `--input`. Each Decide or Check fit writes its own copy beside its output.
     package static func draftRequestURL(fileManager: FileManager = .default) -> URL {
-        StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
-            .deletingLastPathComponent()
+        StudioOutputLocation.supportRoot(fileManager: fileManager)
             .appendingPathComponent("Decisions", isDirectory: true)
             .appendingPathComponent("request.json")
     }

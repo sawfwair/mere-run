@@ -1045,7 +1045,10 @@ package final class MereRunController: ObservableObject {
         outputFallbackReason = reason
     }
 
-    package func run(studio request: StudioRunRequest) -> Bool {
+    /// Launches a Studio request. `stillWanted` is asked before a launch that had to wait for
+    /// the camera prompt goes ahead once access is granted, so a run stopped while the system was
+    /// asking never starts the capture after all.
+    package func run(studio request: StudioRunRequest, stillWanted: @escaping @MainActor () -> Bool = { true }) -> Bool {
         // Track the conversation as in-flight at SUBMISSION time, not at start, so a turn that
         // queues behind the concurrency cap still blocks a second send into the same thread and
         // shows a pending bubble. Cleared on every exit.
@@ -1054,7 +1057,10 @@ package final class MereRunController: ObservableObject {
         }
         if let shortCircuit = ensureCameraAccess(
             for: request.template.id,
-            retry: { _ = $0.run(studio: request) }
+            retry: { controller in
+                guard stillWanted() else { return }
+                _ = controller.run(studio: request, stillWanted: stillWanted)
+            }
         ) {
             return shortCircuit
         }

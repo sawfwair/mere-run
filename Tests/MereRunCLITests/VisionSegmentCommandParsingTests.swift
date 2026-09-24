@@ -366,6 +366,15 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
     }
 
     func testLiveCaptureFileRemovesRecordingOnSIGTERM() throws {
+        try assertLiveCaptureFileRemovesRecording(on: SIGTERM, testName: "testLiveCaptureFileRemovesRecordingOnSIGTERM")
+    }
+
+    func testLiveCaptureFileRemovesRecordingOnSIGINT() throws {
+        try assertLiveCaptureFileRemovesRecording(on: SIGINT, testName: "testLiveCaptureFileRemovesRecordingOnSIGINT")
+    }
+
+    /// Runs the named test in a child process that owns a capture file, then signals the child.
+    private func assertLiveCaptureFileRemovesRecording(on signo: Int32, testName: String) throws {
         let environmentKey = "MERERUN_TEST_CAPTURE_TERMINATION_PATH"
         if let recordingPath = ProcessInfo.processInfo.environment[environmentKey] {
             let recording = URL(fileURLWithPath: recordingPath)
@@ -384,22 +393,23 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         child.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
         child.arguments = [
             "-XCTest",
-            "MereRunCLITests.VisionSegmentCommandParsingTests/testLiveCaptureFileRemovesRecordingOnSIGTERM",
+            "MereRunCLITests.VisionSegmentCommandParsingTests/\(testName)",
             Bundle(for: Self.self).bundleURL.path,
         ]
         child.environment = ProcessInfo.processInfo.environment.merging([environmentKey: recording.path]) { _, value in value }
         try child.run()
-        defer { if child.isRunning { child.terminate(); child.waitUntilExit() } }
+        defer { if child.isRunning { kill(child.processIdentifier, SIGKILL); child.waitUntilExit() } }
 
         for _ in 0..<500 where !FileManager.default.fileExists(atPath: ready.path) && child.isRunning {
             Thread.sleep(forTimeInterval: 0.02)
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: ready.path), "Child never created the capture")
-        XCTAssertTrue(child.isRunning, "Child exited before SIGTERM")
+        XCTAssertTrue(child.isRunning, "Child exited before the signal")
         guard child.isRunning else { return }
-        child.terminate()
+        kill(child.processIdentifier, signo)
         child.waitUntilExit()
-        XCTAssertEqual(child.terminationStatus, 128 + SIGTERM)
+        XCTAssertEqual(child.terminationReason, .exit)
+        XCTAssertEqual(child.terminationStatus, 128 + signo)
         XCTAssertFalse(FileManager.default.fileExists(atPath: recording.path))
     }
 

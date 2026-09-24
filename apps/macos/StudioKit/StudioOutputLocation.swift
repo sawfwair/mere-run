@@ -25,8 +25,8 @@ package enum StudioOutputLocation {
     /// The `UserDefaults` key holding the user's chosen root ("" = the per-media defaults).
     package static let rootDefaultsKey = "mererun.app.outputRoot"
 
-    /// Where the chosen root is read from: the app's defaults. A test that files runs somewhere
-    /// else points this at a throwaway suite instead of writing into the user's settings.
+    /// Where the chosen root is read from: the app's defaults. The live-acceptance harness points
+    /// this at a suite of its own instead of writing into the user's settings.
     nonisolated(unsafe) package static var defaults: UserDefaults = .standard
 
     /// Longest slug we keep before the identifier suffix.
@@ -62,15 +62,26 @@ package enum StudioOutputLocation {
         }
     }
 
-    /// `~/Library/Application Support/MereRun/App Outputs` — the pre-v2 destination, kept as the
-    /// fallback when a user-visible folder cannot be written.
-    package static func appOutputsRoot(fileManager: FileManager = .default) -> URL {
+    /// The defaults key a test registers (never persisted) to keep the app's own folder — App
+    /// Outputs and the pages' draft files — out of the user's Application Support.
+    package static let supportRootDefaultsKey = "mererun.app.supportRoot"
+
+    /// `~/Library/Application Support/MereRun`: App Outputs and the pages' draft files, unless
+    /// the defaults redirect it.
+    package static func supportRoot(fileManager: FileManager = .default) -> URL {
+        if let redirected = defaults.string(forKey: supportRootDefaultsKey) {
+            return URL(fileURLWithPath: redirected, isDirectory: true)
+        }
         let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
                 .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return support
-            .appendingPathComponent("MereRun", isDirectory: true)
-            .appendingPathComponent("App Outputs", isDirectory: true)
+        return support.appendingPathComponent("MereRun", isDirectory: true)
+    }
+
+    /// `~/Library/Application Support/MereRun/App Outputs` — the pre-v2 destination, kept as the
+    /// fallback when a user-visible folder cannot be written.
+    package static func appOutputsRoot(fileManager: FileManager = .default) -> URL {
+        supportRoot(fileManager: fileManager).appendingPathComponent("App Outputs", isDirectory: true)
     }
 
     private static func configuredRoot() -> String {
@@ -351,6 +362,22 @@ package enum StudioOutputLocation {
         package var draft: CommandDraft
         /// nil when the intended destination was created (or already existed).
         package var fallbackReason: String?
+        /// The folder the run moved out of and the one it moved to, when it had to move.
+        package var move: Move?
+    }
+
+    /// A run redirected to App Outputs: every path it writes that lived in `from` lives in `to`
+    /// instead; paths elsewhere (a user-chosen report location) stay exactly as they are.
+    package struct Move: Equatable {
+        package let from: String
+        package let to: URL
+
+        package func applied(to path: String) -> String {
+            guard !path.isBlank else { return path }
+            let url = URL(fileURLWithPath: path)
+            guard url.deletingLastPathComponent().standardizedFileURL.path == from else { return path }
+            return to.appendingPathComponent(url.lastPathComponent).path
+        }
     }
 
     /// Creates the destination directory of `draft`, redirecting the run to App Outputs when that
@@ -376,34 +403,38 @@ package enum StudioOutputLocation {
                 // Nowhere to write at all: run as asked and let the CLI report the real failure.
                 return Preparation(draft: draft)
             }
+            let move = Move(from: intended.standardizedFileURL.path, to: fallbackDirectory)
             var moved = draft
-            let originalDirectory = intended.standardizedFileURL.path
-            moved.outputPath = redirect(draft.outputPath, from: originalDirectory, to: fallbackDirectory)
-            moved.visionJSONOutputPath = redirect(draft.visionJSONOutputPath, from: originalDirectory, to: fallbackDirectory)
-            moved.visionMaskOutputDirectory = redirect(
-                draft.visionMaskOutputDirectory, from: originalDirectory, to: fallbackDirectory
-            )
-            moved.timingsOutputPath = redirect(draft.timingsOutputPath, from: originalDirectory, to: fallbackDirectory)
+            moved.outputPath = move.applied(to: draft.outputPath)
+            moved.visionJSONOutputPath = move.applied(to: draft.visionJSONOutputPath)
+            moved.visionMaskOutputDirectory = move.applied(to: draft.visionMaskOutputDirectory)
+            moved.timingsOutputPath = move.applied(to: draft.timingsOutputPath)
             reserve(moved.outputPath)
             return Preparation(
                 draft: moved,
-                fallbackReason: "Could not write to \(abbreviate(intended)): \(error.localizedDescription)"
+                fallbackReason: "Could not write to \(abbreviate(intended)): \(error.localizedDescription)",
+                move: move
             )
         }
     }
 
     /// `preparingDestination` for a whole request — the specialist pages and the Command view
-    /// submit one of these rather than a prompt draft. When the draft moves, the `--output` the
-    /// request's Command edits carry moves with it, so a redirected run and its recorded argv
-    /// agree. The reason, when there is one, is for the shell's banner.
+    /// submit one of these rather than a prompt draft. When the draft moves, every destination
+    /// the request's argv carries in the old folder moves with it — the output and each sidecar
+    /// routing derives beside it — so a redirected run and its recorded argv agree. The reason,
+    /// when there is one, is for the shell's banner.
     package static func preparing(
         _ request: StudioRunRequest,
         fileManager: FileManager = .default
     ) -> (request: StudioRunRequest, fallbackReason: String?) {
         let prepared = preparingDestination(of: request.draft, fileManager: fileManager)
-        guard prepared.draft != request.draft else { return (request, nil) }
-        let flag = request.templateID.capability?.output.flag ?? "--output"
-        let moved = StudioRunRequest(
+        return (self.request(request, preparedAs: prepared), prepared.fallbackReason)
+    }
+
+    /// `request` running the prepared draft, with its argv's destinations moved to match.
+    package static func request(_ request: StudioRunRequest, preparedAs prepared: Preparation) -> StudioRunRequest {
+        guard let move = prepared.move else { return request }
+        return StudioRunRequest(
             id: request.id,
             mode: request.mode,
             templateID: request.templateID,
@@ -411,24 +442,27 @@ package enum StudioOutputLocation {
             draft: prepared.draft,
             createdAt: request.createdAt,
             conversationID: request.conversationID,
-            execution: request.execution?.replacing(flag, with: prepared.draft.outputPath),
+            execution: request.execution.map { moving($0, by: move) },
             parentID: request.parentID
         )
-        return (moved, prepared.fallbackReason)
+    }
+
+    /// The argv with every destination flag the capability declares — its output and the
+    /// sidecars in `sidecarFlags` — that lived in the old folder pointed at the new one.
+    private static func moving(_ execution: StudioExecution, by move: Move) -> StudioExecution {
+        guard let capability = execution.templateID.capability, let form = execution.form else { return execution }
+        var moved = execution
+        for flag in StudioTaskSchema.outputFlags(for: capability) {
+            let path = form.text(flag)
+            let relocated = move.applied(to: path)
+            if relocated != path { moved = moved.replacing(flag, with: relocated) }
+        }
+        return moved
     }
 
     /// The one line the shell shows when a run had to move: why, and where it went instead.
     package static func fallbackNotice(_ reason: String) -> String {
         "\(reason) Saving to \(abbreviate(appOutputsRoot())) instead."
-    }
-
-    /// Rewrites a path that lived in `directory` so it lives in `replacement` instead. Paths
-    /// elsewhere (a user-chosen report location) are left exactly as they are.
-    private static func redirect(_ path: String, from directory: String, to replacement: URL) -> String {
-        guard !path.isBlank else { return path }
-        let url = URL(fileURLWithPath: path)
-        guard url.deletingLastPathComponent().standardizedFileURL.path == directory else { return path }
-        return replacement.appendingPathComponent(url.lastPathComponent).path
     }
 
     /// `~/Pictures/mere.run/Image` rather than the full home path, for the banner text.
@@ -461,10 +495,11 @@ package enum StudioOutputLocation {
     /// capability's output flag set to `namedOutputPath` (the domain's folder, the prompt's slug
     /// or the input's name, a derived identifier), and every sidecar in `derivedSidecars` the
     /// capability declares beside it with the same stem, plus `--mask-output-dir`. A destination
-    /// the user pointed outside the app's folder in the Command view is kept, as is a sidecar
-    /// pointed anywhere but beside the app's own primary; a sidecar the app named earlier moves
-    /// with the primary, and an app-named `--context-output` is dropped once
-    /// `--no-musical-context` is on. The identifier is derived from what the run does
+    /// in one of the app's own folders (`isAppOwned`) is the app's to rename. One the user
+    /// pointed elsewhere in the Command view keeps its folder and name, with `-2`, `-3`… added
+    /// while that path exists or a submitted run reserved it; a sidecar pointed anywhere but
+    /// beside the primary is kept as it is. A sidecar the app named earlier moves with the
+    /// primary, and an app-named `--context-output` is dropped once `--no-musical-context` is on. The identifier is derived from what the run does
     /// (template, prompt, model, inputs, options) and never from where it writes, so calling
     /// this again on its own result names the same files: the Command view's "Will run" and the
     /// run agree. The task runner calls it at submit time, when `reserve` makes two runs in one
@@ -488,7 +523,11 @@ package enum StudioOutputLocation {
         }
         let primaryInput = draft.primaryInputPath
         let existing = draft.text(flag)
-        if outputKind != .none, existing.isBlank || isAppChosen(existing, templateID: templateID, kind: outputKind) {
+        if outputKind != .none, !existing.isBlank, !isAppOwned(existing) {
+            // A destination the user chose keeps its folder, but never writes over a file an
+            // earlier run left there or one a submitted run is about to write.
+            named.form[flag] = .text(unclaimed(existing, isDirectory: outputKind == .directory, fileManager: fileManager))
+        } else if outputKind != .none {
             // The argv without its destinations: the same command pointed at another folder is
             // the same run.
             var bare = draft
@@ -562,21 +601,38 @@ package enum StudioOutputLocation {
         }
     }
 
-    /// Whether `path` is one the app proposed (the template's stamped default, or an earlier
-    /// naming) rather than a folder the user picked: it sits directly in the domain's folder.
-    private static func isAppChosen(_ path: String, templateID: CommandTemplateID, kind: CommandOutputKind) -> Bool {
-        let fileExtension: String
-        switch kind {
-        case .file(let ext): fileExtension = ext
-        case .directory, .none: fileExtension = ""
+    /// Whether `path` sits in a folder the app files runs into, so the app may name it afresh:
+    /// under a domain folder of the configured root, anywhere under a per-media `mere.run` folder
+    /// (`~/Pictures`, `~/Music`, `~/Documents`, `~/Movies`) whether or not a root is configured
+    /// now, or in App Outputs. Anything else is a place the user chose.
+    package static func isAppOwned(
+        _ path: String,
+        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+    ) -> Bool {
+        guard !path.isBlank else { return false }
+        let candidate = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL.path
+        var folders = ["Pictures", "Music", "Documents", "Movies"].map {
+            home.appendingPathComponent($0, isDirectory: true).appendingPathComponent("mere.run", isDirectory: true)
         }
-        let folder = directory(
-            domain: templateID.studioDomain,
-            kind: StudioOutputFileKind.classify(URL(fileURLWithPath: "output.\(fileExtension)")),
-            configuredRoot: configuredRoot(),
-            home: URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        folders.append(appOutputsRoot())
+        if !configuredRoot().isBlank {
+            folders += StudioDomain.allCases.map { directory(domain: $0, kind: .other, configuredRoot: configuredRoot(), home: home) }
+        }
+        return folders.contains { candidate.hasPrefix($0.standardizedFileURL.path + "/") }
+    }
+
+    /// `path`, or the first of `<name>-2`, `<name>-3`… beside it (before the extension of a
+    /// file) that neither exists nor is reserved.
+    private static func unclaimed(_ path: String, isDirectory: Bool, fileManager: FileManager) -> String {
+        let url = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
+        guard isTaken(url.path, fileManager: fileManager) else { return path }
+        let folder = url.deletingLastPathComponent()
+        let name = uniqueFileName(
+            stem: isDirectory ? url.lastPathComponent : url.deletingPathExtension().lastPathComponent,
+            identifier: "",
+            fileExtension: isDirectory ? "" : url.pathExtension,
+            exists: { isTaken(folder.appendingPathComponent($0).path, fileManager: fileManager) }
         )
-        return URL(fileURLWithPath: path).deletingLastPathComponent().standardizedFileURL.path
-            == folder.standardizedFileURL.path
+        return folder.appendingPathComponent(name, isDirectory: isDirectory).path
     }
 }

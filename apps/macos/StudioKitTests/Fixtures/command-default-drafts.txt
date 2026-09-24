@@ -50,7 +50,6 @@ imageReconstruct3D	model	image-3d-triposr
 imageReconstruct3D	outputPath	~/Documents/mere.run/3D/triposr-3d-<stamp>
 imageReconstruct3DMultiview	model	image-3d-instantmesh-base
 imageReconstruct3DMultiview	outputPath	~/Documents/mere.run/3D/instantmesh-multiview-<stamp>
-imageReconstruct3DMultiview	reconstructionResolution	128
 imageReconstruct3DTrellis2	maxTokens	2097152
 imageReconstruct3DTrellis2	model	image-3d-trellis2-4b
 imageReconstruct3DTrellis2	outputPath	~/Documents/mere.run/3D/trellis-2-pbr-3d-<stamp>

@@ -155,7 +155,7 @@ struct StudioTaskWorkspace: View {
             jobMonitor.attach(controller.jobs)
             refreshReadiness()
         }
-        .onChange(of: draft.model) { _, _ in
+        .onChange(of: StudioTaskSchema.requiredModelID(for: draft)) { _, _ in
             error = nil
             refreshReadiness()
         }
@@ -289,7 +289,7 @@ struct StudioTaskWorkspace: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: task, modelID: StudioTaskSchema.modelID(for: draft))
+        controller.checkReadiness(for: task, modelID: StudioTaskSchema.requiredModelID(for: draft))
     }
 
     private func chooseInput() {
@@ -318,7 +318,9 @@ struct StudioTaskWorkspace: View {
             error = "This run's command can't be loaded into the composer. Use Edit command… to change it."
             return
         }
-        draft = restored
+        var next = draft
+        next.adopt(restored)
+        draft = next
         sessions?.set(Optional<StudioTaskCommandState>.none, for: task.rawValue + ".commandOverride")
         error = nil
         navigation.selectedLibraryID = item.id

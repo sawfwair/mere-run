@@ -387,7 +387,8 @@ private struct StudioLiveListenSessionContent: View {
         error = nil
         guard let runner else { return }
         do {
-            let request = try runner.run(draft.liveListenLaunch(), task: Self.task)
+            // The runner adds the session's switches (`StudioTaskRunner.launching`).
+            let request = try runner.run(draft, task: Self.task)
             session.begin(request, library: runner.library)
         } catch {
             self.error = error.localizedDescription
@@ -395,7 +396,7 @@ private struct StudioLiveListenSessionContent: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.modelID(for: draft))
+        controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.requiredModelID(for: draft))
     }
 
     private func save() {

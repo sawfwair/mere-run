@@ -6,6 +6,80 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Show a benchmark's or quality gate's printed report in Studio's Models
+  pages and Train dashboard as printed, in a fixed-width font, instead of
+  reading its `*`, `_`, and `|` as Markdown.
+- Fix Studio's Faces ▸ Embed and Compare running on the largest face while the
+  face picker showed face 1: a fresh draft names face 0 as the Faces page
+  did. 3D ▸ InstantMesh starts at the 3D page's grid resolution of 256 again,
+  in the task and the Command Console.
+- Fix Studio checks before a run: Image ▸ Datasets ▸ Run plan's Materialize
+  and Preflight clear each other (the CLI refuses both, and a fresh Run plan
+  starts with Preflight on), Validate with Compare asks for its reference
+  folder, and Vision ▸ Faces ▸ Batch runs on an input list file alone instead
+  of asking for images.
+- Fix Studio's live sessions: an Audio ▸ Live session run from the Command
+  view now streams into the page's transcript and the page follows it instead
+  of offering a second Start, the menu's Stop (⌘.) on Audio ▸ Live lets the CLI
+  flush its last events like the page's Stop, and Stop on Vision ▸ Live while
+  macOS is still asking for the camera cancels the run instead of starting the
+  capture once access is granted.
+- Fix Studio's Vision ▸ Geometry (multi-view) cameras: a camera file that
+  does not match the views, or will not read, now refuses the run instead of
+  letting the model estimate cameras, and a camera file restored from a run or
+  typed in the Command view is read into the editor instead of overwritten.
+  Settings kept by the pages Studio's tasks replaced carry over whole: every
+  command Audio ▸ Live and the other pages kept a draft for, the 3D page's
+  engine, source picture, ordered views, and cameras, the Vision page's
+  settings and multi-view cameras, and Video Foley's renoise mode. The renoise
+  editor objects to exactly what the run refuses.
+- Fix Studio's Train pages: choosing a recipe no longer blocks Preflight and
+  Start (steps, rank, and learning rate left to the recipe are no longer
+  "not positive"), a value set after the recipe is chosen stays an override
+  even when it equals the old default, "Use these settings" on a preflight or
+  dry-run row restores the training run instead of another check, Chat ▸
+  Train uses a resume checkpoint and step once, a fresh Image ▸ Train draft
+  gets its seed of 42 again, and Preflight is unavailable while training runs
+  so ⌘. always stops the training.
+- Keep each Studio task variant's settings: switching 3D ▸ From image,
+  Faces, Geometry, or any other task's variant, or picking another variant's
+  Library row, and switching back restores that variant as it was left
+  (InstantMesh's ordered views and cameras, Compare's second picture). Stop
+  (⌘.) in Audio ▸ Separate or Music ▸ Separate acts only on that task's own
+  run, and each task on the shared workspace checks its own model readiness
+  when it opens.
+- Fix Studio refusing a run whose model is a folder on disk: a local
+  checkpoints root given as the model (Sound ▸ Video Foley and the other Woosh
+  commands, the Earth tasks), Chat ▸ Train's model path, and Music ▸ Train's
+  checkpoints root no longer ask `model list` for a managed model. Image ▸
+  Train with a recipe checks, names, and offers to get the base the recipe
+  trains (the FLUX.2 Klein base for `klein-fast-style`) instead of Krea 2.
+- Fix Studio task drafts that wrote every run to one file: a fresh draft no
+  longer keeps the template's stamped destination, and a saved draft drops any
+  destination in one of Studio's own folders, so Music ▸ Transcribe in JSON
+  names a new `.json` file each run and a changed output root takes effect. A
+  destination chosen in the Command view keeps its folder but steps aside to
+  `-2`, `-3`… instead of overwriting an earlier run's file or folder, training
+  adapters included. Run again keeps the extension a run's `--format` wrote,
+  a run that falls back to App Outputs moves every sidecar in its command with
+  it, and the Command view's "Will run" shows the destination the run writes.
+- `vision track-live` now removes its temporary camera recording on SIGINT
+  (Ctrl-C, or Studio's Stop) as well as SIGTERM, and exits with status 128 plus
+  the signal number.
+- `plugin install --yes` now runs a channel's declared `setup --yes` step after
+  a verified signed-bundle install too, not only after a pipx source install.
+  Every dry run and `plugin info` show the setup step; for a managed bundle it
+  runs as `mere.run plugin run ENTRYPOINT -- setup --yes`.
+- `plugin install --yes` registers a graph-provider plugin before it runs
+  setup, so a failed setup leaves the provider registered and only the printed
+  setup command needs retrying.
+- `model pull MODEL --accept-model-license` on an installed restricted model now
+  prints the same terms notice, `source:` lines, and confirmation statement as
+  a download, records the current component terms in the manifest with the
+  acceptance, and prints nothing under `--quiet`.
+- `mere.run catalog --json` now reports `audio enhance --input-rate` as a
+  `choice` of `8000`, `12000`, `16000`, and `24000` instead of an `integer`.
+  Clients that build controls from the catalog should read its `choices`.
 - Let a plugin catalog declare a setup step that runs through its verified
   entrypoint after installation. For an installed restricted model,
   `mere.run model pull MODEL --accept-model-license` now records explicit terms

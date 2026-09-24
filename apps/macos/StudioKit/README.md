@@ -20,8 +20,10 @@ conversation turn: it names the destination
 records the Library row under the template's own mode, and remembers
 `"<task>.requestID"` for Stop. A task on the shared task workspace keeps its
 draft as a `StudioTaskDraft` under `"<task>.taskDraft"` (the template plus its
-`StudioConsoleDraft`), imported once from the page draft a legacy page kept
-(`StudioTaskDraftMigration`); `commandForm` returns that form directly, so the
+`StudioConsoleDraft`, with the task's other variants parked beside it),
+imported once from what a legacy page kept — every command's draft, or the
+Vision and 3D pages' keys rebuilt into their commands
+(`StudioTaskDraftMigration.swift`); `commandForm` returns that form directly, so the
 Command view and the workspace never disagree. `StudioArchetypes` declares each
 task's archetype and whether it uses a task draft; `StudioTaskSchema` reads the
 well slots, chips, and inspector sections from the template's contract.

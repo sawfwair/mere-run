@@ -186,8 +186,9 @@ package struct StudioLiveDiarizationAccumulator: Equatable {
 extension StudioTaskDraft {
     /// The draft Audio ▸ Live launches: the parked settings plus the switches a session needs on
     /// stdout — `--jsonl` for `speech listen`, whose events are what the transcript reads, and
-    /// `--quiet` for both commands, so nothing but events reaches the page. Applied at Start and
-    /// never parked, so the inspector does not count them as changed settings.
+    /// `--quiet` for both commands, so nothing but events reaches the page. Applied at launch
+    /// (`StudioTaskRunner.launching`), whether Start or the Command view runs it, and never
+    /// parked, so the inspector does not count them as changed settings.
     package func liveListenLaunch() -> StudioTaskDraft {
         var launch = self
         launch.form["--quiet"] = .flag(true)
@@ -205,8 +206,9 @@ extension StudioTaskDraft {
 /// Audio ▸ Live's session: which job it is, every event it has streamed since Start, and the
 /// microphones the CLI lists. The controller owns one, so it outlives the page — the transcript
 /// keeps growing while the user is elsewhere, and coming back shows all of it. A session started
-/// without the page (the Command view) is adopted when the page appears, with what the job has
-/// kept of its stdout for the part streamed before then. When the session ends its text is
+/// without the page (the Command view) is adopted as it starts once the page has been shown, or
+/// when the page appears, with what the job has kept of its stdout for the part streamed before
+/// then. When the session ends its text is
 /// written beside the domain's other outputs and becomes the Library row's artifact, so the row
 /// reads like a transcript rather than the raw event stream.
 @MainActor
@@ -286,8 +288,9 @@ package final class StudioLiveListenModel: ObservableObject {
 
     /// The task's current job, when it is not already this session: one started from the
     /// Command view, or before this model existed. What the job has printed so far becomes the
-    /// transcript.
+    /// transcript. From then on a session that starts elsewhere is adopted as it starts.
     package func adoptCurrentSession(runner: StudioTaskRunner) {
+        library = runner.library
         guard let job = runner.currentJob(for: .audioLive), job.request.requestID != requestID else { return }
         adopt(job, library: runner.library)
     }
@@ -332,7 +335,15 @@ package final class StudioLiveListenModel: ObservableObject {
         case .output(let job, let stream, let text):
             guard stream == .stdout, let requestID, job.request.requestID == requestID else { return }
             receive(text)
-        case .started(let job), .changed(let job):
+        case .started(let job):
+            // A session the Command view started while the page is up is the one the page shows,
+            // so it never offers Start on a microphone already in use.
+            if job.request.requestID != requestID, job.request.templateID?.studioTask == .audioLive, let library {
+                adopt(job, library: library)
+            } else if let requestID, job.request.requestID == requestID {
+                objectWillChange.send()
+            }
+        case .changed(let job):
             if let requestID, job.request.requestID == requestID { objectWillChange.send() }
         case .finished(let job, _):
             guard let requestID, job.request.requestID == requestID else { return }
