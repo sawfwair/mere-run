@@ -374,17 +374,15 @@ struct StudioTrainingView: View {
             error = nil
             refreshReadiness()
         }
-        .onChange(of: draft.text("--recipe")) { _, _ in
-            // The recipe decides the seeded options from now on; typed values stay as overrides.
-            draft = StudioTrainingRun.applyingRecipe(draft)
+        .onChange(of: draft.text("--recipe")) { previous, _ in
+            // A first recipe decides the seeded options from now on; typed values stay as overrides.
+            let chosen = StudioTrainingRun.choosingRecipe(draft, previous: previous)
+            if chosen != draft { draft = chosen }
         }
         .onChange(of: draft.text("--dataset")) { _, _ in adoptExistingMusicManifest() }
         .onAppear {
             jobMonitor.attach(controller.jobs)
             adoptPageDefaults()
-            // An imported page draft may carry a recipe beside the seeded options it decides.
-            let recipeApplied = StudioTrainingRun.applyingRecipe(draft)
-            if recipeApplied != draft { draft = recipeApplied }
             adoptExistingMusicManifest()
             refreshReadiness()
             seedComparisons()
@@ -770,6 +768,8 @@ struct StudioTrainingView: View {
                 }
                 .buttonStyle(.mereSecondary)
                 .help(kind == .music ? "Check the clips" : "Check the request without training")
+                // A check submitted while training would become the run Stop (⌘.) acts on.
+                .disabled(isRunning)
                 if isRunning {
                     Button {
                         runner?.stop(task: task)
@@ -1114,7 +1114,7 @@ struct StudioTrainingView: View {
     /// A draft nothing has touched yet takes the page's own defaults once (`StudioTrainingRun`).
     private func adoptPageDefaults() {
         guard let sessions, !sessions.contains(StudioTaskSessions.taskDraftKey(task)),
-              draft == StudioTaskDraft(templateID: kind.templateID) else { return }
+              StudioTrainingRun.isUntouched(draft) else { return }
         draft = StudioTrainingRun.applyingPageDefaults(draft)
     }
 
@@ -1256,12 +1256,8 @@ struct StudioTrainingView: View {
             }
             currentSnapshot = StudioTrainingSnapshot.load(outputPath: request.draft.outputPath)
             statusMessage = resumes ? "Checkpoint resume submitted." : "Training submitted."
-            if kind == .image, resumes {
-                // The next run starts fresh unless another checkpoint is chosen.
-                var next = draft
-                next.form["--resume-from"] = .unset
-                draft = next
-            }
+            let next = StudioTrainingRun.afterSubmitting(draft)
+            if next != draft { draft = next }
             seedComparisons()
         } catch {
             self.error = error.localizedDescription
@@ -1295,11 +1291,8 @@ struct StudioTrainingView: View {
                 return false
             }
         }
-        let steps = draft.text(kind == .music ? "--steps" : "--training-steps")
-        let rank = draft.text("--rank")
-        let learningRate = draft.text("--learning-rate")
-        guard Int(steps) ?? 0 > 0, Int(rank) ?? 0 > 0, Double(learningRate) ?? 0 > 0 else {
-            statusMessage = "Steps, rank, and learning rate must be positive."
+        if let problem = StudioTrainingRun.scheduleProblem(in: draft) {
+            statusMessage = problem
             return false
         }
         return true

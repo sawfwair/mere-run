@@ -156,15 +156,17 @@ package enum StudioLibraryDraftRestoration {
 
     /// The task draft a row restores to: the recorded argv read back into the contract form,
     /// as "Edit command" reopens it, minus the run's own destinations — the next run is named
-    /// afresh rather than written over this one's files. nil for a thread or a row with no
-    /// recorded command. The workspace reads the same form the Command view edits.
+    /// afresh rather than written over this one's files — and, for a trainer's preflight or dry
+    /// run, minus the check-only switches. nil for a thread or a row with no recorded command.
+    /// The workspace reads the same form the Command view edits.
     package static func taskDraft(from item: StudioLibraryItem) -> StudioTaskDraft? {
         guard !item.isConversation, let templateID = item.templateID,
               let recorded = item.commandDraft, let template = CommandCatalog.template(id: templateID),
               let capability = templateID.capability else { return nil }
         let arguments = item.commandArguments ?? template.arguments(from: recorded)
-        return StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
-            .withoutDestinations()
+        let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
+        // A trainer's preflight row restores as the training run it checked.
+        return StudioTrainingRun.withoutCheckSwitches(draft).withoutDestinations()
     }
 
     /// nil exactly when `canRestore` is false.

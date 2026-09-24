@@ -204,6 +204,7 @@ final class StudioTrainingRunTests: XCTestCase {
     func testAKleinLaunchSetsTheCheckpointAndPreviewCadence() {
         var klein = StudioTrainingRun.baseline(for: .imageTrainLoRA)
         klein.form["--recipe"] = .text("klein-fast-style")
+        klein = StudioTrainingRun.choosingRecipe(klein, previous: "")
         let launched = StudioTrainingRun.launchDraft(klein)
         XCTAssertTrue(StudioTrainingRun.trainsKlein(klein))
         XCTAssertEqual(launched.text("--checkpoint-interval"), "250")
@@ -223,6 +224,91 @@ final class StudioTrainingRunTests: XCTestCase {
         XCTAssertFalse(StudioTrainingRun.trainsKlein(krea))
         XCTAssertEqual(krea.text("--checkpoint-interval"), "", "Klein-only; it would block a Krea 2 preflight")
         XCTAssertEqual(krea, StudioTrainingRun.baseline(for: .imageTrainLoRA))
+    }
+
+    /// A first recipe clears the seeded options it decides; after that the draft is the user's.
+    /// A value set once the recipe decides stays an override — even one equal to the seeded
+    /// default, like a 1024 width under a 768 recipe — through a change of recipe, a reopened
+    /// page, and the launch.
+    func testARecipeClearsTheSeededOptionsOnlyWhenFirstChosen() {
+        var draft = StudioTrainingRun.baseline(for: .imageTrainLoRA)
+        draft.form["--recipe"] = .text("krea-fast-style")
+        draft = StudioTrainingRun.choosingRecipe(draft, previous: "")
+        XCTAssertEqual(draft.text("--width"), "", "the recipe decides the width")
+        XCTAssertEqual(draft.text("--model"), "", "and the base")
+
+        draft.form["--width"] = .integer(1024)
+        XCTAssertEqual(StudioTrainingRun.launchDraft(draft).text("--width"), "1024", "an override survives the launch")
+        draft.form["--recipe"] = .text("krea-cinematic-style")
+        let changed = StudioTrainingRun.choosingRecipe(draft, previous: "krea-fast-style")
+        XCTAssertEqual(changed, draft, "changing recipes takes nothing away")
+        XCTAssertTrue(StudioTrainingRun.launchDraft(changed).arguments.contains("1024"))
+    }
+
+    /// A recipe leaves steps, rank, and learning rate blank for itself to decide; only a value
+    /// that is set and not positive stops a preflight or a start.
+    func testOnlyASetScheduleValueMustBePositive() {
+        var recipe = StudioTrainingRun.baseline(for: .imageTrainLoRA)
+        recipe.form["--recipe"] = .text("krea-fast-style")
+        recipe = StudioTrainingRun.choosingRecipe(recipe, previous: "")
+        XCTAssertEqual(recipe.text("--training-steps"), "")
+        XCTAssertNil(StudioTrainingRun.scheduleProblem(in: recipe), "blank is the recipe's value")
+        XCTAssertNil(StudioTrainingRun.scheduleProblem(in: StudioTrainingRun.baseline(for: .imageTrainLoRA)))
+        for (flag, value) in [("--training-steps", "0"), ("--rank", "-4"), ("--learning-rate", "0")] {
+            var bad = recipe
+            bad.form[flag] = .text(value)
+            XCTAssertEqual(StudioTrainingRun.scheduleProblem(in: bad), "Steps, rank, and learning rate must be positive.", flag)
+        }
+        var music = StudioTaskDraft(templateID: .musicTrainAdapter)
+        XCTAssertNil(StudioTrainingRun.scheduleProblem(in: music))
+        music.form["--steps"] = .text("0")
+        XCTAssertNotNil(StudioTrainingRun.scheduleProblem(in: music))
+    }
+
+    /// "Use these settings" on a preflight or dry-run row restores the training run it
+    /// checked, so Start trains rather than checking again.
+    @MainActor
+    func testUsingAChecksSettingsRestoresTheTrainingRun() throws {
+        let library = StudioLibraryStore(libraryURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("training-restore-\(UUID().uuidString).json"))
+        for templateID in [CommandTemplateID.imageTrainLoRA, .textTrainLoRA] {
+            var draft = StudioTaskDraft(templateID: templateID)
+            let slot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: templateID))
+            draft.setAttachmentText("/tmp/dataset", for: slot.storage)
+            draft.form["--seed"] = .integer(7)
+            let check = try XCTUnwrap(StudioTrainingRun.preflightDraft(draft))
+            let row = library.start(request: try XCTUnwrap(check.request()), commandPreview: "fixture")
+            let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: row))
+            for flag in ["--preflight", "--dry-run", "--json"] {
+                XCTAssertFalse(restored.arguments.contains(flag), "\(templateID) restores \(flag)")
+            }
+            XCTAssertEqual(restored.text("--seed"), "7", "the rest of the settings come back")
+        }
+    }
+
+    /// A resume checkpoint is used by the run it was chosen for; the next run starts fresh.
+    func testAResumeIsUsedOnce() {
+        var image = StudioTaskDraft(templateID: .imageTrainLoRA)
+        image.form["--resume-from"] = .text("/tmp/checkpoint-step750.safetensors")
+        XCTAssertEqual(StudioTrainingRun.afterSubmitting(image).text("--resume-from"), "")
+        var text = StudioTaskDraft(templateID: .textTrainLoRA)
+        text.form["--resume-from"] = .text("/tmp/adapter-step200")
+        text.form["--resume-step"] = .integer(200)
+        let next = StudioTrainingRun.afterSubmitting(text)
+        XCTAssertEqual(next.text("--resume-from"), "")
+        XCTAssertEqual(next.text("--resume-step"), "")
+        XCTAssertEqual(next.text("--seed"), text.text("--seed"))
+    }
+
+    /// The page's defaults go onto a draft nothing has touched, whatever destination it holds:
+    /// one made a moment earlier, or one a legacy page stamped.
+    func testADestinationDoesNotMakeADraftTouched() {
+        var draft = StudioTaskDraft(templateID: .imageTrainLoRA)
+        XCTAssertTrue(StudioTrainingRun.isUntouched(draft))
+        draft.form["--output"] = .text("/Users/example/Documents/mere.run/Image/train-lora-20260924-113445.safetensors")
+        XCTAssertTrue(StudioTrainingRun.isUntouched(draft))
+        draft.form["--seed"] = .integer(7)
+        XCTAssertFalse(StudioTrainingRun.isUntouched(draft))
     }
 
     func testTheModelPickerOffersTrainableBasesOnly() {

@@ -40,6 +40,13 @@ package enum StudioTrainingRun {
         applyingPageDefaults(StudioTaskDraft(templateID: templateID))
     }
 
+    /// Whether nothing has been set on a draft yet, so the page's defaults may still be applied:
+    /// it is a fresh draft of its template, whatever destination it carries (routing names one
+    /// per run; a stamped one was the template's, not the user's).
+    package static func isUntouched(_ draft: StudioTaskDraft) -> Bool {
+        draft.withoutDestinations() == StudioTaskDraft(templateID: draft.templateID).withoutDestinations()
+    }
+
     // MARK: Recipes and Klein
 
     /// The image trainer's options a recipe decides. The CLI prefers an explicit flag over the
@@ -55,6 +62,16 @@ package enum StudioTrainingRun {
     /// Whether `flag` is one the chosen recipe decides for this draft.
     package static func isRecipeGoverned(_ flag: String, in draft: StudioTaskDraft) -> Bool {
         draft.templateID == .imageTrainLoRA && !draft.text("--recipe").isBlank && recipeGovernedFlags.contains(flag)
+    }
+
+    /// A recipe chosen where there was none: the seeded values of the options it decides are
+    /// cleared (`applyingRecipe`). Changing one recipe for another, reopening the page, and
+    /// launching leave the draft alone, so a value set once the recipe decides — even one equal
+    /// to the seeded default, like a 1024 width under a 768 recipe — is the override the CLI
+    /// takes it for.
+    package static func choosingRecipe(_ draft: StudioTaskDraft, previous: String) -> StudioTaskDraft {
+        guard previous.isBlank else { return draft }
+        return applyingRecipe(draft)
     }
 
     /// The draft with the seeded values of the recipe-governed options cleared once a recipe is
@@ -98,9 +115,11 @@ package enum StudioTrainingRun {
         return draft
     }
 
-    /// What the page launches for a draft: the recipe's options cleared, then Klein's cadence.
+    /// What the page launches for a draft: Klein's cadence where the draft trains Klein. The
+    /// recipe's options were cleared when it was chosen (`choosingRecipe`); what is set now is
+    /// set on purpose.
     package static func launchDraft(_ draft: StudioTaskDraft) -> StudioTaskDraft {
-        applyingKleinDefaults(applyingRecipe(draft))
+        applyingKleinDefaults(draft)
     }
 
     /// Whether a managed model is a base the trainer can train: Krea 2 and the Klein base models
@@ -128,6 +147,47 @@ package enum StudioTrainingRun {
         }
         checked.form["--json"] = .flag(true)
         return checked
+    }
+
+    /// The switches `preflightDraft` adds, for "Use these settings" on a check's Library row:
+    /// the draft it restores is the training run the check was for, so Start trains.
+    package static func withoutCheckSwitches(_ draft: StudioTaskDraft) -> StudioTaskDraft {
+        var training = draft
+        switch draft.templateID {
+        case .imageTrainLoRA: training.form.values["--preflight"] = nil
+        case .textTrainLoRA: training.form.values["--dry-run"] = nil
+        default: return draft
+        }
+        training.form.values["--json"] = nil
+        return training
+    }
+
+    /// The page's check on the schedule before a run: the steps, rank, and learning rate the
+    /// draft sets must be positive. One left blank is the recipe's or the CLI's own default,
+    /// which is how a recipe leaves them.
+    package static func scheduleProblem(in draft: StudioTaskDraft) -> String? {
+        let steps = draft.templateID == .musicTrainAdapter ? "--steps" : "--training-steps"
+        let notPositive = [steps, "--rank", "--learning-rate"].contains { flag in
+            let text = draft.text(flag)
+            return !text.isBlank && (Double(text) ?? 0) <= 0
+        }
+        return notPositive ? "Steps, rank, and learning rate must be positive." : nil
+    }
+
+    /// The draft once a run is submitted: a checkpoint resume is used once, so the next run
+    /// starts fresh unless another checkpoint is chosen.
+    package static func afterSubmitting(_ draft: StudioTaskDraft) -> StudioTaskDraft {
+        var next = draft
+        switch draft.templateID {
+        case .imageTrainLoRA:
+            next.form.values["--resume-from"] = nil
+        case .textTrainLoRA:
+            next.form.values["--resume-from"] = nil
+            next.form.values["--resume-step"] = nil
+        default:
+            break
+        }
+        return next
     }
 
     // MARK: Music

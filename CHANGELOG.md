@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio's Train pages: choosing a recipe no longer blocks Preflight and
+  Start (steps, rank, and learning rate left to the recipe are no longer
+  "not positive"), a value set after the recipe is chosen stays an override
+  even when it equals the old default, "Use these settings" on a preflight or
+  dry-run row restores the training run instead of another check, Chat ▸
+  Train uses a resume checkpoint and step once, a fresh Image ▸ Train draft
+  gets its seed of 42 again, and Preflight is unavailable while training runs
+  so ⌘. always stops the training.
 - Keep each Studio task variant's settings: switching 3D ▸ From image,
   Faces, Geometry, or any other task's variant, or picking another variant's
   Library row, and switching back restores that variant as it was left
