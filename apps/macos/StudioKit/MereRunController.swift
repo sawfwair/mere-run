@@ -433,7 +433,9 @@ package final class MereRunController: ObservableObject {
         cliResolver: @escaping (String) -> MereRunLaunch = { CLIResolver.resolve(customPath: $0) },
         resolvesCLIOnInit: Bool = true,
         taskSessions: StudioTaskSessions? = nil,
-        machineMonitor: StudioMachineMonitor? = nil
+        machineMonitor: StudioMachineMonitor? = nil,
+        initialRuntimeHost: String? = nil,
+        initialRuntimePort: Int? = nil
     ) {
         self.taskSessions = taskSessions ?? StudioTaskSessions()
         self.machineMonitor = machineMonitor ?? StudioMachineMonitor()
@@ -449,8 +451,8 @@ package final class MereRunController: ObservableObject {
         hubCache = UserDefaults.standard.string(forKey: Keys.hubCache) ?? ""
         workingDirectory = UserDefaults.standard.string(forKey: Keys.workingDirectory)
             ?? FileManager.default.homeDirectoryForCurrentUser.path
-        runtimeHost = UserDefaults.standard.string(forKey: Keys.runtimeHost) ?? "127.0.0.1"
-        runtimePort = (UserDefaults.standard.object(forKey: Keys.runtimePort) as? Int) ?? 8080
+        runtimeHost = initialRuntimeHost ?? UserDefaults.standard.string(forKey: Keys.runtimeHost) ?? "127.0.0.1"
+        runtimePort = initialRuntimePort ?? (UserDefaults.standard.object(forKey: Keys.runtimePort) as? Int) ?? 8080
         let storedKey = Self.loadRuntimeAPIKey(from: secretStore, defaults: UserDefaults.standard)
         runtimeAPIKey = storedKey.value
         runtimeAPIKeyStorageNotice = storedKey.notice

@@ -236,8 +236,6 @@ final class StudioSnapshotTests: XCTestCase {
         defer { SnapshotRuntimeEndpoint.uninstall() }
         // The panel as it drops from the menu bar: a card over the desktop.
         let size = CGSize(width: StudioMenuBarPanel.width + 40, height: 600)
-        let restoreEndpoint = pinRuntimeEndpoint(fixture.controller)
-        defer { restoreEndpoint() }
 
         // Every render polls the stub, whose token count never moves, so each render sets the
         // decode history it shows after that poll rather than inheriting the last render's.
@@ -248,6 +246,8 @@ final class StudioSnapshotTests: XCTestCase {
             throughput: [Double] = []
         ) throws {
             let controller = fixture.controller
+            XCTAssertEqual(controller.runtimeHost, "127.0.0.1")
+            XCTAssertEqual(controller.runtimePort, 8_080)
             let panel = StudioMenuBarPanel(controller: controller, onOpenStudio: {}, onOpenServer: {})
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
                 .overlay {
@@ -366,19 +366,6 @@ final class StudioSnapshotTests: XCTestCase {
         return monitor
     }
 
-    /// Points the runtime endpoint at 127.0.0.1:8080 for a render, whatever an earlier test left
-    /// in the test runner's defaults; the returned closure puts it back.
-    private func pinRuntimeEndpoint(_ controller: MereRunController) -> () -> Void {
-        let host = controller.runtimeHost
-        let port = controller.runtimePort
-        controller.runtimeHost = "127.0.0.1"
-        controller.runtimePort = 8_080
-        return {
-            controller.runtimeHost = host
-            controller.runtimePort = port
-        }
-    }
-
     override func tearDownWithError() throws {
         fixture?.tearDown()
         fixture = nil
@@ -397,8 +384,6 @@ final class StudioSnapshotTests: XCTestCase {
         SnapshotRuntimeEndpoint.install()
         defer { SnapshotRuntimeEndpoint.uninstall() }
         SnapshotRuntimeEndpoint.answer = .runtime(SnapshotRuntimeEndpoint.busyRuntime)
-        let restoreEndpoint = pinRuntimeEndpoint(fixture.controller)
-        defer { restoreEndpoint() }
 
         let runner = SnapshotProcessRunner()
         runner.liveSessionMarkers = ["serve"]
@@ -2068,7 +2053,9 @@ private final class SnapshotFixture {
             processRunner: processRunner,
             cliResolver: { _ in .executable(URL(fileURLWithPath: "/usr/local/bin/mere.run")) },
             resolvesCLIOnInit: true,
-            machineMonitor: machineMonitor
+            machineMonitor: machineMonitor,
+            initialRuntimeHost: "127.0.0.1",
+            initialRuntimePort: 8_080
         )
         library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
         switch seed {
