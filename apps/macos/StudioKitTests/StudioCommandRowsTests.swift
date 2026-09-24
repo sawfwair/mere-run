@@ -32,6 +32,31 @@ final class StudioCommandRowsTests: XCTestCase {
         XCTAssertEqual(parsed.positional, ["one", "two"])
         XCTAssertEqual(parsed.flags.map(\.0), ["--json", "--model", "--quiet"])
         XCTAssertEqual(parsed.flags.map(\.1), [nil, "m", nil])
+
+        // A negative value is joined to its flag (`ArgumentBuilder.optionArguments`), and a value
+        // that happens to begin with a dash never swallows the following token.
+        let joined = StudioCommandRows.parse(
+            arguments: ["music", "generate", "beat", "--target-peak-db=-1", "--fade-in-ms", "5", "--midi-note-offset=-12", "--quiet", "--seed="],
+            commandPathCount: 2
+        )
+        XCTAssertEqual(joined.positional, ["beat"])
+        XCTAssertEqual(joined.flags.map(\.0), ["--target-peak-db", "--fade-in-ms", "--midi-note-offset", "--quiet", "--seed"])
+        XCTAssertEqual(joined.flags.map(\.1), ["-1", "5", "-12", nil, ""])
+    }
+
+    /// Music ▸ Generate's default draft carries `--target-peak-db=-1`: the declared row shows -1
+    /// and no undeclared `--target-peak-db=-1` toggle row appears beside it.
+    func testJoinedNegativeValuesRenderOnTheirDeclaredRow() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicGenerate))
+        let rows = StudioCommandRows.groups(template: template, draft: template.defaultDraft()).flatMap(\.rows)
+        XCTAssertEqual(rows.first { $0.flag == "--target-peak-db" }?.value, .text("-1"))
+        XCTAssertFalse(rows.contains { $0.flag.contains("=") }, "no row is keyed by a joined token: \(rows.map(\.flag).filter { $0.contains("=") })")
+
+        var realtime = try XCTUnwrap(CommandCatalog.template(id: .musicRealtime)).defaultDraft()
+        realtime.musicMIDINoteOffset = -12
+        let realtimeRows = StudioCommandRows.groups(template: CommandCatalog.template(id: .musicRealtime)!, draft: realtime).flatMap(\.rows)
+        XCTAssertEqual(realtimeRows.first { $0.flag == "--midi-note-offset" }?.value, .text("-12"))
+        XCTAssertFalse(realtimeRows.contains { $0.flag.contains("=") })
     }
 
     func testImageGenerateRowsCarryTheDraftValues() throws {

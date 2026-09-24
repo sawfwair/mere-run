@@ -68,20 +68,25 @@ package struct StudioCommandRowGroupRows: Identifiable, Equatable {
 
 package enum StudioCommandRows {
     /// The argv split into positional arguments and `(flag, value?)` pairs, after the command
-    /// path. A flag followed by another flag (or by nothing) carries no value.
+    /// path. A value is the token after its flag or, for a negative number, the part joined to it
+    /// with `=` (`ArgumentBuilder.optionArguments`); a flag followed by another flag (or by
+    /// nothing) carries no value.
     package static func parse(arguments: [String], commandPathCount: Int) -> (positional: [String], flags: [(String, String?)]) {
         var positional: [String] = []
         var flags: [(String, String?)] = []
         var index = min(commandPathCount, arguments.count)
         while index < arguments.count {
             let token = arguments[index]
-            if token.hasPrefix("--") {
+            if let (flag, joined) = ArgumentBuilder.splitOption(token) {
                 let next = index + 1 < arguments.count ? arguments[index + 1] : nil
-                if let next, !next.hasPrefix("--") {
-                    flags.append((token, next))
+                if let joined {
+                    flags.append((flag, joined))
+                    index += 1
+                } else if let next, !next.hasPrefix("--") {
+                    flags.append((flag, next))
                     index += 2
                 } else {
-                    flags.append((token, nil))
+                    flags.append((flag, nil))
                     index += 1
                 }
             } else {

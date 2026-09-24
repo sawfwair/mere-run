@@ -43,6 +43,30 @@ final class StudioContinuityTests: XCTestCase {
         XCTAssertTrue(execution.arguments.contains("two words"))
     }
 
+    /// A recorded command keeps a negative value joined to its flag through a replay's edits, and
+    /// the console reads it back as the option's value, so "Use these settings" and "Edit command"
+    /// see -1 dBFS rather than an unknown flag.
+    func testReplacingKeepsNegativeValuesJoinedToTheirFlag() throws {
+        let recorded = StudioExecution(templateID: .musicGenerate, arguments: [
+            "music", "generate", "beat", "--output", "/tmp/a.wav", "--target-peak-db=-1", "--seed", "7",
+        ])
+        let replaced = recorded.replacing("--output", with: "/tmp/b.wav")
+        XCTAssertEqual(replaced.arguments, ["music", "generate", "beat", "--output", "/tmp/b.wav", "--target-peak-db=-1", "--seed", "7"])
+        XCTAssertEqual(recorded.replacing("--target-peak-db", with: "-3").arguments.filter { $0.hasPrefix("--target-peak-db") }, ["--target-peak-db=-3"])
+        XCTAssertEqual(recorded.replacing("--target-peak-db", with: "0").arguments.filter { $0.hasPrefix("--target") || $0 == "0" }, ["--target-peak-db", "0"])
+        XCTAssertEqual(recorded.replacing("--midi-note-offset", with: "-12").arguments.suffix(1), ["--midi-note-offset=-12"])
+        XCTAssertEqual(ArgumentBuilder.optionArguments("--steps", "4"), ["--steps", "4"])
+        XCTAssertEqual(ArgumentBuilder.optionArguments("--target-peak-db", "-1"), ["--target-peak-db=-1"])
+        XCTAssertEqual(ArgumentBuilder.splitOption("--target-peak-db=-1")?.value, "-1")
+        XCTAssertEqual(ArgumentBuilder.splitOption("--quiet")?.value, nil)
+        XCTAssertNil(ArgumentBuilder.splitOption("-1"))
+
+        let form = try XCTUnwrap(replaced.form)
+        XCTAssertEqual(form.text("--target-peak-db"), "-1")
+        XCTAssertEqual(form.text("--seed"), "7")
+        XCTAssertEqual(form.extraArguments, "")
+    }
+
     func testConsolePreservesServerAuthenticationChecksAfterEditingTheHost() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .apiServe))
         var form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())

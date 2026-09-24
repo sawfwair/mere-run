@@ -47,7 +47,7 @@ package struct StudioExecution: Codable, Equatable {
         while index < arguments.count {
             let token = arguments[index]
             if token == flag || token.hasPrefix(flag + "=") {
-                if !inserted, let value { result += [flag, value] }
+                if !inserted, let value { result += ArgumentBuilder.optionArguments(flag, value) }
                 inserted = true
                 if token == flag, index + 1 < arguments.count, !arguments[index + 1].hasPrefix("--") {
                     index += 1
@@ -57,7 +57,7 @@ package struct StudioExecution: Codable, Equatable {
             }
             index += 1
         }
-        if !inserted, let value { result += [flag, value] }
+        if !inserted, let value { result += ArgumentBuilder.optionArguments(flag, value) }
         return StudioExecution(templateID: templateID, arguments: result)
     }
 
