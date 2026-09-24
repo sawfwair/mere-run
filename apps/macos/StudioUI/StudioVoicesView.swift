@@ -109,10 +109,17 @@ struct StudioVoicesView: View {
                     selectedProfileID = created.id
                 }
                 isCreating = false
+                // The next voice starts from a blank form, not the one just saved.
+                var fresh = StudioTaskDraft(templateID: .speechProfileCreate)
+                fresh.form["--name"] = .unset
+                draft = fresh
             } else if result.exitCode != 0 {
-                error = result.templateID == .speechProfileCreate
-                    ? "The voice could not be created. The Library row has the CLI's output."
-                    : "The voice could not be deleted. The Library row has the CLI's output."
+                // The page has no Library column, so the CLI's reason is shown here.
+                let job = result.requestID.flatMap { controller.jobs.job(requestID: $0) }
+                let reason = StudioFailureSummary.summary(
+                    outputText: result.outputText, logLines: job?.log.lines.map(\.text) ?? [], exitCode: result.exitCode
+                )
+                error = (result.templateID == .speechProfileCreate ? "The voice could not be created. " : "The voice could not be deleted. ") + reason
             }
         }
         .confirmationDialog(

@@ -112,28 +112,28 @@ extension StudioDiarizationDocument {
     /// file names no model or total length, so the model is blank and the length is the last
     /// turn's end. Nil for text with no RTTM line in it.
     package static func rttm(_ text: String) -> StudioDiarizationDocument? {
-        var segments: [Segment] = []
-        var indexBySpeaker: [String: Int] = [:]
+        var turns: [(speaker: String, start: Double, end: Double)] = []
         for line in text.components(separatedBy: .newlines) {
             let fields = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
             guard fields.count >= 8, fields[0] == "SPEAKER",
                   let start = Double(fields[3]), let duration = Double(fields[4]) else { continue }
-            let speaker = fields[7]
-            let index: Int
-            if let known = indexBySpeaker[speaker] {
-                index = known
-            } else if let suffix = speaker.split(separator: "_").last, let numbered = Int(suffix) {
-                index = numbered
-                indexBySpeaker[speaker] = numbered
-            } else {
-                index = indexBySpeaker.count
-                indexBySpeaker[speaker] = index
-            }
             // The file carries milliseconds; the sum is rounded back to them so 24.6 + 3.3 reads 27.9.
-            let end = ((start + duration) * 1_000).rounded() / 1_000
-            segments.append(Segment(speaker: speaker, speakerIndex: index, startSeconds: start, endSeconds: end))
+            turns.append((fields[7], start, ((start + duration) * 1_000).rounded() / 1_000))
         }
-        guard !segments.isEmpty else { return nil }
+        guard !turns.isEmpty else { return nil }
+        // Speakers are numbered by the `speaker_<n>` suffix the CLI writes when every label has
+        // one, else by first appearance — never a mix, which could give two labels one index.
+        let labels = turns.map(\.speaker).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        let numbered = labels.compactMap { $0.split(separator: "_").last.flatMap { Int($0) } }
+        let indexBySpeaker: [String: Int]
+        if numbered.count == labels.count, Set(numbered).count == labels.count {
+            indexBySpeaker = Dictionary(uniqueKeysWithValues: zip(labels, numbered))
+        } else {
+            indexBySpeaker = Dictionary(uniqueKeysWithValues: labels.enumerated().map { ($1, $0) })
+        }
+        let segments = turns.map { turn in
+            Segment(speaker: turn.speaker, speakerIndex: indexBySpeaker[turn.speaker] ?? 0, startSeconds: turn.start, endSeconds: turn.end)
+        }
         return StudioDiarizationDocument(
             schemaVersion: 1,
             model: "",

@@ -784,7 +784,9 @@ draft through the task runner as an inference job with a Library row, the
 transport row carries the operation, microphone, options, and model chips,
 events stream into the transcript or the speaker activity as they arrive, and
 Stop interrupts the CLI the way Ctrl-C does (terminating it if it does not
-finish). Coming back to the page adopts a session still running. The packaged
+finish). The session belongs to the controller, so leaving the page loses
+nothing; when it ends, its text is written to the Audio folder and becomes the
+Library row's artifact, so the row reads like Transcribe's. The packaged
 app and embedded CLI carry the microphone usage description and audio-input
 entitlement those capture paths require.
 

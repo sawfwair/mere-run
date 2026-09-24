@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import MereRunContract
 import StudioKit
 import SwiftUI
@@ -10,24 +9,35 @@ import UniformTypeIdentifiers
 /// Library row, Stop, and the Activity panel like any run; the page reads the job's stdout events
 /// into the live transcript or the speaker activity as they arrive. Its settings — which of the
 /// two commands, the microphone, the language and windows, the model — are the task draft the
-/// Command view edits too.
+/// Command view edits too. The session itself (`StudioLiveListenModel`) belongs to the
+/// controller, so leaving and coming back loses nothing.
 struct StudioLiveListenSession: View {
+    @EnvironmentObject private var controller: MereRunController
+    @ObservedObject private var models: StudioModelStore
+
+    init(models: StudioModelStore) {
+        _models = ObservedObject(wrappedValue: models)
+    }
+
+    var body: some View {
+        StudioLiveListenSessionContent(session: controller.liveListen, models: models)
+    }
+}
+
+private struct StudioLiveListenSessionContent: View {
+    @ObservedObject var session: StudioLiveListenModel
+    @ObservedObject var models: StudioModelStore
+
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var navigation: NavigationModel
     @Environment(\.studioTaskRunner) private var runner
     @Environment(\.studioTaskSessions) private var sessions
     @Environment(\.studioModelTitles) private var titles
-    @ObservedObject private var models: StudioModelStore
-    @StateObject private var session = StudioLiveListenModel()
     @State private var error: String?
     @State private var showsOptions = false
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private static let task = StudioTask.audioLive
-
-    init(models: StudioModelStore) {
-        _models = ObservedObject(wrappedValue: models)
-    }
 
     // MARK: Draft
 
@@ -58,8 +68,23 @@ struct StudioLiveListenSession: View {
         showsSpeakers ? !session.activity.segments.isEmpty : !session.transcript.displayText.isEmpty
     }
 
-    private var copyText: String {
-        showsSpeakers ? session.activity.displayText : session.transcript.committedText
+    private var phase: StudioSessionPhase {
+        guard let job = session.job else { return .idle }
+        switch job.state {
+        case .queued:
+            return .queued
+        case .running:
+            return .live
+        case .finished(let exit, _), .cancelled(let exit, _):
+            return .ended(exitCode: exit)
+        case .preflightFailed(let failure):
+            return .ended(exitCode: failure.exitCode)
+        }
+    }
+
+    private var logLines: [String] {
+        guard let startedAt = session.startedAt else { return [] }
+        return StudioRealtimeSessionLog.lines(session.logLines, startedAt: startedAt)
     }
 
     /// The template's options the page does not draw as chips: everything but the variant, the
@@ -81,9 +106,9 @@ struct StudioLiveListenSession: View {
     var body: some View {
         VStack(spacing: 0) {
             StudioSessionSurface(
-                phase: session.phase,
+                phase: phase,
                 clock: StudioTimeFormat.string(session.elapsed),
-                logLines: session.logLines,
+                logLines: logLines,
                 onToggle: toggle
             ) {
                 chips
@@ -99,7 +124,7 @@ struct StudioLiveListenSession: View {
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onAppear {
-            session.attach(controller, runner: runner)
+            if let runner { session.adoptCurrentSession(runner: runner) }
             refreshReadiness()
             Task {
                 if session.devices.isEmpty { await session.refreshDevices() }
@@ -250,16 +275,23 @@ struct StudioLiveListenSession: View {
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                         .monospacedDigit()
+                } else if let url = session.transcriptURL, !session.isActive {
+                    Text("Saved as \(url.lastPathComponent)")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(url.path)
                 }
                 Spacer(minLength: 8)
                 StudioSessionSecondaryButton("Copy") {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(copyText, forType: .string)
+                    NSPasteboard.general.setString(session.text, forType: .string)
                 }
-                .disabled(copyText.isEmpty)
+                .disabled(session.text.isEmpty)
                 .accessibilityLabel(showsSpeakers ? "Copy the speaker activity" : "Copy the live transcript")
                 StudioSessionSecondaryButton("Save…", action: save)
-                    .disabled(copyText.isEmpty)
+                    .disabled(session.text.isEmpty)
                 StudioSessionSecondaryButton("Clear", action: session.clear)
                     .disabled(session.isActive || !hasOutput)
             }
@@ -356,7 +388,7 @@ struct StudioLiveListenSession: View {
         guard let runner else { return }
         do {
             let request = try runner.run(draft.liveListenLaunch(), task: Self.task)
-            session.begin(request)
+            session.begin(request, library: runner.library)
         } catch {
             self.error = error.localizedDescription
         }
@@ -377,163 +409,9 @@ struct StudioLiveListenSession: View {
             allowedContentTypes: [.plainText]
         ) else { return }
         do {
-            try copyText.write(to: url, atomically: true, encoding: .utf8)
+            try session.text.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             self.error = "Could not save \(url.lastPathComponent): \(error.localizedDescription)"
-        }
-    }
-}
-
-/// The page's session state: which job is the session, the events it has streamed, and the
-/// microphones the CLI lists. Outlives view replacement within the page; a session left running
-/// while the user is elsewhere is adopted again from the runner's current job, with the stdout
-/// the job has kept.
-@MainActor
-final class StudioLiveListenModel: ObservableObject {
-    @Published private(set) var transcript = StudioLiveTranscriptAccumulator()
-    @Published private(set) var activity = StudioLiveDiarizationAccumulator()
-    @Published private(set) var requestID: UUID?
-    @Published private(set) var templateID: CommandTemplateID?
-    @Published private(set) var devices: [StudioListenDevice] = []
-    @Published private(set) var devicesUnavailable = false
-    @Published private(set) var now = Date()
-
-    private var controller: MereRunController?
-    private var subscription: AnyCancellable?
-    private var stopEscalation: Task<Void, Never>?
-
-    /// How long Stop waits for `speech listen` to finish on SIGINT before the job is terminated.
-    static let stopGrace: Duration = .seconds(4)
-
-    func attach(_ controller: MereRunController, runner: StudioTaskRunner?) {
-        guard self.controller == nil else { return }
-        self.controller = controller
-        subscription = controller.jobs.events.sink { [weak self] event in
-            self?.handle(event)
-        }
-        if let job = runner?.currentJob(for: .audioLive) {
-            adopt(job)
-        }
-    }
-
-    var job: Job? {
-        guard let requestID else { return nil }
-        return controller?.jobs.job(requestID: requestID)
-    }
-
-    var isActive: Bool {
-        job?.state.isActive ?? false
-    }
-
-    var phase: StudioSessionPhase {
-        guard let job else { return .idle }
-        switch job.state {
-        case .queued:
-            return .queued
-        case .running:
-            return .live
-        case .finished(let exit, _), .cancelled(let exit, _):
-            return .ended(exitCode: exit)
-        case .preflightFailed(let failure):
-            return .ended(exitCode: failure.exitCode)
-        }
-    }
-
-    /// Seconds the session has run, frozen at its end.
-    var elapsed: TimeInterval {
-        guard let job, let started = job.startedAt else { return 0 }
-        switch job.state {
-        case .finished(_, let ended), .cancelled(_, let ended):
-            return max(0, ended.timeIntervalSince(started))
-        case .queued, .running, .preflightFailed:
-            return max(0, now.timeIntervalSince(started))
-        }
-    }
-
-    var logLines: [String] {
-        guard let job else { return [] }
-        return StudioRealtimeSessionLog.lines(job.log.lines, startedAt: job.startedAt ?? job.submittedAt)
-    }
-
-    var errorMessage: String? {
-        templateID == .speechDiarizeLive ? activity.errorMessage : transcript.errorMessage
-    }
-
-    /// A session this page just started.
-    func begin(_ request: StudioRunRequest) {
-        stopEscalation?.cancel()
-        requestID = request.id
-        templateID = request.templateID
-        transcript.beginSession()
-        activity.beginSession()
-        now = Date()
-    }
-
-    /// A session already running when the page appeared: what the job has printed so far
-    /// becomes the transcript, so leaving and coming back loses nothing the job still holds.
-    func adopt(_ job: Job) {
-        requestID = job.request.requestID
-        templateID = job.request.templateID
-        transcript = StudioLiveTranscriptAccumulator()
-        activity = StudioLiveDiarizationAccumulator()
-        receive(job.liveText)
-        now = Date()
-    }
-
-    /// Stops the session the way Ctrl-C does — SIGINT, which `speech listen` traps to flush its
-    /// last events and exit cleanly — and terminates it if it has not ended after `stopGrace`.
-    func stop() {
-        guard let controller, let job, job.state.isActive else { return }
-        if job.state.isQueued {
-            controller.jobs.cancel(job.id)
-            return
-        }
-        controller.jobs.interrupt(job.id)
-        stopEscalation?.cancel()
-        stopEscalation = Task { [weak self] in
-            try? await Task.sleep(for: Self.stopGrace)
-            guard !Task.isCancelled, let self, let job = self.job, job.state.isActive else { return }
-            controller.jobs.cancel(job.id)
-        }
-    }
-
-    func clear() {
-        transcript.clear()
-        activity.clear()
-    }
-
-    func tick() {
-        now = Date()
-    }
-
-    func refreshDevices() async {
-        guard let controller else { return }
-        let result = await controller.utilityCommandResult(args: ["speech", "listen", "--list-devices"])
-        devicesUnavailable = result.exitCode != 0
-        guard result.exitCode == 0 else { return }
-        devices = StudioListenDevice.parseList(result.stdout)
-    }
-
-    private func handle(_ event: JobStore.Event) {
-        switch event {
-        case .output(let job, let stream, let text):
-            guard stream == .stdout, let requestID, job.request.requestID == requestID else { return }
-            receive(text)
-        case .started(let job), .changed(let job):
-            if let requestID, job.request.requestID == requestID { objectWillChange.send() }
-        case .finished(let job, _):
-            guard let requestID, job.request.requestID == requestID else { return }
-            stopEscalation?.cancel()
-            objectWillChange.send()
-        }
-    }
-
-    private func receive(_ text: String) {
-        guard !text.isEmpty else { return }
-        if templateID == .speechDiarizeLive {
-            activity.receive(text)
-        } else {
-            transcript.receive(text)
         }
     }
 }

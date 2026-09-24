@@ -221,8 +221,9 @@ The format is based on Keep a Changelog.
 - Make Audio ▸ Live a Session page: Start runs `speech listen` or `speech
   diarize-live` through the task runner as a cancellable inference job with a
   Library row, the transport row carries the operation, microphone, options,
-  and model chips, and Stop interrupts the CLI the way Ctrl-C does. Coming
-  back to the page adopts a session still running.
+  and model chips, and Stop interrupts the CLI the way Ctrl-C does. The
+  session outlives the page, and its text is filed as the row's artifact when
+  it ends.
 - Make Voice ▸ Voices a Manage page — a list, a detail with the reference
   player and transcript, Delete behind a confirmation, and New voice with the
   reference in an attachment well — and retire Voice ▸ Clone, whose form

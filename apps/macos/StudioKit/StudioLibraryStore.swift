@@ -195,9 +195,13 @@ package final class StudioLibraryStore: ObservableObject {
     }
 
     package func markRunning(id: UUID) {
+        setStatus(.running, id: id)
+    }
+
+    package func setStatus(_ status: StudioLibraryStatus, id: UUID) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         var item = items[index]
-        item.status = .running
+        item.status = status
         item.updatedAt = Date()
         items[index] = item
         save()

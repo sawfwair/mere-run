@@ -169,6 +169,17 @@ final class StudioAudioVoiceTests: XCTestCase {
         }
         XCTAssertEqual(decoded, document)
         XCTAssertNil(StudioDiarizationDocument.rttm("[00:04.120 --> 00:07.400] and that is the whole idea."))
+
+        // Labels without the CLI's numeric suffix are numbered by first appearance, never mixed
+        // with suffix numbers, so two labels cannot share an index.
+        let mixed = """
+        SPEAKER call 1 0.000 1.000 <NA> <NA> alice <NA> <NA>
+        SPEAKER call 1 1.000 1.000 <NA> <NA> speaker_0 <NA> <NA>
+        SPEAKER call 1 2.000 1.000 <NA> <NA> alice <NA> <NA>
+        """
+        let named = try XCTUnwrap(StudioDiarizationDocument.rttm(mixed))
+        XCTAssertEqual(named.segments.map(\.speakerIndex), [0, 1, 0])
+        XCTAssertEqual(named.speakerCount, 2)
         XCTAssertEqual(StudioAnalyzeDocumentSource.preferredExtensions(for: .speechDiarize), ["rttm"])
     }
 
@@ -283,13 +294,14 @@ final class StudioAudioVoiceTests: XCTestCase {
     }
 
     func testVoiceProfileRecordResolvesItsReference() throws {
+        // As the CLI's `VoiceProfileStore` encodes it: a default `JSONEncoder`, so dates are
+        // seconds since 2001, read back with the default decoder the page uses.
         let json = """
         [{"id":"6F9B2C1E-0D44-4C1B-9A7E-3B2C4D5E6F70","name":"Narrator","createdAt":800000000,"updatedAt":800000000,
           "transcript":"A calm reading.","language":"en","referenceAudioRelativePath":"6F9B2C1E/reference.wav","modelFingerprint":null}]
         """
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        let record = try XCTUnwrap(decoder.decode([StudioVoiceProfileRecord].self, from: Data(json.utf8)).first)
+        let record = try XCTUnwrap(JSONDecoder().decode([StudioVoiceProfileRecord].self, from: Data(json.utf8)).first)
+        XCTAssertEqual(record.createdAt, Date(timeIntervalSinceReferenceDate: 800_000_000))
         XCTAssertEqual(record.referenceAudioURL, StudioVoiceProfileStore.voicesDirectory.appendingPathComponent("6F9B2C1E/reference.wav"))
         let absolute = StudioVoiceProfileRecord(
             id: record.id, name: record.name, createdAt: record.createdAt, updatedAt: record.updatedAt, transcript: record.transcript,
@@ -300,19 +312,114 @@ final class StudioAudioVoiceTests: XCTestCase {
 
     // MARK: - Runner
 
-    func testVoiceCreateAndDeleteRunThroughTheTaskRunner() throws {
+    @MainActor
+    private struct Fixture {
+        let root: URL
+        let processRunner: RecordingProcessRunner
+        let controller: MereRunController
+        let library: StudioLibraryStore
+        let runner: StudioTaskRunner
+        let defaults: UserDefaults
+        let suiteName: String
+
+        func tearDown() {
+            controller.terminateAllProcesses()
+            StudioOutputLocation.defaults = .standard
+            defaults.removePersistentDomain(forName: suiteName)
+            try? FileManager.default.removeItem(at: root)
+        }
+    }
+
+    /// A controller over a recording process runner, with outputs rooted in a throwaway folder.
+    private func makeFixture() throws -> Fixture {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("audio-voice-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
+        let suiteName = "StudioAudioVoiceTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.set(root.appendingPathComponent("outputs").path, forKey: StudioOutputLocation.rootDefaultsKey)
+        StudioOutputLocation.defaults = defaults
         let processRunner = RecordingProcessRunner()
         let controller = MereRunController(
             secretStore: InMemorySecretStore(), processRunner: processRunner, resolvesCLIOnInit: false,
             taskSessions: StudioTaskSessions(url: root.appendingPathComponent("sessions.json"))
         )
-        defer { controller.terminateAllProcesses() }
         let library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
         library.observe(controller: controller)
-        let runner = StudioTaskRunner(controller: controller, library: library)
+        return Fixture(
+            root: root, processRunner: processRunner, controller: controller, library: library,
+            runner: StudioTaskRunner(controller: controller, library: library), defaults: defaults, suiteName: suiteName
+        )
+    }
+
+    func testLiveListenSessionStopsWithInterruptThenCancel() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.tearDown() }
+        let session = fixture.controller.liveListen
+        session.stopGrace = .milliseconds(80)
+        fixture.controller.checkReadiness(for: .audioLive, modelID: "")
+        let request = try fixture.runner.run(StudioTaskDraft(templateID: .speechListen).liveListenLaunch(), task: .audioLive)
+        session.begin(request, library: fixture.library)
+        let process = try XCTUnwrap(fixture.processRunner.processes.last)
+        XCTAssertTrue(session.isActive)
+
+        session.stop()
+        XCTAssertEqual(process.interruptCallCount, 1, "Stop sends SIGINT first, as Ctrl-C would")
+        XCTAssertEqual(process.terminateCallCount, 0)
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(process.terminateCallCount, 1, "a session still running after the grace is terminated")
+
+        // Library ▸ Stop on a Session task takes the same path.
+        let second = try fixture.runner.run(StudioTaskDraft(templateID: .speechListen).liveListenLaunch(), task: .audioLive)
+        let secondProcess = try XCTUnwrap(fixture.processRunner.processes.last)
+        XCTAssertNotEqual(second.id, request.id)
+        fixture.runner.stop(task: .audioLive)
+        XCTAssertEqual(secondProcess.interruptCallCount, 1)
+        XCTAssertEqual(secondProcess.terminateCallCount, 0)
+    }
+
+    func testLiveListenSessionAdoptsARunningJobAndFilesItsTranscript() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.tearDown() }
+        fixture.controller.checkReadiness(for: .audioLive, modelID: "")
+        // Started without the page (the Command view): the model does not know it yet.
+        let request = try fixture.runner.run(StudioTaskDraft(templateID: .speechListen).liveListenLaunch(), task: .audioLive)
+        let start = try XCTUnwrap(fixture.processRunner.starts.last)
+        start.stdout(#"{"protocol":1,"type":"commit","utteranceId":"u1","revision":2,"text":"Good morning everyone."}"# + "\n")
+        try await Task.sleep(for: .milliseconds(50))
+
+        let session = fixture.controller.liveListen
+        XCTAssertNil(session.requestID)
+        session.adoptCurrentSession(runner: fixture.runner)
+        XCTAssertEqual(session.requestID, request.id)
+        XCTAssertEqual(session.transcript.committedText, "Good morning everyone.", "what the job printed before is replayed")
+        session.adoptCurrentSession(runner: fixture.runner)
+        XCTAssertEqual(session.transcript.committedText, "Good morning everyone.", "adopting the same session again is a no-op")
+
+        // Events after adoption stream in; the session ends; its text becomes the row's artifact.
+        start.stdout(#"{"protocol":1,"type":"commit","utteranceId":"u2","revision":1,"text":"Today we walk through the roadmap."}"# + "\n")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(session.transcript.committedText, "Good morning everyone.\nToday we walk through the roadmap.")
+        start.termination(0)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertFalse(session.isActive)
+        let url = try XCTUnwrap(session.transcriptURL)
+        XCTAssertTrue(url.lastPathComponent.hasPrefix("live-transcript"))
+        XCTAssertTrue(url.path.hasPrefix(fixture.root.path), "filed under the configured root: \(url.path)")
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "Good morning everyone.\nToday we walk through the roadmap.")
+        let row = try XCTUnwrap(fixture.library.items.first { $0.id == request.id })
+        XCTAssertEqual(row.status, .completed)
+        XCTAssertEqual(row.outputURL, url)
+        XCTAssertEqual(row.artifactURLs, [url])
+        XCTAssertEqual(row.outputText, "Good morning everyone.\nToday we walk through the roadmap.", "the row reads like a transcript, not the event stream")
+    }
+
+    func testVoiceCreateAndDeleteRunThroughTheTaskRunner() throws {
+        let fixture = try makeFixture()
+        defer { fixture.tearDown() }
+        let root = fixture.root
+        let controller = fixture.controller
+        let library = fixture.library
+        let runner = fixture.runner
         controller.checkReadiness(for: .voiceVoices, modelID: StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .speechProfileCreate)))
         XCTAssertEqual(controller.readiness(for: .voiceVoices), .ready, "profile create runs no managed model")
 

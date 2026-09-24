@@ -190,7 +190,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--name", label: "Name", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--audio", label: "Reference audio", kind: .file, required: true, group: Group.inputs, tier: .essential),
             .init(flag: "--text", label: "Transcript", kind: .string, group: Group.prompt, tier: .standard),
-            .init(flag: "--language", label: "Language", kind: .string, tier: .standard),
+            .init(flag: "--language", label: "Language", kind: .string, defaultValue: "auto", tier: .standard),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text)
@@ -219,11 +219,11 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
                 flag: "--decode-ms", label: "Decode window (ms)", kind: .integer,
-                defaultValue: "2000", tier: .standard, range: .init(min: 250, max: 10_000, step: 250)
+                defaultValue: "2000", tier: .standard, range: .init(min: 1, max: 10_000, step: 100)
             ),
             .init(
                 flag: "--silence-ms", label: "Silence to commit (ms)", kind: .integer,
-                defaultValue: "900", tier: .standard, range: .init(min: 100, max: 5_000, step: 100)
+                defaultValue: "900", tier: .standard, range: .init(min: 1, max: 5_000, step: 100)
             ),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--jsonl", label: "JSONL", kind: .boolean, group: Group.run, tier: .expert)

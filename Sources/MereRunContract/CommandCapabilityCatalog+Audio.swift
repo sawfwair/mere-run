@@ -36,7 +36,10 @@ extension MereRunCapabilityCatalog {
                 flag: "--overlap", label: "AP-BWE overlap", kind: .integer,
                 tier: .standard, range: .init(min: 1, max: 64, step: 1)
             ),
-            .init(flag: "--input-rate", label: "UniverSR input bandwidth (Hz)", kind: .integer, tier: .standard),
+            .init(
+                flag: "--input-rate", label: "UniverSR input bandwidth", kind: .choice,
+                choices: ["8000", "12000", "16000", "24000"], tier: .standard
+            ),
             .init(
                 flag: "--ode-method",
                 label: "UniverSR ODE method",
@@ -53,7 +56,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--guidance-scale", label: "UniverSR guidance", kind: .number,
                 defaultValue: "1.5", tier: .standard, range: .init(min: 0, max: 10, step: 0.1)
             ),
-            .init(flag: "--seed", label: "Seed", kind: .integer, tier: .standard),
+            .init(flag: "--seed", label: "Seed", kind: .integer, defaultValue: "42", tier: .standard),
             .init(
                 flag: "--chunk-seconds", label: "UniverSR chunk (s)", kind: .integer,
                 defaultValue: "10", tier: .standard, range: .init(min: 3, max: 600, step: 1)

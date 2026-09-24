@@ -110,7 +110,17 @@ package final class StudioTaskRunner {
         }
     }
 
+    /// How long a Session task's Stop waits for the CLI to finish on SIGINT before terminating it.
+    package static let sessionStopGrace: Duration = .seconds(4)
+
+    /// Stops the task's current job: a session the way Ctrl-C does, so the CLI flushes what it
+    /// has (then terminated after `sessionStopGrace`); anything else terminated at once.
     package func stop(task: StudioTask) {
-        if let job = currentJob(for: task) { controller.jobs.cancel(job.id) }
+        guard let job = currentJob(for: task) else { return }
+        if task.archetype == .session {
+            controller.jobs.interruptThenCancel(job.id, after: Self.sessionStopGrace)
+        } else {
+            controller.jobs.cancel(job.id)
+        }
     }
 }

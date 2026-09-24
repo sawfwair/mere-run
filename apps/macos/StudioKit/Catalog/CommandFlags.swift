@@ -798,6 +798,7 @@ extension CommandFlags {
             "--ode-method": "midpoint",
             "--ode-steps": "4",
             "--guidance-scale": "1.5",
+            "--seed": "42",
             "--chunk-seconds": "10",
             "--dtype": "float32"
         ]
@@ -2522,6 +2523,9 @@ extension CommandFlags {
     /// `mere.run speech profile create` — Create voice profile
     package enum SpeechProfileCreate: CommandFlagNamespace {
         package static let command = ["speech", "profile", "create"]
+        package static let defaultValues = [
+            "--language": "auto"
+        ]
 
         package static let name = "--name"
         package static let audio = "--audio"
