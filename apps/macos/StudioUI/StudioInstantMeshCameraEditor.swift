@@ -290,13 +290,13 @@ struct StudioInstantMeshCamerasOverride: View {
         }
     }
 
+    /// The camera files the Library's rows still name — in their argv (`StudioCameraDocuments`
+    /// reads the value after each `--cameras`, the same way the runner copies it beside the
+    /// output) and in their recorded drafts — so a prune keeps every file a run can be replayed
+    /// from.
     private func referencedCameraFiles() -> Set<String> {
-        var referenced = Set(library.items.compactMap { $0.commandDraft?.camerasPath }.filter { !$0.isEmpty })
-        for arguments in library.items.compactMap(\.commandArguments) {
-            for (index, argument) in arguments.enumerated() where argument == Self.camerasFlag && index + 1 < arguments.count {
-                referenced.insert(arguments[index + 1])
-            }
-        }
-        return referenced
+        Set(library.items.flatMap { item in
+            StudioCameraDocuments.referencedPaths(in: item.commandArguments ?? []) + [item.commandDraft?.camerasPath].compactMap { $0 }
+        }.filter { !$0.isEmpty })
     }
 }
