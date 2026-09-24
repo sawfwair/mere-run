@@ -259,6 +259,14 @@ final class ConversationTranscriptTests: XCTestCase {
             ConversationTranscript.Reply(answer: "Take the train.", reasoning: nil, isThinking: false)
         )
         XCTAssertEqual(ConversationTranscript.splitThinking("<|message_model|><|content_te", streaming: true).answer, "")
+
+        // A tool-call frame is the CLI's tool call, not prose: it never reaches the answer, whole
+        // or (while streaming) in part; the other message tokens are framing.
+        let withTool = "<|message_model|><|content_thinking|>look it up<|end_message|><|message_model|><|content_text|>One moment.<|end_message|>"
+            + "<|message_model|>lookup<|content_invoke_tool_json|>{\"name\":\"lookup\",\"args\":{\"q\":\"train\"}}<|end_message|><|content_model_end_sampling|>"
+        XCTAssertEqual(ConversationTranscript.splitThinking(withTool), ConversationTranscript.Reply(answer: "One moment.lookup", reasoning: "look it up", isThinking: false))
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|content_text|>Done.<|end_message|><|message_model|><|content_invoke_tool_json|>{\"na", streaming: true).answer, "Done.")
+        XCTAssertEqual(ConversationTranscript.splitThinking("<|message_user|>hi<|end_message|><|message_tool|>", streaming: true).answer, "hi")
     }
 
     func testReasoningAndFailureDiagnosticsAreNeverReplayed() {

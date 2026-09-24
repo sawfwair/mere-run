@@ -223,20 +223,28 @@ package enum ConversationTranscript {
             ReasoningMarkers(open: "<|content_thinking|>", close: "<|end_message|>", prefilled: false, isChannel: true),
         ]
 
-        /// The channel tokens that frame an answer without being part of it: Gemma 4's
-        /// `<|channel>final` and its like, and Inkling's message framing.
-        static let channelTokens = ["<|message_model|>", "<|content_text|>", "<|content_model_end_sampling|>"]
+        /// The control tokens that frame an answer without being part of it: Gemma 4's
+        /// `<|channel>final` and its like, and every Inkling message token — the ones
+        /// `InklingOutputParser.stripControlTokens` removes, including the tool-call frame
+        /// (`<|content_invoke_tool_json|>`) whose JSON the CLI turns into a tool call.
+        static let channelTokens = [
+            "<|message_model|>", "<|message_user|>", "<|message_system|>", "<|message_tool|>",
+            "<|content_text|>", "<|content_xml|>", "<|content_invoke_tool_json|>", "<|content_model_end_sampling|>",
+        ]
 
         /// A stream can end in the first bytes of a marker; these are what `withoutTrailingPartialMarker`
         /// holds back.
         static let heldBack = all.flatMap { [$0.open, $0.close] } + channelTokens + ["<|channel>final"]
 
+        /// The text with every channel token removed, and with Inkling's tool-call frames
+        /// (`<|content_invoke_tool_json|>{…}<|end_message|>`) removed whole: their JSON is the
+        /// CLI's tool call, never prose.
         static func withoutChannelTokens(_ text: String) -> String {
-            var text = text.replacingOccurrences(of: #"<\|channel>[a-z_]+\s*"#, with: "", options: .regularExpression)
-            for token in channelTokens {
-                text = text.replacingOccurrences(of: token, with: "")
-            }
-            return text
+            var text = text.replacingOccurrences(
+                of: #"<\|content_invoke_tool_json\|>.*?(<\|end_message\|>|\z)"#, with: "", options: [.regularExpression]
+            )
+            text = text.replacingOccurrences(of: #"<\|channel>[a-z_]+\s*"#, with: "", options: .regularExpression)
+            return text.replacingOccurrences(of: #"<\|[a-z_]+\|>"#, with: "", options: .regularExpression)
         }
     }
 
