@@ -3,6 +3,19 @@ import MereRunCore
 @testable import MereRunCLI
 
 final class ModelPullCommandParsingTests: XCTestCase {
+    func testInstalledRestrictedModelCanRecordAcceptanceWithoutDownload() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let modelID = "vision-chat-muse-glimmer-30b"
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+        let command = try ModelPull.parse([modelID, "--accept-model-license"])
+        try MereRunModelManifest(id: modelID, usageTermsAcknowledged: false).write(to: temp)
+
+        XCTAssertTrue(try command.acknowledgeInstalledUsageTerms(for: spec, at: temp))
+        XCTAssertEqual(try MereRunModelManifest.loadRequired(from: temp).usageTermsAcknowledged, true)
+        XCTAssertFalse(try command.acknowledgeInstalledUsageTerms(for: spec, at: temp))
+    }
+
     func testModelPullParsesHardwareOverride() throws {
         let cmd = try ModelPull.parse([
             "text-code-qwen3",
