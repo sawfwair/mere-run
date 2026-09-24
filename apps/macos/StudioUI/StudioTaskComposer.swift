@@ -190,27 +190,9 @@ struct StudioTaskComposer: View {
         .accessibilityValue(draft.template?.title ?? "")
     }
 
-    /// "Threshold 0.3", "Native", "Latency offline": the label with the value, or the label alone
-    /// for a switch that is on, or "Label auto" when the CLI picks.
+    /// The chip's words, shared with the feed card (`StudioContractField.chipTitle(in:)`).
     private func chipTitle(_ field: StudioContractField<StudioTaskDraft>) -> String {
-        let value = field.value(in: draft)
-        switch value {
-        case .flag(let on):
-            return on ? field.label : "\(field.label) off"
-        case .unset:
-            if let fallback = field.option.defaultValue, !fallback.isEmpty {
-                return "\(field.label) \(StudioContractChoiceTitles.title(for: fallback, flag: field.flag).lowercased())"
-            }
-            return "\(field.label) auto"
-        case .text(let text):
-            if text.isEmpty { return "\(field.label) auto" }
-            let shown = field.option.choices.isEmpty ? text : StudioContractChoiceTitles.title(for: text, flag: field.flag)
-            return "\(field.label) \(shown)"
-        case .integer(let integer):
-            return "\(field.label) \(integer)"
-        case .number(let number):
-            return "\(field.label) \(StudioComposerPresets.decimalText(number))"
-        }
+        field.chipTitle(in: draft)
     }
 
     // MARK: - Model chip

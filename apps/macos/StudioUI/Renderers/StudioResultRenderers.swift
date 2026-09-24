@@ -45,6 +45,8 @@ enum StudioResultRendering: Equatable {
     case runPlan(StudioRunPlanReport)
     /// Image ▸ Datasets ▸ Validate's artifact folder.
     case validationArtifacts(StudioImageValidationReport)
+    /// The counts a 3D run's manifest reports, under the mesh tile on its feed card.
+    case meshSummary(StudioMeshSummary)
 }
 
 /// What a renderer draws in the Analyze input column, in place of the input, when the chosen
@@ -189,6 +191,16 @@ enum StudioResultRenderers {
         return nil
     }
 
+    /// The rendering a Generate feed card adds under its output tiles for one finished row, read
+    /// from the files the run left: a mesh summary for a 3D run's manifests. Nil for a row whose
+    /// tiles say everything. (A rendering that replaces the tiles is another registry entry.)
+    static func cardFooterRendering(for item: StudioLibraryItem) -> StudioResultRendering? {
+        if item.templateID?.studioTask == .threeDFromImage, let summary = StudioMeshSummary.load(item: item) {
+            return .meshSummary(summary)
+        }
+        return nil
+    }
+
     /// The files a card rendering already shows, so the card lists neither as a sidecar.
     static func renderedFiles(of rendering: StudioResultRendering, item: StudioLibraryItem) -> [URL] {
         switch rendering {
@@ -196,7 +208,7 @@ enum StudioResultRenderers {
             return item.outputURL.map { [$0] } ?? []
         case .clap, .musicAnalysis, .pianoRoll, .poseSubjects, .flowStatistics, .faceEmbedding, .faceComparison,
              .faceBatch, .depthManifest, .stems, .embeddings, .anonymizationSpans, .anonymizedText, .datasetCandidates,
-             .runPlan, .validationArtifacts:
+             .runPlan, .validationArtifacts, .meshSummary:
             return []
         case .syncReview(_, let audio), .audioOutput(let audio):
             return [audio]
@@ -224,7 +236,7 @@ struct StudioCardRenderingView: View {
             .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         case .clap, .audioOutput, .musicAnalysis, .pianoRoll, .poseSubjects, .flowStatistics, .faceEmbedding,
              .faceComparison, .faceBatch, .depthManifest, .stems, .embeddings, .anonymizationSpans, .anonymizedText,
-             .datasetCandidates, .runPlan, .validationArtifacts:
+             .datasetCandidates, .runPlan, .validationArtifacts, .meshSummary:
             StudioResultRendererView(rendering: rendering, item: item)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
@@ -280,6 +292,8 @@ struct StudioResultRendererView: View {
             StudioRunPlanReportView(report: report)
         case .validationArtifacts(let report):
             StudioImageValidationArtifacts(report: report)
+        case .meshSummary(let summary):
+            StudioMeshSummaryRow(summary: summary)
         }
     }
 }

@@ -12,11 +12,12 @@ struct StudioTaskCommandView: View {
     let onClose: () -> Void
     var canRun = true
 
-    private var launch: StudioConsoleRun? { StudioConsoleRun(template: template, draft: form, seed: seed) }
-    private var preview: String { controller.commandPreview(arguments: launch?.arguments ?? [], masksSecrets: true) }
-
     var body: some View {
-        VStack(spacing: 0) {
+        // One build per body: the argv, the preview, and the validation (which may read a file
+        // the command names) all come from it.
+        let launch = StudioConsoleRun(template: template, draft: form, seed: seed)
+        let preview = controller.commandPreview(arguments: launch?.arguments ?? [], masksSecrets: true)
+        return VStack(spacing: 0) {
             HStack {
                 Label("Command", systemImage: "terminal").font(.headline)
                 Spacer()

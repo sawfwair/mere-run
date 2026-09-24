@@ -570,44 +570,60 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         }
         let cameras = StudioInstantMeshCameraDocument(cameras: (0..<4).map { _ in .example })
         XCTAssertEqual(cameras.problems(viewCount: 4), [])
-        let template = try XCTUnwrap(CommandCatalog.template(id: .imageReconstruct3DMultiview))
-        let root = StudioOutputLocation.specialistDirectory(domain: .threeD, name: "3d-asset", configuredRoot: live.path)
-        let camerasURL = StudioCameraDocuments.url(besideOutputDirectory: root.path)
+        let camerasURL = live.appendingPathComponent("\(flow)/cameras.json")
         try FileManager.default.createDirectory(at: camerasURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try cameras.json().write(to: camerasURL, options: .atomic)
 
-        // Studio3DCreationView.commandDraft for the InstantMesh engine with Preflight only on.
-        func makeDraft(camerasPath: String) -> CommandDraft {
-            var draft = template.defaultDraft()
-            draft.inputPath = ""
-            draft.referenceImagePaths = views.map(\.path).joined(separator: "\n")
-            draft.outputPath = root.path
-            draft.model = ""
-            draft.reconstructionResolution = 256
-            draft.noVertexColors = false
-            draft.camerasPath = camerasPath
-            draft.dryRun = true
-            draft.json = true
-            return draft
-        }
-        let (_, argv) = try specialistRequest(templateID: .imageReconstruct3DMultiview, mode: .createImage, draft: makeDraft(camerasPath: camerasURL.path))
+        // The task draft 3D ▸ From image runs on the InstantMesh engine: the views in the well,
+        // the camera editor's file as `--cameras`, Preflight on. Routing names the directory.
+        var draft = StudioTaskDraft(templateID: .imageReconstruct3DMultiview)
+        StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0].attach(views, to: &draft)
+        draft.form["--resolution"] = .integer(256)
+        draft.form["--cameras"] = .text(camerasURL.path)
+        draft.form["--dry-run"] = .flag(true)
+        draft.form["--json"] = .flag(true)
+        let (request, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(2)), ["image", "reconstruct-3d-multiview"])
         XCTAssertEqual(argv.filter { $0 == "--view" }.count, 4)
+        XCTAssertEqual(argv.indices.filter { argv[$0] == "--view" }.map { argv[$0 + 1] }, views.map(\.path), "views in well order")
         XCTAssertTrue(argv.contains("--dry-run"))
+        XCTAssertEqual(argv.firstIndex(of: "--cameras").map { argv[$0 + 1] }, camerasURL.path)
+        XCTAssertEqual(URL(fileURLWithPath: request.draft.outputPath).deletingLastPathComponent().path, live.appendingPathComponent("3D").path)
         let run = try runCLI(flow, argv, timeout: 600)
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
-        let object = StudioStructuredOutput.objectData(in: run.stdout).flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
-        XCTAssertNotNil(object, "--dry-run --json should print a JSON plan")
+        let plan = try XCTUnwrap(
+            StudioStructuredOutput.objectData(in: run.stdout).flatMap { try? JSONDecoder().decode(DryRunPlan.self, from: $0) },
+            "--dry-run --json should print the InstantMesh plan: \(run.stdout.prefix(400))"
+        )
+        XCTAssertEqual(plan.cameraRig, "supplied-c2w-intrinsics", "the plan uses Studio's cameras, not the released rig")
+        XCTAssertEqual(plan.inputPaths.count, 4)
+        XCTAssertEqual(plan.extractionResolution, 256)
+        XCTAssertTrue(plan.checkpointVerified)
 
-        // Three cameras for four views: Studio blocks it; the CLI must too.
+        // Three cameras for four views: the runner refuses the draft with the editor's words,
+        // before anything is created; the CLI must refuse the same argv too.
         let short = StudioInstantMeshCameraDocument(cameras: (0..<3).map { _ in .example })
         XCTAssertEqual(short.problems(viewCount: 4), ["Add one camera per view: 4 views, 3 cameras."])
         let shortURL = live.appendingPathComponent("\(flow)/short.cameras.json")
-        try FileManager.default.createDirectory(at: shortURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try short.json().write(to: shortURL, options: .atomic)
-        let (_, shortArgv) = try specialistRequest(templateID: .imageReconstruct3DMultiview, mode: .createImage, draft: makeDraft(camerasPath: shortURL.path))
+        var shortDraft = draft
+        shortDraft.form["--cameras"] = .text(shortURL.path)
+        XCTAssertThrowsError(try taskRequest(shortDraft)) { error in
+            XCTAssertEqual((error as? StudioValidationError)?.message, "Add one camera per view: 4 views, 3 cameras.")
+        }
+        let shortArgv = namedArguments(shortDraft)
         let shortRun = try runCLI(flow, shortArgv, timeout: 600)
         XCTAssertNotEqual(shortRun.exitCode, 0, "The CLI accepted 3 cameras for 4 views")
-        conclude(flow, "dryRun exit=\(run.exitCode) keys=\(object?.keys.sorted() ?? []) shortCameras exit=\(shortRun.exitCode) \(StudioFailureSummary.lastMeaningfulLine(in: shortRun.stderr) ?? "")")
+        conclude(flow, "dryRun exit=\(run.exitCode) rig=\(plan.cameraRig) views=\(plan.inputPaths.count) resolution=\(plan.extractionResolution) shortCameras studio=refused cli exit=\(shortRun.exitCode) \(StudioFailureSummary.lastMeaningfulLine(in: shortRun.stderr) ?? "")")
+    }
+
+    /// What `image reconstruct-3d-multiview --dry-run --json` prints (`InstantMeshPlanPayload`),
+    /// read by name.
+    private struct DryRunPlan: Decodable {
+        let cameraRig: String
+        let checkpointVerified: Bool
+        let extractionResolution: Int
+        let inputPaths: [String]
     }
 
     // MARK: - Audio ▸ Who Spoke
@@ -1421,6 +1437,57 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(squares.images, 2)
         XCTAssertTrue(squares.trainable, "status \(squares.status): \(squares.problems)")
         conclude(flow, "scanned=\(document.scannedDirectories) candidates=\(document.candidates.count) trainable=\(document.trainableCount) headline='\(document.headline)'")
+    }
+
+    // MARK: - 3D ▸ TripoSR
+
+    /// A real TripoSR reconstruction from the task draft 3D ▸ From image runs, at a small density
+    /// grid so it stays short: the run lands in a fresh directory under the live root's 3D folder,
+    /// writes a GLB beside its manifests, and the manifests decode into the counts the feed card
+    /// shows under the mesh tile, matching what `--json` printed.
+    func test33TripoSRReconstructsFromTheTaskDraft() throws {
+        try requireModels(["image-3d-triposr"])
+        let flow = "33-triposr"
+        let subject = try Self.squareImage(
+            in: fixtures(), name: "triposr-object.png", size: CGSize(width: 256, height: 256),
+            square: CGRect(x: 64, y: 64, width: 128, height: 128)
+        )
+        var draft = StudioTaskDraft(templateID: .imageReconstruct3D)
+        StudioTaskSchema.slots(for: .imageReconstruct3D)[0].attach([subject], to: &draft)
+        draft.form["--resolution"] = .integer(64)
+        draft.form["--already-framed"] = .flag(true)
+        draft.form["--json"] = .flag(true)
+        let (request, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(3)), ["image", "reconstruct-3d", subject.path])
+        XCTAssertEqual(argv.firstIndex(of: "--resolution").map { argv[$0 + 1] }, "64")
+        let output = URL(fileURLWithPath: request.draft.outputPath, isDirectory: true)
+        XCTAssertEqual(output.deletingLastPathComponent().path, live.appendingPathComponent("3D").path)
+        XCTAssertTrue(output.lastPathComponent.hasPrefix("triposr-object"), output.lastPathComponent)
+
+        let run = try runCLI(flow, argv, timeout: 900)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        let files = ((try? FileManager.default.contentsOfDirectory(atPath: output.path)) ?? []).sorted()
+        XCTAssertTrue(files.contains { $0.hasSuffix(".glb") }, "Expected a GLB in \(files)")
+        let row = StudioLibraryItem(
+            id: request.id, mode: request.mode, prompt: "", inputURL: subject, outputURL: nil, createdAt: Date(), updatedAt: Date(),
+            status: .completed, exitCode: 0, commandPreview: "", outputText: nil, templateID: .imageReconstruct3D,
+            artifactURLs: files.map { output.appendingPathComponent($0) }
+        )
+        let summary = try XCTUnwrap(StudioMeshSummary.load(item: row), "the manifests should decode into a mesh summary: \(files)")
+        XCTAssertGreaterThan(summary.vertexCount, 0)
+        XCTAssertGreaterThan(summary.triangleCount, 0)
+        XCTAssertNil(summary.pbrVoxelCount, "only TRELLIS.2 counts PBR voxels")
+        let printed = try XCTUnwrap(StudioStructuredOutput.objectData(in: run.stdout).flatMap { try? JSONDecoder().decode(PrintedMesh.self, from: $0) },
+                                    "--json should print the run payload")
+        XCTAssertEqual(printed.vertexCount, summary.vertexCount, "the card's counts are the run's")
+        XCTAssertEqual(printed.triangleCount, summary.triangleCount)
+        conclude(flow, "output=\(output.path) files=\(files) mesh=\(summary.text) seconds=\(String(format: "%.0f", run.duration))")
+    }
+
+    /// The counts `image reconstruct-3d --json` prints (`TripoSRRunPayload`), read by name.
+    private struct PrintedMesh: Decodable {
+        let vertexCount: Int
+        let triangleCount: Int
     }
 
     // MARK: - Studio request builders

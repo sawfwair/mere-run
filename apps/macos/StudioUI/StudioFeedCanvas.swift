@@ -257,7 +257,10 @@ private struct StudioCardHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                Text(item.displayTitle)
+                // A task run without a prompt is headed by its command ("TripoSR 3D"), not the
+                // mode that files it; a title the user gave it wins either way.
+                Text(item.customTitle.flatMap { $0.isBlank ? nil : $0 }
+                    ?? (item.prompt.isBlank && item.templateID?.studioTask.usesTaskDraft == true ? item.displayKindTitle : item.displayTitle))
                     .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(3)
@@ -319,6 +322,11 @@ enum StudioFeedChips {
     static func chips(for item: StudioLibraryItem, titles: StudioModelTitles) -> [String] {
         guard let draft = item.commandDraft else { return [] }
         var chips: [String] = []
+        // A task on the shared workspace records its exact argv; its chips are the composer's
+        // (the template's essentials) valued from that, not the fields of the mode that files it.
+        if item.templateID?.studioTask.usesTaskDraft == true {
+            return StudioTaskChips.chips(for: item, titles: titles)
+        }
         switch item.mode {
         case .createImage, .video:
             chips.append("\(draft.width)×\(draft.height)")
@@ -455,6 +463,9 @@ struct StudioGenerationCard: View {
             StudioCardRenderingView(rendering: rendering, item: item)
         } else if !mediaFiles.isEmpty {
             StudioOutputGrid(urls: mediaFiles, tileSide: Self.tileSide, onOpen: { actions.focus(item, $0) })
+        }
+        if let rendering = StudioResultRenderers.cardFooterRendering(for: item) {
+            StudioResultRendererView(rendering: rendering, item: item)
         }
         ForEach(textFiles, id: \.self) { url in
             StudioTextFilePreview(url: url)

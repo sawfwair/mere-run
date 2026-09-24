@@ -769,15 +769,23 @@ through the task runner. Any audio attachment well offers Record… in its
 context menu (`StudioUI/StudioAudioRecorder.swift`); the recording is filed
 with the task's domain.
 
-**3D** is the domain for TripoSR, native TRELLIS.2 PBR reconstruction, and
-ordered 4- and 6-view InstantMesh. It has engine-specific controls, immutable
-output directories, embedded orbitable Quick Look models, manifest statistics,
-and the shared progress and Library lifecycle. InstantMesh's optional calibrated
-cameras are edited per view (`StudioUI/StudioCameraEditor.swift`,
+**3D** ▸ From image is a Generate task on the shared task workspace for
+TripoSR, native TRELLIS.2 PBR reconstruction, and ordered 4- and 6-view
+InstantMesh. The Engine chip picks the template; the well takes one picture
+(or InstantMesh's ordered views), the inspector shows each engine's own
+controls from the contract, and every run lands in a fresh directory under the
+3D folder. Results are feed cards with the mesh in an orbitable Quick Look
+tile and the manifest's vertex, triangle, and PBR voxel counts under it
+(`StudioKit/StudioMeshSummary.swift`, `StudioUI/Renderers/StudioMeshSummaryRow.swift`).
+InstantMesh's ordered views are reordered in the inspector, and its optional
+calibrated cameras are edited per view there
+(`StudioUI/StudioInstantMeshCameraEditor.swift`,
 `StudioKit/StudioCameraDocuments.swift`) — a 3 × 4 camera-to-world pose and
-`fx, fy, cx, cy` — checked as the CLI checks them and written as
-`<output>.cameras.json` beside the run's output folder; camera files import and
-export. It runs the `image reconstruct-3d`
+`fx, fy, cx, cy` — checked as the CLI checks them, saved as a content-named
+file the draft's `--cameras` points at, and imported and exported as files.
+An InstantMesh run without four or six views, or with a camera file that does
+not match them, is refused with the reason before anything is created
+(`StudioKit/StudioCommandChecks.swift`). It runs the `image reconstruct-3d`
 family; the `vision image-to-3d` aliases stay CLI-only rather than being
 duplicated under Vision.
 

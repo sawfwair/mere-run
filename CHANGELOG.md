@@ -294,6 +294,17 @@ The format is based on Keep a Changelog.
   Command view, "Use these settings", and Stop, and files its output under the
   Text or Image folder like every other run. The typed-text and dataset
   decoders are typed `Decodable` readers of the CLI's own output.
+- Move 3D ▸ From image onto the shared task workspace: an Engine chip picks
+  TRELLIS.2, TripoSR, or InstantMesh, the well takes the picture or the ordered
+  views, each engine's controls come from its contract, and results are feed
+  cards with the mesh in a Quick Look tile and the manifest's vertex, triangle,
+  and PBR voxel counts under it. InstantMesh's views are reordered and its
+  cameras edited in the inspector; a run without four or six views, or with a
+  camera file that does not match them, is refused with the reason before
+  anything is created. Runs land in a fresh directory under the 3D folder
+  named after the picture; the output-directory field is gone. The old page's
+  typed settings (engine, resolution, seeds, token ceiling, remesh band) start
+  fresh at the contract's defaults; an edited camera document carries over.
 
 ## 0.55.0 - 2026-09-22
 

@@ -241,7 +241,7 @@ package enum StudioConsoleCommand {
                 return "\(label) \(issue.message)."
             }
         }
-        return nil
+        return StudioCommandChecks.message(for: capability, draft: draft)
     }
 
     /// Where the run will write, when the contract names the option that says so. `JobStore`

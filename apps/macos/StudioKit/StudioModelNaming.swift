@@ -66,7 +66,7 @@ package enum StudioModelNaming {
     /// "speech-".
     private static let categoryPrefixes = [
         "text-chat-", "text-agent-", "text-embed-", "text-code-", "text-decide-",
-        "image-", "video-", "music-", "sfx-", "speech-tts-", "speech-asr-", "speech-",
+        "image-3d-", "image-", "video-", "music-", "sfx-", "speech-tts-", "speech-asr-", "speech-",
         "embed-", "vision-ground-", "vision-segment-", "vision-chat-", "vision-ocr-", "vision-", "text-"
     ]
 
@@ -78,7 +78,7 @@ package enum StudioModelNaming {
         "clip": "CLIP", "t5": "T5", "mmdit": "MMDiT", "dit": "DiT", "sdxl": "SDXL", "sam": "SAM",
         "3d": "3D", "hd": "HD", "sfx": "SFX", "ai": "AI", "gguf": "GGUF", "mlx": "MLX",
         "ace": "ACE", "q4": "Q4", "q8": "Q8", "fp8": "FP8", "bf16": "BF16", "int4": "INT4",
-        "int8": "INT8"
+        "int8": "INT8", "triposr": "TripoSR", "trellis2": "TRELLIS.2", "instantmesh": "InstantMesh"
     ]
 
     /// Qualifiers that hyphenate onto the name they qualify, the way the model cards print them:

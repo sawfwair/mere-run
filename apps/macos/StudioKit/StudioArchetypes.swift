@@ -59,6 +59,7 @@ extension StudioTask {
         .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive,
         .audioWhoSpoke, .audioEnhance, .audioSeparate, .musicSeparate, .audioLive, .voiceVoices,
         .textEmbeddings, .textAnonymize, .imageDatasets,
+        .threeDFromImage,
     ]
 
     /// Temporary gate: true while this task still renders its bespoke page. A mode-backed task

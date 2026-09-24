@@ -1424,7 +1424,7 @@ package struct CommandTemplate: Identifiable, Equatable {
         case .imageReconstruct3DMultiview:
             let views = CommandArguments.pathList(draft.referenceImagePaths)
             if views.count != 4 && views.count != 6 {
-                return "Add exactly 4 or 6 ordered source views."
+                return StudioCommandChecks.instantMeshViewCountMessage
             }
         case .videoAnimate:
             if draft.referenceMaskPath.isBlank {

@@ -722,8 +722,6 @@ private struct StudioWorkspaceView: View {
             StudioRealtimeMusicView(initialDraft: draft)
         case .voiceVoices:
             StudioVoicesView()
-        case .threeDFromImage:
-            Studio3DCreationView()
         case .visionLive:
             StudioLiveTrackSession(models: models)
         case .audioLive:

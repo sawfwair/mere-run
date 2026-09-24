@@ -370,10 +370,16 @@ package enum StudioCameraDocuments {
         StudioDraftFiles.prune(in: draftFolder(page: page, fileManager: fileManager), prefix: "cameras-", current: current, referenced: referenced, keeping: keeping, fileManager: fileManager)
     }
 
+    /// The defaults key a test registers (in the suite `StudioOutputLocation.defaults` names, never
+    /// persisted) to keep an editor's draft files in its own folder rather than the user's.
+    package static let draftRootDefaultsKey = "mererun.app.cameraDraftRoot"
+
+    /// Where the pages' draft files live: `~/Library/Application Support/MereRun`, beside App
+    /// Outputs, unless the defaults redirect it.
     private static func draftFolder(page: String, fileManager: FileManager) -> URL {
-        StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
-            .deletingLastPathComponent()
-            .appendingPathComponent(page, isDirectory: true)
+        let root = StudioOutputLocation.defaults.string(forKey: draftRootDefaultsKey).map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? StudioOutputLocation.appOutputsRoot(fileManager: fileManager).deletingLastPathComponent()
+        return root.appendingPathComponent(page, isDirectory: true)
     }
 }
 

@@ -255,6 +255,9 @@ package enum StudioTaskSchema {
     package static func variantField(for task: StudioTask) -> StudioContractField<StudioTaskDraft>? {
         let templates = task.variantTemplates
         guard templates.count > 1 else { return nil }
+        // Filed with the prompt when the task takes one, else with the inputs, so a prompt-less
+        // task's inspector never opens with a "Prompt" section.
+        let takesPrompt = templates[0].id.capability.flatMap(promptField) != nil
         return StudioContractField(
             option: MereRunCapabilityOption(
                 flag: variantFlag,
@@ -262,7 +265,7 @@ package enum StudioTaskSchema {
                 kind: .choice,
                 choices: templates.map(\.id.rawValue),
                 defaultValue: templates[0].id.rawValue,
-                group: MereRunCapabilityOptionGroup.prompt,
+                group: takesPrompt ? MereRunCapabilityOptionGroup.prompt : MereRunCapabilityOptionGroup.inputs,
                 tier: .essential
             ),
             bindings: [.variant],
