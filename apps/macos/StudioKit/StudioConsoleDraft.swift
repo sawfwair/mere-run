@@ -205,6 +205,15 @@ package enum StudioConsoleCommand {
                 }
             }
         }
+        // Woosh's renoise is one amount or one amount per step; the CLI rejects anything else
+        // (`parseRenoiseSchedule`), so the run is refused with the same objection first.
+        if let renoise = capability.options.first(where: { $0.flag == "--renoise" }), carries(renoise, in: draft) {
+            let argument = draft.text(renoise.flag)
+            let schedule = StudioRenoise(mode: StudioRenoise.inferredMode(argument: argument), argument: argument)
+            // With `--steps` left to the CLI the count is unknown, so only the amounts are checked.
+            let steps = Int(draft.text("--steps")) ?? schedule.scheduleValues?.count ?? 1
+            if let problem = schedule.problems(steps: steps).first { return problem }
+        }
         // Any command that declares a reply budget shares the runtime's bounds: Chat, Code, and
         // the vision commands all reject a zero or negative budget, and Chat's context size caps
         // it. Capabilities without `--context-size` read as unbounded above.

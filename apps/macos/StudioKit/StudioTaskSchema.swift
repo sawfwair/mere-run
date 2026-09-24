@@ -86,7 +86,9 @@ package enum StudioTaskSchema {
             let types: [UTType]
             if argument.kind == .directory {
                 types = [.folder]
-            } else if index == 0, !template.inputKind.allowedTypes.isEmpty {
+            } else if slots.isEmpty, !template.inputKind.allowedTypes.isEmpty {
+                // The first file positional is the template's own input, wherever the contract
+                // places it (`sfx video generate <prompt> <input>`).
                 types = template.inputKind.allowedTypes
             } else {
                 types = acceptedTypes(forArgument: argument.name, templateID: templateID)
@@ -123,8 +125,6 @@ package enum StudioTaskSchema {
     private static func acceptedTypes(forArgument name: String, templateID: CommandTemplateID) -> [UTType] {
         switch templateID {
         case .visionFlow, .visionFaceCompare, .visionFaceBatch, .visionGeometryMultiview: return [.image]
-        case .sfxClapScore, .sfxAEEncode: return [.audio]
-        case .sfxAEDecode: return [.data]
         default: return [.data]
         }
     }
