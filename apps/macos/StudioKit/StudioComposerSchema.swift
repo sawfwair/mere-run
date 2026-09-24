@@ -441,6 +441,9 @@ package struct StudioModelScope: Equatable {
         case .geoFire: return ["vision-fire"]
         case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview: return ["image-3d"]
         case .speechSynthesize, .speechProfileCreate: return ["speech-tts"]
+        case .imageTrainLoRA: return ["image"]
+        case .textTrainLoRA: return ["text-chat"]
+        case .musicTrainAdapter: return ["music"]
         default:
             if let mode = StudioMode.allCases.first(where: { $0.defaultTemplateID == templateID }) {
                 return mode.modelCategories

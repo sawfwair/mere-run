@@ -524,7 +524,7 @@ package enum StudioOutputLocation {
                 seed: draft.text("--seed"),
                 fingerprint: ([templateID.rawValue] + bare.arguments).joined(separator: "\u{1}"),
                 fallbackStem: primaryInput.isBlank
-                    ? template.title
+                    ? (promptlessStems[templateID] ?? template.title)
                     : URL(fileURLWithPath: primaryInput).deletingPathExtension().lastPathComponent,
                 existing: existing
             )
@@ -561,6 +561,13 @@ package enum StudioOutputLocation {
         }
         return named
     }
+
+    /// The stem a template's output takes when it has neither a prompt nor a primary input to be
+    /// named after, where the template's title would read oddly as a file name: Music ▸ Train's
+    /// clip list is an editor, not a well, so its adapter is a `music-adapter`.
+    private static let promptlessStems: [CommandTemplateID: String] = [
+        .musicTrainAdapter: "music-adapter",
+    ]
 
     /// The extension a command whose output follows its `--format` writes (`speech diarize`,
     /// `music transcribe`): the chosen format, with MIDI's conventional extension; nil when the

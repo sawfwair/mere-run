@@ -681,7 +681,7 @@ package enum StudioContractOverrideID: String, CaseIterable, Hashable {
     case cameras
     /// The ordered view list over a repeatable `--view` (InstantMesh).
     case orderedViews
-    /// The music training manifest editor over `--manifest`.
+    /// The music training clip list over `music train-adapter --dataset`.
     case musicManifest
     /// Click-to-pick a face on the detection result, over the `--*face-index` options.
     case faceIndex
@@ -689,7 +689,7 @@ package enum StudioContractOverrideID: String, CaseIterable, Hashable {
     case instruments
     /// The renoise mode control over its flag pair.
     case renoise
-    /// Per-target LoRA ranks over `--target-rank`.
+    /// Per-target LoRA ranks over `--lora-target-ranks`.
     case targetRanks
 }
 
