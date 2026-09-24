@@ -4,4 +4,4 @@ trustPolicyIgnoreAfter: 10080
 blockExoticSubdeps: true
 strictDepBuilds: true
 allowBuilds:
-  esbuild@0.27.3: true
+  esbuild@0.25.12: true
