@@ -861,24 +861,6 @@ private enum StudioVisionOverlayKind {
     case pose
 }
 
-private struct StudioPoseOverlayResult: Decodable {
-    struct Subject: Decodable {
-        struct Point: Decodable {
-            let name: String
-            let x: Double
-            let y: Double
-            let confidence: Double
-        }
-        let kind: String
-        let index: Int
-        let points: [Point]
-    }
-    let imageWidth: Int
-    let imageHeight: Int
-    let coordinateSpace: String
-    let subjects: [Subject]
-}
-
 private struct StudioVisionOverlayPreview: View {
     let imageURL: URL
     let jsonURL: URL
@@ -1094,40 +1076,6 @@ private struct StudioVisionOverlayPreview: View {
     }
 }
 
-private struct StudioFlowField {
-    let width: Int
-    let height: Int
-    let vectors: [(Float, Float)]
-
-    static func load(url: URL) throws -> StudioFlowField {
-        let data = try Data(contentsOf: url)
-        guard data.count >= 12 else { throw CocoaError(.fileReadCorruptFile) }
-        func uint32(_ offset: Int) -> UInt32 {
-            data.withUnsafeBytes { raw in
-                UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: offset, as: UInt32.self))
-            }
-        }
-        let magic = Float(bitPattern: uint32(0))
-        let width = Int(Int32(bitPattern: uint32(4)))
-        let height = Int(Int32(bitPattern: uint32(8)))
-        guard abs(magic - 202_021.25) < 0.01, width > 0, height > 0,
-              data.count >= 12 + width * height * 8 else {
-            throw CocoaError(.fileReadCorruptFile)
-        }
-        var vectors: [(Float, Float)] = []
-        vectors.reserveCapacity(width * height)
-        var offset = 12
-        for _ in 0..<(width * height) {
-            vectors.append((
-                Float(bitPattern: uint32(offset)),
-                Float(bitPattern: uint32(offset + 4))
-            ))
-            offset += 8
-        }
-        return StudioFlowField(width: width, height: height, vectors: vectors)
-    }
-}
-
 private struct StudioOpticalFlowPreview: View {
     let url: URL
     @State private var field: StudioFlowField?
@@ -1144,9 +1092,9 @@ private struct StudioOpticalFlowPreview: View {
                     for y in stride(from: 0, to: field.height, by: step) {
                         for x in stride(from: 0, to: field.width, by: step) {
                             let vector = field.vectors[y * field.width + x]
-                            let magnitude = hypot(Double(vector.0), Double(vector.1))
+                            let magnitude = hypot(Double(vector.x), Double(vector.y))
                             guard magnitude.isFinite, magnitude > 0.01 else { continue }
-                            let angle = atan2(Double(vector.1), Double(vector.0))
+                            let angle = atan2(Double(vector.y), Double(vector.x))
                             let length = min(CGFloat(step) * 0.8, CGFloat(log1p(magnitude)) * 3 + 2)
                             let start = CGPoint(x: (CGFloat(x) + 0.5) * sx, y: (CGFloat(y) + 0.5) * sy)
                             let end = CGPoint(

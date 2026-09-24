@@ -48,77 +48,6 @@ enum StudioSFXTask: String, CaseIterable, Identifiable {
     }
 }
 
-struct StudioNPYMetadata: Equatable {
-    let version: String
-    let descriptor: String
-    let shape: String
-    let fortranOrder: Bool
-    let byteCount: Int
-
-    static func load(from url: URL) -> StudioNPYMetadata? {
-        guard let data = try? Data(contentsOf: url),
-              data.count >= 10,
-              Array(data.prefix(6)) == [0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59] else {
-            return nil
-        }
-        let major = Int(data[6])
-        let minor = Int(data[7])
-        let headerLength: Int
-        let headerStart: Int
-        if major <= 1 {
-            headerLength = Int(data[8]) | (Int(data[9]) << 8)
-            headerStart = 10
-        } else {
-            guard data.count >= 12 else { return nil }
-            headerLength = Int(data[8])
-                | (Int(data[9]) << 8)
-                | (Int(data[10]) << 16)
-                | (Int(data[11]) << 24)
-            headerStart = 12
-        }
-        guard headerLength >= 0, data.count >= headerStart + headerLength,
-              let header = String(
-                  data: data.subdata(in: headerStart..<(headerStart + headerLength)),
-                  encoding: .ascii
-              ) else {
-            return nil
-        }
-        return StudioNPYMetadata(
-            version: "\(major).\(minor)",
-            descriptor: dictionaryValue("descr", in: header) ?? "unknown",
-            shape: tupleValue("shape", in: header) ?? "unknown",
-            fortranOrder: header.contains("'fortran_order': True")
-                || header.contains("\"fortran_order\": true"),
-            byteCount: data.count
-        )
-    }
-
-    private static func dictionaryValue(_ key: String, in header: String) -> String? {
-        for quote in ["'", "\""] {
-            let marker = "\(quote)\(key)\(quote)"
-            guard let keyRange = header.range(of: marker),
-                  let colon = header[keyRange.upperBound...].firstIndex(of: ":") else { continue }
-            let tail = header[header.index(after: colon)...]
-                .trimmingCharacters(in: .whitespaces)
-            guard let first = tail.first, first == "'" || first == "\"",
-                  let end = tail.dropFirst().firstIndex(of: first) else { continue }
-            return String(tail[tail.index(after: tail.startIndex)..<end])
-        }
-        return nil
-    }
-
-    private static func tupleValue(_ key: String, in header: String) -> String? {
-        for quote in ["'", "\""] {
-            let marker = "\(quote)\(key)\(quote)"
-            guard let keyRange = header.range(of: marker),
-                  let open = header[keyRange.upperBound...].firstIndex(of: "("),
-                  let close = header[open...].firstIndex(of: ")") else { continue }
-            return String(header[open...close])
-        }
-        return nil
-    }
-}
-
 struct StudioSFXLabView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
@@ -633,17 +562,5 @@ private struct StudioSFXSyncReview: View {
                 .merePanel()
             }
         }
-    }
-}
-
-/// `mere.run sfx clap` prints one JSON object (`score`, `prompt`, `audio`, `model`); the score is
-/// read from it by name, from the last line that decodes, rather than guessed from the text.
-enum StudioCLAPScore {
-    private struct Output: Decodable { let score: Double }
-
-    static func parse(_ text: String) -> Double? {
-        text.components(separatedBy: .newlines).reversed().lazy.compactMap { line in
-            try? JSONDecoder().decode(Output.self, from: Data(line.utf8)).score
-        }.first
     }
 }

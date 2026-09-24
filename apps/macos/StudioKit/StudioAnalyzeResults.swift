@@ -249,11 +249,23 @@ package enum StudioAnalyzeDocument: Equatable {
     case tracking(StudioVisionTrackDocument)
     case diarization(StudioDiarizationDocument)
     case transcript(StudioTranscriptDocument)
+    case faces(StudioFaceOverlayResult)
+    case pose(StudioPoseOverlayResult)
+    case flow(StudioFlowField)
+    case musicAnalysis(StudioMusicAnalysisDocument)
+    case midi(StudioMIDISummary)
+    case clap(StudioCLAPScore.Output)
+    case tensor(StudioTensorHeader)
 
-    /// Decodes whichever document `data` holds. The vision writers all emit a JSON object with a
-    /// distinguishing key (`queries`, `prompts`, `frames`), so the shape identifies itself; a
-    /// payload that is not JSON at all is read as a transcript.
+    /// Decodes whichever document `data` holds. The binary formats announce themselves (`.flo`'s
+    /// magic float, `MThd`, `.npy`'s magic, a safetensors length prefix); the JSON writers each
+    /// emit an object with a distinguishing key (`queries`, `prompts`, `frames`, `faces`,
+    /// `subjects`, `metadata`), so the shape identifies itself; a payload that is none of those
+    /// is read as a transcript.
     package static func decode(_ data: Data) -> StudioAnalyzeDocument? {
+        if let field = try? StudioFlowField.decode(data) { return .flow(field) }
+        if let midi = StudioMIDISummary.decode(data) { return .midi(midi) }
+        if let npy = StudioNPYMetadata.decode(data) { return .tensor(.npy(npy)) }
         let decoder = JSONDecoder()
         if let document = try? decoder.decode(StudioVisionTrackDocument.self, from: data) {
             return .tracking(document)
@@ -267,7 +279,21 @@ package enum StudioAnalyzeDocument: Equatable {
         if let document = try? decoder.decode(StudioDiarizationDocument.self, from: data) {
             return .diarization(document)
         }
-        guard let text = String(data: data, encoding: .utf8), !text.isBlank else { return nil }
+        if let document = try? decoder.decode(StudioFaceOverlayResult.self, from: data) {
+            return .faces(document)
+        }
+        if let document = try? decoder.decode(StudioPoseOverlayResult.self, from: data) {
+            return .pose(document)
+        }
+        if let document = try? decoder.decode(StudioMusicAnalysisDocument.self, from: data) {
+            return .musicAnalysis(document)
+        }
+        guard let text = String(data: data, encoding: .utf8), !text.isBlank else {
+            // Not text at all: a safetensors file is the one binary left.
+            return StudioSafetensorsHeader.decode(data).map { .tensor(.safetensors($0)) }
+        }
+        if let analysis = StudioMusicAnalysisDocument.decode(text) { return .musicAnalysis(analysis) }
+        if let clap = StudioCLAPScore.decode(text) { return .clap(clap) }
         let transcript = StudioTranscriptDocument.parse(text)
         return transcript.segments.isEmpty && transcript.text.isEmpty ? nil : .transcript(transcript)
     }
@@ -279,14 +305,21 @@ package enum StudioAnalyzeDocument: Equatable {
         case .segmentation(let document): return document.modelID
         case .tracking(let document): return document.modelID
         case .diarization(let document): return document.model
-        case .transcript: return nil
+        case .musicAnalysis(let document): return document.model
+        case .clap(let output): return output.model
+        case .transcript, .faces, .pose, .flow, .midi, .tensor: return nil
         }
     }
 
-    /// The pixel size the document itself knows, when it records one (only `track` does).
+    /// The pixel size the document itself knows, when it records one.
     package var reportedInputSize: CGSize? {
-        guard case .tracking(let document) = self else { return nil }
-        return CGSize(width: document.frameWidth, height: document.frameHeight)
+        switch self {
+        case .tracking(let document): return CGSize(width: document.frameWidth, height: document.frameHeight)
+        case .faces(let document): return CGSize(width: document.width, height: document.height)
+        case .pose(let document): return CGSize(width: document.imageWidth, height: document.imageHeight)
+        case .flow(let field): return CGSize(width: field.width, height: field.height)
+        default: return nil
+        }
     }
 
     /// The detections to draw, in the input's pixel space.
@@ -345,7 +378,23 @@ package enum StudioAnalyzeDocument: Equatable {
                     maskURL: detection.maskPath.map { URL(fileURLWithPath: $0) }
                 )
             }
-        case .diarization, .transcript:
+        case .faces(let document):
+            // Faces are numbered the way `--face-index` counts them, so the row and the pick agree.
+            return document.faces.map { face in
+                StudioAnalyzeDetection(
+                    id: face.index,
+                    label: "Face \(face.index + 1)",
+                    confidence: face.detection.score,
+                    box: CGRect(
+                        x: face.detection.boundingBox.x,
+                        y: face.detection.boundingBox.y,
+                        width: face.detection.boundingBox.width,
+                        height: face.detection.boundingBox.height
+                    ),
+                    maskURL: nil
+                )
+            }
+        case .diarization, .transcript, .pose, .flow, .musicAnalysis, .midi, .clap, .tensor:
             return []
         }
     }
@@ -355,6 +404,8 @@ package enum StudioAnalyzeDocument: Equatable {
         switch self {
         case .ground, .segmentation:
             return detectionCount == 1 ? "1 object found" : "\(detectionCount) objects found"
+        case .faces:
+            return detectionCount == 1 ? "1 face found" : "\(detectionCount) faces found"
         case .tracking(let document):
             let objects = document.objects.count == 1 ? "1 object" : "\(document.objects.count) objects"
             return "\(objects) across \(document.frames.count) frames"
@@ -364,6 +415,19 @@ package enum StudioAnalyzeDocument: Equatable {
         case .transcript(let document):
             let count = document.segments.count
             return count == 1 ? "1 segment" : "\(count) segments"
+        case .pose(let document):
+            return document.summary
+        case .flow(let field):
+            return field.summary
+        case .musicAnalysis(let document):
+            return [document.tempoDescription, document.metadata.keyscale, document.analyzedDescription]
+                .compactMap { $0 }.joined(separator: " · ")
+        case .midi(let summary):
+            return summary.summary
+        case .clap(let output):
+            return String(format: "CLAP score %.2f", output.score)
+        case .tensor(let header):
+            return header.summary
         }
     }
 
@@ -491,8 +555,12 @@ package enum StudioAnalyzeDocumentSource {
     private static let documentRoles = [StudioArtifactRole.detections, StudioArtifactRole.tracking]
 
     /// The artifact holding the run's structured result: the `--json-output` sidecar for the
-    /// vision tasks, the transcript the speech tasks write. A run whose receipt named its
-    /// sidecars says which file that is; extension order is the fallback for the rest.
+    /// vision tasks, the transcript the speech tasks write, the flow field, MIDI, or tensor a
+    /// specialist command writes as its primary output. A run whose receipt named its sidecars
+    /// says which file that is; the template's own preference comes next, and extension order
+    /// is the fallback for the rest. Commands that print their result (`music analyze`,
+    /// `sfx clap score`, `text embed`) have no document file; the canvas reads the row's
+    /// captured output instead.
     package static func url(for item: StudioLibraryItem) -> URL? {
         let artifacts = item.allArtifactURLs
         for role in documentRoles {
@@ -500,11 +568,22 @@ package enum StudioAnalyzeDocumentSource {
                 return match
             }
         }
-        for pathExtension in documentExtensions {
+        for pathExtension in preferredExtensions(for: item.templateID) + documentExtensions {
             if let match = artifacts.first(where: { $0.pathExtension.lowercased() == pathExtension }) {
                 return match
             }
         }
         return nil
+    }
+
+    /// The file a template's result lives in when it is not a JSON sidecar.
+    package static func preferredExtensions(for templateID: CommandTemplateID?) -> [String] {
+        switch templateID {
+        case .visionFlow: return ["flo"]
+        case .musicTranscribe: return ["mid", "midi"]
+        case .sfxAEEncode: return ["npy"]
+        case .sfxConditionText, .geoFlood, .geoFire, .geoTessera, .geoOlmoEarth: return ["safetensors"]
+        default: return []
+        }
     }
 }
