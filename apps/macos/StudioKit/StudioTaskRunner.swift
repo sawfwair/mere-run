@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 /// Why a request cannot run yet, in the words the composer's banner shows.
@@ -48,13 +49,31 @@ package final class StudioTaskRunner {
         return StudioOutputLocation.preparing(resolved, fileManager: fileManager)
     }
 
-    /// The request a task draft runs: its destination named, then prepared. Throws before
-    /// anything is created when the command is incomplete.
-    package func request(for draft: StudioTaskDraft, task: StudioTask) throws -> StudioRunRequest {
-        guard let base = StudioOutputLocation.destination(for: draft).request() else {
+    /// The request a task draft runs: its destination named, validated and prepared, then a
+    /// camera draft the inspector wrote copied beside the output (`StudioCameraDocuments`) so
+    /// the run's folder carries its own file. Static so the live-acceptance tests build exactly
+    /// what the app runs. Throws before anything is created when the command is incomplete.
+    package static func prepare(
+        draft: StudioTaskDraft,
+        sessions: StudioTaskSessions,
+        fileManager: FileManager = .default
+    ) throws -> (request: StudioRunRequest, fallbackReason: String?) {
+        let named = StudioOutputLocation.destination(for: draft, fileManager: fileManager)
+        guard let base = named.request() else {
             throw StudioValidationError(message: "This command can't run from Studio.")
         }
-        let prepared = try Self.prepare(base, sessions: sessions)
+        var prepared = try prepare(base, sessions: sessions, fileManager: fileManager)
+        if prepared.fallbackReason == nil, let page = StudioCameraDocuments.draftPage(for: draft.templateID) {
+            let placed = try StudioCameraDocuments.placingDraft(of: named, page: page, fileManager: fileManager)
+            if placed != named, let request = placed.request() {
+                prepared = try prepare(request, sessions: sessions, fileManager: fileManager)
+            }
+        }
+        return prepared
+    }
+
+    package func request(for draft: StudioTaskDraft, task: StudioTask) throws -> StudioRunRequest {
+        let prepared = try Self.prepare(draft: draft, sessions: sessions)
         if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
         return prepared.request
     }
@@ -96,9 +115,24 @@ package final class StudioTaskRunner {
         let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft)
         library.start(request: request, commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true),
                       status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued)
-        // `run(studio:)` keeps the camera-access gate in front of `vision track-live`.
-        _ = controller.run(studio: request)
+        // `run(studio:)` keeps the camera-access gate in front of `vision track-live`. While the
+        // system is still asking, the controller retries once the answer comes; once access is
+        // denied or restricted nothing will ever launch, so the row fails with the reason instead
+        // of staying "running" forever.
+        let launched = controller.run(studio: request)
+        if !launched, request.template.id == .visionTrackLive,
+           AVCaptureDevice.authorizationStatus(for: .video) != .notDetermined {
+            library.complete(
+                id: request.id, exitCode: 1, outputURL: nil,
+                outputText: Self.cameraDeniedMessage,
+                commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true)
+            )
+        }
     }
+
+    /// What a Live row says when the Mac will not give mere.run the camera.
+    package static let cameraDeniedMessage =
+        "Camera access is off for mere.run. Turn it on in System Settings ▸ Privacy & Security ▸ Camera, then start again."
 
     /// The job Stop acts on: the run this task last submitted while it is alive, else the newest
     /// live run of any of the task's templates.
