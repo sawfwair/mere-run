@@ -273,7 +273,7 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(flag: "--output", label: "Output", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--resolution", label: "Resolution", kind: .integer),
+            .init(flag: "--resolution", label: "Resolution", kind: .integer, group: Group.run, tier: .essential),
             .init(flag: "--density-threshold", label: "Density threshold", kind: .number),
             .init(flag: "--foreground-ratio", label: "Foreground ratio", kind: .number),
             .init(flag: "--already-framed", label: "Already framed", kind: .boolean),
@@ -295,7 +295,7 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(flag: "--output", label: "Output", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential),
             .init(flag: "--texture-seed", label: "Texture seed", kind: .integer),
             .init(flag: "--max-tokens", label: "Maximum sparse tokens", kind: .integer),
             .init(flag: "--already-framed", label: "Already framed", kind: .boolean),
@@ -318,7 +318,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--output", label: "Output", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--cameras", label: "Cameras", kind: .file),
-            .init(flag: "--resolution", label: "Resolution", kind: .integer),
+            .init(flag: "--resolution", label: "Resolution", kind: .integer, group: Group.run, tier: .essential),
             .init(flag: "--no-vertex-colors", label: "Geometry only", kind: .boolean),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
