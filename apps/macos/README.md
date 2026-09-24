@@ -850,8 +850,12 @@ multi-view variant edits optional calibrated cameras per view in the inspector �
 image size, normalized focal length and center, and a world-to-camera rotation
 and translation — with the CLI's own checks (positive size and focal length, a
 proper rotation, and an image size equal to the image's decoded size, which new
-cameras take from the image), writing its saved draft file into `--cameras` only
-while the cameras match the views; at submit the runner copies that file beside
+cameras take from the image), writing its saved draft file into `--cameras`
+whenever cameras are on; a camera file that does not match the views, or will
+not read, refuses the run with the reason rather than letting the model estimate
+cameras (`StudioCommandChecks`). A camera file the draft names from elsewhere — a
+restored run, the Command view — is read into the editor, not overwritten. At
+submit the runner copies the file beside
 the run's output directory as `<folder>.cameras.json` and points `--cameras`
 there, so the run's folder is self-contained. Camera files import and export.
 Faces are numbered from one everywhere the picture is read; the flag counts

@@ -238,12 +238,30 @@ struct StudioTargetRankEditor: View {
 
 /// Woosh renoise on the task inspector (Sound ▸ Video Foley), the `.renoise` override: the
 /// model's default, one amount, or one amount per step, written to `--renoise` exactly as the
-/// CLI reads it. The mode is kept beside the task draft (`"<task>.renoiseMode"`) so "Per step"
-/// survives an empty field and a rebuilt inspector; the problems the CLI would raise are shown
-/// under the control, and the runner refuses the run while one stands.
+/// CLI reads it. The mode is kept beside the task draft (`"<task>.renoiseMode"`, read through
+/// `StudioTaskDraftMigration.renoiseMode` so the SFX Lab page's mode carries over) so
+/// "Per step" survives an empty field and a rebuilt inspector; the problems the CLI would raise
+/// are shown under the control, and the runner refuses the run while one stands.
 struct StudioRenoiseOverride: View {
     @Binding var draft: StudioTaskDraft
-    @StudioStoredValue("renoiseMode") private var mode = StudioRenoise.Mode.automatic
+    @Environment(\.studioTaskSessions) private var sessions
+    /// The mode while no session store is attached (a preview).
+    @State private var unsavedMode = StudioRenoise.Mode.automatic
+
+    private var task: StudioTask { draft.templateID.studioTask }
+
+    private var mode: Binding<StudioRenoise.Mode> {
+        Binding(
+            get: { sessions.map { StudioTaskDraftMigration.renoiseMode(for: task, in: $0) } ?? unsavedMode },
+            set: { mode in
+                if let sessions {
+                    sessions.set(mode, for: StudioTaskDraftMigration.renoiseModeKey(for: task))
+                } else {
+                    unsavedMode = mode
+                }
+            }
+        )
+    }
 
     private var value: Binding<String> {
         Binding(
@@ -254,7 +272,7 @@ struct StudioRenoiseOverride: View {
 
     var body: some View {
         StudioRenoiseControl(
-            value: value, mode: $mode,
+            value: value, mode: mode,
             steps: StudioRenoise.stepCount(in: draft.form, templateID: draft.templateID)
         )
     }
@@ -300,7 +318,9 @@ struct StudioRenoiseControl: View {
                 )
                 .accessibilityLabel("Renoise schedule")
             }
-            ForEach(renoise.problems(steps: steps), id: \.self) { problem in
+            // The CLI's reading of the argument, whatever mode is showing: the run is refused
+            // for exactly these.
+            ForEach(StudioRenoise.problems(argument: value, steps: steps), id: \.self) { problem in
                 Label(problem, systemImage: "exclamationmark.circle")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textSecondary)

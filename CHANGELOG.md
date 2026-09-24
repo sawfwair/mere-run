@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio's Vision ▸ Geometry (multi-view) cameras: a camera file that
+  does not match the views, or will not read, now refuses the run instead of
+  letting the model estimate cameras, and a camera file restored from a run or
+  typed in the Command view is read into the editor instead of overwritten.
+  Settings kept by the pages Studio's tasks replaced carry over whole: every
+  command Audio ▸ Live and the other pages kept a draft for, the 3D page's
+  engine, source picture, ordered views, and cameras, the Vision page's
+  settings and multi-view cameras, and Video Foley's renoise mode. The renoise
+  editor objects to exactly what the run refuses.
 - Fix Studio's Train pages: choosing a recipe no longer blocks Preflight and
   Start (steps, rank, and learning rate left to the recipe are no longer
   "not positive"), a value set after the recipe is chosen stays an override

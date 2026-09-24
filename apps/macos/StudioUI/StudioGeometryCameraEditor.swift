@@ -112,18 +112,20 @@ struct StudioGeometryCameraEditor: View {
 
 /// The task inspector's `.cameras` override for Vision ▸ Geometry (multi-view): the editor above
 /// over a camera document kept beside the task's draft (`"vision.geometry.geometryCameras"`),
-/// writing the saved draft file's path into `--cameras` a moment after editing stops, so the
-/// Command view's preview and the run carry a real file. Only a document the CLI would accept is
-/// written; while the cameras are off or do not match the views, the flag is left empty and the
-/// model estimates them. A camera file picked by hand (the Command view, a restored run) is read
-/// into the editor once rather than overwritten.
+/// writing a content-named draft file whose path `--cameras` names a moment after editing stops,
+/// so the Command view's preview and the run carry a real file. With cameras on, the document is
+/// written even while it does not match the views, so `StudioCommandChecks` refuses the run with
+/// the reason rather than letting the model estimate cameras the user meant to supply. A camera
+/// file the draft names that this editor did not write — restored from a Library row, typed in
+/// the Command view, or imported from the Vision page (`StudioTaskDraftMigration`) — is read into
+/// the editor rather than overwritten.
 struct StudioGeometryCameraOverride: View {
     @Binding var draft: StudioTaskDraft
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.studioTaskSessions) private var sessions
-    @Environment(\.studioTaskScope) private var scope
     @StudioStoredValue("geometryCameras") private var document = StudioGeometryCameraDocument()
     @StudioStoredValue("suppliesCameras") private var enabled = false
+    /// The file the editor last saved, so a `--cameras` change that is its own write is not read back.
+    @State private var savedPath = ""
     @State private var message: String?
     /// Each view's decoded size by path, read when the list changes rather than per render.
     @State private var viewSizes: [String: StudioPixelSize] = [:]
@@ -139,6 +141,10 @@ struct StudioGeometryCameraOverride: View {
 
     private var views: [StudioCameraView] {
         paths.map { StudioCameraView(name: URL(fileURLWithPath: $0).lastPathComponent, pixelSize: viewSizes[$0]) }
+    }
+
+    private var camerasPath: String {
+        draft.text(Self.flag)
     }
 
     private struct DraftKey: Equatable {
@@ -163,9 +169,10 @@ struct StudioGeometryCameraOverride: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .onAppear(perform: adoptExistingCameras)
+        .onAppear(perform: adoptNamedFile)
+        .onChange(of: camerasPath) { _, _ in adoptNamedFile() }
         .task(id: paths) { refreshViewSizes() }
-        .task(id: DraftKey(enabled: enabled, document: document, views: views)) { await saveDraftCameras() }
+        .task(id: DraftKey(enabled: enabled, document: document, views: views)) { await save() }
     }
 
     private func refreshViewSizes() {
@@ -174,56 +181,51 @@ struct StudioGeometryCameraOverride: View {
         })
     }
 
-    /// Keeps the flag current: a saved copy of a valid document under a name made from its
-    /// content, pruned to the recent few plus every file a Library row's argv still names (a
-    /// finished run has its own copy beside its output; a queued one still reads the draft).
-    private func saveDraftCameras() async {
-        guard enabled, !document.cameras.isEmpty, document.problems(views: views).isEmpty else {
-            forgetStudioDraft()
+    /// Keeps `--cameras` current a moment after editing stops. Cameras on: the document is saved
+    /// as a content-named file that `--cameras` names, pruned to the recent few plus every file a
+    /// Library row still names — unless the file the draft already names holds these very bytes
+    /// (a restored file is not renamed). Cameras off: the editor's own file is dropped from the
+    /// draft; a file it did not write stays, so `StudioCommandChecks` refuses a run it would not
+    /// read rather than running without it.
+    private func save() async {
+        guard enabled else {
+            if !camerasPath.isEmpty, camerasPath == savedPath {
+                savedPath = ""
+                draft.form[Self.flag] = .unset
+            }
             return
         }
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
         do {
-            let url = try StudioCameraDocuments.storeDraft(page: Self.page, content: document.json())
+            let content = try document.json()
+            if !camerasPath.isEmpty, (try? Data(contentsOf: URL(fileURLWithPath: camerasPath))) == content {
+                savedPath = camerasPath
+                return
+            }
+            let url = try StudioCameraDocuments.storeDraft(page: Self.page, content: content)
             let referenced = Set(library.items.flatMap { item in
                 StudioCameraDocuments.referencedPaths(in: item.commandArguments ?? []) + [item.commandDraft?.camerasPath].compactMap { $0 }
-            })
+            }.filter { !$0.isEmpty })
             StudioCameraDocuments.pruneDrafts(page: Self.page, current: url, referenced: referenced)
-            if draft.text(Self.flag) != url.path { draft.form[Self.flag] = .text(url.path) }
+            savedPath = url.path
+            if camerasPath != url.path { draft.form[Self.flag] = .text(url.path) }
         } catch {
             message = "Studio could not write the camera file: \(error.localizedDescription)"
         }
     }
 
-    /// Clears a file this editor wrote; a path chosen by hand stays.
-    private func forgetStudioDraft() {
-        let current = draft.text(Self.flag)
-        guard !current.isEmpty, StudioCameraDocuments.isDraft(current, page: Self.page) else { return }
-        draft.form[Self.flag] = .unset
-    }
-
-    /// A camera document from before this editor — the page's own (`VisionLab.geometryCameras`)
-    /// or a file the flag already names — is read into the editor once.
-    private func adoptExistingCameras() {
-        guard document.cameras.isEmpty else { return }
-        if let sessions {
-            let legacyKey = scope + ".VisionLab.geometryCameras"
-            let legacy = sessions.value(for: legacyKey, default: StudioGeometryCameraDocument())
-            if !legacy.cameras.isEmpty {
-                document = legacy
-                enabled = sessions.value(for: scope + ".VisionLab.suppliesCameras", default: true)
-                sessions.set(Optional<StudioGeometryCameraDocument>.none, for: legacyKey)
-                return
-            }
-        }
-        let current = draft.text(Self.flag)
-        guard !current.isEmpty, !StudioCameraDocuments.isDraft(current, page: Self.page) else { return }
-        let url = URL(fileURLWithPath: NSString(string: current).expandingTildeInPath)
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+    /// A camera file the draft names that this editor did not write is read into the editor;
+    /// one that will not read is reported, and stays in the draft for the run to be refused on.
+    private func adoptNamedFile() {
+        let path = camerasPath
+        guard !path.isEmpty, path != savedPath else { return }
+        let url = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
         do {
             document = try StudioGeometryCameraDocument.importing(Data(contentsOf: url))
+            savedPath = path
             enabled = true
+            message = nil
         } catch {
             message = "The camera file at \(url.lastPathComponent) could not be read into the editor: \(error.localizedDescription)"
         }

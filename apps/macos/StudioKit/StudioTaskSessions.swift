@@ -63,6 +63,10 @@ package final class StudioTaskSessions {
 
     package func contains(_ key: String) -> Bool { entries[key] != nil }
 
+    package func containsKey(withPrefix prefix: String) -> Bool {
+        entries.keys.contains { $0.hasPrefix(prefix) }
+    }
+
     /// The task each run launched in this process was submitted from. A job lives no longer
     /// than the process, so this is never persisted; Stop reads it to tell apart two tasks that
     /// run the same command (Audio ▸ Separate and Music ▸ Separate).

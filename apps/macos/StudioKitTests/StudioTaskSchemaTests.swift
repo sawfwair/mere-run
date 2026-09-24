@@ -1,5 +1,6 @@
 @testable import StudioKit
 import MereRunContract
+import StudioTestSupport
 import UniformTypeIdentifiers
 import XCTest
 
@@ -407,7 +408,8 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder.mereRunApp.decode(StudioTaskDraft.self, from: data), draft)
     }
 
-    /// A page that persisted a whole `CommandDraft` seeds the task draft once; scalar pages start fresh.
+    /// A page that persisted a whole `CommandDraft` seeds the task draft once; a task no page
+    /// kept anything for starts fresh.
     @MainActor
     func testLegacyPageDraftsSeedTheTaskDraftOnce() throws {
         let sessions = StudioTaskSessions()
@@ -424,6 +426,161 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertEqual(sessions.taskDraft(for: .visionPose)?.templateID, .visionPose, "a fresh draft otherwise")
         sessions.setTaskDraft(StudioTaskDraft(templateID: .audioEdit), for: .audioEnhance)
         XCTAssertEqual(sessions.taskDraft(for: .audioEnhance)?.templateID, .audioEdit, "a parked draft wins")
+    }
+
+    /// A page that kept a draft for more than one of a task's commands keeps them all: Audio ▸
+    /// Live opens on the transcript's settings with the speaker activity's parked beside them.
+    @MainActor
+    func testEveryVariantAPageKeptIsImported() throws {
+        let sessions = StudioTaskSessions()
+        var listen = try XCTUnwrap(CommandCatalog.template(id: .speechListen)).defaultDraft()
+        listen.model = "speech-asr-parakeet-tdt-0.6b-v3"
+        sessions.set(listen, for: StudioTask.audioLive.rawValue + ".Voice.listenDraft")
+        var speakers = try XCTUnwrap(CommandCatalog.template(id: .speechDiarizeLive)).defaultDraft()
+        speakers.model = "speech-diarization-nemotron-3"
+        sessions.set(speakers, for: StudioTask.audioLive.rawValue + ".Voice.liveDiarizationDraft")
+
+        var imported = try XCTUnwrap(sessions.taskDraft(for: .audioLive))
+        XCTAssertEqual(imported.templateID, StudioTask.audioLive.variantTemplates.first?.id)
+        XCTAssertEqual(imported.model, "speech-asr-parakeet-tdt-0.6b-v3")
+        imported.switchTemplate(to: .speechDiarizeLive)
+        XCTAssertEqual(imported.model, "speech-diarization-nemotron-3", "the speaker activity's draft is not dropped")
+    }
+
+    /// The SFX Lab page kept Video Foley's renoise mode beside its draft; the inspector reads it
+    /// until it keeps a mode of its own.
+    @MainActor
+    func testTheFoleyPagesRenoiseModeCarriesOver() {
+        let sessions = StudioTaskSessions()
+        XCTAssertEqual(StudioTaskDraftMigration.renoiseMode(for: .soundFoley, in: sessions), .automatic)
+        sessions.set(StudioRenoise.Mode.schedule, for: StudioTask.soundFoley.rawValue + ".SFXLab.videoRenoiseMode")
+        XCTAssertEqual(StudioTaskDraftMigration.renoiseMode(for: .soundFoley, in: sessions), .schedule)
+        sessions.set(StudioRenoise.Mode.amount, for: StudioTaskDraftMigration.renoiseModeKey(for: .soundFoley))
+        XCTAssertEqual(StudioTaskDraftMigration.renoiseMode(for: .soundFoley, in: sessions), .amount, "the inspector's own mode wins")
+    }
+
+    /// The inspector and the run's validation read `--renoise` the way the CLI does, whatever
+    /// mode the inspector shows: one number is an amount whatever the step count, so neither
+    /// objects to it, and a schedule of the wrong length is refused by both.
+    func testTheInspectorAndTheRunShareOneRenoiseRule() throws {
+        let capability = try XCTUnwrap(CommandTemplateID.sfxVideo.capability)
+        var draft = StudioTaskDraft(templateID: .sfxVideo)
+        let steps = StudioRenoise.stepCount(in: draft.form, templateID: .sfxVideo)
+        for argument in ["0.3", "0.3, 0.2", "", "1.5", String(repeating: "0.1,", count: steps - 1) + "0.1"] {
+            draft.form["--renoise"] = argument.isEmpty ? .unset : .text(argument)
+            XCTAssertEqual(
+                StudioCommandChecks.message(for: capability, draft: draft.form),
+                StudioRenoise.problems(argument: argument, steps: steps).first,
+                argument
+            )
+        }
+        XCTAssertEqual(StudioRenoise.problems(argument: "0.3", steps: steps), [], "one amount is valid for any step count")
+        XCTAssertFalse(StudioRenoise.problems(argument: "0.3, 0.2", steps: 4).isEmpty)
+    }
+
+    /// Multi-view geometry refuses a camera file that does not fit the views, as its page did,
+    /// instead of running with estimated cameras; one that will not read is refused too.
+    func testMultiviewGeometryRefusesCamerasThatDoNotFitTheViews() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("geometry-cameras-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let capability = try XCTUnwrap(CommandTemplateID.visionGeometryMultiview.capability)
+        var draft = StudioTaskDraft(templateID: .visionGeometryMultiview)
+        draft.form.arguments = ["/tmp/view-a.png", "/tmp/view-b.png"]
+        XCTAssertNil(StudioCommandChecks.message(for: capability, draft: draft.form), "no cameras: the model solves them")
+
+        let one = root.appendingPathComponent("one-camera.json")
+        try StudioGeometryCameraDocument(cameras: [.identity()]).json().write(to: one)
+        draft.form["--cameras"] = .text(one.path)
+        XCTAssertEqual(StudioCommandChecks.message(for: capability, draft: draft.form), "Add one camera per view: 2 views, 1 camera.")
+
+        let two = root.appendingPathComponent("two-cameras.json")
+        try StudioGeometryCameraDocument(cameras: [.identity(), .identity()]).json().write(to: two)
+        draft.form["--cameras"] = .text(two.path)
+        XCTAssertNil(StudioCommandChecks.message(for: capability, draft: draft.form))
+
+        let broken = root.appendingPathComponent("broken.json")
+        try Data("not json".utf8).write(to: broken)
+        draft.form["--cameras"] = .text(broken.path)
+        XCTAssertTrue(StudioCommandChecks.message(for: capability, draft: draft.form)?.hasPrefix("The camera file at broken.json could not be read") ?? false)
+    }
+
+    /// The 3D page kept scalar keys, not a draft. Its command is rebuilt for every engine the
+    /// way it built it: InstantMesh gets the ordered views and the camera document it edited
+    /// (written as the editor's draft file), the page's engine is the variant it opens on, and
+    /// the other engines keep the source picture and shared settings.
+    @MainActor
+    func testThe3DPagesKeysBecomeTheTaskDraft() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("legacy-3d-\(UUID().uuidString)")
+        StudioTestDefaults.redirectSupport(under: root)
+        defer {
+            StudioTestDefaults.restore()
+            try? FileManager.default.removeItem(at: root)
+        }
+        let sessions = StudioTaskSessions()
+        let key = StudioTask.threeDFromImage.rawValue + ".3DCreation."
+        let views = ["/tmp/front.png", "/tmp/right.png", "/tmp/back.png", "/tmp/left.png"]
+        let cameras = StudioInstantMeshCameraDocument(cameras: Array(repeating: .example, count: 4))
+        sessions.set("InstantMesh", for: key + "engine")
+        sessions.set("/tmp/chair.png", for: key + "sourcePath")
+        sessions.set(views, for: key + "orderedViews")
+        sessions.set("image-3d-instantmesh-large", for: key + "model")
+        sessions.set(true, for: key + "suppliesCameras")
+        sessions.set(cameras, for: key + "cameras")
+        sessions.set(true, for: key + "alreadyFramed")
+
+        var imported = try XCTUnwrap(sessions.taskDraft(for: .threeDFromImage))
+        XCTAssertEqual(imported.templateID, .imageReconstruct3DMultiview, "the engine the page had open")
+        XCTAssertEqual(StudioAttachmentSlot.separatedPaths(imported.text("--view")), views)
+        XCTAssertEqual(imported.model, "image-3d-instantmesh-large")
+        XCTAssertEqual(imported.text("--resolution"), "256")
+        let camerasFile = imported.text("--cameras")
+        XCTAssertTrue(StudioCameraDocuments.isDraft(camerasFile, page: "3D Creation"), camerasFile)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: camerasFile)), try cameras.json())
+        XCTAssertNil(StudioCommandChecks.message(for: try XCTUnwrap(imported.capability), draft: imported.form))
+
+        imported.switchTemplate(to: .imageReconstruct3DTrellis2)
+        XCTAssertEqual(imported.argument(0), "/tmp/chair.png")
+        XCTAssertEqual(imported.model, "image-3d-trellis2-4b", "InstantMesh's model is not TRELLIS.2's")
+        imported.switchTemplate(to: .imageReconstruct3D)
+        XCTAssertEqual(imported.form["--already-framed"].flag, true)
+    }
+
+    /// The Vision page kept scalar keys per task. Faces gets its threshold and face numbers on
+    /// every face command; multi-view geometry gets its ordered views and the camera document
+    /// it edited as the editor's draft file.
+    @MainActor
+    func testTheVisionPagesKeysBecomeTheTaskDrafts() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("legacy-vision-\(UUID().uuidString)")
+        StudioTestDefaults.redirectSupport(under: root)
+        defer {
+            StudioTestDefaults.restore()
+            try? FileManager.default.removeItem(at: root)
+        }
+        let sessions = StudioTaskSessions()
+        let faces = StudioTask.visionFaces.rawValue + ".VisionLab."
+        sessions.set("/tmp/group.png", for: faces + "primaryInput")
+        sessions.set(0.4, for: faces + "faceThreshold")
+        sessions.set(2, for: faces + "faceIndex")
+        var face = try XCTUnwrap(sessions.taskDraft(for: .visionFaces))
+        XCTAssertEqual(face.templateID, .visionFaceDetect)
+        XCTAssertEqual(face.argument(0), "/tmp/group.png")
+        XCTAssertEqual(face.text("--score-threshold"), "0.4")
+        face.switchTemplate(to: .visionFaceEmbed)
+        XCTAssertEqual(face.text("--face-index"), "2")
+
+        let geometry = StudioTask.visionGeometry.rawValue + ".VisionLab."
+        let document = StudioGeometryCameraDocument(cameras: [.identity(), .identity()])
+        sessions.set("/tmp/view-a.png", for: geometry + "primaryInput")
+        sessions.set(["/tmp/view-b.png"], for: geometry + "additionalInputs")
+        sessions.set(true, for: geometry + "suppliesCameras")
+        sessions.set(document, for: geometry + "geometryCameras")
+        var multiview = try XCTUnwrap(sessions.taskDraft(for: .visionGeometry))
+        multiview.switchTemplate(to: .visionGeometryMultiview)
+        XCTAssertEqual(multiview.form.arguments.filter { !$0.isEmpty }, ["/tmp/view-a.png", "/tmp/view-b.png"])
+        let camerasFile = multiview.text("--cameras")
+        XCTAssertTrue(StudioCameraDocuments.isDraft(camerasFile, page: "Vision Geometry"), camerasFile)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: camerasFile)), try document.json())
     }
 
     /// The Music Tools page stamped a timestamped `--output` and `--context-output` into the
