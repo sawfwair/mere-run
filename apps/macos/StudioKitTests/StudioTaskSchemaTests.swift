@@ -255,6 +255,60 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertTrue(empty.form.arguments.allSatisfy(\.isEmpty), "nothing to carry")
     }
 
+    /// Each variant keeps its own form: leaving InstantMesh for TRELLIS.2 and coming back finds
+    /// the ordered views and the camera file as they were, Compare keeps its second picture
+    /// across a trip through Detect, and a Library row of another variant ("Use these
+    /// settings") parks the variant it replaces too. The parked forms survive the session store
+    /// and never carry a secret or a destination the app named.
+    @MainActor
+    func testEachVariantKeepsItsOwnDraft() throws {
+        var mesh = StudioTaskDraft(templateID: .imageReconstruct3DMultiview)
+        mesh.form["--view"] = .text("/tmp/front.png\n/tmp/right.png\n/tmp/back.png\n/tmp/left.png")
+        mesh.form["--cameras"] = .text("/tmp/cameras.json")
+        mesh.switchTemplate(to: .imageReconstruct3DTrellis2)
+        XCTAssertEqual(mesh.text("--view"), "", "TRELLIS.2 takes no views")
+        mesh.setArgument(0, "/tmp/chair.png")
+        mesh.switchTemplate(to: .imageReconstruct3DMultiview)
+        XCTAssertEqual(StudioAttachmentSlot.separatedPaths(mesh.text("--view")).count, 4, "the views come back")
+        XCTAssertEqual(mesh.text("--cameras"), "/tmp/cameras.json")
+        mesh.switchTemplate(to: .imageReconstruct3DTrellis2)
+        XCTAssertEqual(mesh.argument(0), "/tmp/chair.png", "and TRELLIS.2 finds its own picture")
+
+        var faces = StudioTaskDraft(templateID: .visionFaceCompare)
+        faces.form.arguments = ["/tmp/a.png", "/tmp/b.png"]
+        faces.switchTemplate(to: .visionFaceDetect)
+        faces.switchTemplate(to: .visionFaceCompare)
+        XCTAssertEqual(faces.form.arguments, ["/tmp/a.png", "/tmp/b.png"], "the second picture survives")
+
+        var restored = StudioTaskDraft(templateID: .visionFaceDetect)
+        restored.setArgument(0, "/tmp/group.png")
+        faces.adopt(restored)
+        XCTAssertEqual(faces.templateID, .visionFaceDetect)
+        XCTAssertEqual(faces.argument(0), "/tmp/group.png")
+        faces.switchTemplate(to: .visionFaceCompare)
+        XCTAssertEqual(faces.form.arguments, ["/tmp/a.png", "/tmp/b.png"], "restoring a row parks what it replaced")
+
+        let sessions = StudioTaskSessions()
+        sessions.setTaskDraft(faces, for: .visionFaces)
+        var reloaded = try XCTUnwrap(sessions.taskDraft(for: .visionFaces))
+        XCTAssertEqual(reloaded, faces)
+        reloaded.switchTemplate(to: .visionFaceDetect)
+        XCTAssertEqual(reloaded.argument(0), "/tmp/group.png", "parked forms round-trip through the session store")
+
+        faces.switchTemplate(to: .visionFaceDetect)
+        faces.form.extraArguments = "--hf-token hf_secret"
+        faces.switchTemplate(to: .visionFaceCompare)
+        XCTAssertFalse(faces.withoutSessionSecrets.parked[.visionFaceDetect]?.extraArguments.contains("hf_secret") ?? true,
+                       "a parked form is saved without its secrets")
+        mesh.switchTemplate(to: .imageReconstruct3DMultiview)
+        var named = mesh
+        named.switchTemplate(to: .imageReconstruct3DTrellis2)
+        named.form["--output"] = .text("/tmp/out/chair-a1b2c3")
+        named.switchTemplate(to: .imageReconstruct3DMultiview)
+        XCTAssertEqual(named.withoutDestinations().parked[.imageReconstruct3DTrellis2]?.text("--output"), "",
+                       "nor with a destination")
+    }
+
     /// The pages turned `--json` on for every run whose surface reads the printed result; a fresh
     /// task draft does the same so a renderer gets JSON, and a parked draft keeps what it ran with.
     func testLauncherDefaultsTurnOnMachineOutputWherePagesDid() {

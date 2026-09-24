@@ -712,7 +712,10 @@ private struct StudioWorkspaceView: View {
              .visionGeometry, .audioWhoSpoke, .audioEnhance, .audioSeparate,
              .textEmbeddings, .textAnonymize, .earthFlood, .earthFire, .earthTessera,
              .earthOlmoEarth:
+            // One workspace per task: Audio ▸ Separate and Music ▸ Separate share a template, and
+            // a reused view would keep the other task's state and never check its readiness.
             StudioTaskWorkspace(task: destination.task, models: models)
+                .id(destination.task)
         case .imageTrain:
             StudioTrainingView(kind: .image, models: models)
         case .chatTrain:

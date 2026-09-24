@@ -15,10 +15,41 @@ package struct StudioTaskDraft: Codable, Equatable {
     package var templateID: CommandTemplateID
     /// One entry per flag the run carries, plus the positionals and anything typed by hand.
     package var form: StudioConsoleDraft
+    /// The task's other variants as the user left them: switching back to one restores its form
+    /// whole — InstantMesh's ordered views and cameras, Compare's second picture — rather than
+    /// only what the two templates share.
+    package private(set) var parked: [CommandTemplateID: StudioConsoleDraft] = [:]
 
     package init(templateID: CommandTemplateID, form: StudioConsoleDraft) {
         self.templateID = templateID
         self.form = form
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case templateID, form, parked
+    }
+
+    /// A draft saved before variants were parked has no `parked` entry; one parked for a
+    /// template this build no longer has drops that form.
+    package init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        templateID = try container.decode(CommandTemplateID.self, forKey: .templateID)
+        form = try container.decode(StudioConsoleDraft.self, forKey: .form)
+        let parked = try container.decodeIfPresent([String: StudioConsoleDraft].self, forKey: .parked) ?? [:]
+        for (key, form) in parked {
+            guard let id = CommandTemplateID(rawValue: key) else { continue }
+            self.parked[id] = form
+        }
+    }
+
+    /// Parked forms are keyed by template id, so the file reads as an object of forms.
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(templateID, forKey: .templateID)
+        try container.encode(form, forKey: .form)
+        if !parked.isEmpty {
+            try container.encode(Dictionary(uniqueKeysWithValues: parked.map { ($0.key.rawValue, $0.value) }), forKey: .parked)
+        }
     }
 
     /// A fresh draft for `templateID`: the console's reading of the template's default draft, so
@@ -120,13 +151,23 @@ package struct StudioTaskDraft: Codable, Equatable {
         )
     }
 
-    /// Switches the variant, carrying the values whose flags the new template also declares
-    /// (the input, the model, the output) and dropping the rest, so Faces ▸ Compare keeps the
-    /// picture Detect was pointed at. The model is cleared when the templates default to
-    /// different models: a face model is no use to the pose command.
+    /// Switches the variant. The form being left is parked; a variant the user has had before
+    /// comes back exactly as it was left. One opened for the first time starts fresh and
+    /// carries the values whose flags the new template also declares (the input, the model)
+    /// and drops the rest, so Faces ▸ Compare keeps the picture Detect was pointed at. The model
+    /// is cleared when the templates default to different models: a face model is no use to the
+    /// pose command.
     package mutating func switchTemplate(to next: CommandTemplateID) {
         guard next != templateID else { return }
         let previous = self
+        var parked = previous.parked
+        parked[previous.templateID] = previous.form
+        defer { self.parked = parked }
+        if let restored = parked.removeValue(forKey: next) {
+            templateID = next
+            form = restored
+            return
+        }
         self = StudioTaskDraft(templateID: next)
         guard let capability, let before = previous.capability else { return }
         let declared = Set(capability.options.map(\.flag))
@@ -161,11 +202,30 @@ package struct StudioTaskDraft: Codable, Equatable {
         clearingDestinations { StudioOutputLocation.isAppOwned($0) }
     }
 
+    /// Takes a recorded run's settings as the draft ("Use these settings"): its variant and
+    /// form, with the variant being left parked like any switch, and the other parked variants
+    /// kept.
+    package mutating func adopt(_ restored: StudioTaskDraft) {
+        switchTemplate(to: restored.templateID)
+        form = restored.form
+    }
+
     private func clearingDestinations(where clears: (String) -> Bool) -> StudioTaskDraft {
-        guard let capability else { return self }
         var cleared = self
+        cleared.form = Self.clearingDestinations(of: form, templateID: templateID, where: clears)
+        for (id, form) in parked {
+            cleared.parked[id] = Self.clearingDestinations(of: form, templateID: id, where: clears)
+        }
+        return cleared
+    }
+
+    private static func clearingDestinations(
+        of form: StudioConsoleDraft, templateID: CommandTemplateID, where clears: (String) -> Bool
+    ) -> StudioConsoleDraft {
+        guard let capability = templateID.capability else { return form }
+        var cleared = form
         for flag in StudioTaskSchema.outputFlags(for: capability) where clears(form.text(flag)) {
-            cleared.form.values[flag] = nil
+            cleared.values[flag] = nil
         }
         return cleared
     }
@@ -217,15 +277,22 @@ extension StudioTaskDraft: StudioAttachmentDraft {
 }
 
 extension StudioTaskDraft: StudioSessionPersistable {
-    /// Persisted settings never contain launch credentials: the same masking the Command
-    /// override applies to its form.
+    /// Persisted settings never contain launch credentials, the parked variants' included: the
+    /// same masking the Command override applies to its form.
     package var withoutSessionSecrets: StudioTaskDraft {
         var saved = self
+        saved.form = Self.withoutSecrets(form, templateID: templateID)
+        for (id, form) in parked { saved.parked[id] = Self.withoutSecrets(form, templateID: id) }
+        return saved
+    }
+
+    private static func withoutSecrets(_ form: StudioConsoleDraft, templateID: CommandTemplateID) -> StudioConsoleDraft {
+        var saved = form
         for flag in Set(CommandLaunchEnvironment.secretFlags(for: templateID).keys)
             .union(["--api-key", "--infinity-api-key", "--admin-password", "--hf-token"]) {
-            saved.form.values[flag] = nil
+            saved.values[flag] = nil
         }
-        saved.form.extraArguments = ShellWords.split(saved.form.extraArguments).maskingSecrets().shellQuoted()
+        saved.extraArguments = ShellWords.split(saved.extraArguments).maskingSecrets().shellQuoted()
         return saved
     }
 }

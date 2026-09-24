@@ -63,6 +63,19 @@ package final class StudioTaskSessions {
 
     package func contains(_ key: String) -> Bool { entries[key] != nil }
 
+    /// The task each run launched in this process was submitted from. A job lives no longer
+    /// than the process, so this is never persisted; Stop reads it to tell apart two tasks that
+    /// run the same command (Audio ▸ Separate and Music ▸ Separate).
+    @ObservationIgnored private var submittingTasks: [UUID: StudioTask] = [:]
+
+    package func noteSubmission(_ requestID: UUID, from task: StudioTask) {
+        submittingTasks[requestID] = task
+    }
+
+    package func submittingTask(of requestID: UUID) -> StudioTask? {
+        submittingTasks[requestID]
+    }
+
     package func set<Value: Codable>(_ value: Value, for key: String) {
         do {
             let data = try JSONEncoder.mereRunApp.encode(value)

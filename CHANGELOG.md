@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Keep each Studio task variant's settings: switching 3D ▸ From image,
+  Faces, Geometry, or any other task's variant, or picking another variant's
+  Library row, and switching back restores that variant as it was left
+  (InstantMesh's ordered views and cameras, Compare's second picture). Stop
+  (⌘.) in Audio ▸ Separate or Music ▸ Separate acts only on that task's own
+  run, and each task on the shared workspace checks its own model readiness
+  when it opens.
 - Fix Studio refusing a run whose model is a folder on disk: a local
   checkpoints root given as the model (Sound ▸ Video Foley and the other Woosh
   commands, the Earth tasks), Chat ▸ Train's model path, and Music ▸ Train's

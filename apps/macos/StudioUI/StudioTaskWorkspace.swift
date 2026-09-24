@@ -318,7 +318,9 @@ struct StudioTaskWorkspace: View {
             error = "This run's command can't be loaded into the composer. Use Edit command… to change it."
             return
         }
-        draft = restored
+        var next = draft
+        next.adopt(restored)
+        draft = next
         sessions?.set(Optional<StudioTaskCommandState>.none, for: task.rawValue + ".commandOverride")
         error = nil
         navigation.selectedLibraryID = item.id

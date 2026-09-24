@@ -94,6 +94,30 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertEqual(request.execution?.arguments, preview.arguments)
     }
 
+    /// Audio ▸ Separate runs Music ▸ Separate's command. Stop on either acts on that task's own
+    /// run: ⌘. in one never cancels the other's, even once its own run has ended.
+    func testStopActsOnlyOnTheTasksOwnRunWhenTwoTasksShareACommand() async throws {
+        controller.readinessByTask[.musicSeparate] = .ready
+        controller.readinessByTask[.audioSeparate] = .ready
+        let input = root.appendingPathComponent("harbor-lights.wav")
+        try Data().write(to: input)
+        var draft = StudioTaskDraft(templateID: .musicSeparate)
+        let slot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .musicSeparate))
+        draft.setAttachmentText(input.path, for: slot.storage)
+
+        let music = try runner.run(draft, task: .musicSeparate)
+        XCTAssertNil(runner.currentJob(for: .audioSeparate), "Music ▸ Separate's run is not Audio ▸ Separate's to stop")
+        runner.stop(task: .audioSeparate)
+        XCTAssertEqual(processRunner.processes[0].terminateCallCount, 0)
+
+        let audio = try runner.run(draft, task: .audioSeparate)
+        XCTAssertEqual(runner.currentJob(for: .audioSeparate)?.request.requestID, audio.id)
+        XCTAssertEqual(runner.currentJob(for: .musicSeparate)?.request.requestID, music.id)
+        processRunner.starts[0].termination(0)
+        for _ in 0..<6 { await Task.yield() }
+        XCTAssertNil(runner.currentJob(for: .musicSeparate), "Audio ▸ Separate's run does not become Music ▸ Separate's")
+    }
+
     func testBlockedReadinessAndAnIncompleteCommandLeaveHistoryUntouched() throws {
         controller.readinessByTask[.audioEnhance] = .missingModel("audio-enhance-ap-bwe-16kto48k")
         XCTAssertThrowsError(try runner.run(try enhanceDraft(), task: .audioEnhance)) { error in

@@ -137,6 +137,7 @@ package final class StudioTaskRunner {
     @discardableResult
     private func submit(_ request: StudioRunRequest, task: StudioTask) -> Bool {
         sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
+        sessions.noteSubmission(request.id, from: task)
         let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft)
         let preview = controller.commandPreview(arguments: arguments, masksSecrets: true)
         library.start(request: request, commandPreview: preview,
@@ -170,12 +171,16 @@ package final class StudioTaskRunner {
         "Camera access is off for mere.run. Turn it on in System Settings ▸ Privacy & Security ▸ Camera, then start again."
 
     /// The job Stop acts on: the run this task last submitted while it is alive, else the newest
-    /// live run of any of the task's templates.
+    /// live run that belongs to the task — submitted from it, or, for a run no task submitted
+    /// (the Command Console), one of the commands the task owns. Audio ▸ Separate runs
+    /// Music ▸ Separate's command, so the command alone never makes another task's run its own.
     package func currentJob(for task: StudioTask) -> Job? {
         let remembered = sessions.value(for: task.rawValue + ".requestID", default: Optional<UUID>.none)
         if let remembered, let job = controller.jobs.job(requestID: remembered), job.state.isActive { return job }
         return controller.jobs.all.last { job in
-            job.state.isActive && (job.request.templateID.map(task.runs) ?? false)
+            guard job.state.isActive else { return false }
+            let owner = job.request.requestID.flatMap(sessions.submittingTask(of:)) ?? job.request.templateID?.studioTask
+            return owner == task
         }
     }
 

@@ -135,7 +135,9 @@ Analyze tasks use one **shared task workspace**
 draft is a `StudioTaskDraft` (`StudioKit/StudioTaskDraft.swift`): the chosen
 template plus the same per-flag `StudioConsoleDraft` the Command view edits, so
 the well, the chips, the inspector, the Command view, Library restoration, and
-the argv read one value. The well's slots, the chips, and the inspector sections
+the argv read one value. The task's other variants are parked in it as they were
+left, so switching back — from the variant chip or by picking another variant's
+Library row — restores that variant's views, second picture, or cameras. The well's slots, the chips, and the inspector sections
 come from the template's contract (`StudioKit/StudioTaskSchema.swift`); the
 destination is filled at submit time by
 `StudioOutputLocation.destination(for:)`; the prompt controller, shared
