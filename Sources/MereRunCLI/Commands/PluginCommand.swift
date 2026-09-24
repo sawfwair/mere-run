@@ -172,6 +172,9 @@ struct PluginInstall: ParsableCommand {
         if !yes {
             print("Install command:")
             print("  \(command.render())")
+            if install.setup == true {
+                print("  \(plugin.entrypoint) setup --yes")
+            }
             print("")
             print("Run with --yes to execute it:")
             print("  \(confirmationCommand(channel: resolvedChannel))")
@@ -189,6 +192,13 @@ struct PluginInstall: ParsableCommand {
         guard manifest.name == plugin.id else {
             throw ValidationError(
                 "Installed plugin manifest name mismatch: expected \(plugin.id), got \(manifest.name)"
+            )
+        }
+        do {
+            try PluginSetupCommand.run(install: install, entrypoint: plugin.entrypoint)
+        } catch {
+            throw ValidationError(
+                "Installed \(plugin.id), but setup failed: \(error). Retry with \(plugin.entrypoint) setup --yes."
             )
         }
         if manifest.graphProvider != nil {
@@ -296,6 +306,18 @@ struct PluginCatalogInstall: Codable, Equatable {
     let spec: String
     let ref: String?
     var bundles: [String: String]?
+    var setup: Bool?
+}
+
+enum PluginSetupCommand {
+    static func run(
+        install: PluginCatalogInstall,
+        entrypoint: String,
+        execute: (String, [String]) throws -> Void = PluginProcess.runExecutable
+    ) throws {
+        guard install.setup == true else { return }
+        try execute(entrypoint, ["setup", "--yes"])
+    }
 }
 
 struct PluginCatalogSnapshot: Codable, Equatable {

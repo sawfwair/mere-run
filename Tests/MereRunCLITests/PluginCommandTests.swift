@@ -83,6 +83,26 @@ final class PluginCommandTests: XCTestCase {
         )
     }
 
+    func testOptionalPluginSetupUsesOnlyVerifiedEntrypointAndFixedVerb() throws {
+        var install = PluginCatalogInstall(
+            manager: "pipx",
+            spec: "git+https://github.com/sawfwair/mere-run-plugins.git@main#subdirectory=packages/mere-computer-use",
+            ref: "main"
+        )
+        var calls: [(String, [String])] = []
+        let execute: (String, [String]) throws -> Void = { executable, arguments in
+            calls.append((executable, arguments))
+        }
+
+        try PluginSetupCommand.run(install: install, entrypoint: "mere-computer-use", execute: execute)
+        XCTAssertTrue(calls.isEmpty)
+        install.setup = true
+        try PluginSetupCommand.run(install: install, entrypoint: "mere-computer-use", execute: execute)
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls[0].0, "mere-computer-use")
+        XCTAssertEqual(calls[0].1, ["setup", "--yes"])
+    }
+
     func testInstallConfirmationKeepsChannelAndForce() throws {
         let command = try PluginInstall.parse([
             "mere-doc-tools", "--catalog-url", "/tmp/plugin review.json", "--force",
