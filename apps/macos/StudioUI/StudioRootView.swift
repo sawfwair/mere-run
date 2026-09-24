@@ -623,9 +623,10 @@ private struct StudioWorkspaceView: View {
             return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false)
         }
         if let taskDraft = taskDraftBinding {
-            // The Command view previews the task draft's own form with its destination named the
-            // way the runner names it at submit time, so "Will run" shows the argv that runs.
-            return StudioOutputLocation.destination(for: taskDraft.wrappedValue).request()
+            // The Command view previews the task draft's own form with its launch-time defaults
+            // applied and its destination named the way the runner names it at submit time, so
+            // "Will run" shows the argv that runs.
+            return StudioOutputLocation.destination(for: StudioTaskRunner.launching(taskDraft.wrappedValue)).request()
         }
         let key = destination.task.rawValue
         let chosen = controller.taskSessions.value(for: key + ".commandTemplate", default: Optional<CommandTemplateID>.none)
@@ -664,7 +665,11 @@ private struct StudioWorkspaceView: View {
                         sourceArguments: source.template.arguments(from: source.draft), form: edited),
                         for: request.templateID.studioTask.rawValue + ".commandOverride")
                 }
-            ), onRun: runStudioCommand, onClose: toggleCommand, canRun: canRunCurrentTask)
+            ), onRun: runStudioCommand, onClose: toggleCommand, canRun: canRunCurrentTask, launching: { form in
+                // A task draft's preview runs through the runner's launch-time defaults.
+                guard taskDraftBinding != nil else { return form }
+                return StudioTaskRunner.launching(StudioTaskDraft(templateID: request.templateID, form: form)).form
+            })
         }
     }
 

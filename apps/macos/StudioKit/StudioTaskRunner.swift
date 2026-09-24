@@ -49,16 +49,25 @@ package final class StudioTaskRunner {
         return StudioOutputLocation.preparing(resolved, fileManager: fileManager)
     }
 
-    /// The request a task draft runs: its destination named, validated and prepared, then a
-    /// camera draft the inspector wrote copied beside the output (`StudioCameraDocuments`) so
-    /// the run's folder carries its own file. Static so the live-acceptance tests build exactly
-    /// what the app runs. Throws before anything is created when the command is incomplete.
+    /// The draft as a run launches it: the launch-time defaults a task's page applies (Image ▸
+    /// Train's recipe clears the options it governs and a Klein base gets its checkpoint and
+    /// preview cadence). The runner and the Command view's "Will run" both go through this, so a
+    /// Run from either surface and the preview agree; every other task's draft is left as it is.
+    package static func launching(_ draft: StudioTaskDraft) -> StudioTaskDraft {
+        StudioTrainingRun.launchDraft(draft)
+    }
+
+    /// The request a task draft runs: its launch-time defaults applied, its destination named,
+    /// validated and prepared, then a camera draft the inspector wrote copied beside the output
+    /// (`StudioCameraDocuments`) so the run's folder carries its own file. Static so the
+    /// live-acceptance tests build exactly what the app runs. Throws before anything is created
+    /// when the command is incomplete.
     package static func prepare(
         draft: StudioTaskDraft,
         sessions: StudioTaskSessions,
         fileManager: FileManager = .default
     ) throws -> (request: StudioRunRequest, fallbackReason: String?) {
-        let named = StudioOutputLocation.destination(for: draft, fileManager: fileManager)
+        let named = StudioOutputLocation.destination(for: launching(draft), fileManager: fileManager)
         guard let base = named.request() else {
             throw StudioValidationError(message: "This command can't run from Studio.")
         }

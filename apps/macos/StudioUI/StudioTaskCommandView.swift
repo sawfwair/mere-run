@@ -11,11 +11,15 @@ struct StudioTaskCommandView: View {
     let onRun: () -> Void
     let onClose: () -> Void
     var canRun = true
+    /// The form as the run launches it (`StudioTaskRunner.launching`), so "Will run" and the
+    /// validation read the launch-time defaults a task applies without writing them into the
+    /// fields; identity for a command that has none.
+    var launching: (StudioConsoleDraft) -> StudioConsoleDraft = { $0 }
 
     var body: some View {
         // One build per body: the argv, the preview, and the validation (which may read a file
         // the command names) all come from it.
-        let launch = StudioConsoleRun(template: template, draft: form, seed: seed)
+        let launch = StudioConsoleRun(template: template, draft: launching(form), seed: seed)
         let preview = controller.commandPreview(arguments: launch?.arguments ?? [], masksSecrets: true)
         return VStack(spacing: 0) {
             HStack {

@@ -1253,7 +1253,8 @@ struct StudioTrainingView: View {
                 guard let built = launch.request() else { throw StudioValidationError(message: "This command can't run from Studio.") }
                 request = try runner.run(request: built, task: task)
             } else {
-                request = try runner.run(StudioTrainingRun.launchDraft(draft), task: task)
+                // The runner applies the recipe and Klein's cadence (`StudioTaskRunner.launching`).
+                request = try runner.run(draft, task: task)
             }
             currentSnapshot = StudioTrainingSnapshot.load(outputPath: request.draft.outputPath)
             statusMessage = resumes ? "Checkpoint resume submitted." : "Training submitted."
