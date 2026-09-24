@@ -21,7 +21,9 @@ final class StudioRegionPromptsTests: XCTestCase {
         let comma = StudioRegionPrompt.box(CGRect(x: 0, y: 0, width: 10, height: 10), label: "  cup,  saucer , ")
         XCTAssertEqual(StudioRegionPromptText.boxLines([comma]), ["0,0,10,10,cup saucer"])
         XCTAssertNil(StudioRegionPrompt.box(.zero, label: " , ").label)
-        XCTAssertEqual(StudioRegionPromptText.boxText([cup, handle, unlabeled]), "40,30,160,110,coffee cup\n40,30,161,110")
+        // With a point among several boxes, an unlabeled box is named so the point can follow it.
+        XCTAssertEqual(StudioRegionPromptText.boxText([cup, handle, unlabeled]), "40,30,160,110,coffee cup\n40,30,161,110,object 2")
+        XCTAssertEqual(StudioRegionPromptText.boxText([cup, unlabeled]), "40,30,160,110,coffee cup\n40,30,161,110")
     }
 
     /// `VisionSegment.parsePointPrompt` takes `x,y,positive|negative[,label]`.
@@ -43,13 +45,21 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertEqual(StudioRegionPromptText.pointLines([plain, inside, outside]), ["100,70,positive", "600,400,negative"])
 
         // Several boxes: the point belongs to the smallest box containing it; one outside all of
-        // them, or inside an unlabeled one, stays unlabeled.
+        // them stays unlabeled. An unlabeled box among several is named by its place so its point
+        // can follow it, and the box line carries the same name.
         let saucer = StudioRegionPrompt.box(CGRect(x: 0, y: 0, width: 400, height: 300), label: "saucer")
         let lid = StudioRegionPrompt.box(CGRect(x: 90, y: 60, width: 20, height: 20))
         XCTAssertEqual(StudioRegionPromptText.pointLines([saucer, cup, inside, outside]), ["100,70,positive,coffee cup", "600,400,negative"])
-        XCTAssertEqual(StudioRegionPromptText.pointLines([saucer, cup, lid, inside]), ["100,70,positive"])
+        XCTAssertEqual(StudioRegionPromptText.pointLines([saucer, cup, lid, inside]), ["100,70,positive,object 3"])
+        XCTAssertEqual(StudioRegionPromptText.boxLines([saucer, cup, lid, inside]).last, "90,60,110,80,object 3")
+        XCTAssertEqual(StudioRegionPromptText.boxLines([saucer, lid]).last, "90,60,110,80", "without points the boxes keep their own labels")
+        XCTAssertEqual(StudioRegionPromptText.boxLines([lid, inside]), ["90,60,110,80"], "one unlabeled box leaves the CLI's rule to join them")
+        XCTAssertEqual(StudioRegionPromptText.pointLines([lid, plain, inside, outside]), ["100,70,positive,object 1", "600,400,negative"])
         XCTAssertEqual(StudioRegionPromptText.refinedBox(for: CGPoint(x: 100, y: 70), in: [saucer, cup, lid])?.id, lid.id)
         XCTAssertNil(StudioRegionPromptText.refinedBox(for: CGPoint(x: 600, y: 400), in: [saucer, cup]))
+        // Read back, a point keeps the box label it was sent with.
+        let readBack = StudioRegionPromptText.prompts(boxText: StudioRegionPromptText.boxText([lid, plain, inside]), pointText: StudioRegionPromptText.pointText([lid, plain, inside]))
+        XCTAssertEqual(readBack.map(\.label), ["object 1", "object 2", "object 1"])
 
         // A label of the point's own wins over the box's.
         XCTAssertEqual(StudioRegionPromptText.pointLines([cup, shadow]), ["12,18,negative,shadow"])

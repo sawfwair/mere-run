@@ -477,9 +477,9 @@ package enum StudioRegionHit: Equatable {
 /// coordinate a `Float`. Coordinates are written as whole pixels, which is what the CLI's help
 /// promises ("in image pixels") and what the result documents report back.
 package enum StudioRegionPromptText {
-    /// One `--box` value per box prompt.
+    /// One `--box` value per box prompt, with the labels `associating` gives.
     package static func boxLines(_ prompts: [StudioRegionPrompt]) -> [String] {
-        prompts.compactMap { prompt in
+        associating(prompts).boxes.compactMap { prompt in
             guard let rect = prompt.rect else { return nil }
             var fields = [rect.minX, rect.minY, rect.maxX, rect.maxY].map(StudioRegionPrompt.pixels)
             if let label = prompt.label { fields.append(label) }
@@ -487,21 +487,47 @@ package enum StudioRegionPromptText {
         }
     }
 
-    /// One `--point` value per point prompt, labeled after the box it refines.
-    ///
-    /// The CLI groups a labeled point with the first `--box` of the same label and unlabeled points
-    /// with the one unlabeled box, when there is exactly one (`SAM31PromptSet.normalized`). A point
-    /// drawn without a label of its own therefore takes the label of the box it belongs to: the only
-    /// box, or the smallest box containing it. An unlabeled box passes no label on, which is the
-    /// CLI's single-unlabeled-box rule; a point outside every box, or inside none of several, stays
-    /// unlabeled and forms one object with the other unlabeled points.
+    /// One `--point` value per point prompt, labeled after the box it refines (`associating`).
     package static func pointLines(_ prompts: [StudioRegionPrompt]) -> [String] {
-        let boxes = prompts.boxes
-        return prompts.compactMap { prompt in
+        associating(prompts).points.compactMap { prompt in
             guard case .point(let x, let y, let isPositive) = prompt.shape else { return nil }
             var fields = [StudioRegionPrompt.pixels(x), StudioRegionPrompt.pixels(y), isPositive ? "positive" : "negative"]
-            if let label = prompt.label ?? refinedBox(for: CGPoint(x: x, y: y), in: boxes)?.label { fields.append(label) }
+            if let label = prompt.label { fields.append(label) }
             return fields.joined(separator: ",")
+        }
+    }
+
+    /// The prompts as the CLI should read them, so each point stays with the box it was drawn on.
+    ///
+    /// The CLI groups a labeled point with the `--box` of the same label that contains it (else
+    /// the first of that label), and unlabeled points with the one unlabeled box when there is
+    /// exactly one (`SAM31PromptSet.normalized`). So a point drawn without a label of its own takes
+    /// the label of the box it belongs to: the only box, or the smallest box containing it. With
+    /// one box, an unlabeled box passes no label on and the CLI's single-unlabeled-box rule joins
+    /// them. With several boxes and at least one point, an unlabeled box is named "object 1",
+    /// "object 2", … by its place among the boxes, so the association survives the command line
+    /// (and the result document names the objects the same way). A point outside every box, or
+    /// inside none of several, stays unlabeled and forms one object with the other unlabeled
+    /// points. Read back from the command line (`prompts(boxText:pointText:)`), a point keeps the
+    /// box label it was sent with.
+    package static func associating(_ prompts: [StudioRegionPrompt]) -> [StudioRegionPrompt] {
+        var boxOrdinal = 0
+        let needsNames = prompts.boxes.count > 1 && !prompts.points.isEmpty
+        let named: [StudioRegionPrompt] = prompts.map { prompt in
+            guard prompt.isBox else { return prompt }
+            boxOrdinal += 1
+            guard needsNames, prompt.label == nil else { return prompt }
+            var labeled = prompt
+            labeled.label = "object \(boxOrdinal)"
+            return labeled
+        }
+        let boxes = named.boxes
+        return named.map { prompt in
+            guard let point = prompt.point, prompt.label == nil,
+                  let label = refinedBox(for: point, in: boxes)?.label else { return prompt }
+            var labeled = prompt
+            labeled.label = label
+            return labeled
         }
     }
 
