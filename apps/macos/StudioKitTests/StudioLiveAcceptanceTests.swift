@@ -4,6 +4,7 @@ import StudioTestSupport
 import CoreGraphics
 import Foundation
 import ImageIO
+import MereRunContract
 import UniformTypeIdentifiers
 import XCTest
 
@@ -402,7 +403,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         StudioTaskSchema.slots(for: .visionFaceDetect)[0].attach([subject], to: &draft)
         draft.form["--score-threshold"] = .number(0.65)
         draft.form["--execution-provider"] = .text("auto")
-        let (request, argv) = try taskRequest(draft)
+        let (request, argv) = try taskRequest(draft, task: .visionFaces)
         XCTAssertEqual(Array(argv.prefix(4)), ["vision", "face", "detect", subject.path])
         let jsonOutput = try XCTUnwrap(argv.firstIndex(of: "--json-output").map { argv[$0 + 1] }, "routing fills the result document")
         XCTAssertTrue(jsonOutput.hasPrefix(live.appendingPathComponent("Vision").path), "the document files under Vision: \(jsonOutput)")
@@ -456,7 +457,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         StudioTaskSchema.slots(for: .visionDepth)[0].attach([subject], to: &draft)
         draft.form["--max-edge"] = .integer(1_024)
         draft.form["--dry-run"] = .unset
-        let (request, argv) = try taskRequest(draft)
+        let (request, argv) = try taskRequest(draft, task: .visionDepth)
         XCTAssertEqual(Array(argv.prefix(3)), ["vision", "depth", subject.path])
         XCTAssertFalse(argv.contains("--dry-run"))
         XCTAssertEqual(argv.firstIndex(of: "--max-edge").map { argv[$0 + 1] }, "1024")
@@ -516,7 +517,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             var variant = draft
             variant.form["--cameras"] = .text(camerasPath)
             variant.form["--dry-run"] = dryRun ? .flag(true) : .unset
-            let built = try taskRequest(variant)
+            let built = try taskRequest(variant, task: .visionGeometry)
             let output = try XCTUnwrap(built.argv.firstIndex(of: "--output").map { built.argv[$0 + 1] })
             XCTAssertEqual(URL(fileURLWithPath: output).deletingLastPathComponent().path, visionFolder.path)
             XCTAssertTrue(URL(fileURLWithPath: output).lastPathComponent.hasPrefix("view-a-320x240"), "named after the first view: \(output)")
@@ -583,7 +584,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         draft.form["--cameras"] = .text(camerasURL.path)
         draft.form["--dry-run"] = .flag(true)
         draft.form["--json"] = .flag(true)
-        let (request, argv) = try taskRequest(draft)
+        let (request, argv) = try taskRequest(draft, task: .threeDFromImage)
         XCTAssertEqual(Array(argv.prefix(2)), ["image", "reconstruct-3d-multiview"])
         XCTAssertEqual(argv.filter { $0 == "--view" }.count, 4)
         XCTAssertEqual(argv.indices.filter { argv[$0] == "--view" }.map { argv[$0 + 1] }, views.map(\.path), "views in well order")
@@ -609,7 +610,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         try short.json().write(to: shortURL, options: .atomic)
         var shortDraft = draft
         shortDraft.form["--cameras"] = .text(shortURL.path)
-        XCTAssertThrowsError(try taskRequest(shortDraft)) { error in
+        XCTAssertThrowsError(try taskRequest(shortDraft, task: .threeDFromImage)) { error in
             XCTAssertEqual((error as? StudioValidationError)?.message, "Add one camera per view: 4 views, 3 cameras.")
         }
         let shortArgv = namedArguments(shortDraft)
@@ -782,7 +783,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         try XCTUnwrap(draft.slots.first).attach([music], to: &draft)
         draft.form["--duration"] = .number(10)
         XCTAssertEqual(draft.primaryInputPath, music.path)
-        let (_, argv) = try taskRequest(draft)
+        let (_, argv) = try taskRequest(draft, task: .musicAnalyze)
         XCTAssertEqual(Array(argv.prefix(3)), ["music", "analyze", music.path])
         XCTAssertEqual(argv.firstIndex(of: "--duration").map { argv[$0 + 1] }, "10")
 
@@ -793,7 +794,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             var retry = draft
             retry.model = "music-acestep-xl-turbo-lm4b"
             modelUsed = retry.model
-            let (_, retryArgv) = try taskRequest(retry)
+            let (_, retryArgv) = try taskRequest(retry, task: .musicAnalyze)
             XCTAssertEqual(retryArgv.firstIndex(of: "--model").map { retryArgv[$0 + 1] }, retry.model)
             run = try runCLI(flow, retryArgv, timeout: 2_400)
         }
@@ -899,7 +900,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         try broken.jsonl().write(to: brokenURL, options: .atomic)
         var brokenDraft = draft
         brokenDraft.form["--dataset"] = .text(brokenURL.path)
-        let (_, brokenArgv) = try taskRequest(brokenDraft)
+        let (_, brokenArgv) = try taskRequest(brokenDraft, task: .musicTrain)
         let brokenRun = try runCLI(flow, brokenArgv, timeout: 120)
         XCTAssertNotEqual(brokenRun.exitCode, 0)
         XCTAssertTrue((brokenRun.stderr + brokenRun.stdout).lowercased().contains("empty caption"), "Expected the CLI's empty-caption error: \(brokenRun.stderr.suffix(300))")
@@ -931,7 +932,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(draft.primaryInputPath, dataset.path)
         let checked = try XCTUnwrap(StudioTrainingRun.preflightDraft(draft))
 
-        let (request, argv) = try taskRequest(checked)
+        let (request, argv) = try taskRequest(checked, task: .imageTrain)
         XCTAssertEqual(Array(argv.prefix(2)), ["image", "train-lora"])
         XCTAssertTrue(argv.contains("--preflight") && argv.contains("--json"), "\(argv)")
         XCTAssertEqual(argv.firstIndex(of: "--data").map { argv[$0 + 1] }, dataset.path)
@@ -1108,7 +1109,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             return draft
         }
         for renoise in [amount.argument, schedule.argument] {
-            let (request, argv) = try taskRequest(makeDraft(renoise: renoise))
+            let (request, argv) = try taskRequest(makeDraft(renoise: renoise), task: .soundGenerate)
             XCTAssertEqual(argv.firstIndex(of: "--renoise").map { argv[$0 + 1] }, renoise)
             XCTAssertEqual(argv.firstIndex(of: "--steps").map { argv[$0 + 1] }, "2")
             XCTAssertTrue(request.draft.outputPath.hasPrefix(live.appendingPathComponent("Sound").path), request.draft.outputPath)
@@ -1131,7 +1132,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         // The runner refuses a schedule that does not match the step count before anything is
         // created; the CLI refuses the same argv.
         let bad = makeDraft(renoise: tooLong.argument)
-        XCTAssertThrowsError(try taskRequest(bad)) { error in
+        XCTAssertThrowsError(try taskRequest(bad, task: .soundGenerate)) { error in
             XCTAssertEqual(
                 error as? StudioValidationError,
                 StudioValidationError(message: "The renoise schedule has 3 values but the run has 2 steps.")
@@ -1156,7 +1157,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         draft.prompt = "a steady electronic tone with a kick drum"
         draft.setArgument(1, tone.path)
         XCTAssertEqual(draft.primaryInputPath, tone.path, "the well fills the audio positional")
-        let (request, argv) = try taskRequest(draft)
+        let (request, argv) = try taskRequest(draft, task: .soundScore)
         XCTAssertEqual(Array(argv.prefix(3)), ["sfx", "clap", "score"])
         XCTAssertEqual(Array(argv.dropFirst(3).prefix(2)), [draft.prompt, tone.path])
         XCTAssertEqual(request.mode, .sfx)
@@ -1184,7 +1185,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         var encode = StudioTaskDraft(templateID: .sfxAEEncode)
         encode.setArgument(0, tone.path)
-        let (encodeRequest, encodeArgv) = try taskRequest(encode)
+        let (encodeRequest, encodeArgv) = try taskRequest(encode, task: .soundEncode)
         XCTAssertEqual(Array(encodeArgv.prefix(3)), ["sfx", "ae", "encode"])
         XCTAssertTrue(encodeRequest.draft.outputPath.hasPrefix(live.appendingPathComponent("Sound").path), encodeRequest.draft.outputPath)
         XCTAssertTrue(encodeRequest.draft.outputPath.hasSuffix(".npy"))
@@ -1198,7 +1199,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         var decode = StudioTaskDraft(templateID: .sfxAEDecode)
         decode.setArgument(0, latents.path)
-        let (decodeRequest, decodeArgv) = try taskRequest(decode)
+        let (decodeRequest, decodeArgv) = try taskRequest(decode, task: .soundDecode)
         XCTAssertEqual(Array(decodeArgv.prefix(3)), ["sfx", "ae", "decode"])
         XCTAssertTrue(decodeRequest.draft.outputPath.hasSuffix(".wav"))
         let decodeRun = try runCLI(flow, decodeArgv, timeout: 900)
@@ -1224,7 +1225,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         draft.form["--renoise"] = .text(StudioRenoise.amount(0.5).argument)
         XCTAssertEqual(draft.primaryInputPath, clip.path, "the well fills the clip positional")
         XCTAssertTrue(StudioTaskSchema.primarySlot(for: .sfxVideo)?.accepts(clip) == true)
-        let (request, argv) = try taskRequest(draft)
+        let (request, argv) = try taskRequest(draft, task: .soundFoley)
         XCTAssertEqual(Array(argv.prefix(3)), ["sfx", "video", "generate"])
         XCTAssertEqual(Array(argv.dropFirst(3).prefix(2)), [draft.prompt, clip.path])
         XCTAssertEqual(argv.firstIndex(of: "--renoise").map { argv[$0 + 1] }, "0.5")
@@ -1365,7 +1366,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         var draft = StudioTaskDraft(templateID: .musicTranscribe)
         try XCTUnwrap(draft.slots.first).attach([music], to: &draft)
         draft.model = model
-        let (request, argv) = try taskRequest(draft)
+        let (request, argv) = try taskRequest(draft, task: .musicTranscribe)
         let midiURL = URL(fileURLWithPath: request.draft.outputPath)
         XCTAssertTrue(midiURL.path.hasPrefix(live.path), "Output escaped the configured root: \(midiURL.path)")
         XCTAssertEqual(midiURL.pathExtension, "mid")
@@ -1398,7 +1399,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         draft.prompt = "the person\nthe red mug"
         draft.form["--camera"] = .integer(1)
         draft.form["--duration-seconds"] = .number(4)
-        let (request, argv) = try taskRequest(draft)
+        let (request, argv) = try taskRequest(draft, task: .visionLive)
         XCTAssertEqual(Array(argv.prefix(2)), ["vision", "track-live"])
         XCTAssertEqual(argv.indices.filter { argv[$0] == "--prompt" }.map { argv[$0 + 1] }, ["the person", "the red mug"])
         XCTAssertEqual(argv.firstIndex(of: "--camera").map { argv[$0 + 1] }, "1")
@@ -1515,7 +1516,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         draft.form["--resolution"] = .integer(64)
         draft.form["--already-framed"] = .flag(true)
         draft.form["--json"] = .flag(true)
-        let (request, argv) = try taskRequest(draft)
+        let (request, argv) = try taskRequest(draft, task: .threeDFromImage)
         XCTAssertEqual(Array(argv.prefix(3)), ["image", "reconstruct-3d", subject.path])
         XCTAssertEqual(argv.firstIndex(of: "--resolution").map { argv[$0 + 1] }, "64")
         let output = URL(fileURLWithPath: request.draft.outputPath, isDirectory: true)
@@ -1681,20 +1682,45 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
         let prepared = StudioOutputLocation.preparing(request)
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        XCTAssertTrue(prepared.request.draft.outputPath.hasPrefix(live.path), "Output escaped the configured root: \(prepared.request.draft.outputPath)")
-        return (prepared.request, prepared.request.template.arguments(from: prepared.request.draft))
+        let argv = prepared.request.template.arguments(from: prepared.request.draft)
+        try requireDestinationsUnderLive(in: argv, draft: prepared.request.draft, capability: request.templateID.capability)
+        return (prepared.request, argv)
     }
 
     /// A specialist page's request, prepared the way `StudioTaskRunner` prepares every run
     /// (Command edits, validation, destination), so the tests build exactly what the app runs.
     private func specialistRequest(templateID: CommandTemplateID, mode: StudioMode, draft: CommandDraft) throws -> (request: StudioRunRequest, argv: [String]) {
         let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
-        let base = StudioRunRequest(mode: mode, templateID: templateID, template: template, draft: draft)
+        return try preparedRequest(StudioRunRequest(mode: mode, templateID: templateID, template: template, draft: draft))
+    }
+
+    /// A task draft's request, prepared the way `StudioTaskRunner.run(_:task:)` prepares it
+    /// (`StudioTaskRunner.prepare(draft:sessions:)`): the destination named by routing under the
+    /// configured root, Command edits, validation, the folder, and a camera draft copied beside
+    /// the output — so the tests build exactly what the task workspace submits. The argv is the
+    /// execution the Library keeps, exactly what the app launches. A destination outside the live
+    /// directory throws before any CLI runs, so a lost defaults suite can never send a run into
+    /// the user's own folders.
+    private func taskRequest(_ draft: StudioTaskDraft, task: StudioTask) throws -> (request: StudioRunRequest, argv: [String]) {
         // XCTest runs these on the main thread; the runner and the session store are main-actor.
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions()) }
+        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        XCTAssertEqual(prepared.request.templateID, draft.templateID, "\(task)")
+        XCTAssertEqual(prepared.request.mode, draft.template?.libraryMode, "\(task) files under its command's mode")
+        let argv = try XCTUnwrap(prepared.request.execution?.arguments, "\(task): a task draft records its argv")
+        try requireDestinationsUnderLive(in: argv, draft: prepared.request.draft, capability: draft.capability)
+        return (prepared.request, argv)
+    }
+
+    /// A request already named by its page (Music ▸ Train writes its clip list beside the adapter
+    /// routing named), prepared as `StudioTaskRunner.run(request:task:)` prepares it: never named
+    /// again, so what was put beside the adapter stays beside it.
+    private func preparedRequest(_ base: StudioRunRequest) throws -> (request: StudioRunRequest, argv: [String]) {
         let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        assertDestinations(of: prepared.request.draft, stayUnder: live)
-        return (prepared.request, template.arguments(from: prepared.request.draft))
+        let argv = prepared.request.execution?.arguments ?? prepared.request.template.arguments(from: prepared.request.draft)
+        try requireDestinationsUnderLive(in: argv, draft: prepared.request.draft, capability: base.templateID.capability)
+        return (prepared.request, argv)
     }
 
     /// A task draft's argv with its destination named but not prepared, for a command the
@@ -1707,86 +1733,31 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         return named.arguments
     }
 
-    /// A request already named by the page (Music ▸ Train writes its clip list beside the adapter
-    /// routing named), prepared as `StudioTaskRunner.run(request:task:)` prepares it: never named
-    /// again, so what was put beside the adapter stays beside it.
-    private func preparedRequest(_ base: StudioRunRequest) throws -> (request: StudioRunRequest, argv: [String]) {
-        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
-        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        assertDestinations(of: prepared.request.draft, stayUnder: live)
-        return (prepared.request, try XCTUnwrap(prepared.request.execution).arguments)
-    }
-
-    /// Every destination the draft names — the output and the sidecars derived beside it — is
-    /// under the live directory, so a run can never write into the user's own folders.
-    private func assertDestinations(of draft: CommandDraft, stayUnder root: URL, file: StaticString = #filePath, line: UInt = #line) {
-        for (label, path) in [
-            ("output", draft.outputPath), ("JSON sidecar", draft.visionJSONOutputPath),
-            ("mask directory", draft.visionMaskOutputDirectory), ("timings report", draft.timingsOutputPath),
-        ] where !path.isBlank {
-            XCTAssertTrue(path.hasPrefix(root.path), "The \(label) escaped the configured root: \(path)", file: file, line: line)
-        }
-    }
-
-    /// The user's own media folders. A CLI launch naming a file under one of them, outside the
-    /// live directory, is a harness fault (the root did not take) and never runs.
-    private var fencedFolders: [URL] {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        return ["Music", "Pictures", "Documents", "Movies", "Desktop", "Downloads"].map {
-            home.appendingPathComponent($0, isDirectory: true)
-        }
-    }
-
-    /// A task draft's request, prepared the way `StudioTaskRunner.run(_:task:)` prepares it
-    /// (`StudioTaskRunner.prepare(draft:sessions:)`): the destination named, Command edits,
-    /// validation, the folder, and a camera draft copied beside the output — so the tests build
-    /// exactly what the task workspace submits.
-    private func taskRequest(_ draft: StudioTaskDraft) throws -> (request: StudioRunRequest, argv: [String]) {
-        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions()) }
-        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        assertDestinations(of: prepared.request.draft, stayUnder: live)
-        let argv = try XCTUnwrap(prepared.request.execution?.arguments, "a task draft records its argv")
-        // Every destination stays under the live directory; a run that would write into the
-        // user's own folders is an error, not a CLI launch.
-        for (index, token) in argv.enumerated()
-        where ["--output", "--json-output", "--jsonl-output", "--mask-output-dir"].contains(token) && index + 1 < argv.count {
-            let path = argv[index + 1]
-            guard path.hasPrefix(live.path + "/") else {
-                struct DestinationEscaped: LocalizedError {
-                    let flag: String
-                    let path: String
-                    var errorDescription: String? { "\(flag) escaped the live directory: \(path)" }
-                }
-                throw DestinationEscaped(flag: token, path: path)
-            }
-        }
-        return (prepared.request, argv)
-    }
-
-    /// A task draft's request, prepared the way `StudioTaskRunner.run` prepares it: the output
-    /// named after the input under the configured root, Command edits applied, validated. The
-    /// argv is the execution the Library keeps, exactly what the app launches. A destination
-    /// outside the live directory throws before any CLI runs, so a lost defaults suite can never
-    /// send a run into the user's own folders.
-    private func taskRequest(_ draft: StudioTaskDraft, task: StudioTask) throws -> (request: StudioRunRequest, argv: [String]) {
-        let prepared = try MainActor.assumeIsolated { () throws -> (request: StudioRunRequest, fallbackReason: String?) in
-            let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request(), "\(task) has no request")
-            return try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions())
-        }
-        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        let argv = try XCTUnwrap(prepared.request.execution?.arguments)
-        if let flag = prepared.request.template.id.capability?.output.flag,
-           let index = argv.firstIndex(of: flag), index + 1 < argv.count {
-            try requireUnderLive(argv[index + 1], "\(task) output")
-        }
-        return (prepared.request, argv)
-    }
-
     private struct DestinationEscaped: LocalizedError {
         let what: String
         let path: String
         let root: String
         var errorDescription: String? { "\(what) would land outside the live directory \(root); refusing to run the CLI: \(path)" }
+    }
+
+    /// Every destination a run names — the draft's output and the sidecars derived beside it,
+    /// and the value of every output flag in the argv, the ones routing fills and the ones a
+    /// draft may choose (`--materialize`) — sits under the live directory, or the CLI is never
+    /// launched.
+    private func requireDestinationsUnderLive(in argv: [String], draft: CommandDraft, capability: MereRunCommandCapability?) throws {
+        var destinations = [
+            ("output", draft.outputPath), ("JSON sidecar", draft.visionJSONOutputPath),
+            ("mask directory", draft.visionMaskOutputDirectory), ("timings report", draft.timingsOutputPath),
+        ]
+        if let capability {
+            let flags = StudioTaskSchema.outputFlags(for: capability).union(StudioTaskSchema.chosenOutputFlags)
+            for (index, word) in argv.enumerated() where flags.contains(word) && index + 1 < argv.count {
+                destinations.append((word, argv[index + 1]))
+            }
+        }
+        for (what, path) in destinations where !path.isBlank {
+            try requireUnderLive(path, what)
+        }
     }
 
     /// Throws unless `path` sits under `MERERUN_LIVE_ACCEPTANCE_DIR`. Both sides are compared
@@ -1797,9 +1768,18 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             return standardized.hasPrefix("/private/") ? String(standardized.dropFirst("/private".count)) : standardized
         }
         let root = normalized(live)
-        let target = normalized(URL(fileURLWithPath: path))
+        let target = normalized(URL(fileURLWithPath: NSString(string: path).expandingTildeInPath))
         guard target.hasPrefix(root + "/") else {
             throw DestinationEscaped(what: what, path: target, root: root)
+        }
+    }
+
+    /// The user's own media folders. A CLI launch naming a file under one of them, outside the
+    /// live directory, is a harness fault (the root did not take) and never runs.
+    private var fencedFolders: [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return ["Music", "Pictures", "Documents", "Movies", "Desktop", "Downloads"].map {
+            home.appendingPathComponent($0, isDirectory: true)
         }
     }
 
