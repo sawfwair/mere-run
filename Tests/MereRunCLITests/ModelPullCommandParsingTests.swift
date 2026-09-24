@@ -8,12 +8,42 @@ final class ModelPullCommandParsingTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: temp) }
         let modelID = "vision-chat-muse-glimmer-30b"
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+        let restriction = try XCTUnwrap(spec.usageRestriction)
         let command = try ModelPull.parse([modelID, "--accept-model-license"])
         try MereRunModelManifest(id: modelID, usageTermsAcknowledged: false).write(to: temp)
+        var diagnostics: [String] = []
 
-        XCTAssertTrue(try command.acknowledgeInstalledUsageTerms(for: spec, at: temp))
-        XCTAssertEqual(try MereRunModelManifest.loadRequired(from: temp).usageTermsAcknowledged, true)
-        XCTAssertFalse(try command.acknowledgeInstalledUsageTerms(for: spec, at: temp))
+        XCTAssertTrue(try command.acknowledgeInstalledUsageTerms(for: spec, at: temp) { diagnostics.append($0) })
+        let manifest = try MereRunModelManifest.loadRequired(from: temp)
+        XCTAssertEqual(manifest.usageTermsAcknowledged, true)
+        XCTAssertEqual(manifest.usageTerms, restriction.terms)
+        XCTAssertEqual(
+            diagnostics,
+            ModelPull.usageTermsNotice(modelID: modelID, restriction: restriction)
+                + ["[\(modelID)] recorded acceptance of installed model terms without downloading"]
+        )
+        XCTAssertTrue(diagnostics.contains { $0.hasPrefix("  By continuing, you confirm") })
+        XCTAssertTrue(diagnostics.contains("    source: \(restriction.terms[0].sourceRepoId)@\(restriction.terms[0].sourceRevision)"))
+
+        diagnostics.removeAll()
+        XCTAssertFalse(try command.acknowledgeInstalledUsageTerms(for: spec, at: temp) { diagnostics.append($0) })
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testQuietInstalledRestrictedModelAcceptanceRecordsTermsSilently() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let modelID = "vision-chat-muse-glimmer-30b"
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+        let command = try ModelPull.parse([modelID, "--accept-model-license", "--quiet"])
+        try MereRunModelManifest(id: modelID, usageTermsAcknowledged: false).write(to: temp)
+        var diagnostics: [String] = []
+
+        XCTAssertTrue(try command.acknowledgeInstalledUsageTerms(for: spec, at: temp) { diagnostics.append($0) })
+        XCTAssertTrue(diagnostics.isEmpty)
+        let manifest = try MereRunModelManifest.loadRequired(from: temp)
+        XCTAssertEqual(manifest.usageTermsAcknowledged, true)
+        XCTAssertEqual(manifest.usageTerms, spec.usageRestriction?.terms)
     }
 
     func testModelPullParsesHardwareOverride() throws {
