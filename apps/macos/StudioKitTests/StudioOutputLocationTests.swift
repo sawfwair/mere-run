@@ -198,6 +198,31 @@ final class StudioOutputLocationTests: XCTestCase {
         )
     }
 
+    /// Proposing a destination is naming, not making: a template's timestamped folder, a
+    /// specialist page's directory, and a named file all stay off the disk until a run starts,
+    /// so opening a task or a page never litters the output folder with empty directories.
+    func testProposingADestinationCreatesNothing() throws {
+        let root = try temporaryDirectory()
+        let stamp = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2001, month: 1, day: 1)))
+        let proposals = [
+            StudioOutputLocation.specialistDirectory(domain: .vision, name: "caption", now: stamp, configuredRoot: root.path, home: root),
+            StudioOutputLocation.outputDirectoryURL(
+                domain: .vision, prompt: "", fallbackStem: "Caption", identifierOverride: "20010101-000000",
+                configuredRoot: root.path, home: root
+            ),
+            StudioOutputLocation.outputURL(
+                domain: .vision, prompt: "", fallbackStem: "Segment", fileExtension: "png",
+                identifierOverride: "20010101-000000", configuredRoot: root.path, home: root
+            ),
+        ]
+        for proposal in proposals {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: proposal.path), proposal.path)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: proposal.deletingLastPathComponent().path), proposal.path)
+        }
+        XCTAssertEqual(proposals[0].lastPathComponent, "caption-20010101-000000")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [])
+    }
+
     func testPreparingADraftWithNoOutputIsANoOp() {
         let draft = CommandDraft()
         let prepared = StudioOutputLocation.preparingDestination(of: draft)

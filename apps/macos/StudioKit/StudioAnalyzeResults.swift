@@ -385,7 +385,7 @@ package enum StudioAnalyzeDocument: Equatable {
                     speaker: "Speaker \(segment.speakerIndex + 1)",
                     start: segment.startSeconds,
                     end: segment.endSeconds,
-                    text: "Spoke for \(StudioTimeFormat.string(segment.endSeconds - segment.startSeconds))"
+                    text: "Spoke for \(StudioTimeFormat.spanString(segment.endSeconds - segment.startSeconds))"
                 )
             }
         default:

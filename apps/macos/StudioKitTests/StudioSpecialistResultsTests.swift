@@ -49,19 +49,27 @@ final class StudioSpecialistResultsTests: XCTestCase {
           "segments" : [
             { "speaker" : "speaker_0", "speaker_index" : 0, "start_seconds" : 0.0, "end_seconds" : 4.0, "duration_seconds" : 4.0 },
             { "speaker" : "speaker_1", "speaker_index" : 1, "start_seconds" : 4.5, "end_seconds" : 8.0, "duration_seconds" : 3.5 },
-            { "speaker" : "speaker_0", "speaker_index" : 0, "start_seconds" : 8.2, "end_seconds" : 70.2, "duration_seconds" : 62.0 }
+            { "speaker" : "speaker_0", "speaker_index" : 0, "start_seconds" : 8.2, "end_seconds" : 70.2, "duration_seconds" : 62.0 },
+            { "speaker" : "speaker_1", "speaker_index" : 1, "start_seconds" : 70.5, "end_seconds" : 70.9, "duration_seconds" : 0.4 }
           ]
         }
         """)
 
         let document = try XCTUnwrap(StudioDiarizationDocument.load(from: url))
 
-        XCTAssertEqual(document.summary, "2 speakers · 3 turns · 3:12")
+        XCTAssertEqual(document.summary, "2 speakers · 4 turns · 3:12")
         XCTAssertEqual(document.speakers.map(\.name), ["Speaker 1", "Speaker 2"])
-        XCTAssertEqual(document.speakers.map(\.turnCount), [2, 1])
+        XCTAssertEqual(document.speakers.map(\.turnCount), [2, 2])
         XCTAssertEqual(document.speakers.map(\.talkTimeDescription), ["1:06", "0:04"])
-        // The Analyze panel's rows name the turn's span, since a diarized turn has no words.
-        XCTAssertEqual(StudioAnalyzeDocument.diarization(document).speechSegments.map(\.text), ["Spoke for 0:04", "Spoke for 0:04", "Spoke for 1:02"])
+        // The Analyze panel's rows name the turn's span, since a diarized turn has no words; a
+        // turn under a second reads in seconds rather than as "0:00".
+        XCTAssertEqual(
+            StudioAnalyzeDocument.diarization(document).speechSegments.map(\.text),
+            ["Spoke for 0:04", "Spoke for 0:04", "Spoke for 1:02", "Spoke for 0.4 s"]
+        )
+        XCTAssertEqual(StudioTimeFormat.spanString(0.96), "1.0 s")
+        XCTAssertEqual(StudioTimeFormat.spanString(1.0), "0:01")
+        XCTAssertEqual(StudioTimeFormat.spanString(75), "1:15")
     }
 
     func testAnRTTMTimelineIsNotADocument() throws {

@@ -181,4 +181,11 @@ package enum StudioTimeFormat {
         }
         return String(format: "%d:%02d", minutes, secs)
     }
+
+    /// A span of time as a row reads it: "0.4 s" under a second, where `m:ss` would round to
+    /// nothing, and the clock form from a second up.
+    package static func spanString(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return string(seconds) }
+        return seconds < 1 ? String(format: "%.1f s", seconds) : string(seconds)
+    }
 }
