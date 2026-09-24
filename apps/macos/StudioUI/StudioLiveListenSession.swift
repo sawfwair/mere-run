@@ -395,7 +395,7 @@ private struct StudioLiveListenSessionContent: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.modelID(for: draft))
+        controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.requiredModelID(for: draft))
     }
 
     private func save() {

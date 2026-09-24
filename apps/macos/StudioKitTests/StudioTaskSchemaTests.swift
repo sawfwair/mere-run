@@ -303,6 +303,45 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertTrue(StudioModelScope(templateID: .musicRealtime).categories.isEmpty, "no filter when the inventory has no category")
     }
 
+    /// Readiness asks `model list` about a managed id only. A local checkpoints root the CLI
+    /// takes as `--model` (the Woosh commands), a local model location beside it (Chat ▸ Train's
+    /// `--model-path`, Music ▸ Train's `--checkpoints-root`) needs no managed model, so such a
+    /// run is never refused as "isn't in the model list".
+    func testALocalModelLocationNeedsNoManagedModel() {
+        var foley = StudioTaskDraft(templateID: .sfxVideo)
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley), StudioTaskSchema.modelID(for: foley))
+        for path in ["/Volumes/Models/woosh", "~/woosh", "./woosh", "checkpoints/woosh"] {
+            foley.model = path
+            XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley), "", path)
+        }
+        foley.model = "sfx-woosh-dvflow-8s"
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley), "sfx-woosh-dvflow-8s")
+
+        var chat = StudioTaskDraft(templateID: .textTrainLoRA)
+        XCTAssertFalse(StudioTaskSchema.requiredModelID(for: chat).isEmpty)
+        chat.form["--model-path"] = .text("/Volumes/Models/inkling")
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: chat), "")
+
+        var music = StudioTaskDraft(templateID: .musicTrainAdapter)
+        XCTAssertFalse(StudioTaskSchema.requiredModelID(for: music).isEmpty)
+        music.form["--checkpoints-root"] = .text("/Volumes/Models/acestep")
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: music), "")
+    }
+
+    /// A recipe decides Image ▸ Train's base when `--model` is left to it, so readiness, the
+    /// picker, and "Get the model" name the base the CLI will train, not the template's default.
+    func testARecipeNamesTheBaseItTrains() {
+        var draft = StudioTaskDraft(templateID: .imageTrainLoRA)
+        draft.model = ""
+        draft.form["--recipe"] = .text("klein-fast-style")
+        XCTAssertEqual(StudioTaskSchema.modelID(for: draft), "image-klein-base-9b")
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: draft), "image-klein-base-9b")
+        draft.form["--recipe"] = .text("krea-cinematic-style")
+        XCTAssertEqual(StudioTaskSchema.modelID(for: draft), "image-krea2-raw")
+        draft.model = "image-klein-base-9b-8bit"
+        XCTAssertEqual(StudioTaskSchema.modelID(for: draft), "image-klein-base-9b-8bit", "an explicit model wins, as on the command line")
+    }
+
     func testTaskDraftPersistsWithoutSecrets() throws {
         var draft = StudioTaskDraft(templateID: .audioEnhance)
         draft.form["--hf-token"] = .text("hf_secret")

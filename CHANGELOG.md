@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio refusing a run whose model is a folder on disk: a local
+  checkpoints root given as the model (Sound ▸ Video Foley and the other Woosh
+  commands, the Earth tasks), Chat ▸ Train's model path, and Music ▸ Train's
+  checkpoints root no longer ask `model list` for a managed model. Image ▸
+  Train with a recipe checks, names, and offers to get the base the recipe
+  trains (the FLUX.2 Klein base for `klein-fast-style`) instead of Krea 2.
 - Fix Studio task drafts that wrote every run to one file: a fresh draft no
   longer keeps the template's stamped destination, and a saved draft drops any
   destination in one of Studio's own folders, so Music ▸ Transcribe in JSON

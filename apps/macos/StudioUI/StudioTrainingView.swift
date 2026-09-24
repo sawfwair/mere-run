@@ -370,7 +370,7 @@ struct StudioTrainingView: View {
             seedComparisons()
             refreshReadiness()
         }
-        .onChange(of: draft.model) { _, _ in
+        .onChange(of: StudioTaskSchema.requiredModelID(for: draft)) { _, _ in
             error = nil
             refreshReadiness()
         }
@@ -537,7 +537,8 @@ struct StudioTrainingView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(MereRunTheme.accent)
                 }
-                Text(scope.displayLabel(model: draft.model, titles: titles))
+                // Blank means the recipe's base or the template's default: name what will train.
+                Text(scope.displayLabel(model: StudioTaskSchema.modelID(for: draft), titles: titles))
                     .font(.callout)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)
@@ -554,7 +555,7 @@ struct StudioTrainingView: View {
         }
         .help(readiness.blocksRun ? readiness.message(titles: titles) : "Base model")
         .accessibilityLabel("Base model")
-        .accessibilityValue(scope.resolvedModelID(model: draft.model))
+        .accessibilityValue(StudioTaskSchema.modelID(for: draft))
     }
 
     private var modelStatusGlyph: String? {
@@ -1188,7 +1189,7 @@ struct StudioTrainingView: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: task, modelID: StudioTaskSchema.modelID(for: draft))
+        controller.checkReadiness(for: task, modelID: StudioTaskSchema.requiredModelID(for: draft))
     }
 
     /// Gets a managed model through the same `model pull` job the readiness row reports.

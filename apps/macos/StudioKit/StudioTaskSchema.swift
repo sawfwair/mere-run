@@ -337,10 +337,30 @@ package enum StudioTaskSchema {
         StudioModelScope(templateID: draft.templateID)
     }
 
-    /// The model the draft will run: its `--model`, else the template's default; empty when the
+    /// The model the draft will run: its `--model`, else the base its training recipe trains
+    /// (`StudioTrainingRun.recipeBaseModel`), else the template's default; empty when the
     /// template runs no managed model.
     package static func modelID(for draft: StudioTaskDraft) -> String {
-        modelScope(for: draft).resolvedModelID(model: draft.text("--model"))
+        let model = draft.text("--model")
+        if model.isBlank, let base = StudioTrainingRun.recipeBaseModel(for: draft) { return base }
+        return modelScope(for: draft).resolvedModelID(model: model)
+    }
+
+    /// The managed model the readiness check asks for before a run: `modelID(for:)`, or none
+    /// when the run reads its weights from a folder on disk — a `--model` that is a path (the
+    /// Woosh commands take a local checkpoints root there) or a local model location the
+    /// trainers take beside the id (`--model-path`, `--checkpoints-root`). The CLI resolves those
+    /// itself; `model list` has no row for them.
+    package static func requiredModelID(for draft: StudioTaskDraft) -> String {
+        if isLocalPath(draft.text("--model").trimmingCharacters(in: .whitespacesAndNewlines)) { return "" }
+        if ["--model-path", "--checkpoints-root"].contains(where: { !draft.text($0).isBlank }) { return "" }
+        return modelID(for: draft)
+    }
+
+    /// Whether a `--model` value names a folder rather than a managed id: it starts at the root,
+    /// the home folder, or the working directory, or has a folder in it.
+    package static func isLocalPath(_ model: String) -> Bool {
+        model.hasPrefix("~") || model.hasPrefix(".") || model.contains("/")
     }
 }
 

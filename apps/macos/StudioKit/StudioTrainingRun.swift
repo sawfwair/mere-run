@@ -70,6 +70,16 @@ package enum StudioTrainingRun {
         return draft
     }
 
+    /// The base model a chosen recipe trains when `--model` is left to it, as the CLI resolves
+    /// the recipe (`resolveLoRATrainingRecipe`): the Klein recipe trains the FLUX.2 Klein 9B
+    /// base, the Krea recipes Krea 2 raw. Nil without a recipe, and for the other trainers.
+    package static func recipeBaseModel(for draft: StudioTaskDraft) -> String? {
+        guard draft.templateID == .imageTrainLoRA else { return nil }
+        let recipe = draft.text("--recipe").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !recipe.isEmpty else { return nil }
+        return recipe.contains("klein") ? "image-klein-base-9b" : "image-krea2-raw"
+    }
+
     /// Whether the image draft trains a FLUX.2 Klein base: the Klein recipe, or a model id that
     /// says so.
     package static func trainsKlein(_ draft: StudioTaskDraft) -> Bool {
