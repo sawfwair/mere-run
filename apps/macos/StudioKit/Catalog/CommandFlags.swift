@@ -794,6 +794,13 @@ extension CommandFlags {
     /// `mere.run audio enhance` — Enhance audio
     package enum AudioEnhance: CommandFlagNamespace {
         package static let command = ["audio", "enhance"]
+        package static let defaultValues = [
+            "--ode-method": "midpoint",
+            "--ode-steps": "4",
+            "--guidance-scale": "1.5",
+            "--chunk-seconds": "10",
+            "--dtype": "float32"
+        ]
 
         package static let model = "--model"
         package static let modelPath = "--model-path"
@@ -1094,6 +1101,9 @@ extension CommandFlags {
     /// `mere.run music separate` — Separate or restore music
     package enum MusicSeparate: CommandFlagNamespace {
         package static let command = ["music", "separate"]
+        package static let defaultValues = [
+            "--dtype": "float16"
+        ]
 
         package static let model = "--model"
         package static let modelPath = "--model-path"
@@ -2457,6 +2467,13 @@ extension CommandFlags {
     /// `mere.run speech diarize` — Diarize speech
     package enum SpeechDiarize: CommandFlagNamespace {
         package static let command = ["speech", "diarize"]
+        package static let defaultValues = [
+            "--format": "json",
+            "--threshold": "0.5",
+            "--min-duration": "0.25",
+            "--merge-gap": "0.25",
+            "--latency": "offline"
+        ]
 
         package static let model = "--model"
         package static let format = "--format"
@@ -2475,6 +2492,10 @@ extension CommandFlags {
     /// `mere.run speech diarize-live` — Live speaker diarization
     package enum SpeechDiarizeLive: CommandFlagNamespace {
         package static let command = ["speech", "diarize-live"]
+        package static let defaultValues = [
+            "--latency": "1.04",
+            "--threshold": "0.5"
+        ]
 
         package static let model = "--model"
         package static let device = "--device"
@@ -2527,6 +2548,10 @@ extension CommandFlags {
     /// `mere.run speech listen` — Live transcription
     package enum SpeechListen: CommandFlagNamespace {
         package static let command = ["speech", "listen"]
+        package static let defaultValues = [
+            "--decode-ms": "2000",
+            "--silence-ms": "900"
+        ]
 
         package static let device = "--device"
         package static let listDevices = "--list-devices"

@@ -118,19 +118,33 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--format", label: "Format", kind: .choice, choices: ["json", "rttm"]),
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--threshold", label: "Threshold", kind: .number),
-            .init(flag: "--min-duration", label: "Minimum duration", kind: .number),
-            .init(flag: "--merge-gap", label: "Merge gap", kind: .number),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(
+                flag: "--format", label: "Format", kind: .choice, choices: ["json", "rttm"],
+                defaultValue: "json", tier: .essential
+            ),
+            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(
+                flag: "--threshold", label: "Activity threshold", kind: .number,
+                defaultValue: "0.5", tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(
+                flag: "--min-duration", label: "Minimum segment", kind: .number,
+                defaultValue: "0.25", tier: .standard, range: .init(min: 0, max: 5, step: 0.05)
+            ),
+            .init(
+                flag: "--merge-gap", label: "Merge gap", kind: .number,
+                defaultValue: "0.25", tier: .standard, range: .init(min: 0, max: 5, step: 0.05)
+            ),
             .init(
                 flag: "--latency",
-                label: "Input buffer latency",
+                label: "Input buffer",
                 kind: .choice,
-                choices: ["offline", "1.04", "0.64", "0.32"]
+                choices: ["offline", "1.04", "0.64", "0.32"],
+                defaultValue: "offline",
+                tier: .essential
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text, flag: "--output", optional: true)
     )
@@ -141,16 +155,19 @@ extension MereRunCapabilityCatalog {
         title: "Live speaker diarization",
         summary: "Stream Nemotron 3 speaker activity from a microphone or 16 kHz PCM stdin.",
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--device", label: "Input device", kind: .string),
-            .init(flag: "--list-devices", label: "List devices", kind: .boolean),
-            .init(flag: "--stdin", label: "PCM stdin", kind: .boolean),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--device", label: "Input device", kind: .string, group: Group.inputs, tier: .standard),
+            .init(flag: "--list-devices", label: "List devices", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--stdin", label: "PCM stdin", kind: .boolean, group: Group.run, tier: .expert),
             .init(
-                flag: "--latency", label: "Input buffer latency", kind: .choice,
-                choices: ["1.04", "0.64", "0.32"]
+                flag: "--latency", label: "Input buffer", kind: .choice,
+                choices: ["1.04", "0.64", "0.32"], defaultValue: "1.04", tier: .essential
             ),
-            .init(flag: "--threshold", label: "Activity threshold", kind: .number),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(
+                flag: "--threshold", label: "Activity threshold", kind: .number,
+                defaultValue: "0.5", tier: .essential, range: .init(min: 0, max: 1, step: 0.01)
+            ),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text)
     )
@@ -170,11 +187,11 @@ extension MereRunCapabilityCatalog {
         title: "Create voice profile",
         summary: "Create a reusable voice-cloning profile.",
         options: [
-            .init(flag: "--name", label: "Name", kind: .string, required: true),
-            .init(flag: "--audio", label: "Audio", kind: .file, required: true),
-            .init(flag: "--text", label: "Transcript", kind: .string),
-            .init(flag: "--language", label: "Language", kind: .string),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--name", label: "Name", kind: .string, required: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--audio", label: "Reference audio", kind: .file, required: true, group: Group.inputs, tier: .essential),
+            .init(flag: "--text", label: "Transcript", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--language", label: "Language", kind: .string, tier: .standard),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text)
     )
@@ -196,14 +213,20 @@ extension MereRunCapabilityCatalog {
         title: "Live transcription",
         summary: "Transcribe a macOS microphone with live Qwen ASR.",
         options: [
-            .init(flag: "--device", label: "Input device", kind: .string),
-            .init(flag: "--list-devices", label: "List devices", kind: .boolean),
-            .init(flag: "--language", label: "Language", kind: .string),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--decode-ms", label: "Decode window", kind: .integer),
-            .init(flag: "--silence-ms", label: "Silence window", kind: .integer),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
-            .init(flag: "--jsonl", label: "JSONL", kind: .boolean)
+            .init(flag: "--device", label: "Input device", kind: .string, group: Group.inputs, tier: .standard),
+            .init(flag: "--list-devices", label: "List devices", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--language", label: "Language", kind: .string, tier: .essential),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(
+                flag: "--decode-ms", label: "Decode window (ms)", kind: .integer,
+                defaultValue: "2000", tier: .standard, range: .init(min: 250, max: 10_000, step: 250)
+            ),
+            .init(
+                flag: "--silence-ms", label: "Silence to commit (ms)", kind: .integer,
+                defaultValue: "900", tier: .standard, range: .init(min: 100, max: 5_000, step: 100)
+            ),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--jsonl", label: "JSONL", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text)
     )
