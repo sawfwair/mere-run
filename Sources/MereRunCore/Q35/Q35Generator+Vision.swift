@@ -255,7 +255,16 @@ extension Q35Generator {
         return (pixels, gridTHW)
     }
 
-    private func loadImage(from imageRef: String) throws -> MediaImage {
+    func loadImage(from imageRef: String) throws -> MediaImage {
+        if imageRef.lowercased().hasPrefix("data:") {
+            guard let comma = imageRef.firstIndex(of: ","),
+                  imageRef[..<comma].lowercased().contains(";base64"),
+                  let data = Data(base64Encoded: String(imageRef[imageRef.index(after: comma)...])),
+                  !data.isEmpty else {
+                throw Q35Error.generationFailed("Invalid base64 Qwen-family image data URL.")
+            }
+            return try MediaImageIO.decode(data: data)
+        }
         if let remoteURL = URL(string: imageRef),
            let scheme = remoteURL.scheme?.lowercased(),
            scheme == "http" || scheme == "https" {
