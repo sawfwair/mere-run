@@ -402,17 +402,11 @@ struct StudioGenerationCard: View {
         files.filter { StudioOutputFileKind.classify($0) == .text && item.artifactRole(for: $0) == nil }
     }
 
-    /// What the card draws in place of the output grid when the run's outputs have a bespoke
-    /// rendering (Video Foley's sync review, a tensor's header); nil for the grid.
-    private var cardRendering: StudioResultRendering? {
-        StudioResultRenderers.cardRendering(for: item, files: files)
-    }
-
     /// The run's non-media companions: everything the CLI's receipt named with a role, plus
     /// whatever the extension leaves unclassified for a run that reported none, minus what a
     /// card rendering already shows.
-    private var sidecars: [URL] {
-        let rendered = cardRendering.map { StudioResultRenderers.renderedFiles(of: $0, item: item) } ?? []
+    private func sidecars(besides rendering: StudioResultRendering?) -> [URL] {
+        let rendered = rendering.map { StudioResultRenderers.renderedFiles(of: $0, item: item) } ?? []
         return files.filter { url in
             let kind = StudioOutputFileKind.classify(url)
             guard ![.image, .video, .audio, .model3D].contains(kind), !rendered.contains(url) else { return false }
@@ -438,9 +432,13 @@ struct StudioGenerationCard: View {
     }
 
     var body: some View {
+        // What the card draws in place of the output grid when the run's outputs have a bespoke
+        // rendering (Video Foley's sync review, a tensor's header): found once per body, since
+        // finding it stats the artifacts and reads a tensor file's header.
+        let rendering = StudioResultRenderers.cardRendering(for: item, files: files)
         VStack(alignment: .leading, spacing: 12) {
             StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date()))
-            outputs
+            outputs(rendering: rendering)
             actionRow
         }
         .padding(.vertical, 14)
@@ -451,9 +449,10 @@ struct StudioGenerationCard: View {
     }
 
     @ViewBuilder
-    private var outputs: some View {
-        if let cardRendering {
-            StudioCardRenderingView(rendering: cardRendering, item: item)
+    private func outputs(rendering: StudioResultRendering?) -> some View {
+        let sidecars = sidecars(besides: rendering)
+        if let rendering {
+            StudioCardRenderingView(rendering: rendering, item: item)
         } else if !mediaFiles.isEmpty {
             StudioOutputGrid(urls: mediaFiles, tileSide: Self.tileSide, onOpen: { actions.focus(item, $0) })
         }
@@ -463,7 +462,7 @@ struct StudioGenerationCard: View {
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         }
-        if cardRendering == nil, mediaFiles.isEmpty, textFiles.isEmpty, let outputText {
+        if rendering == nil, mediaFiles.isEmpty, textFiles.isEmpty, let outputText {
             StudioMarkdownText(content: outputText, bodyFont: .callout)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)

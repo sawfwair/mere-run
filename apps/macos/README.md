@@ -141,8 +141,9 @@ live under `StudioUI/Renderers/` and register by `(view, document)` in
 rendering in place of its output grid); the Session pages share their transport
 chrome from `StudioUI/StudioSessionControls.swift`. A task keeps its bespoke
 page until it is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the
-root then renders the workspace for it instead. The five Sound specialist tasks
-(Video Foley, Condition, Encode, Decode, Score) are the first on it.
+root then renders the workspace for it instead. Sound ▸ Video Foley and
+Condition (Generate) and Sound ▸ Encode, Decode, and Score (Analyze) render on
+it; the SFX Lab page they replaced is gone.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -1035,7 +1036,7 @@ boxes to Segment, Faces, Depth, multi-view geometry and InstantMesh cameras,
 Who Spoke, Music analyze, instruments, and the training manifest, run plans and
 `run inspect`, Sound's renoise through the task draft and the runner, a CLAP
 score decoding for the gauge, the Woosh latents round trip through Encode and
-Decode, a chat turn with thinking shown, and a failed
+Decode, a short Video Foley run on a synthesized clip, a chat turn with thinking shown, and a failed
 turn's one-line reason. Inputs are drawn, synthesized, or generated with the CLI
 into the run directory; nothing binary is committed. It is skipped unless
 `MERERUN_LIVE_ACCEPTANCE_DIR` names a directory, and each test skips on its own

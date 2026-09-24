@@ -1,5 +1,6 @@
 @testable import StudioKit
 import MereRunContract
+import StudioTestSupport
 import UniformTypeIdentifiers
 import XCTest
 
@@ -34,7 +35,10 @@ final class StudioSoundTaskTests: XCTestCase {
         XCTAssertEqual(foley.map(\.id), ["input"])
         XCTAssertEqual(foley.first?.storage, .argument(1))
         XCTAssertEqual(foley.first?.isRequired, true)
-        XCTAssertEqual(foley.first?.acceptedTypes, [.movie, .video, .audiovisualContent], "the template's own video input")
+        XCTAssertEqual(foley.first?.acceptedTypes, [.movie, .video, .audiovisualContent, .data],
+                       "the clip, or the Synchformer features the CLI takes in its place")
+        XCTAssertEqual(foley.first?.accepts(URL(fileURLWithPath: "/tmp/walk.mp4")), true)
+        XCTAssertEqual(foley.first?.accepts(URL(fileURLWithPath: "/tmp/walk-features.npy")), true)
         XCTAssertTrue(StudioTaskSchema.slots(for: .sfxConditionText).isEmpty, "Condition takes only words")
         XCTAssertEqual(StudioTaskSchema.slots(for: .sfxAEEncode).map(\.acceptedTypes), [[.audio]])
         XCTAssertEqual(StudioTaskSchema.slots(for: .sfxAEDecode).map(\.acceptedTypes), [[.data]])
@@ -190,9 +194,9 @@ final class StudioSoundTaskTests: XCTestCase {
         draft.form["--renoise"] = .text("0,5")
         XCTAssertEqual(message(), "The renoise schedule has 2 values but the run has 4 steps.", "a comma decimal is two tokens to the CLI")
         draft.form["--steps"] = .unset
-        draft.form["--renoise"] = .text("0.1,0.2,0.3")
-        XCTAssertNil(message(), "with the step count left to the CLI only the amounts are checked")
-        draft.form["--renoise"] = .text("0.1,2")
+        draft.form["--renoise"] = .text("0.1,0.2,0.3,0.4")
+        XCTAssertNil(message(), "with --steps left out the template's default of 4 counts")
+        draft.form["--renoise"] = .text("0.1,2,0.3,0.4")
         XCTAssertEqual(message(), "Renoise values must be between 0 and 1.")
 
         // The runner refuses the same draft before anything is created or recorded.
@@ -302,49 +306,88 @@ final class StudioSoundTaskTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let npy = root.appendingPathComponent("hit.npy")
-        try Self.npy(descriptor: "<f4", shape: "(1, 128, 87)").write(to: npy)
+        try TensorFixtures.npy(descriptor: "<f4", shape: "(1, 128, 87)").write(to: npy)
         guard case .npy(let metadata)? = StudioTensorHeader.load(from: npy) else { return XCTFail("not read as .npy") }
         XCTAssertEqual(metadata.shape, "(1, 128, 87)")
+        XCTAssertEqual(metadata.byteCount, try Data(contentsOf: npy).count, "the whole file's size, though only the header was read")
         XCTAssertEqual(StudioAnalyzeDocumentSource.preferredExtensions(for: .sfxAEEncode), ["npy"])
 
         let safetensors = root.appendingPathComponent("door.safetensors")
-        try Self.safetensors(["text_embeddings": [1, 77, 1_024], "pooled": [1, 1_024]]).write(to: safetensors)
+        try TensorFixtures.safetensors([("pooled", [1, 1_024]), ("text_embeddings", [1, 77, 1_024])]).write(to: safetensors)
         guard case .safetensors(let header)? = StudioTensorHeader.load(from: safetensors) else { return XCTFail("not read as safetensors") }
         XCTAssertEqual(header.tensors.map(\.name), ["pooled", "text_embeddings"])
         XCTAssertEqual(header.tensors.first?.summary, "F32 [1, 1024]")
+        XCTAssertEqual(header.byteCount, try Data(contentsOf: safetensors).count)
         XCTAssertEqual(StudioAnalyzeDocumentSource.preferredExtensions(for: .sfxConditionText), ["safetensors"])
+        XCTAssertNil(StudioTensorHeader.load(from: root.appendingPathComponent("missing.npy")))
+        try Data("not a tensor file at all".utf8).write(to: root.appendingPathComponent("notes.txt"))
+        XCTAssertNil(StudioTensorHeader.load(from: root.appendingPathComponent("notes.txt")))
     }
 
-    // MARK: Fixtures
+    // MARK: Destinations
 
-    /// A NumPy 1.0 file with an empty payload of the declared shape.
-    static func npy(descriptor: String, shape: String) -> Data {
-        var header = "{'descr': '\(descriptor)', 'fortran_order': False, 'shape': \(shape), }"
-        let remainder = (16 - ((10 + header.utf8.count + 1) % 16)) % 16
-        header += String(repeating: " ", count: remainder) + "\n"
-        var data = Data([0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59, 0x01, 0x00])
-        data.append(UInt8(header.utf8.count & 0xff))
-        data.append(UInt8((header.utf8.count >> 8) & 0xff))
-        data.append(Data(header.utf8))
-        data.append(Data(repeating: 0, count: 16))
-        return data
+    /// Routing names each Sound task's output under the Sound folder with the command's own
+    /// extension: after the prompt for the generators, after the input for the codec, and
+    /// nothing for Score, which prints its result.
+    func testRoutingNamesEachSoundOutputUnderSound() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sound-routing-\(UUID().uuidString)", isDirectory: true)
+        let suite = try XCTUnwrap(UserDefaults(suiteName: "StudioSoundTaskTests-\(UUID().uuidString)"))
+        suite.register(defaults: [StudioOutputLocation.rootDefaultsKey: root.path])
+        StudioOutputLocation.defaults = suite
+        defer { StudioOutputLocation.defaults = .standard }
+        let sound = root.appendingPathComponent("Sound", isDirectory: true).path
+
+        var foley = StudioTaskDraft(templateID: .sfxVideo)
+        foley.prompt = "Footsteps on wet gravel"
+        foley.setArgument(1, "/tmp/walk.mp4")
+        foley.form["--seed"] = .integer(11)
+        let foleyOutput = StudioOutputLocation.destination(for: foley).text("--output")
+        XCTAssertEqual(URL(fileURLWithPath: foleyOutput).deletingLastPathComponent().path, sound)
+        XCTAssertEqual(URL(fileURLWithPath: foleyOutput).lastPathComponent, "footsteps-on-wet-gravel-11.wav")
+
+        var condition = StudioTaskDraft(templateID: .sfxConditionText)
+        condition.prompt = "Heavy wooden door"
+        let conditionOutput = StudioOutputLocation.destination(for: condition).text("--output")
+        XCTAssertEqual(URL(fileURLWithPath: conditionOutput).deletingLastPathComponent().path, sound)
+        XCTAssertTrue(URL(fileURLWithPath: conditionOutput).lastPathComponent.hasPrefix("heavy-wooden-door-"), conditionOutput)
+        XCTAssertEqual(URL(fileURLWithPath: conditionOutput).pathExtension, "safetensors")
+
+        var encode = StudioTaskDraft(templateID: .sfxAEEncode)
+        encode.setArgument(0, "/tmp/hit.wav")
+        let encodeOutput = StudioOutputLocation.destination(for: encode).text("--output")
+        XCTAssertEqual(URL(fileURLWithPath: encodeOutput).deletingLastPathComponent().path, sound)
+        XCTAssertTrue(URL(fileURLWithPath: encodeOutput).lastPathComponent.hasPrefix("hit-"), "named after the input: \(encodeOutput)")
+        XCTAssertEqual(URL(fileURLWithPath: encodeOutput).pathExtension, "npy")
+
+        var decode = StudioTaskDraft(templateID: .sfxAEDecode)
+        decode.setArgument(0, "/tmp/hit.npy")
+        let decodeOutput = StudioOutputLocation.destination(for: decode).text("--output")
+        XCTAssertEqual(URL(fileURLWithPath: decodeOutput).deletingLastPathComponent().path, sound)
+        XCTAssertTrue(URL(fileURLWithPath: decodeOutput).lastPathComponent.hasPrefix("hit-"), decodeOutput)
+        XCTAssertEqual(URL(fileURLWithPath: decodeOutput).pathExtension, "wav")
+
+        var score = StudioTaskDraft(templateID: .sfxClapScore)
+        score.prompt = "a bottle"
+        score.setArgument(1, "/tmp/bottle.wav")
+        XCTAssertEqual(StudioOutputLocation.destination(for: score), score, "Score prints its result; nothing to name")
     }
 
-    /// A safetensors file of float32 tensors, named in sorted order the way the format's writers
-    /// emit them, with zeroed payloads.
-    static func safetensors(_ tensors: [String: [Int]]) -> Data {
-        var offset = 0
-        var entries: [String] = []
-        for (name, shape) in tensors.sorted(by: { $0.key < $1.key }) {
-            let bytes = shape.reduce(1, *) * 4
-            entries.append("\"\(name)\":{\"dtype\":\"F32\",\"shape\":[\(shape.map(String.init).joined(separator: ","))],\"data_offsets\":[\(offset),\(offset + bytes)]}")
-            offset += bytes
-        }
-        let header = "{\(entries.joined(separator: ","))}"
-        var data = Data()
-        withUnsafeBytes(of: UInt64(header.utf8.count).littleEndian) { data.append(contentsOf: $0) }
-        data.append(Data(header.utf8))
-        data.append(Data(repeating: 0, count: offset))
-        return data
+    /// The inspector's editor and the runner's validation count steps the same way: the form's
+    /// `--steps`, else the template's own default.
+    func testRenoiseStepCountIsSharedByTheEditorAndTheRunner() throws {
+        var draft = StudioTaskDraft(templateID: .sfxVideo)
+        XCTAssertEqual(StudioRenoise.stepCount(in: draft.form, templateID: .sfxVideo), 4, "the template's default steps")
+        draft.form["--steps"] = .integer(6)
+        XCTAssertEqual(StudioRenoise.stepCount(in: draft.form, templateID: .sfxVideo), 6)
+        draft.form["--steps"] = .unset
+        draft.form["--renoise"] = .text("0.1,0.2,0.3")
+        draft.prompt = "a door"
+        draft.setArgument(1, "/tmp/door.mp4")
+        XCTAssertEqual(
+            StudioConsoleCommand.validationMessage(for: try XCTUnwrap(draft.capability), draft: draft.form),
+            "The renoise schedule has 3 values but the run has 4 steps.",
+            "with --steps left out the template's default counts, as the editor shows"
+        )
+        XCTAssertEqual(StudioRenoise.stepCount(in: StudioConsoleDraft(), templateID: nil), CommandDraft().steps)
     }
 }

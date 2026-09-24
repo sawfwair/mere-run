@@ -233,14 +233,11 @@ struct StudioRenoiseOverride: View {
         )
     }
 
-    /// The run's step count, which a per-step schedule must match: the form's `--steps`, else
-    /// the template's own default.
-    private var steps: Int {
-        Int(draft.text("--steps")) ?? draft.seed.steps
-    }
-
     var body: some View {
-        StudioRenoiseControl(value: value, mode: $mode, steps: steps)
+        StudioRenoiseControl(
+            value: value, mode: $mode,
+            steps: StudioRenoise.stepCount(in: draft.form, templateID: draft.templateID)
+        )
     }
 }
 

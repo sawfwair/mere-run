@@ -1,5 +1,6 @@
 @testable import StudioKit
 @testable import StudioUI
+import StudioTestSupport
 import XCTest
 
 /// The Sound renderers in the registry: the CLAP gauge answers the Score view, and a finished
@@ -62,7 +63,7 @@ final class StudioSoundRendererTests: XCTestCase {
 
     func testATensorOutputCardShowsItsHeader() throws {
         let safetensors = root.appendingPathComponent("door.safetensors")
-        try Self.safetensors(["pooled": [1, 1_024]]).write(to: safetensors)
+        try TensorFixtures.safetensors([("pooled", [1, 1_024])]).write(to: safetensors)
         let item = row(templateID: .sfxConditionText, input: nil, output: safetensors)
 
         guard case .tensor(.safetensors(let header))? = StudioResultRenderers.cardRendering(for: item, files: [safetensors]) else {
@@ -85,19 +86,4 @@ final class StudioSoundRendererTests: XCTestCase {
         )
     }
 
-    private static func safetensors(_ tensors: [String: [Int]]) -> Data {
-        var offset = 0
-        var entries: [String] = []
-        for (name, shape) in tensors.sorted(by: { $0.key < $1.key }) {
-            let bytes = shape.reduce(1, *) * 4
-            entries.append("\"\(name)\":{\"dtype\":\"F32\",\"shape\":[\(shape.map(String.init).joined(separator: ","))],\"data_offsets\":[\(offset),\(offset + bytes)]}")
-            offset += bytes
-        }
-        let header = "{\(entries.joined(separator: ","))}"
-        var data = Data()
-        withUnsafeBytes(of: UInt64(header.utf8.count).littleEndian) { data.append(contentsOf: $0) }
-        data.append(Data(header.utf8))
-        data.append(Data(repeating: 0, count: offset))
-        return data
-    }
 }

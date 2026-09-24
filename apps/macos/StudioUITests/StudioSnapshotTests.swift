@@ -2889,13 +2889,14 @@ private final class SnapshotFixture {
         let foley = sound.appendingPathComponent("walk.wav", isDirectory: false)
         try Self.writeSilentWAV(to: foley, seconds: 3)
         let conditioning = sound.appendingPathComponent("heavy-wooden-door.safetensors", isDirectory: false)
-        try Self.writeSafetensors(to: conditioning, tensors: [
-            ("text_embeddings", [1, 77, 1_024]), ("pooled_embedding", [1, 1_024]), ("attention_mask", [1, 77])
-        ])
+        try TensorFixtures.safetensors(
+            [("text_embeddings", [1, 77, 1_024]), ("pooled_embedding", [1, 1_024]), ("attention_mask", [1, 77])],
+            metadata: ["model": "sfx-woosh-dflow"]
+        ).write(to: conditioning, options: .atomic)
         let hit = sound.appendingPathComponent("hit.wav", isDirectory: false)
         try Self.writeSilentWAV(to: hit, seconds: 2)
         let latents = sound.appendingPathComponent("hit.npy", isDirectory: false)
-        try Self.writeNPY(to: latents, descriptor: "<f4", shape: "(1, 128, 87)")
+        try TensorFixtures.npy(descriptor: "<f4", shape: "(1, 128, 87)").write(to: latents, options: .atomic)
         let decoded = sound.appendingPathComponent("hit-decoded.wav", isDirectory: false)
         try Self.writeSilentWAV(to: decoded, seconds: 2)
         let bottle = sound.appendingPathComponent("bottle.wav", isDirectory: false)
@@ -3061,39 +3062,6 @@ private final class SnapshotFixture {
     }
 
     /// A valid 16 kHz mono 16-bit PCM WAV of near-silence with a quiet tone so a waveform draws.
-    /// A NumPy 1.0 file whose header declares `descriptor` and `shape`, with a zeroed payload.
-    static func writeNPY(to url: URL, descriptor: String, shape: String) throws {
-        var header = "{'descr': '\(descriptor)', 'fortran_order': False, 'shape': \(shape), }"
-        let remainder = (16 - ((10 + header.utf8.count + 1) % 16)) % 16
-        header += String(repeating: " ", count: remainder) + "\n"
-        var data = Data([0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59, 0x01, 0x00])
-        data.append(UInt8(header.utf8.count & 0xff))
-        data.append(UInt8((header.utf8.count >> 8) & 0xff))
-        data.append(Data(header.utf8))
-        data.append(Data(repeating: 0, count: 16))
-        try data.write(to: url, options: .atomic)
-    }
-
-    /// A safetensors file of float32 tensors in the order given, with zeroed payloads.
-    static func writeSafetensors(to url: URL, tensors: [(name: String, shape: [Int])]) throws {
-        var offset = 0
-        var entries: [String] = []
-        for tensor in tensors {
-            let bytes = tensor.shape.reduce(1, *) * 4
-            entries.append(
-                "\"\(tensor.name)\":{\"dtype\":\"F32\",\"shape\":[\(tensor.shape.map(String.init).joined(separator: ","))]," +
-                "\"data_offsets\":[\(offset),\(offset + bytes)]}"
-            )
-            offset += bytes
-        }
-        let header = "{\(entries.joined(separator: ",")),\"__metadata__\":{\"model\":\"sfx-woosh-dflow\"}}"
-        var data = Data()
-        withUnsafeBytes(of: UInt64(header.utf8.count).littleEndian) { data.append(contentsOf: $0) }
-        data.append(Data(header.utf8))
-        data.append(Data(repeating: 0, count: offset))
-        try data.write(to: url, options: .atomic)
-    }
-
     static func writeSilentWAV(to url: URL, seconds: Int) throws {
         let sampleRate = 16_000
         let frames = sampleRate * seconds

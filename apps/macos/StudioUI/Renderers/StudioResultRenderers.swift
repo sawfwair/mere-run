@@ -89,12 +89,65 @@ struct StudioCardRenderingView: View {
 
     var body: some View {
         switch rendering {
-        case .tensor, .clap, .audioOutput:
+        case .tensor(let header):
+            // The header's rows, then the file itself, since the card lists it as no chip.
+            VStack(spacing: 0) {
+                StudioTensorInspector(header: header)
+                if let url = item.outputURL {
+                    StudioResultFileRow(url: url, glyph: "square.stack.3d.down.forward", quickLook: true)
+                }
+            }
+            .background(MereRunTheme.surfaceRaised.opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
+        case .clap, .audioOutput:
             StudioResultRendererView(rendering: rendering, item: item)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         case .syncReview:
             StudioResultRendererView(rendering: rendering, item: item)
+        }
+    }
+}
+
+/// One output file as a result row: its name, Reveal, and — where the panel's own action row
+/// does not offer it — Quick Look.
+private struct StudioResultFileRow: View {
+    let url: URL
+    let glyph: String
+    var quickLook = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: glyph)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(MereRunTheme.accent)
+                    .frame(width: 14)
+                Text(url.lastPathComponent)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .help(url.path)
+                if quickLook {
+                    Button("Quick Look") { QuickLookCoordinator.shared.preview(url) }
+                        .buttonStyle(.mereSecondary)
+                        .controlSize(.small)
+                        .accessibilityLabel("Quick Look \(url.lastPathComponent)")
+                }
+                Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                    .buttonStyle(.mereSecondary)
+                    .controlSize(.small)
+                    .accessibilityLabel("Reveal \(url.lastPathComponent) in Finder")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .accessibilityElement(children: .contain)
+            .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+            Rectangle()
+                .fill(MereRunTheme.border.opacity(0.27))
+                .frame(height: 1)
         }
     }
 }
@@ -129,34 +182,10 @@ private struct StudioAudioOutputRows: View {
                 .frame(height: 210)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-            hairline
-            HStack(spacing: 10) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(MereRunTheme.accent)
-                    .frame(width: 14)
-                Text(url.lastPathComponent)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .help(url.path)
-                Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                    .buttonStyle(.mereSecondary)
-                    .controlSize(.small)
-                    .accessibilityLabel("Reveal \(url.lastPathComponent) in Finder")
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .contain)
-            hairline
+            Rectangle()
+                .fill(MereRunTheme.border.opacity(0.27))
+                .frame(height: 1)
+            StudioResultFileRow(url: url, glyph: "waveform")
         }
-    }
-
-    private var hairline: some View {
-        Rectangle()
-            .fill(MereRunTheme.border.opacity(0.27))
-            .frame(height: 1)
     }
 }
