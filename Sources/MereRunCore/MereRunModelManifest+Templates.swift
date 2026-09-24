@@ -911,7 +911,7 @@ extension MereRunModelManifest {
                     "\(LFM2Resources.denseBF16UpstreamRepoId)@\(LFM2Resources.denseBF16UpstreamRevision)",
                 createdAt: createdAt
             )
-        case .lfm25A1BDSpark, .lfm25Small1_2BDSpark, .lfm25Dense2_6BDSpark:
+        case .lfm25A1BDSpark, .lfm25Small1_2BDSpark, .lfm25Dense2_6BDSpark, .lfm25VL3BDSpark:
             let source: (repoId: String, revision: String)
             switch modelID {
             case .lfm25A1BDSpark:
@@ -920,6 +920,8 @@ extension MereRunModelManifest {
                 source = (LFM2Resources.smallDSparkRepoId, LFM2Resources.smallDSparkRevision)
             case .lfm25Dense2_6BDSpark:
                 source = (LFM2Resources.denseDSparkRepoId, LFM2Resources.denseDSparkRevision)
+            case .lfm25VL3BDSpark:
+                source = (LFM2Resources.visionDSparkRepoId, LFM2Resources.visionDSparkRevision)
             default:
                 preconditionFailure("unreachable LFM2.5 DSpark manifest case")
             }
@@ -949,6 +951,20 @@ extension MereRunModelManifest {
                 supports: [.chat, .visionChat],
                 components: q35TextComponents,
                 upstreamRepoId: "\(LFM2Resources.visionUpstreamRepoId)@\(LFM2Resources.visionUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .lfm25VL3BBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(LFM2Resources.visionBF16RepoId)@\(LFM2Resources.visionBF16Revision)",
                 createdAt: createdAt
             )
         case .qwen35Agent9B:

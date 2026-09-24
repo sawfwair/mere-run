@@ -33,6 +33,14 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let visionUpstreamRepoId = "LiquidAI/LFM2.5-VL-3B-MLX-8bit"
     public static let visionUpstreamRevision = "4065d2c056a9c54d44fec67cf651812b55c6673f"
     public static let visionEstimatedDownloadBytes: Int64 = 3_736_739_700
+    public static let visionBF16ModelId = "vision-chat-lfm25-3b-bf16"
+    public static let visionBF16RepoId = "LiquidAI/LFM2.5-VL-3B-MLX-bf16"
+    public static let visionBF16Revision = "e9679508c2af3b7e67c0d52af2a06a8c7390d2a7"
+    public static let visionBF16EstimatedDownloadBytes: Int64 = 6_265_059_519
+    public static let visionDSparkModelId = "vision-chat-lfm25-3b-dspark"
+    public static let visionDSparkRepoId = "LiquidAI/LFM2.5-VL-3B-DSpark"
+    public static let visionDSparkRevision = "af77e9306a26e8625fde74d2a3051ab6d21bd955"
+    public static let visionDSparkEstimatedDownloadBytes: Int64 = 558_964_083
     public static let defaultDSparkModelId = "text-chat-lfm25-a1b-dspark"
     public static let defaultDSparkRepoId = "LiquidAI/LFM2.5-8B-A1B-DSpark"
     public static let defaultDSparkRevision = "5b285c827912834665b1915f171897e49ff0f388"
@@ -101,6 +109,7 @@ public struct LFM2Resources: Sendable, Hashable {
         denseBF16ModelId,
         denseQADModelId,
         visionModelId,
+        visionBF16ModelId,
     ]
     public static let upstreamRepoIds = [
         upstreamRepoId,
@@ -111,6 +120,7 @@ public struct LFM2Resources: Sendable, Hashable {
         denseBF16UpstreamRepoId,
         denseQADRepoId,
         visionUpstreamRepoId,
+        visionBF16RepoId,
     ]
 
     public static func handles(modelSpec: String) -> Bool {
@@ -204,6 +214,9 @@ public struct LFM2Resources: Sendable, Hashable {
         }
         if normalized == denseBF16ModelId || normalized == denseBF16UpstreamRepoId.lowercased() {
             return denseDSparkModelId
+        }
+        if normalized == visionBF16ModelId || normalized == visionBF16RepoId.lowercased() {
+            return visionDSparkModelId
         }
         return nil
     }

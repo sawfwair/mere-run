@@ -311,7 +311,7 @@ Table 3 lists provider sources and local recipes for text and multimodal models.
     </tr>
     <tr>
       <td>LFM2.5 vision (Liquid AI)</td>
-      <td><code>vision-chat-lfm25-3b-8bit</code></td>
+      <td><code>vision-chat-lfm25-3b-8bit</code>, <code>vision-chat-lfm25-3b-bf16</code></td>
       <td>Guide. <a href="https://docs.liquid.ai/lfm/key-concepts/vision-capabilities">Vision capabilities</a></td>
       <td>Includes VL-3B examples for image questions, grounding, layout, and tools; map to local controls.</td>
       <td><a href="https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Guides/handbook-lfm25-vision.md">LFM2.5 vision (Liquid AI) guide (draft)</a></td>

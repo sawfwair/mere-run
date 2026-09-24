@@ -79,14 +79,14 @@ public struct LFM2DSparkConfig: Decodable, Sendable, Hashable {
 
         guard architectures == ["Lfm2DSparkDraftModel"],
               modelType == "qwen3",
-              hiddenLayerCount == 5,
+              [4, 5].contains(hiddenLayerCount),
               layerTypes == Array(repeating: "full_attention", count: hiddenLayerCount),
               blockSize == 9,
               markovRank == 256,
               !ropeUsesNeoXLayout,
               confidenceHeadEnabled,
               markovHeadType == "vanilla",
-              features.targetLayerIDs.count == hiddenLayerCount else {
+              features.targetLayerIDs.count == 5 else {
             throw DecodingError.dataCorruptedError(
                 forKey: .architectures,
                 in: container,

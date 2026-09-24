@@ -214,6 +214,8 @@ final class ManagedModelCatalogTests: XCTestCase {
             "text-chat-lfm25-1.2b-dspark",
             "text-chat-lfm25-2.6b-dspark",
             "vision-chat-lfm25-3b-8bit",
+            "vision-chat-lfm25-3b-bf16",
+            "vision-chat-lfm25-3b-dspark",
             Q35Resources.q38FlashNextMixedModelId,
             Q35Resources.q38FlashNext3BitModelId,
             Q35Resources.q38FlashNext3BitNativePLEModelId,
@@ -1670,6 +1672,29 @@ final class ManagedModelCatalogTests: XCTestCase {
             contents: Data()
         ))
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+
+    func testLFM25BF16VisionInstallsPinnedDSparkCompanion() throws {
+        let target = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.visionBF16ModelId))
+        let draft = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.visionDSparkModelId))
+
+        XCTAssertEqual(target.category, .visionChat)
+        XCTAssertEqual(target.hubFallback?.repoId, LFM2Resources.visionBF16RepoId)
+        XCTAssertEqual(target.hubFallback?.revision, LFM2Resources.visionBF16Revision)
+        XCTAssertEqual(target.hubFallback?.patterns, LFM2Resources.visionSnapshotPatterns)
+        XCTAssertEqual(target.estimatedDownloadBytes, 6_265_059_519)
+        XCTAssertEqual(target.companionModelIDs, [LFM2Resources.visionDSparkModelId])
+        XCTAssertEqual(target.apiProfile?.inputModalities, [.text, .image])
+        XCTAssertFalse(target.runtimeAutoDownloadAllowed)
+
+        XCTAssertEqual(draft.category, .visionChat)
+        XCTAssertEqual(draft.hubFallback?.repoId, LFM2Resources.visionDSparkRepoId)
+        XCTAssertEqual(draft.hubFallback?.revision, LFM2Resources.visionDSparkRevision)
+        XCTAssertEqual(draft.validationKind, .lfm2DSpark)
+        XCTAssertEqual(draft.estimatedDownloadBytes, 558_964_083)
+        XCTAssertFalse(draft.runtimeAutoDownloadAllowed)
+        XCTAssertNotNil(target.usageRestriction)
+        XCTAssertNotNil(draft.usageRestriction)
     }
 
     func testQwen3TTSSpecsDownloadSpeechTokenizer() throws {

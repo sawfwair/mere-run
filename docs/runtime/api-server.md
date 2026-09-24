@@ -772,6 +772,9 @@ Engine compatibility:
   LiquidAI's dense language backbone, SigLIP2 vision tower, and multimodal
   projector. It accepts local-file and base64 image content parts; it does not
   fetch remote image URLs.
+- `vision-chat-lfm25-3b-bf16`: uses the same image input path with the BF16
+  language and vision weights. Its managed pull installs a matching DSpark
+  companion for native speculative decoding.
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.
 - `text-code`: accepts plain text chat requests and OpenAI `stop` sequences;

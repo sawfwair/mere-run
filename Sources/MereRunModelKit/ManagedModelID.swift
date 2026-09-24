@@ -66,6 +66,8 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case lfm25Small1_2BDSpark = "text-chat-lfm25-1.2b-dspark"
     case lfm25Dense2_6BDSpark = "text-chat-lfm25-2.6b-dspark"
     case lfm25VL3B8Bit = "vision-chat-lfm25-3b-8bit"
+    case lfm25VL3BBF16 = "vision-chat-lfm25-3b-bf16"
+    case lfm25VL3BDSpark = "vision-chat-lfm25-3b-dspark"
     case qwen35Agent9B = "text-agent-qwen35-9b"
     case ornith9B = "text-agent-ornith-9b"
     case ornith35B = "text-agent-ornith-35b"

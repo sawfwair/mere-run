@@ -5,11 +5,12 @@ extension ManagedModelCatalog {
         id: String,
         repoId: String,
         revision: String,
-        estimatedDownloadBytes: Int64
+        estimatedDownloadBytes: Int64,
+        isVision: Bool = false
     ) -> ManagedModelSpec {
         ManagedModelSpec(
             id: id,
-            category: .textChat,
+            category: isVision ? .visionChat : .textChat,
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
                 repoId: repoId,
@@ -151,6 +152,13 @@ extension ManagedModelCatalog {
                 repoId: LFM2Resources.denseDSparkRepoId,
                 revision: LFM2Resources.denseDSparkRevision,
                 estimatedDownloadBytes: LFM2Resources.denseDSparkEstimatedDownloadBytes
+            ),
+            lfm2DSparkSpec(
+                id: LFM2Resources.visionDSparkModelId,
+                repoId: LFM2Resources.visionDSparkRepoId,
+                revision: LFM2Resources.visionDSparkRevision,
+                estimatedDownloadBytes: LFM2Resources.visionDSparkEstimatedDownloadBytes,
+                isVision: true
             ),
             ManagedModelSpec(
                 id: ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,

@@ -15,6 +15,7 @@ Native Swift MLX runtime for LiquidAI LFM2 text and vision-language checkpoints.
   LiquidAI's QAD-trained Q4_0 checkpoint, hosted by `Sawfwair`
 - `text-chat-lfm25-2.6b-bf16` — `LiquidAI/LFM2.5-2.6B` with DSpark
 - `vision-chat-lfm25-3b-8bit` — `LiquidAI/LFM2.5-VL-3B-MLX-8bit`
+- `vision-chat-lfm25-3b-bf16` — `LiquidAI/LFM2.5-VL-3B-MLX-bf16` with DSpark
 - Serving engine: `text-chat-lfm2`
 
 The runtime loads MLX-converted directory-root snapshots with:
@@ -59,10 +60,11 @@ Convolution output projections and MoE expert matrices remain frozen. The
 training path turns off the inference-only fused affine-8 MoE kernel so that
 MLX can differentiate through the frozen base graph.
 
-For text targets, the managed catalog also installs the matching pinned
-`*-dspark` companion. `LFM2DSpark.swift` projects hidden states captured at
-the inputs to the checkpoint's five configured target layers into a five-layer,
-non-causal diffusion-attention drafter. It proposes up to nine tokens per round;
+For BF16 text and vision targets, the managed catalog also installs a matching
+pinned `*-dspark` companion. `LFM2DSpark.swift` projects hidden states captured
+at five configured target layers into the drafter. Text drafters have five
+attention layers and propose up to nine tokens per round. The vision drafter
+has four attention layers and proposes up to eight tokens per round on Apple Silicon;
 `LFM2DSparkDecoder.swift`
 verifies the block with the target model, commits full acceptances, and replays
 only the bounded committed prefix after a rejection because LFM2 short-conv
@@ -91,9 +93,9 @@ fall back to MLX's portable gather path.
   requantized to MLX affine 6-bit/group-64; the published conversion receipts
   record the measured error and hashes. QAD targets quantized accuracy recovery,
   not a separate speedup over the same Q4_0 runtime path.
-- The three `text-chat-*` checkpoints reject image content parts. The
-  `vision-chat-lfm25-3b-8bit` catalog entry enables them through the same
-  serving engine.
+- Text-only LFM2 checkpoints reject image content parts. Both managed
+  `vision-chat-lfm25-3b-*` targets enable them through the same serving engine.
+  The 8-bit target does not attach the BF16-trained vision drafter.
 - API serving enables exact token-prefix KV reuse by default and enables
   continuous decode batching when `--max-active-requests` is greater than one.
   Ragged rows carry independent attention offsets and typed short-convolution

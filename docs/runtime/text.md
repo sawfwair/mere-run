@@ -60,6 +60,7 @@ gate.
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
 - `text-chat-lfm25-a1b-bf16` (managed LiquidAI LFM2.5 8B-A1B BF16 target plus DSpark)
 - `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
+- `vision-chat-lfm25-3b-bf16` (managed LiquidAI LFM2.5-VL 3B BF16 snapshot with DSpark)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
 - `text-agent-ornith-35b-mlx-4bit` (recommended self-contained Ornith 1.5 Q4 coding and vision bundle)
 - `text-agent-ornith-35b-mlx-6bit` (Ornith 1.5 balanced tier)
@@ -277,6 +278,21 @@ swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
 swift run mere.run text chat \
   --model vision-chat-lfm25-3b-8bit \
   --image ./document.png \
+  --prompt "Summarize this document and list its key figures."
+```
+
+For BF16 vision inference with DSpark, pull the separate BF16 target. The
+managed pull also installs its four-layer DSpark companion. At temperature
+zero, the native decoder proposes up to eight tokens per verification pass.
+Image encoding and prompt prefill use the same LFM2.5-VL path as the 8-bit model.
+
+```bash
+swift run mere.run model pull vision-chat-lfm25-3b-bf16 --accept-model-license
+swift run mere.run text chat \
+  --model vision-chat-lfm25-3b-bf16 \
+  --image ./document.png \
+  --temperature 0 \
+  --stats \
   --prompt "Summarize this document and list its key figures."
 ```
 

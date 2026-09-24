@@ -249,7 +249,7 @@ are:
   `image-hidream-o1`, `image-hidream-o1-dev`, `image-sensenova-u1-5-8b-mot`, `image-krea2-raw`,
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
-- Text chat: `text-chat-gemma4`, `text-chat-diffusiongemma-26b-optiq-4bit`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-agent-ornith-35b-mlx-4bit`, `vision-chat-ornith-35b`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
+- Text chat: `text-chat-gemma4`, `text-chat-diffusiongemma-26b-optiq-4bit`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-agent-ornith-35b-mlx-4bit`, `vision-chat-ornith-35b`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, `vision-chat-lfm25-3b-bf16`
 - Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Multimodal embed: `vision-embed-qwen3-vl-2b`

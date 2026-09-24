@@ -908,5 +908,30 @@ extension ManagedModelCatalog {
             defaultCLICommands: ["text chat", "api serve"],
             apiProfile: .lfm2(inputModalities: [.text, .image])
         ),
+        ManagedModelSpec(
+            id: LFM2Resources.visionBF16ModelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.visionBF16RepoId,
+                revision: LFM2Resources.visionBF16Revision,
+                patterns: LFM2Resources.visionSnapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.visionBF16RepoId,
+            upstreamRevision: LFM2Resources.visionBF16Revision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.visionBF16RepoId,
+                sourceRevision: LFM2Resources.visionBF16Revision,
+                licenseURL: "https://huggingface.co/\(LFM2Resources.visionBF16RepoId)/blob/\(LFM2Resources.visionBF16Revision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.visionBF16EstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            companionModelIDs: [LFM2Resources.visionDSparkModelId],
+            apiProfile: .lfm2(inputModalities: [.text, .image])
+        ),
     ]
 }

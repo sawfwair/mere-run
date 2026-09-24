@@ -51,6 +51,7 @@ mere.run model pull text-chat-lfm25-1.2b-qad-4bit --accept-model-license
 mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
+mere.run model pull vision-chat-lfm25-3b-bf16 --accept-model-license
 mere.run model pull text-chat-laguna-s-2-1
 mere.run model pull text-chat-laguna-xs-2-1
 ```

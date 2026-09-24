@@ -24,6 +24,7 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
 
     private func makeDSparkConfig(
         vocabularySize: Int = 128_000,
+        maskTokenID: Int = 125_017,
         targetLayerCount: Int = 30,
         targetLayerIDs: [Int] = [2, 9, 17, 21, 27]
     ) -> [String: Any] {
@@ -43,7 +44,7 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
             "layer_types": Array(repeating: "full_attention", count: 5),
             "block_size": 9,
             "dflash_config": [
-                "mask_token_id": 125_017,
+                "mask_token_id": maskTokenID,
                 "target_layer_ids": targetLayerIDs,
                 "num_target_layers": targetLayerCount,
             ],
@@ -305,6 +306,52 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertTrue(config.confidenceHeadEnabled)
     }
 
+    func testDecodesOfficialLiquidAILFM25VisionDSparkContract() throws {
+        var object = makeDSparkConfig()
+        object["num_hidden_layers"] = 4
+        object["layer_types"] = Array(repeating: "full_attention", count: 4)
+        object["rope_theta"] = 1_000_000
+        object["max_position_embeddings"] = 128_000
+
+        let config = try decodeDSparkConfig(object)
+        XCTAssertEqual(config.hiddenLayerCount, 4)
+        XCTAssertEqual(config.features.targetLayerIDs, [2, 9, 17, 21, 27])
+        XCTAssertEqual(config.features.targetLayerCount, 30)
+        XCTAssertEqual(config.blockSize, 9)
+    }
+
+    func testVisionDSparkRejectsTextTargetWithMatchingBackboneDimensions() throws {
+        let target = try decodeConfig([
+            "architectures": ["Lfm2ForCausalLM"],
+            "model_type": "lfm2",
+            "vocab_size": 128_000,
+            "hidden_size": 2_048,
+            "intermediate_size": 10_752,
+            "num_hidden_layers": 30,
+            "num_attention_heads": 32,
+            "num_key_value_heads": 8,
+            "max_position_embeddings": 128_000,
+            "norm_eps": 0.00001,
+            "conv_L_cache": 3,
+            "layer_types": Array(repeating: "conv", count: 30),
+        ])
+        var object = makeDSparkConfig()
+        object["num_hidden_layers"] = 4
+        object["layer_types"] = Array(repeating: "full_attention", count: 4)
+        let draft = try decodeDSparkConfig(object)
+
+        XCTAssertNoThrow(try LFM2Generator.validateDSparkCompatibility(
+            target: target,
+            dspark: draft,
+            isVisionTarget: true
+        ))
+        XCTAssertThrowsError(try LFM2Generator.validateDSparkCompatibility(
+            target: target,
+            dspark: draft,
+            isVisionTarget: false
+        ))
+    }
+
     func testRejectsAlteredLFM25DSparkArchitectureContract() throws {
         var object = makeDSparkConfig()
         object["block_size"] = 8
@@ -363,6 +410,53 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
 
         MLX.eval(embeddings)
         XCTAssertEqual(embeddings.shape, [1, 3, 16])
+    }
+
+    func testVisionPrefillFeedsCapturedVisualContextToFourLayerDSpark() throws {
+        let visionConfig = try decodeVisionConfig(makeTinyVisionConfig())
+        let visionModel = LFM2VLModel(config: visionConfig)
+        let tokens = [1, visionConfig.imageTokenIndex, 2]
+        let embeddings = try visionModel.inputEmbeddings(
+            inputTokens: tokens,
+            pixelValues: MLXArray.zeros([1, 4, 12]),
+            grids: [LFM2VLImageGrid(rows: 2, columns: 2)]
+        )
+        var draftObject = makeDSparkConfig(
+            vocabularySize: 64,
+            maskTokenID: 63,
+            targetLayerCount: 2,
+            targetLayerIDs: [0, 1, 0, 1, 0]
+        )
+        draftObject["hidden_size"] = 16
+        draftObject["num_hidden_layers"] = 4
+        draftObject["num_attention_heads"] = 4
+        draftObject["num_key_value_heads"] = 2
+        draftObject["head_dim"] = 4
+        draftObject["intermediate_size"] = 32
+        draftObject["layer_types"] = Array(repeating: "full_attention", count: 4)
+        let draft = LFM2DSparkModel(config: try decodeDSparkConfig(draftObject))
+        let target = visionModel.languageModel
+        let input = MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count)
+        let output = target.forwardPrefill(
+            input,
+            cache: makeLayerCaches(config: visionConfig.textConfig),
+            inputEmbeddings: embeddings,
+            captureLayerIndices: [0, 1]
+        )
+        let draftCache = draft.makeCache()
+        draft.appendTargetContext(
+            draft.combineTargetHiddenStates(output.capturedHiddenStates),
+            cache: draftCache
+        )
+        let proposed = draft.draftBaseHidden(
+            anchorToken: 3,
+            proposalCount: 2,
+            target: target,
+            cache: draftCache
+        )
+        MLX.eval(proposed)
+        XCTAssertEqual(proposed.shape, [1, 2, 16])
+        XCTAssertTrue(draftCache.allSatisfy { $0.offset == tokens.count + 2 })
     }
 
     func testRendersLiquidAIChatTemplateShape() throws {
@@ -671,6 +765,15 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
             LFM2Resources.dsparkModelID(for: LFM2Resources.denseBF16ModelId),
             LFM2Resources.denseDSparkModelId
         )
+        XCTAssertEqual(
+            LFM2Resources.dsparkModelID(for: LFM2Resources.visionBF16ModelId),
+            LFM2Resources.visionDSparkModelId
+        )
+        XCTAssertEqual(
+            LFM2Resources.dsparkModelID(for: LFM2Resources.visionBF16RepoId),
+            LFM2Resources.visionDSparkModelId
+        )
+        XCTAssertNil(LFM2Resources.dsparkModelID(for: LFM2Resources.visionModelId))
         XCTAssertNil(LFM2Resources.dsparkModelID(for: LFM2Resources.defaultModelId))
         XCTAssertNil(LFM2Resources.dsparkModelID(for: LFM2Resources.denseModelId))
         XCTAssertFalse(LFM2DSparkPolicy.enabled(environment: ["MERERUN_LFM25_DSPARK": "off"]))

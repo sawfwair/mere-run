@@ -712,6 +712,21 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                LFM2Resources.visionBF16ModelId,
+                "LFM2.5-VL 3B BF16",
+                "Runs LiquidAI's BF16 vision-language model with its native DSpark companion.",
+                minimum: 16,
+                recommended: 24,
+                setup: true
+            ),
+            descriptor(
+                LFM2Resources.visionDSparkModelId,
+                "LFM2.5-VL 3B DSpark assistant",
+                "Installs the speculative-decoding assistant for LFM2.5-VL 3B BF16.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 "text-chat-q36-nano-gguf",
                 "Qwen3.6 A3B chat nano (GGUF)",
                 "Runs Qwen3.6 35B-A3B GGUF through llama.cpp; the default chat model on Linux CUDA hosts.",

@@ -24,6 +24,7 @@ final class ChatExecutionTests: XCTestCase {
         let fixtures: [(String, Double, Double, Int?, Double)] = [
             ("fixture", 0.7, 0.9, nil, 0),
             (LFM2Resources.visionModelId, 0.2, 0.9, 50, 0),
+            (LFM2Resources.visionBF16ModelId, 0, 0.9, 50, 0),
             (LagunaResources.modelID, 1, 1, 20, 0.02),
             (MuseGlimmerResources.modelId, 1, 0.95, 64, 0),
             (NemotronHResources.modelID, 1, 0.95, nil, 0),
@@ -69,6 +70,17 @@ final class ChatExecutionTests: XCTestCase {
             XCTAssertEqual(selectedPath, path)
         }
         XCTAssertThrowsError(try NativeChatRuntime.command(modelID: LagunaResources.modelID, modelPath: nil))
+    }
+
+    func testBF16LFM25VisionUsesNativeRuntime() throws {
+        let runtime = try NativeChatRuntime.command(
+            modelID: LFM2Resources.visionBF16ModelId,
+            modelPath: "/fixture/vision"
+        )
+        guard case .textChatLFM2(_, let path) = runtime else {
+            return XCTFail("BF16 LFM2.5 vision must use the native LFM2 runtime")
+        }
+        XCTAssertEqual(path, "/fixture/vision")
     }
 
     func testEmptyModelSelectionKeepsTheSelectedEngineDefault() async throws {

@@ -129,6 +129,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-lfm25-2.6b-qad-4bit` |
 | `text-chat` | `text-chat-lfm25-2.6b-bf16` |
 | `vision-chat` | `vision-chat-lfm25-3b-8bit` |
+| `vision-chat` | `vision-chat-lfm25-3b-bf16` |
 | `speech-tts` | `speech-tts-qwen3-nano` |
 | `speech-tts` | `speech-tts-qwen3-customvoice` |
 | `speech-asr` | `speech-asr-qwen3` |
@@ -711,6 +712,20 @@ data URLs natively, expands each `<image>` placeholder to the downsampled
 patch grid, and continues generation through the shared LFM2 decode engine.
 Remote image URLs are not fetched by the local runtime.
 
+`vision-chat-lfm25-3b-bf16` uses LiquidAI's BF16 MLX export at revision
+`e9679508c2af3b7e67c0d52af2a06a8c7390d2a7`. Its pinned snapshot is
+6,265,059,519 bytes, including the vision tower and language backbone. The
+managed pull also installs the 558,964,083-byte
+`vision-chat-lfm25-3b-dspark` companion from
+`LiquidAI/LFM2.5-VL-3B-DSpark@af77e9306a26e8625fde74d2a3051ab6d21bd955`.
+This four-layer drafter captures five language-backbone layers and verifies
+up to eight candidate tokens per pass on Apple Silicon. It runs after image
+encoding and prefill. The 8-bit target remains separate because Liquid AI's
+published vision DSpark measurements use 16-bit weights; acceleration of
+quantized targets was outside that release's scope. See the
+[LFM2.5-VL-DSpark release](https://www.liquid.ai/blog/lfm2-5-vl-dspark)
+for upstream measurements. They are not mere.run results.
+
 Useful environment variables for that path:
 
 - `MERERUN_HUB_CACHE`: override the native Hugging Face snapshot cache path
@@ -1074,6 +1089,7 @@ MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-bf16 --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-qad-4bit --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull vision-chat-lfm25-3b-bf16 --accept-model-license
 
 # Inspect installed models
 swift run mere.run status

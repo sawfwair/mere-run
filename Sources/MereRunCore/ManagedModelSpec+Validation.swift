@@ -192,6 +192,7 @@ public extension ManagedModelSpec {
             return LFM2Resources(rootURL: rootURL).validate(
                 fileManager: fileManager,
                 requireVisionProcessor: id == LFM2Resources.visionModelId
+                    || id == LFM2Resources.visionBF16ModelId
             )
         case .lfm2DSpark:
             return LFM2Resources.missingDSparkFiles(
