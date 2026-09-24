@@ -193,7 +193,7 @@ struct StudioRealtimeMusicView: View {
             Button(action: toggleSession) {
                 ZStack {
                     Circle().fill(MereRunTheme.accent)
-                    TransportGlyph(stop: isPending)
+                    StudioSessionTransportGlyph(stop: isPending)
                         .stroke(MereRunTheme.onAccent, style: StrokeStyle(lineWidth: 1.15, lineCap: .round, lineJoin: .round))
                         .frame(width: 16, height: 16)
                 }
@@ -216,9 +216,9 @@ struct StudioRealtimeMusicView: View {
 
             Spacer(minLength: 8)
 
-            SessionSecondaryButton("Record to file") { showsSessionOptions.toggle() }
+            StudioSessionSecondaryButton("Record to file") { showsSessionOptions.toggle() }
                 .popover(isPresented: $showsSessionOptions, arrowEdge: .bottom) { sessionOptions }
-            SessionSecondaryButton(midiInput.isEmpty ? "MIDI in: none" : "MIDI in: \(midiInput)") {
+            StudioSessionSecondaryButton(midiInput.isEmpty ? "MIDI in: none" : "MIDI in: \(midiInput)") {
                 showsMIDIOptions.toggle()
             }
             .popover(isPresented: $showsMIDIOptions, arrowEdge: .bottom) { midiOptions }
@@ -233,14 +233,14 @@ struct StudioRealtimeMusicView: View {
         case .idle:
             EmptyView()
         case .queued:
-            SessionBadge(text: "QUEUED", color: MereRunTheme.yellow)
+            StudioSessionBadge(text: "QUEUED", color: MereRunTheme.yellow)
         case .live:
-            SessionBadge(text: "LIVE", color: MereRunTheme.red)
+            StudioSessionBadge(text: "LIVE", color: MereRunTheme.red)
         case .ended(let exitCode):
             if let exitCode, exitCode != 0 {
-                SessionBadge(text: "FAILED", color: MereRunTheme.red)
+                StudioSessionBadge(text: "FAILED", color: MereRunTheme.red)
             } else {
-                SessionBadge(text: "ENDED", color: MereRunTheme.textMuted)
+                StudioSessionBadge(text: "ENDED", color: MereRunTheme.textMuted)
             }
         }
     }
@@ -320,7 +320,7 @@ struct StudioRealtimeMusicView: View {
                     .foregroundStyle(MereRunTheme.textMuted)
             }
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
-            SessionHairline()
+            StudioSessionHairline()
             VStack(spacing: 16) {
                 HStack(alignment: .bottom, spacing: 12) {
                     promptField("Prompt A", text: $promptA)
@@ -443,16 +443,16 @@ struct StudioRealtimeMusicView: View {
                         .foregroundStyle(MereRunTheme.textSecondary)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 8), spacing: 6) {
                         ForEach(Array(60...75), id: \.self) { note in
-                            SessionSecondaryButton(Self.noteName(note)) { playNote(note) }
+                            StudioSessionSecondaryButton(Self.noteName(note)) { playNote(note) }
                                 .disabled(!isLive)
                         }
                     }
                 }
 
                 HStack(spacing: 8) {
-                    SessionSecondaryButton("Reset state") { send("reset") }
+                    StudioSessionSecondaryButton("Reset state") { send("reset") }
                         .disabled(!isLive)
-                    SessionSecondaryButton("Apply all controls", action: applyControls)
+                    StudioSessionSecondaryButton("Apply all controls", action: applyControls)
                         .disabled(!isLive)
                 }
             }
@@ -474,7 +474,7 @@ struct StudioRealtimeMusicView: View {
                     .accessibilityLabel("Copy session log")
             }
             .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
-            SessionHairline()
+            StudioSessionHairline()
             VStack(alignment: .leading, spacing: 0) {
                 let visible = StudioRealtimeSessionLog.visibleTail(
                     logLines, height: Self.logHeight, lineHeight: Self.logLineHeight
@@ -520,13 +520,13 @@ struct StudioRealtimeMusicView: View {
                 .lineLimit(1)
             Spacer(minLength: 8)
             if case .ended = phase, let url = item?.outputURL {
-                SessionSecondaryButton("Preview recording") {
+                StudioSessionSecondaryButton("Preview recording") {
                     QuickLookCoordinator.shared.preview(url)
                 }
             }
-            SessionSecondaryButton("Cancel", action: cancelSession)
+            StudioSessionSecondaryButton("Cancel", action: cancelSession)
                 .disabled(!isLive)
-            SessionSecondaryButton("Log") { showsLog.toggle() }
+            StudioSessionSecondaryButton("Log") { showsLog.toggle() }
                 .popover(isPresented: $showsLog, arrowEdge: .top) { logPopover }
         }
         .padding(.horizontal, 16)
@@ -822,89 +822,6 @@ private extension View {
                             .strokeBorder(MereRunTheme.border.opacity(0.8), lineWidth: 1)
                     }
             }
-    }
-}
-
-private struct SessionHairline: View {
-    var body: some View {
-        Rectangle()
-            .fill(MereRunTheme.border.opacity(0.4))
-            .frame(height: 1)
-    }
-}
-
-/// `btnSecondary`: 26pt, raised fill, hairline border, 11.5pt medium.
-private struct SessionSecondaryButton: View {
-    let label: String
-    let action: () -> Void
-    @Environment(\.isEnabled) private var isEnabled
-
-    init(_ label: String, action: @escaping () -> Void) {
-        self.label = label
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(isEnabled ? MereRunTheme.textPrimary : MereRunTheme.textMuted)
-                .lineLimit(1)
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(MereRunTheme.surfaceRaised)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
-                        }
-                }
-                .contentShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// The LIVE pill: tinted fill, dot, 10.5pt bold tracked caps.
-private struct SessionBadge: View {
-    let text: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(text)
-                .font(.system(size: 10.5, weight: .bold))
-                .tracking(0.63)
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 7)
-        .frame(height: 18)
-        .background(Capsule().fill(color.opacity(0.13)))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// Stroke-only stop square / play triangle on the 24-unit icon grid the mockup uses.
-private struct TransportGlyph: Shape {
-    let stop: Bool
-
-    func path(in rect: CGRect) -> Path {
-        let unit = rect.width / 24
-        var path = Path()
-        if stop {
-            path.addRoundedRect(
-                in: CGRect(x: rect.minX + 6 * unit, y: rect.minY + 6 * unit, width: 12 * unit, height: 12 * unit),
-                cornerSize: CGSize(width: 2 * unit, height: 2 * unit)
-            )
-        } else {
-            path.move(to: CGPoint(x: rect.minX + 7 * unit, y: rect.minY + 5 * unit))
-            path.addLine(to: CGPoint(x: rect.minX + 19 * unit, y: rect.minY + 12 * unit))
-            path.addLine(to: CGPoint(x: rect.minX + 7 * unit, y: rect.minY + 19 * unit))
-            path.closeSubpath()
-        }
-        return path
     }
 }
 
