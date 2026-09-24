@@ -559,7 +559,9 @@ struct StudioRegionPromptLayer: View {
 final class StudioRegionKeyMonitor {
     static let shared = StudioRegionKeyMonitor()
 
-    private var monitor: Any?
+    /// Removes the installed monitor; nil while none is installed. AppKit's monitor token is
+    /// opaque, so only this closure holds it.
+    private var removeMonitor: (() -> Void)?
     private var owner: UUID?
     private var window: NSWindow?
     private var handler: ((StudioRegionKeyCommand) -> Void)?
@@ -568,11 +570,12 @@ final class StudioRegionKeyMonitor {
         self.owner = owner
         self.window = window
         self.handler = handler
-        guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, self.handle(event) else { return event }
-            return nil
-        }
+        guard removeMonitor == nil,
+              let token = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
+                  guard let self, self.handle(event) else { return event }
+                  return nil
+              }) else { return }
+        removeMonitor = { NSEvent.removeMonitor(token) }
     }
 
     func release(owner: UUID) {
@@ -580,8 +583,8 @@ final class StudioRegionKeyMonitor {
         self.owner = nil
         window = nil
         handler = nil
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
+        removeMonitor?()
+        removeMonitor = nil
     }
 
     /// Whether `event` acted on the owner's selection.
