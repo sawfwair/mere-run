@@ -428,7 +428,7 @@ Datasets render on it through the shared task workspace: the typed text or the
 folder, plan file, or nothing a Datasets variant takes on the left, and the
 cosine matrix, the protected text and spans, the candidate folders (each with
 "Train on it"), the run plan report, or the validation artifacts as the result
-panel's rows (`StudioUI/Renderers/`). Fourteen tasks still render their own form
+panel's rows (`StudioUI/Renderers/`). Fifteen tasks still render their own form
 inside their task rather than this canvas (Vision ▸ Depth, Pose, Faces, Flow,
 Geometry, Live; Audio ▸ Who Spoke, Enhance, Separate; the four Earth tasks;
 Sound ▸ Score and Condition). Migrating one is a view change, not a design

@@ -318,10 +318,19 @@ package struct StudioDatasetDiscoveryDocument: Decodable, Equatable {
 
 // MARK: - image validate
 
-/// What `image validate` reports on stderr: the family and suite it checked and the folder it
-/// wrote its artifacts to. Read from the run's captured output, so a run that stopped before
-/// "Validation complete" has no report and the panel shows the CLI's words instead.
+/// What a finished `image validate` run stands for: the family and suite it checked and the
+/// folder it wrote its artifacts to. The command prints nothing the canvas decodes (its report
+/// goes to stderr), so the report is read from the run's Library row — the folder the run was
+/// pointed at and the `--family` and `--test` in its argv — once the run has exited cleanly.
+/// `image validate --json` would let the CLI say this itself.
 package struct StudioImageValidationReport: Equatable {
+    package struct Artifact: Identifiable, Equatable {
+        package let url: URL
+        package let isDirectory: Bool
+
+        package var id: URL { url }
+    }
+
     package let family: String
     package let suite: String
     package let artifactDirectory: URL
@@ -332,41 +341,40 @@ package struct StudioImageValidationReport: Equatable {
         self.artifactDirectory = artifactDirectory
     }
 
-    private static let heading = "Image validation"
-    private static let completion = "Validation complete. Artifacts written to "
-
-    package static func decode(outputText: String) -> StudioImageValidationReport? {
-        let lines = outputText.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }
-        guard let start = lines.firstIndex(of: heading),
-              let family = value(of: "family", in: lines[start...]),
-              let suite = value(of: "suite", in: lines[start...]),
-              let completed = lines.last(where: { $0.hasPrefix(completion) }) else { return nil }
-        var path = String(completed.dropFirst(completion.count))
-        if path.hasSuffix(".") { path.removeLast() }
-        return StudioImageValidationReport(family: family, suite: suite, artifactDirectory: URL(fileURLWithPath: path, isDirectory: true))
+    /// The report for a Library row, or nil for a row of another command, one still running or
+    /// failed, or one that recorded no folder. The CLI's own defaults stand in for an argv
+    /// (a Console run's) that left the suite or family out.
+    package init?(item: StudioLibraryItem) {
+        guard item.templateID == .imageValidate, item.status == .completed, item.exitCode == 0,
+              let output = item.outputURL else { return nil }
+        let arguments = item.commandArguments ?? []
+        family = Self.value(of: "--family", in: arguments) ?? "zimage"
+        suite = Self.value(of: "--test", in: arguments) ?? "all"
+        artifactDirectory = output
     }
 
-    /// "  family: zimage" → "zimage", read from the lines after the heading.
-    private static func value(of key: String, in lines: ArraySlice<String>) -> String? {
-        let prefix = "\(key): "
-        return lines.first { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }
+    private static func value(of flag: String, in arguments: [String]) -> String? {
+        guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
+        return arguments[index + 1]
     }
 
     /// The artifacts on disk right now, sorted by name; empty once the folder is gone.
-    package func artifacts(fileManager: FileManager = .default) -> [URL] {
+    package func artifacts(fileManager: FileManager = .default) -> [Artifact] {
         let contents = (try? fileManager.contentsOfDirectory(
-            at: artifactDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+            at: artifactDirectory, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]
         )) ?? []
-        return contents.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        return contents
+            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+            .map { Artifact(url: $0, isDirectory: (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true) }
     }
 
-    /// "Z-Image · all" — the result panel's header.
+    /// "Z-Image · every suite" — the result panel's header.
     package var summary: String {
         "\(familyTitle) · \(suite == "all" ? "every suite" : suite)"
     }
 
     package var familyTitle: String {
-        switch family {
+        switch family.lowercased() {
         case "zimage": return "Z-Image"
         case "klein": return "FLUX.2 Klein"
         default: return family

@@ -116,24 +116,32 @@ struct StudioDatasetCandidates: View {
 }
 
 /// "Train on it": Image ▸ Train's parked draft gets the folder as its dataset, then the task
-/// opens. The Training page keeps a `CommandDraft` under `Training.imageDraft` in its own task
-/// scope and starts from the template's defaults with a stamped adapter path, so a handoff into
-/// an untouched page seeds the same defaults before pointing the dataset at the folder.
+/// opens. On the shared task workspace that is the task draft's `--data`; while the Training
+/// page still owns the task it is the `CommandDraft` the page keeps under `Training.imageDraft`
+/// in its own scope, which an untouched page starts from the template's defaults with a stamped
+/// adapter path, so a handoff into it seeds the same before pointing the dataset at the folder.
 @MainActor
 enum StudioDatasetTrainingHandoff {
-    static let draftKey = StudioTask.imageTrain.rawValue + ".Training.imageDraft"
+    static let legacyDraftKey = StudioTask.imageTrain.rawValue + ".Training.imageDraft"
 
     static func open(_ candidate: StudioDatasetDiscoveryDocument.Candidate, navigation: NavigationModel, sessions: StudioTaskSessions?) {
         if let sessions {
-            var draft = sessions.value(for: draftKey, default: Optional<CommandDraft>.none) ?? freshDraft()
-            draft.inputPath = candidate.path
-            sessions.set(draft, for: draftKey)
+            if StudioTask.imageTrain.usesTaskDraft {
+                if var draft = sessions.taskDraft(for: .imageTrain) ?? StudioTaskDraft(task: .imageTrain) {
+                    draft.form["--data"] = .text(candidate.path)
+                    sessions.setTaskDraft(draft, for: .imageTrain)
+                }
+            } else {
+                var draft = sessions.value(for: legacyDraftKey, default: Optional<CommandDraft>.none) ?? legacyFreshDraft()
+                draft.inputPath = candidate.path
+                sessions.set(draft, for: legacyDraftKey)
+            }
         }
         navigation.open(task: .imageTrain)
     }
 
     /// What `StudioTrainingView` starts an image draft as.
-    private static func freshDraft() -> CommandDraft {
+    private static func legacyFreshDraft() -> CommandDraft {
         var draft = CommandCatalog.template(id: .imageTrainLoRA)?.defaultDraft() ?? CommandDraft()
         draft.outputPath = StudioSpecialistFiles.outputFile(domain: .image, name: "image-adapter", fileExtension: "safetensors").path
         if draft.seed.isBlank { draft.seed = "42" }

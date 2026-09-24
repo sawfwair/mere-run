@@ -75,15 +75,17 @@ struct StudioResultMetricRow: View {
     }
 }
 
-/// A file or folder the run wrote or read, with Reveal.
+/// A file or folder the run wrote or read, with Reveal. The caller says which it is, so the
+/// row never asks the disk while drawing.
 struct StudioResultFileRow: View {
     let url: URL
     var detail: String?
+    var isDirectory = false
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: Self.glyph(for: url))
+                Image(systemName: isDirectory ? "folder" : Self.glyph(for: url))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(MereRunTheme.accent)
                     .frame(width: 14)
@@ -122,8 +124,7 @@ struct StudioResultFileRow: View {
         case .image: return "photo"
         case .model3D: return "cube.transparent"
         case .text: return "doc.text"
-        case .other:
-            return (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? "folder" : "doc"
+        case .other: return "doc"
         }
     }
 }

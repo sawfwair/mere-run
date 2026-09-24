@@ -31,7 +31,9 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
     // MARK: - Argv parity with the Utility Lab page
 
     /// Embeddings: one line per text, the page's `--pretty`, and the destination routing names
-    /// under Text — the same argv `StudioUtilityLabView` built from its `CommandDraft`.
+    /// under Text — the same argv `StudioUtilityLabView` built from its `CommandDraft` (the page
+    /// left `--model` out and the CLI defaulted it; the draft names that default, to the same
+    /// effect).
     func testEmbeddingsDraftBuildsThePagesArgv() throws {
         var draft = StudioTaskDraft(templateID: .textEmbed)
         // The template's defaults: its example text, the default model, and the page's --pretty.
@@ -72,6 +74,8 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         let output = named.text("--output")
         XCTAssertTrue(output.hasPrefix(root.appendingPathComponent("Text").path), output)
 
+        XCTAssertEqual(URL(fileURLWithPath: output).pathExtension, "json", "with --json the protected text is a JSON document")
+
         let template = try XCTUnwrap(CommandCatalog.template(id: .textAnonymize))
         var page = template.defaultDraft()
         page.prompt = paste
@@ -85,8 +89,30 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         XCTAssertEqual(named.arguments.count, template.arguments(from: page).count)
     }
 
-    /// Discover's `--root` is required but filed under no group; it is the well slot all the
-    /// same, and the draft builds the page's argv.
+    /// Anonymize's contract names no extension, so its destination follows `--json`; every run
+    /// gets its own file, and a restored draft (destinations dropped) is named afresh.
+    func testAnonymizeDestinationsAreNamedPerRunAndFollowJSON() throws {
+        var first = StudioTaskDraft(templateID: .textAnonymize)
+        first.prompt = "Alice"
+        var second = StudioTaskDraft(templateID: .textAnonymize)
+        second.prompt = "Bob"
+        let firstOutput = StudioOutputLocation.destination(for: first).text("--output")
+        let secondOutput = StudioOutputLocation.destination(for: second).text("--output")
+        XCTAssertNotEqual(firstOutput, secondOutput)
+        XCTAssertTrue(firstOutput.hasPrefix(root.appendingPathComponent("Text").path), firstOutput)
+        XCTAssertEqual(URL(fileURLWithPath: firstOutput).pathExtension, "json")
+
+        var plain = first
+        plain.form["--json"] = .flag(false)
+        XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: plain).text("--output")).pathExtension, "txt")
+
+        let restored = StudioOutputLocation.destination(for: first).withoutDestinations()
+        XCTAssertEqual(restored.text("--output"), "")
+        let renamed = StudioOutputLocation.destination(for: restored).text("--output")
+        XCTAssertEqual(renamed, firstOutput, "the same command names the same file again")
+    }
+
+    /// Discover's `--root` is the well slot, and the draft builds the page's argv.
     func testDiscoverRootIsTheWellSlotAndTheDraftBuildsThePagesArgv() throws {
         let slots = StudioTaskSchema.slots(for: .imageDatasetDiscover)
         XCTAssertEqual(slots.map(\.id), ["--root"])
@@ -281,35 +307,43 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         XCTAssertEqual(StudioAnalyzeDocument.runPlan(report).summary(detectionCount: 0), "Materialized run")
     }
 
-    /// `image validate` reports on stderr; the folder it names is the result.
-    func testValidationOutputDecodesIntoTheArtifactFolder() throws {
+    /// `image validate` prints nothing the canvas decodes; a finished row's folder and argv are
+    /// the report, and a failed or running row has none (the CLI's words stand in for it).
+    func testValidationReportComesFromTheFinishedRow() throws {
         let folder = root.appendingPathComponent("validation", isDirectory: true)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent("vae", isDirectory: true), withIntermediateDirectories: true)
         try Data([0x89, 0x50]).write(to: folder.appendingPathComponent("vae-roundtrip.png"))
         try "ok".write(to: folder.appendingPathComponent("report.txt"), atomically: true, encoding: .utf8)
-        let output = """
-        Image validation
-          family: zimage
-          suite: all
-          output: \(folder.path)
-          Using model: /Users/example/Library/Application Support/MereRun/models/image-zimage-turbo
-          Source: managed
-
-        Validation complete. Artifacts written to \(folder.path).
-        """
-        guard case .validation(let report) = try XCTUnwrap(StudioAnalyzeDocument.decode(Data(output.utf8))) else {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageValidate))
+        var page = template.defaultDraft()
+        page.variant = "Klein"
+        page.outputPath = folder.path
+        var item = StudioLibraryItem(
+            id: UUID(), mode: .createImage, prompt: "", inputURL: nil, outputURL: folder,
+            createdAt: Date(), updatedAt: Date(), status: .completed, exitCode: 0,
+            commandPreview: "mere.run image validate …", outputText: "Image validation\n  family: Klein\n  suite: all",
+            templateID: .imageValidate, commandDraft: page, commandArguments: template.arguments(from: page)
+        )
+        guard case .validation(let report) = try XCTUnwrap(StudioAnalyzeDocument.derived(from: item)) else {
             return XCTFail("Expected a validation report")
         }
-        XCTAssertEqual(report.family, "zimage")
+        XCTAssertEqual(report.family, "Klein")
+        XCTAssertEqual(report.familyTitle, "FLUX.2 Klein")
         XCTAssertEqual(report.suite, "all")
-        XCTAssertEqual(report.artifactDirectory.standardizedFileURL.path, folder.standardizedFileURL.path)
-        XCTAssertEqual(report.artifacts().map(\.lastPathComponent), ["report.txt", "vae-roundtrip.png"])
-        XCTAssertEqual(report.summary, "Z-Image · every suite")
+        XCTAssertEqual(report.artifactDirectory, folder)
+        XCTAssertEqual(report.artifacts().map(\.url.lastPathComponent), ["report.txt", "vae", "vae-roundtrip.png"])
+        XCTAssertEqual(report.artifacts().map(\.isDirectory), [false, true, false])
+        XCTAssertEqual(report.summary, "FLUX.2 Klein · every suite")
+        XCTAssertEqual(StudioAnalyzeDocument.validation(report).summary(detectionCount: 0), "FLUX.2 Klein · every suite")
 
-        let unfinished = "Image validation\n  family: klein\n  suite: vae\n  output: /tmp/x\nError: model missing"
-        XCTAssertNil(StudioImageValidationReport.decode(outputText: unfinished), "a run that stopped has no folder to show")
-        guard case .transcript = try XCTUnwrap(StudioAnalyzeDocument.decode(Data(unfinished.utf8))) else {
-            return XCTFail("The CLI's words stand in for the report")
-        }
+        item.commandArguments = ["image", "validate", "--output", folder.path]
+        XCTAssertEqual(StudioImageValidationReport(item: item)?.family, "zimage", "the CLI's own default")
+        item.status = .failed
+        item.exitCode = 1
+        XCTAssertNil(StudioAnalyzeDocument.derived(from: item), "a run that stopped has no folder to show")
+        XCTAssertNil(StudioAnalyzeDocument.decode(Data("Image validation\n  family: klein".utf8)).flatMap { document -> StudioImageValidationReport? in
+            if case .validation(let report) = document { return report }
+            return nil
+        }, "the printed lines are never scraped")
     }
 }

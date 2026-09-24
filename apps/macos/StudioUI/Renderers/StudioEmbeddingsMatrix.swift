@@ -45,7 +45,7 @@ struct StudioEmbeddingsMatrix: View {
                     GridRow {
                         label("#\(row.id + 1)")
                         ForEach(document.vectors) { column in
-                            cell(document.cosineSimilarity(row, column))
+                            cell(document.cosineSimilarity(row, column), row: row.id + 1, column: column.id + 1)
                         }
                     }
                 }
@@ -64,7 +64,7 @@ struct StudioEmbeddingsMatrix: View {
             .frame(width: text.count > 3 ? Self.cellWidth : 28, height: Self.cellHeight)
     }
 
-    private func cell(_ similarity: Double) -> some View {
+    private func cell(_ similarity: Double, row: Int, column: Int) -> some View {
         Text(similarity.formatted(.number.precision(.fractionLength(2))))
             .font(.system(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(MereRunTheme.textPrimary)
@@ -73,7 +73,8 @@ struct StudioEmbeddingsMatrix: View {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Self.fill(for: similarity))
             }
-            .accessibilityLabel(similarity.formatted(.number.precision(.fractionLength(3))))
+            .help("#\(row) to #\(column): \(similarity.formatted(.number.precision(.fractionLength(3))))")
+            .accessibilityLabel("#\(row) to #\(column), \(similarity.formatted(.number.precision(.fractionLength(3))))")
     }
 
     /// Close pairs read green, related ones the accent, the rest sit on the raised surface.
