@@ -220,7 +220,9 @@ struct StudioTaskInspector: View {
             set: { draft.switchTemplate(to: $0) }
         )
         return StudioInspectorLabeledRow(task == .threeDFromImage ? "Engine" : "Operation") {
-            if templates.count <= 4 {
+            // Segments only when every title fits one at the column's width; longer names
+            // ("TRELLIS.2 PBR 3D") read whole from a menu rather than truncated.
+            if templates.count <= 4, templates.allSatisfy({ $0.title.count <= 9 }) {
                 MereSegmentedControl(templates.map(\.id), selection: selection, accessibilityLabel: "Variant") {
                     StudioTaskSchema.variantTitle($0.rawValue)
                 }

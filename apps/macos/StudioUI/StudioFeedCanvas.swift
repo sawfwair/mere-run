@@ -258,8 +258,9 @@ private struct StudioCardHeader: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 // A task run without a prompt is headed by its command ("TripoSR 3D"), not the
-                // mode that files it.
-                Text(item.prompt.isBlank && item.templateID?.studioTask.usesTaskDraft == true ? item.displayKindTitle : item.displayTitle)
+                // mode that files it; a title the user gave it wins either way.
+                Text(item.customTitle.flatMap { $0.isBlank ? nil : $0 }
+                    ?? (item.prompt.isBlank && item.templateID?.studioTask.usesTaskDraft == true ? item.displayKindTitle : item.displayTitle))
                     .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(3)
@@ -321,17 +322,10 @@ enum StudioFeedChips {
     static func chips(for item: StudioLibraryItem, titles: StudioModelTitles) -> [String] {
         guard let draft = item.commandDraft else { return [] }
         var chips: [String] = []
-        // A task on the shared workspace records its exact argv; its chips read that rather than
-        // the fields of the mode that files it, which its command never set.
+        // A task on the shared workspace records its exact argv; its chips are the composer's
+        // (the template's essentials) valued from that, not the fields of the mode that files it.
         if item.templateID?.studioTask.usesTaskDraft == true {
-            let arguments = item.commandArguments ?? []
-            for (flag, label) in [("--resolution", "resolution"), ("--seed", "seed")] {
-                if let index = arguments.firstIndex(of: flag), index + 1 < arguments.count {
-                    chips.append("\(label) \(arguments[index + 1])")
-                }
-            }
-            if !draft.model.isBlank { chips.append(StudioModelNaming.displayName(draft.model, titles: titles)) }
-            return chips
+            return StudioTaskChips.chips(for: item, titles: titles)
         }
         switch item.mode {
         case .createImage, .video:
@@ -461,7 +455,7 @@ struct StudioGenerationCard: View {
         if !mediaFiles.isEmpty {
             StudioOutputGrid(urls: mediaFiles, tileSide: Self.tileSide, onOpen: { actions.focus(item, $0) })
         }
-        if let rendering = StudioResultRenderers.cardRendering(for: item) {
+        if let rendering = StudioResultRenderers.cardFooterRendering(for: item) {
             StudioResultRendererView(rendering: rendering, item: item)
         }
         ForEach(textFiles, id: \.self) { url in
