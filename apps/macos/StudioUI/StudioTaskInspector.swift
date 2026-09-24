@@ -199,6 +199,10 @@ struct StudioTaskInspector: View {
             StudioInstantMeshCamerasOverride(draft: $draft)
         case .faceIndex:
             StudioFaceIndexEditor(draft: $draft, fields: fields)
+        case .earthDimensions:
+            StudioEarthDimensionsControl(draft: $draft)
+        case .earthSampling:
+            StudioEarthSamplingControl(draft: $draft)
         case .cameras, .orderedViews, .musicManifest, .targetRanks:
             // The page PR that owns the editor replaces this with it; until then every flag the
             // editor would write stays reachable as its plain control.

@@ -728,8 +728,6 @@ private struct StudioWorkspaceView: View {
             StudioLiveListenSession(models: models)
         case .textDecide:
             StudioLayaDecisionView()
-        case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth:
-            StudioGeoLabView(tool: geoToolBinding)
         case .modelsInstalled:
             StudioModelsView(
                 modelStore: models,
@@ -779,27 +777,6 @@ private struct StudioWorkspaceView: View {
     }
 
     // MARK: Task bindings for re-hosted views
-
-    private var geoToolBinding: Binding<StudioGeoTool> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .earthFire: return .fire
-                case .earthTessera: return .tessera
-                case .earthOlmoEarth: return .olmoEarth
-                default: return .flood
-                }
-            },
-            set: { tool in
-                switch tool {
-                case .flood: navigation.open(task: .earthFlood)
-                case .fire: navigation.open(task: .earthFire)
-                case .tessera: navigation.open(task: .earthTessera)
-                case .olmoEarth: navigation.open(task: .earthOlmoEarth)
-                }
-            }
-        )
-    }
 
     // MARK: - Prompt workspace
 

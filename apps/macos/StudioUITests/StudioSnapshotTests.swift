@@ -1870,6 +1870,58 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Earth on the shared task workspace, through the root: TESSERA with a finished run — the
+    /// attached bundle read against the tensors the command needs on the left, the embedding's
+    /// header in the result panel on the right, the inspector open with the constrained
+    /// dimensions picker — light and dark at the board size and at a narrow width; Flood with a
+    /// bundle missing its DEM, so the checklist warns before any run; OlmoEarth with nothing
+    /// attached, the serif empty state; and TESSERA's inspector column on its own.
+    func testEarthWorkspaceSnapshots() throws {
+        let earth = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { earth.tearDown() }
+        try earth.seedEarthRuns()
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(earth.controller)
+                .environmentObject(earth.library)
+                .environmentObject(navigation)
+            try earth.write(view, size: size, appearance: appearance, name: name, settle: 2.5,
+                            afterAppear: { navigation.open(task: task) })
+        }
+
+        let board = CGSize(width: 1_440, height: 820)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.earthTessera, name: "earth-tessera-result-\(appearance.rawValue)", appearance: appearance, size: board)
+        }
+        try render(.earthTessera, name: "earth-tessera-result-narrow-light", appearance: .light, size: CGSize(width: 960, height: 760))
+        try render(.earthFlood, name: "earth-flood-missing-dem-light", appearance: .light, size: board)
+        try render(.earthFlood, name: "earth-flood-missing-dem-dark", appearance: .dark, size: board)
+        try render(.earthOlmoEarth, name: "earth-olmoearth-empty-light", appearance: .light, size: board)
+
+        let draft = try XCTUnwrap(earth.controller.taskSessions.taskDraft(for: .earthTessera))
+        let inspector = StudioTaskInspector(
+            task: .earthTessera, draft: .constant(draft), modelInventory: earth.controller.modelStore.rows,
+            readiness: .ready, onShowModels: {}, onClose: {}
+        )
+        .environmentObject(earth.controller)
+        .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+        try earth.write(inspector, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                        appearance: .light, name: "earth-tessera-inspector-light", settle: 1.5)
+        let olmoInspector = StudioTaskInspector(
+            task: .earthOlmoEarth, draft: .constant(StudioTaskDraft(templateID: .geoOlmoEarth)),
+            modelInventory: earth.controller.modelStore.rows, readiness: .ready, onShowModels: {}, onClose: {}
+        )
+        .environmentObject(earth.controller)
+        .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+        try earth.write(olmoInspector, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                        appearance: .light, name: "earth-olmoearth-inspector-light", settle: 1.5)
+    }
+
     /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
     /// with its own state, the outputs with Reveal, and the raw report folded away. `executor
     /// list`, `run list`, and `run inspect` are answered by a scripted runner; no CLI runs.
@@ -3816,6 +3868,89 @@ private final class SnapshotFixture {
         glb.append(contentsOf: word(0x004E_4942))
         glb.append(binary)
         return glb
+    }
+
+    /// The Earth board's state: a finished TESSERA run over a four-observation bundle written
+    /// here (its 64-wide embedding beside it under Earth, and the JSON the command printed as
+    /// the row's output text), the bundle parked in TESSERA's task draft; and a Flood task draft
+    /// pointed at a bundle without its DEM, so the checklist has something to warn about.
+    func seedEarthRuns() throws {
+        guard let template = CommandCatalog.template(id: .geoTessera) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let bundle = root.appendingPathComponent("valley-2024.safetensors", isDirectory: false)
+        try SafetensorsFixture.write(to: bundle, tensors: [
+            .float32("S2", shape: [1, 4, 10], value: 1_200),
+            .float32("S2_DOY", shape: [1, 4], value: 120),
+            .float32("S1_ASC", shape: [1, 4, 2], value: -12),
+            .float32("S1_ASC_DOY", shape: [1, 4], value: 118),
+        ])
+        let embedding = root.appendingPathComponent("Earth/valley-2024-a1b2c3.safetensors", isDirectory: false)
+        try SafetensorsFixture.write(
+            to: embedding,
+            tensors: [.float32("embeddings", shape: [1, 64], value: 0.031)],
+            metadata: [
+                "format": "mere.run/tessera-v2-embeddings-v1", "model_id": "vision-embed-tessera-v2-large",
+                "source_revision": "4f1c2e9", "dimensions": "64",
+            ]
+        )
+
+        var draft = template.defaultDraft()
+        draft.inputPath = bundle.path
+        draft.outputPath = embedding.path
+        draft.model = "vision-embed-tessera-v2-large"
+        draft.geoDimensions = "64"
+        let startedAt = Self.mockupTime(hour: 10, minute: 12)
+        let request = StudioRunRequest(mode: template.libraryMode, templateID: .geoTessera, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: template.libraryMode,
+            prompt: "",
+            inputURL: bundle,
+            outputURL: embedding,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(6.2),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run geo tessera valley-2024.safetensors --output valley-2024-a1b2c3.safetensors --dimensions 64 --json",
+            outputText: """
+            {
+              "batch_size" : 1,
+              "device" : "metal",
+              "inference_seconds" : 0.41,
+              "input_path" : "\(bundle.path)",
+              "model_id" : "vision-embed-tessera-v2-large",
+              "model_load_seconds" : 5.8,
+              "operation" : "time-series-embedding",
+              "output_path" : "\(embedding.path)",
+              "schema_version" : 1,
+              "status" : "completed",
+              "variant" : "large"
+            }
+            """,
+            templateID: .geoTessera,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft),
+            artifactURLs: [embedding]
+        )
+        row.inputIdentity = StudioInputIdentity.read(bundle)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .geoTessera)
+        taskDraft.setArgument(0, bundle.path)
+        // No model in the draft: the scripted inventory does not list the TESSERA checkpoints, so
+        // a named one would only draw the "couldn't check" card over the result.
+        taskDraft.form["--dimensions"] = .integer(64)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .earthTessera)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.earthTessera.rawValue + ".requestID")
+
+        let incomplete = root.appendingPathComponent("delta-tiles.safetensors", isDirectory: false)
+        try SafetensorsFixture.write(to: incomplete, tensors: [
+            .float32("S2L2A", shape: [1, 12, 4, 8, 8], value: 0.2),
+            .float32("S1RTC", shape: [1, 2, 4, 8, 8], value: -0.4),
+        ])
+        var flood = StudioTaskDraft(templateID: .geoFlood)
+        flood.setArgument(0, incomplete.path)
+        controller.taskSessions.setTaskDraft(flood, for: .earthFlood)
     }
 
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept

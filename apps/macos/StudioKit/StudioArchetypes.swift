@@ -60,6 +60,7 @@ extension StudioTask {
         .audioWhoSpoke, .audioEnhance, .audioSeparate, .musicSeparate, .audioLive, .voiceVoices,
         .textEmbeddings, .textAnonymize, .imageDatasets,
         .threeDFromImage,
+        .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth,
     ]
 
     /// Temporary gate: true while this task still renders its bespoke page. A mode-backed task

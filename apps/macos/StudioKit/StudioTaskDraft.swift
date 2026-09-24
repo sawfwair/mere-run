@@ -271,13 +271,45 @@ package enum StudioTaskDraftMigration {
     /// The page stamped a per-run destination (and its sidecars) into the draft it kept; those
     /// were never settings, so they are cleared and routing names fresh ones.
     package static func imported(for task: StudioTask, from sessions: StudioTaskSessions) -> StudioTaskDraft? {
-        guard let template = task.variantTemplates.first,
-              let key = legacyKey(for: template.id),
-              let draft = sessions.value(for: task.rawValue + "." + key, default: Optional<CommandDraft>.none) else {
+        guard let template = task.variantTemplates.first, let draft = pageDraft(for: template.id, task: task, in: sessions) else {
             return nil
         }
         return StudioTaskDraft(templateID: template.id, form: StudioConsoleCommand.seed(template: template, draft: draft))
             .withoutDestinations()
+    }
+
+    /// The Earth page kept one `CommandDraft` per workflow in one dictionary, scoped by the task
+    /// like every page key; each Earth task reads its own entry.
+    package static let earthPageKey = "GeoLab.drafts"
+
+    /// The page's dictionary key, `StudioGeoTool`, was a `String` enum without
+    /// `CodingKeyRepresentable`, so `JSONEncoder` wrote the dictionary as an array of alternating
+    /// keys and drafts; decoding through the same kind of key reads that shape back.
+    private enum LegacyGeoTool: String, Codable, Hashable {
+        case flood
+        case fire
+        case tessera
+        case olmoEarth
+
+        init?(templateID: CommandTemplateID) {
+            switch templateID {
+            case .geoFlood: self = .flood
+            case .geoFire: self = .fire
+            case .geoTessera: self = .tessera
+            case .geoOlmoEarth: self = .olmoEarth
+            default: return nil
+            }
+        }
+    }
+
+    private static func pageDraft(for templateID: CommandTemplateID, task: StudioTask, in sessions: StudioTaskSessions) -> CommandDraft? {
+        if let key = legacyKey(for: templateID) {
+            return sessions.value(for: task.rawValue + "." + key, default: Optional<CommandDraft>.none)
+        }
+        if let tool = LegacyGeoTool(templateID: templateID) {
+            return sessions.value(for: task.rawValue + "." + earthPageKey, default: [LegacyGeoTool: CommandDraft]())[tool]
+        }
+        return nil
     }
 }
 

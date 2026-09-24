@@ -142,17 +142,19 @@ prompt controller's `runTask`, and the remaining pages' `StudioSpecialistRunner`
 shim — goes through `StudioKit/StudioTaskRunner.swift`. Bespoke result views
 live under `StudioUI/Renderers/` and register by `(view, document)` in
 `StudioResultRenderers` (a finished feed card asks the same registry for a
-rendering in place of its output grid); the Session pages share their transport
-chrome from `StudioUI/StudioSessionControls.swift`. A task keeps its bespoke
-page until it is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the
-root then renders the workspace for it instead. Sound ▸ Video Foley and
-Condition (Generate); Sound ▸ Encode, Decode, and Score, Music ▸ Analyze and
+rendering in place of, or under, its output grid); a task that can say more
+about its input file than its name registers an input view the same way in
+`StudioInputRenderers`; the Session pages share their transport chrome from
+`StudioUI/StudioSessionControls.swift`. A task keeps its bespoke page until it
+is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the root then
+renders the workspace for it instead. Sound ▸ Video Foley and Condition and 3D ▸
+From image (Generate); Sound ▸ Encode, Decode, and Score, Music ▸ Analyze and
 Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, Audio ▸ Who Spoke,
-Enhance, and Separate, Text ▸ Embeddings and Anonymize, and Image ▸ Datasets
-(Analyze) render on it; Vision ▸ Live and Audio ▸ Live (Session) and Voice ▸
-Voices (Manage) render their own pages over the same task draft. The SFX Lab,
-Music Tools, Vision Lab, Voice, Audio Tools, and Utility Lab pages they replaced
-are gone.
+Enhance, and Separate, Text ▸ Embeddings and Anonymize, Image ▸ Datasets, and
+the four Earth tasks (Analyze) render on it; Vision ▸ Live and Audio ▸ Live
+(Session) and Voice ▸ Voices (Manage) render their own pages over the same task
+draft. The SFX Lab, Music Tools, Vision Lab, Voice, Audio Tools, Utility Lab,
+3D Creation, and Geo Lab pages they replaced are gone.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -444,9 +446,10 @@ Image ▸ Datasets render on it too: the typed text or the folder, plan file, or
 nothing a Datasets variant takes on the left, and the cosine matrix, the
 protected text and spans, the candidate folders (each with "Train on it"), the
 run plan report, or the validation artifacts as the result panel's rows
-(`StudioUI/Renderers/`). The four Earth tasks still render their own form
-inside their task until their page moves. Migrating one is a view change, not
-a design decision.
+(`StudioUI/Renderers/`). The four Earth tasks reach it through the shared task
+workspace too, with a checklist of the tensors their bundle needs in the input
+column. Every input-first task now renders on this canvas; migrating one was a
+view change, not a design decision.
 A view that is about the result rather than the input — Points, Vectors, Depth,
 Scene — takes the input column from a renderer registered in
 `StudioUI/Renderers/StudioResultRenderers.swift` (`canvasRendering`), the same
@@ -882,13 +885,23 @@ each question's token fit. The handbook example loads with one click, and reques
 JSON imports and exports.
 
 **Earth** is native Earth-observation inference, with Flood, Fire, TESSERA, and
-OlmoEarth tasks. It covers TerraMind flood and fire tile inference and the
-TESSERA v2 and OlmoEarth v1.2 encoders, names the tensors each input bundle must
-carry before a run rather than after it (required and at-least-one-of, as each
-command checks them), exposes engine-specific controls
-(TESSERA output dimensions; OlmoEarth patch size, ground sample distance, and
-space-time tokens), and preserves every produced safetensors file as a durable
-Library artifact.
+OlmoEarth tasks — TerraMind flood and fire tile inference and the TESSERA v2
+and OlmoEarth v1.2 encoders — each an Analyze task on the shared task
+workspace. The well takes the safetensors tile bundle; the input column reads
+the bundle's header (never the tensors behind it) against the tensors the
+command requires and ticks each one off with its dtype and shape, so a missing
+`DEM` or an unpaired `S1_ASC` is caught before the run in the words the
+command would refuse it with, and an empty well names what a bundle must carry
+(`StudioKit/StudioEarthInputRequirement.swift`,
+`StudioUI/Renderers/StudioEarthInputChecklist.swift`, registered by template in
+`StudioUI/Renderers/StudioInputRenderers.swift`). The result panel shows the
+written safetensors file's header — the logits or embedding tensor, its shape,
+and the writer's metadata — with the command's JSON as the second view. The
+inspector holds the model, Preflight, TESSERA's output dimensions as the picker
+of the widths the command accepts (`StudioUI/StudioEarthControls.swift`), and
+OlmoEarth's patch size, ground sample distance, and space-time tokens. Outputs
+are named after the bundle under the Earth folder, every run is a Library row,
+and the Geo Lab page's saved drafts seed the task drafts once.
 
 **Models ▸ Installed** is a list-and-detail page. In a narrow window, select a
 model to open its full-width details. Choose **All models** or press Escape to

@@ -200,6 +200,8 @@ package enum StudioTaskSchema {
         case "--instruments", "--list-instruments": return .instruments
         case "--renoise", "--renoise-strength": return .renoise
         case "--target-rank": return .targetRanks
+        case "--dimensions" where templateID == .geoTessera: return .earthDimensions
+        case "--patch-size", "--input-resolution" where templateID == .geoOlmoEarth: return .earthSampling
         default: return nil
         }
     }

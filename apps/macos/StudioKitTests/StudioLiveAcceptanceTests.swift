@@ -1,5 +1,6 @@
 @testable import StudioKit
 import AVFoundation
+import StudioTestSupport
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -1489,6 +1490,125 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let vertexCount: Int
         let triangleCount: Int
     }
+
+    // MARK: - Earth (shared task workspace)
+
+    /// A four-observation Sentinel-1/2 bundle, built here, through TESSERA v2 large from the task
+    /// draft: the checklist passes the bundle, the argv carries the picker's width, and the
+    /// embedding written back decodes as the tensor the Analyze panel shows.
+    func test28TesseraEmbedsATinyObservationBundleFromTheTaskDraft() throws {
+        try requireModels(["vision-embed-tessera-v2-large"])
+        let flow = "28-earth-tessera"
+        let bundle = try SafetensorsFixture.write(
+            to: live.appendingPathComponent(flow, isDirectory: true).appendingPathComponent("valley-2024.safetensors"),
+            tensors: Self.tesseraObservations
+        )
+        let requirement = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoTessera))
+        let header = try XCTUnwrap(StudioSafetensorsHeader.loadHeader(from: bundle))
+        let check = requirement.check(header)
+        XCTAssertTrue(check.isSatisfied, check.message ?? "")
+
+        var draft = StudioTaskDraft(templateID: .geoTessera)
+        draft.setArgument(0, bundle.path)
+        draft.model = "vision-embed-tessera-v2-large"
+        draft.form["--dimensions"] = .integer(64)
+        let (request, argv) = try taskRequest(draft, task: .earthTessera)
+        XCTAssertEqual(Array(argv.prefix(3)), ["geo", "tessera", bundle.path])
+        XCTAssertTrue(argv.contains("--dimensions") && argv.contains("64") && argv.contains("--json"), argv.joined(separator: " "))
+        let output = URL(fileURLWithPath: request.draft.outputPath)
+        XCTAssertEqual(output.deletingLastPathComponent().path, live.appendingPathComponent("Earth").path)
+        XCTAssertEqual(output.pathExtension, "safetensors")
+
+        let run = try runCLI(flow, argv, timeout: 900)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        XCTAssertTrue(run.stdout.contains("\"status\" : \"completed\""), run.stdout)
+        guard case .tensor(.safetensors(let written)) = try decodeAnalyzeDocument(at: output.path) else {
+            return XCTFail("The embedding did not decode as a safetensors header")
+        }
+        let embeddings = try XCTUnwrap(written.tensors.first { $0.name == "embeddings" })
+        XCTAssertEqual(embeddings.shape, [1, 64], "one tile, the picked width")
+        XCTAssertEqual(embeddings.dtype, "F32")
+        XCTAssertEqual(written.metadata["dimensions"], "64")
+        XCTAssertEqual(written.metadata["model_id"], "vision-embed-tessera-v2-large")
+        conclude(flow, "output=\(output.lastPathComponent) embeddings=\(embeddings.summary) seconds=\(String(format: "%.1f", run.duration))")
+    }
+
+    /// A Flood bundle without its DEM: the checklist says "Missing DEM." before the run, and the
+    /// command refuses the same file with the same tensor named, before loading weights.
+    func test29FloodRefusesABundleMissingDEMAsTheChecklistWarned() throws {
+        try requireModels(["vision-flood-terramind-base"])
+        let flow = "29-earth-flood-missing-dem"
+        let bundle = try SafetensorsFixture.write(
+            to: live.appendingPathComponent(flow, isDirectory: true).appendingPathComponent("delta-tiles.safetensors"),
+            tensors: [
+                .float32("S2L2A", shape: [1, 12, 4, 256, 256], value: 0.2),
+                .float32("S1RTC", shape: [1, 2, 4, 256, 256], value: -0.4),
+            ]
+        )
+        let requirement = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoFlood))
+        let check = requirement.check(try XCTUnwrap(StudioSafetensorsHeader.loadHeader(from: bundle)))
+        XCTAssertFalse(check.isSatisfied)
+        XCTAssertEqual(check.message, "Missing DEM.")
+        XCTAssertEqual(check.required.map(\.isPresent), [true, true, false])
+
+        // The contract is satisfied (a file is attached), so only the checklist stands between
+        // the operator and the failed run below.
+        var draft = StudioTaskDraft(templateID: .geoFlood)
+        draft.setArgument(0, bundle.path)
+        draft.model = "vision-flood-terramind-base"
+        let (request, argv) = try taskRequest(draft, task: .earthFlood)
+        XCTAssertEqual(Array(argv.prefix(3)), ["geo", "flood", bundle.path])
+        let run = try runCLI(flow, argv, timeout: 300)
+        XCTAssertNotEqual(run.exitCode, 0, "The command must refuse a bundle without DEM")
+        XCTAssertTrue(run.stderr.contains("DEM"), "The refusal should name the tensor the checklist named: \(run.failureDescription)")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: request.draft.outputPath), "Nothing is written for a refused bundle")
+        conclude(flow, "checklist=\(check.message ?? "-") exit=\(run.exitCode) stderr=\(run.stderr.trimmingCharacters(in: .whitespacesAndNewlines).suffix(80))")
+    }
+
+    /// An 8×8, single-timestamp Sentinel-2 tile through OlmoEarth's preflight from the task
+    /// draft: the inspector's patch size and resolution reach the argv and the plan comes back
+    /// ready, without loading weights or writing an embedding.
+    func test30OlmoEarthPreflightAcceptsATinyMultisensorBundle() throws {
+        try requireModels(["vision-embed-olmoearth-v12-base"])
+        let flow = "30-earth-olmoearth-preflight"
+        let bundle = try SafetensorsFixture.write(
+            to: live.appendingPathComponent(flow, isDirectory: true).appendingPathComponent("field-tile.safetensors"),
+            tensors: [
+                .int32("TIMESTAMPS", shape: [1, 1, 3], values: [15, 5, 2_024]),
+                .float32("S2L2A", shape: [1, 8, 8, 1, 12], value: 1_500),
+            ]
+        )
+        let requirement = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoOlmoEarth))
+        let check = requirement.check(try XCTUnwrap(StudioSafetensorsHeader.loadHeader(from: bundle)))
+        XCTAssertTrue(check.isSatisfied, check.message ?? "")
+        XCTAssertEqual(check.oneOf.map(\.isPresent), [true, false, false])
+
+        var draft = StudioTaskDraft(templateID: .geoOlmoEarth)
+        draft.setArgument(0, bundle.path)
+        draft.model = "vision-embed-olmoearth-v12-base"
+        draft.form["--patch-size"] = .integer(2)
+        draft.form["--input-resolution"] = .number(10)
+        draft.form["--preflight"] = .flag(true)
+        let (request, argv) = try taskRequest(draft, task: .earthOlmoEarth)
+        XCTAssertEqual(Array(argv.prefix(3)), ["geo", "olmoearth", bundle.path])
+        XCTAssertTrue(argv.contains("--preflight"))
+        XCTAssertEqual(argv.firstIndex(of: "--patch-size").map { argv[$0 + 1] }, "2")
+        let run = try runCLI(flow, argv, timeout: 300)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        XCTAssertTrue(run.stdout.contains("\"status\" : \"ready\""), run.stdout)
+        XCTAssertTrue(run.stdout.contains("\"batch_size\" : 1"), run.stdout)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: request.draft.outputPath), "A preflight writes nothing")
+        conclude(flow, "exit=\(run.exitCode) preflight=ready patchSize=2")
+    }
+
+    /// Four Sentinel-2 observations (ten bands, day of year) with one ascending Sentinel-1 pair,
+    /// in the raw units TESSERA's preprocessor normalizes.
+    private static let tesseraObservations: [SafetensorsFixture.Tensor] = [
+        .float32("S2", shape: [1, 4, 10], value: 1_200),
+        .float32("S2_DOY", shape: [1, 4], value: 120),
+        .float32("S1_ASC", shape: [1, 4, 2], value: -12),
+        .float32("S1_ASC_DOY", shape: [1, 4], value: 118),
+    ]
 
     // MARK: - Studio request builders
 
