@@ -105,7 +105,9 @@ package final class StudioTaskRunner {
     package func currentJob(for task: StudioTask) -> Job? {
         let remembered = sessions.value(for: task.rawValue + ".requestID", default: Optional<UUID>.none)
         if let remembered, let job = controller.jobs.job(requestID: remembered), job.state.isActive { return job }
-        return controller.jobs.all.last { $0.state.isActive && $0.request.templateID?.studioTask == task }
+        return controller.jobs.all.last { job in
+            job.state.isActive && (job.request.templateID.map(task.runs) ?? false)
+        }
     }
 
     package func stop(task: StudioTask) {

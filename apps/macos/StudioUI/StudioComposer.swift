@@ -575,14 +575,21 @@ enum StudioAttachmentPicker {
 
 /// One 48×48 slot of the attachment well. Empty: a dashed outline with a plus. Filled: the
 /// file's thumbnail (or a kind glyph for audio and video) with a hover-revealed remove button.
-/// Accepts a drop, a paste (⌘V while focused), and a click to pick.
+/// Accepts a drop, a paste (⌘V while focused), and a click to pick; an audio slot's context
+/// menu also offers "Record…", which files the recording with the task's domain.
 struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
     let slot: StudioAttachmentSlot
     @Binding var draft: Draft
     let onPick: () -> Void
 
+    @Environment(\.studioTaskScope) private var taskScope
     @State private var isDropTargeted = false
     @State private var hovering = false
+    @State private var isRecording = false
+
+    private var recordingDomain: StudioDomain {
+        StudioTask(rawValue: taskScope)?.domain ?? .audio
+    }
 
     private static var side: CGFloat { 48 }
     private static var cornerRadius: CGFloat { MereRunTheme.Radius.base }
@@ -636,6 +643,9 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
         .onPasteCommand(of: [.fileURL, .image]) { _ in paste() }
         .contextMenu {
             Button("Choose…", action: onPick)
+            if slot.canRecord {
+                Button("Record…") { isRecording = true }
+            }
             if isFilled {
                 Button("Reveal in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting(paths.map { URL(fileURLWithPath: $0) })
@@ -643,7 +653,13 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
                 Button("Remove") { slot.clear(in: &draft) }
             }
         }
-        .help(isFilled ? paths.joined(separator: "\n") : "Drop, paste, or click to add \(slot.label.lowercased())")
+        .popover(isPresented: $isRecording, arrowEdge: .bottom) {
+            StudioAudioRecordingPopover(domain: recordingDomain) { url in
+                slot.attach([url], to: &draft)
+            }
+        }
+        .help(isFilled ? paths.joined(separator: "\n")
+              : "Drop, paste, or click to add \(slot.label.lowercased())\(slot.canRecord ? "; right-click to record" : "")")
         .accessibilityLabel(slot.label)
         .accessibilityValue(isFilled ? slot.caption(in: draft) : "Empty")
         .accessibilityHint("Drop a file, paste with Command-V, or click to choose")

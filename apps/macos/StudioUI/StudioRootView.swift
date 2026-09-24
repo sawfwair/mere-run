@@ -692,14 +692,16 @@ private struct StudioWorkspaceView: View {
     // MARK: - Domain content
 
     /// The task's surface by archetype: the prompt workspace for a mode-backed task, the shared
-    /// task workspace for a task whose page PR has landed (`StudioTask.migratedTasks`), and the
-    /// task's own page for everything else. A page PR flips its task's gate and deletes its case
-    /// below; the switch's default is the workspace, so nothing else in this file changes.
+    /// task workspace for an Analyze or Generate task whose page PR has landed
+    /// (`StudioTask.migratedTasks`), and the task's own page for everything else — a migrated
+    /// Session or Manage task included, whose page reads the same task draft. A page PR flips its
+    /// task's gate and deletes its case below; the switch's default is the workspace, so nothing
+    /// else in this file changes.
     @ViewBuilder
     private var domainContent: some View {
         if destination.task.mode != nil {
             promptWorkspace
-        } else if destination.task.usesTaskDraft {
+        } else if destination.task.usesTaskDraft, destination.task.showsPromptChrome {
             StudioTaskWorkspace(task: destination.task, models: models)
         } else {
             legacyContent
