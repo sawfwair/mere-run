@@ -22,7 +22,9 @@ The format is based on Keep a Changelog.
   CLI's `Error:` line over the list of searched model paths, Who Spoke shows a
   sub-second turn as "0.4 s", a specialist page dates the result it shows, and
   a unit test no longer creates an empty `caption-<stamp>` folder under
-  `~/Documents/mere.run/Vision` on every test run.
+  `~/Documents/mere.run/Vision` on every test run. A Segment, Track, or Find run
+  that matches nothing says so and suggests other words or a drawn box, instead
+  of showing the CLI's summary text.
 - Change how `vision segment` and `vision track` group `--box` and `--point`
   prompts: a labeled point now refines the box with the same label that
   contains it (else the first with that label), unlabeled points form one
