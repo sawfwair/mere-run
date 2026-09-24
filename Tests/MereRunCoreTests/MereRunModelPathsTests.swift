@@ -5,8 +5,15 @@ import XCTest
 final class MereRunModelPathsTests: XCTestCase {
     private let legacyModelsDirEnvironmentKey = ["ZE", "RO", "MODELS", "DIR"].joined(separator: "_")
     private let legacyApplicationSupportName = ["Ze", "ro"].joined()
+    private var registrationDomain: [String: Any] = [:]
+
+    override func setUp() {
+        super.setUp()
+        registrationDomain = UserDefaults.standard.volatileDomain(forName: UserDefaults.registrationDomain)
+    }
 
     override func tearDown() {
+        UserDefaults.standard.setVolatileDomain(registrationDomain, forName: UserDefaults.registrationDomain)
         MereRunModelPaths.setProcessModelsDirOverride(nil)
         unsetenv(MereRunModelPaths.modelsDirEnvironmentKey)
         unsetenv(legacyModelsDirEnvironmentKey)
@@ -118,13 +125,8 @@ final class MereRunModelPathsTests: XCTestCase {
     }
 
     func testModelStoreResolutionFallsBackWhenPersistedPathUnavailable() {
-        let suite = "MereRunModelPathsTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
-
         let missingPath = "/Volumes/mererun-missing-\(UUID().uuidString)"
-        defaults.set(missingPath, forKey: MereRunModelPaths.modelStorageActivePathDefaultsKey)
+        let defaults = makeDefaults([MereRunModelPaths.modelStorageActivePathDefaultsKey: missingPath])
 
         let resolution = MereRunModelPaths.modelStoreResolution(defaults: defaults)
 
@@ -141,14 +143,9 @@ final class MereRunModelPathsTests: XCTestCase {
     }
 
     func testModelStoreResolutionIgnoresLegacyEnvironmentVariable() {
-        let suite = "MereRunModelPathsTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
-
         let resolution = MereRunModelPaths.modelStoreResolution(
             environment: [legacyModelsDirEnvironmentKey: "/Volumes/legacy-models"],
-            defaults: defaults
+            defaults: makeDefaults()
         )
 
         XCTAssertEqual(resolution.source, .default)
@@ -188,6 +185,14 @@ final class MereRunModelPathsTests: XCTestCase {
             resolved.standardizedFileURL,
             activeRoot.appendingPathComponent(modelId, isDirectory: true).standardizedFileURL
         )
+    }
+
+    /// Defaults holding `values` only in this process's registration domain, which is never
+    /// written to disk. A throwaway suite leaves an empty plist in ~/Library/Preferences even
+    /// after its persistent domain is removed. tearDown puts the registration domain back.
+    private func makeDefaults(_ values: [String: Any] = [:]) -> UserDefaults {
+        UserDefaults.standard.register(defaults: values)
+        return UserDefaults(suiteName: "MereRunModelPathsTests")!
     }
 
     private func makeTemporaryDirectory(named prefix: String) throws -> URL {

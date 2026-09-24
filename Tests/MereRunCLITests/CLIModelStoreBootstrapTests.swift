@@ -5,12 +5,13 @@ import MereRunCore
 @testable import MereRunCLI
 
 final class CLIModelStoreBootstrapTests: XCTestCase {
-    private var defaultsSuites: [String] = []
+    private var registrationDomain: [String: Any] = [:]
     private let legacyModelsDirEnvironmentKey = ["ZE", "RO", "MODELS", "DIR"].joined(separator: "_")
     private var originalModelsDirEnvironmentValue: String?
 
     override func setUp() {
         super.setUp()
+        registrationDomain = UserDefaults.standard.volatileDomain(forName: UserDefaults.registrationDomain)
         originalModelsDirEnvironmentValue = ProcessInfo.processInfo.environment[
             MereRunModelPaths.modelsDirEnvironmentKey
         ]
@@ -27,10 +28,7 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
         } else {
             unsetenv(MereRunModelPaths.modelsDirEnvironmentKey)
         }
-        for suite in defaultsSuites {
-            UserDefaults.standard.removePersistentDomain(forName: suite)
-        }
-        defaultsSuites.removeAll()
+        UserDefaults.standard.setVolatileDomain(registrationDomain, forName: UserDefaults.registrationDomain)
         super.tearDown()
     }
 
@@ -61,8 +59,7 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
     }
 
     func testResolvedOverridePathUsesPersistedPathWhenNoFlagOrEnvironment() {
-        let defaults = makeDefaults()
-        defaults.set("/persisted/models", forKey: MereRunModelPaths.modelStorageActivePathDefaultsKey)
+        let defaults = makeDefaults([MereRunModelPaths.modelStorageActivePathDefaultsKey: "/persisted/models"])
 
         let path = CLIModelStoreBootstrap.resolvedOverridePath(
             arguments: ["mere.run", "model", "list"],
@@ -74,8 +71,7 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
     }
 
     func testBootstrapIncludesRegisteredLocationsForPersistedPrimaryStore() {
-        let defaults = makeDefaults()
-        defaults.set("/persisted/models", forKey: MereRunModelPaths.modelStorageActivePathDefaultsKey)
+        let defaults = makeDefaults([MereRunModelPaths.modelStorageActivePathDefaultsKey: "/persisted/models"])
 
         CLIModelStoreBootstrap.bootstrap(
             arguments: ["mere.run", "model", "list"],
@@ -134,11 +130,11 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
         XCTAssertEqual(MereRunCLI.configuration.version, MereRunCLIVersion.current)
     }
 
-    private func makeDefaults() -> UserDefaults {
-        let suite = "CLIModelStoreBootstrapTests.\(UUID().uuidString)"
-        defaultsSuites.append(suite)
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
+    /// Defaults holding `values` only in this process's registration domain, which is never
+    /// written to disk. A throwaway suite leaves an empty plist in ~/Library/Preferences even
+    /// after its persistent domain is removed. tearDown puts the registration domain back.
+    private func makeDefaults(_ values: [String: Any] = [:]) -> UserDefaults {
+        UserDefaults.standard.register(defaults: values)
+        return UserDefaults(suiteName: "CLIModelStoreBootstrapTests")!
     }
 }
