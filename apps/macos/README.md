@@ -607,11 +607,11 @@ pictures and clips, `~/Music/mere.run/<Domain>` for audio,
 The suffix is derived, not random, so the path the Command view previews is the
 path the run writes. Settings ▸ General takes one root that overrides all three
 (`mererun.app.outputRoot`). The specialist pages — Vision, 3D, Sound, Voice,
-Music ▸ Analyze, Transcribe, and Realtime, Train (an adapter is filed under the
-domain it trains for), Video ▸ Subjects, Text ▸ Decisions, the Image utilities
-(validation and run plans under Image; embeddings and anonymization under
-Text), and the Voice recorder — propose their destinations from the same rule
-(`StudioOutputLocation.specialistDirectory` and `specialistFile`):
+Music ▸ Analyze, Transcribe, and Realtime, Video ▸ Subjects, Text ▸ Decisions,
+the Image utilities (validation and run plans under Image; embeddings and
+anonymization under Text), and the Voice recorder — propose their destinations
+from the same rule (`StudioOutputLocation.specialistDirectory` and
+`specialistFile`):
 `<Domain>/<page>-<timestamp>` under the same roots, so a run started from a page
 and one started from the Command Console file side by side. A specialist or
 Command view run is prepared the same way a prompt run is
@@ -649,7 +649,20 @@ multi-reference editing, structured prompts, LoRA catalog IDs or local adapters,
 Krea tuning, and preflight. Image ▸ Train adds dataset previews, preflight,
 launch and resume, loss metrics, samples, checkpoints, and run comparison for
 Krea 2 and FLUX.2 Klein; Klein's per-target ranks are rows of module suffix and
-rank rather than a typed `suffix=rank` list. Image ▸ Datasets renders validation
+rank rather than a typed `suffix=rank` list. The three Train pages are Project
+surfaces over a task draft (`StudioKit/StudioTrainingRun.swift`,
+`StudioUI/StudioTrainingView.swift`): the dataset folder and an optional resume
+checkpoint are attachment wells, the base model is the shared model picker over
+the trainer's inventory category, the template's options sit in the sections
+the page always had (numbers the contract gives no range are typed), and the
+adapter's destination is routed rather than typed — named after the dataset and
+filed under the domain it trains for, with events, samples, and checkpoints
+beside it. A chosen recipe decides the options it governs (`--width`, `--model`,
+`--rank`, and the rest are left off the command line unless typed), and a Klein
+launch sets a checkpoint and a preview every 250 steps when neither was chosen.
+Runs go through the task runner, so Stop, the Library row, and the root's
+Command view share the draft; the pages' saved drafts import once.
+Image ▸ Datasets renders validation
 artifacts, candidate dataset diagnostics, and the run plan as a report
 (`StudioKit/StudioRunPlanReport.swift`, `StudioUI/StudioRunPlanReportView.swift`):
 a preflight's steps, resolution, batch, rank, learning rate, checkpoint and
@@ -701,7 +714,9 @@ matching `.txt` captions (or drop them in), caption each clip, add lyrics where
 they matter, play any clip, and see the trainer's own checks in the page's words.
 Start training writes `<adapter>.dataset.jsonl` beside the adapter, one record
 per line the way `music train-adapter --dataset` reads it; manifests made
-elsewhere import, and the clip list exports. The resident ACE-Step server's
+elsewhere import, and the clip list exports. The clip list is the task draft's
+`--dataset` editor, and ACE-Step's checkpoint root (a folder chooser), decoder,
+VAE, and text-encoder folders sit under the model picker. The resident ACE-Step server's
 health and lifecycle live under Server ▸ Music server.
 
 **Sound** ▸ Generate and Video Foley produce effects, with Woosh renoise as the
@@ -726,8 +741,10 @@ duplicated under Vision.
 
 **Chat** covers native and MLX chat and code with typed text/JSON response
 format, reasoning policy, context and KV controls, LoRA application, tool
-permissions, and preflight. Chat ▸ Train hosts the text trainer rather than a
-generic form. Laguna XS and Inkling-Small are explicit model families; Inkling
+permissions, and preflight. Chat ▸ Train hosts the text trainer over its task
+draft: the JSONL dataset, evaluation prompts, and a resume checkpoint are
+attachment wells, the base model comes from the text-chat inventory, and a
+local model path sits under it. Laguna XS and Inkling-Small are explicit model families; Inkling
 reasoning effort is available in chat and training, and omitted target modules
 preserve the runtime's full attention, MLP, expert, shared-outer, and
 unembedding training defaults.
