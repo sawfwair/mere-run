@@ -1402,6 +1402,76 @@ final class StudioSnapshotTests: XCTestCase {
                             appearance: .light, name: "task-workspace-enhance-inspector-light", settle: 1.5)
     }
 
+    /// 3D ▸ From image on the shared task workspace: the feed with a finished TripoSR run (its
+    /// mesh through Quick Look and the manifest's counts under the tile), the well holding the
+    /// picture, and the Engine chip, light and dark at 1440×820 and at a narrower width; then the
+    /// inspector on TRELLIS.2 with its remesh controls, and on InstantMesh with four views and
+    /// cameras one short, so the ordered-view rows, the camera cards, and the CLI's check show.
+    func testThreeDWorkspaceSnapshots() throws {
+        let workspace = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses(installing: [
+                (id: "image-3d-triposr", category: "image", title: "TripoSR"),
+                (id: "image-3d-trellis2-4b", category: "image", title: "TRELLIS.2 4B"),
+                (id: "image-3d-instantmesh-base", category: "image", title: "InstantMesh"),
+            ]))
+        )
+        defer { workspace.tearDown() }
+        // The camera editor saves its document as a draft file while cameras are on; keep that
+        // in the fixture's folder rather than the user's Application Support.
+        let draftRoot = StudioCameraDocuments.draftRoot
+        StudioCameraDocuments.draftRoot = workspace.root
+        defer { StudioCameraDocuments.draftRoot = draftRoot }
+        let views = try workspace.seedMeshRun()
+        let task = StudioTask.threeDFromImage
+        let sessions = workspace.controller.taskSessions
+        let runner = StudioTaskRunner(controller: workspace.controller, library: workspace.library)
+
+        func render(name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel(destination: task.destination)
+            let view = StudioTaskWorkspace(task: task, models: workspace.controller.modelStore)
+                .environmentObject(workspace.controller)
+                .environmentObject(workspace.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: size.width, height: size.height)
+            try workspace.write(view, size: size, appearance: appearance, name: name, settle: 3)
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(name: "three-d-workspace-\(appearance.rawValue)", appearance: appearance, size: CGSize(width: 1_440, height: 820))
+        }
+        try render(name: "three-d-workspace-narrow-light", appearance: .light, size: CGSize(width: 1_140, height: 820))
+
+        func inspector(_ draft: StudioTaskDraft, height: CGFloat) -> some View {
+            StudioTaskInspector(
+                task: task, draft: .constant(draft), modelInventory: workspace.controller.modelStore.rows,
+                readiness: .ready, onShowModels: {}, onClose: {}
+            )
+            .environmentObject(workspace.controller)
+            .environmentObject(workspace.library)
+            .environment(\.studioTaskSessions, sessions)
+            .environment(\.studioTaskScope, task.rawValue)
+            .frame(width: StudioLayoutPolicy.inspectorWidth, height: height)
+        }
+
+        var trellis = StudioTaskDraft(templateID: .imageReconstruct3DTrellis2)
+        trellis.setArgument(0, workspace.mugURL.path)
+        try workspace.write(inspector(trellis, height: 820), size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                            appearance: .light, name: "three-d-inspector-trellis-light", settle: 1.5)
+
+        var instantMesh = StudioTaskDraft(templateID: .imageReconstruct3DMultiview)
+        StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0].attach(views, to: &instantMesh)
+        sessions.set(StudioInstantMeshCameraDocument(cameras: (0..<3).map { _ in .example }), for: task.rawValue + ".3DCreation.cameras")
+        sessions.set(true, for: task.rawValue + ".3DCreation.suppliesCameras")
+        for appearance in StudioSnapshotAppearance.allCases {
+            try workspace.write(inspector(instantMesh, height: 1_400), size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 1_400),
+                                appearance: appearance, name: "three-d-inspector-instantmesh-\(appearance.rawValue)", settle: 1.5)
+        }
+    }
+
     /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
     /// with its own state, the outputs with Reveal, and the raw report folded away. `executor
     /// list`, `run list`, and `run inspect` are answered by a scripted runner; no CLI runs.
@@ -2825,6 +2895,97 @@ private final class SnapshotFixture {
         controller.taskSessions.set(Optional(row.id), for: StudioTask.audioEnhance.rawValue + ".requestID")
     }
 
+    /// A finished 3D ▸ TripoSR run of the mug: its output folder holding a small OBJ Quick Look
+    /// can draw and the two manifests the CLI writes beside a mesh, with the task draft pointed
+    /// at the picture on the TripoSR engine. Returns four view pictures for an InstantMesh draft.
+    func seedMeshRun() throws -> [URL] {
+        guard let template = CommandCatalog.template(id: .imageReconstruct3D) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let folder = root.appendingPathComponent("3D/mug", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let mesh = folder.appendingPathComponent("mug.obj", isDirectory: false)
+        try Self.cubeOBJ.write(to: mesh, atomically: true, encoding: .utf8)
+        let manifest = folder.appendingPathComponent("mug-manifest.json", isDirectory: false)
+        try """
+        {"schemaVersion": 1, "inputPaths": ["\(mugURL.path)"], "outputDirectory": "\(folder.path)",
+         "coordinateSystem": "x-right-y-up-z-forward", "units": "normalized-object-space", "inferredUnseenGeometry": true,
+         "vertexCount": 12480, "triangleCount": 24956, "bounds": {"min": [-0.5, -0.5, -0.5], "max": [0.5, 0.5, 0.5]}, "artifacts": []}
+        """.write(to: manifest, atomically: true, encoding: .utf8)
+        let runManifest = folder.appendingPathComponent("mug-run-manifest.json", isDirectory: false)
+        try """
+        {"schemaVersion": 1, "outputDirectory": "\(folder.path)",
+         "mesh": {"coordinateSystem": "x-right-y-up-z-forward", "units": "normalized-object-space", "inferredUnseenGeometry": true,
+                  "vertexCount": 12480, "triangleCount": 24956, "bounds": {"min": [-0.5, -0.5, -0.5], "max": [0.5, 0.5, 0.5]}},
+         "artifacts": []}
+        """.write(to: runManifest, atomically: true, encoding: .utf8)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = mugURL.path
+        draft.outputPath = folder.path
+        let startedAt = Self.mockupTime(hour: 10, minute: 12)
+        let request = StudioRunRequest(mode: .createImage, templateID: .imageReconstruct3D, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: "",
+            inputURL: mugURL,
+            outputURL: mesh,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(41),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run image reconstruct-3d mug.png --output 3D/mug --resolution 256",
+            outputText: nil,
+            templateID: .imageReconstruct3D,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft),
+            artifactURLs: [mesh, manifest, runManifest],
+            artifactRoles: [
+                manifest.standardizedFileURL.path: "mesh-manifest-json",
+                runManifest.standardizedFileURL.path: "triposr-run-manifest-json",
+            ]
+        )
+        row.inputIdentity = StudioInputIdentity.read(mugURL)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .imageReconstruct3D)
+        taskDraft.setArgument(0, mugURL.path)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .threeDFromImage)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.threeDFromImage.rawValue + ".requestID")
+
+        return try ["front", "right", "back", "left"].map { name in
+            let url = root.appendingPathComponent("\(name).png", isDirectory: false)
+            try Self.writeMugPNG(to: url, side: 256)
+            return url
+        }
+    }
+
+    /// A unit cube as Wavefront OBJ: eight corners, twelve triangles.
+    private static let cubeOBJ = """
+    o mug
+    v -0.5 -0.5 -0.5
+    v 0.5 -0.5 -0.5
+    v 0.5 0.5 -0.5
+    v -0.5 0.5 -0.5
+    v -0.5 -0.5 0.5
+    v 0.5 -0.5 0.5
+    v 0.5 0.5 0.5
+    v -0.5 0.5 0.5
+    f 1 3 2
+    f 1 4 3
+    f 5 6 7
+    f 5 7 8
+    f 1 2 6
+    f 1 6 5
+    f 2 3 7
+    f 2 7 6
+    f 3 4 8
+    f 3 8 7
+    f 4 1 5
+    f 4 5 8
+
+    """
+
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
     /// as the row's output text the way the Library keeps stdout.
     func seedMusicAnalysisRun() throws {
@@ -3275,6 +3436,31 @@ private enum ModelsInventoryScript {
             .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: modelList), exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
             version,
+        ]
+    }
+
+    /// `readinessResponses` with more models installed and capable, so a task whose default model
+    /// is not in `modelList` renders its result rather than a readiness card.
+    static func readinessResponses(installing extraModels: [(id: String, category: String, title: String)]) -> [SnapshotProcessRunner.Response] {
+        let list = modelList.replacingOccurrences(
+            of: "image-zimage-nano          image        installed  2.1 GB",
+            with: (["image-zimage-nano          image        installed  2.1 GB"]
+                + extraModels.map { "\($0.id)  \($0.category)  installed  1.8 GB" })
+                .joined(separator: "\n")
+        )
+        let extraCapabilities = extraModels.map { model in
+            """
+            ,{"id": "\(model.id)", "title": "\(model.title)", "summary": "", \
+            "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, \
+            "reasons": [], "estimatedDownloadBytes": 1800000000, \
+            "sourceRepository": "mere-run/\(model.id)", "publisher": "mere.run"}
+            """
+        }.joined(separator: "\n")
+        let capabilityJSON = capabilities.replacingOccurrences(of: "\n]}", with: "\n\(extraCapabilities)\n]}")
+        return [
+            .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
+            .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: list), exitCode: 0),
+            .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
         ]
     }
 

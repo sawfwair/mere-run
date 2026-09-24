@@ -737,8 +737,6 @@ private struct StudioWorkspaceView: View {
             )
         case .voiceClone, .voiceVoices:
             StudioVoiceView(task: voiceTaskBinding, tasks: [.synthesize, .profiles], initialDraft: draft)
-        case .threeDFromImage:
-            Studio3DCreationView()
         case .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive:
             StudioVisionLabView(task: visionLabBinding)
         case .audioWhoSpoke, .audioLive:
