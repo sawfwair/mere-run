@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Show a benchmark's or quality gate's printed report in Studio's Models
+  pages and Train dashboard as printed, in a fixed-width font, instead of
+  reading its `*`, `_`, and `|` as Markdown.
 - Fix Studio's Faces ▸ Embed and Compare running on the largest face while the
   face picker showed face 1: a fresh draft names face 0 as the Faces page
   did. 3D ▸ InstantMesh starts at the 3D page's grid resolution of 256 again,

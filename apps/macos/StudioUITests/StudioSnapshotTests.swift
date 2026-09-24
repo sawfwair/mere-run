@@ -1949,6 +1949,33 @@ final class StudioSnapshotTests: XCTestCase {
     /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
     /// with its own state, the outputs with Reveal, and the raw report folded away. `executor
     /// list`, `run list`, and `run inspect` are answered by a scripted runner; no CLI runs.
+    /// A Project or Manage page's run whose result is what the CLI printed — a benchmark table —
+    /// shown as printed: the `|` columns, `*fused*`, and `__baseline__` stay characters rather
+    /// than turning into Markdown emphasis, light and dark.
+    func testRunDetailPrintedReportSnapshots() throws {
+        let report = """
+        model                     | prefill tok/s | decode tok/s
+        --------------------------|---------------|-------------
+        *fused* text-chat-gemma4  |        1841.2 |         61.2
+        __baseline__ pipeline     |         912.7 |          9.8
+        """
+        let item = StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: "", inputURL: nil, outputURL: nil,
+            createdAt: Self.boardTime(hour: 10, minute: 0), updatedAt: Self.boardTime(hour: 10, minute: 2),
+            status: .completed, exitCode: 0, commandPreview: "mere.run model benchmark text-chat-gemma4",
+            outputText: report, templateID: .modelBenchmark, artifactURLs: []
+        )
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioRunDetailView(item: item, preferredKinds: [.text])
+                .environmentObject(fixture.controller)
+                .padding(16)
+                .frame(width: 640, height: 280)
+                .background(MereRunTheme.background)
+            try fixture.write(view, size: CGSize(width: 640, height: 280), appearance: appearance,
+                              name: "run-detail-printed-report-\(appearance.rawValue)")
+        }
+    }
+
     func testRunsInspectionSnapshots() throws {
         let runs = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,
