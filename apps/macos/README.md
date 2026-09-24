@@ -117,8 +117,30 @@ draw them in StudioUI, one file each side:
 `StudioCommandRows.swift` and `StudioCommandView.swift`,
 `StudioConsoleDraft.swift` and `StudioConsoleView.swift`,
 `StudioFeedCards.swift` and `StudioFeedCanvas.swift`,
-`StudioLibraryPresentation.swift` and `StudioLibraryPanel.swift`. That is what
-makes a surface's rules testable without rendering it.
+`StudioLibraryPresentation.swift` and `StudioLibraryPanel.swift`,
+`StudioTaskSchema.swift` and `StudioTaskComposer.swift` / `StudioTaskInspector.swift`.
+That is what makes a surface's rules testable without rendering it.
+
+Every task declares a **surface archetype** (`StudioKit/StudioArchetypes.swift`:
+Generate, Converse, Analyze, Session, Project, Manage), with the words and glyph
+its empty surface shows (`StudioTaskPresentation`). Mode-less Generate and
+Analyze tasks are moving onto one **shared task workspace**
+(`StudioUI/StudioTaskWorkspace.swift`): the archetype's canvas over
+`StudioTaskComposer`, with `StudioTaskInspector` in the inspector column. Its
+draft is a `StudioTaskDraft` (`StudioKit/StudioTaskDraft.swift`): the chosen
+template plus the same per-flag `StudioConsoleDraft` the Command view edits, so
+the well, the chips, the inspector, the Command view, Library restoration, and
+the argv read one value. The well's slots, the chips, and the inspector sections
+come from the template's contract (`StudioKit/StudioTaskSchema.swift`); the
+destination is filled at submit time by
+`StudioOutputLocation.destination(for:)`; every run — the workspace's, the
+prompt controller's `runTask`, and the remaining pages' `StudioSpecialistRunner`
+shim — goes through `StudioKit/StudioTaskRunner.swift`. Bespoke result views
+live under `StudioUI/Renderers/` and register by `(view, document)` in
+`StudioResultRenderers`; the Session pages share their transport chrome from
+`StudioUI/StudioSessionControls.swift`. A task keeps its bespoke page until it
+is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the root then
+renders the workspace for it instead.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -209,9 +231,10 @@ appear on prompt tasks only). `StudioDestination` persists per window under
 `studio.destination`; `studio.mode` still records the last prompt mode so its
 draft and readiness survive a detour through a System task.
 
-The Library column appears on the prompt tasks (`StudioTask.isPromptTask`);
-every other task — Subjects, Realtime, Models, Train, the labs — takes the full
-content width even inside a Create domain. Chat and Code fill that column with
+The Library column appears on the prompt tasks and on tasks that have moved onto
+the shared task workspace (`StudioTask.showsPromptChrome`); every other task —
+Subjects, Realtime, Models, Train, the labs — takes the full content width even
+inside a Create domain. Chat and Code fill that column with
 their thread list instead (threads never file into the media Library). It is
 filtered to the current domain by default with an All segment — a row is filed
 under its command's domain (`CommandTemplateID.studioDomain`), so 3D meshes land

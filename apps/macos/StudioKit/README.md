@@ -14,6 +14,18 @@ selection memory, result focus, command overrides, and persistence. Keep session
 values. `CommandTemplate.validationMessage(for:execution:)` applies the same
 validation during preparation and final job admission.
 
+`StudioTaskRunner` is the one submission path for every run that is not a
+conversation turn: it names the destination
+(`StudioOutputLocation.destination(for:)`), applies Command edits, validates,
+records the Library row under the template's own mode, and remembers
+`"<task>.requestID"` for Stop. A task on the shared task workspace keeps its
+draft as a `StudioTaskDraft` under `"<task>.taskDraft"` (the template plus its
+`StudioConsoleDraft`), imported once from the page draft a legacy page kept
+(`StudioTaskDraftMigration`); `commandForm` returns that form directly, so the
+Command view and the workspace never disagree. `StudioArchetypes` declares each
+task's archetype and its `usesLegacyPage` gate; `StudioTaskSchema` reads the
+well slots, chips, and inspector sections from the template's contract.
+
 `MereRunController` owns CLI configuration and submission. `JobStore` owns jobs,
 queues, cancellation, and completion. `StudioLibraryStore` records history and
 artifacts independently of window lifetime. Historical replay uses recorded

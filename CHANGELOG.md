@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix a Library row started from Studio's Command Console or a Command view for
+  a command whose input is a positional file (`audio enhance`, `sfx ae encode`,
+  `vision depth`, the Earth commands): the row now records that file as its
+  input and is titled after the command, instead of showing the file path as
+  its prompt.
 - Fix Studio's Segment and Track drawing after a live click-through: a click
   inside a box with the Point or Negative tool now adds the point there (a box
   is grabbed only with the Box tool; points and handles always take the press),
