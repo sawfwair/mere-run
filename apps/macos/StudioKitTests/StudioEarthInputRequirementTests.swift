@@ -60,7 +60,7 @@ final class StudioEarthInputRequirementTests: XCTestCase {
     /// what the command will refuse the file for.
     func testTheChecklistReadsAnAttachedBundle() throws {
         let tessera = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoTessera))
-        let complete = try XCTUnwrap(StudioSafetensorsHeader.decode(SafetensorsFixture.data(tensors: Self.tesseraTensors)))
+        let complete = try XCTUnwrap(StudioSafetensorsHeader.decode(TensorFixtures.safetensors(tensors: Self.tesseraTensors)))
         let satisfied = tessera.check(complete)
         XCTAssertTrue(satisfied.isSatisfied)
         XCTAssertNil(satisfied.message)
@@ -70,7 +70,7 @@ final class StudioEarthInputRequirementTests: XCTestCase {
         XCTAssertEqual(satisfied.oneOf[0].detail, "F32 [1, 4, 2] · F32 [1, 4]")
 
         // Half a pair is no pair: the command throws `incompleteInputPair` for it.
-        let halfPair = try XCTUnwrap(StudioSafetensorsHeader.decode(SafetensorsFixture.data(tensors: [
+        let halfPair = try XCTUnwrap(StudioSafetensorsHeader.decode(TensorFixtures.safetensors(tensors: [
             .float32("S2", shape: [1, 4, 10]), .float32("S2_DOY", shape: [1, 4]), .float32("S1_DESC", shape: [1, 4, 2]),
         ])))
         let unpaired = tessera.check(halfPair)
@@ -81,7 +81,7 @@ final class StudioEarthInputRequirementTests: XCTestCase {
 
         // A complete ascending pair beside a lone descending tensor: the command still refuses
         // the bundle (`incompleteInputPair`), so the checklist must not call it ready.
-        let strayDescending = try XCTUnwrap(StudioSafetensorsHeader.decode(SafetensorsFixture.data(
+        let strayDescending = try XCTUnwrap(StudioSafetensorsHeader.decode(TensorFixtures.safetensors(
             tensors: Self.tesseraTensors + [.float32("S1_DESC", shape: [1, 4, 2])]
         )))
         let stray = tessera.check(strayDescending)
@@ -89,18 +89,18 @@ final class StudioEarthInputRequirementTests: XCTestCase {
         XCTAssertEqual(stray.oneOf.map(\.isPresent), [true, false])
         XCTAssertEqual(stray.oneOf.map(\.isIncomplete), [false, true])
         XCTAssertEqual(stray.message, "S1_DESC needs S1_DESC_DOY.")
-        let noOrbit = try XCTUnwrap(StudioSafetensorsHeader.decode(SafetensorsFixture.data(
+        let noOrbit = try XCTUnwrap(StudioSafetensorsHeader.decode(TensorFixtures.safetensors(
             tensors: Array(Self.tesseraTensors.prefix(2))
         )))
         XCTAssertEqual(tessera.check(noOrbit).message, "Needs S1_ASC + S1_ASC_DOY or S1_DESC + S1_DESC_DOY.")
 
         let flood = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoFlood))
-        let noDEM = try XCTUnwrap(StudioSafetensorsHeader.decode(SafetensorsFixture.data(tensors: [
+        let noDEM = try XCTUnwrap(StudioSafetensorsHeader.decode(TensorFixtures.safetensors(tensors: [
             .float32("S2L2A", shape: [1, 12, 4, 8, 8]), .float32("S1RTC", shape: [1, 2, 4, 8, 8]),
         ])))
         XCTAssertEqual(flood.check(noDEM).message, "Missing DEM.")
         XCTAssertEqual(flood.check(noDEM).required.map(\.isPresent), [true, true, false])
-        let empty = try XCTUnwrap(StudioSafetensorsHeader.decode(SafetensorsFixture.data(tensors: [.float32("logits", shape: [1])])))
+        let empty = try XCTUnwrap(StudioSafetensorsHeader.decode(TensorFixtures.safetensors(tensors: [.float32("logits", shape: [1])])))
         XCTAssertEqual(flood.check(empty).message, "Missing S2L2A, S1RTC, and DEM.")
         let olmo = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoOlmoEarth))
         XCTAssertEqual(olmo.check(empty).message, "Missing TIMESTAMPS. Needs S2L2A, S1RTC, or LANDSAT.")
@@ -110,23 +110,23 @@ final class StudioEarthInputRequirementTests: XCTestCase {
     /// tile bundle of any size is checked in a moment.
     func testTheHeaderIsReadWithoutTheTensors() throws {
         let url = root.appendingPathComponent("tile.safetensors")
-        try SafetensorsFixture.write(to: url, tensors: Self.tesseraTensors, metadata: ["source": "test"])
+        try TensorFixtures.write(to: url, tensors: Self.tesseraTensors, metadata: ["source": "test"])
         // Append junk after the tensors: a reader that swallowed the whole file would still
         // decode, but `byteCount` proves the header path reports the file's size, not its read.
         let handle = try FileHandle(forWritingTo: url)
         try handle.seekToEnd()
         try handle.write(contentsOf: Data(repeating: 0, count: 4_096))
         try handle.close()
-        let header = try XCTUnwrap(StudioSafetensorsHeader.loadHeader(from: url))
+        let header = try XCTUnwrap(StudioSafetensorsHeader.load(from: url))
         XCTAssertEqual(header.tensors.map(\.name), ["S2", "S2_DOY", "S1_ASC", "S1_ASC_DOY"], "written order, by offset")
         XCTAssertEqual(header.metadata, ["source": "test"])
         XCTAssertEqual(header.byteCount, try XCTUnwrap(FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int))
-        XCTAssertNil(StudioSafetensorsHeader.loadHeader(from: root.appendingPathComponent("missing.safetensors")))
+        XCTAssertNil(StudioSafetensorsHeader.load(from: root.appendingPathComponent("missing.safetensors")))
         let text = root.appendingPathComponent("notes.txt")
         try "not a tensor file at all, just words".write(to: text, atomically: true, encoding: .utf8)
-        XCTAssertNil(StudioSafetensorsHeader.loadHeader(from: text))
-        XCTAssertNil(StudioTensorHeader.loadHeader(from: text))
-        guard case .safetensors(let viaTensorHeader)? = StudioTensorHeader.loadHeader(from: url) else {
+        XCTAssertNil(StudioSafetensorsHeader.load(from: text))
+        XCTAssertNil(StudioTensorHeader.load(from: text))
+        guard case .safetensors(let viaTensorHeader)? = StudioTensorHeader.load(from: url) else {
             return XCTFail("The tensor header reader should read a safetensors file's front")
         }
         XCTAssertEqual(viaTensorHeader, header)
@@ -140,7 +140,7 @@ final class StudioEarthInputRequirementTests: XCTestCase {
         bytes.append(Data(dictionary.utf8))
         bytes.append(Data(repeating: 0, count: 1 * 64 * 1_875 * 4))
         try bytes.write(to: npy)
-        guard case .npy(let metadata)? = StudioTensorHeader.loadHeader(from: npy) else {
+        guard case .npy(let metadata)? = StudioTensorHeader.load(from: npy) else {
             return XCTFail("The tensor header reader should read an .npy file's front")
         }
         XCTAssertEqual(metadata.descriptor, "<f4")
@@ -305,7 +305,7 @@ final class StudioEarthInputRequirementTests: XCTestCase {
         XCTAssertEqual(named.request()?.mode, .readImage, "Library rows keep the page's attribution")
     }
 
-    static let tesseraTensors: [SafetensorsFixture.Tensor] = [
+    static let tesseraTensors: [TensorFixtures.Tensor] = [
         .float32("S2", shape: [1, 4, 10], value: 1_200),
         .float32("S2_DOY", shape: [1, 4], value: 120),
         .float32("S1_ASC", shape: [1, 4, 2], value: -12),

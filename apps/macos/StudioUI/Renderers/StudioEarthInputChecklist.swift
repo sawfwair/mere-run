@@ -193,7 +193,7 @@ struct StudioEarthInputChecklist: View {
             return
         }
         let loaded = await Task.detached(priority: .userInitiated) {
-            StudioSafetensorsHeader.loadHeader(from: url)
+            StudioSafetensorsHeader.load(from: url)
         }.value
         guard !Task.isCancelled else { return }
         header = loaded.map(Loaded.header) ?? .unreadable

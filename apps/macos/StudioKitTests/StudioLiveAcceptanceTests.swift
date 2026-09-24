@@ -1556,12 +1556,12 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     func test28TesseraEmbedsATinyObservationBundleFromTheTaskDraft() throws {
         try requireModels(["vision-embed-tessera-v2-large"])
         let flow = "28-earth-tessera"
-        let bundle = try SafetensorsFixture.write(
+        let bundle = try TensorFixtures.write(
             to: live.appendingPathComponent(flow, isDirectory: true).appendingPathComponent("valley-2024.safetensors"),
             tensors: Self.tesseraObservations
         )
         let requirement = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoTessera))
-        let header = try XCTUnwrap(StudioSafetensorsHeader.loadHeader(from: bundle))
+        let header = try XCTUnwrap(StudioSafetensorsHeader.load(from: bundle))
         let check = requirement.check(header)
         XCTAssertTrue(check.isSatisfied, check.message ?? "")
 
@@ -1595,7 +1595,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     func test29FloodRefusesABundleMissingDEMAsTheChecklistWarned() throws {
         try requireModels(["vision-flood-terramind-base"])
         let flow = "29-earth-flood-missing-dem"
-        let bundle = try SafetensorsFixture.write(
+        let bundle = try TensorFixtures.write(
             to: live.appendingPathComponent(flow, isDirectory: true).appendingPathComponent("delta-tiles.safetensors"),
             tensors: [
                 .float32("S2L2A", shape: [1, 12, 4, 256, 256], value: 0.2),
@@ -1603,7 +1603,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             ]
         )
         let requirement = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoFlood))
-        let check = requirement.check(try XCTUnwrap(StudioSafetensorsHeader.loadHeader(from: bundle)))
+        let check = requirement.check(try XCTUnwrap(StudioSafetensorsHeader.load(from: bundle)))
         XCTAssertFalse(check.isSatisfied)
         XCTAssertEqual(check.message, "Missing DEM.")
         XCTAssertEqual(check.required.map(\.isPresent), [true, true, false])
@@ -1628,7 +1628,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     func test30OlmoEarthPreflightAcceptsATinyMultisensorBundle() throws {
         try requireModels(["vision-embed-olmoearth-v12-base"])
         let flow = "30-earth-olmoearth-preflight"
-        let bundle = try SafetensorsFixture.write(
+        let bundle = try TensorFixtures.write(
             to: live.appendingPathComponent(flow, isDirectory: true).appendingPathComponent("field-tile.safetensors"),
             tensors: [
                 .int32("TIMESTAMPS", shape: [1, 1, 3], values: [15, 5, 2_024]),
@@ -1636,7 +1636,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             ]
         )
         let requirement = try XCTUnwrap(StudioEarthInputRequirement.requirement(for: .geoOlmoEarth))
-        let check = requirement.check(try XCTUnwrap(StudioSafetensorsHeader.loadHeader(from: bundle)))
+        let check = requirement.check(try XCTUnwrap(StudioSafetensorsHeader.load(from: bundle)))
         XCTAssertTrue(check.isSatisfied, check.message ?? "")
         XCTAssertEqual(check.oneOf.map(\.isPresent), [true, false, false])
 
@@ -1660,7 +1660,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
     /// Four Sentinel-2 observations (ten bands, day of year) with one ascending Sentinel-1 pair,
     /// in the raw units TESSERA's preprocessor normalizes.
-    private static let tesseraObservations: [SafetensorsFixture.Tensor] = [
+    private static let tesseraObservations: [TensorFixtures.Tensor] = [
         .float32("S2", shape: [1, 4, 10], value: 1_200),
         .float32("S2_DOY", shape: [1, 4], value: 120),
         .float32("S1_ASC", shape: [1, 4, 2], value: -12),

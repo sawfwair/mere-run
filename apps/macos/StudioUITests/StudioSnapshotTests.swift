@@ -3920,14 +3920,14 @@ private final class SnapshotFixture {
             throw StudioSnapshotError.noContentView
         }
         let bundle = root.appendingPathComponent("valley-2024.safetensors", isDirectory: false)
-        try SafetensorsFixture.write(to: bundle, tensors: [
+        try TensorFixtures.write(to: bundle, tensors: [
             .float32("S2", shape: [1, 4, 10], value: 1_200),
             .float32("S2_DOY", shape: [1, 4], value: 120),
             .float32("S1_ASC", shape: [1, 4, 2], value: -12),
             .float32("S1_ASC_DOY", shape: [1, 4], value: 118),
         ])
         let embedding = root.appendingPathComponent("Earth/valley-2024-a1b2c3.safetensors", isDirectory: false)
-        try SafetensorsFixture.write(
+        try TensorFixtures.write(
             to: embedding,
             tensors: [.float32("embeddings", shape: [1, 64], value: 0.031)],
             metadata: [
@@ -3985,7 +3985,7 @@ private final class SnapshotFixture {
         controller.taskSessions.set(Optional(row.id), for: StudioTask.earthTessera.rawValue + ".requestID")
 
         let incomplete = root.appendingPathComponent("delta-tiles.safetensors", isDirectory: false)
-        try SafetensorsFixture.write(to: incomplete, tensors: [
+        try TensorFixtures.write(to: incomplete, tensors: [
             .float32("S2L2A", shape: [1, 12, 4, 8, 8], value: 0.2),
             .float32("S1RTC", shape: [1, 2, 4, 8, 8], value: -0.4),
         ])
