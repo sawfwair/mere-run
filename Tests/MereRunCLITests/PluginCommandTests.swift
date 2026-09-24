@@ -1,3 +1,4 @@
+import ArgumentParser
 import Foundation
 import XCTest
 @testable import MereRunCLI
@@ -94,13 +95,113 @@ final class PluginCommandTests: XCTestCase {
             calls.append((executable, arguments))
         }
 
-        try PluginSetupCommand.run(install: install, entrypoint: "mere-computer-use", execute: execute)
+        let plugin = PluginCatalogEntry(
+            id: "mere-computer-use", name: "Computer Use", description: "", repo: "", package: "mere-computer-use",
+            subdirectory: "", entrypoint: "mere-computer-use", capabilities: [], channels: ["main": install]
+        )
+
+        try PluginSetupCommand.run(plugin: plugin, install: install, managed: false, execute: execute)
         XCTAssertTrue(calls.isEmpty)
         install.setup = true
-        try PluginSetupCommand.run(install: install, entrypoint: "mere-computer-use", execute: execute)
+        try PluginSetupCommand.run(plugin: plugin, install: install, managed: false, execute: execute)
         XCTAssertEqual(calls.count, 1)
         XCTAssertEqual(calls[0].0, "mere-computer-use")
         XCTAssertEqual(calls[0].1, ["setup", "--yes"])
+    }
+
+    func testSignedBundleInstallRunsFixedSetupAfterVerifiedInstall() throws {
+        let catalogURL = try writeCatalog(setupCatalogJSON(bundle: true))
+        let command = try PluginInstall.parse(["mere-computer-use", "--catalog-url", catalogURL.path, "--yes"])
+        var events: [String] = []
+        var actions = PluginInstallActions()
+        actions.installBundle = { plugin, source, archive, local in
+            XCTAssertEqual(plugin.id, "mere-computer-use")
+            XCTAssertEqual(source, "https://example.com/mere-computer-use/release.json")
+            XCTAssertNil(archive)
+            XCTAssertFalse(local)
+            events.append("bundle")
+        }
+        actions.installSource = { _, _ in
+            XCTFail("A signed bundle install must not run the source installer")
+            throw ValidationError("unexpected")
+        }
+        actions.registerGraphProvider = { _ in XCTFail("Managed bundles are discovered without registration") }
+        actions.execute = { executable, arguments in events.append("\(executable) \(arguments.joined(separator: " "))") }
+
+        try command.run(actions: actions)
+
+        XCTAssertEqual(events, ["bundle", "mere-computer-use setup --yes"])
+    }
+
+    func testSignedBundleSetupFailureAdvisesManagedRetry() throws {
+        let catalogURL = try writeCatalog(setupCatalogJSON(bundle: true))
+        let command = try PluginInstall.parse(["mere-computer-use", "--catalog-url", catalogURL.path, "--yes"])
+        var actions = PluginInstallActions()
+        actions.installBundle = { _, _, _, _ in }
+        actions.execute = { _, _ in throw ValidationError("driver download failed") }
+
+        XCTAssertThrowsError(try command.run(actions: actions)) { error in
+            XCTAssertTrue(String(describing: error).contains(
+                "Installed mere-computer-use, but setup failed: driver download failed. "
+                    + "Retry with \(CLICommandDisplay.command("plugin run mere-computer-use -- setup --yes"))."
+            ))
+        }
+    }
+
+    func testFailedSourceSetupKeepsGraphProviderRegistered() throws {
+        let catalogURL = try writeCatalog(setupCatalogJSON(bundle: false))
+        let command = try PluginInstall.parse(["mere-computer-use", "--catalog-url", catalogURL.path, "--yes"])
+        let manifest = try JSONDecoder().decode(PluginManifest.self, from: Data("""
+        {"contractVersion":"mere.run/plugin.v1","name":"mere-computer-use","version":"0.2.0",
+         "graphProvider":{"contractVersion":"mere.run/plugin-graph-provider.v1"}}
+        """.utf8))
+        var events: [String] = []
+        var actions = PluginInstallActions()
+        actions.installBundle = { _, _, _, _ in XCTFail("A source install must not use the bundle installer") }
+        actions.installSource = { plugin, _ in
+            XCTAssertEqual(plugin.id, "mere-computer-use")
+            events.append("source")
+            return manifest
+        }
+        actions.registerGraphProvider = { events.append("register \($0)") }
+        actions.execute = { executable, arguments in
+            events.append("\(executable) \(arguments.joined(separator: " "))")
+            throw ValidationError("driver download failed")
+        }
+
+        XCTAssertThrowsError(try command.run(actions: actions)) { error in
+            XCTAssertTrue(String(describing: error).contains("Retry with mere-computer-use setup --yes."))
+        }
+        XCTAssertEqual(events, ["source", "register mere-computer-use", "mere-computer-use setup --yes"])
+    }
+
+    func testEveryDryRunAndInfoShowTheSetupStep() throws {
+        let catalogURL = try writeCatalog(setupCatalogJSON(bundle: true))
+        let catalog = try PluginCatalogClient.load(catalogURL: catalogURL.path)
+        let plugin = try catalog.requirePlugin("mere-computer-use")
+        let install = try plugin.install(channel: "main")
+        let command = try PluginInstall.parse(["mere-computer-use", "--catalog-url", catalogURL.path])
+        let managedSetup = CLICommandDisplay.command("plugin run mere-computer-use -- setup --yes")
+
+        let bundlePlan = command.dryRun(
+            plugin: plugin, install: install, bundle: "https://example.com/mere-computer-use/release.json", channel: "main"
+        )
+        XCTAssertTrue(bundlePlan.contains("  \(managedSetup)"))
+        XCTAssertEqual(bundlePlan.last, "  \(command.confirmationCommand(channel: "main"))")
+
+        let sourcePlan = command.dryRun(plugin: plugin, install: install, bundle: nil, channel: "main")
+        XCTAssertTrue(sourcePlan.contains("  \(PluginInstallCommand.render(install: install))"))
+        XCTAssertTrue(sourcePlan.contains("  mere-computer-use setup --yes"))
+
+        XCTAssertTrue(PluginInfo.summary(plugin: plugin, install: install, channel: "main")
+            .contains("  mere-computer-use setup --yes"))
+
+        var withoutSetup = install
+        withoutSetup.setup = nil
+        XCTAssertFalse(command.dryRun(plugin: plugin, install: withoutSetup, bundle: nil, channel: "main")
+            .contains { $0.contains("setup --yes") })
+        XCTAssertFalse(PluginInfo.summary(plugin: plugin, install: withoutSetup, channel: "main")
+            .contains { $0.contains("setup --yes") })
     }
 
     func testInstallConfirmationKeepsChannelAndForce() throws {
@@ -340,12 +441,12 @@ final class PluginCommandTests: XCTestCase {
         XCTAssertEqual(provider.requirement.nodeKinds, ["fixture.prepare"])
     }
 
-    private func writeCatalog() throws -> URL {
+    private func writeCatalog(_ json: String = catalogJSON) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("PluginCommandTests.\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let catalogURL = directory.appendingPathComponent("plugins.v1.json")
-        try catalogJSON.write(to: catalogURL, atomically: true, encoding: .utf8)
+        try json.write(to: catalogURL, atomically: true, encoding: .utf8)
         addTeardownBlock {
             try? FileManager.default.removeItem(at: directory)
         }
@@ -450,3 +551,34 @@ private let catalogJSON = """
   ]
 }
 """
+
+private func setupCatalogJSON(bundle: Bool) -> String {
+    let bundles = bundle ? #","bundles": {"macos-arm64": "https://example.com/mere-computer-use/release.json"}"# : ""
+    return """
+    {
+      "contractVersion": "mere.run/plugin-catalog.v1",
+      "updatedAt": "2026-09-24T00:00:00Z",
+      "defaultChannel": "main",
+      "plugins": [
+        {
+          "id": "mere-computer-use",
+          "name": "Computer Use",
+          "description": "Drive macOS apps through a local driver.",
+          "repo": "https://github.com/sawfwair/mere-run-plugins",
+          "package": "mere-computer-use",
+          "subdirectory": "packages/mere-computer-use",
+          "entrypoint": "mere-computer-use",
+          "capabilities": ["computer-use"],
+          "channels": {
+            "main": {
+              "manager": "pipx",
+              "ref": "main",
+              "spec": "git+https://github.com/sawfwair/mere-run-plugins.git@main#subdirectory=packages/mere-computer-use",
+              "setup": true\(bundles)
+            }
+          }
+        }
+      ]
+    }
+    """
+}

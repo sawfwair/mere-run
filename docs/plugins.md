@@ -53,11 +53,19 @@ plugin that declares a graph provider is registered only after that manifest
 passes validation.
 
 A catalog channel may declare `setup: true` for a plugin whose verified
-entrypoint installs a separate local prerequisite. The dry run shows both
-commands. With `--yes`, installation invokes the fixed `setup --yes` verb after
-manifest verification. The computer-use plugin uses this to install the signed,
-checksum-verified Cua Driver macOS app. macOS Accessibility and Screen Recording
-grants still require the user in System Settings.
+entrypoint installs a separate local prerequisite. `plugin info` and every
+`plugin install` dry run show the setup step next to the install step. With
+`--yes`, installation invokes the entrypoint's fixed `setup --yes` verb once the
+installed plugin is verified, whether it came from pipx or a signed bundle.
+For a signed bundle, the step runs through the managed entrypoint, shown as
+`mere.run plugin run ENTRYPOINT -- setup --yes`. A graph provider is registered
+before setup runs, so a failed setup leaves the plugin installed and
+registered; the error prints the setup command to retry. Setup does not run on
+`plugin rollback` or `plugin run`.
+
+The computer-use plugin uses this to install the signed, checksum-verified Cua
+Driver macOS app. macOS Accessibility and Screen Recording grants still require
+the user in System Settings.
 
 Use `--channel` to select a non-default catalog channel and `--force` only when
 you intentionally want to forward a forced reinstall to the package manager.
