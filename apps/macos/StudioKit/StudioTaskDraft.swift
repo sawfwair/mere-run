@@ -38,14 +38,18 @@ package struct StudioTaskDraft: Codable, Equatable {
 
     /// The switches a page turned on for every run of a template because the surface reads the
     /// command's machine output: `--json` where the result is printed as JSON and a renderer
-    /// decodes it. Applied to a fresh draft only; a parked or restored draft keeps what it ran
-    /// with.
+    /// decodes it, `--pretty` where the JSON view shows what was printed. Applied to a fresh
+    /// draft only; a parked or restored draft keeps what it ran with.
     package static func launcherDefaults(for templateID: CommandTemplateID) -> [String] {
         switch templateID {
         case .imageDatasetDiscover, .imageRunPlan,
              .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionPose, .visionFlow,
              .visionDepth, .visionDepthVideo, .visionGeometry, .visionGeometryMultiview, .visionTrackLive:
             return ["--json"]
+        case .textEmbed:
+            return ["--pretty"]
+        case .textAnonymize:
+            return ["--json", "--pretty"]
         default:
             return []
         }

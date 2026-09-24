@@ -70,9 +70,10 @@ package enum StudioTaskSchema {
 
     /// The attachment well's slots for a template: every positional the contract declares as a
     /// file (a repeatable one is an ordered list), then every file or directory option in the
-    /// Inputs group that is not an output, a model location, or a composite editor's flag.
-    /// Accepted types come from the template's own `inputKind` for the primary input and from a
-    /// per-flag table for the rest; a directory option takes a folder.
+    /// Inputs group — or required, since a command cannot run without the folder it scans
+    /// (`image dataset discover --root`) — that is not an output, a model location, or a
+    /// composite editor's flag. Accepted types come from the template's own `inputKind` for the
+    /// primary input and from a per-flag table for the rest; a directory option takes a folder.
     package static func slots(for templateID: CommandTemplateID) -> [StudioAttachmentSlot] {
         guard let capability = templateID.capability, let template = CommandCatalog.template(id: templateID) else {
             return []
@@ -102,7 +103,8 @@ package enum StudioTaskSchema {
         let excluded = outputFlags(for: capability).union(chosenOutputFlags).union(modelLocationFlags)
             .union(overrideFlags(for: templateID))
         for option in capability.options where [.file, .directory].contains(option.kind) {
-            guard StudioContractGroup(contractGroup: option.group) == .inputs, !excluded.contains(option.flag) else { continue }
+            guard StudioContractGroup(contractGroup: option.group) == .inputs || option.required,
+                  !excluded.contains(option.flag) else { continue }
             let types: [UTType] = option.kind == .directory ? [.folder] : acceptedTypes(forFlag: option.flag)
             slots.append(StudioAttachmentSlot(
                 id: option.flag,
@@ -309,6 +311,13 @@ package enum StudioTaskSchema {
         return nil
     }
 
+    /// Whether a repeatable prompt positional takes one text per line (`text embed`, where each
+    /// line is a document to compare) or the whole passage as one text (`text anonymize`, whose
+    /// page sent the paste as one argument so a paragraph keeps its lines together).
+    package static func promptSplitsLines(for templateID: CommandTemplateID) -> Bool {
+        templateID != .textAnonymize
+    }
+
     /// The model scope the chip, the inspector row, and the readiness card share for a draft.
     package static func modelScope(for draft: StudioTaskDraft) -> StudioModelScope {
         StudioModelScope(templateID: draft.templateID)
@@ -333,12 +342,15 @@ extension MereRunCapabilityOption {
 
 extension StudioTaskDraft {
     /// The free text the composer's prompt field edits: the prompt positional (or one line per
-    /// argument for a repeatable one) or the `--prompt` option; empty for a template with none.
+    /// argument for a repeatable one that takes texts) or the `--prompt` option; empty for a
+    /// template with none.
     package var prompt: String {
         get {
             switch capability.flatMap(StudioTaskSchema.promptField) {
             case .argument(let index, let repeatable):
-                return repeatable ? form.arguments.dropFirst(index).joined(separator: "\n") : argument(index)
+                return repeatable && StudioTaskSchema.promptSplitsLines(for: templateID)
+                    ? form.arguments.dropFirst(index).joined(separator: "\n")
+                    : argument(index)
             case .flag(let flag):
                 return text(flag)
             case nil:
@@ -348,7 +360,7 @@ extension StudioTaskDraft {
         set {
             switch capability.flatMap(StudioTaskSchema.promptField) {
             case .argument(let index, let repeatable):
-                if repeatable {
+                if repeatable, StudioTaskSchema.promptSplitsLines(for: templateID) {
                     let lines = newValue.components(separatedBy: .newlines).filter { !$0.isBlank }
                     form.arguments = Array(form.arguments.prefix(index)) + lines
                 } else {
