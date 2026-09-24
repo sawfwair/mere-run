@@ -52,7 +52,7 @@ Models ▸ Installed's Pull… catalog, and the Guide. Everything else that
 interrupts is an alert or a confirmation dialog — third-party model terms,
 removals, thread rename, Library delete, and a bad `mererun://` link.
 
-Fifty-three tasks fall into three shapes:
+Fifty-five tasks use six surface archetypes:
 
 - Twelve **prompt tasks** back a `StudioMode` and render the composer, a canvas,
   and the Library column: Image ▸ Generate, Video ▸ Generate, Music ▸ Compose,
@@ -62,15 +62,16 @@ Fifty-three tasks fall into three shapes:
   Audio ▸ Transcribe — are input-first, so their canvas is the **Analyze**
   surface rather than the generation feed. Chat and Code get the **Converse**
   surface and a thread list in place of the Library.
-- Four more — Audio ▸ Who Spoke, Enhance, Separate and Music ▸ Separate — are
-  mode-less Analyze tasks on the shared task workspace
-  (`StudioUI/StudioTaskWorkspace.swift`), whose draft is their command's
-  contract form.
-- The other thirty-seven tasks host a full-height view of their own: the project
-  boards (Video ▸ Subjects, the three Train tasks), the session pages
-  (Music ▸ Realtime, Audio ▸ Live, Vision ▸ Live, Server ▸ Serving), the
-  management pages (Models, Runs, Plugins, Voice ▸ Voices), and the analysis
-  forms that have not moved to the Analyze surface yet.
+- Twenty-four contract-backed Generate and Analyze tasks use the shared task
+  workspace (`StudioUI/StudioTaskWorkspace.swift`). They cover Sound's Foley,
+  Condition, Encode, Decode, and Score; Music's Analyze, Transcribe, and Separate;
+  Vision's Depth, Pose, Faces, Flow, and Geometry; Audio's Who Spoke, Enhance,
+  and Separate; Text's Embeddings and Anonymize; Image's Datasets; 3D's From
+  image; and all four Earth tasks.
+- Nineteen tasks use their own Session, Project, or Manage surface, except Text ▸
+  Decisions, which keeps its question editor and answer pane. These include the
+  three Train projects, Video ▸ Subjects, Music ▸ Realtime, Audio ▸ Live,
+  Vision ▸ Live, Voice ▸ Voices, Models, Server, Runs, and Plugins.
 
 Every task has an editable **Command** panel. A separate **Command Console**
 window provides the complete command catalog. Both are
@@ -128,7 +129,7 @@ That is what makes a surface's rules testable without rendering it.
 Every task declares a **surface archetype** (`StudioKit/StudioArchetypes.swift`:
 Generate, Converse, Analyze, Session, Project, Manage), with the words and glyph
 its empty surface shows (`StudioTaskPresentation`). Mode-less Generate and
-Analyze tasks are moving onto one **shared task workspace**
+Analyze tasks use one **shared task workspace**
 (`StudioUI/StudioTaskWorkspace.swift`): the archetype's canvas over
 `StudioTaskComposer`, with `StudioTaskInspector` in the inspector column. Its
 draft is a `StudioTaskDraft` (`StudioKit/StudioTaskDraft.swift`): the chosen
@@ -137,24 +138,24 @@ the well, the chips, the inspector, the Command view, Library restoration, and
 the argv read one value. The well's slots, the chips, and the inspector sections
 come from the template's contract (`StudioKit/StudioTaskSchema.swift`); the
 destination is filled at submit time by
-`StudioOutputLocation.destination(for:)`; every task run — the workspace's, the
-prompt controller's `runTask`, and the remaining pages' `StudioSpecialistRunner`
-shim — goes through `StudioKit/StudioTaskRunner.swift`. Bespoke result views
+`StudioOutputLocation.destination(for:)`; the prompt controller, shared
+workspace, and task-specific pages submit runs through
+`StudioKit/StudioTaskRunner.swift`. Bespoke result views
 live under `StudioUI/Renderers/` and register by `(view, document)` in
 `StudioResultRenderers` (a finished feed card asks the same registry for a
 rendering in place of, or under, its output grid); a task that can say more
 about its input file than its name registers an input view the same way in
 `StudioInputRenderers`; the Session pages share their transport chrome from
-`StudioUI/StudioSessionControls.swift`. A task keeps its bespoke page until it
-is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the root then
-renders the workspace for it instead. Sound ▸ Video Foley and Condition and 3D ▸
+`StudioUI/StudioSessionControls.swift`. Sound ▸ Video Foley and Condition and 3D ▸
 From image (Generate); Sound ▸ Encode, Decode, and Score, Music ▸ Analyze and
 Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, Audio ▸ Who Spoke,
 Enhance, and Separate, Text ▸ Embeddings and Anonymize, Image ▸ Datasets, and
 the four Earth tasks (Analyze) render on it; Vision ▸ Live and Audio ▸ Live
 (Session) and Voice ▸ Voices (Manage) render their own pages over the same task
 draft. The SFX Lab, Music Tools, Vision Lab, Voice, Audio Tools, Utility Lab,
-3D Creation, and Geo Lab pages they replaced are gone.
+3D Creation, and Geo Lab pages they replaced are gone. Text ▸ Decisions keeps
+its question editor; Video ▸ Subjects, Music ▸ Realtime, Models, Server, Runs,
+and Plugins keep task-specific surfaces.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -247,7 +248,7 @@ draft and readiness survive a detour through a System task.
 
 The Library column appears on the prompt tasks and on tasks that have moved onto
 the shared task workspace (`StudioTask.showsPromptChrome`); every other task —
-Subjects, Realtime, Models, Train, the labs — takes the full content width even
+Subjects, Realtime, Models, Train, and Decisions — takes the full content width even
 inside a Create domain. Chat and Code fill that column with
 their thread list instead (threads never file into the media Library). It is
 filtered to the current domain by default with an All segment — a row is filed
@@ -295,7 +296,7 @@ Run again and Edit command… stay for an exact rerun or a raw edit.
 
 Each task retains its full draft and selected run through `StudioTaskSessions`.
 Prompt modes preserve model, seed, dimensions, attachments, and sampling values;
-specialist forms retain their typed settings. The versioned JSON store excludes
+task-specific forms retain their typed settings. The versioned JSON store excludes
 launch credentials and preserves unreadable files. Prompt edits update task
 sessions synchronously. `studio.drafts` remains a migration source for earlier
 prompt-only scene state; importing it preserves unvisited tasks and gives full
@@ -448,8 +449,8 @@ protected text and spans, the candidate folders (each with "Train on it"), the
 run plan report, or the validation artifacts as the result panel's rows
 (`StudioUI/Renderers/`). The four Earth tasks reach it through the shared task
 workspace too, with a checklist of the tensors their bundle needs in the input
-column. Every input-first task now renders on this canvas; migrating one was a
-view change, not a design decision.
+column. Every contract-backed input-first task renders on this canvas. Text ▸
+Decisions keeps its question editor and answer pane.
 A view that is about the result rather than the input — Points, Vectors, Depth,
 Scene — takes the input column from a renderer registered in
 `StudioUI/Renderers/StudioResultRenderers.swift` (`canvasRendering`), the same
@@ -636,13 +637,10 @@ path the run writes. Settings ▸ General takes one root that overrides all thre
 Transcribe, the Vision and Audio tasks) has no path field:
 `StudioOutputLocation.destination(for:)` names its output after the input in
 the domain's folder when the run starts, with its sidecars beside it. The
-specialist pages — 3D, Music ▸ Realtime, Train (an adapter is filed under the
-domain it trains for), Video ▸ Subjects, Text ▸ Decisions, the Image utilities
-(validation and run plans under Image; embeddings and anonymization under
-Text), and the audio recorder — propose their destinations from the same rule
-(`StudioOutputLocation.specialistDirectory` and `specialistFile`):
-`<Domain>/<page>-<timestamp>` under the same roots, so a run started from a page
-and one started from the Command Console file side by side. A specialist or
+task-specific pages use the same domain roots: training adapters are filed under
+the domain they train for, Decisions uses `outputDirectoryURL`, and Music ▸
+Realtime, Video ▸ Subjects, and the audio recorder use timestamped file names
+from `specialistFile`. A task-specific or
 Command view run is prepared the same way a prompt run is
 (`StudioOutputLocation.preparing`): the folder is created, or the run moves to
 `App Outputs` and the shell's banner says why; a path a submitted run holds is
@@ -1004,11 +1002,11 @@ unexpectedly) from the job and the endpoint monitor together.
 **Server ▸ Vision server** and **Server ▸ Music server**
 (`StudioUI/StudioResidentServerViews.swift`, `StudioUI/StudioMusicServerView.swift`)
 run `vision serve` and `music serve` (and `world serve`, which has no page) through
-`StudioKit/StudioServiceProcess.swift`, the same
-service-lane owner the API server's process uses: start (with the task's Command
-view edits), stop, restart after the old process exits, preflight as a utility
-command, why the server stopped when it exits on its own, and the live server
-log. None is a Library run, and the menu bar lists each while it runs, with
+`StudioKit/StudioServiceProcess.swift`, the same service-lane owner the API
+server's process uses. Both pages start, stop, and restart their server; show why
+it stopped and its live log; and use the task's Command view edits. Vision server
+also offers preflight. Music server edits its checkpoint and adapter stack.
+Neither server is a Library run, and the menu bar lists each while it runs, with
 Stop. A server started from the Command Console goes to the same service lane —
 the console still shows its log — and its owner adopts it; a `--preflight` run
 stays an ordinary console run. Agent sessions stay durable Library runs. Open
@@ -1146,8 +1144,8 @@ comparable by eye across runs, not a byte-for-byte pixel gate.
 the real CLI against the models installed on the Mac, without the app. Each
 test builds a flow's command the way its page does (`StudioCommandAdapter` for
 composer tasks, a `StudioTaskDraft` through `StudioTaskRunner.prepare` for
-tasks on the shared task workspace, the page's own `CommandDraft` for the
-remaining specialist pages), runs it,
+tasks on the shared task workspace, or a task-specific page's `CommandDraft`),
+runs it,
 and decodes the output with the page's decoder, asserting what the page would
 show — Decisions, Segment with a drawn box and points on a generated photo
 (with an EXIF-rotated copy), Track's prompt frame and range, Find handing its

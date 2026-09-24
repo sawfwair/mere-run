@@ -209,130 +209,51 @@ The format is based on Keep a Changelog.
   or were denied. `/runtime/status` now reads installed models from a
   background-refreshed scan instead of scanning on every request. The macOS
   app declares removable- and network-volume usage descriptions.
-- Move Studio's Sound specialist tasks onto the shared task workspace and
-  remove the SFX Lab page. Video Foley is a Generate task: the clip goes in the
-  attachment well, the sound description in the composer, and the finished card
-  plays the picture over the waveform it produced; Condition generates the
-  conditioning tensors and shows their header. Encode, Decode, and Score are
-  Analyze tasks: Encode shows the `.npy` header, Decode plays the decoded audio,
-  and Score draws the CLAP alignment as a gauge. The inspector's Renoise editor
-  (Automatic, a fixed amount, or one amount per step) writes `--renoise` with a
-  point decimal whatever the locale, and a per-step schedule that does not match
-  the step count is refused before the run starts, in the workspace and the
-  Command Console alike. Output paths are named by routing instead of typed;
-  the page's saved drafts import once.
-- Move Studio's Music ▸ Analyze and Music ▸ Transcribe onto the shared task
-  workspace: attach the recording in the composer's well (or drop it on the
-  canvas), keep the settings in the inspector — the expected instruments are
-  picked there from the list the CLI prints — and read the result on the
-  Analyze board: tempo, key, meter, language, caption, and lyrics under
-  Analysis, and the transcribed notes on the piano roll under Notes, with the
-  raw document a segment away. A transcription is named after the recording
-  and filed by what it is — MIDI under `~/Music/mere.run/Music`, a JSON or
-  JSON Lines event list under `~/Documents/mere.run/Music` — with its
-  musical-context document beside it as `<name>-context.json` (none is asked
-  for when musical context is off); the Library
-  column, "Use these settings",
-  Stop, and the readiness card all work for both, and the settings the Music
-  Tools page kept are carried over once. The resident music server's
-  controls are unchanged under Server ▸ Music server.
-- Move Studio's Vision ▸ Depth, Pose, Faces, Flow, and Geometry from the Vision
-  Lab form onto the shared task workspace: the picture in the composer's well,
-  the variant (Detect, Embed, Compare, Batch; still or video depth; single or
-  multi-view geometry) as a chip, the command's options in the inspector, the
-  Library column with "Use these settings", and a destination named by routing
-  instead of an output-directory field. Faces draws its boxes and landmarks on
-  the picture and reads the embedding, comparison, and batch documents; Pose
-  draws its landmarks; Flow draws the field as vectors with its motion
-  statistics; Depth shows the preview or review clip from the run's folder;
-  Geometry embeds Quick Look over the point cloud with the depth and normal
-  previews beside it. The face is still picked by clicking it (now in the
-  inspector, one picker per picture for Compare, numbered from one) and
-  multi-view cameras are still edited per view, with the camera file written
-  only while it matches the views and copied beside the run's output folder
-  when the run starts. Vision ▸ Live becomes a Session page: Start/Stop, the
-  camera and model as chips, the prompts one per line, the capture's progress
-  while it runs, and the annotated clip with its track spans when it lands; a
-  capture the Mac refuses the camera for fails with the System Settings path
-  instead of staying "running". A fresh Depth or Geometry draft on the
-  workspace runs for real; the Command Console keeps its dry-run default and
-  the inspector keeps a Dry run row.
-- Move Studio's Audio ▸ Who Spoke, Enhance, and Separate (and Music ▸ Separate)
-  onto the shared task workspace: an attachment well (right-click an audio
-  slot to Record…), the model chip, Who Spoke's format and Nemotron 3 input
-  buffer as chips with the segment controls in the inspector, Enhance's and
-  Separate's compute as a chip, results named after the input in the domain's
-  folder, Library history, and "Use these settings". Separate lists every stem
-  with its own player from the manifest the CLI writes; an RTTM timeline draws
-  the speaker lanes the way a JSON one does; an input buffer chosen with
-  Sortformer is refused before the run with the fix named.
-- Make Audio ▸ Live a Session page: Start runs `speech listen` or `speech
-  diarize-live` through the task runner as a cancellable inference job with a
-  Library row, the transport row carries the operation, microphone, options,
-  and model chips, and Stop interrupts the CLI the way Ctrl-C does. The
-  session outlives the page, and its text is filed as the row's artifact when
-  it ends.
-- Make Voice ▸ Voices a Manage page — a list, a detail with the reference
-  player and transcript, Delete behind a confirmation, and New voice with the
-  reference in an attachment well — and retire Voice ▸ Clone, whose form
-  duplicated Speak's composer: attaching a reference to Speak's well is clone
-  mode. A window last opened on Clone reopens on the default task.
-- Declare Studio option metadata (group, tier, default, range) in the shared
-  contract for `speech diarize`, `speech diarize-live`, `speech listen`,
-  `speech profile create`, `audio enhance`, and `music separate`, so their
-  chips and inspector sections render from the contract; `capabilities --json`
-  gains the fields and nothing else changes.
-- Move Studio's Text ▸ Embeddings, Text ▸ Anonymize, and Image ▸ Datasets onto
-  the shared task workspace, in place of the Utility Lab form. Embeddings and
-  Anonymize take their text on the canvas (one text per line to embed; a paste
-  kept as one text to protect) and show the cosine matrix, or the protected
-  text with its spans, beside it; Image ▸ Datasets is one task with an
-  Operation chip over Discover (a folder in the well, candidate datasets with
-  "Train on it"), Validate (no input, the artifacts it wrote), and Run plan (a
-  plan file, the preflight or materialize report; Preflight is a chip, the run
-  directory an Output row). Each has the Library column, the inspector, the
-  Command view, "Use these settings", and Stop, and files its output under the
-  Text or Image folder like every other run. The typed-text and dataset
-  decoders are typed `Decodable` readers of the CLI's own output.
-- Move 3D ▸ From image onto the shared task workspace: an Engine chip picks
-  TRELLIS.2, TripoSR, or InstantMesh, the well takes the picture or the ordered
-  views, each engine's controls come from its contract, and results are feed
-  cards with the mesh in a Quick Look tile and the manifest's vertex, triangle,
-  and PBR voxel counts under it. InstantMesh's views are reordered and its
-  cameras edited in the inspector; a run without four or six views, or with a
-  camera file that does not match them, is refused with the reason before
-  anything is created. Runs land in a fresh directory under the 3D folder
-  named after the picture; the output-directory field is gone. The old page's
-  typed settings (engine, resolution, seeds, token ceiling, remesh band) start
-  fresh at the contract's defaults; an edited camera document carries over.
-- Move Studio's Earth tasks — Flood, Fire, TESSERA, and OlmoEarth — onto the
-  shared task workspace, replacing the Geo Lab page. The tile bundle goes in
-  the attachment well; the input column reads its safetensors header against
-  the tensors the command requires and ticks each off with its dtype and shape,
-  so a bundle missing `DEM`, or carrying `S1_ASC` without `S1_ASC_DOY`, is
-  caught before the run with the tensor named, and an empty well says what a
-  bundle must carry. The result panel shows the written file's tensors and
-  metadata with the command's JSON beside them; the inspector keeps the model,
-  Preflight, TESSERA's output dimensions as a picker of the widths the command
-  accepts, and OlmoEarth's patch size, ground sample distance, and space-time
-  tokens; outputs are named after the bundle under the Earth folder and land in
-  the Library like every run. Drafts saved by the Geo Lab page seed the new
-  task drafts once, without their old output paths.
-- Move Studio's Image ▸ Train, Chat ▸ Train, and Music ▸ Train onto task
-  drafts. The pages keep their settings column and dashboard, but the six path
-  fields are gone: the dataset folder or JSONL, evaluation prompts, and a resume
-  checkpoint are attachment wells, the base model is the shared model picker
-  over the image, text-chat, or music inventory, ACE-Step's checkpoint root is a
-  folder chooser under the model, and the adapter is named after its dataset and
-  filed under the domain it trains for, with the music clip list written beside
-  it. Runs go through the shared task runner, so Stop, the Library row, and the
-  Command view edit the same draft; the pages' saved drafts import once. A
-  chosen recipe now decides the options it governs (the seeded size, steps,
-  model, and rate no longer override it), choice rows can be left unset, and
-  the image trainer no longer turns on a checkpoint and preview cadence by
-  default — both are Klein-only options that blocked a Krea 2 preflight — but
-  sets both to every 250 steps at launch against a Klein base when they were
-  left unset, so there are checkpoints to resume and previews to watch.
+- Bring Sound, Music, Vision, Audio, Text, Image Datasets, 3D, and Earth
+  generation and analysis into Studio's shared task workspace. Attach inputs in
+  the composer, set contract-backed options in the inspector, review runs in the
+  Library, restore recorded settings, and stop the task's active run. Studio
+  names output files from the input or prompt and keeps sidecars beside them;
+  saved page drafts import once where available. Inspector choices show segments
+  when the whole row fits and a menu when it does not.
+- Show Sound ▸ Video Foley's clip and generated waveform together, Condition's
+  tensor header, Encode's `.npy` header, Decode's audio, and Score's CLAP gauge.
+  The Renoise editor supports automatic, fixed, and per-step values and checks
+  that a schedule matches the step count before starting.
+- Show Music ▸ Analyze's tempo, key, meter, language, caption, and lyrics and
+  Music ▸ Transcribe's piano roll and expected-instrument picker. Transcription
+  saves MIDI under Music or JSON and JSON Lines under Documents, with musical
+  context beside the result when enabled. Music ▸ Separate and Audio ▸ Separate
+  list and play each stem from the CLI's manifest.
+- Show Vision ▸ Faces' boxes, landmarks, and comparison results; Pose's
+  landmarks; Flow's vectors and statistics; Depth's previews; and Geometry's
+  point cloud and camera previews. The Faces and multi-view camera editors remain
+  in the inspector. Vision ▸ Live uses a Session surface with camera and model
+  controls, progress, and the annotated clip; denied camera access ends the run
+  with a System Settings instruction.
+- Make Audio ▸ Who Spoke, Enhance, and Separate contract-backed Analyze tasks.
+  Who Spoke shows speaker turns on a timeline, and Enhance plays the output.
+  Audio ▸ Live uses a Session surface with recording controls, a Library row,
+  and Stop. Voice ▸ Voices uses a Manage list and detail with reference playback,
+  creation, and confirmed deletion. Attach a voice reference in Speak to use
+  clone mode.
+- Show Text ▸ Embeddings' cosine matrix and Anonymize's protected text and
+  spans. Image ▸ Datasets offers Discover, Validate, and Run plan with their
+  results, including a direct handoff from a candidate dataset to Image ▸
+  Train. Earth ▸ Flood, Fire, TESSERA, and OlmoEarth inspect bundle tensors
+  before launch and show output tensors with the command's JSON.
+- Make 3D ▸ From image a Generate task with TRELLIS.2, TripoSR, and InstantMesh
+  engines. Ordered views and cameras remain editable; mismatched view counts or
+  camera files fail before launch. Result cards show the mesh and its summary.
+- Keep Image, Chat, and Music training as Project pages over shared task drafts.
+  Dataset, evaluation, and resume inputs use attachment wells; runs share the
+  Library and Command view. A selected recipe governs its options, and a Klein
+  base receives checkpoint and preview intervals when those values are unset.
+  Preserve small numeric options in the generated command: a learning rate of
+  `0.0003` or `1e-5` no longer rounds to `0`.
+- Add shared contract metadata for speech diarization, live listening, voice
+  profiles, audio enhancement, and music separation so their options appear in
+  the appropriate composer and inspector sections.
 
 ## 0.55.0 - 2026-09-22
 

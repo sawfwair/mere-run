@@ -63,6 +63,27 @@ contract. The table records the original implementation sequence.
   snapshot views. Added renders cover image focus, comparison, compact specialist
   tasks, and the Command overlay. Fixtures isolate saved voice profiles.
 
+### Specialist migration
+
+The specialist page migration is complete in the source tree. Sound, Music,
+Vision, Audio, Text, Image Datasets, 3D, and Earth Generate or Analyze tasks use
+the contract-backed task workspace. Live audio and vision use Session surfaces;
+Voices uses Manage; Image, Chat, and Music training use Project surfaces. The
+task-specific Decisions, Subjects, Realtime Music, Models, Server, Runs, and
+Plugins pages remain intentional surfaces. Task runs use `StudioTaskRunner`,
+and the root routes every task explicitly. Inspector choices use segments only
+when the entire row fits; otherwise they use a menu.
+
+The remaining follow-ups are:
+
+- Assign essential contract tiers to Music and Sound options and to 3D
+  resolution and seed, so their composer and result chips show those values.
+- Keep the Audio Analyze canvas within a 960 pt window when the Library is open.
+- Make the menu bar snapshot fixture use the configured server host.
+- Remove the temporary `.mov` left by `vision track-live` after SIGTERM.
+- Mark a non-camera launch refusal as failed in the Library instead of leaving
+  the row running.
+
 ### Remaining architectural and runtime scope
 
 `StudioTask` remains an enum. Shared execution, durable state, and responsive

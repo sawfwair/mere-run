@@ -23,7 +23,7 @@ draft as a `StudioTaskDraft` under `"<task>.taskDraft"` (the template plus its
 `StudioConsoleDraft`), imported once from the page draft a legacy page kept
 (`StudioTaskDraftMigration`); `commandForm` returns that form directly, so the
 Command view and the workspace never disagree. `StudioArchetypes` declares each
-task's archetype and its `usesLegacyPage` gate; `StudioTaskSchema` reads the
+task's archetype and whether it uses a task draft; `StudioTaskSchema` reads the
 well slots, chips, and inspector sections from the template's contract.
 
 `MereRunController` owns CLI configuration and submission. `JobStore` owns jobs,
