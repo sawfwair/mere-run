@@ -204,6 +204,77 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertNil(hit(900, 400))
     }
 
+    // MARK: - What a press does
+
+    /// Every tool against everything a press can land on, with and without Option. Handles and
+    /// points always take the press; a box takes it only with the Box tool, so a click inside a
+    /// box with the Point tool adds the refining point there instead of grabbing the box.
+    func testPressPolicyCoversEveryToolHitAndModifier() {
+        let id = UUID()
+        let handle = StudioRegionHit.handle(id: id, corner: .bottomTrailing)
+        let hits: [StudioRegionHit?] = [nil, .box(id: id), .point(id: id), handle]
+        for tool in StudioRegionTool.allCases {
+            for hit in hits {
+                for optionHeld in [false, true] {
+                    let press = StudioRegionPress.press(tool: tool, hit: hit, optionHeld: optionHeld)
+                    let expected: StudioRegionPress
+                    switch (tool, hit) {
+                    case (_, .handle):
+                        expected = .resize(id: id, corner: .bottomTrailing)
+                    case (_, .point), (.box, .box):
+                        expected = .grab(id: id)
+                    case (.box, _):
+                        expected = .draw(click: optionHeld ? .addPoint(isPositive: false) : .clearSelection)
+                    case (.point, _):
+                        expected = .draw(click: .addPoint(isPositive: !optionHeld))
+                    case (.negativePoint, _):
+                        expected = .draw(click: .addPoint(isPositive: false))
+                    }
+                    XCTAssertEqual(press, expected, "\(tool) on \(String(describing: hit)) option=\(optionHeld)")
+                }
+            }
+        }
+    }
+
+    /// A press that barely moved on screen, or moved less than a pixel of a zoomed-out picture,
+    /// is a click; anything more is a box.
+    func testAClickIsAPressThatCouldNotHaveMeantABox() {
+        let imageSize = CGSize(width: 4_000, height: 2_000)
+        let fitted = CGRect(x: 0, y: 0, width: 400, height: 200)
+        let start = CGPoint(x: 100, y: 100)
+        XCTAssertTrue(StudioRegionGeometry.isClick(from: start, to: start, imageSize: imageSize, fitted: fitted, slop: 4))
+        XCTAssertTrue(StudioRegionGeometry.isClick(from: start, to: CGPoint(x: 103, y: 102), imageSize: imageSize, fitted: fitted, slop: 4))
+        XCTAssertFalse(StudioRegionGeometry.isClick(from: start, to: CGPoint(x: 110, y: 108), imageSize: imageSize, fitted: fitted, slop: 4))
+        // Ten points along, nothing down: a zero-height rect is no box.
+        XCTAssertTrue(StudioRegionGeometry.isClick(from: start, to: CGPoint(x: 110, y: 100), imageSize: imageSize, fitted: fitted, slop: 4))
+        // Zoomed far out, a drag past the slop still spans less than a pixel of the picture.
+        let tiny = CGRect(x: 0, y: 0, width: 40, height: 40)
+        XCTAssertTrue(StudioRegionGeometry.isClick(from: .zero, to: CGPoint(x: 6, y: 6), imageSize: CGSize(width: 4, height: 4), fitted: tiny, slop: 4))
+        XCTAssertFalse(StudioRegionGeometry.isClick(from: .zero, to: CGPoint(x: 12, y: 12), imageSize: CGSize(width: 4, height: 4), fitted: tiny, slop: 4))
+    }
+
+    /// A tag never leaves the picture: a box's tag drops inside its corner when the box touches
+    /// the top edge, and a point's tag flips to the left, and slides inside the top and bottom
+    /// edges, when the marker is near them.
+    func testTagsStayInsideThePicture() {
+        let fitted = CGRect(x: 10, y: 20, width: 400, height: 300)
+        XCTAssertEqual(StudioRegionTagPlacement.boxSide(viewRect: CGRect(x: 50, y: 60, width: 80, height: 40), fitted: fitted, tagHeight: 20), .above)
+        XCTAssertEqual(StudioRegionTagPlacement.boxSide(viewRect: CGRect(x: 50, y: 30, width: 80, height: 40), fitted: fitted, tagHeight: 20), .inside)
+        XCTAssertEqual(StudioRegionTagPlacement.boxSide(viewRect: CGRect(x: 50, y: 40, width: 80, height: 40), fitted: fitted, tagHeight: 20), .above)
+
+        let tag = CGSize(width: 40, height: 16)
+        let middle = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 200, y: 150), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(middle, CGVector(dx: 34, dy: 0))
+        let nearRight = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 380, y: 150), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(nearRight, CGVector(dx: -34, dy: 0), "380 + 14 + 40 would pass the right edge at 410")
+        let atEdge = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 356, y: 150), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(atEdge.dx, 34, "356 + 14 + 40 lands exactly on the edge and still fits")
+        let nearTop = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 200, y: 22), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(nearTop.dy, 6, "the tag's centre moves down to 28 so its top sits on the edge at 20")
+        let nearBottom = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 200, y: 318), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(nearBottom.dy, -6, "and up to 312 so its bottom sits on the edge at 320")
+    }
+
     // MARK: - Upright versus stored
 
     /// Every EXIF orientation of a 40×20 stored picture: where its top-left stored pixel shows

@@ -396,6 +396,15 @@ package enum StudioRegionGeometry {
         )
     }
 
+    /// Whether a press that went from `start` to `end` was a click rather than a drag: it moved
+    /// less than `slop` points on screen, or less than a pixel of the picture on either axis (a
+    /// zoomed-out image), so it could not have meant a box.
+    package static func isClick(from start: CGPoint, to end: CGPoint, imageSize: CGSize, fitted: CGRect, slop: CGFloat) -> Bool {
+        let travelled = max(abs(end.x - start.x), abs(end.y - start.y))
+        let rect = imageRect(fromView: start, to: end, imageSize: imageSize, fitted: fitted)
+        return travelled < slop || rect.width < 1 || rect.height < 1
+    }
+
     /// The rect slid (not shrunk) back inside the image, so moving a box never distorts it.
     package static func clampedRect(_ rect: CGRect, within imageSize: CGSize) -> CGRect {
         var moved = rect.standardized
@@ -462,6 +471,95 @@ package enum StudioRegionHit: Equatable {
             }
         }
         return nil
+    }
+}
+
+// MARK: - What a press does
+
+/// What a click on the picture adds, given the tool in hand. A drag draws a box with any tool.
+package enum StudioRegionTool: Hashable, CaseIterable, Sendable {
+    case box
+    case point
+    case negativePoint
+}
+
+/// What a press on the layer starts, decided from the tool in hand and what is under the pointer.
+///
+/// Handles and points are small and always win: a press on the selected box's corner resizes it,
+/// and a press on a point selects it and a drag moves it, whatever the tool. Boxes belong to the
+/// Box tool: with it, a press on a box selects it and a drag moves it. With the Point and
+/// Negative tools a box's inside is more picture — a click there adds a point, because inside a
+/// box is exactly where a refining point goes, and a drag draws another box. On bare picture a
+/// drag always draws a box; a click adds a point (positive or negative per the tool, negative
+/// with Option) or, with the Box tool, clears the selection.
+package enum StudioRegionPress: Equatable {
+    /// The selected box's `corner`: the drag resizes it.
+    case resize(id: UUID, corner: StudioRegionBoxCorner)
+    /// A prompt: the press selects it and a drag moves it.
+    case grab(id: UUID)
+    /// The picture: a drag draws a box and a click does `click`.
+    case draw(click: StudioRegionClick)
+
+    package static func press(tool: StudioRegionTool, hit: StudioRegionHit?, optionHeld: Bool) -> StudioRegionPress {
+        switch hit {
+        case .handle(let id, let corner):
+            return .resize(id: id, corner: corner)
+        case .point(let id):
+            return .grab(id: id)
+        case .box(let id):
+            return tool == .box ? .grab(id: id) : .draw(click: StudioRegionClick.click(tool: tool, optionHeld: optionHeld))
+        case nil:
+            return .draw(click: StudioRegionClick.click(tool: tool, optionHeld: optionHeld))
+        }
+    }
+}
+
+/// What a click on the picture does.
+package enum StudioRegionClick: Equatable {
+    case addPoint(isPositive: Bool)
+    /// The Box tool draws; a bare click is how you deselect.
+    case clearSelection
+
+    package static func click(tool: StudioRegionTool, optionHeld: Bool) -> StudioRegionClick {
+        if optionHeld || tool == .negativePoint { return .addPoint(isPositive: false) }
+        return tool == .point ? .addPoint(isPositive: true) : .clearSelection
+    }
+}
+
+// MARK: - Where a tag sits
+
+/// Where a prompt's numbered tag goes so it stays on the picture. A box's tag sits above its
+/// top-left corner unless the box touches the top of the picture, when it tucks inside the
+/// corner; a point's tag sits to the right of the marker unless that would leave the picture,
+/// when it sits to the left, and it slides down or up so it never crosses the top or bottom edge.
+package enum StudioRegionTagPlacement {
+    package enum BoxSide: Equatable {
+        case above
+        case inside
+    }
+
+    package static func boxSide(viewRect: CGRect, fitted: CGRect, tagHeight: CGFloat) -> BoxSide {
+        viewRect.minY - fitted.minY >= tagHeight ? .above : .inside
+    }
+
+    /// The offset from a point marker's centre to its tag's centre.
+    ///
+    /// - Parameters:
+    ///   - reach: how far from the marker's centre the tag's near edge starts (the marker's
+    ///     radius plus a gap).
+    package static func pointOffset(
+        center: CGPoint,
+        fitted: CGRect,
+        tagSize: CGSize,
+        reach: CGFloat
+    ) -> CGVector {
+        let distance = reach + tagSize.width / 2
+        let fitsTrailing = center.x + reach + tagSize.width <= fitted.maxX
+        let dx = fitsTrailing ? distance : -distance
+        let lowest = fitted.minY + tagSize.height / 2
+        let highest = max(lowest, fitted.maxY - tagSize.height / 2)
+        let dy = min(max(center.y, lowest), highest) - center.y
+        return CGVector(dx: dx, dy: dy)
     }
 }
 

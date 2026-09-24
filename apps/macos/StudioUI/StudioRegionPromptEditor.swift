@@ -5,18 +5,12 @@ import SwiftUI
 // Drawing boxes and points on a picture instead of typing coordinates. `StudioRegionPromptLayer`
 // is the interactive overlay that sits on a displayed image; `StudioRegionToolbar` picks what a
 // click does; `StudioRegionPromptEditor` composes both around a picture for the surfaces that do
-// not already draw one (a video frame, a subject's reference image). The math and the CLI text
-// live in `StudioKit/StudioRegionPrompts.swift`.
+// not already draw one (a video frame, a subject's reference image). The math, the CLI text, and
+// what a press does (`StudioRegionPress`) live in `StudioKit/StudioRegionPrompts.swift`.
 
 // MARK: - Tools
 
-/// What a click on empty picture does. A drag always draws a box, and Option-click always adds a
-/// negative point, whichever tool is active.
-enum StudioRegionTool: Hashable, CaseIterable {
-    case box
-    case point
-    case negativePoint
-
+extension StudioRegionTool {
     var title: String {
         switch self {
         case .box: return "Box"
@@ -35,11 +29,17 @@ enum StudioRegionTool: Hashable, CaseIterable {
 
     var help: String {
         switch self {
-        case .box: return "Drag on the picture to draw a box around what to find"
-        case .point: return "Click the picture to mark a spot the mask must include"
-        case .negativePoint: return "Click the picture to mark a spot the mask must leave out (Option-click does this in any tool)"
+        case .box:
+            return "Drag on the picture to draw a box around what to find. Click a box to select it, drag it to move it, and drag a corner to resize it"
+        case .point:
+            return "Click the picture, inside a box too, to mark a spot the mask must include"
+        case .negativePoint:
+            return "Click the picture to mark a spot the mask must leave out (Option-click does this in any tool)"
         }
     }
+
+    /// The one-line reminder beside the toolbar.
+    static let gestureHint = "Drag for a box, click for a point, Option-click for a negative point. The Box tool selects and moves boxes."
 }
 
 // MARK: - Toolbar
@@ -101,7 +101,7 @@ struct StudioRegionToolbarRow: View {
     @Binding var prompts: [StudioRegionPrompt]
     @Binding var selection: UUID?
     var isEnabled = true
-    var hint = "Drag for a box, click for a point, Option-click for a negative point."
+    var hint = StudioRegionTool.gestureHint
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -133,10 +133,12 @@ struct StudioRegionToolbarRow: View {
 ///
 /// Sits in the coordinate space of the view showing the image; `fitted` is where the image's
 /// pixels land in that space, so every press converts through `StudioRegionGeometry` into the
-/// picture's own pixels. A drag on empty picture draws a box; a click adds a point (positive or
-/// negative per the tool, negative with Option); a press on a prompt selects it and drags move
-/// it; the selected box shows corner handles that resize it; Delete removes the selection and
-/// Escape clears it.
+/// picture's own pixels. What a press starts is `StudioRegionPress.press(tool:hit:optionHeld:)`:
+/// a drag on picture draws a box; a click adds a point (positive or negative per the tool,
+/// negative with Option) or, with the Box tool, clears the selection; a press on a point, or on
+/// a box with the Box tool, selects it and a drag moves it; the selected box shows corner handles
+/// that resize it. Delete removes the selection and Escape clears it. The selection and tool are
+/// the parent's state, so they outlive this layer's re-renders.
 struct StudioRegionPromptLayer: View {
     @Binding var prompts: [StudioRegionPrompt]
     let imageSize: CGSize
@@ -149,6 +151,9 @@ struct StudioRegionPromptLayer: View {
 
     @State private var drag: DragState?
     @State private var hover: StudioRegionHit?
+    /// Option as the keyboard reports it while the pointer is over the layer, so a synthesized
+    /// press that carries the flag and one whose flag arrived as a key both read as negative.
+    @State private var optionHeld = false
     /// The prompt being moved or resized, as it is right now. It lives here rather than in the
     /// binding until the drag ends, so a drag does not write the draft (and persist it) on every
     /// pointer event.
@@ -156,19 +161,23 @@ struct StudioRegionPromptLayer: View {
     @FocusState private var focused: Bool
 
     private enum Metrics {
-        static let handleSide: CGFloat = 8
+        static let handleSide: CGFloat = 9
         static let pointDiameter: CGFloat = 16
         /// A press that travels less than this is a click, not a box.
         static let clickSlop: CGFloat = 4
+        static let tagHeight: CGFloat = 17
+        /// Roughly what a tag's text measures, so its placement can keep it on the picture.
+        static let tagCharacterWidth: CGFloat = 6.4
+        static let tagPadding: CGFloat = 10
     }
 
     private enum DragState {
-        case drawing(start: CGPoint, current: CGPoint, negative: Bool)
+        case drawing(start: CGPoint, current: CGPoint, click: StudioRegionClick)
         case moving(id: UUID, original: StudioRegionPrompt, start: CGPoint)
         /// `anchor` is the corner that stays put, captured when the drag began.
         case resizing(id: UUID, anchor: CGPoint)
         /// A press on a prompt that has not moved yet: a click selects, a drag moves.
-        case pressing(hit: StudioRegionHit, start: CGPoint)
+        case pressing(id: UUID, start: CGPoint)
     }
 
     /// What is drawn: the bound prompts, with the one mid-drag shown at its live position.
@@ -188,7 +197,9 @@ struct StudioRegionPromptLayer: View {
                 drawingPreview(from: start, to: current)
             }
         }
-        .focusable(isEnabled)
+        // `.edit` interactions take focus on a click whether or not Full Keyboard Access is on,
+        // which is what lets Delete reach `onDeleteCommand` instead of the composer's text.
+        .focusable(isEnabled, interactions: .edit)
         .focused($focused)
         .focusEffectDisabled()
         .gesture(pressGesture, including: isEnabled ? .all : .subviews)
@@ -200,9 +211,14 @@ struct StudioRegionPromptLayer: View {
                 hover = nil
             }
         }
+        .onModifierKeysChanged(mask: .option) { _, modifiers in
+            optionHeld = modifiers.contains(.option)
+        }
         .pointerStyle(pointerStyle)
         .onDeleteCommand { removeSelection() }
         .onExitCommand { selection = nil }
+        .onKeyPress(.delete) { removeSelectionKeyPress() }
+        .onKeyPress(.deleteForward) { removeSelectionKeyPress() }
         .onChange(of: prompts.map(\.id)) { _, ids in
             if let selection, !ids.contains(selection) { self.selection = nil }
         }
@@ -237,16 +253,25 @@ struct StudioRegionPromptLayer: View {
         let width = max(viewRect.width, 2)
         let height = max(viewRect.height, 2)
         // Dashed until selected, so a prompt reads as what was asked and stays apart from the
-        // solid boxes a result draws over the same picture.
+        // solid boxes a result draws over the same picture. Selected, it is solid with a white
+        // halo so the state reads at a glance over any picture.
         let stroke = isSelected
             ? StrokeStyle(lineWidth: 2.5)
             : StrokeStyle(lineWidth: 2, dash: [7, 4])
+        let tagSide = StudioRegionTagPlacement.boxSide(viewRect: viewRect, fitted: fitted, tagHeight: Metrics.tagHeight + 3)
         return RoundedRectangle(cornerRadius: 3)
-            .fill(MereRunTheme.accent.opacity(isSelected ? 0.12 : isHovered ? 0.07 : 0))
+            .fill(MereRunTheme.accent.opacity(isSelected ? 0.14 : isHovered ? 0.07 : 0))
             .overlay {
                 RoundedRectangle(cornerRadius: 3)
                     .strokeBorder(Color.black.opacity(0.18), style: StrokeStyle(lineWidth: 3.5, dash: stroke.dash))
                     .blendMode(.multiply)
+            }
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.white.opacity(0.9), lineWidth: 1.5)
+                        .padding(-2)
+                }
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 3)
@@ -256,7 +281,7 @@ struct StudioRegionPromptLayer: View {
             .overlay(alignment: .topLeading) {
                 StudioRegionTag(text: tagText(prompt, ordinal: ordinal))
                     .fixedSize()
-                    .offset(x: -2, y: -20)
+                    .offset(x: tagSide == .above ? -2 : 4, y: tagSide == .above ? -(Metrics.tagHeight + 3) : 4)
             }
             .overlay {
                 if isSelected {
@@ -286,10 +311,21 @@ struct StudioRegionPromptLayer: View {
     private func pointView(_ prompt: StudioRegionPrompt, point: CGPoint, ordinal: Int, isSelected: Bool, isHovered: Bool) -> some View {
         let center = StudioRegionGeometry.viewPoint(fromImage: point, imageSize: imageSize, fitted: fitted)
         let color = prompt.isPositivePoint ? MereRunTheme.accent : MereRunTheme.red
+        let text = tagText(prompt, ordinal: ordinal)
+        let tagSize = CGSize(
+            width: CGFloat(text.count) * Metrics.tagCharacterWidth + Metrics.tagPadding,
+            height: Metrics.tagHeight
+        )
+        let tagOffset = StudioRegionTagPlacement.pointOffset(
+            center: center, fitted: fitted, tagSize: tagSize, reach: Metrics.pointDiameter / 2 + 6
+        )
         return ZStack {
             if isSelected {
                 Circle()
                     .fill(color.opacity(0.28))
+                    .frame(width: Metrics.pointDiameter + 12, height: Metrics.pointDiameter + 12)
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 1.5)
                     .frame(width: Metrics.pointDiameter + 12, height: Metrics.pointDiameter + 12)
             }
             Circle()
@@ -306,10 +342,10 @@ struct StudioRegionPromptLayer: View {
                 .scaleEffect(isHovered || isSelected ? 1.12 : 1)
                 .mereShadow(radius: 3, y: 1)
         }
-        .overlay(alignment: .leading) {
-            StudioRegionTag(text: tagText(prompt, ordinal: ordinal), tint: color)
+        .overlay {
+            StudioRegionTag(text: text, tint: color)
                 .fixedSize()
-                .offset(x: Metrics.pointDiameter / 2 + 12, y: -1)
+                .offset(x: tagOffset.dx, y: tagOffset.dy)
         }
         .position(center)
         .animation(MereRunTheme.Motion.quick, value: isSelected)
@@ -347,35 +383,40 @@ struct StudioRegionPromptLayer: View {
                 update(to: value.location)
             }
             .onEnded { value in
+                // A click that never moved may arrive as an end alone.
+                if drag == nil { begin(at: value.startLocation) }
                 end(at: value.location)
             }
     }
 
     private func begin(at location: CGPoint) {
         focused = true
-        if let hit = hit(at: location) {
-            selection = hit.id
-            if case .handle(let id, let corner) = hit,
-               let anchor = prompts.first(where: { $0.id == id })?.anchor(for: corner) {
-                drag = .resizing(id: id, anchor: anchor)
-            } else {
-                drag = .pressing(hit: hit, start: location)
-            }
-        } else {
-            selection = nil
-            drag = .drawing(start: location, current: location, negative: NSEvent.modifierFlags.contains(.option))
+        switch StudioRegionPress.press(tool: tool, hit: hit(at: location), optionHeld: isOptionHeld) {
+        case .resize(let id, let corner):
+            selection = id
+            guard let anchor = prompts.first(where: { $0.id == id })?.anchor(for: corner) else { return }
+            drag = .resizing(id: id, anchor: anchor)
+        case .grab(let id):
+            selection = id
+            drag = .pressing(id: id, start: location)
+        case .draw(let click):
+            drag = .drawing(start: location, current: location, click: click)
         }
+    }
+
+    private var isOptionHeld: Bool {
+        optionHeld || NSEvent.modifierFlags.contains(.option)
     }
 
     private func update(to location: CGPoint) {
         switch drag {
-        case .drawing(let start, _, let negative):
-            drag = .drawing(start: start, current: location, negative: negative)
-        case .pressing(let hit, let start):
+        case .drawing(let start, _, let click):
+            drag = .drawing(start: start, current: location, click: click)
+        case .pressing(let id, let start):
             guard hypot(location.x - start.x, location.y - start.y) >= Metrics.clickSlop,
-                  let original = prompts.first(where: { $0.id == hit.id }) else { return }
-            drag = .moving(id: hit.id, original: original, start: start)
-            move(id: hit.id, original: original, from: start, to: location)
+                  let original = prompts.first(where: { $0.id == id }) else { return }
+            drag = .moving(id: id, original: original, start: start)
+            move(id: id, original: original, from: start, to: location)
         case .moving(let id, let original, let start):
             move(id: id, original: original, from: start, to: location)
         case .resizing(let id, let anchor):
@@ -393,15 +434,11 @@ struct StudioRegionPromptLayer: View {
             liveEdit = nil
         }
         switch drag {
-        case .drawing(let start, _, let negative):
-            let travelled = max(abs(location.x - start.x), abs(location.y - start.y))
-            let rect = StudioRegionGeometry.imageRect(fromView: start, to: location, imageSize: imageSize, fitted: fitted)
-            // A press that barely moved on screen, or moved less than a pixel of the picture
-            // (a zoomed-out image), is a click.
-            if travelled < Metrics.clickSlop || rect.width < 1 || rect.height < 1 {
-                click(at: start, negative: negative)
+        case .drawing(let start, _, let click):
+            if StudioRegionGeometry.isClick(from: start, to: location, imageSize: imageSize, fitted: fitted, slop: Metrics.clickSlop) {
+                perform(click, at: start)
             } else {
-                addBox(rect)
+                addBox(StudioRegionGeometry.imageRect(fromView: start, to: location, imageSize: imageSize, fitted: fitted))
             }
         case .moving, .resizing:
             // Commit the live position to the draft once, now that the drag is over.
@@ -414,15 +451,12 @@ struct StudioRegionPromptLayer: View {
         }
     }
 
-    private func click(at location: CGPoint, negative: Bool) {
-        let imagePoint = StudioRegionGeometry.imagePoint(fromView: location, imageSize: imageSize, fitted: fitted)
-        switch (tool, negative) {
-        case (_, true), (.negativePoint, _):
-            add(.point(imagePoint, isPositive: false))
-        case (.point, false):
-            add(.point(imagePoint, isPositive: true))
-        case (.box, false):
-            // The box tool draws; a bare click is how you deselect.
+    private func perform(_ click: StudioRegionClick, at location: CGPoint) {
+        switch click {
+        case .addPoint(let isPositive):
+            let imagePoint = StudioRegionGeometry.imagePoint(fromView: location, imageSize: imageSize, fitted: fitted)
+            add(.point(imagePoint, isPositive: isPositive))
+        case .clearSelection:
             selection = nil
         }
     }
@@ -445,6 +479,12 @@ struct StudioRegionPromptLayer: View {
         guard scale > 0 else { return }
         let delta = CGVector(dx: (location.x - start.x) / scale, dy: (location.y - start.y) / scale)
         liveEdit = original.moved(by: delta, within: imageSize)
+    }
+
+    private func removeSelectionKeyPress() -> KeyPress.Result {
+        guard selection != nil else { return .ignored }
+        removeSelection()
+        return .handled
     }
 
     private func removeSelection() {
@@ -479,10 +519,10 @@ struct StudioRegionPromptLayer: View {
         case .drawing: return .rectSelection
         case .pressing, nil: break
         }
-        switch hover {
-        case .handle(_, let corner): return .frameResize(position: corner.resizePosition)
-        case .box, .point: return .grabIdle
-        case nil: return tool == .box ? .rectSelection : .default
+        switch StudioRegionPress.press(tool: tool, hit: hover, optionHeld: isOptionHeld) {
+        case .resize(_, let corner): return .frameResize(position: corner.resizePosition)
+        case .grab: return .grabIdle
+        case .draw: return tool == .box ? .rectSelection : .default
         }
     }
 }
