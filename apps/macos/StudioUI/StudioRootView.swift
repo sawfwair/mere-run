@@ -726,7 +726,9 @@ private struct StudioWorkspaceView: View {
         case .musicRealtime:
             StudioRealtimeMusicView(initialDraft: draft)
         case .musicAnalyze, .musicTranscribe:
-            StudioMusicToolsView(tool: musicToolBinding, tools: [.analyze, .transcribe])
+            // On the shared task workspace (`StudioTask.migratedTasks`); `domainContent` renders
+            // it before this switch is reached.
+            StudioTaskWorkspace(task: destination.task, models: models)
         case .musicSeparate:
             StudioAudioToolsView(tool: .constant(.separate))
         case .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore:
@@ -789,7 +791,7 @@ private struct StudioWorkspaceView: View {
         case .serverServing:
             StudioServingConsoleView(monitor: controller.servingMonitor, server: controller.localServer)
         case .serverMusic:
-            StudioMusicToolsView(tool: .constant(.serve), tools: [.serve])
+            StudioMusicServerView(server: controller.musicServer)
         case .serverVision:
             StudioVisionServerView(server: controller.visionServer)
         case .runsRuns:
@@ -804,24 +806,6 @@ private struct StudioWorkspaceView: View {
     }
 
     // MARK: Task bindings for re-hosted views
-
-    private var musicToolBinding: Binding<StudioMusicTool> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .musicTranscribe: return .transcribe
-                default: return .analyze
-                }
-            },
-            set: { tool in
-                switch tool {
-                case .analyze: navigation.open(task: .musicAnalyze)
-                case .transcribe: navigation.open(task: .musicTranscribe)
-                case .serve: navigation.open(task: .serverMusic)
-                }
-            }
-        )
-    }
 
     private var audioToolBinding: Binding<StudioAudioTool> {
         Binding(

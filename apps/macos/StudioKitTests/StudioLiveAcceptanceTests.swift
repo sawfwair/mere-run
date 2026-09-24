@@ -10,7 +10,8 @@ import XCTest
 /// installed on this Mac.
 ///
 /// Each test builds the command exactly the way its Studio page does (`StudioCommandAdapter` for
-/// composer tasks, the page's own `CommandDraft` for specialist pages), runs the CLI, and decodes
+/// composer tasks, a `StudioTaskDraft` through `StudioTaskRunner.prepare` for tasks on the shared
+/// task workspace, the page's own `CommandDraft` for the remaining specialist pages), runs the CLI, and decodes
 /// the real output with the Studio decoder the page uses. Inputs are drawn or synthesized here, or
 /// generated with the CLI (a portrait for Faces and Find, a photo of an apple for Segment), so
 /// nothing binary is committed. The CLI's argv, streams, and exit code for every step are kept
@@ -625,29 +626,31 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
     // MARK: - Music ▸ Analyze
 
+    /// Music ▸ Analyze on the shared task workspace: the song attached to the well, the duration
+    /// set in the inspector, the run built through the task runner, and stdout decoded through
+    /// the Analyze canvas's document switch into the Analysis view's document.
     func test11MusicAnalyzeDecodesIntoTheAnalysisDocument() throws {
         try requireModels(["music-acestep"])
         let flow = "11-music-analyze"
         let music = try Self.toneMusic(in: fixtures())
-        let template = try XCTUnwrap(CommandCatalog.template(id: .musicAnalyze))
 
-        var draft = template.defaultDraft()
-        draft.model = draft.model.isBlank ? "music-acestep" : draft.model
-        draft.inputPath = music.path
-        draft.useDuration = true
-        draft.durationSeconds = 10
-        let (_, argv) = try specialistRequest(templateID: .musicAnalyze, mode: .music, draft: draft)
-        XCTAssertEqual(Array(argv.prefix(2)), ["music", "analyze"])
+        var draft = StudioTaskDraft(templateID: .musicAnalyze)
+        try XCTUnwrap(draft.slots.first).attach([music], to: &draft)
+        draft.form["--duration"] = .number(10)
+        XCTAssertEqual(draft.primaryInputPath, music.path)
+        let (_, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(3)), ["music", "analyze", music.path])
         XCTAssertEqual(argv.firstIndex(of: "--duration").map { argv[$0 + 1] }, "10")
 
         var run = try runCLI(flow, argv, timeout: 2_400)
-        var modelUsed = draft.model
+        var modelUsed = StudioTaskSchema.modelID(for: draft)
         if run.exitCode != 0, try Self.installedModels.get().contains("music-acestep-xl-turbo-lm4b") {
-            // The page's default checkpoint may lack a language model; the LM-bearing checkpoint is the fallback.
+            // The default checkpoint may lack a language model; the LM-bearing checkpoint is the fallback.
             var retry = draft
             retry.model = "music-acestep-xl-turbo-lm4b"
             modelUsed = retry.model
-            let (_, retryArgv) = try specialistRequest(templateID: .musicAnalyze, mode: .music, draft: retry)
+            let (_, retryArgv) = try taskRequest(retry)
+            XCTAssertEqual(retryArgv.firstIndex(of: "--model").map { retryArgv[$0 + 1] }, retry.model)
             run = try runCLI(flow, retryArgv, timeout: 2_400)
         }
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
@@ -657,11 +660,17 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(analysis.inputDurationSeconds, 12, accuracy: 1.0)
         XCTAssertLessThanOrEqual(analysis.analyzedDurationSeconds, analysis.inputDurationSeconds + 0.5)
         XCTAssertEqual(analysis.analyzedDescription, "0:10 of 0:12")
+        // The Library keeps stdout as the row's text; the Analyze canvas decodes that same text.
+        let document = try XCTUnwrap(StudioAnalyzeDocument.decode(Data(run.libraryOutputText.utf8)))
+        guard case .musicAnalysis(let shown) = document else { return XCTFail("The shared decoder read the analysis as \(document)") }
+        XCTAssertEqual(shown, analysis)
         conclude(flow, "model=\(modelUsed) analyzed=\(analysis.analyzedDescription) bpm=\(analysis.tempoDescription ?? "-") key=\(analysis.metadata.keyscale ?? "-") meter=\(analysis.metadata.timesignature ?? "-") language=\(analysis.metadata.language ?? "-") caption=\(analysis.caption?.prefix(80) ?? "-")")
     }
 
     // MARK: - Music ▸ Transcribe instruments
 
+    /// The inspector's instruments editor reads the CLI's list once and writes the picked names
+    /// into the task draft's `--instruments`, which the argv carries as the CLI reads it.
     func test12TranscribeInstrumentListFeedsThePicker() throws {
         let flow = "12-instruments"
         let run = try runCLI(flow, StudioInstrumentList.listArguments, timeout: 300)
@@ -671,8 +680,14 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         for name in names {
             XCTAssertTrue(name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }, "Unexpected instrument name token: \(name)")
         }
-        XCTAssertEqual(StudioInstrumentList.decode(StudioInstrumentList.encode(Array(names.prefix(3)))), Array(names.prefix(3)))
+        let picked = Array(names.prefix(3))
+        XCTAssertEqual(StudioInstrumentList.decode(StudioInstrumentList.encode(picked)), picked)
         XCTAssertEqual(StudioInstrumentList.parse(run.stdout + "\n" + run.stdout), names, "Repeated names must not duplicate")
+
+        var draft = StudioTaskDraft(templateID: .musicTranscribe)
+        draft.form["--instruments"] = .text(StudioInstrumentList.encode(picked))
+        XCTAssertEqual(draft.arguments.firstIndex(of: "--instruments").map { draft.arguments[$0 + 1] }, picked.joined(separator: ","))
+        XCTAssertFalse(draft.arguments.contains("--list-instruments"), "the editor's list flag never rides along on a run")
         conclude(flow, "instruments=\(names.count) \(names)")
     }
 
@@ -1018,7 +1033,75 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         conclude(flow, "directory=\(directory.path) leafPreCreated=\(leafExists) file=\(file.path)")
     }
 
+    // MARK: - Music ▸ Transcribe
+
+    /// Music ▸ Transcribe on the shared task workspace: routing names the MIDI after the song
+    /// under the configured root with the musical-context document beside it, the CLI writes
+    /// both, and the Notes view's decoder reads the MIDI the Library row points at.
+    func test20TranscribeWritesMIDIWithItsContextBesideIt() throws {
+        let installed = try Self.installedModels.get()
+        guard let model = ["music-muscriptor-medium", "music-muscriptor-large"].first(where: installed.contains) else {
+            throw XCTSkip("Not installed: music-muscriptor-medium or music-muscriptor-large")
+        }
+        let flow = "20-music-transcribe"
+        let music = try Self.toneMusic(in: fixtures())
+
+        var draft = StudioTaskDraft(templateID: .musicTranscribe)
+        try XCTUnwrap(draft.slots.first).attach([music], to: &draft)
+        draft.model = model
+        let (request, argv) = try taskRequest(draft)
+        let midiURL = URL(fileURLWithPath: request.draft.outputPath)
+        XCTAssertTrue(midiURL.path.hasPrefix(live.path), "Output escaped the configured root: \(midiURL.path)")
+        XCTAssertEqual(midiURL.pathExtension, "mid")
+        XCTAssertTrue(midiURL.deletingPathExtension().lastPathComponent.hasPrefix("tone-music-"), midiURL.lastPathComponent)
+        let contextPath = try XCTUnwrap(argv.firstIndex(of: "--context-output").map { argv[$0 + 1] })
+        XCTAssertEqual(contextPath, midiURL.deletingPathExtension().appendingPathExtension("json").path)
+        XCTAssertEqual(argv.firstIndex(of: "--model").map { argv[$0 + 1] }, model)
+
+        let run = try runCLI(flow, argv, timeout: 1_800)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        let summary = try XCTUnwrap(StudioMIDISummary.load(from: midiURL), "No MIDI at \(midiURL.path)")
+        XCTAssertGreaterThanOrEqual(summary.trackCount, 1)
+        XCTAssertGreaterThan(summary.ticksPerQuarter, 0)
+        let document = try decodeAnalyzeDocument(at: midiURL.path)
+        guard case .midi(let shown) = document else { return XCTFail("The shared decoder read the MIDI as \(document)") }
+        XCTAssertEqual(shown, summary)
+        let contextExists = FileManager.default.fileExists(atPath: contextPath)
+        XCTAssertTrue(contextExists, "The musical context document was not written at \(contextPath)")
+        conclude(flow, "model=\(model) notes=\(summary.notes.count) tracks=\(summary.trackCount) ppq=\(summary.ticksPerQuarter) tempo=\(summary.tempoMicrosecondsPerQuarter.map(String.init) ?? "-") context=\(contextExists)")
+    }
+
     // MARK: - Studio request builders
+
+    /// A task workspace run, prepared the way `StudioTaskRunner.request(for:task:)` prepares it:
+    /// routing names the destination under the configured root, then the shared `prepare` applies
+    /// Command edits (none here), validates, and creates the folder before the CLI launches.
+    private func taskRequest(_ draft: StudioTaskDraft) throws -> (request: StudioRunRequest, argv: [String]) {
+        let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request(), "\(draft.templateID) cannot run from Studio")
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
+        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        let request = prepared.request
+        let argv = request.execution?.arguments ?? request.template.arguments(from: request.draft)
+        // Nothing launches unless every destination is inside the live directory: a run that
+        // escaped would write into the user's own Music or Documents folder.
+        try requireInsideLiveDirectory(request.draft.outputPath)
+        for flag in StudioOutputLocation.derivedSidecars.map(\.flag) {
+            if let index = argv.firstIndex(of: flag), index + 1 < argv.count { try requireInsideLiveDirectory(argv[index + 1]) }
+        }
+        return (request, argv)
+    }
+
+    private struct DestinationEscaped: Error, CustomStringConvertible {
+        let path: String
+        var description: String { "Destination escaped the live directory: \(path)" }
+    }
+
+    private func requireInsideLiveDirectory(_ path: String) throws {
+        guard path.isEmpty || path.hasPrefix(live.path + "/") else {
+            XCTFail("Destination escaped the live directory; not launching: \(path)")
+            throw DestinationEscaped(path: path)
+        }
+    }
 
     /// A composer task's request, prepared the way `StudioPromptTaskController` prepares it: the
     /// destination folder is created (under the configured root) before the CLI launches.

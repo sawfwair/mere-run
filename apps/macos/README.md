@@ -140,7 +140,8 @@ live under `StudioUI/Renderers/` and register by `(view, document)` in
 `StudioResultRenderers`; the Session pages share their transport chrome from
 `StudioUI/StudioSessionControls.swift`. A task keeps its bespoke page until it
 is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the root then
-renders the workspace for it instead.
+renders the workspace for it instead. Music ▸ Analyze and Music ▸ Transcribe
+are on it.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -606,8 +607,11 @@ pictures and clips, `~/Music/mere.run/<Domain>` for audio,
 `<slug-of-prompt>-<seed-or-short-id>.<ext>` with a numeric suffix on collision.
 The suffix is derived, not random, so the path the Command view previews is the
 path the run writes. Settings ▸ General takes one root that overrides all three
-(`mererun.app.outputRoot`). The specialist pages — Vision, 3D, Sound, Voice,
-Music ▸ Analyze, Transcribe, and Realtime, Train (an adapter is filed under the
+(`mererun.app.outputRoot`). A task on the shared task workspace (Music ▸
+Transcribe) has no path field: `StudioOutputLocation.destination(for:)` names
+its output after the recording in the domain's folder when the run starts,
+with its sidecars beside it. The specialist pages — Vision, 3D, Sound, Voice,
+Music ▸ Realtime, Train (an adapter is filed under the
 domain it trains for), Video ▸ Subjects, Text ▸ Decisions, the Image utilities
 (validation and run plans under Image; embeddings and anonymization under
 Text), and the Voice recorder — propose their destinations from the same rule
@@ -682,13 +686,20 @@ commands live in the Command Console.
 **Music** is a production surface, not a prompt-only wrapper: quality planning,
 covers, repaint and flow edits, source and timbre-reference audio, candidate
 ranking, LM planning, adapter stacks, stems, LRC, recipes, and DAW delivery.
-Music ▸ Analyze adds standalone ACE-Step understanding, read from the command's
-JSON as tempo, key, meter, language, caption, and lyrics, with the model's reply
-and audio codes folded away when a run kept them;
-Music ▸ Transcribe adds MuScriptor transcription with an embedded MIDI piano
-roll, and picks expected instruments from the list the CLI prints with
-`--list-instruments` (a plain field when the list cannot be read); Music ▸
-Separate shares the restoration surface with Audio. Music ▸
+Music ▸ Analyze and Music ▸ Transcribe are Analyze tasks on the shared task
+workspace: the recording goes in the composer's well (or is dropped on the
+canvas), the settings live in the inspector, and the result column shows what
+the run found. Analyze reads the command's JSON as tempo, key, meter,
+language, caption, and lyrics under its Analysis view, with the model's reply
+and audio codes folded away when a run kept them
+(`StudioUI/Renderers/StudioMusicAnalysisRenderer.swift`); Transcribe draws the
+MIDI it wrote on a piano roll under Notes, with Quick Look and Reveal for the
+file (`StudioUI/Renderers/StudioPianoRollRenderer.swift`), and its expected
+instruments are picked in the inspector from the list the CLI prints with
+`--list-instruments` (a plain field when the list cannot be read). The
+transcription and its musical-context document are named after the recording
+under `~/Music/mere.run/Music`; none is asked for when musical context is off.
+Music ▸ Separate shares the restoration surface with Audio. Music ▸
 Realtime is the Magenta RT2 session: a transport with the live clock, the
 recording's waveform, Prompt A/B steering with a blend slider, temperature,
 top-k, and guidance sent over the CLI's stdin protocol as you release each
@@ -873,8 +884,9 @@ Command Console, restarts only after the old process has exited, and reads its
 phase (stopped, starting, running, stopping, running outside Studio, stopped
 unexpectedly) from the job and the endpoint monitor together.
 
-**Server ▸ Vision server** and **Server ▸ Music server** run `vision serve` and
-`music serve` (and `world serve`, which has no page) through
+**Server ▸ Vision server** and **Server ▸ Music server**
+(`StudioUI/StudioResidentServerViews.swift`, `StudioUI/StudioMusicServerView.swift`)
+run `vision serve` and `music serve` (and `world serve`, which has no page) through
 `StudioKit/StudioServiceProcess.swift`, the same
 service-lane owner the API server's process uses: start (with the task's Command
 view edits), stop, restart after the old process exits, preflight as a utility
@@ -1016,12 +1028,14 @@ comparable by eye across runs, not a byte-for-byte pixel gate.
 `StudioKitTests/StudioLiveAcceptanceTests` is the other gated harness: it runs
 the real CLI against the models installed on the Mac, without the app. Each
 test builds a flow's command the way its page does (`StudioCommandAdapter` for
-composer tasks, the page's own `CommandDraft` for specialist pages), runs it,
+composer tasks, a `StudioTaskDraft` through `StudioTaskRunner.prepare` for
+tasks on the shared task workspace, the page's own `CommandDraft` for the
+remaining specialist pages), runs it,
 and decodes the output with the page's decoder, asserting what the page would
 show — Decisions, Segment with a drawn box and points on a generated photo
 (with an EXIF-rotated copy), Track's prompt frame and range, Find handing its
 boxes to Segment, Faces, Depth, multi-view geometry and InstantMesh cameras,
-Who Spoke, Music analyze, instruments, and the training manifest, run plans and
+Who Spoke, Music analyze and transcribe, instruments, and the training manifest, run plans and
 `run inspect`, Sound's renoise, a chat turn with thinking shown, and a failed
 turn's one-line reason. Inputs are drawn, synthesized, or generated with the CLI
 into the run directory; nothing binary is committed. It is skipped unless

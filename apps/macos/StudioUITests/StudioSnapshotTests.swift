@@ -1336,24 +1336,44 @@ final class StudioSnapshotTests: XCTestCase {
     /// Music ▸ Analyze with a finished ACE-Step analysis: tempo, key, meter, language, and how
     /// much was analyzed as tiles, the caption and lyrics as prose, and the model's reply folded
     /// away, light and dark.
+    /// Music ▸ Analyze and Music ▸ Transcribe on the shared task workspace, through the root.
+    /// Analyze with a finished run seeded (the song in the well and the input strip with its
+    /// player, the Analysis panel's tiles, caption, lyrics, and folded model reply), light and
+    /// dark; Transcribe with a seeded MIDI transcription (the piano roll under Notes, with Quick
+    /// Look and Reveal) beside its inspector, whose instruments editor shows the chips picked
+    /// from the CLI's list, light and dark; and Transcribe at the compact width without the
+    /// inspector. The models the tasks default to are installed in the scripted inventory, so
+    /// the boards show results rather than readiness cards.
     func testMusicAnalysisSnapshots() throws {
-        try fixture.seedMusicAnalysisRun()
-        for appearance in StudioSnapshotAppearance.allCases {
+        let music = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.musicReadinessResponses)
+        )
+        defer { music.tearDown() }
+        try music.seedMusicAnalysisRun()
+        try music.seedTranscribeRun()
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize, inspector: Bool) throws {
             let navigation = NavigationModel()
             let view = StudioRootView()
-                .environmentObject(fixture.controller)
-                .environmentObject(fixture.library)
+                .environmentObject(music.controller)
+                .environmentObject(music.library)
                 .environmentObject(navigation)
-                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
-            try fixture.write(
-                view,
-                size: Self.fidelitySize,
-                appearance: appearance,
-                name: "music-analyze-\(appearance.rawValue)",
-                settle: 2.0,
-                afterAppear: { navigation.open(task: .musicAnalyze) }
-            )
+                .frame(width: size.width, height: size.height)
+            try music.write(view, size: size, appearance: appearance, name: name, settle: 2.5, afterAppear: {
+                navigation.open(task: task)
+                if inspector { navigation.toggleInspector(for: task) }
+            })
         }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.musicAnalyze, name: "music-analyze-\(appearance.rawValue)", appearance: appearance,
+                       size: Self.fidelitySize, inspector: false)
+            try render(.musicTranscribe, name: "music-transcribe-\(appearance.rawValue)", appearance: appearance,
+                       size: Self.fidelitySize, inspector: true)
+        }
+        try render(.musicTranscribe, name: "music-transcribe-compact-light", appearance: .light,
+                   size: CGSize(width: 960, height: 760), inspector: false)
     }
 
     /// The shared task workspace, rendered directly because no task has moved onto it yet (every
@@ -2839,7 +2859,7 @@ private final class SnapshotFixture {
         draft.useDuration = true
         draft.durationSeconds = 30
         let startedAt = Self.mockupTime(hour: 11, minute: 48)
-        let row = StudioLibraryItem(
+        var row = StudioLibraryItem(
             id: UUID(),
             mode: .music,
             prompt: "",
@@ -2852,12 +2872,138 @@ private final class SnapshotFixture {
             commandPreview: "mere.run music analyze harbor-lights.wav --duration 30",
             outputText: Self.musicAnalysisOutput(audio: song),
             templateID: .musicAnalyze,
-            commandDraft: draft
+            commandDraft: draft,
+            commandArguments: template.arguments(from: draft)
         )
+        row.inputIdentity = StudioInputIdentity.read(song)
         library.upsert(row)
         let scope = StudioTask.musicAnalyze.rawValue
         controller.taskSessions.set(Optional(row.id), for: scope + ".requestID")
+        // The page's draft, under its own key: the workspace imports it into the task draft once.
         controller.taskSessions.set(draft, for: scope + ".MusicTools.analyzeDraft")
+    }
+
+    /// A finished Music ▸ Transcribe run: the song, the MIDI `music transcribe` wrote for it
+    /// (eight bars of chords, a bass line, and a melody on three channels), and the musical
+    /// context document beside it, with the instrument list the inspector's picker reads already
+    /// cached on the controller.
+    func seedTranscribeRun() throws {
+        let song = root.appendingPathComponent("harbor-lights.wav", isDirectory: false)
+        if !FileManager.default.fileExists(atPath: song.path) {
+            try Self.writeSilentWAV(to: song, seconds: 20)
+        }
+        let midi = root.appendingPathComponent("harbor-lights-7c1e2a.mid", isDirectory: false)
+        try Self.writeDemoMIDI(to: midi)
+        let context = root.appendingPathComponent("harbor-lights-7c1e2a.json", isDirectory: false)
+        try Self.musicalContextDocument.write(to: context, atomically: true, encoding: .utf8)
+
+        var taskDraft = StudioTaskDraft(templateID: .musicTranscribe)
+        taskDraft.setArgument(0, song.path)
+        taskDraft.form["--instruments"] = .text("voice,drums,electric_bass,piano")
+        var ran = taskDraft
+        ran.form["--output"] = .text(midi.path)
+        ran.form["--context-output"] = .text(context.path)
+        guard let request = ran.request() else { throw StudioSnapshotError.noContentView }
+        let startedAt = Self.mockupTime(hour: 11, minute: 52)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: request.mode,
+            prompt: "",
+            inputURL: song,
+            outputURL: midi,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(41),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run music transcribe harbor-lights.wav --instruments voice,drums,electric_bass,piano --output harbor-lights-7c1e2a.mid",
+            outputText: nil,
+            templateID: .musicTranscribe,
+            commandDraft: request.draft,
+            commandArguments: request.execution?.arguments,
+            artifactURLs: [midi, context]
+        )
+        row.inputIdentity = StudioInputIdentity.read(song)
+        library.upsert(row)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .musicTranscribe)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.musicTranscribe.rawValue + ".requestID")
+        controller.cachedInstrumentNames = [
+            "voice", "drums", "electric_bass", "piano", "acoustic_guitar", "electric_guitar", "strings", "brass",
+            "soprano_and_alto_sax", "synth_lead", "synth_pad", "organ",
+        ]
+    }
+
+    /// `MuScriptorMusicalContext` for the harbor-lights demo.
+    private static let musicalContextDocument = """
+    {
+      "tempo" : { "bpm" : 96.02, "confidence" : 0.91 },
+      "timeSignature" : { "name" : "4/4", "numerator" : 4, "denominator" : 4, "confidence" : 0.84 },
+      "keySignature" : { "name" : "D major", "tonic" : "D", "mode" : "major", "confidence" : 0.77 },
+      "beats" : []
+    }
+    """
+
+    /// A type-0 Standard MIDI File at 480 PPQ and 96 BPM: eight bars of a D–Bm–G–A progression
+    /// as held chords on channel 0, a walking bass on channel 1, and an eighth-note melody on
+    /// channel 2 — 120 notes across three channels, so the piano roll shows its hues and
+    /// velocities.
+    static func writeDemoMIDI(to url: URL) throws {
+        let ppq = 480
+        var events: [(tick: Int, bytes: [UInt8])] = [(0, [0xFF, 0x51, 0x03, 0x09, 0x89, 0x68])]
+        func note(_ pitch: Int, at start: Int, for length: Int, velocity: Int, channel: Int) {
+            events.append((start, [UInt8(0x90 | channel), UInt8(pitch), UInt8(velocity)]))
+            events.append((start + length, [UInt8(0x80 | channel), UInt8(pitch), 0]))
+        }
+        let chords = [[62, 66, 69], [59, 62, 66], [67, 71, 74], [57, 61, 64]]
+        let bass = [50, 47, 43, 45]
+        let melody = [74, 76, 78, 81, 78, 76, 74, 73, 71, 69, 71, 73, 74, 78, 76, 74]
+        for bar in 0..<8 {
+            let barStart = bar * 4 * ppq
+            for (index, pitch) in chords[bar % 4].enumerated() {
+                note(pitch, at: barStart, for: 4 * ppq - 40, velocity: 64 + index * 6, channel: 0)
+            }
+            for beat in 0..<4 {
+                note(bass[bar % 4] + (beat == 2 ? 7 : 0), at: barStart + beat * ppq, for: ppq - 60, velocity: 88, channel: 1)
+            }
+            for eighth in 0..<8 {
+                let pitch = melody[(bar * 8 + eighth) % melody.count]
+                note(pitch, at: barStart + eighth * ppq / 2, for: ppq / 2 - 30, velocity: 70 + (eighth % 3) * 12, channel: 2)
+            }
+        }
+        // Note-offs before note-ons at the same tick, so a repeated pitch closes before it reopens.
+        events.sort { $0.tick == $1.tick ? $0.bytes[0] < $1.bytes[0] : $0.tick < $1.tick }
+
+        var track = Data()
+        var last = 0
+        for event in events {
+            track.append(contentsOf: variableLength(event.tick - last))
+            track.append(contentsOf: event.bytes)
+            last = event.tick
+        }
+        track.append(contentsOf: [0x00, 0xFF, 0x2F, 0x00])
+
+        var data = Data()
+        func appendBE32(_ value: UInt32) { withUnsafeBytes(of: value.bigEndian) { data.append(contentsOf: $0) } }
+        func appendBE16(_ value: UInt16) { withUnsafeBytes(of: value.bigEndian) { data.append(contentsOf: $0) } }
+        data.append(contentsOf: Array("MThd".utf8))
+        appendBE32(6)
+        appendBE16(0)
+        appendBE16(1)
+        appendBE16(UInt16(ppq))
+        data.append(contentsOf: Array("MTrk".utf8))
+        appendBE32(UInt32(track.count))
+        data.append(track)
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// A MIDI variable-length quantity: seven bits per byte, high bit set on all but the last.
+    private static func variableLength(_ value: Int) -> [UInt8] {
+        var bytes = [UInt8(value & 0x7F)]
+        var remaining = value >> 7
+        while remaining > 0 {
+            bytes.insert(UInt8(remaining & 0x7F) | 0x80, at: 0)
+            remaining >>= 7
+        }
+        return bytes
     }
 
     /// `SpeechDiarizationPayload` for a three-minute stand-up: three voices, sixteen turns.
@@ -3281,10 +3427,24 @@ private enum ModelsInventoryScript {
     /// `model list` and `model capabilities` with Vision ▸ Find's model installed, so the Analyze
     /// board renders its result rather than a readiness card.
     static var analyzeReadinessResponses: [SnapshotProcessRunner.Response] {
-        let extraModels = [
+        readinessResponses(installing: [
             (id: "vision-ground-falcon-perception", category: "vision-ground", title: "Falcon Perception"),
             (id: "speech-asr-parakeet", category: "speech-asr", title: "Parakeet")
-        ]
+        ])
+    }
+
+    /// The same with the Music tasks' default models installed, so their boards render results.
+    static var musicReadinessResponses: [SnapshotProcessRunner.Response] {
+        readinessResponses(installing: [
+            (id: "music-acestep", category: "music", title: "ACE-Step 1.5"),
+            (id: "music-muscriptor-medium", category: "music", title: "MuScriptor medium")
+        ])
+    }
+
+    /// `model list` and `model capabilities` with `extraModels` installed beside the fixture's.
+    static func readinessResponses(
+        installing extraModels: [(id: String, category: String, title: String)]
+    ) -> [SnapshotProcessRunner.Response] {
         let list = modelList.replacingOccurrences(
             of: "image-zimage-nano          image        installed  2.1 GB",
             with: (["image-zimage-nano          image        installed  2.1 GB"]
