@@ -56,13 +56,28 @@ struct StudioAnalyzeCanvas: View {
     @State private var regionSelection: UUID?
     /// Track shows its finished clip once there is one; this brings the seed-frame editor back.
     @State private var editsTrackPrompts = false
+    /// The canvas's own height: what the column has above the composer, which the input's
+    /// picture fits into. Starts unbounded so the first layout uses the cap, then follows the
+    /// window.
+    @State private var availableHeight: CGFloat = .infinity
 
     private enum Metrics {
         static let contentWidth: CGFloat = 940
         static let resultColumnWidth: CGFloat = 360
         static let columnSpacing: CGFloat = 20
-        static let mediaMaxHeight: CGFloat = 520
         static let insets = EdgeInsets(top: 22, leading: 24, bottom: 6, trailing: 24)
+        /// The input strip's row and its gap to the columns.
+        static let inputStripHeight: CGFloat = 28 + 10
+        /// The drawing toolbar's row and its gap to the picture.
+        static let toolbarRowHeight: CGFloat = 30 + 8
+    }
+
+    /// How tall the input may be: the column above the composer less the rows around the
+    /// picture (`StudioAnalyzeMediaLayout`). Track's frame editor takes its own rows out of this.
+    private var mediaHeight: CGFloat {
+        var chrome = Metrics.insets.top + Metrics.insets.bottom + Metrics.inputStripHeight
+        if editing != nil, archetype.inputKind == .image { chrome += Metrics.toolbarRowHeight }
+        return StudioAnalyzeMediaLayout.mediaHeight(availableHeight: availableHeight, chromeHeight: chrome)
     }
 
     // MARK: Derived state
@@ -143,20 +158,25 @@ struct StudioAnalyzeCanvas: View {
     }
 
     private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                inputStrip
-                    .padding(.bottom, 10)
-                HStack(alignment: .top, spacing: Metrics.columnSpacing) {
-                    inputColumn
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    resultColumn
-                        .frame(width: Metrics.resultColumnWidth)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    inputStrip
+                        .padding(.bottom, 10)
+                    HStack(alignment: .top, spacing: Metrics.columnSpacing) {
+                        inputColumn
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        resultColumn
+                            .frame(width: Metrics.resultColumnWidth)
+                    }
                 }
+                .padding(Metrics.insets)
+                .frame(maxWidth: Metrics.contentWidth)
+                .frame(maxWidth: .infinity)
             }
-            .padding(Metrics.insets)
-            .frame(maxWidth: Metrics.contentWidth)
-            .frame(maxWidth: .infinity)
+            .onChange(of: geometry.size.height, initial: true) { _, height in
+                availableHeight = height
+            }
         }
     }
 
@@ -206,7 +226,7 @@ struct StudioAnalyzeCanvas: View {
         switch view {
         case .json:
             StudioAnalyzeDocumentView(url: loaded?.url, text: loaded?.raw)
-                .frame(height: Metrics.mediaMaxHeight)
+                .frame(height: mediaHeight)
                 .mereMediaFrame()
         case .transcript, .timeline, .text, .score, .stems, .vectors:
             mediaView
@@ -240,7 +260,7 @@ struct StudioAnalyzeCanvas: View {
                 }
                 StudioAnalyzeImageView(
                     url: inputURL,
-                    maxHeight: Metrics.mediaMaxHeight,
+                    maxHeight: mediaHeight,
                     detections: view == .masks ? [] : overlayDetections,
                     masks: view == .masks ? overlayDetections : [],
                     imageSize: inputSize,
@@ -265,7 +285,7 @@ struct StudioAnalyzeCanvas: View {
                 VStack(spacing: 8) {
                     StudioVideoPlayerView(url: playableVideoURL ?? inputURL)
                         .aspectRatio(videoAspect, contentMode: .fit)
-                        .frame(maxHeight: Metrics.mediaMaxHeight - 26)
+                        .frame(maxHeight: mediaHeight - 26)
                         .mereMediaFrame()
                     if case .tracking(let tracking) = document {
                         StudioAnalyzeTrackScrubber(document: tracking)
@@ -313,17 +333,23 @@ struct StudioAnalyzeCanvas: View {
                     prompts: editing.regionPrompts,
                     initFrame: editing.initFrame,
                     endFrame: editing.endFrame,
-                    maxHeight: Metrics.mediaMaxHeight - 96
+                    maxHeight: seedFrameHeight
                 )
             } else {
                 Rectangle()
                     .fill(MereRunTheme.surfaceRaised)
                     .aspectRatio(videoAspect, contentMode: .fit)
-                    .frame(maxHeight: Metrics.mediaMaxHeight - 96)
+                    .frame(maxHeight: seedFrameHeight)
                     .overlay { ProgressView().controlSize(.small) }
                     .mereMediaFrame()
             }
         }
+    }
+
+    /// The frame's share of the media height once the editor's own rows, and the Show result
+    /// row when a result is on file, have theirs.
+    private var seedFrameHeight: CGFloat {
+        mediaHeight - StudioTrackFrameEditor.rowsHeight - (resultDescribesInput ? 36 : 0)
     }
 
     /// Track writes an annotated clip; that is the one worth playing when it exists.

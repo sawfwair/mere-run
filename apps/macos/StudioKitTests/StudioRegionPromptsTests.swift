@@ -21,14 +21,48 @@ final class StudioRegionPromptsTests: XCTestCase {
         let comma = StudioRegionPrompt.box(CGRect(x: 0, y: 0, width: 10, height: 10), label: "  cup,  saucer , ")
         XCTAssertEqual(StudioRegionPromptText.boxLines([comma]), ["0,0,10,10,cup saucer"])
         XCTAssertNil(StudioRegionPrompt.box(.zero, label: " , ").label)
-        XCTAssertEqual(StudioRegionPromptText.boxText([cup, handle, unlabeled]), "40,30,160,110,coffee cup\n40,30,161,110")
+        // With a point among several boxes, an unlabeled box is named so the point can follow it.
+        XCTAssertEqual(StudioRegionPromptText.boxText([cup, handle, unlabeled]), "40,30,160,110,coffee cup\n40,30,161,110,object 2")
+        XCTAssertEqual(StudioRegionPromptText.boxText([cup, unlabeled]), "40,30,160,110,coffee cup\n40,30,161,110")
     }
 
     /// `VisionSegment.parsePointPrompt` takes `x,y,positive|negative[,label]`.
     func testPointTextIsWhatTheCLIParses() {
         XCTAssertEqual(StudioRegionPromptText.pointLines([handle, shadow]), ["400,260,positive", "12,18,negative,shadow"])
-        XCTAssertEqual(StudioRegionPromptText.pointText([cup, handle]), "400,260,positive")
+        XCTAssertEqual(StudioRegionPromptText.pointText([cup, handle]), "400,260,positive,coffee cup")
         XCTAssertEqual(StudioRegionPromptText.pointText([cup]), "")
+    }
+
+    /// The CLI groups points with boxes by label (`SAM31PromptSet.normalized`), so a point is
+    /// labeled after the box it refines: the only box, or the smallest box around it. An unlabeled
+    /// box passes nothing on, leaving the CLI's single-unlabeled-box rule to join them.
+    func testPointsAreLabeledAfterTheBoxTheyRefine() {
+        let inside = StudioRegionPrompt.point(CGPoint(x: 100, y: 70), isPositive: true)
+        let outside = StudioRegionPrompt.point(CGPoint(x: 600, y: 400), isPositive: false)
+        XCTAssertEqual(StudioRegionPromptText.pointLines([cup, inside, outside]), ["100,70,positive,coffee cup", "600,400,negative,coffee cup"])
+
+        let plain = StudioRegionPrompt.box(CGRect(x: 40, y: 30, width: 120, height: 80))
+        XCTAssertEqual(StudioRegionPromptText.pointLines([plain, inside, outside]), ["100,70,positive", "600,400,negative"])
+
+        // Several boxes: the point belongs to the smallest box containing it; one outside all of
+        // them stays unlabeled. An unlabeled box among several is named by its place so its point
+        // can follow it, and the box line carries the same name.
+        let saucer = StudioRegionPrompt.box(CGRect(x: 0, y: 0, width: 400, height: 300), label: "saucer")
+        let lid = StudioRegionPrompt.box(CGRect(x: 90, y: 60, width: 20, height: 20))
+        XCTAssertEqual(StudioRegionPromptText.pointLines([saucer, cup, inside, outside]), ["100,70,positive,coffee cup", "600,400,negative"])
+        XCTAssertEqual(StudioRegionPromptText.pointLines([saucer, cup, lid, inside]), ["100,70,positive,object 3"])
+        XCTAssertEqual(StudioRegionPromptText.boxLines([saucer, cup, lid, inside]).last, "90,60,110,80,object 3")
+        XCTAssertEqual(StudioRegionPromptText.boxLines([saucer, lid]).last, "90,60,110,80", "without points the boxes keep their own labels")
+        XCTAssertEqual(StudioRegionPromptText.boxLines([lid, inside]), ["90,60,110,80"], "one unlabeled box leaves the CLI's rule to join them")
+        XCTAssertEqual(StudioRegionPromptText.pointLines([lid, plain, inside, outside]), ["100,70,positive,object 1", "600,400,negative"])
+        XCTAssertEqual(StudioRegionPromptText.refinedBox(for: CGPoint(x: 100, y: 70), in: [saucer, cup, lid])?.id, lid.id)
+        XCTAssertNil(StudioRegionPromptText.refinedBox(for: CGPoint(x: 600, y: 400), in: [saucer, cup]))
+        // Read back, a point keeps the box label it was sent with.
+        let readBack = StudioRegionPromptText.prompts(boxText: StudioRegionPromptText.boxText([lid, plain, inside]), pointText: StudioRegionPromptText.pointText([lid, plain, inside]))
+        XCTAssertEqual(readBack.map(\.label), ["object 1", "object 2", "object 1"])
+
+        // A label of the point's own wins over the box's.
+        XCTAssertEqual(StudioRegionPromptText.pointLines([cup, shadow]), ["12,18,negative,shadow"])
     }
 
     func testDecodingAcceptsAndRejectsExactlyWhatTheCLIDoes() throws {
@@ -56,7 +90,8 @@ final class StudioRegionPromptsTests: XCTestCase {
         )
         XCTAssertEqual(decoded.map(\.isBox), [true, false, false])
         XCTAssertEqual(StudioRegionPromptText.boxText(decoded), "40,30,160,110,coffee cup")
-        XCTAssertEqual(StudioRegionPromptText.pointText(decoded), "400,260,positive\n12,18,negative,shadow")
+        // Written back, the unlabeled point is labeled after the one box it refines.
+        XCTAssertEqual(StudioRegionPromptText.pointText(decoded), "400,260,positive,coffee cup\n12,18,negative,shadow")
     }
 
     func testCountAndAccessibilityDescriptions() {
@@ -167,6 +202,95 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertEqual(hit(41, 31, selected: cup.id), .handle(id: cup.id, corner: .topLeading))
         XCTAssertEqual(hit(41, 31, selected: other.id), .box(id: cup.id), "only the selected box offers handles")
         XCTAssertNil(hit(900, 400))
+    }
+
+    // MARK: - What a press does
+
+    /// Every tool against everything a press can land on, with and without Option. Handles and
+    /// points always take the press; a box takes it only with the Box tool, so a click inside a
+    /// box with the Point tool adds the refining point there instead of grabbing the box.
+    func testPressPolicyCoversEveryToolHitAndModifier() {
+        let id = UUID()
+        let handle = StudioRegionHit.handle(id: id, corner: .bottomTrailing)
+        let hits: [StudioRegionHit?] = [nil, .box(id: id), .point(id: id), handle]
+        for tool in StudioRegionTool.allCases {
+            for hit in hits {
+                for optionHeld in [false, true] {
+                    let press = StudioRegionPress.press(tool: tool, hit: hit, optionHeld: optionHeld)
+                    let expected: StudioRegionPress
+                    switch (tool, hit) {
+                    case (_, .handle):
+                        expected = .resize(id: id, corner: .bottomTrailing)
+                    case (_, .point), (.box, .box):
+                        expected = .grab(id: id)
+                    case (.box, _):
+                        expected = .draw(click: optionHeld ? .addPoint(isPositive: false) : .clearSelection)
+                    case (.point, _):
+                        expected = .draw(click: .addPoint(isPositive: !optionHeld))
+                    case (.negativePoint, _):
+                        expected = .draw(click: .addPoint(isPositive: false))
+                    }
+                    XCTAssertEqual(press, expected, "\(tool) on \(String(describing: hit)) option=\(optionHeld)")
+                }
+            }
+        }
+    }
+
+    /// Delete and Forward Delete remove the selection and Escape clears it, only while there is a
+    /// selection and no text is being edited; every other key, and every key while typing, is
+    /// left alone.
+    func testKeysActOnTheSelectionOnlyWhenNothingIsEditingText() {
+        typealias Key = StudioRegionKeyCommand
+        XCTAssertEqual(Key.command(keyCode: Key.deleteKeyCode, hasSelection: true, textIsEditing: false), .removeSelection)
+        XCTAssertEqual(Key.command(keyCode: Key.forwardDeleteKeyCode, hasSelection: true, textIsEditing: false), .removeSelection)
+        XCTAssertEqual(Key.command(keyCode: Key.escapeKeyCode, hasSelection: true, textIsEditing: false), .clearSelection)
+        for keyCode in [Key.deleteKeyCode, Key.forwardDeleteKeyCode, Key.escapeKeyCode] {
+            XCTAssertNil(Key.command(keyCode: keyCode, hasSelection: true, textIsEditing: true), "typing in a field keeps its keys")
+            XCTAssertNil(Key.command(keyCode: keyCode, hasSelection: false, textIsEditing: false), "nothing selected, nothing to do")
+        }
+        // Return, space, and a letter never touch the selection.
+        for keyCode: UInt16 in [36, 49, 0] {
+            XCTAssertNil(Key.command(keyCode: keyCode, hasSelection: true, textIsEditing: false), "\(keyCode)")
+        }
+    }
+
+    /// A press that barely moved on screen, or moved less than a pixel of a zoomed-out picture,
+    /// is a click; anything more is a box.
+    func testAClickIsAPressThatCouldNotHaveMeantABox() {
+        let imageSize = CGSize(width: 4_000, height: 2_000)
+        let fitted = CGRect(x: 0, y: 0, width: 400, height: 200)
+        let start = CGPoint(x: 100, y: 100)
+        XCTAssertTrue(StudioRegionGeometry.isClick(from: start, to: start, imageSize: imageSize, fitted: fitted, slop: 4))
+        XCTAssertTrue(StudioRegionGeometry.isClick(from: start, to: CGPoint(x: 103, y: 102), imageSize: imageSize, fitted: fitted, slop: 4))
+        XCTAssertFalse(StudioRegionGeometry.isClick(from: start, to: CGPoint(x: 110, y: 108), imageSize: imageSize, fitted: fitted, slop: 4))
+        // Ten points along, nothing down: a zero-height rect is no box.
+        XCTAssertTrue(StudioRegionGeometry.isClick(from: start, to: CGPoint(x: 110, y: 100), imageSize: imageSize, fitted: fitted, slop: 4))
+        // Zoomed far out, a drag past the slop still spans less than a pixel of the picture.
+        let tiny = CGRect(x: 0, y: 0, width: 40, height: 40)
+        XCTAssertTrue(StudioRegionGeometry.isClick(from: .zero, to: CGPoint(x: 6, y: 6), imageSize: CGSize(width: 4, height: 4), fitted: tiny, slop: 4))
+        XCTAssertFalse(StudioRegionGeometry.isClick(from: .zero, to: CGPoint(x: 12, y: 12), imageSize: CGSize(width: 4, height: 4), fitted: tiny, slop: 4))
+    }
+
+    /// A tag never leaves the picture: a box's tag drops inside its corner when the box touches
+    /// the top edge, and a point's tag flips to the left, and slides inside the top and bottom
+    /// edges, when the marker is near them.
+    func testTagsStayInsideThePicture() {
+        let fitted = CGRect(x: 10, y: 20, width: 400, height: 300)
+        XCTAssertEqual(StudioRegionTagPlacement.boxSide(viewRect: CGRect(x: 50, y: 60, width: 80, height: 40), fitted: fitted, tagHeight: 20), .above)
+        XCTAssertEqual(StudioRegionTagPlacement.boxSide(viewRect: CGRect(x: 50, y: 30, width: 80, height: 40), fitted: fitted, tagHeight: 20), .inside)
+        XCTAssertEqual(StudioRegionTagPlacement.boxSide(viewRect: CGRect(x: 50, y: 40, width: 80, height: 40), fitted: fitted, tagHeight: 20), .above)
+
+        let tag = CGSize(width: 40, height: 16)
+        let middle = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 200, y: 150), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(middle, CGVector(dx: 34, dy: 0))
+        let nearRight = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 380, y: 150), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(nearRight, CGVector(dx: -34, dy: 0), "380 + 14 + 40 would pass the right edge at 410")
+        let atEdge = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 356, y: 150), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(atEdge.dx, 34, "356 + 14 + 40 lands exactly on the edge and still fits")
+        let nearTop = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 200, y: 22), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(nearTop.dy, 6, "the tag's centre moves down to 28 so its top sits on the edge at 20")
+        let nearBottom = StudioRegionTagPlacement.pointOffset(center: CGPoint(x: 200, y: 318), fitted: fitted, tagSize: tag, reach: 14)
+        XCTAssertEqual(nearBottom.dy, -6, "and up to 312 so its bottom sits on the edge at 320")
     }
 
     // MARK: - Upright versus stored
@@ -370,6 +494,33 @@ final class StudioRegionPromptsTests: XCTestCase {
 
     // MARK: - Into the command
 
+    /// Segment and Track start with nothing typed: the composer shows its placeholder and a run
+    /// carries only what was drawn, so "a person" never rides along as a real `--prompt`.
+    func testSegmentAndTrackStartWithAnEmptyPromptAndRunOnADrawingAlone() throws {
+        for mode in [StudioMode.segment, .track] {
+            var draft = StudioDraft()
+            draft.reset(for: mode)
+            XCTAssertEqual(draft.prompt, "", "\(mode)")
+            XCTAssertFalse(mode.promptPlaceholder.isEmpty, "\(mode)")
+            XCTAssertEqual(CommandCatalog.template(id: mode.defaultTemplateID)?.defaultPrompt, "", "\(mode)")
+
+            draft.inputPath = mode == .track ? "/tmp/clip.mp4" : "/tmp/mug.png"
+            XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)) { error in
+                XCTAssertEqual(error as? StudioCommandError, .missingPrompt("A prompt or a drawn box or point"))
+            }
+            draft.visionRegionPrompts = [cup]
+            let drawn = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+            let arguments = drawn.template.arguments(from: drawn.draft)
+            XCTAssertFalse(arguments.contains("--prompt"), "\(mode): \(arguments)")
+            XCTAssertTrue(arguments.contains("--box"), "\(mode)")
+
+            draft.visionRegionPrompts = nil
+            draft.prompt = "the mug"
+            let typed = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+            XCTAssertEqual(typed.draft.prompt, "the mug", "\(mode)")
+        }
+    }
+
     func testDrawnPromptsBecomeTheSegmentAndTrackCommandsBoxAndPointFlags() throws {
         var segment = StudioDraft()
         segment.reset(for: .segment)
@@ -378,7 +529,7 @@ final class StudioRegionPromptsTests: XCTestCase {
         segment.visionRegionPrompts = [cup, handle, shadow]
         let request = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)
         XCTAssertEqual(request.draft.visionBoxPrompts, "40,30,160,110,coffee cup")
-        XCTAssertEqual(request.draft.visionPointPrompts, "400,260,positive\n12,18,negative,shadow")
+        XCTAssertEqual(request.draft.visionPointPrompts, "400,260,positive,coffee cup\n12,18,negative,shadow")
         let arguments = request.template.arguments(from: request.draft)
         XCTAssertTrue(arguments.contains("--box"))
         XCTAssertTrue(arguments.contains("40,30,160,110,coffee cup"))
@@ -388,6 +539,18 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)) { error in
             XCTAssertEqual(error as? StudioCommandError, .missingPrompt("A prompt or a drawn box or point"))
         }
+
+        // Negative points alone refine nothing, with or without a text prompt.
+        let negative = StudioRegionPrompt.point(CGPoint(x: 12, y: 18), isPositive: false)
+        segment.visionRegionPrompts = [negative, shadow]
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)) { error in
+            XCTAssertEqual(error as? StudioCommandError, .negativePointsOnly)
+            XCTAssertEqual(error.localizedDescription, "Add a box or a positive point for the negative points to refine.")
+        }
+        segment.prompt = "the mug"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment))
+        segment.visionRegionPrompts = [negative, handle]
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment))
 
         var track = StudioDraft()
         track.reset(for: .track)
@@ -428,6 +591,16 @@ final class StudioRegionPromptsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(StudioDraft.self, from: Data(json.utf8))
         XCTAssertNil(decoded.visionRegionPrompts)
         XCTAssertEqual(decoded.visionInitFrame, 4)
+    }
+
+    /// `vision track` seeds on `--init-frame` and tracks the whole clip up to `--end-frame`, so the
+    /// range Studio shows starts at 0 whatever frame the prompts are on.
+    func testTrackRangeDescriptionStartsAtFrameZero() {
+        let grid = StudioVideoFrameGrid(duration: 2, frameRate: 30)
+        XCTAssertEqual(grid.trackRangeDescription(promptFrame: 10, endFrame: 30), "Prompts on frame 10 · tracks frames 0–30")
+        XCTAssertEqual(grid.trackRangeDescription(promptFrame: 10, endFrame: nil), "Prompts on frame 10 · tracks all 60 frames")
+        XCTAssertEqual(grid.trackRangeDescription(promptFrame: 0, endFrame: nil), "Prompts on frame 0 · tracks all 60 frames")
+        XCTAssertEqual(grid.trackRangeDescription(promptFrame: 99, endFrame: 99), "Prompts on frame 59 · tracks frames 0–59")
     }
 
     // MARK: - Subjects selectors

@@ -746,7 +746,10 @@ extension CommandArguments {
         args.option(F.kind, draft.musicTrainingKind)
         args.option(F.rank, String(draft.rank))
         args.option(F.alpha, format(draft.alpha))
-        args.option(F.factor, String(draft.musicTrainingFactor))
+        // `--factor` is LoKr's factorization target; the CLI's -1 picks balanced factors itself.
+        if draft.musicTrainingKind == "lokr", draft.musicTrainingFactor > 0 {
+            args.option(F.factor, String(draft.musicTrainingFactor))
+        }
         args.option(F.steps, String(draft.steps))
         args.option(F.learningRate, format(draft.learningRate))
         args.option(F.weightDecay, format(draft.musicTrainingWeightDecay))

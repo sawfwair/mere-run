@@ -343,6 +343,9 @@ final class ArtifactReceiptTests: XCTestCase {
         let template = try XCTUnwrap(CommandCatalog.template(id: .visionCaption))
         var draft = template.defaultDraft()
         draft.inputPath = "/in/frame.png"
+        // The store creates a directory destination when the job starts, so the template's
+        // proposal under the real Documents folder is pointed somewhere disposable.
+        draft.outputPath = try makeTemporaryDirectory().appendingPathComponent("captions").path
         let id = store.submit(makeRequest(template: template, draft: draft))
         let job = try XCTUnwrap(store.job(id))
 

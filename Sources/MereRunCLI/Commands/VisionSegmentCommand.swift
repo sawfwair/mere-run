@@ -33,13 +33,18 @@ struct VisionSegment: AsyncParsableCommand {
 
     @Option(
         name: [.long],
-        help: "Box prompt in image pixels: x1,y1,x2,y2[,label]. Repeat for multiple objects."
+        help: "Box prompt in image pixels: x1,y1,x2,y2[,label]. Each box is one object; points with the same label refine it."
     )
     var box: [String] = []
 
     @Option(
         name: [.long],
-        help: "Point prompt in image pixels: x,y,positive[,label] or x,y,negative[,label]. Repeat to build multi-point prompts."
+        help: """
+        Point prompt in image pixels: x,y,positive[,label] or x,y,negative[,label]. A labeled point refines the --box \
+        with that label around it (else the first with that label), or forms one object with the other points of that \
+        label. Unlabeled points form one object together, or refine the one unlabeled --box when there is exactly one. \
+        Points that match no box need a positive point among them.
+        """
     )
     var point: [String] = []
 

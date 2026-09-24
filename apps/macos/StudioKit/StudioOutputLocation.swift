@@ -25,6 +25,10 @@ package enum StudioOutputLocation {
     /// The `UserDefaults` key holding the user's chosen root ("" = the per-media defaults).
     package static let rootDefaultsKey = "mererun.app.outputRoot"
 
+    /// Where the chosen root is read from: the app's defaults. A test that files runs somewhere
+    /// else points this at a throwaway suite instead of writing into the user's settings.
+    nonisolated(unsafe) package static var defaults: UserDefaults = .standard
+
     /// Longest slug we keep before the identifier suffix.
     package static let maximumSlugLength = 60
 
@@ -70,7 +74,7 @@ package enum StudioOutputLocation {
     }
 
     private static func configuredRoot() -> String {
-        UserDefaults.standard.string(forKey: rootDefaultsKey) ?? ""
+        defaults.string(forKey: rootDefaultsKey) ?? ""
     }
 
     // MARK: - Reservations

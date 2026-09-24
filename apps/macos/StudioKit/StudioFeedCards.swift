@@ -74,18 +74,27 @@ package enum StudioFeedCardBuilder {
 /// never the whole stdout/stderr dump.
 package enum StudioFailureSummary {
     /// Lines that carry no diagnosis on their own: progress echoes, the shell's exit note,
-    /// tracebacks' framing, blank separators.
+    /// tracebacks' framing, blank separators, the usage trailer ArgumentParser prints under its
+    /// own error (`Usage: …`, `  See '… --help' …`, `Help:  --flag …`), which would otherwise be
+    /// the last line of every invalid request, and the detail a model-not-found error lists
+    /// under itself (`Upstream repo: …`, `Searched:`, then one `- /path` item per location).
     private static let noisePrefixes = [
         "traceback", "file \"", "  ", "^", "exited with code", "completed with exit code",
         "termination requested", "stderr", "warning:", "{", "[", "generating (", "denoising ",
+        "usage:", "see '", "help:", "- ", "searched:", "upstream repo:",
     ]
 
+    /// The framing the CLI puts in front of the line that is the reason.
+    private static let errorPrefixes = ["mere.run:", "error:", "Error:", "ERROR:", "fatal:"]
+
     /// Summarizes a run's captured text (`StudioLibraryItem.outputText`, which is the stdout and
-    /// stderr the run left behind) or its log lines, newest last.
+    /// stderr the run left behind) or its log lines, newest last. A line the CLI marked as the
+    /// error wins over whatever it printed after it; otherwise the last meaningful line stands.
     package static func summary(outputText: String?, logLines: [String] = [], exitCode: Int32?) -> String {
         // The log is newer than the captured text, so it is searched first (from its end).
         let candidates = (outputText ?? "").components(separatedBy: .newlines) + logLines
-        if let line = candidates.reversed().first(where: isMeaningful) {
+        if let line = candidates.reversed().first(where: { isMeaningful($0) && isMarkedError($0) })
+            ?? candidates.reversed().first(where: isMeaningful) {
             return cleaned(line)
         }
         if let exitCode {
@@ -129,10 +138,15 @@ package enum StudioFailureSummary {
         return true
     }
 
+    private static func isMarkedError(_ rawLine: String) -> Bool {
+        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        return errorPrefixes.contains { line.hasPrefix($0) }
+    }
+
     /// Drops CLI framing ("error:", "Error:", "mere.run:") and trailing punctuation noise.
     private static func cleaned(_ rawLine: String) -> String {
         var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        for prefix in ["mere.run:", "error:", "Error:", "ERROR:", "fatal:"] where line.hasPrefix(prefix) {
+        for prefix in errorPrefixes where line.hasPrefix(prefix) {
             line = String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
         }
         if let first = line.first, first.isLowercase {

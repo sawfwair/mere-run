@@ -579,6 +579,8 @@ package enum StudioCapabilityRequirement: Equatable {
 package enum StudioCommandError: LocalizedError, Equatable {
     case missingPrompt(String)
     case missingInput(String)
+    /// Every drawn prompt is a negative point, which only ever refines a box or a positive point.
+    case negativePointsOnly
     case missingTemplate(CommandTemplateID)
 
     package var errorDescription: String? {
@@ -587,6 +589,8 @@ package enum StudioCommandError: LocalizedError, Equatable {
             return "\(label) is required."
         case .missingInput(let label):
             return "Attach \(label.lowercased()) first."
+        case .negativePointsOnly:
+            return "Add a box or a positive point for the negative points to refine."
         case .missingTemplate(let id):
             return "No command template found for \(id.rawValue)."
         }
@@ -941,6 +945,12 @@ package enum StudioCommandAdapter {
             throw StudioCommandError.missingPrompt(
                 mode == .segment || mode == .track ? "A prompt or a drawn box or point" : "Prompt"
             )
+        }
+        // The CLI runs a negative point on its own as an object with nothing to include
+        // (`SAM31PromptSet.normalized`), so a drawing of only negative points cannot mean anything.
+        if mode == .segment || mode == .track, let drawn = draft.visionRegionPrompts, !drawn.isEmpty,
+           drawn.allSatisfy(\.isNegativePoint) {
+            throw StudioCommandError.negativePointsOnly
         }
         if mode == .track, let end = draft.visionEndFrame, end < (draft.visionInitFrame ?? 0) {
             throw StudioCommandError.missingPrompt("An end frame at or after the start frame")

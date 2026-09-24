@@ -396,6 +396,15 @@ package enum StudioRegionGeometry {
         )
     }
 
+    /// Whether a press that went from `start` to `end` was a click rather than a drag: it moved
+    /// less than `slop` points on screen, or less than a pixel of the picture on either axis (a
+    /// zoomed-out image), so it could not have meant a box.
+    package static func isClick(from start: CGPoint, to end: CGPoint, imageSize: CGSize, fitted: CGRect, slop: CGFloat) -> Bool {
+        let travelled = max(abs(end.x - start.x), abs(end.y - start.y))
+        let rect = imageRect(fromView: start, to: end, imageSize: imageSize, fitted: fitted)
+        return travelled < slop || rect.width < 1 || rect.height < 1
+    }
+
     /// The rect slid (not shrunk) back inside the image, so moving a box never distorts it.
     package static func clampedRect(_ rect: CGRect, within imageSize: CGSize) -> CGRect {
         var moved = rect.standardized
@@ -465,6 +474,121 @@ package enum StudioRegionHit: Equatable {
     }
 }
 
+// MARK: - What a press does
+
+/// What a click on the picture adds, given the tool in hand. A drag draws a box with any tool.
+package enum StudioRegionTool: Hashable, CaseIterable, Sendable {
+    case box
+    case point
+    case negativePoint
+}
+
+/// What a press on the layer starts, decided from the tool in hand and what is under the pointer.
+///
+/// Handles and points are small and always win: a press on the selected box's corner resizes it,
+/// and a press on a point selects it and a drag moves it, whatever the tool. Boxes belong to the
+/// Box tool: with it, a press on a box selects it and a drag moves it. With the Point and
+/// Negative tools a box's inside is more picture — a click there adds a point, because inside a
+/// box is exactly where a refining point goes, and a drag draws another box. On bare picture a
+/// drag always draws a box; a click adds a point (positive or negative per the tool, negative
+/// with Option) or, with the Box tool, clears the selection.
+package enum StudioRegionPress: Equatable {
+    /// The selected box's `corner`: the drag resizes it.
+    case resize(id: UUID, corner: StudioRegionBoxCorner)
+    /// A prompt: the press selects it and a drag moves it.
+    case grab(id: UUID)
+    /// The picture: a drag draws a box and a click does `click`.
+    case draw(click: StudioRegionClick)
+
+    package static func press(tool: StudioRegionTool, hit: StudioRegionHit?, optionHeld: Bool) -> StudioRegionPress {
+        switch hit {
+        case .handle(let id, let corner):
+            return .resize(id: id, corner: corner)
+        case .point(let id):
+            return .grab(id: id)
+        case .box(let id):
+            return tool == .box ? .grab(id: id) : .draw(click: StudioRegionClick.click(tool: tool, optionHeld: optionHeld))
+        case nil:
+            return .draw(click: StudioRegionClick.click(tool: tool, optionHeld: optionHeld))
+        }
+    }
+}
+
+/// What a click on the picture does.
+package enum StudioRegionClick: Equatable {
+    case addPoint(isPositive: Bool)
+    /// The Box tool draws; a bare click is how you deselect.
+    case clearSelection
+
+    package static func click(tool: StudioRegionTool, optionHeld: Bool) -> StudioRegionClick {
+        if optionHeld || tool == .negativePoint { return .addPoint(isPositive: false) }
+        return tool == .point ? .addPoint(isPositive: true) : .clearSelection
+    }
+}
+
+// MARK: - Keys while something is selected
+
+/// What a key does to the selection on the prompt layer. The layer reads the keyboard through
+/// an event monitor rather than SwiftUI focus, because a click that starts a drag gesture never
+/// makes the layer first responder, so it decides here from the raw key code: Delete and
+/// Forward Delete remove the selection, Escape clears it, and nothing happens while a text field
+/// is being edited (the composer's prompt, a label), so typing there is never affected.
+package enum StudioRegionKeyCommand: Equatable {
+    case removeSelection
+    case clearSelection
+
+    /// The virtual key codes of an ANSI keyboard, as `NSEvent.keyCode` reports them.
+    package static let deleteKeyCode: UInt16 = 51
+    package static let forwardDeleteKeyCode: UInt16 = 117
+    package static let escapeKeyCode: UInt16 = 53
+
+    package static func command(keyCode: UInt16, hasSelection: Bool, textIsEditing: Bool) -> StudioRegionKeyCommand? {
+        guard hasSelection, !textIsEditing else { return nil }
+        switch keyCode {
+        case deleteKeyCode, forwardDeleteKeyCode: return .removeSelection
+        case escapeKeyCode: return .clearSelection
+        default: return nil
+        }
+    }
+}
+
+// MARK: - Where a tag sits
+
+/// Where a prompt's numbered tag goes so it stays on the picture. A box's tag sits above its
+/// top-left corner unless the box touches the top of the picture, when it tucks inside the
+/// corner; a point's tag sits to the right of the marker unless that would leave the picture,
+/// when it sits to the left, and it slides down or up so it never crosses the top or bottom edge.
+package enum StudioRegionTagPlacement {
+    package enum BoxSide: Equatable {
+        case above
+        case inside
+    }
+
+    package static func boxSide(viewRect: CGRect, fitted: CGRect, tagHeight: CGFloat) -> BoxSide {
+        viewRect.minY - fitted.minY >= tagHeight ? .above : .inside
+    }
+
+    /// The offset from a point marker's centre to its tag's centre.
+    ///
+    /// - Parameters:
+    ///   - reach: how far from the marker's centre the tag's near edge starts (the marker's
+    ///     radius plus a gap).
+    package static func pointOffset(
+        center: CGPoint,
+        fitted: CGRect,
+        tagSize: CGSize,
+        reach: CGFloat
+    ) -> CGVector {
+        let distance = reach + tagSize.width / 2
+        let fitsTrailing = center.x + reach + tagSize.width <= fitted.maxX
+        let dx = fitsTrailing ? distance : -distance
+        let lowest = fitted.minY + tagSize.height / 2
+        let highest = max(lowest, fitted.maxY - tagSize.height / 2)
+        let dy = min(max(center.y, lowest), highest) - center.y
+        return CGVector(dx: dx, dy: dy)
+    }
+}
+
 // MARK: - The text the CLI reads
 
 /// Encoding prompts as the `--box` and `--point` values `vision segment` and `vision track` parse,
@@ -477,9 +601,9 @@ package enum StudioRegionHit: Equatable {
 /// coordinate a `Float`. Coordinates are written as whole pixels, which is what the CLI's help
 /// promises ("in image pixels") and what the result documents report back.
 package enum StudioRegionPromptText {
-    /// One `--box` value per box prompt.
+    /// One `--box` value per box prompt, with the labels `associating` gives.
     package static func boxLines(_ prompts: [StudioRegionPrompt]) -> [String] {
-        prompts.compactMap { prompt in
+        associating(prompts).boxes.compactMap { prompt in
             guard let rect = prompt.rect else { return nil }
             var fields = [rect.minX, rect.minY, rect.maxX, rect.maxY].map(StudioRegionPrompt.pixels)
             if let label = prompt.label { fields.append(label) }
@@ -487,14 +611,58 @@ package enum StudioRegionPromptText {
         }
     }
 
-    /// One `--point` value per point prompt.
+    /// One `--point` value per point prompt, labeled after the box it refines (`associating`).
     package static func pointLines(_ prompts: [StudioRegionPrompt]) -> [String] {
-        prompts.compactMap { prompt in
+        associating(prompts).points.compactMap { prompt in
             guard case .point(let x, let y, let isPositive) = prompt.shape else { return nil }
             var fields = [StudioRegionPrompt.pixels(x), StudioRegionPrompt.pixels(y), isPositive ? "positive" : "negative"]
             if let label = prompt.label { fields.append(label) }
             return fields.joined(separator: ",")
         }
+    }
+
+    /// The prompts as the CLI should read them, so each point stays with the box it was drawn on.
+    ///
+    /// The CLI groups a labeled point with the `--box` of the same label that contains it (else
+    /// the first of that label), and unlabeled points with the one unlabeled box when there is
+    /// exactly one (`SAM31PromptSet.normalized`). So a point drawn without a label of its own takes
+    /// the label of the box it belongs to: the only box, or the smallest box containing it. With
+    /// one box, an unlabeled box passes no label on and the CLI's single-unlabeled-box rule joins
+    /// them. With several boxes and at least one point, an unlabeled box is named "object 1",
+    /// "object 2", … by its place among the boxes, so the association survives the command line
+    /// (and the result document names the objects the same way). A point outside every box, or
+    /// inside none of several, stays unlabeled and forms one object with the other unlabeled
+    /// points. Read back from the command line (`prompts(boxText:pointText:)`), a point keeps the
+    /// box label it was sent with.
+    package static func associating(_ prompts: [StudioRegionPrompt]) -> [StudioRegionPrompt] {
+        var boxOrdinal = 0
+        let needsNames = prompts.boxes.count > 1 && !prompts.points.isEmpty
+        let named: [StudioRegionPrompt] = prompts.map { prompt in
+            guard prompt.isBox else { return prompt }
+            boxOrdinal += 1
+            guard needsNames, prompt.label == nil else { return prompt }
+            var labeled = prompt
+            labeled.label = "object \(boxOrdinal)"
+            return labeled
+        }
+        let boxes = named.boxes
+        return named.map { prompt in
+            guard let point = prompt.point, prompt.label == nil,
+                  let label = refinedBox(for: point, in: boxes)?.label else { return prompt }
+            var labeled = prompt
+            labeled.label = label
+            return labeled
+        }
+    }
+
+    /// The box a point refines: the only box, or the smallest one containing the point.
+    package static func refinedBox(for point: CGPoint, in boxes: [StudioRegionPrompt]) -> StudioRegionPrompt? {
+        if boxes.count == 1 { return boxes[0] }
+        return boxes
+            .compactMap { box in box.rect.map { (box: box, rect: $0) } }
+            .filter { $0.rect.contains(point) }
+            .min { $0.rect.width * $0.rect.height < $1.rect.width * $1.rect.height }?
+            .box
     }
 
     /// The `visionBoxPrompts` field: box lines joined with newlines.
@@ -655,6 +823,16 @@ package struct StudioVideoFrameGrid: Equatable, Sendable {
     package static func sourceTime(forPlanTime planTime: TimeInterval, sourceFrameRate: Double) -> TimeInterval {
         let rate = max(1, sourceFrameRate.isFinite && sourceFrameRate > 0 ? sourceFrameRate : fallbackFrameRate)
         return ((planTime * rate).rounded() + 0.5) / rate
+    }
+
+    /// "Prompts on frame 10 · tracks frames 0–30": what `vision track --init-frame 10 --end-frame
+    /// 30` does. The tracker segments the prompts on the init frame, then propagates through the
+    /// whole clip from frame 0 to the end frame (`SAM31VideoTracker.track` walks both directions
+    /// from the seed), so the range never starts at the prompt frame.
+    package func trackRangeDescription(promptFrame: Int, endFrame: Int?) -> String {
+        let prompts = "Prompts on frame \(clamped(promptFrame))"
+        guard let endFrame else { return "\(prompts) · tracks all \(frameCount) frames" }
+        return "\(prompts) · tracks frames 0–\(clamped(endFrame))"
     }
 
     /// "0:04.5" — the clock the scrubber shows beside the frame number.

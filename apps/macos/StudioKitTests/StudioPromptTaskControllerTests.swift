@@ -178,6 +178,62 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertTrue(runner.starts.isEmpty)
     }
 
+    /// Segment and Track take their picture as a positional argument and their prompts as `--box`
+    /// and `--point`. Restoring a recorded run lands the input first and the drawing after it, so
+    /// the boxes and points survive the input change that clears prompts drawn on another
+    /// picture, and Track's `--init-frame` / `--end-frame` come back onto its scrubber — whether
+    /// the run's task is opened afterwards or is the one already open.
+    func testUseTheseSettingsRestoresDrawnPromptsAndFramesWithTheirInput() throws {
+        let box = StudioRegionPrompt.box(CGRect(x: 40, y: 30, width: 120, height: 80))
+        let point = StudioRegionPrompt.point(CGPoint(x: 400, y: 260), isPositive: true)
+        let negative = StudioRegionPrompt.point(CGPoint(x: 12, y: 18), isPositive: false)
+        let expectedShapes: [StudioRegionPrompt.Shape] = [
+            .box(x1: 40, y1: 30, x2: 160, y2: 110),
+            .point(x: 400, y: 260, isPositive: true),
+            .point(x: 12, y: 18, isPositive: false)
+        ]
+
+        var segment = StudioDraft()
+        segment.reset(for: .segment)
+        segment.inputPath = root.appendingPathComponent("mug.png").path
+        segment.visionRegionPrompts = [box, point, negative]
+        let segmentRequest = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)
+        let segmentItem = library.start(request: segmentRequest, commandPreview: "fixture")
+
+        var track = StudioDraft()
+        track.reset(for: .track)
+        track.inputPath = root.appendingPathComponent("clip.mp4").path
+        track.visionRegionPrompts = [box, point]
+        track.visionInitFrame = 12
+        track.visionEndFrame = 40
+        let trackRequest = try StudioCommandAdapter.makeRequest(mode: .track, draft: track)
+        let trackItem = library.start(request: trackRequest, commandPreview: "fixture")
+
+        // Restored from another task, then opened: the route through `activate`.
+        activate(.chat)
+        XCTAssertTrue(prompt.useSettings(from: segmentItem))
+        activate(.segment, selected: segmentItem.id)
+        XCTAssertEqual(prompt.draft.inputPath, segment.inputPath)
+        XCTAssertEqual(prompt.draft.visionRegionPrompts?.map(\.shape), expectedShapes)
+
+        XCTAssertTrue(prompt.useSettings(from: trackItem))
+        activate(.track, selected: trackItem.id)
+        XCTAssertEqual(prompt.draft.inputPath, track.inputPath)
+        XCTAssertEqual(prompt.draft.visionRegionPrompts?.map(\.shape), Array(expectedShapes.prefix(2)))
+        XCTAssertEqual(prompt.draft.visionInitFrame, 12)
+        XCTAssertEqual(prompt.draft.visionEndFrame, 40)
+
+        // Restored into the open task, after the picture was replaced and the drawing lost.
+        prompt.draft.replaceInput(root.appendingPathComponent("other.mp4").path)
+        XCTAssertNil(prompt.draft.visionRegionPrompts)
+        XCTAssertTrue(prompt.useSettings(from: trackItem))
+        XCTAssertEqual(prompt.draft.inputPath, track.inputPath)
+        XCTAssertEqual(prompt.draft.visionRegionPrompts?.map(\.shape), Array(expectedShapes.prefix(2)))
+        XCTAssertEqual(prompt.draft.visionInitFrame, 12)
+        XCTAssertEqual(prompt.draft.visionEndFrame, 40)
+        XCTAssertTrue(runner.starts.isEmpty)
+    }
+
     /// A Console run of a template the composer does not build (an upscale, an edit) records a
     /// command but has no composer to land in, so the action is not offered rather than failing.
     func testUseTheseSettingsIsOnlyOfferedForCommandsTheComposerBuilds() throws {

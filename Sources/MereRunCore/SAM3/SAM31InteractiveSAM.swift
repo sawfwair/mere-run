@@ -310,6 +310,11 @@ final class SAM31InteractivePromptEncoder: Module {
         return sharedEmbedding(size: (height, width)).expandedDimensions(axis: 0)
     }
 
+    /// Sparse and dense prompt embeddings, the way SAM 2's `PromptEncoder.forward` builds them for
+    /// the tracker head SAM 3.1 inherits (`sam2_base._forward_sam_heads`): a box becomes its two
+    /// corners, labeled 2 and 3, ahead of the points, and every point list ends in one "not a
+    /// point" pad token (`_embed_points(pad=True)`), which is also the whole sparse prompt when
+    /// only a mask is given.
     func callAsFunction(
         points: SAM31PointPromptTensor? = nil,
         boxes: MLXArray? = nil,
@@ -320,20 +325,26 @@ final class SAM31InteractivePromptEncoder: Module {
         var batch = 1
         var sparseEmbeddings = MLX.zeros([1, 0, embedDim], dtype: .float32)
 
-        if let points {
-            batch = points.coords.dim(0)
-            let pointEmbeddings = embedPoints(points.coords, labels: points.labels, targetHeight: targetHeight, targetWidth: targetWidth)
-            sparseEmbeddings = pointEmbeddings
-        }
-
-        if let boxes {
-            batch = boxes.dim(0)
-            let boxEmbeddings = embedBoxes(boxes, targetHeight: targetHeight, targetWidth: targetWidth)
-            if sparseEmbeddings.dim(1) == 0 {
-                sparseEmbeddings = boxEmbeddings
-            } else {
-                sparseEmbeddings = MLX.concatenated([sparseEmbeddings, boxEmbeddings], axis: 1)
+        if points != nil || boxes != nil {
+            var coords: [MLXArray] = []
+            var labels: [MLXArray] = []
+            if let boxes {
+                batch = boxes.dim(0)
+                let boxCount = boxes.dim(1)
+                coords.append(boxes.reshaped(batch, boxCount * 2, 2))
+                labels.append(MLX.broadcast(
+                    MLXArray((0..<boxCount).flatMap { _ in [Int32(2), Int32(3)] }, [1, boxCount * 2]),
+                    to: [batch, boxCount * 2]
+                ))
             }
+            if let points {
+                batch = points.coords.dim(0)
+                coords.append(points.coords)
+                labels.append(points.labels.asType(.int32))
+            }
+            coords.append(MLX.zeros([batch, 1, 2], dtype: .float32))
+            labels.append(MLX.full([batch, 1], values: MLXArray(Int32(-1))))
+            sparseEmbeddings = embedPoints(MLX.concatenated(coords, axis: 1), labels: MLX.concatenated(labels, axis: 1))
         }
 
         let denseEmbeddings: MLXArray
@@ -358,46 +369,21 @@ final class SAM31InteractivePromptEncoder: Module {
         return (sparseEmbeddings, denseEmbeddings, imagePE)
     }
 
-    private func embedPoints(_ coords: MLXArray, labels: MLXArray, targetHeight: Int, targetWidth: Int) -> MLXArray {
+    /// `PromptEncoder._embed_points`: each point's positional encoding (shifted to the pixel
+    /// center, normalized to the input size) plus the embedding of its own label; a label of -1 is
+    /// the pad token, whose positional encoding is dropped.
+    func embedPoints(_ coords: MLXArray, labels: MLXArray) -> MLXArray {
         let shifted = coords + 0.5
         let normalizer = MLXArray(
             [Float(max(inputImageSize.width, 1)), Float(max(inputImageSize.height, 1))],
             [1, 1, 2]
         ).asType(.float32)
-        var pointEmbeddings = sharedEmbedding.forwardWithCoords(shifted / normalizer)
-
-        let count = labels.dim(labels.ndim - 1)
-        for index in 0..<count {
-            let labelSlice = labels[0..., index..<(index + 1)]
-            let validMask = labelSlice .>= MLXArray(0)
-            let safeLabels = MLX.maximum(labelSlice, 0)
-            let labelEmbedding = pointEmbed(safeLabels.asType(.int32))
-            pointEmbeddings = pointEmbeddings + labelEmbedding * validMask.expandedDimensions(axis: -1).asType(labelEmbedding.dtype)
-
-            let paddingMask = labelSlice .== MLXArray(-1)
-            if MLX.any(paddingMask).item(Bool.self) {
-                let notPoint = notAPointEmbed.weight.reshaped(1, 1, embedDim)
-                pointEmbeddings = MLX.where(paddingMask.expandedDimensions(axis: -1), notPoint, pointEmbeddings)
-            }
-        }
-        return pointEmbeddings
-    }
-
-    private func embedBoxes(_ boxes: MLXArray, targetHeight: Int, targetWidth: Int) -> MLXArray {
-        let reshaped = (boxes + 0.5).reshaped(boxes.dim(0), boxes.dim(1) * 2, 2)
-        let normalizer = MLXArray(
-            [Float(max(inputImageSize.width, 1)), Float(max(inputImageSize.height, 1))],
-            [1, 1, 2]
-        ).asType(.float32)
-        let cornerEmbeddings = sharedEmbedding.forwardWithCoords(reshaped / normalizer)
-        let firstLabel = MLXArray([2], [1, 1]).asType(.int32)
-        let secondLabel = MLXArray([3], [1, 1]).asType(.int32)
-        for boxIndex in 0..<boxes.dim(1) {
-            let start = boxIndex * 2
-            cornerEmbeddings[0..., start..<(start + 1), 0...] = cornerEmbeddings[0..., start..<(start + 1), 0...] + pointEmbed(firstLabel)
-            cornerEmbeddings[0..., (start + 1)..<(start + 2), 0...] = cornerEmbeddings[0..., (start + 1)..<(start + 2), 0...] + pointEmbed(secondLabel)
-        }
-        return cornerEmbeddings
+        let positional = sharedEmbedding.forwardWithCoords(shifted / normalizer)
+        let labelEmbedding = pointEmbed(MLX.maximum(labels, 0).asType(.int32))
+        let isPoint = (labels .>= MLXArray(0)).expandedDimensions(axis: -1)
+        let embedded = positional + labelEmbedding * isPoint.asType(labelEmbedding.dtype)
+        let isPad = (labels .== MLXArray(-1)).expandedDimensions(axis: -1)
+        return MLX.where(isPad, notAPointEmbed.weight.reshaped(1, 1, embedDim), embedded)
     }
 }
 

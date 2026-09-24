@@ -247,6 +247,9 @@ recorded prompt, model, and options in the composer, ready to tweak and run
 again. `StudioLibraryDraftRestoration` reads the recorded command back through
 the same contract bindings the Command view uses, replaces the task's parked
 draft and any Command view override, and records the run as the draft's parent.
+An input-first command's file argument lands first, through `replaceInput`, so
+the `--box`, `--point`, `--init-frame`, and `--end-frame` that follow it come
+back onto the picture rather than being cleared with the input change.
 Only options a page control binds come back; a Command view extra with no
 control (an option the composer never shows) is not restored, and a row whose
 command the composer does not build (an upscale or edit run from the Console)
@@ -308,7 +311,8 @@ Reveal, Copy, and Save to…; outputs drag out to Finder. A run in flight is a
 card that observes its `Job` directly — progress bar, "Denoising 15/24 · 0:41",
 Cancel, and the log tail behind an Activity disclosure — and a queued run is a
 row with Remove; both come from `JobStore`, not from a controller mirror. A
-failed run leads with the last meaningful stderr line, keeps the log behind
+failed run leads with the line the CLI marked as the error (else the last
+meaningful stderr line; a `Searched:` list of model locations is never it), keeps the log behind
 "Show log", and offers Retry. Validation errors ("Prompt is required.") render
 as a banner under the composer; readiness (missing model, missing CLI) is a card
 at the bottom of the feed, so it never hides earlier work. The card speaks
@@ -354,24 +358,46 @@ Segment and Track take their prompts on the picture rather than as typed
 coordinates (`StudioUI/StudioRegionPromptEditor.swift`, the geometry and the CLI
 text in `StudioKit/StudioRegionPrompts.swift`). Over the input, a drag draws a
 box, a click adds a point, and Option-click adds a negative point; a Box /
-Point / Negative / Clear toolbar picks what a click does, the selected box shows
-corner handles, drags move a prompt, and Delete removes the selection. Each
-prompt is a VoiceOver element ("Box 1, coffee cup, 120 by 80 at 40, 30"). The
-prompts live on the draft (`StudioDraft.visionRegionPrompts`) in the input's own
-pixels and become the command's `--box` / `--point` values, so the composer, the
-Command view, and the run all read one set (a `--box` typed in the Command view
-appears on the picture through the same binding table); a drawn prompt
-satisfies the task's prompt requirement. Replacing the input, by any route,
-clears the prompts and frames drawn on the previous one. A photo is shown
+Point / Negative / Clear toolbar picks what a click does. What a press starts
+is one pure decision (`StudioRegionPress.press(tool:hit:optionHeld:)`): a
+point, or the selected box's corner handle, always takes the press (select and
+move, or resize); a box takes it only with the Box tool, so with the Point or
+Negative tool a click inside a box adds the point there — inside a box is where
+a refining point goes — and a drag inside it draws another box. The selected
+box is solid with a white halo and corner handles, the selected point has a
+ring; Delete (or Forward Delete) removes the selection and Escape clears it.
+Those keys arrive through one local `NSEvent` key-down monitor
+(`StudioRegionKeyMonitor`, owned by the layer whose prompt was pressed last and
+installed only while it holds a selection) rather than SwiftUI focus, because a
+click that starts the drawing gesture never makes the layer first responder;
+`StudioRegionKeyCommand` in StudioKit decides the key and ignores every key
+while a text field is being edited, so typing in the composer is never
+affected. A prompt's numbered
+tag flips or slides to stay on the picture. Each prompt is a VoiceOver element
+("Box 1, coffee cup, 120 by 80 at 40, 30"). The prompts live on the draft
+(`StudioDraft.visionRegionPrompts`) in the input's own pixels and become the
+command's `--box` / `--point` values, so the composer, the Command view, and
+the run all read one set (a `--box` typed in the Command view appears on the
+picture through the same binding table); a drawn prompt satisfies the task's
+prompt requirement, and the composer starts empty with a placeholder rather
+than a prefilled prompt, so a drawing runs on its own. Replacing the input, by
+any route, clears the prompts and frames drawn on the previous one. A photo is shown
 upright, as the well shows it, while its prompts and the CLI's result boxes are
 kept in the file's stored pixels — the space the CLI decodes without the EXIF
 transform — with `StudioImageOrientation` mapping between the two for all eight
 orientations. Track shows its clip as a frame scrubber
 (`StudioUI/StudioTrackFrameEditor.swift`, frames decoded with
-`AVAssetImageGenerator`): "Start tracking here" seeds the tracker on the frame
-in view, where the prompts are drawn, and "End tracking here" sets the optional
-last frame (`--init-frame` / `--end-frame`). Once a tracked clip exists it plays
-in place, with "Adjust prompts and frames" bringing the scrubber back.
+`AVAssetImageGenerator`): "Prompts here" makes the frame in view the prompt
+frame the tracker seeds on (`--init-frame`), and "End here" sets the optional
+last frame (`--end-frame`); the full sentence is each button's help, and the
+buttons fall back to their icons when the column is too narrow for the titles.
+The CLI then tracks the whole clip from frame 0 through the end frame, not
+from the prompt frame, so the range line under the scrubber reads "Prompts on
+frame 10 · tracks frames 0–30" and the scrubber shades that span. The picture
+itself takes the height the column has above the composer
+(`StudioAnalyzeMediaLayout`), so a portrait input fits the visible area instead
+of running under the composer. Once a tracked clip exists it plays in place,
+with "Adjust prompts and frames" bringing the scrubber back.
 
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
 steps — for twenty-two tasks, seventeen of which still render their own form
@@ -963,6 +989,30 @@ and in-flight animations land, so a loaded machine can still capture a board
 mid-settle. Together with the offscreen substitutions above — lifted glass
 content, hidden scroll-edge effects, an opaque title bar — that makes the shots
 comparable by eye across runs, not a byte-for-byte pixel gate.
+
+`StudioKitTests/StudioLiveAcceptanceTests` is the other gated harness: it runs
+the real CLI against the models installed on the Mac, without the app. Each
+test builds a flow's command the way its page does (`StudioCommandAdapter` for
+composer tasks, the page's own `CommandDraft` for specialist pages), runs it,
+and decodes the output with the page's decoder, asserting what the page would
+show — Decisions, Segment with a drawn box and points on a generated photo
+(with an EXIF-rotated copy), Track's prompt frame and range, Find handing its
+boxes to Segment, Faces, Depth, multi-view geometry and InstantMesh cameras,
+Who Spoke, Music analyze, instruments, and the training manifest, run plans and
+`run inspect`, Sound's renoise, a chat turn with thinking shown, and a failed
+turn's one-line reason. Inputs are drawn, synthesized, or generated with the CLI
+into the run directory; nothing binary is committed. It is skipped unless
+`MERERUN_LIVE_ACCEPTANCE_DIR` names a directory, and each test skips on its own
+when a model it needs is not installed (`mere.run model list --json`). The CLI
+is the package's debug build, or `MERERUN_LIVE_CLI`. Every step's argv, stdout,
+stderr, and exit code are kept under `<dir>/<flow>/`, and `<dir>/summary.log`
+gets one line per flow. A full pass loads a dozen models and takes several
+minutes; one flow at a time is `--filter StudioLiveAcceptanceTests/test04`:
+
+```
+swift build
+MERERUN_LIVE_ACCEPTANCE_DIR=/tmp/live swift test --filter StudioLiveAcceptanceTests
+```
 
 ## Packaging, updates, and support
 

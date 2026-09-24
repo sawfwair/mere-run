@@ -243,7 +243,7 @@ package enum StudioConsoleCommand {
         var index = capability.command.count
         while index < argv.count {
             let token = argv[index]
-            let parts = token.split(separator: "=", maxSplits: 1).map(String.init)
+            let parts = token.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
             let flag = parts.first ?? token
             if let option = declared[flag] {
                 if option.kind == .boolean {

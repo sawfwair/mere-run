@@ -861,37 +861,6 @@ private enum StudioVisionOverlayKind {
     case pose
 }
 
-private struct StudioFaceOverlayResult: Decodable {
-    struct Record: Decodable {
-        struct Detection: Decodable {
-            struct Box: Decodable {
-                let x: Double
-                let y: Double
-                let width: Double
-                let height: Double
-            }
-            struct Point: Decodable {
-                let x: Double
-                let y: Double
-            }
-            let score: Double
-            let boundingBox: Box
-            let landmarks: [Point]
-
-            enum CodingKeys: String, CodingKey {
-                case score
-                case boundingBox = "boundingBox"
-                case landmarks
-            }
-        }
-        let index: Int
-        let detection: Detection
-    }
-    let width: Int
-    let height: Int
-    let faces: [Record]
-}
-
 private struct StudioPoseOverlayResult: Decodable {
     struct Subject: Decodable {
         struct Point: Decodable {
@@ -962,16 +931,16 @@ private struct StudioVisionOverlayPreview: View {
         // landmarks in the stored pixels the CLI decoded, so they map through the orientation.
         image = StudioImagePreviewLoader.downsampledImage(from: imageURL, maxPixelSize: 1_600)?.image
         orientation = StudioImageMetadata.read(imageURL)?.orientation ?? .up
-        do {
-            let data = try Data(contentsOf: jsonURL)
-            switch kind {
-            case .faces:
-                faces = try JSONDecoder().decode(StudioFaceOverlayResult.self, from: data)
-            case .pose:
-                pose = try JSONDecoder().decode(StudioPoseOverlayResult.self, from: data)
+        switch kind {
+        case .faces:
+            faces = StudioFaceOverlayResult.load(from: jsonURL)
+            if faces == nil { error = "\(jsonURL.lastPathComponent) is not a face detection result." }
+        case .pose:
+            do {
+                pose = try JSONDecoder().decode(StudioPoseOverlayResult.self, from: Data(contentsOf: jsonURL))
+            } catch {
+                self.error = error.localizedDescription
             }
-        } catch {
-            self.error = error.localizedDescription
         }
     }
 

@@ -5,6 +5,34 @@ import XCTest
 /// json`, `music analyze`, and the three shapes of `run inspect --json`. Each sample is written
 /// the way the CLI's own Codable types encode it.
 final class StudioSpecialistResultsTests: XCTestCase {
+    // MARK: - vision face detect
+
+    /// `vision face detect --json-output` on a 512×512 portrait, as `FaceAnalysisResult` encodes it.
+    func testFaceDetectionResultDecodesForTheOverlay() throws {
+        let json = """
+        {"elapsedMilliseconds":558.9,"height":512,"image":"/tmp/portrait-512.png","modelID":"vision-face-buffalo-l","width":512,
+         "faces":[{"index":0,"detection":{"score":0.7824,
+           "boundingBox":{"height":369.15,"width":259.37,"x":126.61,"y":46.76},
+           "landmarks":[{"x":194.73,"y":187.0},{"x":315.77,"y":186.16},{"x":257.02,"y":270.04},{"x":189.64,"y":295.28},{"x":326.75,"y":294.3}]}}]}
+        """
+        let result = try JSONDecoder().decode(StudioFaceOverlayResult.self, from: Data(json.utf8))
+        XCTAssertEqual(result.width, 512)
+        XCTAssertEqual(result.height, 512)
+        XCTAssertEqual(result.faces.map(\.index), [0])
+        let face = try XCTUnwrap(result.faces.first)
+        XCTAssertEqual(face.detection.score, 0.7824)
+        XCTAssertEqual(face.detection.boundingBox, .init(x: 126.61, y: 46.76, width: 259.37, height: 369.15))
+        XCTAssertEqual(face.detection.landmarks.count, 5, "Buffalo-L reports five landmarks")
+        XCTAssertEqual(face.detection.landmarks.first, .init(x: 194.73, y: 187.0))
+
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("face-\(UUID().uuidString).json")
+        try Data(json.utf8).write(to: url)
+        XCTAssertEqual(StudioFaceOverlayResult.load(from: url), result)
+        XCTAssertNil(StudioFaceOverlayResult.load(from: url.appendingPathExtension("missing")))
+        try Data(#"{"width":1}"#.utf8).write(to: url)
+        XCTAssertNil(StudioFaceOverlayResult.load(from: url), "a document without faces is not a face result")
+    }
+
     // MARK: - speech diarize
 
     func testDiarizationLoadsThePayloadAndSummarizesSpeakers() throws {
@@ -21,19 +49,27 @@ final class StudioSpecialistResultsTests: XCTestCase {
           "segments" : [
             { "speaker" : "speaker_0", "speaker_index" : 0, "start_seconds" : 0.0, "end_seconds" : 4.0, "duration_seconds" : 4.0 },
             { "speaker" : "speaker_1", "speaker_index" : 1, "start_seconds" : 4.5, "end_seconds" : 8.0, "duration_seconds" : 3.5 },
-            { "speaker" : "speaker_0", "speaker_index" : 0, "start_seconds" : 8.2, "end_seconds" : 70.2, "duration_seconds" : 62.0 }
+            { "speaker" : "speaker_0", "speaker_index" : 0, "start_seconds" : 8.2, "end_seconds" : 70.2, "duration_seconds" : 62.0 },
+            { "speaker" : "speaker_1", "speaker_index" : 1, "start_seconds" : 70.5, "end_seconds" : 70.9, "duration_seconds" : 0.4 }
           ]
         }
         """)
 
         let document = try XCTUnwrap(StudioDiarizationDocument.load(from: url))
 
-        XCTAssertEqual(document.summary, "2 speakers · 3 turns · 3:12")
+        XCTAssertEqual(document.summary, "2 speakers · 4 turns · 3:12")
         XCTAssertEqual(document.speakers.map(\.name), ["Speaker 1", "Speaker 2"])
-        XCTAssertEqual(document.speakers.map(\.turnCount), [2, 1])
+        XCTAssertEqual(document.speakers.map(\.turnCount), [2, 2])
         XCTAssertEqual(document.speakers.map(\.talkTimeDescription), ["1:06", "0:04"])
-        // The Analyze panel's rows name the turn's span, since a diarized turn has no words.
-        XCTAssertEqual(StudioAnalyzeDocument.diarization(document).speechSegments.map(\.text), ["Spoke for 0:04", "Spoke for 0:04", "Spoke for 1:02"])
+        // The Analyze panel's rows name the turn's span, since a diarized turn has no words; a
+        // turn under a second reads in seconds rather than as "0:00".
+        XCTAssertEqual(
+            StudioAnalyzeDocument.diarization(document).speechSegments.map(\.text),
+            ["Spoke for 0:04", "Spoke for 0:04", "Spoke for 1:02", "Spoke for 0.4 s"]
+        )
+        XCTAssertEqual(StudioTimeFormat.spanString(0.96), "1.0 s")
+        XCTAssertEqual(StudioTimeFormat.spanString(1.0), "0:01")
+        XCTAssertEqual(StudioTimeFormat.spanString(75), "1:15")
     }
 
     func testAnRTTMTimelineIsNotADocument() throws {

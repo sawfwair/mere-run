@@ -1226,7 +1226,7 @@ swift run mere.run vision segment ./photo.jpg --prompt "a cat"
 Key options:
 
 - `--prompt`: one or more text object prompts
-- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts
+- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts, one object each
 - `--point`: one or more `x,y,positive[,label]` or `x,y,negative[,label]` geometry prompts
 - `--model`: managed model id or local SAM 3.1 model root
 - `--output`: annotated image path
@@ -1251,6 +1251,12 @@ Defaults:
 Notes:
 
 - still-image runs accept text, box, and point prompts in the same invocation
+- boxes and points combine by label: a labeled `--point` refines the `--box`
+  with the same label that contains it (else the first box with that label),
+  or forms one object with the other points of that label; unlabeled points
+  form one object together, or refine the one unlabeled `--box` when there is
+  exactly one. Points that match no box must include a positive point; a
+  negative point on its own is rejected, since it describes nothing
 - `--mask-output-dir` writes one PNG mask per exported detection candidate
 - empty detection sets still produce annotated output plus JSON metadata
 
@@ -1261,6 +1267,7 @@ swift run mere.run vision segment ./photo.jpg --prompt "a cat"
 swift run mere.run vision segment ./photo.jpg --prompt "a person" "a phone" --show-boxes
 swift run mere.run vision segment ./photo.jpg --box "120,80,420,760,person" --mask-output-dir ./masks
 swift run mere.run vision segment ./photo.jpg --point "512,384,positive,person" --point "700,200,negative,person"
+swift run mere.run vision segment ./photo.jpg --box "120,80,420,760" --point "260,400,positive" --point "400,700,negative"
 swift run mere.run vision segment ./photo.jpg --prompt "a dog" --output ./photo-segmented.png --json-output ./photo-segmented.json
 ```
 
@@ -1276,8 +1283,10 @@ swift run mere.run vision track ./clip.mp4 --prompt "a dog"
 Key options:
 
 - `--prompt`: one or more text prompts used to seed objects on the init frame
-- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts
-- `--point`: one or more `x,y,positive[,label]` or `x,y,negative[,label]` geometry prompts
+- `--box`: one or more `x1,y1,x2,y2[,label]` geometry prompts, one object each
+- `--point`: one or more `x,y,positive[,label]` or `x,y,negative[,label]`
+  geometry prompts, grouped with boxes by label the way `vision segment` groups
+  them
 - `--init-frame`: starting frame index for seeding
 - `--end-frame`: optional inclusive final frame index
 - `--output`: annotated video path
@@ -1301,7 +1310,11 @@ Defaults:
 Notes:
 
 - text prompts seed objects on `--init-frame`, then the native tracker reuses geometry prompts for later frames
-- box and point prompts seed explicit tracked objects directly on the init frame
+- box and point prompts seed explicit tracked objects directly on the init frame,
+  grouped by label the way `vision segment` groups them; points act only on the
+  init frame and when an object the propagated box lost is re-seeded from its
+  seed geometry, never on the box propagated from the previous frame, since
+  they were placed on the init frame and the object has moved
 - `--mask-output-dir` writes per-frame mask PNGs under frame-named subdirectories
 - prompt sets must include at least one text, box, or point prompt
 - `--preflight --json` prints a structured report without loading SAM,

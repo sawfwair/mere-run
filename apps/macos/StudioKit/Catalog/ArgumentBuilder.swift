@@ -59,10 +59,26 @@ package struct ArgumentBuilder {
         arguments.append(isEnabled ? enabled : disabled)
     }
 
-    /// Appends `--flag value`.
+    /// Appends `--flag value`, or `--flag=value` when the value starts with a dash.
     package mutating func option(_ flag: String, _ value: String) {
-        arguments.append(flag)
-        arguments.append(value)
+        arguments += Self.optionArguments(flag, value)
+    }
+
+    /// `[flag, value]`, or the one joined `flag=value` argument when the value starts with a
+    /// dash. ArgumentParser reads a separate `-1` after an option as the next option and fails
+    /// with "Missing value", so a negative number (a peak of -1 dBFS, a MIDI transposition of
+    /// -12) only reaches the CLI in the joined form. Every place that writes a flag and its value
+    /// into argv goes through here; every reader splits a token on its first `=`.
+    package static func optionArguments(_ flag: String, _ value: String) -> [String] {
+        value.hasPrefix("-") ? ["\(flag)=\(value)"] : [flag, value]
+    }
+
+    /// The flag a token spells and the value joined to it: `--flag=value` reads as
+    /// `("--flag", "value")`, `--flag` as `("--flag", nil)`, and a value or a subcommand as nil.
+    package static func splitOption(_ token: String) -> (flag: String, value: String?)? {
+        guard token.hasPrefix("--") else { return nil }
+        let parts = token.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+        return (String(parts[0]), parts.count == 2 ? String(parts[1]) : nil)
     }
 
     /// Appends `--flag value` once per value, for the options the contract marks repeatable.

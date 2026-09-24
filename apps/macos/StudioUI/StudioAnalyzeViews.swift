@@ -491,12 +491,38 @@ struct StudioAnalyzeResultPanel: View {
         case .text, .score:
             textRow
         default:
-            if detections.isEmpty {
-                textRow
-            } else {
+            if !detections.isEmpty {
                 detectionRows
+            } else if document != nil {
+                noMatchesRow
+            } else {
+                textRow
             }
         }
+    }
+
+    /// A finished run that found nothing says so in words, rather than showing the CLI's
+    /// summary, and points at what usually works instead.
+    @ViewBuilder
+    private var noMatchesRow: some View {
+        let prompt = item.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let drawable = item.mode == .segment || item.mode == .track
+        VStack(alignment: .leading, spacing: 4) {
+            Text(prompt.isEmpty ? "Nothing matched." : "Nothing matched \u{201C}\(prompt)\u{201D}.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(MereRunTheme.textPrimary)
+            Text(drawable
+                 ? "Segmentation looks for things by what they are, not their shape. Try other words, or draw a box around it."
+                 : "Try other words, or a lower threshold.")
+                .font(.system(size: 12))
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+        hairline(0.27)
     }
 
     private var detectionRows: some View {

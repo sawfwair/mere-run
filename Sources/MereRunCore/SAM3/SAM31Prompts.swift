@@ -39,6 +39,11 @@ public struct SAM31PromptBox: Codable, Hashable, Sendable {
     public var segmentationBox: SAM31SegmentationBox {
         SAM31SegmentationBox(x1: x1, y1: y1, x2: x2, y2: y2)
     }
+
+    /// Whether `point` lies inside the box, edges included.
+    public func contains(_ point: SAM31PromptPoint) -> Bool {
+        (x1...x2).contains(point.x) && (y1...y2).contains(point.y)
+    }
 }
 
 public struct SAM31PromptMask: Codable, Hashable, Sendable {
@@ -83,6 +88,8 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
     public enum ValidationError: LocalizedError, Sendable {
         case tooManyObjects(Int, maxSupported: Int)
         case invalidBox(SAM31PromptBox)
+        /// A point-only object made of negative points, which has nothing to include.
+        case noPositivePoint(label: String?)
 
         public var errorDescription: String? {
             switch self {
@@ -90,6 +97,9 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
                 return "SAM 3.1 supports up to \(maxSupported) prompted objects per run. Received \(count)."
             case .invalidBox(let box):
                 return "Invalid box prompt: (\(box.x1), \(box.y1), \(box.x2), \(box.y2))."
+            case .noPositivePoint(let label):
+                let which = label.map { "The point prompts labeled '\($0)'" } ?? "The unlabeled point prompts"
+                return "\(which) are all negative and match no box. Add a positive point, or a box for them to refine."
             }
         }
     }
@@ -139,6 +149,16 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
             && objectPrompts.isEmpty
     }
 
+    /// The prompted objects, in a fixed order: explicit objects, text prompts, boxes, point-only
+    /// groups, masks.
+    ///
+    /// Boxes and points combine by label, since the interactive decoder takes a box and points for
+    /// one object. A labeled point refines the box with the same label that contains it (the
+    /// first such box, or the first box of that label when none contains it), or, with no such
+    /// box, joins the other points of that label as one object. Unlabeled points form one object
+    /// together; when exactly one box is unlabeled they refine it instead. Every box is its own
+    /// object. Point-only groups keep the order their label first appears in, and must include a
+    /// positive point: negative points alone describe nothing (`ValidationError.noPositivePoint`).
     public func normalized(maxObjects: Int = 16) throws -> [SAM31PromptObject] {
         var objects = objectPrompts
         objects.reserveCapacity(
@@ -162,37 +182,57 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
             guard box.x2 > box.x1, box.y2 > box.y1 else {
                 throw ValidationError.invalidBox(box)
             }
-            let label = normalizedLabel(box.label, fallback: "object")
+        }
+        let boxLabels = boxPrompts.map { trimmedLabel($0.label) }
+        let unlabeledBoxIndices = boxLabels.indices.filter { boxLabels[$0] == nil }
+        var pointsByBoxIndex: [Int: [SAM31PromptPoint]] = [:]
+        var pointGroups: [(label: String?, points: [SAM31PromptPoint])] = []
+        for point in pointPrompts {
+            let label = trimmedLabel(point.label)
+            let boxIndex: Int?
+            if let label {
+                let candidates = boxLabels.indices.filter { boxLabels[$0] == label }
+                boxIndex = candidates.first { boxPrompts[$0].contains(point) } ?? candidates.first
+            } else {
+                boxIndex = unlabeledBoxIndices.count == 1 ? unlabeledBoxIndices[0] : nil
+            }
+            if let boxIndex {
+                pointsByBoxIndex[boxIndex, default: []].append(point)
+            } else if let groupIndex = pointGroups.firstIndex(where: { $0.label == label }) {
+                pointGroups[groupIndex].points.append(point)
+            } else {
+                pointGroups.append((label, [point]))
+            }
+        }
+
+        for (index, box) in boxPrompts.enumerated() {
             objects.append(
                 SAM31PromptObject(
                     objectID: "",
-                    label: label,
+                    label: boxLabels[index] ?? "object",
                     promptKind: .box,
-                    boxPrompt: box
+                    boxPrompt: box,
+                    pointPrompts: pointsByBoxIndex[index] ?? []
                 )
             )
         }
 
-        let groupedPoints = Dictionary(grouping: pointPrompts) { point in
-            let label = point.label?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (label?.isEmpty == false) ? label! : UUID().uuidString
-        }
-        let sortedKeys = groupedPoints.keys.sorted()
-        for key in sortedKeys {
-            guard let points = groupedPoints[key], !points.isEmpty else { continue }
-            let label = points[0].label.flatMap { normalizedLabel($0, fallback: nil) } ?? "point-object"
+        for group in pointGroups {
+            guard group.points.contains(where: \.isPositive) else {
+                throw ValidationError.noPositivePoint(label: group.label)
+            }
             objects.append(
                 SAM31PromptObject(
                     objectID: "",
-                    label: label,
+                    label: group.label ?? "point-object",
                     promptKind: .point,
-                    pointPrompts: points
+                    pointPrompts: group.points
                 )
             )
         }
 
         for mask in maskPrompts {
-            let label = normalizedLabel(mask.label, fallback: "mask-object")
+            let label = trimmedLabel(mask.label) ?? "mask-object"
             objects.append(
                 SAM31PromptObject(
                     objectID: "",
@@ -237,12 +277,10 @@ public struct SAM31PromptSet: Codable, Hashable, Sendable {
         }
     }
 
-    private func normalizedLabel(_ raw: String?, fallback: String?) -> String {
+    /// The label with its surrounding whitespace removed, or nil when nothing is left.
+    private func trimmedLabel(_ raw: String?) -> String? {
         let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmed.isEmpty {
-            return trimmed
-        }
-        return fallback ?? "object"
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func slugify(_ value: String) -> String {

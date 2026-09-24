@@ -25,13 +25,20 @@ final class StudioTypesTests: XCTestCase {
                 "\(template.id) command path drifted"
             )
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(
                     declared.contains(flag),
                     "\(template.id) emits undeclared default flag \(flag)"
                 )
             }
         }
+    }
+
+    /// The flag an argument spells: `--flag` and the joined `--flag=value` (how `ArgumentBuilder`
+    /// passes a negative number) both read as `--flag`; a value reads as nil.
+    private static func flagName(_ argument: String) -> String? {
+        guard argument.hasPrefix("--") else { return nil }
+        return argument.split(separator: "=", maxSplits: 1).first.map(String.init)
     }
 
     func testAppUtilityCommandsAreBackedByTheSharedCLIContract() throws {
@@ -54,7 +61,7 @@ final class StudioTypesTests: XCTestCase {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(
                     declared.contains(flag),
                     "\(capabilityID) app utility emits undeclared flag \(flag)"
@@ -257,7 +264,7 @@ final class StudioTypesTests: XCTestCase {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
             }
         }
@@ -527,7 +534,7 @@ final class StudioTypesTests: XCTestCase {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
             }
         }
@@ -604,7 +611,7 @@ final class StudioTypesTests: XCTestCase {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
             }
         }
@@ -755,6 +762,7 @@ final class StudioTypesTests: XCTestCase {
             }),
             (.visionTrack, "vision.track", {
                 $0.inputPath = "/tmp/a.mp4"
+                $0.prompt = "the runner"
                 $0.preflight = true
                 $0.json = true
             }),
@@ -801,7 +809,7 @@ final class StudioTypesTests: XCTestCase {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
             }
         }
@@ -900,7 +908,7 @@ final class StudioTypesTests: XCTestCase {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
             }
         }
@@ -1234,7 +1242,7 @@ final class StudioTypesTests: XCTestCase {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
             }
         }
@@ -1777,7 +1785,7 @@ final class StudioTypesTests: XCTestCase {
         let enhanceFlags = Set(try XCTUnwrap(
             MereRunCapabilityCatalog.command(id: "audio.enhance")
         ).options.map(\.flag))
-        XCTAssertTrue(enhanceArgs.filter { $0.hasPrefix("--") }.allSatisfy(enhanceFlags.contains))
+        XCTAssertTrue(enhanceArgs.compactMap(Self.flagName).allSatisfy(enhanceFlags.contains))
 
         let separate = try XCTUnwrap(CommandCatalog.template(id: .musicSeparate))
         var separateDraft = separate.defaultDraft()
@@ -1790,7 +1798,7 @@ final class StudioTypesTests: XCTestCase {
         let separateFlags = Set(try XCTUnwrap(
             MereRunCapabilityCatalog.command(id: "music.separate")
         ).options.map(\.flag))
-        XCTAssertTrue(separateArgs.filter { $0.hasPrefix("--") }.allSatisfy(separateFlags.contains))
+        XCTAssertTrue(separateArgs.compactMap(Self.flagName).allSatisfy(separateFlags.contains))
 
         XCTAssertTrue(StudioModelOptimizationCommand.supports(modelID: "video-minimax-h3-fl2va-mlx"))
         XCTAssertEqual(
@@ -1878,7 +1886,7 @@ final class StudioTypesTests: XCTestCase {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments where flag.hasPrefix("--") {
+            for flag in arguments.compactMap(Self.flagName) {
                 XCTAssertTrue(
                     declared.contains(flag),
                     "\(templateID) emitted undeclared flag \(flag)"

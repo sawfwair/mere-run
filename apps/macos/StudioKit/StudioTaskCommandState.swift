@@ -42,9 +42,15 @@ extension StudioConsoleDraft {
     package func applyingChanges(from previous: StudioConsoleDraft, to draft: inout StudioDraft,
                                  mode: StudioMode, templateID: CommandTemplateID) {
         guard let capability = templateID.capability else { return }
-        if arguments != previous.arguments,
-           let positional = capability.arguments.first, ["prompt", "caption", "text"].contains(positional.name) {
-            draft.prompt = arguments.first ?? ""
+        // The positional lands before the options: an input-first command's file argument goes
+        // through `replaceInput`, which clears the prompts drawn on the previous picture, so the
+        // `--box`, `--point`, and frame flags that follow are what the command line says.
+        if arguments != previous.arguments, let positional = capability.arguments.first {
+            if ["prompt", "caption", "text"].contains(positional.name) {
+                draft.prompt = arguments.first ?? ""
+            } else if positional.kind == .file {
+                draft.replaceInput(arguments.first ?? "")
+            }
         }
         let bindings = StudioContractBindings.bindings(for: mode)
         for option in capability.options where self[option.flag] != previous[option.flag] {

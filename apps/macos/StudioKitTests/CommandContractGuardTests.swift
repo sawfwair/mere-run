@@ -25,7 +25,7 @@ final class CommandContractGuardTests: XCTestCase {
             if Array(emission.arguments.prefix(capability.command.count)) != capability.command {
                 driftedCommandPaths.append("\(template.id) (probe: \(emission.probe))")
             }
-            for flag in emission.arguments where flag.hasPrefix("--") && !declared.contains(flag) {
+            for flag in emission.arguments.compactMap(CommandDraftProbes.flagName) where !declared.contains(flag) {
                 let key = "\(template.id) emits \(flag), which \(capabilityID) does not declare"
                 if undeclared[key] == nil { undeclared[key] = emission.probe }
             }
@@ -43,6 +43,27 @@ final class CommandContractGuardTests: XCTestCase {
         )
     }
 
+    /// ArgumentParser reads a separate argument that starts with a dash as the next option, so a
+    /// value such as `-1` must be joined to its flag (`--target-peak-db=-1`). The probe drafts
+    /// include the negative defaults (`musicTargetPeakDB`, `musicRepaintEnd`) and a negative
+    /// variant, so every builder that can emit one is exercised.
+    func testNoEmittedValueStartingWithADashFollowsItsFlagAsASeparateArgument() throws {
+        var separated: [String] = []
+        for emission in try CommandDraftProbes.emissions.get() {
+            let capabilityID = try XCTUnwrap(emission.template.id.capabilityID)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            let declared = Set(capability.options.map(\.flag))
+            let arguments = emission.arguments
+            for (index, flag) in arguments.enumerated() where declared.contains(flag) && index + 1 < arguments.count {
+                let next = arguments[index + 1]
+                if next.hasPrefix("-"), CommandDraftProbes.flagName(next).map(declared.contains) != true {
+                    separated.append("\(emission.template.id) emits \(flag) \(next) (probe: \(emission.probe))")
+                }
+            }
+        }
+        XCTAssertEqual(separated, [], "Join a negative value to its flag with =, as ArgumentBuilder.option does")
+    }
+
     /// The reverse direction: every option the contract declares for a template's capability
     /// must be spelled by at least one probe draft, or the app has a task that silently hides a
     /// CLI option. Flags the CLI accepts but the builder intentionally never emits are listed in
@@ -52,7 +73,7 @@ final class CommandContractGuardTests: XCTestCase {
         var templates: [CommandTemplateID: CommandTemplate] = [:]
         for emission in try CommandDraftProbes.emissions.get() {
             templates[emission.template.id] = emission.template
-            emitted[emission.template.id, default: []].formUnion(emission.arguments.filter { $0.hasPrefix("--") })
+            emitted[emission.template.id, default: []].formUnion(emission.arguments.compactMap(CommandDraftProbes.flagName))
         }
 
         var missing: [String] = []
@@ -149,6 +170,13 @@ enum CommandDraftProbes {
         let arguments: [String]
     }
 
+    /// The flag an argument spells, without a joined value: `--flag` and `--flag=value` both read
+    /// as `--flag`; a value or a subcommand reads as nil.
+    static func flagName(_ argument: String) -> String? {
+        guard argument.hasPrefix("--") else { return nil }
+        return argument.split(separator: "=", maxSplits: 1).first.map(String.init)
+    }
+
     /// Argv for every probe of every local template, built once and shared by the tests.
     static let emissions: Result<[Emission], Error> = Result {
         try CommandCatalog.templates.filter(\.buildsLocalArguments).flatMap { template in
@@ -166,7 +194,7 @@ enum CommandDraftProbes {
     /// the field against a specific literal. Each entry names the guard it exists for, so the
     /// branch behind it reaches both the contract check here and the recorded argv in
     /// `CommandArgumentGoldenTests`.
-    static let variantValuesByField: [String: [String]] = [
+    static let variantValuesByField: [String: [any Sendable]] = [
         // `musicLMMode == "use"` emits --use-lm; `== "disable"` emits --no-lm.
         "musicLMMode": ["use", "disable"],
         // `["repaint", "lego"].contains(musicTask)` gates the repaint window flags.
@@ -177,7 +205,11 @@ enum CommandDraftProbes {
         "renderProfile": ["quality"],
         // `StudioVideoModelFamily(model:)` reads `modelRoot` when it is non-blank and selects
         // the LTX, Wan, or MiniMax-H3 branch of `video generate`.
-        "modelRoot": ["video-minimax-h3-ref2va", "video-wan22-ti2v-5b-mlx"]
+        "modelRoot": ["video-minimax-h3-ref2va", "video-wan22-ti2v-5b-mlx"],
+        // `musicTrainingKind == "lokr"` is the one kind `--factor` applies to.
+        "musicTrainingKind": ["lokr"],
+        // A transposition down: the one integer field a person would set negative.
+        "musicMIDINoteOffset": [-12]
     ]
 
     /// Templates held to the reverse guard (`testEveryDeclaredOptionIsEmittedBySomeProbeDraft`).

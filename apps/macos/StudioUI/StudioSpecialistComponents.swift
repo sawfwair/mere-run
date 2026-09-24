@@ -123,6 +123,7 @@ struct StudioEmbeddedQuickLookPreview: NSViewRepresentable {
 struct StudioSpecialistResultView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
+    @Environment(\.studioReferenceDate) private var referenceDate
 
     let requestID: UUID?
     var preferredKinds: [StudioOutputFileKind] = [.video, .image, .model3D, .audio, .text]
@@ -156,6 +157,14 @@ struct StudioSpecialistResultView: View {
                     Text(item.status.rawValue.capitalized)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(statusColor(item.status))
+                    // A finished run says when it ran, so a result kept from an earlier session
+                    // (a failure days old, most tellingly) is never mistaken for a fresh one.
+                    if item.status != .running, item.status != .queued {
+                        Text("· \(StudioFeedTime.label(for: item.updatedAt, now: referenceDate ?? Date()))")
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .accessibilityLabel("Ran \(StudioFeedTime.label(for: item.updatedAt, now: referenceDate ?? Date()))")
+                    }
                     if let progress = requestID.flatMap({ controller.progressByRequestID[$0] }) {
                         Text(progress.label)
                             .font(MereRunTheme.captionFont)

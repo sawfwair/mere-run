@@ -6,6 +6,65 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio's Segment and Track drawing after a live click-through: a click
+  inside a box with the Point or Negative tool now adds the point there (a box
+  is grabbed only with the Box tool; points and handles always take the press),
+  the selected box and point are plainly marked and Delete, Forward Delete,
+  and Escape act on them through a key monitor that ignores keys while a text
+  field is being edited (a click on the picture never gave the layer keyboard
+  focus, so the keys went nowhere), a prompt's tag
+  stays inside the picture at its edges, and the composer starts empty with a
+  placeholder instead of sending `--prompt "a person"` with every drawing.
+  Library ▸ "Use these settings" restores a Segment or Track run's drawn boxes,
+  points, and frames along with its input (they were cleared by the input
+  change). The Analyze picture fits the column above the composer, Track's
+  frame-editor row no longer truncates, a failed run's summary prefers the
+  CLI's `Error:` line over the list of searched model paths, Who Spoke shows a
+  sub-second turn as "0.4 s", a specialist page dates the result it shows, and
+  a unit test no longer creates an empty `caption-<stamp>` folder under
+  `~/Documents/mere.run/Vision` on every test run. A Segment, Track, or Find run
+  that matches nothing says so and suggests other words or a drawn box, instead
+  of showing the CLI's summary text.
+- Change how `vision segment` and `vision track` group `--box` and `--point`
+  prompts: a labeled point now refines the box with the same label that
+  contains it (else the first with that label), unlabeled points form one
+  object together and refine the one unlabeled box when there is exactly one,
+  and each box stays its own object. Points that match no box must include a
+  positive point; a negative point on its own is rejected instead of running as
+  an empty object. Before, every unlabeled point was a separate object and
+  points never refined a box, so a drawn box with a positive and a negative
+  point ran as three objects. In `vision track` the points seed the object on
+  the init frame and return when a lost object is re-seeded; the box propagated
+  from the previous frame carries none. Studio labels its drawn points after
+  the box they refine (naming unlabeled boxes "object 1", "object 2", … when
+  several boxes need telling apart) and no longer runs a drawing whose only
+  prompts are negative points.
+- Fix SAM 3.1 box and point prompts with more than one point, which were broken
+  for every combination: the interactive prompt encoder added every point's
+  label embedding to every point, so a positive and a negative point together,
+  or a box with a point, masked the whole image. Each point now carries its own
+  label, a box goes in as its two corners ahead of the points, and the list
+  ends in the upstream pad token, as SAM 2's prompt encoder builds it. A
+  box-only prompt on a photo no longer spills past its subject either.
+- Fix Studio's Music ▸ Train, which could never start: its command line carried
+  `--factor -1`, which the CLI read as a missing value. `--factor` is now sent
+  only for a LoKr adapter with a factor set, and every negative option value
+  Studio emits — Music ▸ Generate's default `--target-peak-db -1`, a repaint's
+  end, a MIDI transposition — is joined to its flag as `--flag=-1`, which the
+  Command view, the Library's "Use these settings", and replays read back.
+- Keep Gemma 4 and Inkling reasoning out of Studio chat answers. With thinking
+  shown, a streamed `<|channel>thought …` or `<|content_thinking|> …` block was
+  rendered as the answer and replayed into the next turn's prompt; Studio now
+  splits every reasoning marker the CLI strips (`<think>`, Gemma 4's thought
+  channel, Inkling's thinking channel) beside the answer, and drops Inkling's
+  tool-call frames from it.
+- Give a failed Studio run the CLI's own reason instead of "See 'mere.run
+  --help' for more information": the usage trailer ArgumentParser prints under
+  an error no longer counts as the failure's last meaningful line.
+- Say what Vision ▸ Track does with its frames: the tracker seeds the drawn
+  prompts on the chosen frame and tracks the clip from frame 0 through the end
+  frame, so the scrubber now reads "Prompts on frame 10 · tracks frames 0–30"
+  and shades that span, where it promised tracking from the prompt frame.
 - Add a macOS Studio menu bar extra for the local API server: its state and
   address, Start and Stop, why it stopped, the resident models with Unload, the
   Studio jobs in flight, and a way back into the Studio, with or without a Studio

@@ -419,6 +419,17 @@ public final class SAM31VideoTracker: @unchecked Sendable {
                             label: promptObject.objectID
                         )
                     )
+                    // The object's points, labeled with its id, rejoin the box in `normalized`.
+                    promptSet.pointPrompts.append(
+                        contentsOf: promptObject.pointPrompts.map { point in
+                            SAM31PromptPoint(
+                                x: point.x,
+                                y: point.y,
+                                isPositive: point.isPositive,
+                                label: promptObject.objectID
+                            )
+                        }
+                    )
                 }
             case .point:
                 promptSet.pointPrompts.append(
@@ -509,6 +520,10 @@ public final class SAM31VideoTracker: @unchecked Sendable {
         )
     }
 
+    /// The prompt that re-seeds an object the propagated box lost: the seed frame's geometry
+    /// again. A box seed keeps the points drawn with it, as a mask seed does; a propagated box
+    /// (`propagatedPromptObject`) carries no points, since they were placed on the seed frame
+    /// and the object has moved.
     private func fallbackPromptObject(for state: TrackingState) -> SAM31PromptObject {
         switch state.seedPromptObject.promptKind {
         case .box:
@@ -523,7 +538,8 @@ public final class SAM31VideoTracker: @unchecked Sendable {
                     x2: seedBox.x2,
                     y2: seedBox.y2,
                     label: state.trackedObject.objectID
-                )
+                ),
+                pointPrompts: state.seedPromptObject.pointPrompts
             )
         case .point:
             return SAM31PromptObject(
