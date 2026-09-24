@@ -165,7 +165,13 @@ struct StudioTaskWorkspace: View {
             refreshReadiness()
         }
         .onChange(of: navigation.selectedLibraryID) { _, id in
-            guard let id, library.items.contains(where: { $0.id == id }) else { return }
+            guard let id, let item = library.items.first(where: { $0.id == id }) else { return }
+            // A pick of another variant's run shows that variant, so the Analyze canvas can draw it.
+            if let templateID = item.templateID, templateID.studioTask == task, templateID != draft.templateID {
+                var next = draft
+                next.switchTemplate(to: templateID)
+                draft = next
+            }
             highlightCard(id)
         }
         .onReceive(controller.runCompletions) { result in
@@ -397,9 +403,10 @@ struct StudioTaskWorkspace: View {
         }
     }
 
-    /// The run the Analyze canvas is showing: the picked Library row, else this task's newest.
+    /// The run the Analyze canvas is showing: the picked Library row, else this task's newest run
+    /// of the chosen variant (the canvas's own reading).
     private var analyzeResultItem: StudioLibraryItem? {
-        let finished = feedCards.filter { $0.kind == .generation }
+        let finished = feedCards.filter { $0.kind == .generation && $0.item.templateID == draft.templateID }
         if let selectedLibraryID = navigation.selectedLibraryID,
            let picked = finished.first(where: { $0.id == selectedLibraryID }) {
             return picked.item
@@ -427,7 +434,7 @@ struct StudioTaskWorkspace: View {
                 saveOutput(url)
                 return
             }
-            guard let text = item.outputText, !text.isBlank else {
+            guard let text = item.outputText.flatMap(Self.savedText), !text.isBlank else {
                 error = "This run left no text to save."
                 return
             }
@@ -438,5 +445,14 @@ struct StudioTaskWorkspace: View {
                 self.error = "Could not save \(destination.lastPathComponent): \(error.localizedDescription)"
             }
         }
+    }
+
+    /// The words "Save text" writes from a run's captured output: the protected text of an
+    /// anonymization (its JSON is the Save JSON action's), else the output as printed.
+    private static func savedText(from output: String) -> String {
+        if case .anonymization(let document) = StudioAnalyzeDocument.decode(Data(output.utf8)) {
+            return document.protectedText
+        }
+        return output
     }
 }

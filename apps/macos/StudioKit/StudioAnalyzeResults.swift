@@ -268,7 +268,7 @@ package enum StudioAnalyzeDocument: Equatable {
     /// `subjects`, `metadata`, an embedding's `usage`, an envelope's `candidates` or
     /// `run_plan`), so the shape identifies itself; the commands that print their result are read
     /// from the one object in the captured output; a payload that is none of those is read as a
-    /// transcript.
+    /// transcript. A run whose row alone says what it produced is `derived(from:)` instead.
     package static func decode(_ data: Data) -> StudioAnalyzeDocument? {
         if let field = try? StudioFlowField.decode(data) { return .flow(field) }
         if let midi = StudioMIDISummary.decode(data) { return .midi(midi) }
@@ -302,9 +302,15 @@ package enum StudioAnalyzeDocument: Equatable {
         if let analysis = StudioMusicAnalysisDocument.decode(text) { return .musicAnalysis(analysis) }
         if let clap = StudioCLAPScore.decode(text) { return .clap(clap) }
         if let object = StudioStructuredOutput.objectData(in: text), let printed = decodePrinted(object) { return printed }
-        if let validation = StudioImageValidationReport.decode(outputText: text) { return .validation(validation) }
         let transcript = StudioTranscriptDocument.parse(text)
         return transcript.segments.isEmpty && transcript.text.isEmpty ? nil : .transcript(transcript)
+    }
+
+    /// The document a finished run's Library row stands for when its command prints nothing the
+    /// canvas decodes: `image validate` names its artifact folder and suite in its argv. Read
+    /// before the row's output, which for such a run is only the CLI's progress lines.
+    package static func derived(from item: StudioLibraryItem) -> StudioAnalyzeDocument? {
+        StudioImageValidationReport(item: item).map(StudioAnalyzeDocument.validation)
     }
 
     /// The JSON the text and dataset commands print (and `text embed`/`anonymize` also write to

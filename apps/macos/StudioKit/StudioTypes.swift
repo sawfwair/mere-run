@@ -1114,10 +1114,14 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
         }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
-        // A run without a prompt is known by what it read (the folder Discover scanned, the
-        // plan Run plan checked), else by its command rather than the mode it files under.
-        if let inputURL, !inputURL.lastPathComponent.isEmpty { return inputURL.lastPathComponent }
-        return displayKindTitle
+        // A run on the shared task workspace without a prompt is known by what it read (the
+        // folder Discover scanned, the plan Run plan checked), else by its command rather than
+        // the mode it files under.
+        if templateID?.studioTask.usesTaskDraft == true {
+            if let inputURL, !inputURL.lastPathComponent.isEmpty { return inputURL.lastPathComponent }
+            return displayKindTitle
+        }
+        return mode.title
     }
 
     package var displayKindTitle: String {

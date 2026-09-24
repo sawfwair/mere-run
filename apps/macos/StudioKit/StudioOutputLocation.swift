@@ -562,10 +562,14 @@ package enum StudioOutputLocation {
         return named
     }
 
-    /// The extension a command whose output follows its `--format` writes (`speech diarize`,
-    /// `music transcribe`): the chosen format, with MIDI's conventional extension; nil when the
-    /// capability has no such option.
+    /// The extension a command whose output follows one of its switches writes: the chosen
+    /// `--format` (`speech diarize`, `music transcribe`), with MIDI's conventional extension, or
+    /// JSON versus plain text for `text anonymize --json`; nil when the capability has no such
+    /// option.
     private static func formatExtension(in draft: StudioTaskDraft) -> String? {
+        if draft.templateID == .textAnonymize {
+            return draft.form["--json"] == .flag(true) ? "json" : "txt"
+        }
         guard let option = draft.capability?.options.first(where: { $0.flag == "--format" }) else { return nil }
         let chosen = draft.text("--format")
         let format = chosen.isEmpty ? (option.defaultValue ?? option.choices.first ?? "") : chosen

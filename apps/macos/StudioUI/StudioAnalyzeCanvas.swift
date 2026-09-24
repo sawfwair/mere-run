@@ -573,8 +573,9 @@ struct StudioAnalyzeCanvas: View {
         let itemID = item.id
         let url = StudioAnalyzeDocumentSource.url(for: item)
         let fallbackText = item.outputText
+        let derived = StudioAnalyzeDocument.derived(from: item)
         let result = await Task.detached(priority: .userInitiated) {
-            StudioAnalyzeLoadedResult.load(itemID: itemID, url: url, fallbackText: fallbackText)
+            StudioAnalyzeLoadedResult.load(itemID: itemID, url: url, fallbackText: fallbackText, derived: derived)
         }.value
         guard !Task.isCancelled else { return }
         loaded = result
@@ -625,7 +626,12 @@ struct StudioAnalyzeLoadedResult: Equatable {
     let raw: String?
     let document: StudioAnalyzeDocument?
 
-    static func load(itemID: UUID, url: URL?, fallbackText: String?) -> StudioAnalyzeLoadedResult {
+    /// - Parameter derived: the document the run's row alone stands for
+    ///   (`StudioAnalyzeDocument.derived(from:)`), which wins over reading its output.
+    static func load(itemID: UUID, url: URL?, fallbackText: String?, derived: StudioAnalyzeDocument? = nil) -> StudioAnalyzeLoadedResult {
+        if let derived {
+            return StudioAnalyzeLoadedResult(itemID: itemID, url: nil, raw: fallbackText, document: derived)
+        }
         if let url, let data = try? Data(contentsOf: url), !data.isEmpty {
             return StudioAnalyzeLoadedResult(
                 itemID: itemID,
