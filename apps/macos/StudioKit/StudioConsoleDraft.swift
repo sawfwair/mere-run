@@ -41,7 +41,7 @@ package struct StudioConsoleDraft: Codable, Equatable, Sendable {
         switch self[flag] {
         case .text(let text): return text
         case .integer(let value): return String(value)
-        case .number(let value): return StudioComposerPresets.decimalText(value)
+        case .number(let value): return StudioComposerPresets.argumentText(value)
         case .flag(let on): return on ? "true" : ""
         case .unset: return ""
         }
@@ -337,7 +337,7 @@ package enum StudioConsoleCommand {
         if [.modelPull, .modelInfo, .modelRemove, .modelRuntimeGet, .modelRuntimeSet].contains(template.id) {
             command.model = draft.arguments.first ?? ""
         }
-        command.inputPath = ["--input", "--image", "--audio", "--video", "--data"]
+        command.inputPath = ["--input", "--image", "--audio", "--video", "--data", "--dataset"]
             .first(where: { defaults[$0] != nil }).map(value)
             ?? argument(ofKind: [.file, .directory]) ?? ""
         command.outputPath = outputPath(for: capability, draft: draft)

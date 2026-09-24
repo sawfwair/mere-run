@@ -299,7 +299,11 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         )
         XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(generated))
 
-        let otherTemplate = try XCTUnwrap(CommandCatalog.templates.first { $0.libraryMode == .createImage && $0.id != .imageGenerate })
+        // A template whose task has moved onto a task draft restores through it, so the sample
+        // is one that still has no composer to land in.
+        let otherTemplate = try XCTUnwrap(CommandCatalog.templates.first {
+            $0.libraryMode == .createImage && $0.id != .imageGenerate && !$0.id.studioTask.usesTaskDraft
+        })
         let other = library.start(
             request: StudioRunRequest(mode: .createImage, templateID: otherTemplate.id, template: otherTemplate, draft: otherTemplate.defaultDraft()),
             commandPreview: "fixture"

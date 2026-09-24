@@ -318,6 +318,21 @@ The format is based on Keep a Changelog.
   tokens; outputs are named after the bundle under the Earth folder and land in
   the Library like every run. Drafts saved by the Geo Lab page seed the new
   task drafts once, without their old output paths.
+- Move Studio's Image ▸ Train, Chat ▸ Train, and Music ▸ Train onto task
+  drafts. The pages keep their settings column and dashboard, but the six path
+  fields are gone: the dataset folder or JSONL, evaluation prompts, and a resume
+  checkpoint are attachment wells, the base model is the shared model picker
+  over the image, text-chat, or music inventory, ACE-Step's checkpoint root is a
+  folder chooser under the model, and the adapter is named after its dataset and
+  filed under the domain it trains for, with the music clip list written beside
+  it. Runs go through the shared task runner, so Stop, the Library row, and the
+  Command view edit the same draft; the pages' saved drafts import once. A
+  chosen recipe now decides the options it governs (the seeded size, steps,
+  model, and rate no longer override it), choice rows can be left unset, and
+  the image trainer no longer turns on a checkpoint and preview cadence by
+  default — both are Klein-only options that blocked a Krea 2 preflight — but
+  sets both to every 250 steps at launch against a Klein base when they were
+  left unset, so there are checkpoints to resume and previews to watch.
 
 ## 0.55.0 - 2026-09-22
 

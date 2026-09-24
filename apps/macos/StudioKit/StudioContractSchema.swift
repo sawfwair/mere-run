@@ -267,6 +267,9 @@ package enum StudioContractChoiceTitles {
     }
 
     private static let table: [String: String] = [
+        "--kind auto": "Auto",
+        "--kind lora": "LoRA",
+        "--kind lokr": "LoKr",
         "--mode style": "Preset voice",
         "--mode clone": "Cloned voice",
         "--response-format text": "Text",
@@ -693,7 +696,7 @@ package enum StudioContractOverrideID: String, CaseIterable, Hashable {
     case cameras
     /// The ordered view list over a repeatable `--view` (InstantMesh).
     case orderedViews
-    /// The music training manifest editor over `--manifest`.
+    /// The music training clip list over `music train-adapter --dataset`.
     case musicManifest
     /// Click-to-pick a face on the detection result, over the `--*face-index` options.
     case faceIndex
@@ -701,7 +704,7 @@ package enum StudioContractOverrideID: String, CaseIterable, Hashable {
     case instruments
     /// The renoise mode control over its flag pair.
     case renoise
-    /// Per-target LoRA ranks over `--target-rank`.
+    /// Per-target LoRA ranks over `--lora-target-ranks`.
     case targetRanks
     /// The output widths `geo tessera --dimensions` accepts (the students' 16–128, the teacher's
     /// 1024, or the checkpoint's own), which the contract declares as a bare integer.

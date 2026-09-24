@@ -691,7 +691,19 @@ resolution, batch, rank, learning rate, checkpoint and preview cadence,
 schedule, memory switches, dataset counts, model, and output, read from the
 CLI's typed envelope, or a materialized run's files, each revealable in
 Finder; Preflight is a chip and the run directory for Materialize is an
-Output-section row in the inspector.
+Output-section row in the inspector. The three Train pages are Project
+surfaces over a task draft (`StudioKit/StudioTrainingRun.swift`,
+`StudioUI/StudioTrainingView.swift`): the dataset folder and an optional resume
+checkpoint are attachment wells, the base model is the shared model picker over
+the trainer's inventory category, the template's options sit in the sections
+the page always had (numbers the contract gives no range are typed), and the
+adapter's destination is routed rather than typed — named after the dataset and
+filed under the domain it trains for, with events, samples, and checkpoints
+beside it. A chosen recipe decides the options it governs (`--width`, `--model`,
+`--rank`, and the rest are left off the command line unless typed), and a Klein
+launch sets a checkpoint and a preview every 250 steps when neither was chosen.
+Runs go through the task runner, so Stop, the Library row, and the root's
+Command view share the draft; the pages' saved drafts import once.
 
 **Video** ▸ Generate uses model-family-aware controls: LTX uses `--quality` and
 `--output-mode`, while native MiniMax-H3 exposes its exact `17n+5` frame
@@ -746,7 +758,9 @@ matching `.txt` captions (or drop them in), caption each clip, add lyrics where
 they matter, play any clip, and see the trainer's own checks in the page's words.
 Start training writes `<adapter>.dataset.jsonl` beside the adapter, one record
 per line the way `music train-adapter --dataset` reads it; manifests made
-elsewhere import, and the clip list exports. The resident ACE-Step server's
+elsewhere import, and the clip list exports. The clip list is the task draft's
+`--dataset` editor, and ACE-Step's checkpoint root (a folder chooser), decoder,
+VAE, and text-encoder folders sit under the model picker. The resident ACE-Step server's
 health and lifecycle live under Server ▸ Music server.
 
 **Sound** ▸ Generate and Video Foley produce effects, with Woosh renoise as the
@@ -794,8 +808,10 @@ duplicated under Vision.
 
 **Chat** covers native and MLX chat and code with typed text/JSON response
 format, reasoning policy, context and KV controls, LoRA application, tool
-permissions, and preflight. Chat ▸ Train hosts the text trainer rather than a
-generic form. Laguna XS and Inkling-Small are explicit model families; Inkling
+permissions, and preflight. Chat ▸ Train hosts the text trainer over its task
+draft: the JSONL dataset, evaluation prompts, and a resume checkpoint are
+attachment wells, the base model comes from the text-chat inventory, and a
+local model path sits under it. Laguna XS and Inkling-Small are explicit model families; Inkling
 reasoning effort is available in chat and training, and omitted target modules
 preserve the runtime's full attention, MLP, expert, shared-outer, and
 unembedding training defaults.

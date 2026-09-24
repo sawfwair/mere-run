@@ -61,6 +61,7 @@ extension StudioTask {
         .textEmbeddings, .textAnonymize, .imageDatasets,
         .threeDFromImage,
         .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth,
+        .imageTrain, .chatTrain, .musicTrain,
     ]
 
     /// Temporary gate: true while this task still renders its bespoke page. A mode-backed task

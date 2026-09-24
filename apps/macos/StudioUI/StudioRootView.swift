@@ -711,11 +711,11 @@ private struct StudioWorkspaceView: View {
     private var legacyContent: some View {
         switch destination.task {
         case .imageTrain:
-            StudioTrainingView(kind: .image)
+            StudioTrainingView(kind: .image, models: models)
         case .chatTrain:
-            StudioTrainingView(kind: .text)
+            StudioTrainingView(kind: .text, models: models)
         case .musicTrain:
-            StudioTrainingView(kind: .music)
+            StudioTrainingView(kind: .music, models: models)
         case .videoSubjects:
             StudioSCAILView()
         case .musicRealtime:

@@ -145,6 +145,11 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertEqual(StudioTaskSchema.slots(for: .sfxClapScore).map(\.id), ["audio"])
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageReconstruct3DMultiview).map(\.id), ["--view"])
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageReconstruct3DMultiview).first?.storage, .flagList("--view"))
+        // The contract declares the text trainer's resume checkpoint before its dataset; the
+        // required option leads the well all the same, so the adapter is named after the data.
+        XCTAssertEqual(StudioTaskSchema.slots(for: .textTrainLoRA).map(\.id), ["--data", "--resume-from", "--eval"])
+        XCTAssertEqual(StudioTaskSchema.primarySlot(for: .textTrainLoRA)?.isRequired, true)
+        XCTAssertEqual(StudioTaskSchema.slots(for: .imageTrainLoRA).map(\.id), ["--data", "--resume-from"])
     }
 
     func testSlotsWriteTheTaskDraft() throws {

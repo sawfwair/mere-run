@@ -4,6 +4,7 @@ import StudioKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Which trainer a Train task hosts: Image ▸ Train, Chat ▸ Train, and Music ▸ Train each show one.
 enum StudioTrainingKind: String, CaseIterable, Identifiable {
     case image
     case text
@@ -11,19 +12,12 @@ enum StudioTrainingKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
-        switch self {
-        case .image: "Image LoRA"
-        case .text: "Text LoRA"
-        case .music: "Music LoRA / LoKr"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .image: "photo.stack"
-        case .text: "text.word.spacing"
-        case .music: "music.note.list"
+    init?(task: StudioTask) {
+        switch task {
+        case .imageTrain: self = .image
+        case .chatTrain: self = .text
+        case .musicTrain: self = .music
+        default: return nil
         }
     }
 
@@ -35,11 +29,11 @@ enum StudioTrainingKind: String, CaseIterable, Identifiable {
         }
     }
 
-    var mode: StudioMode {
+    var task: StudioTask {
         switch self {
-        case .image: .createImage
-        case .text: .chat
-        case .music: .music
+        case .image: .imageTrain
+        case .text: .chatTrain
+        case .music: .musicTrain
         }
     }
 }
@@ -270,481 +264,503 @@ struct StudioTrainingSnapshot: Equatable {
     }
 }
 
+/// The Train tasks' Project surface: a settings column over the task's `StudioTaskDraft` — the
+/// dataset in an attachment well (or the clip list for music), the model picker, the template's
+/// options in the sections the page always had, where the adapter will be filed, and Preflight
+/// and Start — beside the dashboard that follows the run: live metrics, the loss curve, samples,
+/// checkpoints, A/B comparison, and history. Runs go through `StudioTaskRunner`, so Stop, the
+/// Library row, and the remembered request are the shared ones, and the root's Command view
+/// edits the same draft this column does.
 struct StudioTrainingView: View {
+    let kind: StudioTrainingKind
+
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
+    @EnvironmentObject private var navigation: NavigationModel
+    @Environment(\.studioTaskRunner) private var runner
+    @Environment(\.studioTaskSessions) private var sessions
+    @Environment(\.studioModelTitles) private var titles
+    @ObservedObject private var models: StudioModelStore
+    @StateObject private var jobMonitor = StudioJobMonitor()
 
-    /// Fixed per host: Image ▸ Train, Chat ▸ Train, and Music ▸ Train each show one trainer.
-    @State private var kind: StudioTrainingKind
-    @StudioStoredValue("Training.imageDraft") private var imageDraft: CommandDraft = CommandDraft()
-    @StudioStoredValue("Training.textDraft") private var textDraft: CommandDraft = CommandDraft()
-    @StudioStoredValue("Training.musicDraft") private var musicDraft: CommandDraft = CommandDraft()
     /// The clips Music ▸ Train writes as the trainer's manifest, beside each run's adapter.
     @StudioStoredValue("Training.musicManifest") private var musicManifest = StudioMusicTrainingManifest()
-    /// The saved copy of a ready manifest, for the Command view; empty while the clips have problems.
-    @State private var draftManifestPath = ""
-    @State private var datasetSnapshot: StudioTrainingDatasetSnapshot?
-    @State private var currentSnapshot: StudioTrainingSnapshot?
+    /// The run the dashboard follows: what the runner remembered last, or a history row picked here.
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
-    @State private var statusMessage: String?
     @StudioStoredValue("Training.compareA") private var compareA: UUID? = nil
     @StudioStoredValue("Training.compareB") private var compareB: UUID? = nil
+    @State private var datasetSnapshot: StudioTrainingDatasetSnapshot?
+    @State private var currentSnapshot: StudioTrainingSnapshot?
+    @State private var statusMessage: String?
+    @State private var error: String?
     @State private var selectedDatasetPreview: String?
+    @State private var showAdvanced = false
 
     private let refreshTimer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+    private static let trainingTemplates: Set<CommandTemplateID> = [.imageTrainLoRA, .textTrainLoRA, .musicTrainAdapter]
 
-    init(kind: StudioTrainingKind) {
-        _kind = State(initialValue: kind)
-
-        var image = CommandCatalog.template(id: .imageTrainLoRA)?.defaultDraft() ?? CommandDraft()
-        image.outputPath = Self.timestampedOutput(domain: .image, prefix: "image-adapter")
-        if image.seed.isBlank { image.seed = "42" }
-        image.checkpointInterval = 250
-        image.sampleInterval = 250
-        _imageDraft = StudioStoredValue(wrappedValue: image, "Training.imageDraft")
-
-        var text = CommandCatalog.template(id: .textTrainLoRA)?.defaultDraft() ?? CommandDraft()
-        text.outputPath = Self.timestampedOutput(domain: .chat, prefix: "text-adapter")
-        if text.seed.isBlank { text.seed = "42" }
-        _textDraft = StudioStoredValue(wrappedValue: text, "Training.textDraft")
-
-        var music = CommandCatalog.template(id: .musicTrainAdapter)?.defaultDraft() ?? CommandDraft()
-        music.outputPath = Self.timestampedOutput(domain: .music, prefix: "music-adapter")
-        if music.seed.isBlank { music.seed = "42" }
-        _musicDraft = StudioStoredValue(wrappedValue: music, "Training.musicDraft")
+    init(kind: StudioTrainingKind, models: StudioModelStore) {
+        self.kind = kind
+        _models = ObservedObject(wrappedValue: models)
     }
 
-    /// The command the Command view shows and runs. For music, `--dataset` is the saved copy of the
-    /// clips; each Start training writes its own manifest beside the adapter instead.
-    private var activeDraft: CommandDraft {
-        switch kind {
-        case .image: return imageDraft
-        case .text: return textDraft
-        case .music:
-            var draft = musicDraft
-            draft.inputPath = draftManifestPath
-            return draft
-        }
+    private var task: StudioTask { kind.task }
+
+    // MARK: Draft
+
+    /// The task's draft, read and written through the session store so the root's Command view
+    /// and Library ▸ "Use these settings" edit the value this column shows.
+    private var draft: StudioTaskDraft {
+        get { sessions?.taskDraft(for: task) ?? StudioTaskDraft(templateID: kind.templateID) }
+        nonmutating set { sessions?.setTaskDraft(newValue, for: task) }
+    }
+
+    private var draftBinding: Binding<StudioTaskDraft> {
+        Binding(get: { draft }, set: { draft = $0 })
+    }
+
+    private var baseline: StudioTaskDraft { StudioTrainingRun.baseline(for: kind.templateID) }
+    private var slots: [StudioAttachmentSlot] { draft.slots }
+    private var readiness: ModelReadinessState { controller.readiness(for: task) }
+    private var dependencies: [String: (carries: Bool, dependsOn: String?)] { StudioTaskSchema.dependencies(for: draft) }
+
+    /// Every option the contract lets the page edit, in contract order; the page's sections pick
+    /// from it by flag and Advanced takes the rest.
+    private var allFields: [StudioContractField<StudioTaskDraft>] {
+        StudioTaskSchema.sections(for: task, draft: draft).flatMap(\.fields) + StudioTaskSchema.advanced(for: task, draft: draft)
+    }
+
+    private func fields(for flags: [String]) -> [StudioContractField<StudioTaskDraft>] {
+        flags.compactMap { flag in allFields.first { $0.flag == flag } }
+    }
+
+    private var pageSections: [StudioTrainingSection] { StudioTrainingRun.sections(for: kind.templateID) }
+    private var modelFields: [StudioContractField<StudioTaskDraft>] { fields(for: StudioTrainingRun.modelFlags(for: kind.templateID)) }
+
+    private var advancedFields: [StudioContractField<StudioTaskDraft>] {
+        let placed = Set(pageSections.flatMap(\.flags) + StudioTrainingRun.modelFlags(for: kind.templateID))
+        return allFields.filter { !placed.contains($0.flag) && $0.overrideID != .model && $0.overrideID != .musicManifest }
+    }
+
+    private var isRunning: Bool {
+        _ = jobMonitor.generation
+        return runner?.currentJob(for: task) != nil
     }
 
     private var trainingRuns: [StudioLibraryItem] {
-        let ids: Set<CommandTemplateID> = [.imageTrainLoRA, .textTrainLoRA, .musicTrainAdapter]
-        return library.items.filter { item in
-            item.templateID.map(ids.contains) == true
-        }
+        library.items.filter { item in item.templateID.map(Self.trainingTemplates.contains) == true }
     }
+
+    // MARK: Body
 
     var body: some View {
         HStack(spacing: 0) {
-            leftColumn
+            settingsColumn
                 .frame(minWidth: 340, idealWidth: 465, maxWidth: 465)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
             dashboard
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .studioTaskCommand(kind.templateID, draft: activeDraft)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onReceive(refreshTimer) { _ in refreshSnapshot() }
         .onReceive(controller.runCompletions) { result in
-            guard [.imageTrainLoRA, .textTrainLoRA, .musicTrainAdapter].contains(result.templateID) else {
-                return
-            }
+            guard Self.trainingTemplates.contains(result.templateID) else { return }
             refreshSnapshot()
             seedComparisons()
+            refreshReadiness()
         }
-        .onChange(of: kind) { _, _ in
-            datasetSnapshot = nil
-            currentSnapshot = nil
-            statusMessage = nil
+        .onChange(of: draft.model) { _, _ in
+            error = nil
+            refreshReadiness()
         }
-        .task { seedComparisons() }
+        .onChange(of: draft.text("--recipe")) { _, _ in
+            // The recipe decides the seeded options from now on; typed values stay as overrides.
+            draft = StudioTrainingRun.applyingRecipe(draft)
+        }
+        .onChange(of: draft.text("--dataset")) { _, _ in adoptExistingMusicManifest() }
+        .onAppear {
+            jobMonitor.attach(controller.jobs)
+            adoptPageDefaults()
+            // An imported page draft may carry a recipe beside the seeded options it decides.
+            let recipeApplied = StudioTrainingRun.applyingRecipe(draft)
+            if recipeApplied != draft { draft = recipeApplied }
+            adoptExistingMusicManifest()
+            refreshReadiness()
+            seedComparisons()
+            refreshSnapshot()
+        }
         .task(id: musicManifest) { await saveDraftManifest() }
-        .onAppear(perform: adoptExistingMusicManifest)
     }
 
-    private var leftColumn: some View {
+    // MARK: - Settings column
+
+    private var settingsColumn: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: MereRunTheme.Spacing.lg) {
+            VStack(spacing: 0) {
                 datasetSection
-                Divider().overlay(MereRunTheme.border.opacity(0.5))
-                switch kind {
-                case .image:
-                    imageControls
-                case .text:
-                    textControls
-                case .music:
-                    musicControls
+                modelSection
+                ForEach(pageSections) { section in
+                    contractSection(section.title, fields: fields(for: section.flags))
                 }
-                Divider().overlay(MereRunTheme.border.opacity(0.5))
-                actionSection
-                if let statusMessage {
-                    Text(statusMessage)
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
+                outputSection
+                if !advancedFields.isEmpty {
+                    advancedSection
                 }
             }
-            .padding(18)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Training settings")
     }
+
+    // MARK: Dataset
 
     @ViewBuilder
     private var datasetSection: some View {
         if kind == .music {
-            StudioMusicManifestEditor(manifest: $musicManifest, message: $statusMessage)
+            VStack(alignment: .leading, spacing: 10) {
+                StudioMusicManifestEditor(manifest: $musicManifest, message: $statusMessage)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(MereRunTheme.border.opacity(0.4)).frame(height: 1)
+            }
         } else {
-            fileDatasetSection
-        }
-    }
-
-    private var fileDatasetSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Dataset")
-                    .font(MereRunTheme.sectionFont)
-                Spacer()
-                Button("Inspect") { inspectDataset() }
-                    .buttonStyle(.mereSecondary)
-            }
-            StudioPathField(
-                label: kind == .image ? "Image-caption directory" : "JSONL dataset",
-                placeholder: kind == .image ? "Folder with image + .txt pairs" : "Training examples, one per line",
-                path: activeInputBinding,
-                picksDirectory: kind == .image,
-                allowedContentTypes: kind == .image ? [] : [.json, .plainText]
-            )
-            if let snapshot = datasetSnapshot {
-                HStack(spacing: 8) {
-                    datasetMetric("Records", snapshot.totalRecords)
-                    datasetMetric("Usable", snapshot.usableRecords)
-                    datasetMetric("Issues", snapshot.totalRecords - snapshot.usableRecords)
-                }
-                ForEach(snapshot.diagnostics, id: \.self) { diagnostic in
-                    Label(
-                        diagnostic,
-                        systemImage: snapshot.usableRecords == snapshot.totalRecords
-                            ? "checkmark.circle.fill"
-                            : "exclamationmark.triangle.fill"
-                    )
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(
-                        snapshot.usableRecords == snapshot.totalRecords
-                            ? MereRunTheme.green
-                            : MereRunTheme.yellow
-                    )
-                }
-                if !snapshot.previews.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(snapshot.previews) { preview in
-                                datasetPreviewCard(preview)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var activeInputBinding: Binding<String> {
-        switch kind {
-        case .image: $imageDraft.inputPath
-        case .text: $textDraft.inputPath
-        case .music: $musicDraft.inputPath
-        }
-    }
-
-    private var imageControls: some View {
-        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
-            Text("Image training")
-                .font(MereRunTheme.sectionFont)
-            labeledTextField("Base model", placeholder: "image-krea2-raw or Klein base", text: $imageDraft.model)
-            Picker("Recipe", selection: $imageDraft.trainingRecipe) {
-                Text("Custom").tag("")
-                Text("Krea fast style").tag("krea-fast-style")
-                Text("Krea cinematic style").tag("krea-cinematic-style")
-                Text("Klein fast style").tag("klein-fast-style")
-            }
-            if !imageDraft.trainingRecipe.isBlank {
-                Toggle("Override recipe values", isOn: $imageDraft.overrideTrainingRecipe)
-            }
-            HStack {
-                Stepper("Width \(imageDraft.width)", value: $imageDraft.width, in: 256...2_048, step: 16)
-                Stepper("Height \(imageDraft.height)", value: $imageDraft.height, in: 256...2_048, step: 16)
-            }
-            coreOptimizerControls(draft: $imageDraft)
-
-            DisclosureGroup("Memory and schedule") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Toggle("Progressive resolution", isOn: $imageDraft.progressive)
-                    Toggle("Low RAM latent cache", isOn: $imageDraft.lowRAM)
-                    Toggle("Gradient checkpointing", isOn: $imageDraft.gradientCheckpointing)
-                    Toggle("Disable compiled train step", isOn: $imageDraft.disableCompile)
-                    Toggle("Lite attention targets", isOn: $imageDraft.trainingLite)
-                    Picker("Frozen-base quantization", selection: $imageDraft.baseQuantizationBits) {
-                        Text("None").tag("")
-                        Text("4-bit").tag("4")
-                        Text("8-bit").tag("8")
-                    }
-                    Stepper(
-                        "Scheduler steps \(imageDraft.schedulerSteps)",
-                        value: $imageDraft.schedulerSteps,
-                        in: 100...10_000,
-                        step: 100
-                    )
-                    Stepper(
-                        "Warmup steps \(imageDraft.lrWarmupSteps)",
-                        value: $imageDraft.lrWarmupSteps,
-                        in: 0...10_000
-                    )
-                    Toggle("Disable cosine scheduler", isOn: $imageDraft.disableCosineScheduler)
-                    numberField("LR minimum factor", value: $imageDraft.lrMinFactor)
-                    numberField("Adam weight decay", value: $imageDraft.adamWeightDecay)
-                    numberField("Caption dropout", value: $imageDraft.captionDropout)
-                    Stepper(
-                        "Maximum source resolution \(imageDraft.maxResolution)",
-                        value: $imageDraft.maxResolution,
-                        in: 0...4_096,
-                        step: 64
-                    )
-                }
-                .padding(.top, 9)
-            }
-
-            DisclosureGroup("Checkpoints, samples, and resume") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Stepper(
-                        "Checkpoint every \(imageDraft.checkpointInterval) steps",
-                        value: $imageDraft.checkpointInterval,
-                        in: 0...10_000,
-                        step: 50
-                    )
-                    StudioPathField(
-                        label: "Resume from Klein checkpoint",
-                        placeholder: "Optional .safetensors or .zip",
-                        path: Binding(
-                            get: { imageDraft.trainingResumePath ?? "" },
-                            set: { imageDraft.trainingResumePath = $0.isBlank ? nil : $0 }
-                        ),
-                        allowedContentTypes: [.data, .archive]
-                    )
-                    Stepper(
-                        "Preview every \(imageDraft.sampleInterval) steps",
-                        value: $imageDraft.sampleInterval,
-                        in: 0...10_000,
-                        step: 50
-                    )
-                    labeledTextField(
-                        "Preview prompt",
-                        placeholder: "Defaults to first caption",
-                        text: $imageDraft.samplePrompt
-                    )
-                    labeledTextField(
-                        "Preview model",
-                        placeholder: "image-klein-9b",
-                        text: $imageDraft.sampleModel
-                    )
-                    HStack {
-                        Stepper("Sample steps \(imageDraft.sampleSteps)", value: $imageDraft.sampleSteps, in: 1...100)
-                        numberField("Sample CFG", value: $imageDraft.sampleCFG)
-                    }
-                    numberField("Sample LoRA scale", value: $imageDraft.sampleLoRAScale)
-                    labeledTextField("Sample seed", placeholder: "Random", text: $imageDraft.sampleSeed)
-                }
-                .padding(.top, 9)
-            }
-
-            DisclosureGroup("Klein target and timestep controls") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("Target mode", selection: $imageDraft.loraTargetMode) {
-                        Text("Default").tag("")
-                        Text("Suffix").tag("suffix")
-                        Text("Transformer linear walk").tag("transformer-linear-walk")
-                    }
-                    Picker("Rank preset", selection: $imageDraft.loraRankPreset) {
-                        Text("None").tag("")
-                        Text("FLUX.2 style 128").tag("flux2-style-128")
-                    }
-                    Picker("Target preset", selection: $imageDraft.loraTargetPreset) {
-                        Text("None").tag("")
-                        Text("fal Klein fast").tag("fal-klein-fast")
-                    }
-                    StudioTargetRankEditor(value: $imageDraft.loraTargetRanks)
-                    Picker("Timestep sampling", selection: $imageDraft.timestepSampling) {
-                        ForEach(
-                            ["", "uniform", "bellCurve", "contentFocused", "styleFocused", "logitNormal", "shift"],
-                            id: \.self
-                        ) { value in
-                            Text(value.isEmpty ? "Default" : value).tag(value)
-                        }
-                    }
-                    Picker("Timestep weighting", selection: $imageDraft.timestepLossWeighting) {
-                        Text("Default").tag("")
-                        Text("None").tag("none")
-                        Text("Weighted").tag("weighted")
-                    }
-                    Picker("Loss weighting", selection: $imageDraft.lossWeighting) {
-                        Text("Default").tag("")
-                        Text("None").tag("none")
-                        Text("SNR").tag("snr")
-                        Text("Min SNR").tag("minSNR")
-                    }
-                    HStack {
-                        Stepper("Timestep low \(imageDraft.timestepLow)", value: $imageDraft.timestepLow, in: 0...10_000)
-                        Stepper("High \(imageDraft.timestepHigh)", value: $imageDraft.timestepHigh, in: 0...10_000)
-                    }
-                }
-                .padding(.top, 9)
-            }
-        }
-    }
-
-    private var textControls: some View {
-        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
-            Text("Text training")
-                .font(MereRunTheme.sectionFont)
-            Picker("Base family", selection: $textDraft.model) {
-                Text("Gemma 4").tag("text-chat-gemma4-12b-4bit")
-                Text("Laguna XS 2.1").tag("text-chat-laguna-xs-2-1")
-                Text("Inkling-Small").tag("text-chat-inkling-small")
-                Text("LFM2.5 A1B").tag("text-chat-lfm25-a1b-8bit")
-            }
-            .pickerStyle(.segmented)
-            labeledTextField("Base model", placeholder: "Managed text model", text: $textDraft.model)
-            StudioPathField(
-                label: "Local model path",
-                placeholder: "Optional local model directory",
-                path: $textDraft.modelRoot,
-                picksDirectory: true
-            )
-            labeledTextField("Adapter name", placeholder: "local-assistant", text: $textDraft.adapterName)
-            coreOptimizerControls(draft: $textDraft)
-            Stepper(
-                "Maximum sequence length \(textDraft.maxSequenceLength)",
-                value: $textDraft.maxSequenceLength,
-                in: 128...65_536,
-                step: 128
-            )
-            labeledTextField(
-                "Target modules",
-                placeholder: "Model-family defaults",
-                text: $textDraft.targetModules
-            )
-            Text("Leave target modules empty for the native family recipe. LFM2.5 v1 is attention-only; Inkling also includes MLP, expert, and unembedding targets.")
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-            if textDraft.model.localizedCaseInsensitiveContains("inkling") {
-                numberField(
-                    "Reasoning effort",
-                    value: Binding(
-                        get: { textDraft.reasoningEffort ?? 0.9 },
-                        set: { textDraft.reasoningEffort = min(max($0, 0), 0.99) }
-                    )
-                )
-            }
-            StudioPathField(
-                label: "Evaluation prompts",
-                placeholder: "Optional eval JSON or JSONL",
-                path: $textDraft.evalPath,
-                allowedContentTypes: [.json, .plainText]
-            )
-            Toggle("Open local training visualizer", isOn: $textDraft.visualize)
-            if textDraft.visualize {
-                Stepper(
-                    "Visualizer port \(textDraft.visualizePort)",
-                    value: $textDraft.visualizePort,
-                    in: 1...65_535
-                )
-            }
-        }
-    }
-
-    private var musicControls: some View {
-        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
-            Text("Music adapter training")
-                .font(MereRunTheme.sectionFont)
-            labeledTextField("ACE-Step model", placeholder: "music-acestep", text: $musicDraft.model)
-            Picker("Adapter kind", selection: $musicDraft.musicTrainingKind) {
-                Text("LoRA").tag("lora")
-                Text("LoKr").tag("lokr")
-            }
-            coreOptimizerControls(draft: $musicDraft)
-            if musicDraft.musicTrainingKind == "lokr" {
-                Stepper(
-                    "Factor \(musicDraft.musicTrainingFactor)",
-                    value: $musicDraft.musicTrainingFactor,
-                    in: -1...1_024
-                )
-            }
-            numberField("AdamW weight decay", value: $musicDraft.musicTrainingWeightDecay)
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Maximum clip duration \(musicDraft.musicTrainingMaxDuration, specifier: "%.1f")s")
+            StudioInspectorSectionView(
+                title: "Dataset",
+                canReset: slots.contains { $0.isFilled(in: draft) },
+                onReset: clearAttachments
+            ) {
+                attachmentWell
+                Text(kind == .image
+                    ? "A folder of images with matching .txt captions; a checkpoint to resume from is optional."
+                    : "Chat SFT examples as JSONL, one per line; evaluation prompts and a resume checkpoint are optional.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
-                Slider(value: $musicDraft.musicTrainingMaxDuration, in: 1...600, step: 1)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let snapshot = datasetSnapshot {
+                    datasetReport(snapshot)
+                }
             }
-            Stepper(
-                "Log every \(musicDraft.musicTrainingLogEvery) steps",
-                value: $musicDraft.musicTrainingLogEvery,
-                in: 1...1_000
-            )
-            StudioPathField(
-                label: "Checkpoint root",
-                placeholder: "Auto-discover",
-                path: $musicDraft.musicCheckpointsRoot,
-                picksDirectory: true
-            )
-            HStack {
-                labeledTextField(
-                    "Decoder",
-                    placeholder: "acestep-v15-turbo",
-                    text: $musicDraft.musicDecoderSubdirectory
-                )
-                labeledTextField("VAE", placeholder: "vae", text: $musicDraft.musicVAESubdirectory)
-            }
-            labeledTextField(
-                "Text encoder",
-                placeholder: "Auto-discover",
-                text: $musicDraft.musicTextSubdirectory
-            )
         }
     }
 
-    private func coreOptimizerControls(draft: Binding<CommandDraft>) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Stepper(
-                    "Steps \(draft.wrappedValue.steps)",
-                    value: draft.steps,
-                    in: 1...1_000_000
-                )
-                Stepper(
-                    "Batch \(draft.wrappedValue.batchSize)",
-                    value: draft.batchSize,
-                    in: 1...256
-                )
+    /// The well the composer draws for a task, with the same slots: the dataset first, then the
+    /// optional inputs the contract declares.
+    private var attachmentWell: some View {
+        HStack(alignment: .center, spacing: 8) {
+            ForEach(slots) { slot in
+                StudioAttachmentSlotView(slot: slot, draft: draftBinding, onPick: { pick(slot) })
             }
-            HStack {
-                Stepper(
-                    "Rank \(draft.wrappedValue.rank)",
-                    value: draft.rank,
-                    in: 1...1_024
-                )
-                numberField("Alpha", value: draft.alpha)
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(slots) { slot in
+                    Text(slot.caption(in: draft))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(MereRunTheme.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
-            numberField("Learning rate", value: draft.learningRate)
-            labeledTextField("Seed", placeholder: "42", text: draft.seed)
+            .padding(.leading, 4)
+            Spacer(minLength: 8)
+            Button("Inspect") { inspectDataset() }
+                .buttonStyle(.mereSecondary)
+                .disabled(draft.primaryInputPath.isBlank)
+                .help("Count the records and preview them")
         }
     }
 
-    private var actionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            StudioPathField(
-                label: "Adapter output",
-                placeholder: "Output .safetensors",
-                path: activeOutputBinding
+    @ViewBuilder
+    private func datasetReport(_ snapshot: StudioTrainingDatasetSnapshot) -> some View {
+        HStack(spacing: 8) {
+            datasetMetric("Records", snapshot.totalRecords)
+            datasetMetric("Usable", snapshot.usableRecords)
+            datasetMetric("Issues", snapshot.totalRecords - snapshot.usableRecords)
+        }
+        ForEach(snapshot.diagnostics, id: \.self) { diagnostic in
+            Label(
+                diagnostic,
+                systemImage: snapshot.usableRecords == snapshot.totalRecords
+                    ? "checkmark.circle.fill"
+                    : "exclamationmark.triangle.fill"
             )
-            HStack {
+            .font(MereRunTheme.captionFont)
+            .foregroundStyle(
+                snapshot.usableRecords == snapshot.totalRecords
+                    ? MereRunTheme.green
+                    : MereRunTheme.yellow
+            )
+        }
+        if !snapshot.previews.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(snapshot.previews) { preview in
+                        datasetPreviewCard(preview)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Model
+
+    private var modelSection: some View {
+        let modelChanged = draft.model != baseline.model
+            || modelFields.contains { $0.changedCount(draft: draft, baseline: baseline) > 0 }
+        return StudioInspectorSectionView(title: "Model", canReset: modelChanged, onReset: {
+            var next = draft
+            next.model = baseline.model
+            for field in modelFields { field.reset(&next, to: baseline) }
+            draft = next
+        }) {
+            modelPicker
+            if readiness.blocksRun {
+                readinessRow
+            }
+            if !modelFields.isEmpty {
+                contractForm(modelFields)
+            }
+        }
+    }
+
+    private var modelPicker: some View {
+        let scope = StudioTaskSchema.modelScope(for: draft)
+        let bases = models.rows.filter { StudioTrainingRun.isTrainableBase($0.id, for: kind.templateID) }
+        return StudioModelPicker(scope: scope, model: draftBinding.model, modelInventory: bases,
+                                 onShowModels: { navigation.open(task: .modelsInstalled) }) {
+            HStack(spacing: 8) {
+                if let glyph = modelStatusGlyph {
+                    Image(systemName: glyph)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MereRunTheme.accent)
+                }
+                Text(scope.displayLabel(model: draft.model, titles: titles))
+                    .font(.callout)
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .background { StudioInspectorFieldChrome() }
+            .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
+        }
+        .help(readiness.blocksRun ? readiness.message(titles: titles) : "Base model")
+        .accessibilityLabel("Base model")
+        .accessibilityValue(scope.resolvedModelID(model: draft.model))
+    }
+
+    private var modelStatusGlyph: String? {
+        switch readiness {
+        case .missingModel: return "arrow.down.circle"
+        case .unsupported: return "exclamationmark.triangle"
+        case .notChecked, .checking, .ready, .unknown: return nil
+        }
+    }
+
+    /// Why the model cannot train yet, with the next step: get it, or check again.
+    private var readinessRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(readiness.message(titles: titles))
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                if case .missingModel = readiness {
+                    Button("Get the model") { pull(modelID: StudioTaskSchema.modelID(for: draft)) }
+                        .buttonStyle(.mereSecondary)
+                        .disabled(jobMonitor.pullJob(for: StudioTaskSchema.modelID(for: draft)) != nil)
+                }
+                Button("Check again", action: refreshReadiness)
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(MereRunTheme.accent)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Model readiness")
+        .accessibilityValue(readiness.message(titles: titles))
+    }
+
+    // MARK: Contract sections
+
+    private func contractSection(_ title: String, fields: [StudioContractField<StudioTaskDraft>]) -> some View {
+        StudioInspectorSectionView(
+            title: title,
+            canReset: fields.contains { $0.changedCount(draft: draft, baseline: baseline) > 0 },
+            onReset: {
+                var next = draft
+                for field in fields { field.reset(&next, to: baseline) }
+                draft = next
+            }
+        ) {
+            contractForm(fields)
+            if kind == .text, title == "Training" {
+                Text("Leave target modules empty for the native family recipe. LFM2.5 v1 is attention-only; Inkling also includes MLP, expert, and unembedding targets.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The contract form's rows, with two differences from the inspector's: a number the
+    /// contract gives no range (a size, a step count, a learning rate) is typed, as the page
+    /// always had it, so it can be left empty for the CLI's default rather than nudged by a
+    /// stepper that cannot reach 0.0003 or be unset; and a free-text option keeps its label
+    /// beside the field. While a recipe is chosen, the rows it decides say so.
+    private func contractForm(_ fields: [StudioContractField<StudioTaskDraft>]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(fields.filter { StudioContractSchema.isVisible($0, in: draft, dependencies: dependencies) }) { field in
+                if let override = field.overrideID {
+                    overrideControl(override)
+                } else if [.number, .integer].contains(field.kind), field.option.range == nil {
+                    typedRow(field, monospaced: true, width: 120)
+                } else if field.control == .field {
+                    typedRow(field, monospaced: false, width: 220)
+                } else {
+                    ContractFormControl(
+                        field: field, draft: draftBinding,
+                        noneTitle: StudioTrainingRun.isRecipeGoverned(field.flag, in: draft) ? "From recipe" : nil
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// A labelled text field over one option: empty leaves the flag out, so the placeholder says
+    /// what runs then — the contract's default, the recipe's value, or the CLI's own.
+    private func typedRow(_ field: StudioContractField<StudioTaskDraft>, monospaced: Bool, width: CGFloat) -> some View {
+        let text = Binding<String>(
+            get: {
+                let value = field.value(in: draft)
+                return value.text ?? value.numericValue.map { StudioComposerPresets.argumentText($0) } ?? ""
+            },
+            set: { typed in
+                var next = draft
+                field.write(typed.isEmpty ? .unset : .text(typed), to: &next)
+                draft = next
+            }
+        )
+        let placeholder = StudioTrainingRun.isRecipeGoverned(field.flag, in: draft)
+            ? "From recipe"
+            : (field.option.defaultValue ?? "Default")
+        return StudioInspectorLabeledRow(field.label) {
+            StudioInspectorTextField(placeholder: placeholder, text: text, isMonospaced: monospaced)
+                .frame(width: width)
+        }
+        .help(field.flag)
+    }
+
+    /// The editors the page draws itself: Klein's per-target ranks. The model picker and the
+    /// clip list have sections of their own, so their rows never reach a form here.
+    @ViewBuilder
+    private func overrideControl(_ override: StudioContractOverrideID) -> some View {
+        switch override {
+        case .targetRanks:
+            StudioTargetRankEditor(value: Binding(
+                get: { draft.text("--lora-target-ranks") },
+                set: { text in
+                    var next = draft
+                    next.form["--lora-target-ranks"] = text.isEmpty ? .unset : .text(text)
+                    draft = next
+                }
+            ))
+        default:
+            EmptyView()
+        }
+    }
+
+    private var advancedSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Button {
+                    withAnimation(MereRunTheme.Motion.quick) { showAdvanced.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(MereRunTheme.textMuted)
+                        Text("Advanced · \(advancedFields.count) more")
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(MereRunTheme.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(showAdvanced ? "Hide advanced settings" : "Show \(advancedFields.count) advanced settings")
+                Spacer(minLength: 0)
+                if showAdvanced, advancedFields.contains(where: { $0.changedCount(draft: draft, baseline: baseline) > 0 }) {
+                    Button("Reset") {
+                        var next = draft
+                        for field in advancedFields { field.reset(&next, to: baseline) }
+                        draft = next
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .help("Back to the defaults")
+                }
+            }
+            if showAdvanced {
+                contractForm(advancedFields)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Output
+
+    /// Where the adapter lands, without a path field: routing names it inside the domain's folder
+    /// when the run starts, after the dataset (or the clip list, for music).
+    private var outputSection: some View {
+        let folder = URL(fileURLWithPath: StudioOutputLocation.destination(for: draft).text("--output")).deletingLastPathComponent()
+        return StudioInspectorSectionView(title: "Output", canReset: false, onReset: {}) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Saves to \(StudioOutputLocation.abbreviate(folder))")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(MereRunTheme.textPrimary)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                    Text(kind == .music
+                        ? "The adapter is named when the run starts; the clip list is written beside it."
+                        : "The adapter is named after the dataset when the run starts; events, samples, and checkpoints land beside it.")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
+                    .buttonStyle(.mereSecondary)
+                    .help("Show the folder in Finder")
+            }
+            SettingsLink {
+                Text("Change in Settings…")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(MereRunTheme.accent)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: Actions
+
+    private var actionBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let error {
+                MereBanner(severity: .error, text: error, onDismiss: { self.error = nil })
+            }
+            HStack(spacing: 10) {
                 Button {
                     preflight()
                 } label: {
@@ -752,24 +768,50 @@ struct StudioTrainingView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.mereSecondary)
-                Button {
-                    startTraining()
-                } label: {
-                    Label(activeDraft.trainingResumePath?.isBlank == false ? "Resume training" : "Start training", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
+                .help(kind == .music ? "Check the clips" : "Check the request without training")
+                if isRunning {
+                    Button {
+                        runner?.stop(task: task)
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.mereSecondary)
+                    .help("Stop the training run (⌘.)")
+                    .keyboardShortcut(".", modifiers: .command)
+                    .accessibilityLabel("Stop training")
+                } else {
+                    Button {
+                        startTraining()
+                    } label: {
+                        Label(resumes ? "Resume training" : "Start training", systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.merePrimary)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help(readiness.blocksRun ? readiness.message(titles: titles) : "Start training (⌘↩)")
                 }
-                .buttonStyle(.merePrimary)
             }
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MereRunTheme.background)
+        .overlay(alignment: .top) {
+            Rectangle().fill(MereRunTheme.border.opacity(0.4)).frame(height: 1)
         }
     }
 
-    private var activeOutputBinding: Binding<String> {
-        switch kind {
-        case .image: $imageDraft.outputPath
-        case .text: $textDraft.outputPath
-        case .music: $musicDraft.outputPath
-        }
+    private var resumes: Bool {
+        !draft.text("--resume-from").isBlank
     }
+
+    // MARK: - Dashboard
 
     private var dashboard: some View {
         ScrollView {
@@ -822,7 +864,9 @@ struct StudioTrainingView: View {
                 ContentUnavailableView(
                     "No training run selected",
                     systemImage: "chart.xyaxis.line",
-                    description: Text("Inspect a dataset, preflight the request, then start training.")
+                    description: Text(kind == .music
+                        ? "Add the clips, validate them, then start training."
+                        : "Attach a dataset, preflight the request, then start training.")
                 )
                 .frame(minHeight: 280)
             }
@@ -880,6 +924,7 @@ struct StudioTrainingView: View {
                     .merePanel()
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("\(item.displayTitle), \(item.status.rawValue)")
             }
         }
     }
@@ -893,7 +938,7 @@ struct StudioTrainingView: View {
             )
             dashboardMetric(
                 "Loss",
-                latest?.loss.map { String(format: "%.6f", $0) } ?? "—"
+                (latest?.loss ?? snapshot.lossPoints.last?.loss).map { String(format: "%.6f", $0) } ?? "—"
             )
             dashboardMetric(
                 "Progress",
@@ -961,6 +1006,7 @@ struct StudioTrainingView: View {
                     }
                     .buttonStyle(.plain)
                     .help(url.lastPathComponent)
+                    .accessibilityLabel("Sample \(url.lastPathComponent)")
                 }
             }
         }
@@ -1004,6 +1050,7 @@ struct StudioTrainingView: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .merePanel()
+        .accessibilityElement(children: .combine)
     }
 
     private func datasetMetric(_ label: String, _ value: Int) -> some View {
@@ -1017,6 +1064,7 @@ struct StudioTrainingView: View {
         .padding(9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .merePanel()
+        .accessibilityElement(children: .combine)
     }
 
     private func datasetPreviewCard(_ preview: StudioTrainingDatasetPreview) -> some View {
@@ -1060,7 +1108,105 @@ struct StudioTrainingView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(preview.title)
     }
+
+    // MARK: - Draft upkeep
+
+    /// A draft nothing has touched yet takes the page's own defaults once (`StudioTrainingRun`).
+    private func adoptPageDefaults() {
+        guard let sessions, !sessions.contains(StudioTaskSessions.taskDraftKey(task)),
+              draft == StudioTaskDraft(templateID: kind.templateID) else { return }
+        draft = StudioTrainingRun.applyingPageDefaults(draft)
+    }
+
+    /// A manifest the draft names that this page did not write — one chosen in the Command view,
+    /// or a run's `<adapter>.dataset.jsonl` restored with Library ▸ "Use these settings" — becomes
+    /// the clip list, so the clips, the Command view, and Start never disagree. The page then
+    /// saves its own copy back into `--dataset`. A path that no longer exists is forgotten
+    /// quietly; one that will not read is reported once, then forgotten.
+    private func adoptExistingMusicManifest() {
+        guard kind == .music else { return }
+        let path = draft.text("--dataset")
+        guard !path.isBlank else { return }
+        let url = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL
+        guard !StudioMusicTrainingManifest.isDraftURL(url) else { return }
+        var next = draft
+        next.form["--dataset"] = .unset
+        draft = next
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            musicManifest = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
+            statusMessage = nil
+        } catch {
+            statusMessage = "The manifest at \(url.lastPathComponent) could not be read into the clip list: \(error.localizedDescription)"
+        }
+    }
+
+    /// Keeps the Command view's manifest current, a moment after editing stops: a ready clip list
+    /// is saved and its path becomes the draft's `--dataset`, so the Command view's Run has a real
+    /// file to pass; a list with problems leaves the flag empty, so it never runs a broken one.
+    private func saveDraftManifest() async {
+        guard kind == .music else { return }
+        guard musicManifest.problems().isEmpty else {
+            setDraftManifestPath(nil)
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        do {
+            let url = try StudioMusicTrainingManifest.storeDraft(content: musicManifest.jsonl())
+            // Rows the Library still names (queued Command-view runs included) keep their files.
+            let referenced = Set(library.items.compactMap { $0.commandDraft?.inputPath })
+            StudioMusicTrainingManifest.pruneDrafts(current: url, referenced: referenced)
+            setDraftManifestPath(url.path)
+        } catch {
+            setDraftManifestPath(nil)
+        }
+    }
+
+    /// Writes the saved clip list's path into `--dataset`, leaving a manifest the user chose alone.
+    private func setDraftManifestPath(_ path: String?) {
+        let current = draft.text("--dataset")
+        let isOurs = current.isBlank || StudioMusicTrainingManifest.isDraftURL(URL(fileURLWithPath: current))
+        guard isOurs, current != (path ?? "") else { return }
+        var next = draft
+        next.form["--dataset"] = path.map { .text($0) } ?? .unset
+        draft = next
+    }
+
+    private func pick(_ slot: StudioAttachmentSlot) {
+        var next = draft
+        StudioAttachmentPicker.pick(for: slot, into: &next)
+        draft = next
+        datasetSnapshot = nil
+        error = nil
+    }
+
+    private func clearAttachments() {
+        var next = draft
+        for slot in slots { slot.clear(in: &next) }
+        draft = next
+        datasetSnapshot = nil
+    }
+
+    private func refreshReadiness() {
+        controller.checkReadiness(for: task, modelID: StudioTaskSchema.modelID(for: draft))
+    }
+
+    /// Gets a managed model through the same `model pull` job the readiness row reports.
+    private func pull(modelID: String) {
+        guard !modelID.isBlank, let template = CommandCatalog.template(id: .modelPull) else { return }
+        var commandDraft = template.defaultDraft()
+        commandDraft.model = modelID
+        let request = StudioRunRequest(mode: template.libraryMode, templateID: .modelPull, template: template, draft: commandDraft)
+        if !models.startPull(request) {
+            error = controller.status
+            refreshReadiness()
+        }
+    }
+
+    // MARK: - Inspect, preflight, start
 
     private func inspectDataset() {
         if kind == .music {
@@ -1068,9 +1214,9 @@ struct StudioTrainingView: View {
             statusMessage = nil
             return
         }
-        let path = activeDraft.inputPath
+        let path = draft.primaryInputPath
         guard !path.isBlank else {
-            statusMessage = "Choose a dataset first."
+            statusMessage = "Attach a dataset first."
             return
         }
         datasetSnapshot = StudioTrainingDatasetSnapshot.inspect(kind: kind, path: path)
@@ -1079,62 +1225,53 @@ struct StudioTrainingView: View {
     }
 
     private func preflight() {
+        error = nil
         inspectDataset()
-        guard validateDraft(allowsExistingOutput: true) else { return }
-        if kind == .music {
+        guard validateDraft() else { return }
+        guard let checked = StudioTrainingRun.preflightDraft(StudioTrainingRun.launchDraft(draft)) else {
             statusMessage = "The clips are ready. ACE-Step checks its model files when training starts."
             return
         }
-        var draft = activeDraft
-        if kind == .image {
-            draft.preflight = true
-            draft.json = true
-        } else {
-            draft.dryRun = true
-            draft.json = true
+        guard let runner else { return }
+        do {
+            _ = try runner.run(checked, task: task)
+            statusMessage = "Preflight submitted."
+        } catch {
+            self.error = error.localizedDescription
         }
-        requestID = StudioSpecialistRunner.submit(
-            templateID: kind.templateID,
-            mode: kind.mode,
-            draft: draft,
-            controller: controller,
-            library: library
-        )
-        statusMessage = "Preflight submitted."
     }
 
     private func startTraining() {
+        error = nil
         inspectDataset()
-        guard validateDraft(allowsExistingOutput: false) else { return }
-        var draft = activeDraft
-        if kind == .music {
-            // The manifest lives beside the adapter it trains, so the run folder shows what made it.
-            let manifestURL = StudioMusicTrainingManifest.manifestURL(besideOutput: draft.outputPath)
-            do {
-                try FileManager.default.createDirectory(at: manifestURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try musicManifest.jsonl().write(to: manifestURL, options: .atomic)
-            } catch {
-                statusMessage = "Studio could not write the training manifest: \(error.localizedDescription)"
-                return
+        guard validateDraft(), let runner else { return }
+        do {
+            let request: StudioRunRequest
+            if kind == .music {
+                if readiness.blocksRun { throw StudioValidationError(message: readiness.message(titles: titles)) }
+                let launch = try StudioTrainingRun.musicLaunch(draft, manifest: musicManifest)
+                guard let built = launch.request() else { throw StudioValidationError(message: "This command can't run from Studio.") }
+                request = try runner.run(request: built, task: task)
+            } else {
+                request = try runner.run(StudioTrainingRun.launchDraft(draft), task: task)
             }
-            draft.inputPath = manifestURL.path
+            currentSnapshot = StudioTrainingSnapshot.load(outputPath: request.draft.outputPath)
+            statusMessage = resumes ? "Checkpoint resume submitted." : "Training submitted."
+            if kind == .image, resumes {
+                // The next run starts fresh unless another checkpoint is chosen.
+                var next = draft
+                next.form["--resume-from"] = .unset
+                draft = next
+            }
+            seedComparisons()
+        } catch {
+            self.error = error.localizedDescription
         }
-        requestID = StudioSpecialistRunner.submit(
-            templateID: kind.templateID,
-            mode: kind.mode,
-            draft: draft,
-            controller: controller,
-            library: library
-        )
-        currentSnapshot = StudioTrainingSnapshot.load(outputPath: draft.outputPath)
-        statusMessage = draft.trainingResumePath?.isBlank == false
-            ? "Checkpoint resume submitted."
-            : "Training submitted."
-        advanceOutput()
-        seedComparisons()
     }
 
-    private func validateDraft(allowsExistingOutput: Bool) -> Bool {
+    /// The page's own checks before the runner's: the dataset inspected and whole, the target
+    /// ranks well formed, the schedule positive. The runner then validates the command itself.
+    private func validateDraft() -> Bool {
         if kind == .music {
             if let problem = musicManifest.problems().first {
                 statusMessage = problem
@@ -1148,68 +1285,28 @@ struct StudioTrainingView: View {
                 return false
             }
         }
-        let draft = activeDraft
-        guard !draft.outputPath.isBlank,
-              draft.outputPath.lowercased().hasSuffix(".safetensors") else {
-            statusMessage = "Choose a .safetensors output path."
-            return false
+        if kind == .image {
+            let resume = draft.text("--resume-from")
+            if !resume.isBlank, !FileManager.default.fileExists(atPath: resume) {
+                statusMessage = "The selected resume checkpoint does not exist."
+                return false
+            }
+            if let problem = StudioTargetRank.problems(StudioTargetRank.decode(draft.text("--lora-target-ranks"))).first {
+                statusMessage = problem
+                return false
+            }
         }
-        if !allowsExistingOutput, FileManager.default.fileExists(atPath: draft.outputPath) {
-            statusMessage = "The output already exists. Choose a new path to preserve the existing adapter."
-            return false
-        }
-        if kind == .image,
-           let resume = draft.trainingResumePath,
-           !resume.isBlank,
-           !FileManager.default.fileExists(atPath: resume) {
-            statusMessage = "The selected resume checkpoint does not exist."
-            return false
-        }
-        if kind == .image, let problem = StudioTargetRank.problems(StudioTargetRank.decode(draft.loraTargetRanks)).first {
-            statusMessage = problem
-            return false
-        }
-        guard draft.steps > 0, draft.rank > 0, draft.learningRate > 0 else {
+        let steps = draft.text(kind == .music ? "--steps" : "--training-steps")
+        let rank = draft.text("--rank")
+        let learningRate = draft.text("--learning-rate")
+        guard Int(steps) ?? 0 > 0, Int(rank) ?? 0 > 0, Double(learningRate) ?? 0 > 0 else {
             statusMessage = "Steps, rank, and learning rate must be positive."
             return false
         }
         return true
     }
 
-    /// Keeps the Command view's manifest current, a moment after editing stops; only a manifest the
-    /// trainer would accept is saved, so the Command view never runs a broken one.
-    private func saveDraftManifest() async {
-        guard kind == .music else { return }
-        guard musicManifest.problems().isEmpty else {
-            draftManifestPath = ""
-            return
-        }
-        try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled else { return }
-        do {
-            let url = try StudioMusicTrainingManifest.storeDraft(content: musicManifest.jsonl())
-            // Rows the Library still names (queued Command-view runs included) keep their files.
-            let referenced = Set(library.items.compactMap { $0.commandDraft?.inputPath })
-            StudioMusicTrainingManifest.pruneDrafts(current: url, referenced: referenced)
-            draftManifestPath = url.path
-        } catch {
-            draftManifestPath = ""
-        }
-    }
-
-    /// A manifest chosen before this page built its own is read into the clips, once. A path that
-    /// no longer exists is forgotten quietly; one that will not read is reported once, then forgotten.
-    private func adoptExistingMusicManifest() {
-        guard kind == .music, musicManifest.clips.isEmpty, !musicDraft.inputPath.isBlank else { return }
-        let url = URL(fileURLWithPath: NSString(string: musicDraft.inputPath).expandingTildeInPath).standardizedFileURL
-        musicDraft.inputPath = ""
-        guard !StudioMusicTrainingManifest.isDraftURL(url), FileManager.default.fileExists(atPath: url.path) else { return }
-        do {
-            musicManifest = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
-        } catch {
-            statusMessage = "The manifest at \(url.lastPathComponent) could not be read into the clip list: \(error.localizedDescription)"
-        }
-    }
+    // MARK: - Snapshots and comparison
 
     private func refreshSnapshot() {
         if let requestID,
@@ -1228,115 +1325,5 @@ struct StudioTrainingView: View {
     private func seedComparisons() {
         if compareA == nil { compareA = trainingRuns.first?.id }
         if compareB == nil { compareB = trainingRuns.dropFirst().first?.id }
-    }
-
-    private func advanceOutput() {
-        switch kind {
-        case .image:
-            imageDraft.outputPath = Self.timestampedOutput(domain: .image, prefix: "image-adapter")
-            imageDraft.trainingResumePath = nil
-        case .text:
-            textDraft.outputPath = Self.timestampedOutput(domain: .chat, prefix: "text-adapter")
-        case .music:
-            musicDraft.outputPath = Self.timestampedOutput(domain: .music, prefix: "music-adapter")
-        }
-    }
-
-    private func labeledTextField(
-        _ label: String,
-        placeholder: String,
-        text: Binding<String>
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(label)
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-            TextField(placeholder, text: text)
-                .mereField()
-        }
-    }
-
-    private func numberField(_ label: String, value: Binding<Double>) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(label)
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-            TextField(label, value: value, format: .number.precision(.significantDigits(1...8)))
-                .mereField()
-        }
-    }
-
-    /// An adapter is a document, so it lands in Documents (or the configured root) under the
-    /// domain it trains for: Image, Chat, or Music.
-    private static func timestampedOutput(domain: StudioDomain, prefix: String) -> String {
-        StudioSpecialistFiles.outputFile(domain: domain, name: prefix, fileExtension: "safetensors").path
-    }
-}
-
-private struct StudioTrainingLossChart: View {
-    let points: [(step: Int, loss: Double)]
-
-    var body: some View {
-        GeometryReader { proxy in
-            Canvas { context, size in
-                let inset: CGFloat = 26
-                let rect = CGRect(
-                    x: inset,
-                    y: 12,
-                    width: max(1, size.width - inset - 12),
-                    height: max(1, size.height - inset - 18)
-                )
-                context.stroke(
-                    Path { path in
-                        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-                        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-                        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-                    },
-                    with: .color(MereRunTheme.border),
-                    lineWidth: 1
-                )
-                guard points.count > 1 else {
-                    context.draw(
-                        Text("Waiting for loss points")
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.textMuted),
-                        at: CGPoint(x: rect.midX, y: rect.midY)
-                    )
-                    return
-                }
-                let minStep = points.map(\.step).min() ?? 0
-                let maxStep = points.map(\.step).max() ?? 1
-                let minLoss = points.map(\.loss).min() ?? 0
-                let maxLoss = points.map(\.loss).max() ?? 1
-                func x(_ step: Int) -> CGFloat {
-                    rect.minX + CGFloat(Double(step - minStep) / Double(max(maxStep - minStep, 1))) * rect.width
-                }
-                func y(_ loss: Double) -> CGFloat {
-                    let range = max(maxLoss - minLoss, 0.000_000_1)
-                    return rect.maxY - CGFloat((loss - minLoss) / range) * rect.height
-                }
-                var path = Path()
-                for (index, point) in points.enumerated() {
-                    let location = CGPoint(x: x(point.step), y: y(point.loss))
-                    if index == 0 {
-                        path.move(to: location)
-                    } else {
-                        path.addLine(to: location)
-                    }
-                }
-                context.stroke(
-                    path,
-                    with: .linearGradient(
-                        Gradient(colors: [MereRunTheme.accent, MereRunTheme.green]),
-                        startPoint: CGPoint(x: rect.minX, y: rect.midY),
-                        endPoint: CGPoint(x: rect.maxX, y: rect.midY)
-                    ),
-                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
-                )
-            }
-        }
-        .padding(8)
-        .accessibilityElement()
-        .accessibilityLabel("Training loss chart with \(points.count) points")
     }
 }

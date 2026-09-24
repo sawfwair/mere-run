@@ -524,7 +524,7 @@ package enum StudioOutputLocation {
                 seed: draft.text("--seed"),
                 fingerprint: ([templateID.rawValue] + bare.arguments).joined(separator: "\u{1}"),
                 fallbackStem: primaryInput.isBlank
-                    ? template.title
+                    ? (promptlessStems[templateID] ?? template.title)
                     : URL(fileURLWithPath: primaryInput).deletingPathExtension().lastPathComponent,
                 existing: existing
             )
@@ -562,10 +562,16 @@ package enum StudioOutputLocation {
         return named
     }
 
-    /// The extension a command whose output follows one of its switches writes: the chosen
-    /// `--format` (`speech diarize`, `music transcribe`), with MIDI's conventional extension, or
-    /// JSON versus plain text for `text anonymize --json`; nil when the capability has no such
-    /// option.
+    /// The stem a template's output takes when it has neither a prompt nor a primary input to be
+    /// named after, where the template's title would read oddly as a file name: Music ▸ Train's
+    /// clip list is an editor, not a well, so its adapter is a `music-adapter`.
+    private static let promptlessStems: [CommandTemplateID: String] = [
+        .musicTrainAdapter: "music-adapter",
+    ]
+
+    /// The extension a command whose output follows its `--format` writes (`speech diarize`,
+    /// `music transcribe`): the chosen format, with MIDI's conventional extension; nil when the
+    /// capability has no such option.
     private static func formatExtension(in draft: StudioTaskDraft) -> String? {
         if draft.templateID == .textAnonymize {
             return draft.form["--json"] == .flag(true) ? "json" : "txt"

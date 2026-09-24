@@ -837,9 +837,11 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
     // MARK: - Music ▸ Train manifest
 
-    /// The page's default draft must parse: `--factor` is LoKr's and stays off a LoRA command line
-    /// (a separate `-1` used to read as the next option), so the trainer gets as far as loading
-    /// both clips before the missing checkpoints stop it.
+    /// Music ▸ Train's task draft — the clips written beside the adapter routing names, the model
+    /// and checkpoint root pointed at nothing so the trainer stops after reading the manifest —
+    /// runs `music train-adapter` through the runner's own preparation. `--factor` is LoKr's and
+    /// stays off a LoRA command line (a separate `-1` used to read as the next option), so the
+    /// trainer gets as far as loading both clips before the missing checkpoints stop it.
     func test13MusicTrainManifestIsAcceptedByTheTrainer() throws {
         let flow = "13-music-train-manifest"
         let clipA = try Self.toneMusic(in: fixtures())
@@ -851,25 +853,34 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(manifest.problems(), [])
         XCTAssertEqual(manifest.readyClipCount(), 2)
 
-        let template = try XCTUnwrap(CommandCatalog.template(id: .musicTrainAdapter))
-        var draft = template.defaultDraft()
-        draft.outputPath = live.appendingPathComponent("\(flow)/music-adapter.safetensors").path
-        draft.seed = "42"
-        draft.steps = 1
+        // Music ▸ Train's task draft: the same contract form the Command view edits. The clip list
+        // editor owns the dataset, so the page has no well; Validate checks the clips and runs nothing.
+        var draft = StudioTaskDraft(templateID: .musicTrainAdapter)
+        draft.form["--steps"] = .integer(1)
         // Point the trainer at no ACE-Step so it fails after it has parsed the manifest.
         draft.model = live.appendingPathComponent("\(flow)/no-acestep-root").path
-        draft.musicCheckpointsRoot = live.appendingPathComponent("\(flow)/no-checkpoints").path
-        let manifestURL = StudioMusicTrainingManifest.manifestURL(besideOutput: draft.outputPath)
-        try FileManager.default.createDirectory(at: manifestURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try manifest.jsonl().write(to: manifestURL, options: .atomic)
-        XCTAssertTrue(manifestURL.lastPathComponent.hasPrefix("music-adapter.dataset") && manifestURL.pathExtension == "jsonl", manifestURL.lastPathComponent)
-        draft.inputPath = manifestURL.path
+        draft.form["--checkpoints-root"] = .text(live.appendingPathComponent("\(flow)/no-checkpoints").path)
+        XCTAssertEqual(StudioTaskSchema.slots(for: .musicTrainAdapter), [])
+        XCTAssertNil(StudioTrainingRun.preflightDraft(draft))
+        XCTAssertEqual(draft.text("--seed"), "42", "the template's seed")
+
+        // Start training: the adapter is named, the clips are written beside it as the dataset.
+        let launch = try StudioTrainingRun.musicLaunch(draft, manifest: manifest)
+        let output = URL(fileURLWithPath: launch.text("--output"))
+        let manifestURL = URL(fileURLWithPath: launch.text("--dataset"))
+        XCTAssertTrue(output.path.hasPrefix(live.appendingPathComponent("Music").path), output.path)
+        XCTAssertEqual(manifestURL.deletingLastPathComponent().path, output.deletingLastPathComponent().path, "the clip list sits beside the adapter")
+        XCTAssertEqual(manifestURL.lastPathComponent, output.deletingPathExtension().lastPathComponent + ".dataset.jsonl")
         let imported = try StudioMusicTrainingManifest.importing(Data(contentsOf: manifestURL), from: manifestURL)
         XCTAssertEqual(imported.clips.map { $0.audioURL.path }, manifest.clips.map { $0.audioURL.path }, "Import round-trips the (standardized) clip paths")
         XCTAssertEqual(imported.clips.first?.lyrics, "la la la\nla la")
 
-        let (_, argv) = try specialistRequest(templateID: .musicTrainAdapter, mode: .music, draft: draft)
+        let (request, argv) = try preparedRequest(try XCTUnwrap(launch.request()))
+        XCTAssertEqual(request.draft.outputPath, output.path, "preparing does not name the adapter again")
+        XCTAssertEqual(request.draft.inputPath, manifestURL.path, "the Library row's input is the clip list")
+        XCTAssertEqual(request.mode, .music, "attributed by the template")
         XCTAssertEqual(argv.firstIndex(of: "--dataset").map { argv[$0 + 1] }, manifestURL.path)
+        XCTAssertEqual(argv.firstIndex(of: "--checkpoints-root").map { argv[$0 + 1] }, draft.text("--checkpoints-root"))
         XCTAssertFalse(argv.contains { $0.hasPrefix("--factor") }, "LoRA training has no factor: \(argv)")
         XCTAssertNil(argv.firstIndex { $0.hasPrefix("-") && Int($0) != nil }, "A negative value must be joined to its flag: \(argv)")
         let run = try runCLI(flow, argv, timeout: 300)
@@ -879,19 +890,65 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertFalse(text.lowercased().contains("dataset record"), "The manifest itself must not be rejected: \(text.suffix(600))")
         XCTAssertNotEqual(run.exitCode, 0, "Without ACE-Step the run should stop; it did not (timedOut=\(run.timedOut))")
 
-        // Studio blocks a clip without a caption; the CLI rejects the same manifest the same way.
+        // The page refuses a clip without a caption before anything is launched; the CLI rejects
+        // the same manifest the same way when it is sent anyway (from the Command view).
         var broken = manifest
         broken.clips[1].caption = "   "
         XCTAssertEqual(broken.problems(), ["Clip 2 needs a caption."])
         let brokenURL = live.appendingPathComponent("\(flow)/broken.dataset.jsonl")
         try broken.jsonl().write(to: brokenURL, options: .atomic)
         var brokenDraft = draft
-        brokenDraft.inputPath = brokenURL.path
-        let (_, brokenArgv) = try specialistRequest(templateID: .musicTrainAdapter, mode: .music, draft: brokenDraft)
+        brokenDraft.form["--dataset"] = .text(brokenURL.path)
+        let (_, brokenArgv) = try taskRequest(brokenDraft)
         let brokenRun = try runCLI(flow, brokenArgv, timeout: 120)
         XCTAssertNotEqual(brokenRun.exitCode, 0)
         XCTAssertTrue((brokenRun.stderr + brokenRun.stdout).lowercased().contains("empty caption"), "Expected the CLI's empty-caption error: \(brokenRun.stderr.suffix(300))")
         conclude(flow, "valid: exit=\(run.exitCode) '\(StudioFailureSummary.lastMeaningfulLine(in: run.stderr) ?? "")' broken: exit=\(brokenRun.exitCode) '\(StudioFailureSummary.lastMeaningfulLine(in: brokenRun.stderr) ?? "")'")
+    }
+
+    /// Image ▸ Train's Preflight: the task draft with a dataset folder in the well and the page's
+    /// check-only switches (`--preflight --json`) runs through the runner's preparation, and the
+    /// CLI's typed envelope comes back with the dataset counted and no adapter written.
+    func test24ImageTrainPreflightFromTheTaskDraft() throws {
+        let flow = "24-image-train-preflight"
+        let installed = try Self.installedModels.get()
+        guard let model = ["image-krea2-raw", "image-krea2-turbo", "image-klein-base-9b", "image-klein-9b"].first(where: installed.contains) else {
+            throw XCTSkip("No trainable image model installed")
+        }
+        let dataset = fixtures().appendingPathComponent("style-dataset", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        for index in 0..<3 {
+            _ = try Self.squareImage(in: dataset, name: "frame-\(index).png")
+            try "a red square on white, frame \(index)".write(to: dataset.appendingPathComponent("frame-\(index).txt"), atomically: true, encoding: .utf8)
+        }
+
+        var draft = StudioTrainingRun.applyingPageDefaults(StudioTaskDraft(templateID: .imageTrainLoRA))
+        let well = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .imageTrainLoRA))
+        XCTAssertTrue(well.accepts(dataset), "the dataset slot takes a folder")
+        well.attach([dataset], to: &draft)
+        draft.model = model
+        draft.form["--training-steps"] = .integer(4)
+        XCTAssertEqual(draft.primaryInputPath, dataset.path)
+        let checked = try XCTUnwrap(StudioTrainingRun.preflightDraft(draft))
+
+        let (request, argv) = try taskRequest(checked)
+        XCTAssertEqual(Array(argv.prefix(2)), ["image", "train-lora"])
+        XCTAssertTrue(argv.contains("--preflight") && argv.contains("--json"), "\(argv)")
+        XCTAssertEqual(argv.firstIndex(of: "--data").map { argv[$0 + 1] }, dataset.path)
+        XCTAssertEqual(argv.firstIndex(of: "--seed").map { argv[$0 + 1] }, "42", "the page's default seed")
+        XCTAssertEqual(request.mode, .createImage)
+        XCTAssertTrue(request.draft.outputPath.hasPrefix(live.appendingPathComponent("Image").path), request.draft.outputPath)
+        XCTAssertTrue(URL(fileURLWithPath: request.draft.outputPath).lastPathComponent.hasPrefix("style-dataset-"), "named after the dataset: \(request.draft.outputPath)")
+
+        let run = try runCLI(flow, argv, timeout: 600)
+        let report = try XCTUnwrap(StudioRunPlanReport.decode(outputText: run.libraryOutputText), "The preflight envelope did not decode: \(run.stdout.prefix(600))")
+        // The page's defaults must not block the default model's preflight: a Klein-only option
+        // turned on by default is a blocker on Krea 2 before anything was chosen.
+        XCTAssertNotEqual(report.status, "blocked", report.diagnostics.map { "\($0.title): \($0.message)" }.joined(separator: "; "))
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        XCTAssertFalse(report.summary.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: request.draft.outputPath), "a preflight writes no adapter")
+        conclude(flow, "model=\(model) status=\(report.status) summary='\(report.summary.prefix(120))' diagnostics=\(report.diagnostics.count)")
     }
 
     // MARK: - Image ▸ Datasets ▸ Run plan
@@ -1650,12 +1707,22 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         return named.arguments
     }
 
+    /// A request already named by the page (Music ▸ Train writes its clip list beside the adapter
+    /// routing named), prepared as `StudioTaskRunner.run(request:task:)` prepares it: never named
+    /// again, so what was put beside the adapter stays beside it.
+    private func preparedRequest(_ base: StudioRunRequest) throws -> (request: StudioRunRequest, argv: [String]) {
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
+        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        assertDestinations(of: prepared.request.draft, stayUnder: live)
+        return (prepared.request, try XCTUnwrap(prepared.request.execution).arguments)
+    }
+
     /// Every destination the draft names — the output and the sidecars derived beside it — is
     /// under the live directory, so a run can never write into the user's own folders.
     private func assertDestinations(of draft: CommandDraft, stayUnder root: URL, file: StaticString = #filePath, line: UInt = #line) {
         for (label, path) in [
             ("output", draft.outputPath), ("JSON sidecar", draft.visionJSONOutputPath),
-            ("mask directory", draft.visionMaskOutputDirectory),
+            ("mask directory", draft.visionMaskOutputDirectory), ("timings report", draft.timingsOutputPath),
         ] where !path.isBlank {
             XCTAssertTrue(path.hasPrefix(root.path), "The \(label) escaped the configured root: \(path)", file: file, line: line)
         }

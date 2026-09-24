@@ -262,7 +262,9 @@ package enum StudioTaskDraftMigration {
         case .sfxAEEncode: return "SFXLab.encodeDraft"
         case .sfxAEDecode: return "SFXLab.decodeDraft"
         case .sfxClapScore: return "SFXLab.scoreDraft"
-        case .imageTrainLoRA, .textTrainLoRA, .musicTrainAdapter: return "Training.draft"
+        case .imageTrainLoRA: return "Training.imageDraft"
+        case .textTrainLoRA: return "Training.textDraft"
+        case .musicTrainAdapter: return "Training.musicDraft"
         default: return nil
         }
     }

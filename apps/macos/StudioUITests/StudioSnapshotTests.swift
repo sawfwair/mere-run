@@ -984,7 +984,12 @@ final class StudioSnapshotTests: XCTestCase {
     /// Music ▸ Train with three clips in the manifest editor — two captioned, one with lyrics, and
     /// one still needing a caption so the row and the problem list show — light and dark.
     func testMusicTrainingManifestEditorSnapshots() throws {
-        let clips = fixture.root.appendingPathComponent("clips", isDirectory: true)
+        let training = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.trainingReadinessResponses)
+        )
+        defer { training.tearDown() }
+        let clips = training.root.appendingPathComponent("clips", isDirectory: true)
         try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
         var manifest = StudioMusicTrainingManifest()
         let rows: [(name: String, caption: String, lyrics: String)] = [
@@ -998,17 +1003,53 @@ final class StudioSnapshotTests: XCTestCase {
             try SnapshotFixture.writeSilentWAV(to: url, seconds: 2)
             manifest.clips.append(.init(audioPath: url.path, caption: row.caption, lyrics: row.lyrics))
         }
-        fixture.controller.taskSessions.set(manifest, for: StudioTask.musicTrain.rawValue + ".Training.musicManifest")
+        training.controller.taskSessions.set(manifest, for: StudioTask.musicTrain.rawValue + ".Training.musicManifest")
 
-        for appearance in StudioSnapshotAppearance.allCases {
+        let renders: [(name: String, appearance: StudioSnapshotAppearance, size: CGSize)] = [
+            ("music-train-manifest-light", .light, Self.fidelitySize),
+            ("music-train-manifest-dark", .dark, Self.fidelitySize),
+            ("music-train-manifest-narrow-light", .light, CGSize(width: 1_140, height: 820)),
+        ]
+        for render in renders {
             let navigation = NavigationModel()
             let view = StudioRootView()
-                .environmentObject(fixture.controller)
-                .environmentObject(fixture.library)
+                .environmentObject(training.controller)
+                .environmentObject(training.library)
                 .environmentObject(navigation)
-            try fixture.write(view, size: Self.fidelitySize, appearance: appearance,
-                              name: "music-train-manifest-\(appearance.rawValue)", settle: 1.5,
-                              afterAppear: { navigation.open(task: .musicTrain) })
+            try training.write(view, size: render.size, appearance: render.appearance, name: render.name, settle: 2.5,
+                               afterAppear: { navigation.open(task: .musicTrain) })
+        }
+    }
+
+    /// Image ▸ Train over a finished run: the dataset folder in the well with its inspection,
+    /// the Krea 2 model ready, the page's sections, and the dashboard following the run — loss
+    /// curve, samples, checkpoints, A/B against an earlier run, and history — light and dark at
+    /// the mockup size and at a narrower width; then Chat ▸ Train before anything is attached,
+    /// light and dark.
+    func testTrainingProjectSnapshots() throws {
+        let training = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.trainingReadinessResponses)
+        )
+        defer { training.tearDown() }
+        try training.seedTrainingRuns()
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(training.controller)
+                .environmentObject(training.library)
+                .environmentObject(navigation)
+            try training.write(view, size: size, appearance: appearance, name: name, settle: 3.0,
+                               afterAppear: { navigation.open(task: task) })
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.imageTrain, name: "train-image-\(appearance.rawValue)", appearance: appearance, size: Self.fidelitySize)
+        }
+        try render(.imageTrain, name: "train-image-narrow-light", appearance: .light, size: CGSize(width: 1_140, height: 820))
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.chatTrain, name: "train-text-\(appearance.rawValue)", appearance: appearance, size: Self.fidelitySize)
         }
     }
 
@@ -3953,6 +3994,99 @@ private final class SnapshotFixture {
         controller.taskSessions.setTaskDraft(flood, for: .earthFlood)
     }
 
+    /// Two finished Image ▸ Train runs the dashboard can follow and compare: a dataset folder of
+    /// six captioned pictures, an adapter for it with a 40-step loss log, three preview samples,
+    /// and two checkpoints beside it (the run the page follows), and an earlier, shorter run for
+    /// the B side of the comparison. The task draft is parked on the dataset with a recipe.
+    func seedTrainingRuns() throws {
+        guard let template = CommandCatalog.template(id: .imageTrainLoRA) else { throw StudioSnapshotError.noContentView }
+        let dataset = root.appendingPathComponent("datasets/warm-still-life", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        let captions = [
+            "a ceramic mug on linen in soft morning light", "a pear on a wooden board, warm window light",
+            "a stack of letters tied with twine", "a brass candlestick beside a folded napkin",
+            "dried flowers in a glass bottle on a sill", "a bowl of walnuts on a dark table",
+        ]
+        for (index, caption) in captions.enumerated() {
+            try Self.writeFixturePNG(to: dataset.appendingPathComponent("still-\(index + 1).png"), size: CGSize(width: 512, height: 512),
+                                     hueOffset: CGFloat(index) * 0.13)
+            try caption.write(to: dataset.appendingPathComponent("still-\(index + 1).txt"), atomically: true, encoding: .utf8)
+        }
+
+        let folder = root.appendingPathComponent("training/Image", isDirectory: true)
+        func seedRun(stem: String, steps: Int, loss: (Int) -> Double, samples: Int, hour: Int, minute: Int) throws -> StudioLibraryItem {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let adapter = folder.appendingPathComponent("\(stem).safetensors")
+            try Data(repeating: 0, count: 64).write(to: adapter)
+            var events: [String] = []
+            for index in 0..<40 {
+                let step = max(1, (index + 1) * steps / 40)
+                events.append(
+                    "{\"sequence\": \(index + 1), \"type\": \"step\", \"stage\": \"train\", \"step\": \(step), " +
+                    "\"total_steps\": \(steps), \"loss\": \(String(format: "%.5f", loss(step))), \"fraction\": \(Double(step) / Double(steps))}"
+                )
+            }
+            events.append("{\"sequence\": 41, \"type\": \"run_finished\", \"stage\": \"finished\", \"step\": \(steps), \"total_steps\": \(steps), \"fraction\": 1, \"path\": \"\(adapter.path)\"}")
+            try events.joined(separator: "\n").write(to: folder.appendingPathComponent("\(stem).events.jsonl"), atomically: true, encoding: .utf8)
+            let sampleFolder = folder.appendingPathComponent("samples", isDirectory: true)
+            try FileManager.default.createDirectory(at: sampleFolder, withIntermediateDirectories: true)
+            for index in 0..<samples {
+                try Self.writeFixturePNG(to: sampleFolder.appendingPathComponent("\(stem)-step-\(String(format: "%04d", (index + 1) * 250)).png"),
+                                         size: CGSize(width: 512, height: 512), hueOffset: 0.6 + CGFloat(index) * 0.1)
+            }
+            let checkpointFolder = folder.appendingPathComponent("checkpoints", isDirectory: true)
+            try FileManager.default.createDirectory(at: checkpointFolder, withIntermediateDirectories: true)
+            for step in stride(from: 250, through: steps, by: 250) where step < steps {
+                try Data(repeating: 0, count: 16).write(to: checkpointFolder.appendingPathComponent("\(stem)-checkpoint-step\(step).safetensors"))
+            }
+
+            var draft = template.defaultDraft()
+            draft.inputPath = dataset.path
+            draft.outputPath = adapter.path
+            draft.trainingRecipe = "krea-fast-style"
+            draft.seed = "42"
+            draft.checkpointInterval = 250
+            draft.sampleInterval = 250
+            draft.steps = steps
+            let startedAt = Self.mockupTime(hour: hour, minute: minute)
+            var row = StudioLibraryItem(
+                id: UUID(),
+                mode: .createImage,
+                prompt: "",
+                inputURL: dataset,
+                outputURL: adapter,
+                createdAt: startedAt,
+                updatedAt: startedAt.addingTimeInterval(Double(steps) * 2.3),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run image train-lora --data warm-still-life --output \(stem).safetensors --recipe krea-fast-style",
+                outputText: nil,
+                templateID: .imageTrainLoRA,
+                commandDraft: draft,
+                commandArguments: template.arguments(from: draft),
+                artifactURLs: [adapter]
+            )
+            row.inputIdentity = StudioInputIdentity.read(dataset)
+            library.upsert(row)
+            return row
+        }
+
+        let earlier = try seedRun(stem: "warm-still-life-7", steps: 600, loss: { 0.42 * exp(-Double($0) / 260) + 0.11 },
+                                  samples: 2, hour: 8, minute: 5)
+        let latest = try seedRun(stem: "warm-still-life-42", steps: 1_000, loss: { 0.39 * exp(-Double($0) / 340) + 0.08 + 0.012 * sin(Double($0) / 37) },
+                                 samples: 3, hour: 10, minute: 12)
+
+        var taskDraft = StudioTrainingRun.applyingPageDefaults(StudioTaskDraft(templateID: .imageTrainLoRA))
+        taskDraft.form["--data"] = .text(dataset.path)
+        taskDraft.form["--recipe"] = .text("krea-fast-style")
+        // Choosing the recipe on the page clears the seeded options it decides; the seed does too.
+        controller.taskSessions.setTaskDraft(StudioTrainingRun.applyingRecipe(taskDraft), for: .imageTrain)
+        let scope = StudioTask.imageTrain.rawValue
+        controller.taskSessions.set(Optional(latest.id), for: scope + ".requestID")
+        controller.taskSessions.set(Optional(latest.id), for: scope + ".Training.compareA")
+        controller.taskSessions.set(Optional(earlier.id), for: scope + ".Training.compareB")
+    }
+
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
     /// as the row's output text the way the Library keeps stdout.
     func seedMusicAnalysisRun() throws {
@@ -4663,6 +4797,37 @@ private enum ModelsInventoryScript {
             .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
             .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: list), exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
+        ]
+    }
+
+    /// `model list` and `model capabilities` with the three trainers' default models installed,
+    /// so the Train pages render with Start available rather than a readiness message.
+    static var trainingReadinessResponses: [SnapshotProcessRunner.Response] {
+        let extraModels = [
+            (id: "image-krea2-raw", category: "image", title: "Krea 2 raw"),
+            (id: "text-chat-gemma4-12b-4bit", category: "text-chat", title: "Gemma 4 12B"),
+            (id: "music-acestep", category: "music", title: "ACE-Step"),
+        ]
+        let list = modelList.replacingOccurrences(
+            of: "image-zimage-nano          image        installed  2.1 GB",
+            with: (["image-zimage-nano          image        installed  2.1 GB"]
+                + extraModels.map { "\($0.id)  \($0.category)  installed  6.2 GB" })
+                .joined(separator: "\n")
+        )
+        let extraCapabilities = extraModels.map { model in
+            """
+            ,{"id": "\(model.id)", "title": "\(model.title)", "summary": "", \
+            "minimumUnifiedMemoryGB": 16, "recommendedUnifiedMemoryGB": 32, "supported": true, \
+            "reasons": [], "estimatedDownloadBytes": 6200000000, \
+            "sourceRepository": "mere-run/\(model.id)", "publisher": "mere.run"}
+            """
+        }.joined(separator: "\n")
+        let capabilityJSON = capabilities.replacingOccurrences(of: "\n]}", with: "\n\(extraCapabilities)\n]}")
+        return [
+            .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
+            .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: list), exitCode: 0),
+            .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
+            version,
         ]
     }
 

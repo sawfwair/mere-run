@@ -106,10 +106,11 @@ package enum StudioTaskSchema {
         }
         let excluded = outputFlags(for: capability).union(chosenOutputFlags).union(modelLocationFlags)
             .union(overrideFlags(for: templateID))
+        var optionSlots: [StudioAttachmentSlot] = []
         for option in capability.options where [.file, .directory].contains(option.kind) {
             guard StudioContractGroup(contractGroup: option.group) == .inputs, !excluded.contains(option.flag) else { continue }
             let types: [UTType] = option.kind == .directory ? [.folder] : acceptedTypes(forFlag: option.flag)
-            slots.append(StudioAttachmentSlot(
+            optionSlots.append(StudioAttachmentSlot(
                 id: option.flag,
                 label: option.label,
                 acceptedTypes: types,
@@ -117,7 +118,10 @@ package enum StudioTaskSchema {
                 isRequired: option.required
             ))
         }
-        return slots
+        // The required option comes first in the well, whatever the contract's declaration
+        // order: it is the input the run is about (`text train-lora --data`, not its optional
+        // resume checkpoint), so the canvas shows it large and the output is named after it.
+        return slots + optionSlots.filter(\.isRequired) + optionSlots.filter { !$0.isRequired }
     }
 
     /// The slot the Analyze canvas shows large: the first one.
@@ -149,7 +153,7 @@ package enum StudioTaskSchema {
 
     /// Flags whose value is a model location rather than an input: the model chip's business.
     /// The contract files an ungrouped directory option under Inputs, so ACE-Step's checkpoint
-    /// root is named here to keep it out of the well.
+    /// root is named here to keep it out of the well and in the Model section.
     private static let modelLocationFlags: Set<String> = [
         "--model-path", "--model-root", "--lora", "--adapter", "--checkpoints-root",
     ]
@@ -195,11 +199,13 @@ package enum StudioTaskSchema {
         // `--view` stays a well slot (an ordered list the filmstrip draws); `.orderedViews` is
         // the reordering editor the 3D page PR adds beside it.
         case "--manifest": return .musicManifest
+        // Music ▸ Train's dataset is the clip list the page edits and writes beside the adapter.
+        case "--dataset" where templateID == .musicTrainAdapter: return .musicManifest
         case "--face-index", "--reference-face-index", "--candidate-face-index": return .faceIndex
         // `--list-instruments` is how the editor reads its choices, not a setting of the run.
         case "--instruments", "--list-instruments": return .instruments
         case "--renoise", "--renoise-strength": return .renoise
-        case "--target-rank": return .targetRanks
+        case "--lora-target-ranks": return .targetRanks
         case "--dimensions" where templateID == .geoTessera: return .earthDimensions
         case "--patch-size", "--input-resolution" where templateID == .geoOlmoEarth: return .earthSampling
         default: return nil
