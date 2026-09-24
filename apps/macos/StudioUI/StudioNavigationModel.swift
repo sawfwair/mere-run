@@ -29,16 +29,13 @@ package final class NavigationModel: ObservableObject {
     @Published package var deepLinkError: String?
     /// The task last shown in each domain, so returning to a domain lands where you left it.
     @Published package private(set) var rememberedTasks: [StudioDomain: StudioTask] = [:]
-    /// The Vision Lab variant its rail shows (Faces covers detect/embed/compare/batch, Geometry
-    /// covers single and multi-view); kept in step with the Vision toolbar task.
-    @Published private(set) var visionLabTask: StudioVisionTask = .faceDetect
     /// Set by the Command Console scene while its window exists. Opening the console syncs the
     /// composer draft only when this is false, so raising an open console never clobbers edits.
     @Published package var isConsoleOpen = false
-    /// The prompt tasks whose inspector column is shown. Remembered per task, so Image ▸ Generate
-    /// can keep its inspector open while Chat stays a plain thread.
+    /// Tasks whose inspector column is shown. Remembered per task, so Image ▸ Generate can keep
+    /// its inspector open while Chat stays a plain thread.
     @Published package var inspectorTasks: Set<StudioTask> = []
-    /// Whether the Command view column is shown for the current prompt task. It takes the
+    /// Whether the Command view column is shown for the current task. It takes the
     /// inspector's place while open (the two are never side by side) and is not remembered.
     @Published package var showCommandColumn = false
     /// Help ▸ mere.run Guide presents the Guide sheet on the Studio window from any key window.
@@ -50,14 +47,10 @@ package final class NavigationModel: ObservableObject {
     package init(destination: StudioDestination = .default) {
         self.destination = destination
         rememberedTasks[destination.domain] = destination.task
-        if let variant = destination.task.visionLabTask { visionLabTask = variant }
     }
 
     func open(destination: StudioDestination) {
         rememberedTasks[destination.domain] = destination.task
-        if let variant = destination.task.visionLabTask, visionLabTask.studioTask != destination.task {
-            visionLabTask = variant
-        }
         guard destination != self.destination else { return }
         self.destination = destination
         // The Command view belongs to the task it was opened on; a new task starts closed.
@@ -70,14 +63,8 @@ package final class NavigationModel: ObservableObject {
         requested && !isConsoleOpen
     }
 
-    /// The Vision Lab rail picked a variant: show it and move the toolbar task to its group.
-    func selectVisionLabVariant(_ variant: StudioVisionTask) {
-        visionLabTask = variant
-        open(task: variant.studioTask)
-    }
-
-    /// Scene restore: applies the persisted destination through `open` so remembered tasks and
-    /// the Vision Lab variant learn it, and returns the prompt mode the composer should hold —
+    /// Scene restore: applies the persisted destination through `open` so remembered tasks
+    /// learn it, and returns the prompt mode the composer should hold —
     /// the destination's own mode when it has one, otherwise the persisted last prompt mode.
     @discardableResult
     package func restore(destination: StudioDestination, lastPromptMode: StudioMode) -> StudioMode {
@@ -104,17 +91,12 @@ package final class NavigationModel: ObservableObject {
     /// Whether the inspector column is shown for `task`: remembered on, and not displaced by the
     /// Command view column.
     package func showsInspector(for task: StudioTask) -> Bool {
-        task.isPromptTask && inspectorTasks.contains(task) && !showCommandColumn
-    }
-
-    /// Whether the Command view column is shown for `task`.
-    package func showsCommandColumn(for task: StudioTask) -> Bool {
-        showCommandColumn
+        task.showsPromptChrome && inspectorTasks.contains(task) && !showCommandColumn
     }
 
     /// Shows or hides the inspector for `task`. Showing it closes the Command view column.
     package func toggleInspector(for task: StudioTask) {
-        guard task.isPromptTask else { return }
+        guard task.showsPromptChrome else { return }
         if showsInspector(for: task) {
             inspectorTasks.remove(task)
         } else {
@@ -124,7 +106,7 @@ package final class NavigationModel: ObservableObject {
     }
 
     /// Shows or hides the Command view column; the inspector's memory for the task survives.
-    package func toggleCommandColumn(for task: StudioTask) {
+    package func toggleCommandColumn() {
         showCommandColumn.toggle()
     }
 

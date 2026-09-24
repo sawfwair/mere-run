@@ -63,6 +63,23 @@ contract. The table records the original implementation sequence.
   snapshot views. Added renders cover image focus, comparison, compact specialist
   tasks, and the Command overlay. Fixtures isolate saved voice profiles.
 
+### Specialist migration
+
+The specialist page migration is complete in the source tree. Sound, Music,
+Vision, Audio, Text, Image Datasets, 3D, and Earth Generate or Analyze tasks use
+the contract-backed task workspace. Live audio and vision use Session surfaces;
+Voices uses Manage; Image, Chat, and Music training use Project surfaces. The
+task-specific Decisions, Subjects, Realtime Music, Models, Server, Runs, and
+Plugins pages remain intentional surfaces. Task runs use `StudioTaskRunner`,
+and the root routes every task explicitly. Inspector choices use segments only
+when the entire row fits; otherwise they use a menu.
+
+The migration follow-ups are complete: Music, Sound, and 3D essential settings
+appear in composer and result chips; the Audio Analyze canvas stacks within a
+960 pt window with the Library open; menu bar snapshots use an isolated runtime
+endpoint; `vision track-live` removes its temporary recording after SIGTERM;
+and a synchronous launch refusal marks its Library row failed.
+
 ### Remaining architectural and runtime scope
 
 `StudioTask` remains an enum. Shared execution, durable state, and responsive
@@ -177,7 +194,10 @@ Specialist workspaces (the 19 sheets, about 15,000 lines):
 - Eight of the surfaces (Geospatial, Audio, Health benchmarks, 3D, Music Tools,
   Vision Lab, SFX Lab, Utility Lab) are forms over a command family whose shape
   the contract already declares. Their real value is the bespoke result
-  renderers (pose overlay, flow field, piano roll, CLAP gauge, PII spans).
+  renderers (pose overlay, flow field, piano roll, CLAP gauge, PII spans). SFX
+  Lab has since moved onto the shared task workspace (Video Foley and Condition
+  as Generate tasks; Encode, Decode, and Score as Analyze tasks), with the CLAP
+  gauge and the sync review kept as renderers.
 
 Architecture (`MereRunController.swift`, `CommandCatalog.swift`,
 `MereRunRootView.swift`):
@@ -281,7 +301,7 @@ Tasks per domain (archetype in parentheses):
   Train (Project).
 - Sound: Generate, Video Foley (Generate); Score, Condition, Encode, Decode
   (Analyze).
-- Voice: Speak, Clone (Generate); Voices (Manage).
+- Voice: Speak (Generate; its composer is the clone surface too); Voices (Manage).
 - 3D: From image (Generate) with engine picker TripoSR / TRELLIS.2 / InstantMesh.
 - Chat: threads with a Code preset (Converse); Train text LoRA (Project).
 - Vision: Read, Find, Segment, Track, Depth, Pose, Faces, Flow, Geometry

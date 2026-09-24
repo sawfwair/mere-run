@@ -52,6 +52,13 @@ After installation, `mere.run` verifies the plugin manifest and entrypoint. A
 plugin that declares a graph provider is registered only after that manifest
 passes validation.
 
+A catalog channel may declare `setup: true` for a plugin whose verified
+entrypoint installs a separate local prerequisite. The dry run shows both
+commands. With `--yes`, installation invokes the fixed `setup --yes` verb after
+manifest verification. The computer-use plugin uses this to install the signed,
+checksum-verified Cua Driver macOS app. macOS Accessibility and Screen Recording
+grants still require the user in System Settings.
+
 Use `--channel` to select a non-default catalog channel and `--force` only when
 you intentionally want to forward a forced reinstall to the package manager.
 

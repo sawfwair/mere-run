@@ -267,10 +267,25 @@ package enum StudioContractChoiceTitles {
     }
 
     private static let table: [String: String] = [
+        "--kind auto": "Auto",
+        "--kind lora": "LoRA",
+        "--kind lokr": "LoKr",
         "--mode style": "Preset voice",
         "--mode clone": "Cloned voice",
         "--response-format text": "Text",
         "--response-format json_object": "JSON",
+        "--format json": "JSON",
+        "--format rttm": "RTTM",
+        "--format midi": "MIDI",
+        "--latency offline": "Offline",
+        "--latency 1.04": "1.04 s",
+        "--latency 0.64": "0.64 s",
+        "--latency 0.32": "0.32 s",
+        "--ode-method rk4": "RK4",
+        "--input-rate 8000": "8 kHz",
+        "--input-rate 12000": "12 kHz",
+        "--input-rate 16000": "16 kHz",
+        "--input-rate 24000": "24 kHz",
         "--output-mode video-only": "Video",
         "--output-mode audio-video": "Audio + Video",
         "--backend auto": "Auto",
@@ -304,7 +319,8 @@ package enum StudioContractControl: Equatable {
     case field
     /// A checkbox: `boolean`.
     case toggle
-    /// A segmented control: `choice` with up to four choices.
+    /// A segmented control: `choice` with up to four choices. A row too narrow to show every
+    /// segment whole draws a menu instead.
     case segmented
     /// A pop-up: `choice` with more than four.
     case picker
@@ -674,6 +690,29 @@ package enum StudioContractOverrideID: String, CaseIterable, Hashable {
     /// Boxes and points drawn on the picture, and Track's frames picked on its scrubber; the
     /// canvas owns them, so the inspector never shows them as text.
     case regionPrompts
+    /// Which of a task's templates runs (Vision ▸ Faces: detect, embed, compare, batch; 3D: the
+    /// engine); it picks the capability rather than an argument of one. Task drafts only.
+    case variant
+    /// The per-view camera editor over `--cameras` (multi-view geometry, InstantMesh).
+    case cameras
+    /// The ordered view list over a repeatable `--view` (InstantMesh).
+    case orderedViews
+    /// The music training clip list over `music train-adapter --dataset`.
+    case musicManifest
+    /// Click-to-pick a face on the detection result, over the `--*face-index` options.
+    case faceIndex
+    /// The instrument picker over `--instruments`.
+    case instruments
+    /// The renoise mode control over its flag pair.
+    case renoise
+    /// Per-target LoRA ranks over `--lora-target-ranks`.
+    case targetRanks
+    /// The output widths `geo tessera --dimensions` accepts (the students' 16–128, the teacher's
+    /// 1024, or the checkpoint's own), which the contract declares as a bare integer.
+    case earthDimensions
+    /// `geo olmoearth`'s spatial patch size (1, 2, 4, or 8 pixels) and ground sample distance in
+    /// metres (above zero), which the contract declares as a bare integer and number.
+    case earthSampling
 }
 
 /// One composite editor: the flags it owns, and any draft field behind it that has no flag of its

@@ -30,8 +30,10 @@ struct StudioAnalyzePromptEditing {
 /// failure) as the same cards the Generate feed uses. Earlier runs stay in the Library column.
 struct StudioAnalyzeCanvas: View {
     let archetype: StudioAnalyzeArchetype
-    let mode: StudioMode
-    /// Every row of this mode, oldest first, as the feed builds them.
+    /// The task's glyph, empty-state words, and examples: the mode's for a prompt task, the
+    /// task's own on the shared task workspace.
+    let presentation: StudioTaskPresentation
+    /// Every row of this task, oldest first, as the feed builds them.
     let cards: [StudioFeedCard]
     /// The Library row the user picked, when they picked one.
     let selectedID: UUID?
@@ -43,6 +45,12 @@ struct StudioAnalyzeCanvas: View {
     let readinessActions: StudioReadinessActions
     let analyze: StudioAnalyzeActions
     var editing: StudioAnalyzePromptEditing?
+    /// The variant the task draft runs, when the task has several; picks the input kind and
+    /// views from the archetype's `variants`.
+    var templateID: CommandTemplateID?
+    /// The typed input of a `.text` task (Embeddings, Anonymize): the input column is this
+    /// editor, bound to the command's positional.
+    var textInput: Binding<String>?
 
     @State private var chosenView: StudioAnalyzeResultView?
     @State private var loaded: StudioAnalyzeLoadedResult?
@@ -65,6 +73,7 @@ struct StudioAnalyzeCanvas: View {
         static let contentWidth: CGFloat = 940
         static let resultColumnWidth: CGFloat = 360
         static let columnSpacing: CGFloat = 20
+        static let stackedBreakpoint: CGFloat = 760
         static let insets = EdgeInsets(top: 22, leading: 24, bottom: 6, trailing: 24)
         /// The input strip's row and its gap to the columns.
         static let inputStripHeight: CGFloat = 28 + 10
@@ -76,24 +85,40 @@ struct StudioAnalyzeCanvas: View {
     /// picture (`StudioAnalyzeMediaLayout`). Track's frame editor takes its own rows out of this.
     private var mediaHeight: CGFloat {
         var chrome = Metrics.insets.top + Metrics.insets.bottom + Metrics.inputStripHeight
-        if editing != nil, archetype.inputKind == .image { chrome += Metrics.toolbarRowHeight }
+        if editing != nil, inputKind == .image { chrome += Metrics.toolbarRowHeight }
         return StudioAnalyzeMediaLayout.mediaHeight(availableHeight: availableHeight, chromeHeight: chrome)
     }
 
     // MARK: Derived state
 
+    private var inputKind: StudioAnalyzeInputKind {
+        archetype.inputKind(for: templateID)
+    }
+
+    private var views: [StudioAnalyzeResultView] {
+        archetype.views(for: templateID)
+    }
+
     private var inputURL: URL? {
+        guard inputKind != .text, inputKind != .none else { return nil }
         let trimmed = inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : URL(fileURLWithPath: trimmed)
     }
 
+    /// A typed input counts as attached once there is text in it.
+    private var hasTypedInput: Bool {
+        inputKind == .text && !(textInput?.wrappedValue.isBlank ?? true)
+    }
+
     /// The run whose result is on screen: the picked Library row when it finished, else the most
-    /// recent finished run of this task.
+    /// recent finished run of this task. On a task with variants, only a run of the chosen
+    /// variant: Datasets ▸ Validate does not show the last Discover's candidates.
     private var resultCard: StudioFeedCard? {
-        if let selectedID, let picked = cards.first(where: { $0.id == selectedID }), picked.kind == .generation {
+        let finished = cards.filter { $0.kind == .generation && (templateID == nil || $0.item.templateID == templateID) }
+        if let selectedID, let picked = finished.first(where: { $0.id == selectedID }) {
             return picked
         }
-        return cards.last { $0.kind == .generation }
+        return finished.last
     }
 
     /// The cards that sit above the result: everything still in flight, plus the newest failure.
@@ -109,13 +134,15 @@ struct StudioAnalyzeCanvas: View {
 
     /// An input-first task shows its input the moment there is one: attaching a picture and then
     /// still being told to "Choose image…" would be absurd, so the serif empty state is only for
-    /// an empty well with nothing to report.
+    /// an empty well with nothing to report. A typed input is entered on the canvas itself, so
+    /// its editor is always up.
     private var hasBody: Bool {
-        inputURL != nil || resultCard != nil || !pendingCards.isEmpty || showsReadinessCard
+        inputURL != nil || inputKind == .text || inputKind == .none || resultCard != nil || !pendingCards.isEmpty
+            || showsReadinessCard
     }
 
     private var view: StudioAnalyzeResultView {
-        guard let chosenView, archetype.views.contains(chosenView) else { return archetype.defaultView }
+        guard let chosenView, views.contains(chosenView) else { return views.first ?? .json }
         return chosenView
     }
 
@@ -135,6 +162,8 @@ struct StudioAnalyzeCanvas: View {
     /// the next run while the panel keeps listing what the last one found.
     private var resultDescribesInput: Bool {
         guard let item = resultCard?.item else { return false }
+        // A typed or absent input has no file identity to compare; the result stands as is.
+        guard inputKind != .text, inputKind != .none else { return true }
         return StudioInputIdentity.matches(item: item, input: inputURL)
     }
 
@@ -147,31 +176,27 @@ struct StudioAnalyzeCanvas: View {
             if hasBody {
                 content
             } else {
-                StudioEmptyState(mode: mode, onUseExample: actions.useExample, onAttach: actions.attach)
+                StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, onAttach: actions.attach)
                     .padding(MereRunTheme.Spacing.xxxl)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: resultCard?.id) { await loadDocument() }
-        .task(id: inputPath) { await measureInput() }
+        .task(id: inputURL?.path ?? "") { await measureInput() }
         .onChange(of: resultCard?.id) { _, _ in editsTrackPrompts = false }
     }
 
     private var content: some View {
         GeometryReader { geometry in
+            let stacked = geometry.size.width < Metrics.stackedBreakpoint
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    inputStrip
+                    inputStrip(stacked: stacked)
                         .padding(.bottom, 10)
-                    HStack(alignment: .top, spacing: Metrics.columnSpacing) {
-                        inputColumn
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        resultColumn
-                            .frame(width: Metrics.resultColumnWidth)
-                    }
+                    columns(stacked: stacked)
                 }
                 .padding(Metrics.insets)
-                .frame(maxWidth: Metrics.contentWidth)
+                .frame(maxWidth: min(Metrics.contentWidth, geometry.size.width))
                 .frame(maxWidth: .infinity)
             }
             .onChange(of: geometry.size.height, initial: true) { _, height in
@@ -180,32 +205,77 @@ struct StudioAnalyzeCanvas: View {
         }
     }
 
+    @ViewBuilder
+    private func columns(stacked: Bool) -> some View {
+        if stacked {
+            VStack(alignment: .leading, spacing: Metrics.columnSpacing) {
+                inputColumn.frame(maxWidth: .infinity, alignment: .leading)
+                resultColumn.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            HStack(alignment: .top, spacing: Metrics.columnSpacing) {
+                inputColumn.frame(maxWidth: .infinity, alignment: .leading)
+                resultColumn.frame(width: Metrics.resultColumnWidth)
+            }
+        }
+    }
+
     // MARK: - Input strip
 
-    private var inputStrip: some View {
+    @ViewBuilder
+    private func inputStrip(stacked: Bool) -> some View {
+        if stacked {
+            VStack(alignment: .leading, spacing: 8) {
+                inputSourceRow
+                resultViewPicker
+            }
+        } else {
+            HStack(spacing: 10) {
+                inputSourceRow
+                Spacer(minLength: 8)
+                resultViewPicker
+            }
+        }
+    }
+
+    private var inputSourceRow: some View {
         HStack(spacing: 10) {
             Text("Input")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(MereRunTheme.textSecondary)
             StudioAnalyzeChip(text: inputDescription)
                 .help(inputURL?.path ?? "No input attached")
-            Button(inputURL == nil ? "Choose…" : "Replace", action: analyze.replaceInput)
-                .buttonStyle(.mereSecondary)
-                .help("Pick a different \(archetype.inputKind.noun)")
-            Spacer(minLength: 8)
-            // Nothing has been found yet, so there is nothing to switch between.
-            if archetype.views.count > 1, resultCard != nil {
-                MereSegmentedControl(
-                    archetype.views,
-                    selection: Binding(get: { view }, set: { chosenView = $0 }),
-                    accessibilityLabel: "Result view"
-                ) { $0.title }
+            if inputKind != .text, inputKind != .none {
+                Button(inputURL == nil ? "Choose…" : "Replace", action: analyze.replaceInput)
+                    .buttonStyle(.mereSecondary)
+                    .help("Pick a different \(inputKind.noun)")
             }
         }
         .accessibilityElement(children: .contain)
     }
 
+    @ViewBuilder
+    private var resultViewPicker: some View {
+        // Nothing has been found yet, so there is nothing to switch between.
+        if views.count > 1, resultCard != nil {
+            MereSegmentedControl(
+                views,
+                selection: Binding(get: { view }, set: { chosenView = $0 }),
+                accessibilityLabel: "Result view"
+            ) { $0.title }
+        }
+    }
+
     private var inputDescription: String {
+        switch inputKind {
+        case .text:
+            let lines = (textInput?.wrappedValue ?? "").components(separatedBy: .newlines).filter { !$0.isBlank }
+            return lines.isEmpty ? "No text yet" : (lines.count == 1 ? "1 line" : "\(lines.count) lines")
+        case .none:
+            return "No input needed"
+        case .image, .video, .audio, .file, .directory:
+            break
+        }
         guard let inputURL else { return "No input" }
         var parts = [inputURL.lastPathComponent]
         if let inputSize {
@@ -228,24 +298,68 @@ struct StudioAnalyzeCanvas: View {
             StudioAnalyzeDocumentView(url: loaded?.url, text: loaded?.raw)
                 .frame(height: mediaHeight)
                 .mereMediaFrame()
-        case .transcript, .timeline, .text, .score, .stems, .vectors:
-            mediaView
         default:
-            mediaView
+            // A view about the result rather than the input (landmarks, a flow field, a depth
+            // map, a scene) takes the column from a registered renderer.
+            if let rendering = StudioResultRenderers.canvasRendering(
+                for: view, document: document, item: resultDescribesInput ? resultCard?.item : nil, inputURL: inputURL
+            ) {
+                StudioResultCanvasView(rendering: rendering, maxHeight: mediaHeight)
+            } else {
+                mediaView
+            }
         }
     }
 
     @ViewBuilder
     private var mediaView: some View {
-        switch archetype.inputKind {
+        switch inputKind {
         case .image:
             imageView
         case .video:
             videoView
         case .audio:
             audioView
-        case .file:
+        case .file, .directory:
             fileView
+        case .text:
+            textView
+        case .none:
+            // Nothing to show on the left; the result document takes the column.
+            StudioAnalyzeDocumentView(url: loaded?.url, text: loaded?.raw)
+                .frame(height: mediaHeight)
+                .mereMediaFrame()
+        }
+    }
+
+    /// The typed input, edited in place: one text per line for Embeddings, the passage to
+    /// protect for Anonymize.
+    @ViewBuilder
+    private var textView: some View {
+        if let textInput {
+            TextEditor(text: textInput)
+                .font(.system(size: 13))
+                .foregroundStyle(MereRunTheme.textPrimary)
+                .scrollContentBackground(.hidden)
+                .padding(MereRunTheme.Spacing.sm)
+                .frame(height: min(mediaHeight, 320))
+                .background(MereRunTheme.surface)
+                .overlay(alignment: .topLeading) {
+                    // The task's placeholder, where the editor has none of its own.
+                    if !hasTypedInput, !presentation.promptPlaceholder.isEmpty {
+                        Text(presentation.promptPlaceholder)
+                            .font(.system(size: 13))
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .padding(.horizontal, MereRunTheme.Spacing.sm + 5)
+                            .padding(.vertical, MereRunTheme.Spacing.sm + 1)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .mereMediaFrame()
+                .accessibilityLabel(presentation.promptPlaceholder.isEmpty ? "Input text" : presentation.promptPlaceholder)
+        } else {
+            missingInput
         }
     }
 
@@ -385,9 +499,14 @@ struct StudioAnalyzeCanvas: View {
 
     @ViewBuilder
     private var fileView: some View {
-        if let inputURL {
+        if let rendering = StudioInputRenderers.rendering(for: templateID, url: inputURL) {
+            // A task that can say what its input file holds draws the file itself.
+            StudioInputRendererView(rendering: rendering)
+                .frame(maxWidth: .infinity)
+                .mereMediaFrame()
+        } else if let inputURL {
             VStack(spacing: MereRunTheme.Spacing.sm) {
-                Image(systemName: "doc.text")
+                Image(systemName: inputKind == .directory ? "folder" : "doc.text")
                     .font(.system(size: 34, weight: .medium))
                     .foregroundStyle(MereRunTheme.accent)
                 Text(inputURL.lastPathComponent)
@@ -409,7 +528,7 @@ struct StudioAnalyzeCanvas: View {
             Image(systemName: "paperclip")
                 .font(.system(size: 26, weight: .medium))
                 .foregroundStyle(MereRunTheme.textMuted)
-            Text("No \(archetype.inputKind.noun) attached.")
+            Text("No \(inputKind.noun) attached.")
                 .font(.system(size: 13))
                 .foregroundStyle(MereRunTheme.textSecondary)
         }
@@ -470,17 +589,17 @@ struct StudioAnalyzeCanvas: View {
     private func resultPanel(_ card: StudioFeedCard) -> some View {
         if resultDescribesInput {
             StudioAnalyzeResultPanel(
-            item: card.item,
-            document: document,
-            detections: detections,
-            speechSegments: document?.speechSegments ?? [],
-            outputText: card.item.outputText,
-            view: view,
-            nextActions: archetype.nextActions,
-            onOpenTask: { analyze.openTask($0, detections) },
-            onSave: analyze.save
-        )
-            } else {
+                item: card.item,
+                document: document,
+                detections: detections,
+                speechSegments: document?.speechSegments ?? [],
+                outputText: card.item.outputText,
+                view: view,
+                nextActions: archetype.nextActions,
+                onOpenTask: { analyze.openTask($0, detections) },
+                onSave: analyze.save
+            )
+        } else {
             ContentUnavailableView("Input changed", systemImage: "arrow.triangle.2.circlepath",
                 description: Text("Run this task again to analyze the selected input. The earlier result remains in Library."))
         }
@@ -496,8 +615,9 @@ struct StudioAnalyzeCanvas: View {
         let itemID = item.id
         let url = StudioAnalyzeDocumentSource.url(for: item)
         let fallbackText = item.outputText
+        let derived = StudioAnalyzeDocument.derived(from: item)
         let result = await Task.detached(priority: .userInitiated) {
-            StudioAnalyzeLoadedResult.load(itemID: itemID, url: url, fallbackText: fallbackText)
+            StudioAnalyzeLoadedResult.load(itemID: itemID, url: url, fallbackText: fallbackText, derived: derived)
         }.value
         guard !Task.isCancelled else { return }
         loaded = result
@@ -511,7 +631,7 @@ struct StudioAnalyzeCanvas: View {
             inputOrientation = .up
             return
         }
-        let kind = archetype.inputKind
+        let kind = inputKind
         let measured = await Task.detached(priority: .userInitiated) {
             StudioAnalyzeMediaInfo.measure(inputURL, kind: kind)
         }.value
@@ -531,6 +651,9 @@ extension StudioAnalyzeInputKind {
         case .video: return "video"
         case .audio: return "audio file"
         case .file: return "file"
+        case .directory: return "folder"
+        case .text: return "text"
+        case .none: return "input"
         }
     }
 }
@@ -545,12 +668,25 @@ struct StudioAnalyzeLoadedResult: Equatable {
     let raw: String?
     let document: StudioAnalyzeDocument?
 
-    static func load(itemID: UUID, url: URL?, fallbackText: String?) -> StudioAnalyzeLoadedResult {
+    /// - Parameter derived: the document the run's row alone stands for
+    ///   (`StudioAnalyzeDocument.derived(from:)`), which wins over reading its output.
+    static func load(itemID: UUID, url: URL?, fallbackText: String?, derived: StudioAnalyzeDocument? = nil) -> StudioAnalyzeLoadedResult {
+        if let derived {
+            return StudioAnalyzeLoadedResult(itemID: itemID, url: nil, raw: fallbackText, document: derived)
+        }
+        // A tensor result (Earth's safetensors, `sfx ae encode`'s `.npy`) can be hundreds of
+        // megabytes: only its header is read, and the JSON view shows what the command printed.
+        if let url, StudioTensorHeader.fileExtensions.contains(url.pathExtension.lowercased()) {
+            let header = StudioTensorHeader.load(from: url)
+            return StudioAnalyzeLoadedResult(itemID: itemID, url: url, raw: fallbackText, document: header.map { .tensor($0) })
+        }
         if let url, let data = try? Data(contentsOf: url), !data.isEmpty {
+            // A binary result with no text of its own (a flow field, MIDI) shows the command's
+            // printed output in the JSON view instead.
             return StudioAnalyzeLoadedResult(
                 itemID: itemID,
                 url: url,
-                raw: String(data: data, encoding: .utf8),
+                raw: String(data: data, encoding: .utf8) ?? fallbackText,
                 document: StudioAnalyzeDocument.decode(data)
             )
         }
@@ -594,7 +730,7 @@ enum StudioAnalyzeMediaInfo {
             let asset = AVURLAsset(url: url)
             let duration = CMTimeGetSeconds(asset.duration)
             return Measurement(size: nil, duration: duration.isFinite ? duration : nil)
-        case .file:
+        case .file, .directory, .text, .none:
             return Measurement()
         }
     }

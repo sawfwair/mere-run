@@ -98,7 +98,7 @@ struct StudioMusicManifestEditor: View {
             }
             Spacer()
             Button {
-                add(StudioSpecialistFiles.chooseFile(title: "Add audio clips", allowedContentTypes: [.audio], allowsMultipleSelection: true))
+                add(StudioFilePanels.chooseFile(title: "Add audio clips", allowedContentTypes: [.audio], allowsMultipleSelection: true))
             } label: {
                 Label("Add audio…", systemImage: "plus")
             }
@@ -162,7 +162,7 @@ struct StudioMusicManifestEditor: View {
     }
 
     private func addFolder() {
-        guard let folder = StudioSpecialistFiles.chooseDirectory(title: "Add a folder of clips") else { return }
+        guard let folder = StudioFilePanels.chooseDirectory(title: "Add a folder of clips") else { return }
         let before = draft.clips.count
         add([folder])
         if draft.clips.count == before {
@@ -172,7 +172,7 @@ struct StudioMusicManifestEditor: View {
 
     /// Any file type: `.jsonl` has no declared type, so a type filter would grey the files out.
     private func importManifest() {
-        guard let url = StudioSpecialistFiles.chooseFile(title: "Import a training manifest").first else { return }
+        guard let url = StudioFilePanels.chooseFile(title: "Import a training manifest").first else { return }
         do {
             draft = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
             message = nil
@@ -182,7 +182,7 @@ struct StudioMusicManifestEditor: View {
     }
 
     private func exportManifest() {
-        guard let url = StudioSpecialistFiles.saveFile(title: "Export the training manifest", suggestedName: "dataset.jsonl") else { return }
+        guard let url = StudioFilePanels.saveFile(title: "Export the training manifest", suggestedName: "dataset.jsonl") else { return }
         do {
             try draft.jsonl().write(to: url, options: .atomic)
         } catch {

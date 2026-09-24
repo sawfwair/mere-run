@@ -145,7 +145,7 @@ package struct StudioConsoleView: View {
                 get: { navigation.showLibrary },
                 set: { navigation.showLibrary = $0 }
             ),
-            canShowLibrary: navigation.destination.task.isPromptTask,
+            canShowLibrary: navigation.destination.task.showsPromptChrome,
             showInspector: .constant(false),
             canShowInspector: false,
             showCommand: .constant(false),

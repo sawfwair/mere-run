@@ -234,6 +234,61 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertTrue(runner.starts.isEmpty)
     }
 
+    /// A specialist row restores into the task draft the shared workspace reads
+    /// (`"<task>.taskDraft"`): the recorded argv comes back as the contract form, replacing any
+    /// Command edits. The Library offers it only once the task's page has moved; the reading and
+    /// the write are proven here so a page PR flips its gate onto a working path.
+    func testUseTheseSettingsRestoresASpecialistRowIntoItsTaskDraft() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .audioEnhance))
+        var recorded = template.defaultDraft()
+        recorded.inputPath = root.appendingPathComponent("voice-memo.wav").path
+        recorded.model = "audio-enhance-universr"
+        recorded.outputPath = root.appendingPathComponent("voice-memo-enhanced.wav").path
+        let request = StudioRunRequest(mode: .listen, templateID: .audioEnhance, template: template, draft: recorded)
+        let item = library.start(request: request, commandPreview: "fixture")
+        controller.taskSessions.set(
+            StudioTaskCommandState(templateID: .audioEnhance, sourceArguments: [], form: StudioConsoleDraft()),
+            for: StudioTask.audioEnhance.rawValue + ".commandOverride"
+        )
+
+        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: item))
+        XCTAssertEqual(restored.templateID, .audioEnhance)
+        XCTAssertEqual(restored.primaryInputPath, recorded.inputPath)
+        XCTAssertEqual(restored.model, "audio-enhance-universr")
+        XCTAssertEqual(restored.text("--output"), "", "a restored run gets a fresh destination, never the row's file")
+        XCTAssertEqual(
+            restored.arguments,
+            try XCTUnwrap(item.commandArguments).filter { $0 != "--output" && $0 != recorded.outputPath },
+            "everything but the destination is the row's exact argv, read back"
+        )
+
+        // A transcribe row carries a sidecar as well; both destinations go.
+        let transcribeTemplate = try XCTUnwrap(CommandCatalog.template(id: .musicTranscribe))
+        var transcribe = transcribeTemplate.defaultDraft()
+        transcribe.inputPath = root.appendingPathComponent("harbor-lights.wav").path
+        transcribe.outputPath = root.appendingPathComponent("harbor-lights.mid").path
+        transcribe.musicContextOutput = root.appendingPathComponent("harbor-lights-context.json").path
+        let transcribeRow = library.start(
+            request: StudioRunRequest(mode: .music, templateID: .musicTranscribe, template: transcribeTemplate, draft: transcribe),
+            commandPreview: "fixture"
+        )
+        let restoredTranscribe = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: transcribeRow))
+        XCTAssertEqual(restoredTranscribe.primaryInputPath, transcribe.inputPath)
+        XCTAssertEqual(restoredTranscribe.text("--output"), "")
+        XCTAssertEqual(restoredTranscribe.text("--context-output"), "")
+
+        XCTAssertTrue(prompt.useTaskSettings(from: item, task: .audioEnhance))
+        XCTAssertEqual(controller.taskSessions.taskDraft(for: .audioEnhance), restored)
+        XCTAssertNil(controller.taskSessions.value(for: StudioTask.audioEnhance.rawValue + ".commandOverride",
+                                                   default: Optional<StudioTaskCommandState>.none))
+        // Enhance is on the shared workspace, so the Library offers the action and it lands in
+        // the task draft through the same path.
+        XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(item), "offered once the task is on the workspace")
+        XCTAssertTrue(prompt.useSettings(from: item))
+        XCTAssertEqual(controller.taskSessions.taskDraft(for: .audioEnhance), restored)
+        XCTAssertTrue(runner.starts.isEmpty)
+    }
+
     /// A Console run of a template the composer does not build (an upscale, an edit) records a
     /// command but has no composer to land in, so the action is not offered rather than failing.
     func testUseTheseSettingsIsOnlyOfferedForCommandsTheComposerBuilds() throws {
@@ -244,9 +299,15 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         )
         XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(generated))
 
-        let otherTemplate = try XCTUnwrap(CommandCatalog.templates.first { $0.libraryMode == .createImage && $0.id != .imageGenerate })
+        // A template whose task has moved onto a task draft restores through it, so the sample
+        // is one whose task still keeps its own page (Video ▸ Subjects) and whose mode's composer
+        // does not build it: nothing to land in.
+        let otherTemplate = try XCTUnwrap(CommandCatalog.templates.first {
+            let task = $0.id.studioTask
+            return task.mode == nil && !task.usesTaskDraft && $0.libraryMode.defaultTemplateID != $0.id
+        })
         let other = library.start(
-            request: StudioRunRequest(mode: .createImage, templateID: otherTemplate.id, template: otherTemplate, draft: otherTemplate.defaultDraft()),
+            request: StudioRunRequest(mode: otherTemplate.libraryMode, templateID: otherTemplate.id, template: otherTemplate, draft: otherTemplate.defaultDraft()),
             commandPreview: "fixture"
         )
         XCTAssertFalse(StudioLibraryDraftRestoration.canRestore(other), otherTemplate.id.rawValue)

@@ -37,6 +37,18 @@ package enum StudioAnalyzeResultView: String, CaseIterable, Identifiable, Hashab
     case text
     /// One number and how it was reached.
     case score
+    /// What a model understood about a recording: tempo, key, meter, a caption.
+    case analysis
+    /// Transcribed notes on a piano roll.
+    case notes
+    /// A tensor's header: dtype, shape, and size, for an `.npy` or safetensors output.
+    case tensor
+    /// Dataset candidates found under a folder.
+    case candidates
+    /// A structured report (a run plan's preflight or materialization).
+    case report
+    /// Text with the spans a model marked in it.
+    case spans
     /// The raw result document, monospaced.
     case json
 
@@ -59,6 +71,12 @@ package enum StudioAnalyzeResultView: String, CaseIterable, Identifiable, Hashab
         case .stems: return "Stems"
         case .text: return "Text"
         case .score: return "Score"
+        case .analysis: return "Analysis"
+        case .notes: return "Notes"
+        case .tensor: return "Tensor"
+        case .candidates: return "Candidates"
+        case .report: return "Report"
+        case .spans: return "Spans"
         case .json: return "JSON"
         }
     }
@@ -71,6 +89,12 @@ package enum StudioAnalyzeInputKind: Equatable {
     case audio
     /// A file the canvas can only name (a text corpus, a GeoTIFF the app does not decode).
     case file
+    /// A folder the run scans or reads.
+    case directory
+    /// Typed text: the input column is an editor bound to the command's positional.
+    case text
+    /// The run takes no input at all (`image validate`); the result column stands alone.
+    case none
 }
 
 /// What one contextual next step does.
@@ -111,14 +135,53 @@ package struct StudioAnalyzeNextAction: Identifiable, Equatable {
 /// steps that continue from it. Every input-first task — the ones that take a file, run a single
 /// pass over it, and show what the model found — declares one.
 package struct StudioAnalyzeArchetype: Equatable {
+    /// What one of a task's templates takes and shows when it differs from the task's own
+    /// declaration: Image ▸ Datasets scans a folder to discover, reads a plan file to check it,
+    /// and takes nothing at all to validate a model.
+    package struct Variant: Equatable {
+        package let inputKind: StudioAnalyzeInputKind
+        package let views: [StudioAnalyzeResultView]
+
+        package init(inputKind: StudioAnalyzeInputKind, views: [StudioAnalyzeResultView]) {
+            self.inputKind = inputKind
+            self.views = views
+        }
+    }
+
     package let task: StudioTask
     package let inputKind: StudioAnalyzeInputKind
     /// The strip's view switch, in order; the first is the default.
     package let views: [StudioAnalyzeResultView]
     package let nextActions: [StudioAnalyzeNextAction]
+    /// Per-template exceptions to `inputKind` and `views`, keyed by the variant template.
+    package var variants: [CommandTemplateID: Variant] = [:]
+
+    package init(
+        task: StudioTask,
+        inputKind: StudioAnalyzeInputKind,
+        views: [StudioAnalyzeResultView],
+        nextActions: [StudioAnalyzeNextAction],
+        variants: [CommandTemplateID: Variant] = [:]
+    ) {
+        self.task = task
+        self.inputKind = inputKind
+        self.views = views
+        self.nextActions = nextActions
+        self.variants = variants
+    }
 
     package var defaultView: StudioAnalyzeResultView {
         views.first ?? .json
+    }
+
+    /// The input the chosen variant takes: its own declaration, else the task's.
+    package func inputKind(for templateID: CommandTemplateID?) -> StudioAnalyzeInputKind {
+        templateID.flatMap { variants[$0]?.inputKind } ?? inputKind
+    }
+
+    /// The views the chosen variant offers: its own declaration, else the task's.
+    package func views(for templateID: CommandTemplateID?) -> [StudioAnalyzeResultView] {
+        templateID.flatMap { variants[$0]?.views } ?? views
     }
 
     /// The tasks this archetype's next steps can hand off to.
@@ -152,10 +215,11 @@ extension StudioAnalyzeArchetype {
             _ task: StudioTask,
             _ inputKind: StudioAnalyzeInputKind,
             _ views: [StudioAnalyzeResultView],
-            _ nextActions: [StudioAnalyzeNextAction]
+            _ nextActions: [StudioAnalyzeNextAction],
+            variants: [CommandTemplateID: Variant] = [:]
         ) {
             table[task] = StudioAnalyzeArchetype(
-                task: task, inputKind: inputKind, views: views, nextActions: nextActions
+                task: task, inputKind: inputKind, views: views, nextActions: nextActions, variants: variants
             )
         }
 
@@ -181,6 +245,8 @@ extension StudioAnalyzeArchetype {
         add(.visionDepth, .image, [.depth, .json], [
             .open("Find objects", .visionFind),
             .save("Save JSON", .json)
+        ], variants: [
+            .visionDepthVideo: Variant(inputKind: .video, views: [.video, .json])
         ])
         add(.visionPose, .image, [.points, .json], [
             .open("Detect faces", .visionFaces),
@@ -189,6 +255,10 @@ extension StudioAnalyzeArchetype {
         add(.visionFaces, .image, [.boxes, .points, .json], [
             .open("Pose landmarks", .visionPose),
             .save("Save JSON", .json)
+        ], variants: [
+            .visionFaceEmbed: Variant(inputKind: .image, views: [.vectors, .json]),
+            .visionFaceCompare: Variant(inputKind: .image, views: [.score, .json]),
+            .visionFaceBatch: Variant(inputKind: .image, views: [.json])
         ])
         add(.visionFlow, .image, [.vectors, .json], [
             .save("Save flow", .media)
@@ -221,18 +291,33 @@ extension StudioAnalyzeArchetype {
             .save("Save stems", .media)
         ])
 
-        // Text
-        add(.textDecide, .file, [.json], [.save("Save JSON", .json)])
-        add(.textEmbeddings, .file, [.vectors, .json], [
+        // Music
+        add(.musicAnalyze, .audio, [.analysis, .json], [
+            .open("Transcribe notes", .musicTranscribe),
+            .open("Separate stems", .musicSeparate),
             .save("Save JSON", .json)
         ])
-        add(.textAnonymize, .file, [.text], [
+        add(.musicTranscribe, .audio, [.notes, .json], [
+            .open("Analyze", .musicAnalyze),
+            .save("Save MIDI", .media)
+        ])
+        add(.musicSeparate, .audio, [.stems, .json], [
+            .open("Analyze", .musicAnalyze),
+            .save("Save stems", .media)
+        ])
+
+        // Text: Embeddings and Anonymize take typed text, not a file.
+        add(.textDecide, .file, [.json], [.save("Save JSON", .json)])
+        add(.textEmbeddings, .text, [.vectors, .json], [
+            .save("Save JSON", .json)
+        ])
+        add(.textAnonymize, .text, [.spans, .text], [
             .save("Save text", .text)
         ])
 
-        // Earth
+        // Earth: the CLI writes safetensors, so the result is the tensor's header, not a raster.
         for task in [StudioTask.earthFlood, .earthFire, .earthTessera, .earthOlmoEarth] {
-            add(task, .file, [.map, .json], [.save("Save JSON", .json)])
+            add(task, .file, [.tensor, .json], [.save("Save tensor", .media)])
         }
 
         // Sound analysis
@@ -240,12 +325,54 @@ extension StudioAnalyzeArchetype {
             .open("Transcribe", .audioTranscribe),
             .save("Save JSON", .json)
         ])
-        add(.soundCondition, .audio, [.audio, .json], [
+        add(.soundEncode, .audio, [.tensor, .json], [
+            .open("Decode latents", .soundDecode),
+            .save("Save latents", .media)
+        ])
+        add(.soundDecode, .file, [.audio, .json], [
+            .open("Score against a prompt", .soundScore),
             .save("Save audio", .media)
+        ])
+
+        // Image datasets: three variants behind one task control segment. Training on a found
+        // dataset is a Project handoff, which a next step (input-first siblings only) cannot be;
+        // the candidates renderer offers it on each row instead.
+        add(.imageDatasets, .directory, [.candidates, .json], [
+            .save("Save JSON", .json)
+        ], variants: [
+            .imageRunPlan: Variant(inputKind: .file, views: [.report, .json]),
+            .imageValidate: Variant(inputKind: .none, views: [.json])
         ])
 
         return table
     }()
+}
+
+/// The Generate archetype for a task that has no `StudioMode`: prompt first, a feed of results.
+/// The attachment slots and chips come from the task's contract (`StudioTaskSchema`); this
+/// declares only what the contract cannot say — whether the composer shows a prompt, and what
+/// the finished card leads with.
+package struct StudioGenerateArchetype: Equatable {
+    package let task: StudioTask
+    /// The command takes free text (a positional prompt or `--prompt`), so the composer shows the
+    /// prompt field.
+    package let hasPrompt: Bool
+    /// What the finished card's first tile is.
+    package let primaryOutput: StudioOutputFileKind
+
+    package static let archetypes: [StudioTask: StudioGenerateArchetype] = [
+        .soundFoley: StudioGenerateArchetype(task: .soundFoley, hasPrompt: true, primaryOutput: .audio),
+        .soundCondition: StudioGenerateArchetype(task: .soundCondition, hasPrompt: true, primaryOutput: .other),
+        .threeDFromImage: StudioGenerateArchetype(task: .threeDFromImage, hasPrompt: false, primaryOutput: .model3D),
+    ]
+}
+
+extension StudioTask {
+    /// The Generate archetype this mode-less task renders with, or nil for every other task
+    /// (a mode-backed Generate task declares its shape through the mode).
+    package var generateArchetype: StudioGenerateArchetype? {
+        StudioGenerateArchetype.archetypes[self]
+    }
 }
 
 /// Carrying one task's input into the sibling task a next step opens.

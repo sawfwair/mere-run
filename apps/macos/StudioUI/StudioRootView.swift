@@ -95,7 +95,6 @@ private struct StudioWorkspaceView: View {
     private var modelUsageTermsByID: [String: StudioModelUsageTerms] {
         Dictionary(uniqueKeysWithValues: models.rows.compactMap { row in row.usageTerms.map { (row.id, $0) } })
     }
-    @State private var imageDatasetTask: StudioUtilityTask = .datasetDiscovery
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
     @FocusState private var promptFocused: Bool
     init(controller: MereRunController, library: StudioLibraryStore, navigation: NavigationModel,
@@ -126,18 +125,30 @@ private struct StudioWorkspaceView: View {
         destination.task.mode != nil
     }
 
-    /// The Library column belongs to prompt tasks only: Subjects, Realtime, Models, and the other
-    /// Project, Session, and Manage tasks take the full width even inside a Create domain.
+    /// The Library column belongs to the Generate, Converse, and Analyze tasks: Subjects,
+    /// Realtime, Models, and the other Project, Session, and Manage tasks take the full width
+    /// even inside a Create domain, as does Decisions' custom Analyze editor.
     private var showsLibraryColumn: Bool {
-        navigation.showLibrary && destination.task.isPromptTask
+        navigation.showLibrary && destination.task.showsPromptChrome
     }
 
     private var showsInspectorColumn: Bool {
-        showsPromptWorkspace && navigation.showsInspector(for: destination.task)
+        destination.task.showsPromptChrome && navigation.showsInspector(for: destination.task)
+    }
+
+    /// The task's draft on the shared task workspace, read and written through the session store
+    /// so the inspector column, the Command view, and the workspace edit one value.
+    private var taskDraftBinding: Binding<StudioTaskDraft>? {
+        let task = destination.task
+        guard task.usesTaskDraft, let initial = controller.taskSessions.taskDraft(for: task) else { return nil }
+        return Binding(
+            get: { controller.taskSessions.taskDraft(for: task) ?? initial },
+            set: { controller.taskSessions.setTaskDraft($0, for: task) }
+        )
     }
 
     private var showsCommandColumn: Bool {
-        navigation.showsCommandColumn(for: destination.task)
+        navigation.showCommandColumn
     }
 
     /// The feed's cards for the current mode: the Library rows plus the jobs still alive.
@@ -209,7 +220,7 @@ private struct StudioWorkspaceView: View {
     /// terms send the user to Models first, and the shell's pull, navigate, and recheck.
     private var readinessActions: StudioReadinessActions {
         StudioReadinessActions(
-            mode: mode,
+            scope: StudioModelScope(mode: mode),
             model: $prompt.draft.model,
             modelInventory: modelInventory,
             pullModel: pullModel,
@@ -262,9 +273,9 @@ private struct StudioWorkspaceView: View {
 
     private var showCommandBinding: Binding<Bool> {
         Binding(
-            get: { navigation.showsCommandColumn(for: destination.task) },
+            get: { navigation.showCommandColumn },
             set: { shown in
-                if shown != navigation.showsCommandColumn(for: destination.task) { toggleCommand() }
+                if shown != navigation.showCommandColumn { toggleCommand() }
             }
         )
     }
@@ -288,6 +299,7 @@ private struct StudioWorkspaceView: View {
     var body: some View {
         observedShell
             .environment(\.studioTaskSessions, controller.taskSessions)
+            .environment(\.studioTaskRunner, prompt.runner)
             .environment(\.studioTaskScope, destination.task.rawValue)
     }
 
@@ -563,10 +575,10 @@ private struct StudioWorkspaceView: View {
             domain: destination.domain,
             subtitle: domainSubtitle,
             task: taskBinding,
-            showsPanelToggles: destination.task.isPromptTask,
+            showsPanelToggles: destination.task.showsPromptChrome,
             isLibraryShown: layout.showsLibrary || libraryOverlay,
             isInspectorShown: navigation.showsInspector(for: destination.task),
-            isCommandShown: navigation.showsCommandColumn(for: destination.task),
+            isCommandShown: navigation.showCommandColumn,
             isSidebarShown: columnVisibility != .detailOnly,
             onToggleSidebar: {
                 columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
@@ -580,23 +592,41 @@ private struct StudioWorkspaceView: View {
 
     // MARK: - Inspector and Command view
 
+    @ViewBuilder
     private var inspectorColumn: some View {
-        StudioInspector(
-            mode: mode,
-            draft: $prompt.draft,
-            baseline: freshDraft(for: mode),
-            modelInventory: modelInventory,
-            readiness: readiness,
-            lastSeed: lastSeed,
-            onShowModels: { navigation.open(task: .modelsInstalled) },
-            onShowAdapters: { navigation.open(task: .modelsAdapters) },
-            onClose: toggleInspector
-        )
+        if let taskDraft = taskDraftBinding {
+            StudioTaskInspector(
+                task: destination.task,
+                draft: taskDraft,
+                modelInventory: modelInventory,
+                readiness: controller.readiness(for: destination.task),
+                onShowModels: { navigation.open(task: .modelsInstalled) },
+                onClose: toggleInspector
+            )
+        } else {
+            StudioInspector(
+                mode: mode,
+                draft: $prompt.draft,
+                baseline: freshDraft(for: mode),
+                modelInventory: modelInventory,
+                readiness: readiness,
+                lastSeed: lastSeed,
+                onShowModels: { navigation.open(task: .modelsInstalled) },
+                onShowAdapters: { navigation.open(task: .modelsAdapters) },
+                onClose: toggleInspector
+            )
+        }
     }
 
     private var baseTaskRequest: StudioRunRequest? {
         if showsPromptWorkspace {
             return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false)
+        }
+        if let taskDraft = taskDraftBinding {
+            // The Command view previews the task draft's own form with its launch-time defaults
+            // applied and its destination named the way the runner names it at submit time, so
+            // "Will run" shows the argv that runs.
+            return StudioOutputLocation.destination(for: StudioTaskRunner.launching(taskDraft.wrappedValue)).request()
         }
         let key = destination.task.rawValue
         let chosen = controller.taskSessions.value(for: key + ".commandTemplate", default: Optional<CommandTemplateID>.none)
@@ -619,6 +649,13 @@ private struct StudioWorkspaceView: View {
             StudioTaskCommandView(template: request.template, seed: request.draft, form: Binding(
                 get: { commandForm(for: request) },
                 set: { edited in
+                    if let taskDraft = taskDraftBinding {
+                        // A task draft has no separate override: the form is the draft.
+                        var next = taskDraft.wrappedValue
+                        next.form = edited
+                        taskDraft.wrappedValue = next
+                        return
+                    }
                     if showsPromptWorkspace {
                         edited.applyingChanges(from: commandForm(for: request), to: &draft,
                                                mode: mode, templateID: request.templateID)
@@ -628,9 +665,24 @@ private struct StudioWorkspaceView: View {
                         sourceArguments: source.template.arguments(from: source.draft), form: edited),
                         for: request.templateID.studioTask.rawValue + ".commandOverride")
                 }
-            ), onRun: runStudioCommand, onClose: toggleCommand,
-               canRun: !showsPromptWorkspace || (!readiness.blocksRun && !(mode.isConversational && activeConversationRunning)))
+            ), onRun: runStudioCommand, onClose: toggleCommand, canRun: canRunCurrentTask, launching: { form in
+                // A task draft's preview runs through the runner's launch-time defaults.
+                guard taskDraftBinding != nil else { return form }
+                return StudioTaskRunner.launching(StudioTaskDraft(templateID: request.templateID, form: form)).form
+            })
         }
+    }
+
+    /// Whether Run is available for the current task: the prompt workspace's readiness and
+    /// conversation gates, the task workspace's readiness, or a task-specific command.
+    private var canRunCurrentTask: Bool {
+        if showsPromptWorkspace {
+            return !readiness.blocksRun && !(mode.isConversational && activeConversationRunning)
+        }
+        if destination.task.usesTaskDraft {
+            return !controller.readiness(for: destination.task).blocksRun
+        }
+        return baseTaskRequest != nil
     }
 
     /// Models reports its installed count and store size; every other domain keeps its tagline.
@@ -643,6 +695,9 @@ private struct StudioWorkspaceView: View {
 
     // MARK: - Domain content
 
+    /// Every destination's surface. Prompt tasks share their composer; contract-backed Generate
+    /// and Analyze tasks share the task workspace. Session, Project, and Manage tasks keep their
+    /// purpose-built surfaces, with no fallback route for a task the switch has not classified.
     @ViewBuilder
     private var domainContent: some View {
         switch destination.task {
@@ -650,52 +705,31 @@ private struct StudioWorkspaceView: View {
              .chatChat, .chatCode, .visionRead, .visionFind, .visionSegment, .visionTrack,
              .audioTranscribe:
             promptWorkspace
-        case .imageDatasets:
-            StudioUtilityLabView(
-                task: $imageDatasetTask,
-                tasks: [.datasetDiscovery, .imageValidation, .runPlan],
-                showsTaskPicker: true
-            )
+        case .imageDatasets, .musicAnalyze, .musicTranscribe, .musicSeparate,
+             .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore,
+             .threeDFromImage, .visionDepth, .visionPose, .visionFaces, .visionFlow,
+             .visionGeometry, .audioWhoSpoke, .audioEnhance, .audioSeparate,
+             .textEmbeddings, .textAnonymize, .earthFlood, .earthFire, .earthTessera,
+             .earthOlmoEarth:
+            StudioTaskWorkspace(task: destination.task, models: models)
         case .imageTrain:
-            StudioTrainingView(kind: .image)
+            StudioTrainingView(kind: .image, models: models)
         case .chatTrain:
-            StudioTrainingView(kind: .text)
+            StudioTrainingView(kind: .text, models: models)
         case .musicTrain:
-            StudioTrainingView(kind: .music)
+            StudioTrainingView(kind: .music, models: models)
         case .videoSubjects:
             StudioSCAILView()
         case .musicRealtime:
             StudioRealtimeMusicView(initialDraft: draft)
-        case .musicAnalyze, .musicTranscribe:
-            StudioMusicToolsView(tool: musicToolBinding, tools: [.analyze, .transcribe])
-        case .musicSeparate:
-            StudioAudioToolsView(tool: .constant(.separate))
-        case .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore:
-            StudioSFXLabView(
-                task: sfxTaskBinding,
-                tasks: [.video, .condition, .encode, .decode, .score],
-                initialDraft: draft
-            )
-        case .voiceClone, .voiceVoices:
-            StudioVoiceView(task: voiceTaskBinding, tasks: [.synthesize, .profiles], initialDraft: draft)
-        case .threeDFromImage:
-            Studio3DCreationView()
-        case .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive:
-            StudioVisionLabView(task: visionLabBinding)
-        case .audioWhoSpoke, .audioLive:
-            StudioVoiceView(task: voiceTaskBinding, tasks: [.diarize, .listen], initialDraft: draft)
-        case .audioEnhance, .audioSeparate:
-            StudioAudioToolsView(tool: audioToolBinding)
+        case .voiceVoices:
+            StudioVoicesView()
+        case .visionLive:
+            StudioLiveTrackSession(models: models)
+        case .audioLive:
+            StudioLiveListenSession(models: models)
         case .textDecide:
             StudioLayaDecisionView()
-        case .textEmbeddings, .textAnonymize:
-            StudioUtilityLabView(
-                task: utilityTaskBinding,
-                tasks: [.embeddings, .anonymize],
-                showsTaskPicker: false
-            )
-        case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth:
-            StudioGeoLabView(tool: geoToolBinding)
         case .modelsInstalled:
             StudioModelsView(
                 modelStore: models,
@@ -730,7 +764,7 @@ private struct StudioWorkspaceView: View {
         case .serverServing:
             StudioServingConsoleView(monitor: controller.servingMonitor, server: controller.localServer)
         case .serverMusic:
-            StudioMusicToolsView(tool: .constant(.serve), tools: [.serve])
+            StudioMusicServerView(server: controller.musicServer)
         case .serverVision:
             StudioVisionServerView(server: controller.visionServer)
         case .runsRuns:
@@ -738,123 +772,6 @@ private struct StudioWorkspaceView: View {
         case .pluginsCatalog:
             StudioPluginsView()
         }
-    }
-
-    // MARK: Task bindings for re-hosted views
-
-    private var musicToolBinding: Binding<StudioMusicTool> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .musicTranscribe: return .transcribe
-                default: return .analyze
-                }
-            },
-            set: { tool in
-                switch tool {
-                case .analyze: navigation.open(task: .musicAnalyze)
-                case .transcribe: navigation.open(task: .musicTranscribe)
-                case .serve: navigation.open(task: .serverMusic)
-                }
-            }
-        )
-    }
-
-    private var audioToolBinding: Binding<StudioAudioTool> {
-        Binding(
-            get: { destination.task == .audioSeparate ? .separate : .enhance },
-            set: { navigation.open(task: $0 == .separate ? .audioSeparate : .audioEnhance) }
-        )
-    }
-
-    private var sfxTaskBinding: Binding<StudioSFXTask> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .soundCondition: return .condition
-                case .soundEncode: return .encode
-                case .soundDecode: return .decode
-                case .soundScore: return .score
-                default: return .video
-                }
-            },
-            set: { task in
-                switch task {
-                case .generate: navigation.open(task: .soundGenerate)
-                case .video: navigation.open(task: .soundFoley)
-                case .condition: navigation.open(task: .soundCondition)
-                case .encode: navigation.open(task: .soundEncode)
-                case .decode: navigation.open(task: .soundDecode)
-                case .score: navigation.open(task: .soundScore)
-                }
-            }
-        )
-    }
-
-    private var voiceTaskBinding: Binding<StudioVoiceTask> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .voiceVoices: return .profiles
-                case .audioWhoSpoke: return .diarize
-                case .audioLive: return .listen
-                case .audioTranscribe: return .transcribe
-                default: return .synthesize
-                }
-            },
-            set: { task in
-                switch task {
-                case .synthesize: navigation.open(task: .voiceClone)
-                case .profiles: navigation.open(task: .voiceVoices)
-                case .transcribe: navigation.open(task: .audioTranscribe)
-                case .diarize: navigation.open(task: .audioWhoSpoke)
-                case .listen: navigation.open(task: .audioLive)
-                }
-            }
-        )
-    }
-
-    private var utilityTaskBinding: Binding<StudioUtilityTask> {
-        Binding(
-            get: { destination.task == .textAnonymize ? .anonymize : .embeddings },
-            set: { task in
-                switch task {
-                case .embeddings: navigation.open(task: .textEmbeddings)
-                case .anonymize: navigation.open(task: .textAnonymize)
-                case .imageValidation, .datasetDiscovery, .runPlan:
-                    imageDatasetTask = task
-                    navigation.open(task: .imageDatasets)
-                }
-            }
-        )
-    }
-
-    private var geoToolBinding: Binding<StudioGeoTool> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .earthFire: return .fire
-                case .earthTessera: return .tessera
-                case .earthOlmoEarth: return .olmoEarth
-                default: return .flood
-                }
-            },
-            set: { tool in
-                switch tool {
-                case .flood: navigation.open(task: .earthFlood)
-                case .fire: navigation.open(task: .earthFire)
-                case .tessera: navigation.open(task: .earthTessera)
-                case .olmoEarth: navigation.open(task: .earthOlmoEarth)
-                }
-            }
-        )
-    }
-
-    private var visionLabBinding: Binding<StudioVisionTask> {
-        Binding(
-            get: { navigation.visionLabTask },
-            set: { navigation.selectVisionLabVariant($0) }
-        )
     }
 
     // MARK: - Prompt workspace
@@ -939,7 +856,7 @@ private struct StudioWorkspaceView: View {
         } else if let archetype = destination.task.analyzeArchetype {
             StudioAnalyzeCanvas(
                 archetype: archetype,
-                mode: mode,
+                presentation: StudioTaskPresentation(mode: mode),
                 cards: feedCards,
                 selectedID: navigation.selectedLibraryID,
                 inputPath: draft.inputPath,
@@ -952,7 +869,8 @@ private struct StudioWorkspaceView: View {
             )
         } else {
             StudioFeedCanvas(
-                mode: mode,
+                presentation: StudioTaskPresentation(mode: mode),
+                slots: mode.attachmentSlots,
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,
@@ -1003,7 +921,10 @@ private struct StudioWorkspaceView: View {
         libraryOverlay = false
         navigation.selectedLibraryID = item.id
         controller.taskSessions.rememberSelection(item.id, for: item.mode)
-        if item.mode != mode || !showsPromptWorkspace {
+        if let task = item.templateID?.studioTask, task.usesTaskDraft {
+            // The task workspace reads the draft this wrote when it appears.
+            navigation.open(destination: task.destination)
+        } else if item.mode != mode || !showsPromptWorkspace {
             navigation.open(destination: item.mode.destination)
         } else {
             refreshReadiness()
@@ -1177,9 +1098,9 @@ private struct StudioWorkspaceView: View {
         StudioSceneActions(
             destination: destination,
             showLibrary: showLibraryBinding,
-            canShowLibrary: destination.task.isPromptTask,
+            canShowLibrary: destination.task.showsPromptChrome,
             showInspector: showInspectorBinding,
-            canShowInspector: destination.task.isPromptTask,
+            canShowInspector: destination.task.showsPromptChrome,
             showCommand: showCommandBinding,
             canShowCommand: baseTaskRequest != nil,
             open: { navigation.open(destination: $0) },
@@ -1187,9 +1108,7 @@ private struct StudioWorkspaceView: View {
             newChat: startNewConversation,
             canNewChat: showsPromptWorkspace && mode.isConversational,
             runComposer: runStudioCommand,
-            canRun: showsPromptWorkspace
-                ? !readiness.blocksRun && !(mode.isConversational && activeConversationRunning)
-                : baseTaskRequest != nil,
+            canRun: canRunCurrentTask,
             stop: stopCurrentRun,
             canStop: currentTaskJob != nil,
             openConsole: { openConsole() },
@@ -1416,10 +1335,10 @@ private struct StudioWorkspaceView: View {
     /// Every task exposes its current editable command in the same workspace.
     private func toggleCommand() {
         if reduceMotion {
-            navigation.toggleCommandColumn(for: destination.task)
+            navigation.toggleCommandColumn()
         } else {
             withAnimation(MereRunTheme.Motion.standard) {
-                navigation.toggleCommandColumn(for: destination.task)
+                navigation.toggleCommandColumn()
             }
         }
     }
@@ -1568,6 +1487,11 @@ private struct StudioWorkspaceView: View {
     private func runStudioCommand() {
         studioError = nil
         do {
+            if let taskDraft = taskDraftBinding {
+                // The task workspace's Run and the Command view's Run submit the same draft.
+                navigation.selectedLibraryID = try prompt.runner.run(taskDraft.wrappedValue, task: destination.task).id
+                return
+            }
             if !showsPromptWorkspace {
                 guard let base = baseTaskRequest else { return }
                 if !runServer(base) { _ = try prompt.runTask(base, task: destination.task) }
@@ -1681,7 +1605,7 @@ private struct StudioWorkspaceView: View {
             studioError = "This run left no text to save."
             return
         }
-        guard let destination = StudioSpecialistFiles.saveFile(
+        guard let destination = StudioFilePanels.saveFile(
             title: "Save result",
             suggestedName: suggestedName
         ) else { return }
@@ -1704,7 +1628,7 @@ private struct StudioWorkspaceView: View {
 
     /// Copies an output to a location the user picks.
     private func saveOutput(_ url: URL) {
-        guard let destination = StudioSpecialistFiles.saveFile(
+        guard let destination = StudioFilePanels.saveFile(
             title: "Save output",
             suggestedName: url.lastPathComponent
         ) else { return }

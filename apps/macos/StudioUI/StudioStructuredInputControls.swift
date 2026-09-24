@@ -6,8 +6,10 @@ import SwiftUI
 
 // MARK: - Instruments
 
-/// Music ▸ Transcribe's expected instruments: chips picked from the list the CLI prints with
-/// `--list-instruments`, searchable; a plain field when the list cannot be read.
+/// Music ▸ Transcribe's expected instruments, the inspector's `.instruments` editor: chips
+/// picked from the list the CLI prints with `--list-instruments`, searchable; a plain field when
+/// the list cannot be read. It binds the task draft's `--instruments` value directly, so the
+/// Command view and the argv carry exactly what the chips say.
 struct StudioInstrumentPicker: View {
     @EnvironmentObject private var controller: MereRunController
     /// The `--instruments` value: comma-separated names, blank for automatic.
@@ -17,15 +19,28 @@ struct StudioInstrumentPicker: View {
     @State private var isPicking = false
     @State private var search = ""
 
+    static let label = "Expected instruments"
+
+    init(value: Binding<String>) {
+        _value = value
+    }
+
+    init(draft: Binding<StudioTaskDraft>) {
+        _value = Binding(
+            get: { draft.wrappedValue.text("--instruments") },
+            set: { draft.wrappedValue.form["--instruments"] = $0.isEmpty ? .unset : .text($0) }
+        )
+    }
+
     private var selected: [String] { StudioInstrumentList.decode(value) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Expected instruments")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(Self.label)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                Spacer(minLength: 0)
                 if let names {
                     Button {
                         search = ""
@@ -42,9 +57,9 @@ struct StudioInstrumentPicker: View {
                 }
             }
             if loadFailed {
-                TextField("voice, drums, electric_bass — blank means automatic", text: $value)
-                    .mereField()
-                Text("The instrument list could not be read from the CLI; type group names separated by commas.")
+                StudioInspectorTextField(placeholder: "voice, drums, electric_bass", text: $value)
+                    .accessibilityLabel(Self.label)
+                Text("The instrument list could not be read from the CLI; type group names separated by commas, or leave it blank for automatic.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -52,6 +67,7 @@ struct StudioInstrumentPicker: View {
                 Text(names == nil ? "Reading the instrument list…" : "Automatic — the model decides which instruments it hears.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 FlowLayout(spacing: 6) {
                     ForEach(selected, id: \.self) { name in
@@ -60,6 +76,9 @@ struct StudioInstrumentPicker: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Self.label)
+        .accessibilityValue(selected.isEmpty ? "Automatic" : selected.map(StudioInstrumentList.displayName).joined(separator: ", "))
         .task { await load() }
     }
 
@@ -124,8 +143,8 @@ struct StudioInstrumentPicker: View {
         value = StudioInstrumentList.encode(selected.filter { $0 != name })
     }
 
-    /// Reads the CLI's list once per launch, kept on the controller so rebuilding the page does not
-    /// spawn the CLI again; a failure leaves the plain field.
+    /// Reads the CLI's list once per launch, kept on the controller so rebuilding the inspector
+    /// does not spawn the CLI again; a failure leaves the plain field.
     private func load() async {
         guard names == nil else { return }
         if let cached = controller.cachedInstrumentNames {
@@ -217,8 +236,32 @@ struct StudioTargetRankEditor: View {
 
 // MARK: - Renoise
 
-/// Sound ▸ Generate's Woosh renoise: the model's default, one amount, or one amount per step. The
-/// page keeps `mode` beside the draft, so "Per step" survives an empty field and a rebuilt view.
+/// Woosh renoise on the task inspector (Sound ▸ Video Foley), the `.renoise` override: the
+/// model's default, one amount, or one amount per step, written to `--renoise` exactly as the
+/// CLI reads it. The mode is kept beside the task draft (`"<task>.renoiseMode"`) so "Per step"
+/// survives an empty field and a rebuilt inspector; the problems the CLI would raise are shown
+/// under the control, and the runner refuses the run while one stands.
+struct StudioRenoiseOverride: View {
+    @Binding var draft: StudioTaskDraft
+    @StudioStoredValue("renoiseMode") private var mode = StudioRenoise.Mode.automatic
+
+    private var value: Binding<String> {
+        Binding(
+            get: { draft.text("--renoise") },
+            set: { draft.form["--renoise"] = $0.isEmpty ? .unset : .text($0) }
+        )
+    }
+
+    var body: some View {
+        StudioRenoiseControl(
+            value: value, mode: $mode,
+            steps: StudioRenoise.stepCount(in: draft.form, templateID: draft.templateID)
+        )
+    }
+}
+
+/// The renoise control itself: a mode segment, then the amount slider or the schedule field,
+/// then whatever the CLI would object to. Drawn in the inspector's own controls.
 struct StudioRenoiseControl: View {
     /// The `--renoise` value; blank for the model's default.
     @Binding var value: String
@@ -228,15 +271,13 @@ struct StudioRenoiseControl: View {
     private var renoise: StudioRenoise { StudioRenoise(mode: mode, argument: value) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Renoise")
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-            Picker("Renoise", selection: $mode) {
-                ForEach(StudioRenoise.Mode.allCases) { Text($0.title).tag($0) }
+                .font(.callout.weight(.medium))
+                .foregroundStyle(MereRunTheme.textSecondary)
+            MereSegmentedControl(StudioRenoise.Mode.allCases, selection: $mode, accessibilityLabel: "Renoise") {
+                Self.segmentTitle($0)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             switch mode {
             case .automatic:
                 Text("The model's own renoise setting.")
@@ -247,35 +288,43 @@ struct StudioRenoiseControl: View {
                     get: { renoise.amountValue ?? StudioRenoise.defaultAmount },
                     set: { value = StudioRenoise.amount(($0 * 100).rounded() / 100).argument }
                 )
-                HStack {
-                    Slider(value: amount, in: 0...1, step: 0.01)
-                    Text(renoise.amountValue.map { $0.formatted(.number.precision(.fractionLength(2))) } ?? value)
-                        .font(MereRunTheme.captionFont)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .frame(minWidth: 34, alignment: .trailing)
+                StudioInspectorSlider(label: "Amount", value: amount, range: 0...1, step: 0.01) { _ in
+                    // Text that is not a number stays visible until it is fixed, never replaced.
+                    renoise.amountValue.map(StudioComposerPresets.decimalText) ?? value
                 }
-                .accessibilityLabel("Renoise amount")
             case .schedule:
-                TextField("One amount per step, 0 to 1: 0.3, 0.3, 0.2, …", text: $value)
-                    .mereField()
-                    .accessibilityLabel("Renoise schedule")
+                StudioInspectorTextField(
+                    placeholder: "One amount per step, 0 to 1: 0.3, 0.3, 0.2, …",
+                    text: $value,
+                    isMonospaced: true
+                )
+                .accessibilityLabel("Renoise schedule")
             }
             ForEach(renoise.problems(steps: steps), id: \.self) { problem in
                 Label(problem, systemImage: "exclamationmark.circle")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .onAppear {
-            // The draft's argument may have come from elsewhere (a Library rerun, a draft written
-            // before the page kept a mode): show the mode it reads as, keeping its value.
+            // The draft's argument may have come from elsewhere (a Library rerun, a page draft
+            // imported once): show the mode it reads as, keeping its value.
             let resolved = StudioRenoise.resolvedMode(stored: mode, argument: value)
             if resolved != mode { mode = resolved }
         }
         .onChange(of: mode) { _, mode in
             let kept = StudioRenoise.argument(switching: value, to: mode)
             if kept != value { value = kept }
+        }
+    }
+
+    /// The segment's word, short enough for three to share the inspector's width.
+    static func segmentTitle(_ mode: StudioRenoise.Mode) -> String {
+        switch mode {
+        case .automatic: return "Auto"
+        case .amount: return "Amount"
+        case .schedule: return "Per step"
         }
     }
 }

@@ -39,20 +39,24 @@ the audio does not leave the machine.
 ## macOS Studio
 
 Speech is split across two domains. **Voice ▸ Speak** is the prompt task for
-synthesis, with **Voice ▸ Clone** and **Voice ▸ Voices** covering styled and
-reference-cloned synthesis, reference recording, reusable profile create, list,
-and delete, streaming chunk controls and feedback, A/B playback of recent
-renders, and backend, task, and language selection.
+synthesis, styled or cloned: attaching a reference recording to its composer
+well (or picking a saved voice in the inspector) is clone mode, with streaming
+chunk controls and language selection. **Voice ▸ Voices** is the Manage page
+for saved voices — a list, a detail that plays the reference and shows its
+transcript, Delete behind a confirmation, and New voice, which records or
+attaches a reference and runs `speech profile create`.
 
 **Audio ▸ Transcribe** shows the timestamped transcript beside the recording's
 waveform, with a Timeline and a raw JSON view, and saves the transcript as a
-durable artifact. **Audio ▸ Who Spoke** is `speech diarize`, with an audio
-picker, managed Sortformer and Nemotron 3 selection, JSON and RTTM timelines, and
-segment-tuning controls. **Audio ▸ Live** offers `speech listen` transcription
-and `speech diarize-live` speaker activity. It enumerates capture devices
-through the CLI and streams results as they arrive, with an operator-owned
-stop. Every run uses the public
-CLI contract and stays in the Library.
+durable artifact. **Audio ▸ Who Spoke** is `speech diarize` on the same
+surface: the recording in the well, Sortformer or Nemotron 3 from the model
+chip, the output format and Nemotron 3 input buffer as chips, the segment
+controls in the inspector, and a JSON or RTTM timeline drawn as speaker lanes
+and turn rows. **Audio ▸ Live** is a Session page over `speech listen`
+transcription and `speech diarize-live` speaker activity: it lists capture
+devices through the CLI, streams results as they arrive, stops the CLI the way
+Ctrl-C does, and files the session's text as the run's artifact. Every run
+uses the public CLI contract and stays in the Library.
 
 The packaged app declares `NSMicrophoneUsageDescription` and signs both the app
 and embedded CLI with the audio-input entitlement. Recording is local; granting

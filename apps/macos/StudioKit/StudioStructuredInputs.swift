@@ -227,6 +227,13 @@ package enum StudioRenoise: Equatable {
         }
     }
 
+    /// The step count a per-step schedule must match for a form: its `--steps`, else the
+    /// template's own default, which stands in for the CLI's when the flag is left out. The
+    /// inspector's editor and the runner's validation both read this, so they never disagree.
+    package static func stepCount(in form: StudioConsoleDraft, templateID: CommandTemplateID?) -> Int {
+        Int(form.text("--steps")) ?? templateID.flatMap(CommandCatalog.template(id:))?.defaultDraft().steps ?? CommandDraft().steps
+    }
+
     private static func tokens(_ text: String) -> [String] {
         text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }

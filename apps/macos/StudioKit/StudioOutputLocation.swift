@@ -288,30 +288,6 @@ package enum StudioOutputLocation {
         }
     }
 
-    /// The destination a specialist page proposes before it runs: the domain's folder wherever
-    /// Settings says, named `<name>-<timestamp>`. These pages have no prompt to name a file after
-    /// and several write a whole directory, so a timestamp is what keeps two runs apart. It is the
-    /// folder `templateOutputPath` sends the same command to from the Command Console, so a page
-    /// and the console file one command's work together.
-    package static func specialistDirectory(
-        domain: StudioDomain,
-        name: String,
-        now: Date = Date(),
-        configuredRoot: String? = nil,
-        home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
-        fileManager: FileManager = .default
-    ) -> URL {
-        outputDirectoryURL(
-            domain: domain,
-            prompt: "",
-            fallbackStem: name,
-            identifierOverride: DateFormatter.mereRunTimestamp.string(from: now),
-            configuredRoot: configuredRoot,
-            home: home,
-            fileManager: fileManager
-        )
-    }
-
     /// One file a specialist page writes, filed the same way: `<name>-<timestamp>.<ext>` in the
     /// media folder the extension calls for, or under the configured root.
     package static func specialistFile(
@@ -460,5 +436,147 @@ package enum StudioOutputLocation {
         let path = url.standardizedFileURL.path
         guard !home.isEmpty, path == home || path.hasPrefix(home + "/") else { return path }
         return "~" + path.dropFirst(home.count)
+    }
+
+    // MARK: - Task drafts
+
+    /// The sidecars `destination(for:)` derives beside a primary output: the flag, the extension
+    /// the file takes, and the suffix that keeps it apart from a primary of the same extension
+    /// (`--context-output` beside a `.json` transcription is `<stem>-context.json`; the vision
+    /// result document keeps the bare `<stem>.json` the Analyze canvas has always read).
+    /// `--mask-output-dir` is derived too, as `<stem>-masks`. `StudioExecution.replay` renames
+    /// these same flags, the mask directory, and `StudioTaskSchema.chosenOutputFlags` when a run
+    /// is replayed, so a replay never writes over the original's documents.
+    package static let derivedSidecars: [(flag: String, fileExtension: String, suffix: String)] = [
+        ("--json-output", "json", ""), ("--jsonl-output", "jsonl", ""),
+        ("--context-output", "json", "-context"), ("--timings-output", "json", "-timings"),
+    ]
+
+    /// Every flag `destination(for:)` and `StudioExecution.replay` treat as a destination.
+    package static var sidecarFlags: Set<String> {
+        Set(derivedSidecars.map(\.flag)).union(["--mask-output-dir"])
+    }
+
+    /// The draft with its destination filled the way the composer names a prompt run's: the
+    /// capability's output flag set to `namedOutputPath` (the domain's folder, the prompt's slug
+    /// or the input's name, a derived identifier), and every sidecar in `derivedSidecars` the
+    /// capability declares beside it with the same stem, plus `--mask-output-dir`. A destination
+    /// the user pointed outside the app's folder in the Command view is kept, as is a sidecar
+    /// pointed anywhere but beside the app's own primary; a sidecar the app named earlier moves
+    /// with the primary, and an app-named `--context-output` is dropped once
+    /// `--no-musical-context` is on. The identifier is derived from what the run does
+    /// (template, prompt, model, inputs, options) and never from where it writes, so calling
+    /// this again on its own result names the same files: the Command view's "Will run" and the
+    /// run agree. The task runner calls it at submit time, when `reserve` makes two runs in one
+    /// second step apart.
+    package static func destination(
+        for draft: StudioTaskDraft,
+        fileManager: FileManager = .default
+    ) -> StudioTaskDraft {
+        guard let capability = draft.capability, let template = draft.template,
+              let flag = capability.output.flag,
+              let option = capability.options.first(where: { $0.flag == flag }) else { return draft }
+        var named = draft
+        let templateID = draft.templateID
+        let outputKind: CommandOutputKind
+        if option.kind == .directory || capability.output.kind == .directory {
+            outputKind = .directory
+        } else if let ext = capability.output.fileExtension ?? formatExtension(in: draft) {
+            outputKind = .file(ext)
+        } else {
+            outputKind = .none
+        }
+        let primaryInput = draft.primaryInputPath
+        let existing = draft.text(flag)
+        if outputKind != .none, existing.isBlank || isAppChosen(existing, templateID: templateID, kind: outputKind) {
+            // The argv without its destinations: the same command pointed at another folder is
+            // the same run.
+            var bare = draft
+            for output in StudioTaskSchema.outputFlags(for: capability) { bare.form.values[output] = nil }
+            let path = namedOutputPath(
+                templateID: templateID,
+                outputKind: outputKind,
+                prompt: draft.prompt,
+                seed: draft.text("--seed"),
+                fingerprint: ([templateID.rawValue] + bare.arguments).joined(separator: "\u{1}"),
+                fallbackStem: primaryInput.isBlank
+                    ? (promptlessStems[templateID] ?? template.title)
+                    : URL(fileURLWithPath: primaryInput).deletingPathExtension().lastPathComponent,
+                existing: existing
+            )
+            named.form[flag] = .text(path)
+        }
+        let output = named.text(flag)
+        guard !output.isBlank else { return named }
+        let stem = URL(fileURLWithPath: output).deletingPathExtension()
+        let declared = Set(capability.options.map(\.flag))
+        // A sidecar the app named sits beside the primary it was derived from — the one the
+        // draft carried in, or the one just named; anywhere else is the user's choice.
+        let appFolders = Set([existing, output].filter { !$0.isBlank }
+            .map { URL(fileURLWithPath: $0).deletingLastPathComponent().standardizedFileURL.path })
+        func isAppNamed(_ path: String) -> Bool {
+            path.isBlank || appFolders.contains(URL(fileURLWithPath: path).deletingLastPathComponent().standardizedFileURL.path)
+        }
+        let skipsContext = named.form["--no-musical-context"].flag == true
+        for sidecar in derivedSidecars where sidecar.flag != flag && declared.contains(sidecar.flag) {
+            guard isAppNamed(named.text(sidecar.flag)) else { continue }
+            if sidecar.flag == "--context-output", skipsContext {
+                named.form[sidecar.flag] = .unset
+                continue
+            }
+            named.form[sidecar.flag] = .text(
+                stem.deletingLastPathComponent()
+                    .appendingPathComponent(stem.lastPathComponent + sidecar.suffix)
+                    .appendingPathExtension(sidecar.fileExtension).path
+            )
+        }
+        if flag != "--mask-output-dir", declared.contains("--mask-output-dir"), isAppNamed(named.text("--mask-output-dir")) {
+            named.form["--mask-output-dir"] = .text(
+                stem.deletingLastPathComponent().appendingPathComponent("\(stem.lastPathComponent)-masks", isDirectory: true).path
+            )
+        }
+        return named
+    }
+
+    /// The stem a template's output takes when it has neither a prompt nor a primary input to be
+    /// named after, where the template's title would read oddly as a file name: Music ▸ Train's
+    /// clip list is an editor, not a well, so its adapter is a `music-adapter`.
+    private static let promptlessStems: [CommandTemplateID: String] = [
+        .musicTrainAdapter: "music-adapter",
+    ]
+
+    /// The extension a command whose output follows its `--format` writes (`speech diarize`,
+    /// `music transcribe`): the chosen format, with MIDI's conventional extension; nil when the
+    /// capability has no such option.
+    private static func formatExtension(in draft: StudioTaskDraft) -> String? {
+        if draft.templateID == .textAnonymize {
+            return draft.form["--json"] == .flag(true) ? "json" : "txt"
+        }
+        guard let option = draft.capability?.options.first(where: { $0.flag == "--format" }) else { return nil }
+        let chosen = draft.text("--format")
+        let format = chosen.isEmpty ? (option.defaultValue ?? option.choices.first ?? "") : chosen
+        switch format {
+        case "": return nil
+        case "midi": return "mid"
+        default: return format
+        }
+    }
+
+    /// Whether `path` is one the app proposed (the template's stamped default, or an earlier
+    /// naming) rather than a folder the user picked: it sits directly in the domain's folder.
+    private static func isAppChosen(_ path: String, templateID: CommandTemplateID, kind: CommandOutputKind) -> Bool {
+        let fileExtension: String
+        switch kind {
+        case .file(let ext): fileExtension = ext
+        case .directory, .none: fileExtension = ""
+        }
+        let folder = directory(
+            domain: templateID.studioDomain,
+            kind: StudioOutputFileKind.classify(URL(fileURLWithPath: "output.\(fileExtension)")),
+            configuredRoot: configuredRoot(),
+            home: URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        )
+        return URL(fileURLWithPath: path).deletingLastPathComponent().standardizedFileURL.path
+            == folder.standardizedFileURL.path
     }
 }

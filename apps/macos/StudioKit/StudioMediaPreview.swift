@@ -52,7 +52,7 @@ package enum StudioOutputFileKind: Equatable {
     ]
 
     private static let knownAudioExtensions: Set<String> = [
-        "aac", "aif", "aiff", "caf", "flac", "m4a", "mp3", "ogg", "opus", "wav"
+        "aac", "aif", "aiff", "caf", "flac", "m4a", "mid", "midi", "mp3", "ogg", "opus", "wav"
     ]
 
     private static let knownVideoExtensions: Set<String> = [

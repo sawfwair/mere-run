@@ -34,11 +34,18 @@ struct StudioLayaDecisionView: View {
     }
 
     var body: some View {
-        StudioAnalysisLayout {
-            editor
-        } result: {
-            StudioDecisionResultPane(requestID: requestID, onLoadExample: loadExample)
-                .padding(18)
+        GeometryReader { geometry in
+            if geometry.size.width >= 780 {
+                HSplitView {
+                    editor.frame(minWidth: 280, idealWidth: 340, maxWidth: 410)
+                    result.frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                VSplitView {
+                    editor.frame(minHeight: 190, idealHeight: geometry.size.height * 0.45)
+                    result.frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity)
+                }
+            }
         }
         .background(MereRunTheme.background)
         .studioTaskCommand(.textDecide, draft: draft)
@@ -48,6 +55,11 @@ struct StudioLayaDecisionView: View {
         } message: {
             Text("The text and questions you have now are replaced.")
         }
+    }
+
+    private var result: some View {
+        StudioDecisionResultPane(requestID: requestID, onLoadExample: loadExample)
+            .padding(18)
     }
 
     // MARK: Editor
@@ -219,9 +231,10 @@ struct StudioLayaDecisionView: View {
         command.outputPath = directory.appendingPathComponent(preflight ? "fit.json" : "decisions.json").path
         command.preflight = preflight
         command.force = true
-        requestID = StudioSpecialistRunner.submit(
-            templateID: .textDecide, mode: .chat, draft: command, controller: controller, library: library
-        )
+        guard let template = CommandCatalog.template(id: .textDecide) else { return }
+        let request = StudioRunRequest(mode: .chat, templateID: template.id, template: template, draft: command)
+        requestID = (try? StudioTaskRunner(controller: controller, library: library)
+            .run(request: request, task: .textDecide, validating: false))?.id
     }
 
     /// Loads the example, asking first when it would replace work.
@@ -252,7 +265,7 @@ struct StudioLayaDecisionView: View {
     }
 
     private func importRequest() {
-        guard let url = StudioSpecialistFiles.chooseFile(title: "Import a decision request", allowedContentTypes: [.json]).first else {
+        guard let url = StudioFilePanels.chooseFile(title: "Import a decision request", allowedContentTypes: [.json]).first else {
             return
         }
         do {
@@ -264,7 +277,7 @@ struct StudioLayaDecisionView: View {
     }
 
     private func exportRequest() {
-        guard let url = StudioSpecialistFiles.saveFile(
+        guard let url = StudioFilePanels.saveFile(
             title: "Export the decision request",
             suggestedName: "request.json",
             allowedContentTypes: [.json]
@@ -521,7 +534,7 @@ private struct StudioDecisionResultPane: View {
             case .completed:
                 StudioDecisionAnswers(item: item)
             case .failed, .interrupted:
-                StudioSpecialistFailureView(item: item, models: controller.modelStore)
+                StudioRunFailureDetail(models: controller.modelStore, item: item)
             case .cancelled:
                 ContentUnavailableView("Cancelled", systemImage: "stop.circle")
             }

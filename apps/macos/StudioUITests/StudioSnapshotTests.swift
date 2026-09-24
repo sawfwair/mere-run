@@ -86,7 +86,7 @@ final class StudioSnapshotTests: XCTestCase {
                 afterAppear: {
                     if render.command {
                         navigation.showLibrary = false
-                        navigation.toggleCommandColumn(for: .imageGenerate)
+                        navigation.toggleCommandColumn()
                     } else {
                         navigation.toggleInspector(for: .imageGenerate)
                     }
@@ -236,8 +236,6 @@ final class StudioSnapshotTests: XCTestCase {
         defer { SnapshotRuntimeEndpoint.uninstall() }
         // The panel as it drops from the menu bar: a card over the desktop.
         let size = CGSize(width: StudioMenuBarPanel.width + 40, height: 600)
-        let restoreEndpoint = pinRuntimeEndpoint(fixture.controller)
-        defer { restoreEndpoint() }
 
         // Every render polls the stub, whose token count never moves, so each render sets the
         // decode history it shows after that poll rather than inheriting the last render's.
@@ -248,6 +246,8 @@ final class StudioSnapshotTests: XCTestCase {
             throughput: [Double] = []
         ) throws {
             let controller = fixture.controller
+            XCTAssertEqual(controller.runtimeHost, "127.0.0.1")
+            XCTAssertEqual(controller.runtimePort, 8_080)
             let panel = StudioMenuBarPanel(controller: controller, onOpenStudio: {}, onOpenServer: {})
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
                 .overlay {
@@ -366,19 +366,6 @@ final class StudioSnapshotTests: XCTestCase {
         return monitor
     }
 
-    /// Points the runtime endpoint at 127.0.0.1:8080 for a render, whatever an earlier test left
-    /// in the test runner's defaults; the returned closure puts it back.
-    private func pinRuntimeEndpoint(_ controller: MereRunController) -> () -> Void {
-        let host = controller.runtimeHost
-        let port = controller.runtimePort
-        controller.runtimeHost = "127.0.0.1"
-        controller.runtimePort = 8_080
-        return {
-            controller.runtimeHost = host
-            controller.runtimePort = port
-        }
-    }
-
     override func tearDownWithError() throws {
         fixture?.tearDown()
         fixture = nil
@@ -397,8 +384,6 @@ final class StudioSnapshotTests: XCTestCase {
         SnapshotRuntimeEndpoint.install()
         defer { SnapshotRuntimeEndpoint.uninstall() }
         SnapshotRuntimeEndpoint.answer = .runtime(SnapshotRuntimeEndpoint.busyRuntime)
-        let restoreEndpoint = pinRuntimeEndpoint(fixture.controller)
-        defer { restoreEndpoint() }
 
         let runner = SnapshotProcessRunner()
         runner.liveSessionMarkers = ["serve"]
@@ -984,7 +969,12 @@ final class StudioSnapshotTests: XCTestCase {
     /// Music ▸ Train with three clips in the manifest editor — two captioned, one with lyrics, and
     /// one still needing a caption so the row and the problem list show — light and dark.
     func testMusicTrainingManifestEditorSnapshots() throws {
-        let clips = fixture.root.appendingPathComponent("clips", isDirectory: true)
+        let training = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.trainingReadinessResponses)
+        )
+        defer { training.tearDown() }
+        let clips = training.root.appendingPathComponent("clips", isDirectory: true)
         try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
         var manifest = StudioMusicTrainingManifest()
         let rows: [(name: String, caption: String, lyrics: String)] = [
@@ -998,7 +988,84 @@ final class StudioSnapshotTests: XCTestCase {
             try SnapshotFixture.writeSilentWAV(to: url, seconds: 2)
             manifest.clips.append(.init(audioPath: url.path, caption: row.caption, lyrics: row.lyrics))
         }
-        fixture.controller.taskSessions.set(manifest, for: StudioTask.musicTrain.rawValue + ".Training.musicManifest")
+        training.controller.taskSessions.set(manifest, for: StudioTask.musicTrain.rawValue + ".Training.musicManifest")
+
+        let renders: [(name: String, appearance: StudioSnapshotAppearance, size: CGSize)] = [
+            ("music-train-manifest-light", .light, Self.fidelitySize),
+            ("music-train-manifest-dark", .dark, Self.fidelitySize),
+            ("music-train-manifest-narrow-light", .light, CGSize(width: 1_140, height: 820)),
+        ]
+        for render in renders {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(training.controller)
+                .environmentObject(training.library)
+                .environmentObject(navigation)
+            try training.write(view, size: render.size, appearance: render.appearance, name: render.name, settle: 2.5,
+                               afterAppear: { navigation.open(task: .musicTrain) })
+        }
+    }
+
+    /// Image ▸ Train over a finished run: the dataset folder in the well with its inspection,
+    /// the Krea 2 model ready, the page's sections, and the dashboard following the run — loss
+    /// curve, samples, checkpoints, A/B against an earlier run, and history — light and dark at
+    /// the mockup size and at a narrower width; then Chat ▸ Train before anything is attached,
+    /// light and dark.
+    func testTrainingProjectSnapshots() throws {
+        let training = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.trainingReadinessResponses)
+        )
+        defer { training.tearDown() }
+        try training.seedTrainingRuns()
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(training.controller)
+                .environmentObject(training.library)
+                .environmentObject(navigation)
+            try training.write(view, size: size, appearance: appearance, name: name, settle: 3.0,
+                               afterAppear: { navigation.open(task: task) })
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.imageTrain, name: "train-image-\(appearance.rawValue)", appearance: appearance, size: Self.fidelitySize)
+        }
+        try render(.imageTrain, name: "train-image-narrow-light", appearance: .light, size: CGSize(width: 1_140, height: 820))
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.chatTrain, name: "train-text-\(appearance.rawValue)", appearance: appearance, size: Self.fidelitySize)
+        }
+    }
+
+    /// Image ▸ Datasets ▸ Run plan on the shared task workspace, through the root, after a
+    /// training-plan preflight with one warning: the plan file in the input column, the report's
+    /// status, warning, and sections as the result panel's rows, the variant and Preflight chips
+    /// in the composer, light and dark.
+    func testImageRunPlanReportSnapshots() throws {
+        let plan = fixture.root.appendingPathComponent("plan.json")
+        try Data("{\"schema_version\": 1, \"kind\": \"image.train_lora\"}".utf8).write(to: plan)
+        let startedAt = Self.boardTime(hour: 10, minute: 0)
+        let item = StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: "",
+            inputURL: plan,
+            outputURL: nil,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(0.8),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run image run-plan plan.json --preflight --json",
+            outputText: Self.trainingPlanPreflight,
+            templateID: .imageRunPlan,
+            artifactURLs: []
+        )
+        fixture.library.upsert(item)
+        var draft = StudioTaskDraft(templateID: .imageRunPlan)
+        draft.setArgument(0, plan.path)
+        fixture.controller.taskSessions.setTaskDraft(draft, for: .imageDatasets)
+        fixture.controller.taskSessions.set(Optional(item.id), for: StudioTask.imageDatasets.rawValue + ".requestID")
 
         for appearance in StudioSnapshotAppearance.allCases {
             let navigation = NavigationModel()
@@ -1006,45 +1073,164 @@ final class StudioSnapshotTests: XCTestCase {
                 .environmentObject(fixture.controller)
                 .environmentObject(fixture.library)
                 .environmentObject(navigation)
-            try fixture.write(view, size: Self.fidelitySize, appearance: appearance,
-                              name: "music-train-manifest-\(appearance.rawValue)", settle: 1.5,
-                              afterAppear: { navigation.open(task: .musicTrain) })
+                .frame(width: 1_200, height: 820)
+            try fixture.write(view, size: CGSize(width: 1_200, height: 820), appearance: appearance,
+                              name: "image-run-plan-\(appearance.rawValue)", settle: 2.0,
+                              afterAppear: { navigation.open(task: .imageDatasets) })
         }
     }
 
-    /// Image ▸ Datasets ▸ Run plan after a training-plan preflight with one warning: the report's
-    /// sections in place of the old path list, light and dark.
-    func testImageRunPlanReportSnapshots() throws {
-        var item = StudioLibraryItem(
-            id: UUID(),
-            mode: .createImage,
-            prompt: "Run plan",
-            inputURL: fixture.root.appendingPathComponent("plan.json"),
-            outputURL: nil,
-            createdAt: StudioSnapshotRenderer.referenceDate,
-            updatedAt: StudioSnapshotRenderer.referenceDate,
-            status: .completed,
-            exitCode: 0,
-            commandPreview: "mere.run image run-plan plan.json --preflight --json",
-            outputText: Self.trainingPlanPreflight,
-            artifactURLs: []
-        )
-        item.templateID = .imageRunPlan
-        fixture.library.upsert(item)
+    /// Text ▸ Embeddings, Text ▸ Anonymize, and Image ▸ Datasets ▸ Discover and Validate on the
+    /// shared task workspace, through the root. Embeddings with three texts in the editor and
+    /// the cosine matrix beside them (light and dark, and at a narrower window); Anonymize with
+    /// a paste and its protected text and spans; Discover with a scanned folder and three
+    /// candidates, one blocked; Validate before any run, with no input column to fill.
+    func testTextAndDatasetsWorkspaceSnapshots() throws {
         let sessions = fixture.controller.taskSessions
-        sessions.set(Optional(item.id), for: StudioTask.imageDatasets.rawValue + ".requestID")
-        sessions.set(fixture.root.appendingPathComponent("plan.json").path, for: StudioTask.imageDatasets.rawValue + ".UtilityLab.planPath")
 
-        for appearance in StudioSnapshotAppearance.allCases {
-            let view = StudioUtilityLabView(task: .constant(.runPlan), tasks: [.datasetDiscovery, .imageValidation, .runPlan], showsTaskPicker: true)
+        // Embeddings: the run wrote its vectors beside the Text folder; the row keeps the file.
+        let texts = ["semantic search query", "related document", "an unrelated recipe for soup"]
+        let vectors = fixture.root.appendingPathComponent("embeddings.json")
+        try Data(Self.embeddingsOutput.utf8).write(to: vectors)
+        let embeddingsStart = Self.boardTime(hour: 9, minute: 12)
+        fixture.library.upsert(StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: texts.joined(separator: "\n"), inputURL: nil, outputURL: vectors,
+            createdAt: embeddingsStart, updatedAt: embeddingsStart.addingTimeInterval(2.4), status: .completed, exitCode: 0,
+            commandPreview: "mere.run text embed … --output embeddings.json --pretty", outputText: Self.embeddingsOutput,
+            templateID: .textEmbed, artifactURLs: [vectors]
+        ))
+        var embeddings = StudioTaskDraft(templateID: .textEmbed)
+        embeddings.prompt = texts.joined(separator: "\n")
+        sessions.setTaskDraft(embeddings, for: .textEmbeddings)
+
+        // Anonymize: the paste as one text, three spans found.
+        let paste = "My name is Alice Smith and my email is alice@example.com. Call me on 555-0134."
+        let anonymizeStart = Self.boardTime(hour: 9, minute: 20)
+        fixture.library.upsert(StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: paste, inputURL: nil, outputURL: nil,
+            createdAt: anonymizeStart, updatedAt: anonymizeStart.addingTimeInterval(1.1), status: .completed, exitCode: 0,
+            commandPreview: "mere.run text anonymize … --json --pretty", outputText: Self.anonymizationOutput(paste),
+            templateID: .textAnonymize
+        ))
+        var anonymize = StudioTaskDraft(templateID: .textAnonymize)
+        anonymize.prompt = paste
+        sessions.setTaskDraft(anonymize, for: .textAnonymize)
+
+        // Discover: a scanned folder with three candidate leaves.
+        let datasets = fixture.root.appendingPathComponent("datasets", isDirectory: true)
+        try FileManager.default.createDirectory(at: datasets, withIntermediateDirectories: true)
+        let discoverStart = Self.boardTime(hour: 11, minute: 5)
+        fixture.library.upsert(StudioLibraryItem(
+            id: UUID(), mode: .createImage, prompt: "", inputURL: datasets, outputURL: nil,
+            createdAt: discoverStart, updatedAt: discoverStart.addingTimeInterval(0.6), status: .completed, exitCode: 0,
+            commandPreview: "mere.run image dataset discover --root datasets --max-depth 4 --min-usable-pairs 1 --json",
+            outputText: Self.discoveryOutput(root: datasets), templateID: .imageDatasetDiscover
+        ))
+        var discover = StudioTaskDraft(templateID: .imageDatasetDiscover)
+        discover.form["--root"] = .text(datasets.path)
+        sessions.setTaskDraft(discover, for: .imageDatasets)
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
                 .environmentObject(fixture.controller)
                 .environmentObject(fixture.library)
-                .environment(\.studioTaskSessions, sessions)
-                .environment(\.studioTaskScope, StudioTask.imageDatasets.rawValue)
-                .frame(width: 1_200, height: 820)
-            try fixture.write(view, size: CGSize(width: 1_200, height: 820), appearance: appearance,
-                              name: "image-run-plan-\(appearance.rawValue)", settle: 1.5)
+                .environmentObject(navigation)
+                .frame(width: size.width, height: size.height)
+            try fixture.write(view, size: size, appearance: appearance, name: name, settle: 2.0,
+                              afterAppear: { navigation.open(task: task) })
         }
+
+        let board = CGSize(width: 1_440, height: 820)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.textEmbeddings, name: "text-embeddings-\(appearance.rawValue)", appearance: appearance, size: board)
+            try render(.textAnonymize, name: "text-anonymize-\(appearance.rawValue)", appearance: appearance, size: board)
+            try render(.imageDatasets, name: "image-datasets-discover-\(appearance.rawValue)", appearance: appearance, size: board)
+        }
+        try render(.textEmbeddings, name: "text-embeddings-narrow-light", appearance: .light, size: CGSize(width: 1_024, height: 760))
+
+        // Validate: no input, nothing run yet.
+        var validate = discover
+        validate.switchTemplate(to: .imageValidate)
+        sessions.setTaskDraft(validate, for: .imageDatasets)
+        try render(.imageDatasets, name: "image-datasets-validate-empty-light", appearance: .light, size: CGSize(width: 1_200, height: 820))
+    }
+
+    /// A clock time on the reference day, for the rows the text and dataset boards seed.
+    private static func boardTime(hour: Int, minute: Int) -> Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: StudioSnapshotRenderer.referenceDate)
+        return calendar.date(byAdding: DateComponents(hour: hour, minute: minute), to: today) ?? today
+    }
+
+    /// `text embed` for three texts at eight dimensions: the first two close, the third apart.
+    private static let embeddingsOutput = """
+    {
+      "object": "list",
+      "model": "text-embed-qwen3-0.6b",
+      "data": [
+        {"object": "embedding", "index": 0, "embedding": [0.61, 0.42, -0.18, 0.33, 0.07, -0.29, 0.44, 0.12]},
+        {"object": "embedding", "index": 1, "embedding": [0.58, 0.39, -0.22, 0.30, 0.11, -0.25, 0.47, 0.09]},
+        {"object": "embedding", "index": 2, "embedding": [-0.21, 0.08, 0.66, -0.12, 0.51, 0.34, -0.19, 0.27]}
+      ],
+      "usage": {"prompt_tokens": 19, "total_tokens": 19}
+    }
+    """
+
+    /// `text anonymize --json --pretty` for one paste with a name, an email, and a phone number.
+    private static func anonymizationOutput(_ text: String) -> String {
+        """
+        {
+          "object": "list",
+          "model": "text-anonymize-privacy-filter",
+          "data": [
+            {
+              "text": "\(text)",
+              "anonymized_text": "My name is [NAME] and my email is [EMAIL]. Call me on [PHONE].",
+              "token_count": 24,
+              "spans": [
+                {"label": "NAME", "text": "Alice Smith", "startToken": 3, "endToken": 5},
+                {"label": "EMAIL", "text": "alice@example.com", "startToken": 10, "endToken": 16},
+                {"label": "PHONE", "text": "555-0134", "startToken": 21, "endToken": 24}
+              ]
+            }
+          ]
+        }
+        """
+    }
+
+    /// `image dataset discover --json` over a folder with a ready leaf, one with warnings, and one
+    /// blocked for want of captions, plus one note about preview images.
+    private static func discoveryOutput(root: URL) -> String {
+        func candidate(_ id: String, _ name: String, status: String, trainable: Bool, images: Int, captions: Int, usable: Int, diagnostics: String) -> String {
+            """
+            {"id": "\(id)", "name": "\(name)", "path": "\(root.appendingPathComponent(id).path)", "relative_path": "\(id)", "depth": 1,
+             "status": "\(status)", "trainable": \(trainable), "image_count": \(images), "caption_count": \(captions), "usable_pair_count": \(usable),
+             "missing_caption_count": \(images - captions), "empty_caption_count": 0, "duplicate_caption_group_count": 0, "placeholder_caption_count": 0,
+             "diagnostics": [\(diagnostics)]}
+            """
+        }
+        let warning = """
+        {"id": "missing_captions", "severity": "warning", "title": "Missing captions", "message": "2 images have no caption and will be skipped.", "locations": [], "suggested_action_ids": []}
+        """
+        let blocker = """
+        {"id": "missing_captions", "severity": "blocker", "title": "Missing captions", "message": "No image has a caption.", "locations": [], "suggested_action_ids": []}
+        """
+        return """
+        {"schema_version": 1, "mere_run_version": "0.55.0", "command": ["image", "dataset", "discover"], "mode": "inspection",
+         "status": "warning", "created_at": "2026-09-23T11:05:00Z", "cwd": "\(root.path)",
+         "summary": "Found 3 dataset candidates under \(root.lastPathComponent); 2 are trainable.",
+         "request": {"root": "\(root.path)", "max_depth": 4, "min_usable_pairs": 1, "exclude_preview_images": false},
+         "result": {"root": "\(root.path)", "scanned_directory_count": 14, "candidate_count": 3, "trainable_candidate_count": 2,
+           "candidates": [
+             \(candidate("ceramic-mugs", "Ceramic mugs", status: "ok", trainable: true, images: 48, captions: 48, usable: 48, diagnostics: "")),
+             \(candidate("portraits", "Portraits", status: "warning", trainable: true, images: 32, captions: 30, usable: 30, diagnostics: warning)),
+             \(candidate("sketches", "Sketches", status: "blocked", trainable: false, images: 6, captions: 0, usable: 0, diagnostics: blocker))
+           ]},
+         "diagnostics": [{"id": "preview_images", "severity": "note", "title": "Preview images",
+                          "message": "3 preview images were counted; exclude them to train on originals only.", "locations": [], "suggested_action_ids": []}],
+         "actions": []}
+        """
     }
 
     /// The camera editors at the width of the 3D and Vision columns: InstantMesh with four views and
@@ -1215,7 +1401,7 @@ final class StudioSnapshotTests: XCTestCase {
         let view = StudioRootView().environmentObject(fixture.controller)
             .environmentObject(fixture.library).environmentObject(navigation)
         try fixture.write(view, size: CGSize(width: 768, height: 760), appearance: .light,
-            name: "completion-compact-command", settle: 2, afterAppear: { navigation.toggleCommandColumn(for: .imageGenerate) })
+            name: "completion-compact-command", settle: 2, afterAppear: { navigation.toggleCommandColumn() })
     }
 
     /// Compare, "Use these settings", and the readiness card's next steps, light and dark. First
@@ -1265,7 +1451,8 @@ final class StudioSnapshotTests: XCTestCase {
             let shown = [cards.last { $0.kind == .generation }, cards.first { $0.item.status == .failed }].compactMap { $0 }
             let noop: (StudioLibraryItem) -> Void = { _ in }
             return StudioFeedCanvas(
-                mode: .createImage,
+                presentation: StudioTaskPresentation(mode: .createImage),
+                slots: StudioMode.createImage.attachmentSlots,
                 cards: shown,
                 readiness: readiness,
                 pullJob: nil,
@@ -1277,7 +1464,7 @@ final class StudioSnapshotTests: XCTestCase {
                     useExample: { _ in }, attach: {}
                 ),
                 readinessActions: StudioReadinessActions(
-                    mode: .createImage, model: .constant("image-zimage-turbo"), modelInventory: inventory,
+                    scope: StudioModelScope(mode: .createImage), model: .constant("image-zimage-turbo"), modelInventory: inventory,
                     pullModel: {}, openModels: {}, recheck: {}
                 )
             )
@@ -1310,49 +1497,453 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
-    /// Audio ▸ Who Spoke with a finished diarization: the recording, one lane per speaker over
-    /// its length, and every turn as the Analyze panel's rows with Save timeline…, light and dark.
+    /// Audio ▸ Who Spoke on the shared task workspace with a finished diarization: the recording
+    /// in the well and on the canvas, one lane per speaker over its length, and every turn as the
+    /// Analyze panel's rows with Save timeline…, light and dark. The page's own draft key from
+    /// before the move is what the seed parks, so the board also proves the one-time import.
     func testWhoSpokeTimelineSnapshots() throws {
-        try fixture.seedDiarizationRun()
+        let audio = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: AudioVoiceScript.responses)
+        )
+        defer { audio.tearDown() }
+        try audio.seedDiarizationRun()
         for appearance in StudioSnapshotAppearance.allCases {
             let navigation = NavigationModel()
             let view = StudioRootView()
-                .environmentObject(fixture.controller)
-                .environmentObject(fixture.library)
+                .environmentObject(audio.controller)
+                .environmentObject(audio.library)
                 .environmentObject(navigation)
                 .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
-            try fixture.write(
+            try audio.write(
                 view,
                 size: Self.fidelitySize,
                 appearance: appearance,
                 name: "who-spoke-\(appearance.rawValue)",
-                settle: 2.0,
+                settle: 2.5,
                 afterAppear: { navigation.open(task: .audioWhoSpoke) }
             )
         }
     }
 
+    /// The Audio and Voice pages through the root, light and dark at 1440×820 and once at
+    /// 960×760: Who Spoke, Enhance, and Separate on the shared task workspace with a finished
+    /// run each (the stems list plays from the manifest), Voice ▸ Voices as the Manage page with
+    /// two saved voices and its New voice form, and Audio ▸ Live idle and then mid-session — a
+    /// `speech listen` job held open by the process seam, adopted by the page, with three
+    /// events streamed into its transcript.
+    // swiftlint:disable:next function_body_length
+    func testAudioAndVoicePageSnapshots() throws {
+        let pages = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: AudioVoiceScript.responses)
+        )
+        defer { pages.tearDown() }
+        try pages.seedDiarizationRun()
+        try pages.seedEnhanceRun()
+        try pages.seedSeparateRun(task: .audioSeparate)
+        let voices = try pages.voiceProfileSeed()
+        let wide = CGSize(width: 1_440, height: 820)
+        let narrow = CGSize(width: 960, height: 760)
+
+        func render(
+            _ task: StudioTask, name: String, size: CGSize, appearance: StudioSnapshotAppearance,
+            profiles: [StudioVoiceProfileRecord] = [], afterAppear: (() -> Void)? = nil
+        ) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(pages.controller)
+                .environmentObject(pages.library)
+                .environmentObject(navigation)
+                .environment(\.studioVoiceProfileSeed, profiles)
+                .frame(width: size.width, height: size.height)
+            try pages.write(view, size: size, appearance: appearance, name: name, settle: 2.5, afterAppear: {
+                navigation.open(task: task)
+                afterAppear?()
+            })
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let suffix = appearance.rawValue
+            try render(.audioWhoSpoke, name: "audio-who-spoke-\(suffix)", size: wide, appearance: appearance)
+            try render(.audioEnhance, name: "audio-enhance-\(suffix)", size: wide, appearance: appearance)
+            try render(.audioSeparate, name: "audio-separate-\(suffix)", size: wide, appearance: appearance)
+            try render(.voiceVoices, name: "voice-voices-\(suffix)", size: wide, appearance: appearance, profiles: voices)
+            try render(.audioLive, name: "audio-live-idle-\(suffix)", size: wide, appearance: appearance)
+        }
+        try render(.audioWhoSpoke, name: "audio-who-spoke-compact-light", size: narrow, appearance: .light)
+        try render(.audioEnhance, name: "audio-enhance-compact-light", size: narrow, appearance: .light)
+        try render(.audioSeparate, name: "audio-separate-compact-light", size: narrow, appearance: .light)
+        try render(.voiceVoices, name: "voice-voices-new-compact-light", size: narrow, appearance: .light)
+        try render(.audioLive, name: "audio-live-compact-light", size: narrow, appearance: .light)
+
+        let requestID = try pages.seedLiveListenSession()
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.audioLive, name: "audio-live-running-\(appearance.rawValue)", size: wide, appearance: appearance) {
+                pages.speakIntoLiveListenSession()
+            }
+        }
+        XCTAssertTrue(pages.controller.jobs.job(requestID: requestID)?.state.isRunning ?? false, "the seam holds the session open")
+    }
+
     /// Music ▸ Analyze with a finished ACE-Step analysis: tempo, key, meter, language, and how
     /// much was analyzed as tiles, the caption and lyrics as prose, and the model's reply folded
     /// away, light and dark.
+    /// Music ▸ Analyze and Music ▸ Transcribe on the shared task workspace, through the root.
+    /// Analyze with a finished run seeded (the song in the well and the input strip with its
+    /// player, the Analysis panel's tiles, caption, lyrics, and folded model reply) beside its
+    /// inspector, where the checkpoint root files under Model as a folder chooser, light and
+    /// dark; Transcribe with a seeded MIDI transcription (the piano roll under Notes, with Quick
+    /// Look and Reveal) beside its inspector, whose instruments editor shows the chips picked
+    /// from the CLI's list, light and dark; and Transcribe at the compact width without the
+    /// inspector. The models the tasks default to are installed in the scripted inventory, so
+    /// the boards show results rather than readiness cards.
     func testMusicAnalysisSnapshots() throws {
-        try fixture.seedMusicAnalysisRun()
-        for appearance in StudioSnapshotAppearance.allCases {
+        let music = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.musicReadinessResponses)
+        )
+        defer { music.tearDown() }
+        try music.seedMusicAnalysisRun()
+        try music.seedTranscribeRun()
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize, inspector: Bool) throws {
             let navigation = NavigationModel()
             let view = StudioRootView()
-                .environmentObject(fixture.controller)
-                .environmentObject(fixture.library)
+                .environmentObject(music.controller)
+                .environmentObject(music.library)
                 .environmentObject(navigation)
-                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
-            try fixture.write(
-                view,
-                size: Self.fidelitySize,
-                appearance: appearance,
-                name: "music-analyze-\(appearance.rawValue)",
-                settle: 2.0,
-                afterAppear: { navigation.open(task: .musicAnalyze) }
-            )
+                .frame(width: size.width, height: size.height)
+            try music.write(view, size: size, appearance: appearance, name: name, settle: 2.5, afterAppear: {
+                navigation.open(task: task)
+                if inspector { navigation.toggleInspector(for: task) }
+            })
         }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.musicAnalyze, name: "music-analyze-\(appearance.rawValue)", appearance: appearance,
+                       size: Self.fidelitySize, inspector: true)
+            try render(.musicTranscribe, name: "music-transcribe-\(appearance.rawValue)", appearance: appearance,
+                       size: Self.fidelitySize, inspector: true)
+        }
+        try render(.musicTranscribe, name: "music-transcribe-compact-light", appearance: .light,
+                   size: CGSize(width: 960, height: 760), inspector: false)
+    }
+
+    /// The shared task workspace, rendered directly: Audio ▸ Enhance as an Analyze
+    /// task with an audio well, once with a finished enhance run seeded so the input strip, the
+    /// player, and the result column draw, light and dark; its inspector column beside it; and
+    /// Vision ▸ Pose empty, so the serif empty state and the well's attach button show.
+    func testTaskWorkspaceSnapshots() throws {
+        let workspace = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { workspace.tearDown() }
+        try workspace.seedEnhanceRun()
+        let sessions = workspace.controller.taskSessions
+        let runner = StudioTaskRunner(controller: workspace.controller, library: workspace.library)
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel(destination: task.destination)
+            let view = StudioTaskWorkspace(task: task, models: workspace.controller.modelStore)
+                .environmentObject(workspace.controller)
+                .environmentObject(workspace.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: size.width, height: size.height)
+            try workspace.write(view, size: size, appearance: appearance, name: name, settle: 2.5)
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.audioEnhance, name: "task-workspace-enhance-\(appearance.rawValue)", appearance: appearance,
+                       size: CGSize(width: 1_140, height: 820))
+        }
+        try render(.visionPose, name: "task-workspace-pose-empty-light", appearance: .light, size: CGSize(width: 960, height: 760))
+
+        let draft = try XCTUnwrap(sessions.taskDraft(for: .audioEnhance))
+        let inspector = StudioTaskInspector(
+            task: .audioEnhance, draft: .constant(draft), modelInventory: workspace.controller.modelStore.rows,
+            readiness: .ready, onShowModels: {}, onClose: {}
+        )
+        .environmentObject(workspace.controller)
+        .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+        try workspace.write(inspector, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                            appearance: .light, name: "task-workspace-enhance-inspector-light", settle: 1.5)
+    }
+
+    /// The Sound tasks on the shared workspace, each over a seeded finished run: Video Foley's
+    /// feed card reviews the clip against its waveform (light and dark, and at a narrower width),
+    /// Condition's card shows the conditioning tensors' header, Encode's Analyze board the
+    /// `.npy` header, Decode's the decoded audio, Score's the CLAP gauge; then Foley's inspector
+    /// with the renoise editor on Fixed amount. Readiness is answered from a scripted inventory
+    /// with the Woosh models installed.
+    func testSoundWorkspaceSnapshots() throws {
+        let sound = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.soundReadinessResponses)
+        )
+        defer { sound.tearDown() }
+        try sound.seedSoundRuns()
+        let sessions = sound.controller.taskSessions
+        let runner = StudioTaskRunner(controller: sound.controller, library: sound.library)
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel(destination: task.destination)
+            let view = StudioTaskWorkspace(task: task, models: sound.controller.modelStore)
+                .environmentObject(sound.controller)
+                .environmentObject(sound.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: size.width, height: size.height)
+            try sound.write(view, size: size, appearance: appearance, name: name, settle: 2.5)
+        }
+
+        let wide = CGSize(width: 1_140, height: 820)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.soundFoley, name: "task-workspace-sound-foley-\(appearance.rawValue)", appearance: appearance, size: wide)
+            try render(.soundScore, name: "task-workspace-sound-score-\(appearance.rawValue)", appearance: appearance, size: wide)
+        }
+        try render(.soundFoley, name: "task-workspace-sound-foley-narrow-light", appearance: .light, size: CGSize(width: 820, height: 760))
+        try render(.soundCondition, name: "task-workspace-sound-condition-light", appearance: .light, size: wide)
+        try render(.soundEncode, name: "task-workspace-sound-encode-light", appearance: .light, size: wide)
+        try render(.soundDecode, name: "task-workspace-sound-decode-light", appearance: .light, size: wide)
+
+        let draft = try XCTUnwrap(sessions.taskDraft(for: .soundFoley))
+        let inspector = StudioTaskInspector(
+            task: .soundFoley, draft: .constant(draft), modelInventory: sound.controller.modelStore.rows,
+            readiness: .ready, onShowModels: {}, onClose: {}
+        )
+        .environmentObject(sound.controller)
+        .environment(\.studioTaskSessions, sessions)
+        .environment(\.studioTaskScope, StudioTask.soundFoley.rawValue)
+        .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+        try sound.write(inspector, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                        appearance: .light, name: "task-workspace-sound-foley-inspector-light", settle: 1.5)
+    }
+
+    /// The Vision tasks on the task workspace, each with a finished run on a drawn picture so
+    /// the input strip, the result view, the panel rows, and the canvas renderer draw: Faces
+    /// (boxes, then the Points overlay and the Compare inspector with its click-to-pick face
+    /// picker), Pose, Flow, Depth (the preview PNG in the input column), Geometry (the scene
+    /// strip, and the multi-view inspector's camera editor), light and dark, and the Live session
+    /// idle and after a capture. Nothing runs; the rows and files are seeded.
+    func testVisionWorkspaceSnapshots() throws {
+        let vision = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { vision.tearDown() }
+        let seeded = try vision.seedVisionRuns()
+        let sessions = vision.controller.taskSessions
+        let runner = StudioTaskRunner(controller: vision.controller, library: vision.library)
+        let wide = CGSize(width: 1_440, height: 820)
+        let narrow = CGSize(width: 960, height: 760)
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize, view: StudioAnalyzeResultView? = nil) throws {
+            let navigation = NavigationModel(destination: task.destination)
+            navigation.selectedLibraryID = seeded[task]
+            let workspace = StudioTaskWorkspace(task: task, models: vision.controller.modelStore)
+                .environmentObject(vision.controller)
+                .environmentObject(vision.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: size.width, height: size.height)
+            try vision.write(workspace, size: size, appearance: appearance, name: name, settle: 3)
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let suffix = appearance.rawValue
+            try render(.visionFaces, name: "vision-faces-\(suffix)", appearance: appearance, size: wide)
+            try render(.visionPose, name: "vision-pose-\(suffix)", appearance: appearance, size: wide)
+            try render(.visionFlow, name: "vision-flow-\(suffix)", appearance: appearance, size: wide)
+            try render(.visionDepth, name: "vision-depth-\(suffix)", appearance: appearance, size: wide)
+            try render(.visionGeometry, name: "vision-geometry-\(suffix)", appearance: appearance, size: wide)
+        }
+        try render(.visionFaces, name: "vision-faces-narrow-light", appearance: .light, size: narrow)
+        try render(.visionGeometry, name: "vision-geometry-narrow-light", appearance: .light, size: narrow)
+
+        // Faces ▸ Compare in the inspector: the reference picker shows the Detect run's boxes on
+        // the portrait; the candidate has no detection yet and keeps the plain field.
+        var compare = try XCTUnwrap(sessions.taskDraft(for: .visionFaces))
+        compare.switchTemplate(to: .visionFaceCompare)
+        StudioTaskSchema.slots(for: .visionFaceCompare)[1].attach([vision.secondPortraitURL], to: &compare)
+        compare.form["--reference-face-index"] = .integer(1)
+        func inspector(_ task: StudioTask, draft: StudioTaskDraft, name: String) throws {
+            let view = StudioTaskInspector(
+                task: task, draft: .constant(draft), modelInventory: vision.controller.modelStore.rows,
+                readiness: .ready, onShowModels: {}, onClose: {}
+            )
+            .environmentObject(vision.controller)
+            .environmentObject(vision.library)
+            .environment(\.studioTaskSessions, sessions)
+            .environment(\.studioTaskScope, task.rawValue)
+            .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+            try vision.write(view, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                             appearance: .light, name: name, settle: 2.5)
+        }
+        try inspector(.visionFaces, draft: compare, name: "vision-faces-compare-inspector-light")
+
+        // Geometry ▸ Multi-view in the inspector: two ordered views and a camera per view. The
+        // cameras are sized for another picture, so the editor shows the CLI's checks and writes
+        // no draft file while rendering.
+        var multiview = try XCTUnwrap(sessions.taskDraft(for: .visionGeometry))
+        multiview.switchTemplate(to: .visionGeometryMultiview)
+        StudioTaskSchema.slots(for: .visionGeometryMultiview)[0]
+            .attach([vision.portraitURL, vision.secondPortraitURL], to: &multiview)
+        let cameras = StudioGeometryCameraDocument(cameras: [.identity(), .identity()])
+        sessions.set(cameras, for: StudioTask.visionGeometry.rawValue + ".geometryCameras")
+        sessions.set(true, for: StudioTask.visionGeometry.rawValue + ".suppliesCameras")
+        try inspector(.visionGeometry, draft: multiview, name: "vision-geometry-multiview-inspector-light")
+
+        // Live: idle with the example prompts, then the finished capture with its clip.
+        let liveKey = StudioTask.visionLive.rawValue + ".requestID"
+        let liveRun = sessions.value(for: liveKey, default: Optional<UUID>.none)
+        func renderLive(name: String, appearance: StudioSnapshotAppearance) throws {
+            let navigation = NavigationModel(destination: StudioTask.visionLive.destination)
+            let view = StudioLiveTrackSession(models: vision.controller.modelStore)
+                .environmentObject(vision.controller)
+                .environmentObject(vision.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, StudioTask.visionLive.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: wide.width, height: wide.height)
+            try vision.write(view, size: wide, appearance: appearance, name: name, settle: 3)
+        }
+        sessions.set(Optional<UUID>.none, for: liveKey)
+        try renderLive(name: "vision-live-idle-light", appearance: .light)
+        sessions.set(liveRun, for: liveKey)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try renderLive(name: "vision-live-ended-\(appearance.rawValue)", appearance: appearance)
+        }
+    }
+
+    /// 3D ▸ From image on the shared task workspace: the feed with a finished TripoSR run (its
+    /// mesh through Quick Look and the manifest's counts under the tile), the well holding the
+    /// picture, and the Engine chip, light and dark at 1440×820 and at a narrower width; then the
+    /// inspector on TRELLIS.2 with its remesh controls, and on InstantMesh with four views and
+    /// cameras one short, so the ordered-view rows, the camera cards, and the CLI's check show.
+    func testThreeDWorkspaceSnapshots() throws {
+        let workspace = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses(installing: [
+                (id: "image-3d-triposr", category: "image", title: "TripoSR"),
+                (id: "image-3d-trellis2-4b", category: "image", title: "TRELLIS.2 4B"),
+                (id: "image-3d-instantmesh-base", category: "image", title: "InstantMesh"),
+            ]))
+        )
+        defer { workspace.tearDown() }
+        // The camera editor saves its document as a draft file while cameras are on; keep that
+        // in the fixture's folder rather than the user's Application Support. The registration
+        // domain is never written to disk.
+        UserDefaults.standard.register(defaults: [StudioCameraDocuments.draftRootDefaultsKey: workspace.root.path])
+        let views = try workspace.seedMeshRun()
+        let task = StudioTask.threeDFromImage
+        let sessions = workspace.controller.taskSessions
+        let runner = StudioTaskRunner(controller: workspace.controller, library: workspace.library)
+
+        func render(name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel(destination: task.destination)
+            let view = StudioTaskWorkspace(task: task, models: workspace.controller.modelStore)
+                .environmentObject(workspace.controller)
+                .environmentObject(workspace.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: size.width, height: size.height)
+            try workspace.write(view, size: size, appearance: appearance, name: name, settle: 3)
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(name: "three-d-workspace-\(appearance.rawValue)", appearance: appearance, size: CGSize(width: 1_440, height: 820))
+        }
+        try render(name: "three-d-workspace-narrow-light", appearance: .light, size: CGSize(width: 1_140, height: 820))
+
+        func inspector(_ draft: StudioTaskDraft, height: CGFloat) -> some View {
+            StudioTaskInspector(
+                task: task, draft: .constant(draft), modelInventory: workspace.controller.modelStore.rows,
+                readiness: .ready, onShowModels: {}, onClose: {}
+            )
+            .environmentObject(workspace.controller)
+            .environmentObject(workspace.library)
+            .environment(\.studioTaskSessions, sessions)
+            .environment(\.studioTaskScope, task.rawValue)
+            .frame(width: StudioLayoutPolicy.inspectorWidth, height: height)
+        }
+
+        var trellis = StudioTaskDraft(templateID: .imageReconstruct3DTrellis2)
+        trellis.setArgument(0, workspace.mugURL.path)
+        try workspace.write(inspector(trellis, height: 820), size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                            appearance: .light, name: "three-d-inspector-trellis-light", settle: 1.5)
+
+        var instantMesh = StudioTaskDraft(templateID: .imageReconstruct3DMultiview)
+        StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0].attach(views, to: &instantMesh)
+        sessions.set(StudioInstantMeshCameraDocument(cameras: (0..<3).map { _ in .example }), for: task.rawValue + ".3DCreation.cameras")
+        sessions.set(true, for: task.rawValue + ".3DCreation.suppliesCameras")
+        for appearance in StudioSnapshotAppearance.allCases {
+            try workspace.write(inspector(instantMesh, height: 1_400), size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 1_400),
+                                appearance: appearance, name: "three-d-inspector-instantmesh-\(appearance.rawValue)", settle: 1.5)
+        }
+    }
+
+    /// Earth on the shared task workspace, through the root: TESSERA with a finished run — the
+    /// attached bundle read against the tensors the command needs on the left, the embedding's
+    /// header in the result panel on the right, the inspector open with the constrained
+    /// dimensions picker — light and dark at the board size and at a narrow width; Flood with a
+    /// bundle missing its DEM, so the checklist warns before any run; OlmoEarth with nothing
+    /// attached, the serif empty state; and TESSERA's inspector column on its own.
+    func testEarthWorkspaceSnapshots() throws {
+        let earth = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { earth.tearDown() }
+        try earth.seedEarthRuns()
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(earth.controller)
+                .environmentObject(earth.library)
+                .environmentObject(navigation)
+            try earth.write(view, size: size, appearance: appearance, name: name, settle: 2.5,
+                            afterAppear: { navigation.open(task: task) })
+        }
+
+        let board = CGSize(width: 1_440, height: 820)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.earthTessera, name: "earth-tessera-result-\(appearance.rawValue)", appearance: appearance, size: board)
+        }
+        try render(.earthTessera, name: "earth-tessera-result-narrow-light", appearance: .light, size: CGSize(width: 960, height: 760))
+        try render(.earthFlood, name: "earth-flood-missing-dem-light", appearance: .light, size: board)
+        try render(.earthFlood, name: "earth-flood-missing-dem-dark", appearance: .dark, size: board)
+        try render(.earthOlmoEarth, name: "earth-olmoearth-empty-light", appearance: .light, size: board)
+
+        let draft = try XCTUnwrap(earth.controller.taskSessions.taskDraft(for: .earthTessera))
+        let inspector = StudioTaskInspector(
+            task: .earthTessera, draft: .constant(draft), modelInventory: earth.controller.modelStore.rows,
+            readiness: .ready, onShowModels: {}, onClose: {}
+        )
+        .environmentObject(earth.controller)
+        .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+        try earth.write(inspector, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                        appearance: .light, name: "earth-tessera-inspector-light", settle: 1.5)
+        let olmoInspector = StudioTaskInspector(
+            task: .earthOlmoEarth, draft: .constant(StudioTaskDraft(templateID: .geoOlmoEarth)),
+            modelInventory: earth.controller.modelStore.rows, readiness: .ready, onShowModels: {}, onClose: {}
+        )
+        .environmentObject(earth.controller)
+        .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+        try earth.write(olmoInspector, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                        appearance: .light, name: "earth-olmoearth-inspector-light", settle: 1.5)
     }
 
     /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
@@ -1408,6 +1999,9 @@ private final class SnapshotFixture {
     private(set) var clipURL: URL!
     /// A 720×1280 portrait picture, the shape that has to fit the column above the composer.
     private(set) var portraitURL: URL!
+    /// A second picture for the Vision boards' two-image tasks (Compare's candidate, Flow's
+    /// target, the second multi-view frame).
+    private(set) var secondPortraitURL: URL!
 
     /// The prompts the region-editor renders draw on the 1024×1024 mug: the cup's box (labeled,
     /// selected in the shot), the saucer's, a positive point on the handle, a negative one on
@@ -1459,7 +2053,9 @@ private final class SnapshotFixture {
             processRunner: processRunner,
             cliResolver: { _ in .executable(URL(fileURLWithPath: "/usr/local/bin/mere.run")) },
             resolvesCLIOnInit: true,
-            machineMonitor: machineMonitor
+            machineMonitor: machineMonitor,
+            initialRuntimeHost: "127.0.0.1",
+            initialRuntimePort: 8_080
         )
         library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
         switch seed {
@@ -2736,6 +3332,746 @@ private final class SnapshotFixture {
         controller.taskSessions.set(draft, for: scope + ".Voice.diarizationDraft")
     }
 
+    /// A finished Audio ▸ Enhance run for the task workspace: a narrow-band memo and the 48 kHz
+    /// file `audio enhance` wrote beside it, with the task draft pointed at the memo the way the
+    /// workspace leaves it after a run.
+    func seedEnhanceRun() throws {
+        guard let template = CommandCatalog.template(id: .audioEnhance) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let memo = root.appendingPathComponent("voice-memo.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: memo, seconds: 12)
+        let enhanced = root.appendingPathComponent("voice-memo-48k.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: enhanced, seconds: 12)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = memo.path
+        draft.outputPath = enhanced.path
+        let startedAt = Self.mockupTime(hour: 9, minute: 41)
+        let request = StudioRunRequest(mode: .listen, templateID: .audioEnhance, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: .listen,
+            prompt: "",
+            inputURL: memo,
+            outputURL: enhanced,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(8.4),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run audio enhance voice-memo.wav --output voice-memo-48k.wav",
+            outputText: nil,
+            templateID: .audioEnhance,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft),
+            artifactURLs: [enhanced]
+        )
+        row.inputIdentity = StudioInputIdentity.read(memo)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .audioEnhance)
+        taskDraft.setArgument(0, memo.path)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .audioEnhance)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.audioEnhance.rawValue + ".requestID")
+    }
+
+    /// One finished run per Sound task, each with its task draft parked: Video Foley's clip and
+    /// the WAV made for it, Condition's safetensors, Encode's `.npy`, Decode's WAV from it, and
+    /// Score's printed CLAP result. Rows file under Sound ▸ Generate's mode, as the SFX Lab
+    /// page filed them.
+    func seedSoundRuns() throws {
+        let sound = root.appendingPathComponent("sound", isDirectory: true)
+        try FileManager.default.createDirectory(at: sound, withIntermediateDirectories: true)
+        let clip = sound.appendingPathComponent("walk.mp4", isDirectory: false)
+        try Self.writeFixtureMP4(to: clip, size: CGSize(width: 640, height: 360), frames: 36)
+        let foley = sound.appendingPathComponent("walk.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: foley, seconds: 3)
+        let conditioning = sound.appendingPathComponent("heavy-wooden-door.safetensors", isDirectory: false)
+        try TensorFixtures.safetensors(
+            [("text_embeddings", [1, 77, 1_024]), ("pooled_embedding", [1, 1_024]), ("attention_mask", [1, 77])],
+            metadata: ["model": "sfx-woosh-dflow"]
+        ).write(to: conditioning, options: .atomic)
+        let hit = sound.appendingPathComponent("hit.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: hit, seconds: 2)
+        let latents = sound.appendingPathComponent("hit.npy", isDirectory: false)
+        try TensorFixtures.npy(descriptor: "<f4", shape: "(1, 128, 87)").write(to: latents, options: .atomic)
+        let decoded = sound.appendingPathComponent("hit-decoded.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: decoded, seconds: 2)
+        let bottle = sound.appendingPathComponent("bottle.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: bottle, seconds: 4)
+
+        struct Run {
+            let task: StudioTask
+            let templateID: CommandTemplateID
+            let prompt: String
+            let input: URL?
+            let output: URL?
+            let outputText: String?
+            let startedAt: Date
+            let elapsed: TimeInterval
+            let edit: (inout CommandDraft) -> Void
+        }
+        let runs: [Run] = [
+            Run(task: .soundFoley, templateID: .sfxVideo, prompt: "Footsteps on wet gravel, close perspective", input: clip,
+                output: foley, outputText: nil, startedAt: Self.mockupTime(hour: 14, minute: 2), elapsed: 46) {
+                $0.sfxRenoise = "0.35"
+                $0.seed = "11"
+            },
+            Run(task: .soundCondition, templateID: .sfxConditionText, prompt: "Heavy wooden door creaking open", input: nil,
+                output: conditioning, outputText: nil, startedAt: Self.mockupTime(hour: 13, minute: 48), elapsed: 3.2) { _ in },
+            Run(task: .soundEncode, templateID: .sfxAEEncode, prompt: "", input: hit, output: latents, outputText: nil,
+                startedAt: Self.mockupTime(hour: 13, minute: 40), elapsed: 2.1) { _ in },
+            Run(task: .soundDecode, templateID: .sfxAEDecode, prompt: "", input: latents, output: decoded, outputText: nil,
+                startedAt: Self.mockupTime(hour: 13, minute: 42), elapsed: 1.7) { _ in },
+            Run(task: .soundScore, templateID: .sfxClapScore, prompt: "A glass bottle breaking on concrete", input: bottle,
+                output: nil, outputText: """
+                Loading sfx-woosh-clap
+                {"prompt":"A glass bottle breaking on concrete","score":0.634,"audio":"\(bottle.path)","model":"sfx-woosh-clap"}
+                """, startedAt: Self.mockupTime(hour: 13, minute: 55), elapsed: 1.4) { _ in },
+        ]
+        for run in runs {
+            guard let template = CommandCatalog.template(id: run.templateID) else { throw StudioSnapshotError.noContentView }
+            var draft = template.defaultDraft()
+            draft.prompt = run.prompt
+            draft.inputPath = run.input?.path ?? ""
+            draft.outputPath = run.output?.path ?? ""
+            run.edit(&draft)
+            let arguments = template.arguments(from: draft)
+            var row = StudioLibraryItem(
+                id: UUID(),
+                mode: .sfx,
+                prompt: run.prompt,
+                inputURL: run.input,
+                outputURL: run.output,
+                createdAt: run.startedAt,
+                updatedAt: run.startedAt.addingTimeInterval(run.elapsed),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: (["mere.run"] + arguments).joined(separator: " "),
+                outputText: run.outputText,
+                templateID: run.templateID,
+                commandDraft: draft,
+                commandArguments: arguments,
+                artifactURLs: run.output.map { [$0] } ?? []
+            )
+            if let input = run.input { row.inputIdentity = StudioInputIdentity.read(input) }
+            library.upsert(row)
+            // The parked draft is the run's settings with the destination left to routing.
+            var parked = draft
+            parked.outputPath = ""
+            let taskDraft = StudioTaskDraft(templateID: run.templateID, form: StudioConsoleCommand.seed(template: template, draft: parked))
+            controller.taskSessions.setTaskDraft(taskDraft, for: run.task)
+            controller.taskSessions.set(Optional(row.id), for: run.task.rawValue + ".requestID")
+        }
+        controller.taskSessions.set(StudioRenoise.Mode.amount, for: StudioTask.soundFoley.rawValue + ".renoiseMode")
+    }
+
+    /// One finished run per Vision task on the task workspace — Detect faces, Pose, Flow, Depth,
+    /// Geometry, and a Live capture — on a drawn 960×720 picture, with each task's draft pointed
+    /// at its input and its run remembered the way the workspace leaves them. Returns the row id
+    /// per task so a board can select it.
+    @discardableResult
+    func seedVisionRuns() throws -> [StudioTask: UUID] {
+        let directory = root.appendingPathComponent("vision", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let size = CGSize(width: 960, height: 720)
+        let portrait = directory.appendingPathComponent("portrait.png", isDirectory: false)
+        try Self.writeFixturePNG(to: portrait, size: size, hueOffset: 0.15)
+        portraitURL = portrait
+        let second = directory.appendingPathComponent("portrait-later.png", isDirectory: false)
+        try Self.writeFixturePNG(to: second, size: size, hueOffset: 0.32)
+        secondPortraitURL = second
+        var seeded: [StudioTask: UUID] = [:]
+
+        func seed(
+            _ templateID: CommandTemplateID, task: StudioTask, inputs: [URL], output: URL?, artifacts: [URL],
+            prompt: String = "", minute: Int
+        ) throws {
+            guard let template = CommandCatalog.template(id: templateID) else { throw StudioSnapshotError.noContentView }
+            var draft = StudioTaskDraft(templateID: templateID)
+            draft.form["--dry-run"] = .unset
+            let slots = StudioTaskSchema.slots(for: templateID)
+            if let first = slots.first {
+                if first.allowsMultiple {
+                    first.attach(inputs, to: &draft)
+                } else {
+                    for (slot, input) in zip(slots, inputs) { slot.attach([input], to: &draft) }
+                }
+            }
+            if !prompt.isEmpty { draft.prompt = prompt }
+            if let output, let flag = draft.capability?.output.flag { draft.form[flag] = .text(output.path) }
+            if let document = artifacts.first(where: { $0.pathExtension == "json" }),
+               draft.capability?.options.contains(where: { $0.flag == "--json-output" }) == true,
+               draft.text("--json-output").isEmpty {
+                draft.form["--json-output"] = .text(document.path)
+            }
+            let startedAt = Self.mockupTime(hour: 14, minute: minute)
+            var row = StudioLibraryItem(
+                id: UUID(),
+                mode: template.libraryMode,
+                prompt: prompt,
+                inputURL: inputs.first,
+                outputURL: output,
+                createdAt: startedAt,
+                updatedAt: startedAt.addingTimeInterval(2.6),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run " + draft.arguments.joined(separator: " "),
+                outputText: nil,
+                templateID: templateID,
+                commandDraft: draft.run?.commandDraft,
+                commandArguments: draft.arguments,
+                artifactURLs: artifacts
+            )
+            if let input = inputs.first { row.inputIdentity = StudioInputIdentity.read(input) }
+            library.upsert(row)
+            controller.taskSessions.setTaskDraft(draft, for: task)
+            controller.taskSessions.set(Optional(row.id), for: task.rawValue + ".requestID")
+            seeded[task] = row.id
+        }
+
+        let faces = directory.appendingPathComponent("portrait-faces.json", isDirectory: false)
+        try Self.faceDocument(size: size).write(to: faces, atomically: true, encoding: .utf8)
+        try seed(.visionFaceDetect, task: .visionFaces, inputs: [portrait], output: nil, artifacts: [faces], minute: 2)
+
+        let pose = directory.appendingPathComponent("portrait-pose.json", isDirectory: false)
+        try Self.poseDocument(size: size).write(to: pose, atomically: true, encoding: .utf8)
+        try seed(.visionPose, task: .visionPose, inputs: [portrait], output: pose, artifacts: [pose], minute: 4)
+
+        let flow = directory.appendingPathComponent("portrait-motion.flo", isDirectory: false)
+        try Self.flowField(width: 96, height: 72).write(to: flow, options: .atomic)
+        let flowDocument = directory.appendingPathComponent("portrait-motion.json", isDirectory: false)
+        try "{\"width\":96,\"height\":72}".write(to: flowDocument, atomically: true, encoding: .utf8)
+        try seed(.visionFlow, task: .visionFlow, inputs: [portrait, second], output: flow, artifacts: [flow, flowDocument], minute: 6)
+
+        let depthDirectory = directory.appendingPathComponent("portrait-depth", isDirectory: true)
+        try FileManager.default.createDirectory(at: depthDirectory, withIntermediateDirectories: true)
+        let depthPreview = depthDirectory.appendingPathComponent("portrait-depth.png", isDirectory: false)
+        try Self.writeDepthPNG(to: depthPreview, size: size)
+        let depthManifest = depthDirectory.appendingPathComponent("portrait-depth.json", isDirectory: false)
+        try Self.depthManifest(size: size, outputDirectory: depthDirectory).write(to: depthManifest, atomically: true, encoding: .utf8)
+        try seed(.visionDepth, task: .visionDepth, inputs: [portrait], output: depthDirectory,
+                 artifacts: [depthPreview, depthManifest], minute: 8)
+
+        let sceneDirectory = directory.appendingPathComponent("portrait-scene", isDirectory: true)
+        try FileManager.default.createDirectory(at: sceneDirectory, withIntermediateDirectories: true)
+        let points = sceneDirectory.appendingPathComponent("portrait-points.ply", isDirectory: false)
+        try Self.pointCloudPLY().write(to: points, atomically: true, encoding: .utf8)
+        let sceneDepth = sceneDirectory.appendingPathComponent("portrait-depth.png", isDirectory: false)
+        try Self.writeDepthPNG(to: sceneDepth, size: size)
+        let sceneNormal = sceneDirectory.appendingPathComponent("portrait-normal.png", isDirectory: false)
+        try Self.writeFixturePNG(to: sceneNormal, size: size, hueOffset: 0.55)
+        try seed(.visionGeometry, task: .visionGeometry, inputs: [portrait], output: sceneDirectory,
+                 artifacts: [points, sceneDepth, sceneNormal], minute: 10)
+
+        let clip = directory.appendingPathComponent("live-tracking.mp4", isDirectory: false)
+        try Self.writeFixtureMP4(to: clip, size: CGSize(width: 640, height: 360), frames: 24)
+        let tracking = directory.appendingPathComponent("live-tracking.json", isDirectory: false)
+        try Self.trackingDocument(clip: clip).write(to: tracking, atomically: true, encoding: .utf8)
+        try seed(.visionTrackLive, task: .visionLive, inputs: [], output: clip, artifacts: [clip, tracking],
+                 prompt: "the person", minute: 12)
+        return seeded
+    }
+
+    /// `vision face detect --json-output` for the drawn portrait: two faces with five landmarks
+    /// each, in stored pixels, numbered the way `--face-index` counts them.
+    private static func faceDocument(size: CGSize) -> String {
+        func face(_ index: Int, x: Double, y: Double, width: Double, height: Double, score: Double) -> String {
+            let landmarks = [(0.3, 0.38), (0.7, 0.38), (0.5, 0.58), (0.35, 0.78), (0.65, 0.78)]
+                .map { "{\"x\":\(x + $0.0 * width),\"y\":\(y + $0.1 * height)}" }
+                .joined(separator: ",")
+            return """
+            {"index":\(index),"detection":{"score":\(score),"boundingBox":{"x":\(x),"y":\(y),"width":\(width),"height":\(height)},"landmarks":[\(landmarks)]}}
+            """
+        }
+        return """
+        {"elapsedMilliseconds":412.5,"height":\(Int(size.height)),"image":"portrait.png","modelID":"vision-face-buffalo-l","width":\(Int(size.width)),
+         "faces":[\(face(0, x: 268, y: 150, width: 196, height: 236, score: 0.93)),\(face(1, x: 560, y: 210, width: 150, height: 184, score: 0.81))]}
+        """
+    }
+
+    /// `vision pose --json-output`: a body and a hand, normalized with the origin top-left.
+    private static func poseDocument(size: CGSize) -> String {
+        let body = [
+            ("nose", 0.38, 0.28), ("leftShoulder", 0.30, 0.42), ("rightShoulder", 0.47, 0.42), ("leftElbow", 0.24, 0.56),
+            ("rightElbow", 0.53, 0.55), ("leftWrist", 0.22, 0.70), ("rightWrist", 0.58, 0.66), ("leftHip", 0.33, 0.72),
+            ("rightHip", 0.44, 0.72), ("leftKnee", 0.32, 0.88), ("rightKnee", 0.45, 0.88),
+        ]
+        let hand = [("wrist", 0.58, 0.66), ("thumbTip", 0.62, 0.62), ("indexTip", 0.63, 0.66), ("middleTip", 0.63, 0.69), ("littleTip", 0.61, 0.72)]
+        func points(_ list: [(String, Double, Double)]) -> String {
+            list.map { "{\"name\":\"\($0.0)\",\"x\":\($0.1),\"y\":\($0.2),\"confidence\":0.86}" }.joined(separator: ",")
+        }
+        return """
+        {"imageWidth":\(Int(size.width)),"imageHeight":\(Int(size.height)),"coordinateSpace":"normalized",
+         "subjects":[{"kind":"body","index":0,"points":[\(points(body))]},{"kind":"hand","index":0,"points":[\(points(hand))]}]}
+        """
+    }
+
+    /// A Middlebury `.flo` with a gentle swirl, so the vectors read as motion.
+    private static func flowField(width: Int, height: Int) -> Data {
+        var data = Data()
+        func append(_ value: UInt32) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        append(Float(202_021.25).bitPattern)
+        append(UInt32(width))
+        append(UInt32(height))
+        for y in 0..<height {
+            for x in 0..<width {
+                let dx = Double(x) / Double(width) - 0.5
+                let dy = Double(y) / Double(height) - 0.5
+                append(Float(-dy * 6).bitPattern)
+                append(Float(dx * 6).bitPattern)
+            }
+        }
+        return data
+    }
+
+    /// A grayscale ramp with a brighter oval, the shape a depth preview has.
+    private static func writeDepthPNG(to url: URL, size: CGSize) throws {
+        let width = Int(size.width)
+        let height = Int(size.height)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            throw StudioSnapshotError.noBitmap
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSGradient(starting: NSColor(calibratedWhite: 0.08, alpha: 1), ending: NSColor(calibratedWhite: 0.82, alpha: 1))?
+            .draw(in: CGRect(x: 0, y: 0, width: width, height: height), angle: 90)
+        NSColor(calibratedWhite: 0.96, alpha: 1).setFill()
+        NSBezierPath(ovalIn: CGRect(x: width / 4, y: height / 5, width: width / 3, height: height / 2)).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            throw StudioSnapshotError.pngEncodingFailed
+        }
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// `vision depth`'s `<stem>-depth.json` (`MarigoldV2DepthManifest`) for the seeded run.
+    private static func depthManifest(size: CGSize, outputDirectory: URL) -> String {
+        """
+        {"schemaVersion":1,"createdAt":"2026-09-04T14:08:02Z","inputPath":"portrait.png","inputByteCount":40960,"inputSHA256":"0",
+         "outputDirectory":"\(outputDirectory.path)","width":\(Int(size.width)),"height":\(Int(size.height)),
+         "inferenceWidth":1024,"inferenceHeight":768,"semantics":"affine-relative","parameterization":"log",
+         "checkpoint":"log-stage2","seeThrough":false,
+         "depthStatistics":{"rawMinimum":0.018,"rawMaximum":0.974,"normalizationNear":0.01,"normalizationFar":0.99},
+         "model":{"modelID":"vision-depth-marigold-v2","upstreamRepository":"prs-eth/marigold-depth-v2","upstreamRevision":"main",
+                  "license":"Apache-2.0","inferenceBackend":"mlx"},
+         "artifacts":[]}
+        """
+    }
+
+    /// A small colored point cloud, as `vision geometry` writes its PLY.
+    private static func pointCloudPLY() -> String {
+        var lines = ["ply", "format ascii 1.0", "element vertex 64", "property float x", "property float y", "property float z",
+                     "property uchar red", "property uchar green", "property uchar blue", "end_header"]
+        for index in 0..<64 {
+            let x = Double(index % 8) / 7 - 0.5
+            let y = Double(index / 8) / 7 - 0.5
+            let z = (x * x + y * y) * 0.6
+            lines.append(String(format: "%.3f %.3f %.3f %d %d %d", x, y, z, 90 + index * 2, 120, 200 - index))
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// `vision track-live --json-output` (`SAM31TrackingRun`) for the seeded clip: one object,
+    /// visible for the first three quarters of the capture.
+    private static func trackingDocument(clip: URL) -> String {
+        let frames = (0..<24).map { index -> String in
+            let visible = index < 18
+            let x = 200 + index * 8
+            return """
+            {"frameIndex":\(index),"timestampSeconds":\(Double(index) / 12),"detections":[{"objectID":"obj-1","label":"the person","score":\(visible ? 0.91 : 0),"visible":\(visible),"box":{"x1":\(x),"y1":80,"x2":\(x + 140),"y2":330}}]}
+            """
+        }.joined(separator: ",")
+        return """
+        {"schemaVersion":1,"modelID":"vision-segment-sam31","inputVideoPath":"camera:0","annotatedVideoPath":"\(clip.path)",
+         "fps":12,"frameWidth":640,"frameHeight":360,"objects":[{"objectID":"obj-1","label":"the person","seedFrameIndex":0}],"frames":[\(frames)]}
+        """
+    }
+
+    /// A finished Separate run for `task` (Audio ▸ Separate or Music ▸ Separate): a track, the
+    /// two stems `music separate` wrote beside it, and the manifest it printed and saved, with
+    /// the task draft pointed at the track.
+    func seedSeparateRun(task: StudioTask) throws {
+        guard let template = CommandCatalog.template(id: .musicSeparate) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let track = root.appendingPathComponent("late-set.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: track, seconds: 12)
+        let stems = root.appendingPathComponent("late-set-stems", isDirectory: true)
+        try FileManager.default.createDirectory(at: stems, withIntermediateDirectories: true)
+        var stemURLs: [URL] = []
+        for name in ["vocals", "instrumental"] {
+            let url = stems.appendingPathComponent("\(name).wav", isDirectory: false)
+            try Self.writeSilentWAV(to: url, seconds: 12)
+            stemURLs.append(url)
+        }
+        let manifestURL = stems.appendingPathComponent("separation.json", isDirectory: false)
+        let manifest = Self.separationManifest(source: track, stems: stemURLs, manifest: manifestURL)
+        try manifest.write(to: manifestURL, atomically: true, encoding: .utf8)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = track.path
+        draft.outputPath = stems.path
+        let startedAt = Self.mockupTime(hour: 16, minute: 12)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: .music,
+            prompt: "",
+            inputURL: track,
+            outputURL: stems,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(21.5),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run music separate late-set.wav --output-dir late-set-stems",
+            outputText: manifest,
+            templateID: .musicSeparate,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: draft),
+            artifactURLs: [stems] + stemURLs + [manifestURL]
+        )
+        row.inputIdentity = StudioInputIdentity.read(track)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .musicSeparate)
+        taskDraft.setArgument(0, track.path)
+        controller.taskSessions.setTaskDraft(taskDraft, for: task)
+        controller.taskSessions.set(Optional(row.id), for: task.rawValue + ".requestID")
+    }
+
+    /// Two saved voices for Voice ▸ Voices, their references written here so the detail's
+    /// player has a file to load.
+    func voiceProfileSeed() throws -> [StudioVoiceProfileRecord] {
+        let made = Self.mockupTime(hour: 10, minute: 5)
+        var records: [StudioVoiceProfileRecord] = []
+        let voices: [(id: String, name: String, language: String?, transcript: String)] = [
+            ("6F9B2C1E-0D44-4C1B-9A7E-3B2C4D5E6F70", "Narrator", "en",
+             "Harbour lights are blinking slow on the water where the old boats go. I left my coat on the ferry rail and watched the evening turn to pale."),
+            ("A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D", "Field host", nil,
+             "Good morning everyone, and thank you for joining the quarterly review."),
+        ]
+        for voice in voices {
+            let reference = root.appendingPathComponent("\(voice.name.lowercased().replacingOccurrences(of: " ", with: "-"))-reference.wav")
+            try Self.writeSilentWAV(to: reference, seconds: 6)
+            records.append(StudioVoiceProfileRecord(
+                id: UUID(uuidString: voice.id)!, name: voice.name, createdAt: made, updatedAt: made,
+                transcript: voice.transcript, language: voice.language,
+                referenceAudioRelativePath: reference.path, modelFingerprint: nil
+            ))
+        }
+        return records
+    }
+
+    /// A `speech listen` session started through the task runner and held open by the process
+    /// seam, with its ready event already on stdout, the way the page finds one when it appears.
+    func seedLiveListenSession() throws -> UUID {
+        guard let runner = liveSessionRunner else {
+            throw StudioSnapshotError.noContentView
+        }
+        runner.liveSessionMarkers = ["listen"]
+        var draft = StudioTaskDraft(templateID: .speechListen)
+        draft.form["--language"] = .text("en")
+        controller.taskSessions.setTaskDraft(draft, for: .audioLive)
+        controller.checkReadiness(for: .audioLive, modelID: StudioTaskSchema.modelID(for: draft))
+        let request = try StudioTaskRunner(controller: controller, library: library).run(draft.liveListenLaunch(), task: .audioLive)
+        guard let live = runner.liveStarts.last else {
+            throw StudioSnapshotError.noContentView
+        }
+        live.stdout(#"{"protocol":1,"type":"ready"}"# + "\n")
+        live.stderr("Listening. Press Ctrl-C to stop.\n")
+        return request.id
+    }
+
+    /// Two committed utterances and a partial one, as `speech listen --jsonl` streams them.
+    func speakIntoLiveListenSession() {
+        guard let live = liveSessionRunner?.liveStarts.last else { return }
+        live.stdout(#"{"protocol":1,"type":"commit","utteranceId":"u1","revision":4,"text":"Good morning everyone, and thank you for joining the quarterly review."}"# + "\n")
+        live.stdout(#"{"protocol":1,"type":"commit","utteranceId":"u2","revision":3,"text":"Today we will walk through the roadmap and the numbers behind it."}"# + "\n")
+        live.stdout(#"{"protocol":1,"type":"partial","utteranceId":"u3","revision":2,"text":"Before we start, I want to flag that the shipping dates"}"# + "\n")
+        live.stderr("Committed utterance u2\n")
+    }
+
+    /// A finished 3D ▸ TripoSR run of the mug: its output folder holding a small OBJ Quick Look
+    /// can draw and the two manifests the CLI writes beside a mesh, with the task draft pointed
+    /// at the picture on the TripoSR engine. Returns four view pictures for an InstantMesh draft.
+    func seedMeshRun() throws -> [URL] {
+        guard let template = CommandCatalog.template(id: .imageReconstruct3D) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let folder = root.appendingPathComponent("3D/mug", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let mesh = folder.appendingPathComponent("mug.glb", isDirectory: false)
+        try Self.cubeGLB().write(to: mesh, options: .atomic)
+        let manifest = folder.appendingPathComponent("mug-manifest.json", isDirectory: false)
+        try """
+        {"schemaVersion": 1, "inputPaths": ["\(mugURL.path)"], "outputDirectory": "\(folder.path)",
+         "coordinateSystem": "x-right-y-up-z-forward", "units": "normalized-object-space", "inferredUnseenGeometry": true,
+         "vertexCount": 12480, "triangleCount": 24956, "bounds": {"min": [-0.5, -0.5, -0.5], "max": [0.5, 0.5, 0.5]}, "artifacts": []}
+        """.write(to: manifest, atomically: true, encoding: .utf8)
+        let runManifest = folder.appendingPathComponent("mug-run-manifest.json", isDirectory: false)
+        try """
+        {"schemaVersion": 1, "outputDirectory": "\(folder.path)",
+         "mesh": {"coordinateSystem": "x-right-y-up-z-forward", "units": "normalized-object-space", "inferredUnseenGeometry": true,
+                  "vertexCount": 12480, "triangleCount": 24956, "bounds": {"min": [-0.5, -0.5, -0.5], "max": [0.5, 0.5, 0.5]}},
+         "artifacts": []}
+        """.write(to: runManifest, atomically: true, encoding: .utf8)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = mugURL.path
+        draft.outputPath = folder.path
+        let startedAt = Self.mockupTime(hour: 10, minute: 12)
+        let request = StudioRunRequest(mode: .createImage, templateID: .imageReconstruct3D, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: .createImage,
+            prompt: "",
+            inputURL: mugURL,
+            outputURL: mesh,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(41),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run image reconstruct-3d mug.png --output 3D/mug --resolution 256",
+            outputText: nil,
+            templateID: .imageReconstruct3D,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft),
+            artifactURLs: [mesh, manifest, runManifest],
+            artifactRoles: [
+                manifest.standardizedFileURL.path: "mesh-manifest-json",
+                runManifest.standardizedFileURL.path: "triposr-run-manifest-json",
+            ]
+        )
+        row.inputIdentity = StudioInputIdentity.read(mugURL)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .imageReconstruct3D)
+        taskDraft.setArgument(0, mugURL.path)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .threeDFromImage)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.threeDFromImage.rawValue + ".requestID")
+
+        return try ["front", "right", "back", "left"].map { name in
+            let url = root.appendingPathComponent("\(name).png", isDirectory: false)
+            try Self.writeMugPNG(to: url, side: 256)
+            return url
+        }
+    }
+
+    /// A unit cube as binary glTF: eight corners and twelve triangles in one buffer, the shape the
+    /// 3D commands' GLB exports take.
+    private static func cubeGLB() -> Data {
+        let corners: [Float] = [
+            -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5,
+            -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
+        ]
+        let triangles: [UInt16] = [
+            0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
+            1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7,
+        ]
+        var binary = Data()
+        triangles.forEach { binary.append(contentsOf: withUnsafeBytes(of: $0.littleEndian, Array.init)) }
+        corners.forEach { binary.append(contentsOf: withUnsafeBytes(of: $0.bitPattern.littleEndian, Array.init)) }
+        let indexBytes = triangles.count * 2
+        var json = Data("""
+        {"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
+        "meshes":[{"primitives":[{"attributes":{"POSITION":1},"indices":0}]}],
+        "buffers":[{"byteLength":\(binary.count)}],
+        "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":\(indexBytes),"target":34963},
+        {"buffer":0,"byteOffset":\(indexBytes),"byteLength":\(corners.count * 4),"target":34962}],
+        "accessors":[{"bufferView":0,"componentType":5123,"count":\(triangles.count),"type":"SCALAR"},
+        {"bufferView":1,"componentType":5126,"count":\(corners.count / 3),"type":"VEC3","min":[-0.5,-0.5,-0.5],"max":[0.5,0.5,0.5]}]}
+        """.utf8)
+        while json.count % 4 != 0 { json.append(0x20) }
+        func word(_ value: UInt32) -> [UInt8] { withUnsafeBytes(of: value.littleEndian, Array.init) }
+        var glb = Data()
+        glb.append(contentsOf: word(0x4654_6C67))
+        glb.append(contentsOf: word(2))
+        glb.append(contentsOf: word(UInt32(12 + 8 + json.count + 8 + binary.count)))
+        glb.append(contentsOf: word(UInt32(json.count)))
+        glb.append(contentsOf: word(0x4E4F_534A))
+        glb.append(json)
+        glb.append(contentsOf: word(UInt32(binary.count)))
+        glb.append(contentsOf: word(0x004E_4942))
+        glb.append(binary)
+        return glb
+    }
+
+    /// The Earth board's state: a finished TESSERA run over a four-observation bundle written
+    /// here (its 64-wide embedding beside it under Earth, and the JSON the command printed as
+    /// the row's output text), the bundle parked in TESSERA's task draft; and a Flood task draft
+    /// pointed at a bundle without its DEM, so the checklist has something to warn about.
+    func seedEarthRuns() throws {
+        guard let template = CommandCatalog.template(id: .geoTessera) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let bundle = root.appendingPathComponent("valley-2024.safetensors", isDirectory: false)
+        try TensorFixtures.write(to: bundle, tensors: [
+            .float32("S2", shape: [1, 4, 10], value: 1_200),
+            .float32("S2_DOY", shape: [1, 4], value: 120),
+            .float32("S1_ASC", shape: [1, 4, 2], value: -12),
+            .float32("S1_ASC_DOY", shape: [1, 4], value: 118),
+        ])
+        let embedding = root.appendingPathComponent("Earth/valley-2024-a1b2c3.safetensors", isDirectory: false)
+        try TensorFixtures.write(
+            to: embedding,
+            tensors: [.float32("embeddings", shape: [1, 64], value: 0.031)],
+            metadata: [
+                "format": "mere.run/tessera-v2-embeddings-v1", "model_id": "vision-embed-tessera-v2-large",
+                "source_revision": "4f1c2e9", "dimensions": "64",
+            ]
+        )
+
+        var draft = template.defaultDraft()
+        draft.inputPath = bundle.path
+        draft.outputPath = embedding.path
+        draft.model = "vision-embed-tessera-v2-large"
+        draft.geoDimensions = "64"
+        let startedAt = Self.mockupTime(hour: 10, minute: 12)
+        let request = StudioRunRequest(mode: template.libraryMode, templateID: .geoTessera, template: template, draft: draft)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: template.libraryMode,
+            prompt: "",
+            inputURL: bundle,
+            outputURL: embedding,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(6.2),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run geo tessera valley-2024.safetensors --output valley-2024-a1b2c3.safetensors --dimensions 64 --json",
+            outputText: """
+            {
+              "batch_size" : 1,
+              "device" : "metal",
+              "inference_seconds" : 0.41,
+              "input_path" : "\(bundle.path)",
+              "model_id" : "vision-embed-tessera-v2-large",
+              "model_load_seconds" : 5.8,
+              "operation" : "time-series-embedding",
+              "output_path" : "\(embedding.path)",
+              "schema_version" : 1,
+              "status" : "completed",
+              "variant" : "large"
+            }
+            """,
+            templateID: .geoTessera,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: request.draft),
+            artifactURLs: [embedding]
+        )
+        row.inputIdentity = StudioInputIdentity.read(bundle)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .geoTessera)
+        taskDraft.setArgument(0, bundle.path)
+        // No model in the draft: the scripted inventory does not list the TESSERA checkpoints, so
+        // a named one would only draw the "couldn't check" card over the result.
+        taskDraft.form["--dimensions"] = .integer(64)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .earthTessera)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.earthTessera.rawValue + ".requestID")
+
+        let incomplete = root.appendingPathComponent("delta-tiles.safetensors", isDirectory: false)
+        try TensorFixtures.write(to: incomplete, tensors: [
+            .float32("S2L2A", shape: [1, 12, 4, 8, 8], value: 0.2),
+            .float32("S1RTC", shape: [1, 2, 4, 8, 8], value: -0.4),
+        ])
+        var flood = StudioTaskDraft(templateID: .geoFlood)
+        flood.setArgument(0, incomplete.path)
+        controller.taskSessions.setTaskDraft(flood, for: .earthFlood)
+    }
+
+    /// Two finished Image ▸ Train runs the dashboard can follow and compare: a dataset folder of
+    /// six captioned pictures, an adapter for it with a 40-step loss log, three preview samples,
+    /// and two checkpoints beside it (the run the page follows), and an earlier, shorter run for
+    /// the B side of the comparison. The task draft is parked on the dataset with a recipe.
+    func seedTrainingRuns() throws {
+        guard let template = CommandCatalog.template(id: .imageTrainLoRA) else { throw StudioSnapshotError.noContentView }
+        let dataset = root.appendingPathComponent("datasets/warm-still-life", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataset, withIntermediateDirectories: true)
+        let captions = [
+            "a ceramic mug on linen in soft morning light", "a pear on a wooden board, warm window light",
+            "a stack of letters tied with twine", "a brass candlestick beside a folded napkin",
+            "dried flowers in a glass bottle on a sill", "a bowl of walnuts on a dark table",
+        ]
+        for (index, caption) in captions.enumerated() {
+            try Self.writeFixturePNG(to: dataset.appendingPathComponent("still-\(index + 1).png"), size: CGSize(width: 512, height: 512),
+                                     hueOffset: CGFloat(index) * 0.13)
+            try caption.write(to: dataset.appendingPathComponent("still-\(index + 1).txt"), atomically: true, encoding: .utf8)
+        }
+
+        let folder = root.appendingPathComponent("training/Image", isDirectory: true)
+        func seedRun(stem: String, steps: Int, loss: (Int) -> Double, samples: Int, hour: Int, minute: Int) throws -> StudioLibraryItem {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let adapter = folder.appendingPathComponent("\(stem).safetensors")
+            try Data(repeating: 0, count: 64).write(to: adapter)
+            var events: [String] = []
+            for index in 0..<40 {
+                let step = max(1, (index + 1) * steps / 40)
+                events.append(
+                    "{\"sequence\": \(index + 1), \"type\": \"step\", \"stage\": \"train\", \"step\": \(step), " +
+                    "\"total_steps\": \(steps), \"loss\": \(String(format: "%.5f", loss(step))), \"fraction\": \(Double(step) / Double(steps))}"
+                )
+            }
+            events.append("{\"sequence\": 41, \"type\": \"run_finished\", \"stage\": \"finished\", \"step\": \(steps), \"total_steps\": \(steps), \"fraction\": 1, \"path\": \"\(adapter.path)\"}")
+            try events.joined(separator: "\n").write(to: folder.appendingPathComponent("\(stem).events.jsonl"), atomically: true, encoding: .utf8)
+            let sampleFolder = folder.appendingPathComponent("samples", isDirectory: true)
+            try FileManager.default.createDirectory(at: sampleFolder, withIntermediateDirectories: true)
+            for index in 0..<samples {
+                try Self.writeFixturePNG(to: sampleFolder.appendingPathComponent("\(stem)-step-\(String(format: "%04d", (index + 1) * 250)).png"),
+                                         size: CGSize(width: 512, height: 512), hueOffset: 0.6 + CGFloat(index) * 0.1)
+            }
+            let checkpointFolder = folder.appendingPathComponent("checkpoints", isDirectory: true)
+            try FileManager.default.createDirectory(at: checkpointFolder, withIntermediateDirectories: true)
+            for step in stride(from: 250, through: steps, by: 250) where step < steps {
+                try Data(repeating: 0, count: 16).write(to: checkpointFolder.appendingPathComponent("\(stem)-checkpoint-step\(step).safetensors"))
+            }
+
+            var draft = template.defaultDraft()
+            draft.inputPath = dataset.path
+            draft.outputPath = adapter.path
+            draft.trainingRecipe = "krea-fast-style"
+            draft.seed = "42"
+            draft.checkpointInterval = 250
+            draft.sampleInterval = 250
+            draft.steps = steps
+            let startedAt = Self.mockupTime(hour: hour, minute: minute)
+            var row = StudioLibraryItem(
+                id: UUID(),
+                mode: .createImage,
+                prompt: "",
+                inputURL: dataset,
+                outputURL: adapter,
+                createdAt: startedAt,
+                updatedAt: startedAt.addingTimeInterval(Double(steps) * 2.3),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run image train-lora --data warm-still-life --output \(stem).safetensors --recipe krea-fast-style",
+                outputText: nil,
+                templateID: .imageTrainLoRA,
+                commandDraft: draft,
+                commandArguments: template.arguments(from: draft),
+                artifactURLs: [adapter]
+            )
+            row.inputIdentity = StudioInputIdentity.read(dataset)
+            library.upsert(row)
+            return row
+        }
+
+        let earlier = try seedRun(stem: "warm-still-life-7", steps: 600, loss: { 0.42 * exp(-Double($0) / 260) + 0.11 },
+                                  samples: 2, hour: 8, minute: 5)
+        let latest = try seedRun(stem: "warm-still-life-42", steps: 1_000, loss: { 0.39 * exp(-Double($0) / 340) + 0.08 + 0.012 * sin(Double($0) / 37) },
+                                 samples: 3, hour: 10, minute: 12)
+
+        var taskDraft = StudioTrainingRun.applyingPageDefaults(StudioTaskDraft(templateID: .imageTrainLoRA))
+        taskDraft.form["--data"] = .text(dataset.path)
+        taskDraft.form["--recipe"] = .text("krea-fast-style")
+        // Choosing the recipe on the page clears the seeded options it decides; the seed does too.
+        controller.taskSessions.setTaskDraft(StudioTrainingRun.applyingRecipe(taskDraft), for: .imageTrain)
+        let scope = StudioTask.imageTrain.rawValue
+        controller.taskSessions.set(Optional(latest.id), for: scope + ".requestID")
+        controller.taskSessions.set(Optional(latest.id), for: scope + ".Training.compareA")
+        controller.taskSessions.set(Optional(earlier.id), for: scope + ".Training.compareB")
+    }
+
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
     /// as the row's output text the way the Library keeps stdout.
     func seedMusicAnalysisRun() throws {
@@ -2750,7 +4086,7 @@ private final class SnapshotFixture {
         draft.useDuration = true
         draft.durationSeconds = 30
         let startedAt = Self.mockupTime(hour: 11, minute: 48)
-        let row = StudioLibraryItem(
+        var row = StudioLibraryItem(
             id: UUID(),
             mode: .music,
             prompt: "",
@@ -2763,12 +4099,138 @@ private final class SnapshotFixture {
             commandPreview: "mere.run music analyze harbor-lights.wav --duration 30",
             outputText: Self.musicAnalysisOutput(audio: song),
             templateID: .musicAnalyze,
-            commandDraft: draft
+            commandDraft: draft,
+            commandArguments: template.arguments(from: draft)
         )
+        row.inputIdentity = StudioInputIdentity.read(song)
         library.upsert(row)
         let scope = StudioTask.musicAnalyze.rawValue
         controller.taskSessions.set(Optional(row.id), for: scope + ".requestID")
+        // The page's draft, under its own key: the workspace imports it into the task draft once.
         controller.taskSessions.set(draft, for: scope + ".MusicTools.analyzeDraft")
+    }
+
+    /// A finished Music ▸ Transcribe run: the song, the MIDI `music transcribe` wrote for it
+    /// (eight bars of chords, a bass line, and a melody on three channels), and the musical
+    /// context document beside it, with the instrument list the inspector's picker reads already
+    /// cached on the controller.
+    func seedTranscribeRun() throws {
+        let song = root.appendingPathComponent("harbor-lights.wav", isDirectory: false)
+        if !FileManager.default.fileExists(atPath: song.path) {
+            try Self.writeSilentWAV(to: song, seconds: 20)
+        }
+        let midi = root.appendingPathComponent("harbor-lights-7c1e2a.mid", isDirectory: false)
+        try Self.writeDemoMIDI(to: midi)
+        let context = root.appendingPathComponent("harbor-lights-7c1e2a-context.json", isDirectory: false)
+        try Self.musicalContextDocument.write(to: context, atomically: true, encoding: .utf8)
+
+        var taskDraft = StudioTaskDraft(templateID: .musicTranscribe)
+        taskDraft.setArgument(0, song.path)
+        taskDraft.form["--instruments"] = .text("voice,drums,electric_bass,piano")
+        var ran = taskDraft
+        ran.form["--output"] = .text(midi.path)
+        ran.form["--context-output"] = .text(context.path)
+        guard let request = ran.request() else { throw StudioSnapshotError.noContentView }
+        let startedAt = Self.mockupTime(hour: 11, minute: 52)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: request.mode,
+            prompt: "",
+            inputURL: song,
+            outputURL: midi,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(41),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run music transcribe harbor-lights.wav --instruments voice,drums,electric_bass,piano --output harbor-lights-7c1e2a.mid",
+            outputText: nil,
+            templateID: .musicTranscribe,
+            commandDraft: request.draft,
+            commandArguments: request.execution?.arguments,
+            artifactURLs: [midi, context]
+        )
+        row.inputIdentity = StudioInputIdentity.read(song)
+        library.upsert(row)
+        controller.taskSessions.setTaskDraft(taskDraft, for: .musicTranscribe)
+        controller.taskSessions.set(Optional(row.id), for: StudioTask.musicTranscribe.rawValue + ".requestID")
+        controller.cachedInstrumentNames = [
+            "voice", "drums", "electric_bass", "piano", "acoustic_guitar", "electric_guitar", "strings", "brass",
+            "soprano_and_alto_sax", "synth_lead", "synth_pad", "organ",
+        ]
+    }
+
+    /// `MuScriptorMusicalContext` for the harbor-lights demo.
+    private static let musicalContextDocument = """
+    {
+      "tempo" : { "bpm" : 96.02, "confidence" : 0.91 },
+      "timeSignature" : { "name" : "4/4", "numerator" : 4, "denominator" : 4, "confidence" : 0.84 },
+      "keySignature" : { "name" : "D major", "tonic" : "D", "mode" : "major", "confidence" : 0.77 },
+      "beats" : []
+    }
+    """
+
+    /// A type-0 Standard MIDI File at 480 PPQ and 96 BPM: eight bars of a D–Bm–G–A progression
+    /// as held chords on channel 0, a walking bass on channel 1, and an eighth-note melody on
+    /// channel 2 — 120 notes across three channels, so the piano roll shows its hues and
+    /// velocities.
+    static func writeDemoMIDI(to url: URL) throws {
+        let ppq = 480
+        var events: [(tick: Int, bytes: [UInt8])] = [(0, [0xFF, 0x51, 0x03, 0x09, 0x89, 0x68])]
+        func note(_ pitch: Int, at start: Int, for length: Int, velocity: Int, channel: Int) {
+            events.append((start, [UInt8(0x90 | channel), UInt8(pitch), UInt8(velocity)]))
+            events.append((start + length, [UInt8(0x80 | channel), UInt8(pitch), 0]))
+        }
+        let chords = [[62, 66, 69], [59, 62, 66], [67, 71, 74], [57, 61, 64]]
+        let bass = [50, 47, 43, 45]
+        let melody = [74, 76, 78, 81, 78, 76, 74, 73, 71, 69, 71, 73, 74, 78, 76, 74]
+        for bar in 0..<8 {
+            let barStart = bar * 4 * ppq
+            for (index, pitch) in chords[bar % 4].enumerated() {
+                note(pitch, at: barStart, for: 4 * ppq - 40, velocity: 64 + index * 6, channel: 0)
+            }
+            for beat in 0..<4 {
+                note(bass[bar % 4] + (beat == 2 ? 7 : 0), at: barStart + beat * ppq, for: ppq - 60, velocity: 88, channel: 1)
+            }
+            for eighth in 0..<8 {
+                let pitch = melody[(bar * 8 + eighth) % melody.count]
+                note(pitch, at: barStart + eighth * ppq / 2, for: ppq / 2 - 30, velocity: 70 + (eighth % 3) * 12, channel: 2)
+            }
+        }
+        // Note-offs before note-ons at the same tick, so a repeated pitch closes before it reopens.
+        events.sort { $0.tick == $1.tick ? $0.bytes[0] < $1.bytes[0] : $0.tick < $1.tick }
+
+        var track = Data()
+        var last = 0
+        for event in events {
+            track.append(contentsOf: variableLength(event.tick - last))
+            track.append(contentsOf: event.bytes)
+            last = event.tick
+        }
+        track.append(contentsOf: [0x00, 0xFF, 0x2F, 0x00])
+
+        var data = Data()
+        func appendBE32(_ value: UInt32) { withUnsafeBytes(of: value.bigEndian) { data.append(contentsOf: $0) } }
+        func appendBE16(_ value: UInt16) { withUnsafeBytes(of: value.bigEndian) { data.append(contentsOf: $0) } }
+        data.append(contentsOf: Array("MThd".utf8))
+        appendBE32(6)
+        appendBE16(0)
+        appendBE16(1)
+        appendBE16(UInt16(ppq))
+        data.append(contentsOf: Array("MTrk".utf8))
+        appendBE32(UInt32(track.count))
+        data.append(track)
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// A MIDI variable-length quantity: seven bits per byte, high bit set on all but the last.
+    private static func variableLength(_ value: Int) -> [UInt8] {
+        var bytes = [UInt8(value & 0x7F)]
+        var remaining = value >> 7
+        while remaining > 0 {
+            bytes.insert(UInt8(remaining & 0x7F) | 0x80, at: 0)
+            remaining >>= 7
+        }
+        return bytes
     }
 
     /// `SpeechDiarizationPayload` for a three-minute stand-up: three voices, sixteen turns.
@@ -2799,6 +4261,50 @@ private final class SnapshotFixture {
         \(segments)
           ]
         }
+        """
+    }
+
+    /// The `separation.json` `music separate` writes for two stems, as `MusicSeparationManifest`
+    /// encodes it (snake_case, sorted keys).
+    private static func separationManifest(source: URL, stems: [URL], manifest: URL) -> String {
+        let stemEntries = stems.map { url in
+            """
+              {
+                "name" : "\(url.deletingPathExtension().lastPathComponent)",
+                "path" : "\(url.path)",
+                "sha256" : "0000000000000000000000000000000000000000000000000000000000000000"
+              }
+            """
+        }.joined(separator: ",\n")
+        return """
+        {
+          "chunk_size" : 352800,
+          "chunks" : 3,
+          "created_at" : "2026-09-24T16:12:21Z",
+          "elapsed_seconds" : 21.5,
+          "manifest_path" : "\(manifest.path)",
+          "model" : {
+            "compute_type" : "float16",
+            "id" : "music-separate-bs-roformer-viperx-1297",
+            "license" : "MIT",
+            "repository" : "mere-run/bs-roformer",
+            "revision" : "main",
+            "weights_sha256" : "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "overlap" : 2,
+          "schema_version" : 1,
+          "source" : {
+            "channels" : 1,
+            "frames" : 192000,
+            "path" : "\(source.path)",
+            "sample_rate" : 16000,
+            "sha256" : "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "stems" : [
+        \(stemEntries)
+          ]
+        }
+
         """
     }
 
@@ -3100,6 +4606,28 @@ private enum RunsScript {
 /// The model inventory the Models ▸ Installed fidelity render shows: the mockup's sample
 /// lineup, expressed the way `mere.run model list`, `model capabilities`, `model storage`,
 /// `model info`, `model runtime get`, and `adapter list` print it.
+/// What the Audio and Voice boards' CLI reads answer: the inventory with the diarization,
+/// enhancement, and separation models installed, so the composers are live, and the two
+/// microphones `speech listen --list-devices` lists for Audio ▸ Live's device chip.
+private enum AudioVoiceScript {
+    static let models = [
+        (id: "speech-diarization-sortformer", category: "speech-diarization", title: "Sortformer"),
+        (id: "speech-diarization-nemotron3", category: "speech-diarization", title: "Nemotron 3 Diarization"),
+        (id: "audio-enhance-ap-bwe-16kto48k", category: "audio", title: "AP-BWE 16k to 48k"),
+        (id: "music-separate-bs-roformer-viperx-1297", category: "music", title: "BS-RoFormer ViperX"),
+    ]
+
+    static var responses: [SnapshotProcessRunner.Response] {
+        ModelsInventoryScript.analyzeReadinessResponses(alsoInstalling: models) + [
+            .init(
+                matches: { $0.starts(with: ["speech", "listen"]) && $0.contains("--list-devices") },
+                stdout: "* BuiltInMicrophoneDevice\tMacBook Pro Microphone\n  AppleUSBAudioEngine:0001\tStudio USB Mic\n",
+                exitCode: 0
+            ),
+        ]
+    }
+}
+
 private enum ModelsInventoryScript {
     static let defaultModelID = "image-zimage-nano"
     static let pullingModelID = "vision-chat-qwen3.6-vl-4b"
@@ -3189,13 +4717,50 @@ private enum ModelsInventoryScript {
         ]
     }
 
-    /// `model list` and `model capabilities` with Vision ▸ Find's model installed, so the Analyze
-    /// board renders its result rather than a readiness card.
+    /// `model list` and `model capabilities` with the Analyze tasks' models installed (Vision ▸
+    /// Find's, the Vision specialists', Transcribe's), so the Analyze boards render their results
+    /// rather than a readiness card.
     static var analyzeReadinessResponses: [SnapshotProcessRunner.Response] {
-        let extraModels = [
+        analyzeReadinessResponses(alsoInstalling: [])
+    }
+
+    /// The same answers with more models installed, for the boards of other Analyze tasks.
+    static func analyzeReadinessResponses(
+        alsoInstalling more: [(id: String, category: String, title: String)]
+    ) -> [SnapshotProcessRunner.Response] {
+        readinessResponses(installing: [
             (id: "vision-ground-falcon-perception", category: "vision-ground", title: "Falcon Perception"),
-            (id: "speech-asr-parakeet", category: "speech-asr", title: "Parakeet")
-        ]
+            (id: "speech-asr-parakeet", category: "speech-asr", title: "Parakeet"),
+            (id: "vision-face-buffalo-l", category: "vision-face", title: "Face Buffalo L"),
+            (id: "vision-depth-marigold-v2", category: "vision-depth", title: "Depth Marigold V2"),
+            (id: "vision-geometry-moge2-small", category: "vision-geometry", title: "Geometry MoGe2 Small"),
+            (id: "vision-geometry-da3-small", category: "vision-geometry", title: "Geometry DA3 Small"),
+            (id: "vision-segment-sam31", category: "vision-segment", title: "SAM 3.1")
+        ] + more)
+    }
+
+    /// The same with the Sound tasks' Woosh models installed, so the Sound boards render their
+    /// results and composers rather than readiness cards.
+    static var soundReadinessResponses: [SnapshotProcessRunner.Response] {
+        readinessResponses(installing: [
+            (id: "sfx-woosh-dvflow-8s", category: "sfx", title: "Woosh DVFlow 8s"),
+            (id: "sfx-woosh-dflow", category: "sfx", title: "Woosh DFlow"),
+            (id: "sfx-woosh-clap", category: "sfx", title: "Woosh CLAP")
+        ])
+    }
+
+    /// The same with the Music tasks' default models installed, so their boards render results.
+    static var musicReadinessResponses: [SnapshotProcessRunner.Response] {
+        readinessResponses(installing: [
+            (id: "music-acestep", category: "music", title: "ACE-Step 1.5"),
+            (id: "music-muscriptor-medium", category: "music", title: "MuScriptor medium")
+        ])
+    }
+
+    /// `model list` and `model capabilities` with `extraModels` installed beside the fixture's.
+    static func readinessResponses(
+        installing extraModels: [(id: String, category: String, title: String)]
+    ) -> [SnapshotProcessRunner.Response] {
         let list = modelList.replacingOccurrences(
             of: "image-zimage-nano          image        installed  2.1 GB",
             with: (["image-zimage-nano          image        installed  2.1 GB"]
@@ -3217,6 +4782,37 @@ private enum ModelsInventoryScript {
             .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
             .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: list), exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
+        ]
+    }
+
+    /// `model list` and `model capabilities` with the three trainers' default models installed,
+    /// so the Train pages render with Start available rather than a readiness message.
+    static var trainingReadinessResponses: [SnapshotProcessRunner.Response] {
+        let extraModels = [
+            (id: "image-krea2-raw", category: "image", title: "Krea 2 raw"),
+            (id: "text-chat-gemma4-12b-4bit", category: "text-chat", title: "Gemma 4 12B"),
+            (id: "music-acestep", category: "music", title: "ACE-Step"),
+        ]
+        let list = modelList.replacingOccurrences(
+            of: "image-zimage-nano          image        installed  2.1 GB",
+            with: (["image-zimage-nano          image        installed  2.1 GB"]
+                + extraModels.map { "\($0.id)  \($0.category)  installed  6.2 GB" })
+                .joined(separator: "\n")
+        )
+        let extraCapabilities = extraModels.map { model in
+            """
+            ,{"id": "\(model.id)", "title": "\(model.title)", "summary": "", \
+            "minimumUnifiedMemoryGB": 16, "recommendedUnifiedMemoryGB": 32, "supported": true, \
+            "reasons": [], "estimatedDownloadBytes": 6200000000, \
+            "sourceRepository": "mere-run/\(model.id)", "publisher": "mere.run"}
+            """
+        }.joined(separator: "\n")
+        let capabilityJSON = capabilities.replacingOccurrences(of: "\n]}", with: "\n\(extraCapabilities)\n]}")
+        return [
+            .init(matches: { $0 == ["model", "list"] }, stdout: list, exitCode: 0),
+            .init(matches: { $0 == ["model", "list", "--json"] }, stdout: ModelsInventoryScript.inventoryJSON(from: list), exitCode: 0),
+            .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilityJSON, exitCode: 0),
+            version,
         ]
     }
 

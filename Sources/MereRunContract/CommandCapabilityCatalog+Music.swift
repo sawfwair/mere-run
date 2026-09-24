@@ -383,7 +383,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
             .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
             .init(flag: "--lm-model", label: "LM model", kind: .string),
-            .init(flag: "--duration", label: "Duration", kind: .number),
+            .init(flag: "--duration", label: "Duration", kind: .number, group: Group.sampling, tier: .essential),
             .init(flag: "--max-new-tokens", label: "Max tokens", kind: .integer),
             .init(flag: "--lm-temperature", label: "LM temperature", kind: .number),
             .init(flag: "--lm-top-k", label: "LM top-k", kind: .integer),
@@ -406,9 +406,11 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--model-path", label: "Model path", kind: .directory),
-            .init(flag: "--variant", label: "Variant", kind: .choice, choices: ["small", "medium", "large"]),
+            .init(flag: "--variant", label: "Variant", kind: .choice, choices: ["small", "medium", "large"],
+                  group: Group.run, tier: .essential),
             .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--format", label: "Format", kind: .choice, choices: ["midi", "json", "jsonl"]),
+            .init(flag: "--format", label: "Format", kind: .choice, choices: ["midi", "json", "jsonl"],
+                  group: Group.output, tier: .essential),
             .init(flag: "--instruments", label: "Instruments", kind: .string),
             .init(flag: "--list-instruments", label: "List instruments", kind: .boolean),
             .init(flag: "--sampling", label: "Sampling", kind: .boolean),
@@ -434,17 +436,22 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--model-path", label: "Model path", kind: .directory),
-            .init(flag: "--output-dir", label: "Output directory", kind: .directory),
-            .init(flag: "--overlap", label: "Overlap", kind: .integer),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model-path", label: "Model path", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--output-dir", label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(
+                flag: "--overlap", label: "Chunk overlap", kind: .integer,
+                tier: .standard, range: .init(min: 1, max: 64, step: 1)
+            ),
             .init(
                 flag: "--dtype",
-                label: "Compute type",
+                label: "Compute",
                 kind: .choice,
-                choices: ["float16", "float32"]
+                choices: ["float16", "float32"],
+                defaultValue: "float16",
+                tier: .essential
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .directory, flag: "--output-dir")
     )

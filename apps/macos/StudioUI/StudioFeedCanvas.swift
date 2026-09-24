@@ -32,7 +32,8 @@ struct StudioFeedActions {
 /// the chip's menu rather than a second one; the shell owns getting a model (with the terms
 /// sheet when the publisher asks for one), opening Models, and checking again.
 struct StudioReadinessActions {
-    let mode: StudioMode
+    /// Which models the picker offers and what "Auto" means: the mode's, or a task template's.
+    let scope: StudioModelScope
     let model: Binding<String>
     let modelInventory: [StudioModelInventoryRow]
     let pullModel: () -> Void
@@ -44,7 +45,10 @@ struct StudioReadinessActions {
 /// composer, each run its own card with its own progress, Cancel, or Remove. The readiness
 /// state is a card at the bottom rather than an overlay, so it never hides earlier work.
 struct StudioFeedCanvas: View {
-    let mode: StudioMode
+    /// The task's glyph and empty-state words: the mode's, or a shared-workspace task's own.
+    let presentation: StudioTaskPresentation
+    /// The composer's slots, so a card knows whether "Use as input" can take its output.
+    let slots: [StudioAttachmentSlot]
     let cards: [StudioFeedCard]
     let readiness: ModelReadinessState
     /// The `model pull` the readiness card reports, while one runs for this mode's model.
@@ -77,7 +81,7 @@ struct StudioFeedCanvas: View {
     var body: some View {
         Group {
             if cards.isEmpty && !showsReadinessCard {
-                StudioEmptyState(mode: mode, onUseExample: actions.useExample, onAttach: actions.attach)
+                StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, onAttach: actions.attach)
                     .padding(MereRunTheme.Spacing.xxxl)
             } else {
                 feed
@@ -107,7 +111,7 @@ struct StudioFeedCanvas: View {
                 ScrollView {
                     LazyVStack(spacing: Metrics.cardSpacing) {
                         if cards.isEmpty {
-                            StudioEmptyState(mode: mode, onUseExample: actions.useExample, onAttach: actions.attach)
+                            StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, onAttach: actions.attach)
                                 .padding(.vertical, MereRunTheme.Spacing.xl)
                         }
                         ForEach(cards) { card in
@@ -174,7 +178,7 @@ struct StudioFeedCanvas: View {
         switch card.kind {
         case .generation:
             StudioGenerationCard(
-                mode: mode,
+                slots: slots,
                 item: card.item,
                 isHighlighted: highlighted,
                 actions: actions
@@ -253,7 +257,10 @@ private struct StudioCardHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                Text(item.displayTitle)
+                // A task run without a prompt is headed by its command ("TripoSR 3D"), not the
+                // mode that files it; a title the user gave it wins either way.
+                Text(item.customTitle.flatMap { $0.isBlank ? nil : $0 }
+                    ?? (item.prompt.isBlank && item.templateID?.studioTask.usesTaskDraft == true ? item.displayKindTitle : item.displayTitle))
                     .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(3)
@@ -315,6 +322,11 @@ enum StudioFeedChips {
     static func chips(for item: StudioLibraryItem, titles: StudioModelTitles) -> [String] {
         guard let draft = item.commandDraft else { return [] }
         var chips: [String] = []
+        // A task on the shared workspace records its exact argv; its chips are the composer's
+        // (the template's essentials) valued from that, not the fields of the mode that files it.
+        if item.templateID?.studioTask.usesTaskDraft == true {
+            return StudioTaskChips.chips(for: item, titles: titles)
+        }
         switch item.mode {
         case .createImage, .video:
             chips.append("\(draft.width)×\(draft.height)")
@@ -367,7 +379,8 @@ enum StudioFeedChips {
 struct StudioGenerationCard: View {
     @Environment(\.studioReferenceDate) private var referenceDate
 
-    let mode: StudioMode
+    /// The composer's slots: "Use as input" is offered when one of them takes the output.
+    let slots: [StudioAttachmentSlot]
     let item: StudioLibraryItem
     let isHighlighted: Bool
     let actions: StudioFeedActions
@@ -398,11 +411,13 @@ struct StudioGenerationCard: View {
     }
 
     /// The run's non-media companions: everything the CLI's receipt named with a role, plus
-    /// whatever the extension leaves unclassified for a run that reported none.
-    private var sidecars: [URL] {
-        files.filter { url in
+    /// whatever the extension leaves unclassified for a run that reported none, minus what a
+    /// card rendering already shows.
+    private func sidecars(besides rendering: StudioResultRendering?) -> [URL] {
+        let rendered = rendering.map { StudioResultRenderers.renderedFiles(of: $0, item: item) } ?? []
+        return files.filter { url in
             let kind = StudioOutputFileKind.classify(url)
-            guard ![.image, .video, .audio, .model3D].contains(kind) else { return false }
+            guard ![.image, .video, .audio, .model3D].contains(kind), !rendered.contains(url) else { return false }
             return item.artifactRole(for: url) != nil || kind == .other
         }
     }
@@ -421,13 +436,17 @@ struct StudioGenerationCard: View {
 
     private var canUseAsInput: Bool {
         guard let primaryURL else { return false }
-        return mode.attachmentSlots.contains { $0.accepts(primaryURL) }
+        return slots.contains { $0.accepts(primaryURL) }
     }
 
     var body: some View {
+        // What the card draws for the run's outputs when they have a bespoke rendering (Video
+        // Foley's sync review or a tensor's header in place of the grid, a mesh's counts under
+        // it): found once per body, since finding it stats the artifacts and reads a file's front.
+        let card = StudioResultRenderers.cardRendering(for: item, files: files)
         VStack(alignment: .leading, spacing: 12) {
             StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date()))
-            outputs
+            outputs(card: card)
             actionRow
         }
         .padding(.vertical, 14)
@@ -438,9 +457,16 @@ struct StudioGenerationCard: View {
     }
 
     @ViewBuilder
-    private var outputs: some View {
-        if !mediaFiles.isEmpty {
+    private func outputs(card: StudioCardRendering?) -> some View {
+        let rendering = card?.rendering
+        let sidecars = sidecars(besides: rendering)
+        if let card, card.placement == .replacesOutputs {
+            StudioCardRenderingView(rendering: card.rendering, item: item)
+        } else if !mediaFiles.isEmpty {
             StudioOutputGrid(urls: mediaFiles, tileSide: Self.tileSide, onOpen: { actions.focus(item, $0) })
+        }
+        if let card, card.placement == .belowOutputs {
+            StudioResultRendererView(rendering: card.rendering, item: item)
         }
         ForEach(textFiles, id: \.self) { url in
             StudioTextFilePreview(url: url)
@@ -448,7 +474,7 @@ struct StudioGenerationCard: View {
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         }
-        if mediaFiles.isEmpty, textFiles.isEmpty, let outputText {
+        if rendering == nil, mediaFiles.isEmpty, textFiles.isEmpty, let outputText {
             StudioMarkdownText(content: outputText, bodyFont: .callout)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1053,7 +1079,7 @@ struct StudioReadinessCard: View {
     /// the model chip and readiness re-checks the new choice.
     private var chooseModelMenu: some View {
         StudioModelPicker(
-            mode: actions.mode,
+            scope: actions.scope,
             model: actions.model,
             modelInventory: actions.modelInventory,
             onShowModels: actions.openModels

@@ -41,7 +41,7 @@ package struct StudioConsoleDraft: Codable, Equatable, Sendable {
         switch self[flag] {
         case .text(let text): return text
         case .integer(let value): return String(value)
-        case .number(let value): return StudioComposerPresets.decimalText(value)
+        case .number(let value): return StudioComposerPresets.argumentText(value)
         case .flag(let on): return on ? "true" : ""
         case .unset: return ""
         }
@@ -151,8 +151,11 @@ package enum StudioConsoleCommand {
         secretFlags: Set<String> = []
     ) -> [String] {
         var argv = capability.command
-        for (index, _) in capability.arguments.enumerated() {
-            guard index < draft.arguments.count else { break }
+        // A repeatable last positional (`vision face batch a b c`) takes every value after it.
+        let positionals = capability.arguments.last?.repeatable == true
+            ? draft.arguments.count
+            : min(capability.arguments.count, draft.arguments.count)
+        for index in 0..<positionals {
             let value = draft.arguments[index].trimmingCharacters(in: .whitespacesAndNewlines)
             guard !value.isEmpty else { continue }
             argv.append(value)
@@ -213,7 +216,7 @@ package enum StudioConsoleCommand {
                 return "\(label) \(issue.message)."
             }
         }
-        return nil
+        return StudioCommandChecks.message(for: capability, draft: draft)
     }
 
     /// Where the run will write, when the contract names the option that says so. `JobStore`
@@ -261,7 +264,9 @@ package enum StudioConsoleCommand {
                     let previous = console.text(flag)
                     console[flag] = .text(option.repeatable && !previous.isEmpty ? previous + "\n" + value : value)
                 }
-            } else if !token.hasPrefix("-"), console.arguments.count < capability.arguments.count {
+            } else if !token.hasPrefix("-"),
+                      console.arguments.count < capability.arguments.count || capability.arguments.last?.repeatable == true {
+                // A repeatable last positional (`vision face batch a b c`) keeps taking bare tokens.
                 console.arguments.append(token)
             } else {
                 extras.append(token)
@@ -288,8 +293,15 @@ package enum StudioConsoleCommand {
         var command = seed
         let defaults = Dictionary(capability.options.map { ($0.flag, $0.defaultValue ?? "") }, uniquingKeysWith: { first, _ in first })
         func value(_ flag: String) -> String { draft.values[flag] == nil ? (defaults[flag] ?? "") : draft.text(flag) }
+        func argument(ofKind kinds: [MereRunCapabilityValueKind]) -> String? {
+            guard let index = capability.arguments.firstIndex(where: { kinds.contains($0.kind) }),
+                  index < draft.arguments.count else { return nil }
+            return draft.arguments[index]
+        }
+        // A positional is the prompt only when the contract says it is text; a file positional
+        // (`audio enhance <audio>`) is the run's input, so the Library row knows what it read.
         command.prompt = ["--prompt", "--text", "--query"].first(where: { defaults[$0] != nil }).map(value)
-            ?? draft.arguments.first ?? ""
+            ?? argument(ofKind: [.string, .choice]) ?? ""
         command.secondaryText = ["--negative-prompt", "--system", "--system-prompt", "--lyrics"]
             .first(where: { defaults[$0] != nil }).map(value) ?? ""
         command.model = value("--model")
@@ -300,8 +312,9 @@ package enum StudioConsoleCommand {
         if [.modelPull, .modelInfo, .modelRemove, .modelRuntimeGet, .modelRuntimeSet].contains(template.id) {
             command.model = draft.arguments.first ?? ""
         }
-        command.inputPath = ["--input", "--image", "--audio", "--video", "--data"]
-            .first(where: { defaults[$0] != nil }).map(value) ?? ""
+        command.inputPath = ["--input", "--image", "--audio", "--video", "--data", "--dataset"]
+            .first(where: { defaults[$0] != nil }).map(value)
+            ?? argument(ofKind: [.file, .directory]) ?? ""
         command.outputPath = outputPath(for: capability, draft: draft)
         command.width = Int(value("--width")) ?? 0
         command.height = Int(value("--height")) ?? 0

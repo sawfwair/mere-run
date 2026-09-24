@@ -40,6 +40,36 @@ final class StudioResultWorkflowTests: XCTestCase {
         XCTAssertEqual(URL(fileURLWithPath: first).pathExtension, "lrc")
     }
 
+    /// Run again on a transcribe row renames the MIDI and the context document it named beside
+    /// it, so the replay never writes over the original's files; the input and options stay.
+    func testReplayRenamesEveryDerivedSidecarOfATranscribeRow() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicTranscribe))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/harbor-lights.wav"
+        draft.outputPath = "/tmp/out/harbor-lights-a1b2c3.mid"
+        draft.musicContextOutput = "/tmp/out/harbor-lights-a1b2c3-context.json"
+        draft.musicInstruments = "piano"
+        let row = library().start(request: StudioRunRequest(mode: .music, templateID: .musicTranscribe,
+            template: template, draft: draft), commandPreview: "fixture")
+
+        let replay = try XCTUnwrap(StudioLibraryReplay.request(for: row))
+        let form = try XCTUnwrap(replay.execution?.form)
+
+        XCTAssertNotEqual(replay.draft.outputPath, draft.outputPath)
+        XCTAssertEqual(URL(fileURLWithPath: replay.draft.outputPath).pathExtension, "mid")
+        let context = form.text("--context-output")
+        XCTAssertNotEqual(context, draft.musicContextOutput, "the sidecar is renamed too")
+        XCTAssertTrue(context.hasSuffix("-context.json"), context)
+        XCTAssertEqual(URL(fileURLWithPath: context).deletingLastPathComponent().path, "/tmp/out")
+        XCTAssertEqual(form.arguments.first, "/tmp/harbor-lights.wav")
+        XCTAssertEqual(form.text("--instruments"), "piano")
+
+        let batchTemplate = try XCTUnwrap(CommandCatalog.template(id: .visionFaceBatch))
+        let batch = StudioExecution(templateID: .visionFaceBatch, arguments: batchTemplate.arguments(from: batchTemplate.defaultDraft())
+            + ["/tmp/1.png", "--jsonl-output", "/tmp/out/faces.jsonl"])
+        XCTAssertNotEqual(try XCTUnwrap(batch.replay(outputPath: "/tmp/out/faces-2.jsonl").form).text("--jsonl-output"), "/tmp/out/faces.jsonl")
+    }
+
     func testComparisonShowsSeedChangesAndOmitsDestinationNoise() throws {
         let store = library()
         let first = try image(store)

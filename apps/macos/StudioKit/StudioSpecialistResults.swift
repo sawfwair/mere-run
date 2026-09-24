@@ -86,6 +86,8 @@ package struct StudioFaceOverlayResult: Decodable, Equatable {
 
         package let index: Int
         package let detection: Detection
+        /// The normalized ArcFace vector, when the run asked for embeddings.
+        package let embedding: [Float]?
     }
 
     package let width: Int
@@ -158,6 +160,214 @@ package struct StudioMusicAnalysisDocument: Decodable, Equatable {
             return nil
         }
         return trimmed
+    }
+}
+
+// MARK: - sfx clap score
+
+/// `mere.run sfx clap score` prints one JSON object (`score`, `prompt`, `audio`, `model`); the
+/// score is read from it by name, from the last line that decodes, rather than guessed from the
+/// text around it.
+package enum StudioCLAPScore {
+    package struct Output: Decodable, Equatable {
+        package let score: Double
+        package let prompt: String?
+        package let audio: String?
+        package let model: String?
+    }
+
+    package static func parse(_ text: String) -> Double? {
+        decode(text)?.score
+    }
+
+    package static func decode(_ text: String) -> Output? {
+        text.components(separatedBy: .newlines).reversed().lazy.compactMap { line in
+            try? JSONDecoder().decode(Output.self, from: Data(line.utf8))
+        }.first
+    }
+}
+
+// MARK: - music transcribe
+
+package struct StudioMIDINote: Identifiable, Equatable {
+    package let id: Int
+    package let startTick: Int
+    package let durationTicks: Int
+    package let pitch: Int
+    package let velocity: Int
+    package let channel: Int
+
+    package init(id: Int, startTick: Int, durationTicks: Int, pitch: Int, velocity: Int, channel: Int) {
+        self.id = id
+        self.startTick = startTick
+        self.durationTicks = durationTicks
+        self.pitch = pitch
+        self.velocity = velocity
+        self.channel = channel
+    }
+}
+
+/// What `mere.run music transcribe --format midi` writes, read far enough for a piano roll: the
+/// header's format, track count, and ticks per quarter, every note-on/off pair as a note, and
+/// the first tempo event.
+package struct StudioMIDISummary: Equatable {
+    package let format: Int
+    package let trackCount: Int
+    package let ticksPerQuarter: Int
+    package let notes: [StudioMIDINote]
+    package let tempoMicrosecondsPerQuarter: Int?
+
+    package var pitchRange: ClosedRange<Int>? {
+        guard let minimum = notes.map(\.pitch).min(),
+              let maximum = notes.map(\.pitch).max() else { return nil }
+        return minimum...maximum
+    }
+
+    package var totalTicks: Int {
+        notes.map { $0.startTick + $0.durationTicks }.max() ?? 0
+    }
+
+    /// "128 notes · 4 tracks"
+    package var summary: String {
+        let noteCount = notes.count == 1 ? "1 note" : "\(notes.count) notes"
+        let tracks = trackCount == 1 ? "1 track" : "\(trackCount) tracks"
+        return "\(noteCount) · \(tracks)"
+    }
+
+    package static func load(from url: URL) -> StudioMIDISummary? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return decode(data)
+    }
+
+    // swiftlint:disable:next function_body_length
+    package static func decode(_ data: Data) -> StudioMIDISummary? {
+        guard data.count >= 14, String(data: data.prefix(4), encoding: .ascii) == "MThd" else {
+            return nil
+        }
+        let headerLength = readUInt32(data, at: 4)
+        guard headerLength >= 6, data.count >= 8 + Int(headerLength) else { return nil }
+        let format = Int(readUInt16(data, at: 8))
+        let trackCount = Int(readUInt16(data, at: 10))
+        let division = Int(readUInt16(data, at: 12))
+        let ticksPerQuarter = division & 0x8000 == 0 ? division : 480
+        var offset = 8 + Int(headerLength)
+        var notes: [StudioMIDINote] = []
+        var tempo: Int?
+        var nextID = 0
+
+        for _ in 0..<trackCount {
+            guard offset + 8 <= data.count,
+                  String(data: data[offset..<(offset + 4)], encoding: .ascii) == "MTrk" else {
+                break
+            }
+            let length = Int(readUInt32(data, at: offset + 4))
+            let end = min(data.count, offset + 8 + length)
+            var cursor = offset + 8
+            var tick = 0
+            var runningStatus: UInt8?
+            var openNotes: [Int: (tick: Int, velocity: Int)] = [:]
+
+            while cursor < end {
+                guard let delta = readVariableLength(data, cursor: &cursor, end: end) else { break }
+                tick += delta
+                guard cursor < end else { break }
+                var status = data[cursor]
+                if status & 0x80 != 0 {
+                    cursor += 1
+                    if status < 0xF0 { runningStatus = status }
+                } else if let runningStatus {
+                    status = runningStatus
+                } else {
+                    break
+                }
+
+                if status == 0xFF {
+                    guard cursor < end else { break }
+                    let type = data[cursor]
+                    cursor += 1
+                    guard let metaLength = readVariableLength(data, cursor: &cursor, end: end),
+                          cursor + metaLength <= end else { break }
+                    if type == 0x51, metaLength == 3 {
+                        tempo = Int(data[cursor]) << 16
+                            | Int(data[cursor + 1]) << 8
+                            | Int(data[cursor + 2])
+                    }
+                    cursor += metaLength
+                    continue
+                }
+                if status == 0xF0 || status == 0xF7 {
+                    guard let systemLength = readVariableLength(data, cursor: &cursor, end: end),
+                          cursor + systemLength <= end else { break }
+                    cursor += systemLength
+                    continue
+                }
+
+                let command = status & 0xF0
+                let channel = Int(status & 0x0F)
+                let dataLength = command == 0xC0 || command == 0xD0 ? 1 : 2
+                guard cursor + dataLength <= end else { break }
+                let first = Int(data[cursor])
+                let second = dataLength == 2 ? Int(data[cursor + 1]) : 0
+                cursor += dataLength
+
+                let key = channel * 128 + first
+                if command == 0x90, second > 0 {
+                    openNotes[key] = (tick, second)
+                } else if command == 0x80 || (command == 0x90 && second == 0),
+                          let opened = openNotes.removeValue(forKey: key) {
+                    notes.append(
+                        StudioMIDINote(
+                            id: nextID,
+                            startTick: opened.tick,
+                            durationTicks: max(1, tick - opened.tick),
+                            pitch: first,
+                            velocity: opened.velocity,
+                            channel: channel
+                        )
+                    )
+                    nextID += 1
+                }
+            }
+            offset = end
+        }
+        return StudioMIDISummary(
+            format: format,
+            trackCount: trackCount,
+            ticksPerQuarter: ticksPerQuarter,
+            notes: notes.sorted {
+                $0.startTick == $1.startTick ? $0.pitch < $1.pitch : $0.startTick < $1.startTick
+            },
+            tempoMicrosecondsPerQuarter: tempo
+        )
+    }
+
+    private static func readUInt16(_ data: Data, at offset: Int) -> UInt16 {
+        guard offset + 1 < data.count else { return 0 }
+        return UInt16(data[offset]) << 8 | UInt16(data[offset + 1])
+    }
+
+    private static func readUInt32(_ data: Data, at offset: Int) -> UInt32 {
+        guard offset + 3 < data.count else { return 0 }
+        return UInt32(data[offset]) << 24
+            | UInt32(data[offset + 1]) << 16
+            | UInt32(data[offset + 2]) << 8
+            | UInt32(data[offset + 3])
+    }
+
+    private static func readVariableLength(
+        _ data: Data,
+        cursor: inout Int,
+        end: Int
+    ) -> Int? {
+        var value = 0
+        for _ in 0..<4 {
+            guard cursor < end else { return nil }
+            let byte = data[cursor]
+            cursor += 1
+            value = (value << 7) | Int(byte & 0x7F)
+            if byte & 0x80 == 0 { return value }
+        }
+        return value
     }
 }
 

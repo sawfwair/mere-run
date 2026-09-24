@@ -387,13 +387,36 @@ jobs:
           brew install xcodegen
       - name: Generate iOS project
         run: xcodegen generate --spec apps/ios/project.yml --project apps/ios
+      - name: Select iOS simulator
+        run: |
+          set -euo pipefail
+
+          runtime_id='com.apple.CoreSimulator.SimRuntime.iOS-26-4'
+          if ! xcrun simctl list runtimes -j | jq -e --arg id "$runtime_id" \
+              '.runtimes[] | select(.identifier == $id and .isAvailable)' >/dev/null; then
+            xcodebuild -downloadPlatform iOS -buildVersion 26.4
+          fi
+          xcrun simctl list runtimes -j | jq -e --arg id "$runtime_id" \
+            '.runtimes[] | select(.identifier == $id and .isAvailable)' >/dev/null
+
+          device_id="$(xcrun simctl list devices available -j | jq -r --arg runtime "$runtime_id" \
+            '[.devices[$runtime][]? | select(.name == "iPhone 17 Pro") | .udid][0] // empty')"
+          if [[ -z "$device_id" ]]; then
+            device_type="$(xcrun simctl list devicetypes -j | jq -r \
+              '[.devicetypes[] | select(.name == "iPhone 17 Pro") | .identifier][0] // empty')"
+            test -n "$device_type"
+            device_id="$(xcrun simctl create 'mere.run CI iPhone 17 Pro' "$device_type" "$runtime_id")"
+          fi
+
+          echo "IOS_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
+          xcrun simctl list devices available
       - name: Build iOS app and tests for release
         run: |
           xcodebuild build-for-testing \
             -project apps/ios/MereRunStudio.xcodeproj \
             -scheme MereRunStudio \
             -configuration Release \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -destination "platform=iOS Simulator,id=${IOS_SIMULATOR_ID}" \
             -derivedDataPath .build/ios-derived \
             -clonedSourcePackagesDirPath .build/ios-source-packages \
             ONLY_ACTIVE_ARCH=YES \
@@ -404,7 +427,7 @@ jobs:
             -project apps/ios/MereRunStudio.xcodeproj \
             -scheme MereRunStudio \
             -configuration Release \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -destination "platform=iOS Simulator,id=${IOS_SIMULATOR_ID}" \
             -derivedDataPath .build/ios-derived \
             -clonedSourcePackagesDirPath .build/ios-source-packages \
             -only-testing:MereRunStudioTests \

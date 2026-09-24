@@ -318,16 +318,68 @@ package enum StudioCameraDocuments {
         try StudioDraftFiles.store(content, in: draftFolder(page: page, fileManager: fileManager), prefix: "cameras-", fileExtension: "json", fileManager: fileManager)
     }
 
+    /// The draft folder an editor keeps its camera file in while a template's draft is edited:
+    /// the page's name, so files the pages wrote keep working. Nil for a template without
+    /// cameras.
+    package static func draftPage(for templateID: CommandTemplateID) -> String? {
+        switch templateID {
+        case .visionGeometryMultiview: return "Vision Geometry"
+        case .imageReconstruct3DMultiview: return "3D Creation"
+        default: return nil
+        }
+    }
+
+    /// The camera file a run keeps. A draft this app wrote for `page` is copied beside the run's
+    /// output directory, as `<folder>.cameras.json`, and `--cameras` is pointed there, so the
+    /// output is self-contained and pruning the draft folder can never take a finished run's
+    /// file. A file the user picked, or a draft that is not ours, stays where it is.
+    package static func placingDraft(of draft: StudioTaskDraft, page: String, fileManager: FileManager = .default) throws -> StudioTaskDraft {
+        let flag = "--cameras"
+        let current = draft.text(flag)
+        guard !current.isEmpty, isDraft(current, page: page, fileManager: fileManager),
+              let outputFlag = draft.capability?.output.flag else { return draft }
+        let output = draft.text(outputFlag)
+        guard !output.isEmpty else { return draft }
+        let source = URL(fileURLWithPath: NSString(string: current).expandingTildeInPath)
+        let destination = url(besideOutputDirectory: output, fileManager: fileManager)
+        try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.copyItem(at: source, to: destination)
+        var placed = draft
+        placed.form[flag] = .text(destination.path)
+        return placed
+    }
+
+    /// The camera files an argv names (the value after each `--cameras`), which a prune must keep.
+    package static func referencedPaths(in arguments: [String]) -> [String] {
+        arguments.indices.compactMap { index in
+            arguments[index] == "--cameras" && index + 1 < arguments.count ? arguments[index + 1] : nil
+        }
+    }
+
+    /// Whether `path` is a camera draft this app wrote for `page`, as opposed to a file the user
+    /// picked; an editor only forgets its own files.
+    package static func isDraft(_ path: String, page: String, fileManager: FileManager = .default) -> Bool {
+        let folder = draftFolder(page: page, fileManager: fileManager).standardizedFileURL.path
+        let candidate = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL
+        return candidate.deletingLastPathComponent().path == folder && candidate.lastPathComponent.hasPrefix("cameras-")
+    }
+
     /// Removes old camera drafts for `page`, keeping `current` and every path in `referenced` (the
     /// camera files the Library's rows still name).
     package static func pruneDrafts(page: String, current: URL, referenced: Set<String>, keeping: Int = 8, fileManager: FileManager = .default) {
         StudioDraftFiles.prune(in: draftFolder(page: page, fileManager: fileManager), prefix: "cameras-", current: current, referenced: referenced, keeping: keeping, fileManager: fileManager)
     }
 
+    /// The defaults key a test registers (in the suite `StudioOutputLocation.defaults` names, never
+    /// persisted) to keep an editor's draft files in its own folder rather than the user's.
+    package static let draftRootDefaultsKey = "mererun.app.cameraDraftRoot"
+
+    /// Where the pages' draft files live: `~/Library/Application Support/MereRun`, beside App
+    /// Outputs, unless the defaults redirect it.
     private static func draftFolder(page: String, fileManager: FileManager) -> URL {
-        StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
-            .deletingLastPathComponent()
-            .appendingPathComponent(page, isDirectory: true)
+        let root = StudioOutputLocation.defaults.string(forKey: draftRootDefaultsKey).map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? StudioOutputLocation.appOutputsRoot(fileManager: fileManager).deletingLastPathComponent()
+        return root.appendingPathComponent(page, isDirectory: true)
     }
 }
 

@@ -9,13 +9,34 @@ import UniformTypeIdentifiers
 
 // MARK: - Attachment slots
 
-/// One slot in the composer's attachment well, bound to a draft field.
+/// A draft an attachment well can write into: the prompt tasks' `StudioDraft` (a typed field per
+/// slot) and the specialist tasks' `StudioTaskDraft` (a contract flag or positional per slot).
+/// The well, the canvas drop target, and the paste handler are written once over this.
+package protocol StudioAttachmentDraft {
+    /// What the slot's storage holds: one path, or newline-separated paths for a list slot.
+    func attachmentText(for storage: StudioAttachmentSlot.Storage) -> String
+    mutating func setAttachmentText(_ text: String, for storage: StudioAttachmentSlot.Storage)
+    /// Settings that follow an attachment so the slot is never silently ignored (a cloned voice
+    /// needs clone mode). Most drafts have none.
+    mutating func didAttach(to slot: StudioAttachmentSlot)
+}
+
+/// One slot in the composer's attachment well, bound to a draft field, a contract flag, or a
+/// positional argument.
 package struct StudioAttachmentSlot: Identifiable, Equatable {
     package enum Storage: Equatable {
         /// One path in one draft field; attaching replaces it.
         case path(WritableKeyPath<StudioDraft, String>)
         /// Newline-separated paths in one draft field; attaching appends, the slot previews the first.
         case pathList(WritableKeyPath<StudioDraft, String>)
+        /// One path in a contract option of a `StudioTaskDraft` (`--cameras`, `--second`).
+        case flag(String)
+        /// A repeatable file option, one path per line (`--view`).
+        case flagList(String)
+        /// One positional argument, by the index the contract declares it at.
+        case argument(Int)
+        /// A repeatable positional: every argument from `index` on, in order (`images`).
+        case argumentList(Int)
     }
 
     package let id: String
@@ -29,65 +50,80 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
     /// something is attached, so an empty slot never sits above every message.
     package var isTransient = false
 
-    package var allowsMultiple: Bool {
-        if case .pathList = storage { return true }
-        return false
+    package init(
+        id: String,
+        label: String,
+        acceptedTypes: [UTType],
+        storage: Storage,
+        isRequired: Bool = false,
+        isTransient: Bool = false
+    ) {
+        self.id = id
+        self.label = label
+        self.acceptedTypes = acceptedTypes
+        self.storage = storage
+        self.isRequired = isRequired
+        self.isTransient = isTransient
     }
 
-    /// The paths this slot currently holds, in order.
-    package func paths(in draft: StudioDraft) -> [String] {
+    package var allowsMultiple: Bool {
         switch storage {
-        case .path(let keyPath):
-            let value = draft[keyPath: keyPath].trimmingCharacters(in: .whitespacesAndNewlines)
-            return value.isEmpty ? [] : [value]
-        case .pathList(let keyPath):
-            return Self.separatedPaths(draft[keyPath: keyPath])
+        case .pathList, .flagList, .argumentList: return true
+        case .path, .flag, .argument: return false
         }
     }
 
-    package func isFilled(in draft: StudioDraft) -> Bool {
+    /// The paths this slot currently holds, in order.
+    package func paths<Draft: StudioAttachmentDraft>(in draft: Draft) -> [String] {
+        let text = draft.attachmentText(for: storage)
+        guard allowsMultiple else {
+            let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? [] : [value]
+        }
+        return Self.separatedPaths(text)
+    }
+
+    package func isFilled<Draft: StudioAttachmentDraft>(in draft: Draft) -> Bool {
         !paths(in: draft).isEmpty
     }
 
     /// The caption shown beside the slot: the file name when filled, the slot label otherwise.
-    package func caption(in draft: StudioDraft) -> String {
+    package func caption<Draft: StudioAttachmentDraft>(in draft: Draft) -> String {
         let paths = paths(in: draft)
         guard let first = paths.first else { return label }
         let name = URL(fileURLWithPath: first).lastPathComponent
         return paths.count > 1 ? "\(name) +\(paths.count - 1)" : name
     }
 
-    /// Whether a dropped or pasted file belongs in this slot.
+    /// Whether a dropped or pasted file belongs in this slot. A folder slot takes any directory;
+    /// a file slot with no declared types takes any file.
     package func accepts(_ url: URL) -> Bool {
         guard url.isFileURL else { return false }
+        if acceptedTypes.contains(.folder) {
+            return (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+        }
         guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
         return acceptedTypes.contains { type.conforms(to: $0) }
     }
 
     /// Stores `urls` in the slot: a single-path slot keeps the first, a list slot appends them all.
-    package func attach(_ urls: [URL], to draft: inout StudioDraft) {
+    package func attach<Draft: StudioAttachmentDraft>(_ urls: [URL], to draft: inout Draft) {
         let incoming = urls.filter(accepts).map(\.path)
         guard !incoming.isEmpty else { return }
-        switch storage {
-        case .path(let keyPath) where keyPath == \StudioDraft.inputPath:
-            draft.replaceInput(incoming[0])
-        case .path(let keyPath):
-            draft[keyPath: keyPath] = incoming[0]
-        case .pathList(let keyPath):
-            let existing = Self.separatedPaths(draft[keyPath: keyPath])
-            draft[keyPath: keyPath] = (existing + incoming.filter { !existing.contains($0) })
-                .joined(separator: "\n")
+        if allowsMultiple {
+            let existing = Self.separatedPaths(draft.attachmentText(for: storage))
+            draft.setAttachmentText(
+                (existing + incoming.filter { !existing.contains($0) }).joined(separator: "\n"),
+                for: storage
+            )
+        } else {
+            draft.setAttachmentText(incoming[0], for: storage)
         }
         draft.didAttach(to: self)
     }
 
-    package func clear(in draft: inout StudioDraft) {
-        switch storage {
-        case .path(let keyPath) where keyPath == \StudioDraft.inputPath:
-            draft.replaceInput("")
-        case .path(let keyPath), .pathList(let keyPath):
-            draft[keyPath: keyPath] = ""
-        }
+    package func clear<Draft: StudioAttachmentDraft>(in draft: inout Draft) {
+        draft.setAttachmentText("", for: storage)
     }
 
     package static func separatedPaths(_ raw: String) -> [String] {
@@ -95,6 +131,59 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
             .flatMap { $0.split(separator: ",", omittingEmptySubsequences: true) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+}
+
+extension Array where Element == StudioAttachmentSlot {
+    /// The slot a file dropped on the canvas or pasted with ⌘V lands in: the first empty slot
+    /// that accepts it, else the first slot that accepts it.
+    package func slot<Draft: StudioAttachmentDraft>(for url: URL, in draft: Draft) -> StudioAttachmentSlot? {
+        let accepting = filter { $0.accepts(url) }
+        return accepting.first { !$0.isFilled(in: draft) } ?? accepting.first
+    }
+
+    /// The slot a pasted bitmap (no file on the pasteboard) lands in.
+    package func pastedImageSlot<Draft: StudioAttachmentDraft>(in draft: Draft) -> StudioAttachmentSlot? {
+        let accepting = filter { slot in slot.acceptedTypes.contains { UTType.image.conforms(to: $0) } }
+        return accepting.first { !$0.isFilled(in: draft) } ?? accepting.first
+    }
+}
+
+extension StudioAttachmentDraft {
+    /// Routes each dropped file to the slot it belongs in. Returns whether anything was attached.
+    @discardableResult
+    package mutating func attach(dropped urls: [URL], slots: [StudioAttachmentSlot]) -> Bool {
+        var attached = false
+        for url in urls {
+            guard let slot = slots.slot(for: url, in: self) else { continue }
+            slot.attach([url], to: &self)
+            attached = true
+        }
+        return attached
+    }
+}
+
+extension StudioDraft: StudioAttachmentDraft {
+    package func attachmentText(for storage: StudioAttachmentSlot.Storage) -> String {
+        switch storage {
+        case .path(let keyPath), .pathList(let keyPath):
+            return self[keyPath: keyPath]
+        case .flag, .flagList, .argument, .argumentList:
+            // The prompt tasks bind typed fields, never contract flags.
+            return ""
+        }
+    }
+
+    package mutating func setAttachmentText(_ text: String, for storage: StudioAttachmentSlot.Storage) {
+        switch storage {
+        case .path(let keyPath) where keyPath == \StudioDraft.inputPath:
+            // The input change clears the prompts drawn on the previous picture.
+            replaceInput(text)
+        case .path(let keyPath), .pathList(let keyPath):
+            self[keyPath: keyPath] = text
+        case .flag, .flagList, .argument, .argumentList:
+            break
+        }
     }
 }
 
@@ -163,14 +252,12 @@ extension StudioMode {
     /// The slot a file dropped on the canvas or pasted with ⌘V lands in: the first empty slot
     /// that accepts it, else the first slot that accepts it.
     package func attachmentSlot(for url: URL, in draft: StudioDraft) -> StudioAttachmentSlot? {
-        let accepting = attachmentSlots.filter { $0.accepts(url) }
-        return accepting.first { !$0.isFilled(in: draft) } ?? accepting.first
+        attachmentSlots.slot(for: url, in: draft)
     }
 
     /// The slot a pasted bitmap (no file on the pasteboard) lands in.
     package func pastedImageSlot(in draft: StudioDraft) -> StudioAttachmentSlot? {
-        let accepting = attachmentSlots.filter { slot in slot.acceptedTypes.contains { UTType.image.conforms(to: $0) } }
-        return accepting.first { !$0.isFilled(in: draft) } ?? accepting.first
+        attachmentSlots.pastedImageSlot(in: draft)
     }
 }
 
@@ -178,18 +265,12 @@ extension StudioDraft {
     /// Routes each dropped file to the slot it belongs in. Returns whether anything was attached.
     @discardableResult
     package mutating func attach(dropped urls: [URL], for mode: StudioMode) -> Bool {
-        var attached = false
-        for url in urls {
-            guard let slot = mode.attachmentSlot(for: url, in: self) else { continue }
-            slot.attach([url], to: &self)
-            attached = true
-        }
-        return attached
+        attach(dropped: urls, slots: mode.attachmentSlots)
     }
 
     /// Settings that follow an attachment so the slot is never silently ignored: LTX audio
     /// needs the audio+video output, and a cloned voice needs clone mode.
-    fileprivate mutating func didAttach(to slot: StudioAttachmentSlot) {
+    package mutating func didAttach(to slot: StudioAttachmentSlot) {
         switch slot.id {
         case "audio" where slot.storage == .path(\.audioPath):
             videoQuality = .final
@@ -280,12 +361,96 @@ extension StudioMode {
 
     /// Inventory rows the model chip lists: this mode's categories, installed first.
     package func modelChoices(from inventory: [StudioModelInventoryRow]) -> [StudioModelInventoryRow] {
+        StudioModelScope(mode: self).choices(from: inventory)
+    }
+}
+
+/// What a model picker needs to know about the surface it picks for: which `model list`
+/// categories to offer, what "Auto" resolves to, and the noun for "No image models listed yet".
+/// A prompt mode and a specialist template each make one, so the composer chip, the inspector
+/// row, and the readiness card share a single picker whichever draft is behind them.
+package struct StudioModelScope: Equatable {
+    package let noun: String
+    package let defaultModelID: String
+    /// Empty means every row: a template whose models the inventory does not categorize.
+    package let categories: Set<String>
+
+    package init(noun: String, defaultModelID: String, categories: Set<String>) {
+        self.noun = noun
+        self.defaultModelID = defaultModelID
+        self.categories = categories
+    }
+
+    package init(mode: StudioMode) {
+        self.init(
+            noun: mode.title.lowercased(),
+            defaultModelID: StudioModelNaming.defaultModelID(for: mode),
+            categories: mode.modelCategories
+        )
+    }
+
+    package init(templateID: CommandTemplateID) {
+        let template = CommandCatalog.template(id: templateID)
+        self.init(
+            noun: template?.title.lowercased() ?? templateID.rawValue,
+            defaultModelID: template?.defaultModel ?? "",
+            categories: Self.categories(for: templateID)
+        )
+    }
+
+    /// Inventory rows the picker lists: the scope's categories, installed first.
+    package func choices(from inventory: [StudioModelInventoryRow]) -> [StudioModelInventoryRow] {
         inventory
-            .filter { modelCategories.contains($0.category) }
+            .filter { categories.isEmpty || categories.contains($0.category) }
             .sorted { lhs, rhs in
                 if lhs.isInstalled != rhs.isInstalled { return lhs.isInstalled }
                 return lhs.id < rhs.id
             }
+    }
+
+    /// The model id a draft actually runs with: its explicit model, else the default.
+    package func resolvedModelID(model: String) -> String {
+        let current = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return current.isEmpty ? defaultModelID : current
+    }
+
+    /// What the picker shows: the resolved model's name, or "Auto" when there is no default.
+    package func displayLabel(model: String, titles: StudioModelTitles) -> String {
+        let resolved = resolvedModelID(model: model)
+        return resolved.isEmpty ? "Auto" : StudioModelNaming.displayName(resolved, titles: titles)
+    }
+
+    /// The `model list` categories a specialist template's model chip offers
+    /// (`ManagedModelCategory` raw values). A template whose models the inventory does not
+    /// categorize on its own offers every row.
+    package static func categories(for templateID: CommandTemplateID) -> Set<String> {
+        switch templateID {
+        case .visionDepth, .visionDepthVideo: return ["vision-depth"]
+        case .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionFaceBatch: return ["vision-face"]
+        case .visionGeometry, .visionGeometryMultiview: return ["vision-geometry"]
+        case .visionTrackLive: return ["vision-segment"]
+        case .speechDiarize, .speechDiarizeLive: return ["speech-diarization"]
+        case .speechListen: return ["speech-asr"]
+        case .audioEnhance, .audioEdit: return ["audio"]
+        case .musicAnalyze, .musicTranscribe, .musicSeparate: return ["music"]
+        case .sfxVideo, .sfxConditionText, .sfxAEEncode, .sfxAEDecode, .sfxClapScore: return ["sfx"]
+        case .textEmbed: return ["text-embed"]
+        case .textAnonymize: return ["text-anonymize"]
+        case .textDecide: return ["text-decide"]
+        case .geoFlood: return ["vision-flood"]
+        case .geoFire: return ["vision-fire"]
+        case .geoTessera, .geoOlmoEarth: return ["vision-embed"]
+        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview: return ["image-3d"]
+        case .speechSynthesize, .speechProfileCreate: return ["speech-tts"]
+        case .imageTrainLoRA: return ["image"]
+        case .textTrainLoRA: return ["text-chat"]
+        case .musicTrainAdapter: return ["music"]
+        default:
+            if let mode = StudioMode.allCases.first(where: { $0.defaultTemplateID == templateID }) {
+                return mode.modelCategories
+            }
+            return []
+        }
     }
 }
 
@@ -423,6 +588,20 @@ package enum StudioComposerPresets {
 
     package static func secondsText(_ seconds: Double) -> String {
         seconds.rounded() == seconds ? String(Int(seconds)) : decimalText(seconds)
+    }
+
+    /// A number as the argv carries it: the POSIX locale, no grouping, every fraction digit the
+    /// value has (up to fifteen), and a whole number without a fraction. `decimalText` is for
+    /// chips and labels only; a learning rate of 0.0001 must reach the CLI as typed, not as "0".
+    package static func argumentText(_ value: Double) -> String {
+        if value.rounded() == value, abs(value) < 1e15 { return String(Int(value)) }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.usesGroupingSeparator = false
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 15
+        return formatter.string(from: NSNumber(value: value)) ?? String(value)
     }
 
     package static func decimalText(_ value: Double) -> String {

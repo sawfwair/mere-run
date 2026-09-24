@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Let a plugin catalog declare a setup step that runs through its verified
+  entrypoint after installation. For an installed restricted model,
+  `mere.run model pull MODEL --accept-model-license` now records explicit terms
+  acceptance without downloading the model again.
+- Show essential Music, Sound ▸ Video Foley, and 3D settings in Studio's
+  composer and result chips. Stack Audio Analyze's result below its input
+  when the Library narrows the workspace.
+- Mark a Studio run that cannot launch as failed in the Library, and remove
+  the temporary camera recording when `vision track-live` receives SIGTERM.
+- Fix a Library row started from Studio's Command Console or a Command view for
+  a command whose input is a positional file (`audio enhance`, `sfx ae encode`,
+  `vision depth`, the Earth commands): the row now records that file as its
+  input and is titled after the command, instead of showing the file path as
+  its prompt.
 - Fix Studio's Segment and Track drawing after a live click-through: a click
   inside a box with the Point or Negative tool now adds the point there (a box
   is grabbed only with the Box tool; points and handles always take the press),
@@ -204,6 +218,51 @@ The format is based on Keep a Changelog.
   or were denied. `/runtime/status` now reads installed models from a
   background-refreshed scan instead of scanning on every request. The macOS
   app declares removable- and network-volume usage descriptions.
+- Bring Sound, Music, Vision, Audio, Text, Image Datasets, 3D, and Earth
+  generation and analysis into Studio's shared task workspace. Attach inputs in
+  the composer, set contract-backed options in the inspector, review runs in the
+  Library, restore recorded settings, and stop the task's active run. Studio
+  names output files from the input or prompt and keeps sidecars beside them;
+  saved page drafts import once where available. Inspector choices show segments
+  when the whole row fits and a menu when it does not.
+- Show Sound ▸ Video Foley's clip and generated waveform together, Condition's
+  tensor header, Encode's `.npy` header, Decode's audio, and Score's CLAP gauge.
+  The Renoise editor supports automatic, fixed, and per-step values and checks
+  that a schedule matches the step count before starting.
+- Show Music ▸ Analyze's tempo, key, meter, language, caption, and lyrics and
+  Music ▸ Transcribe's piano roll and expected-instrument picker. Transcription
+  saves MIDI under Music or JSON and JSON Lines under Documents, with musical
+  context beside the result when enabled. Music ▸ Separate and Audio ▸ Separate
+  list and play each stem from the CLI's manifest.
+- Show Vision ▸ Faces' boxes, landmarks, and comparison results; Pose's
+  landmarks; Flow's vectors and statistics; Depth's previews; and Geometry's
+  point cloud and camera previews. The Faces and multi-view camera editors remain
+  in the inspector. Vision ▸ Live uses a Session surface with camera and model
+  controls, progress, and the annotated clip; denied camera access ends the run
+  with a System Settings instruction.
+- Make Audio ▸ Who Spoke, Enhance, and Separate contract-backed Analyze tasks.
+  Who Spoke shows speaker turns on a timeline, and Enhance plays the output.
+  Audio ▸ Live uses a Session surface with recording controls, a Library row,
+  and Stop. Voice ▸ Voices uses a Manage list and detail with reference playback,
+  creation, and confirmed deletion. Attach a voice reference in Speak to use
+  clone mode.
+- Show Text ▸ Embeddings' cosine matrix and Anonymize's protected text and
+  spans. Image ▸ Datasets offers Discover, Validate, and Run plan with their
+  results, including a direct handoff from a candidate dataset to Image ▸
+  Train. Earth ▸ Flood, Fire, TESSERA, and OlmoEarth inspect bundle tensors
+  before launch and show output tensors with the command's JSON.
+- Make 3D ▸ From image a Generate task with TRELLIS.2, TripoSR, and InstantMesh
+  engines. Ordered views and cameras remain editable; mismatched view counts or
+  camera files fail before launch. Result cards show the mesh and its summary.
+- Keep Image, Chat, and Music training as Project pages over shared task drafts.
+  Dataset, evaluation, and resume inputs use attachment wells; runs share the
+  Library and Command view. A selected recipe governs its options, and a Klein
+  base receives checkpoint and preview intervals when those values are unset.
+  Preserve small numeric options in the generated command: a learning rate of
+  `0.0003` or `1e-5` no longer rounds to `0`.
+- Add shared contract metadata for speech diarization, live listening, voice
+  profiles, audio enhancement, and music separation so their options appear in
+  the appropriate composer and inspector sections.
 
 ## 0.55.0 - 2026-09-22
 

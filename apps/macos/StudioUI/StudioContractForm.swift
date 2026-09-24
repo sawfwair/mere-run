@@ -67,6 +67,11 @@ struct ContractFormControl<Draft>: View {
     let field: StudioContractField<Draft>
     @Binding var draft: Draft
     var labelStyle: ContractFormLabelStyle = .label
+    /// What the choice that leaves an option unset is called, for a choice option the contract
+    /// gives no default: "Default" unless the caller says otherwise ("Custom" for a recipe, "From
+    /// recipe" while one is chosen). A choice with a contract default has no such item: the
+    /// default is what runs.
+    var noneTitle: String?
 
     /// The flag column's width, so every row's control starts at the same x the way the board
     /// draws the raw form.
@@ -90,23 +95,13 @@ struct ContractFormControl<Draft>: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
                 .help(field.flag)
         case .segmented:
-            StudioInspectorLabeledRow(field.label) {
-                MereSegmentedControl(field.option.choices, selection: choiceBinding, accessibilityLabel: field.label) {
-                    StudioContractChoiceTitles.title(for: $0, flag: field.flag)
-                }
+            StudioFittingChoice { shape in
+                StudioInspectorLabeledRow(field.label) { choice(shape, menuWidth: 150) }
             }
             .help(field.flag)
         case .picker:
-            StudioInspectorLabeledRow(field.label) {
-                Picker(field.label, selection: choiceBinding) {
-                    ForEach(field.option.choices, id: \.self) { choice in
-                        Text(StudioContractChoiceTitles.title(for: choice, flag: field.flag)).tag(choice)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 150)
-            }
-            .help(field.flag)
+            StudioInspectorLabeledRow(field.label) { choice(.menu, menuWidth: 150) }
+                .help(field.flag)
         case .slider:
             slider
         case .stepper:
@@ -144,20 +139,15 @@ struct ContractFormControl<Draft>: View {
                 Spacer(minLength: 0)
             }
         case .segmented:
-            flagRow {
-                MereSegmentedControl(field.option.choices, selection: choiceBinding, accessibilityLabel: field.label) {
-                    StudioContractChoiceTitles.title(for: $0, flag: field.flag)
+            StudioFittingChoice { shape in
+                flagRow {
+                    choice(shape, menuWidth: 180)
+                    Spacer(minLength: 0)
                 }
             }
         case .picker:
             flagRow {
-                Picker(field.label, selection: choiceBinding) {
-                    ForEach(field.option.choices, id: \.self) { choice in
-                        Text(StudioContractChoiceTitles.title(for: choice, flag: field.flag)).tag(choice)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 180)
+                choice(.menu, menuWidth: 180)
                 Spacer(minLength: 0)
             }
         case .slider, .stepper:
@@ -280,14 +270,52 @@ struct ContractFormControl<Draft>: View {
         )
     }
 
+    // MARK: Choices
+
+    /// The item that leaves the option unset, when the contract declares no default: an empty
+    /// choice ahead of the declared ones, so a fresh form never shows a selection the argv does
+    /// not carry.
+    private var unsetChoice: String? {
+        guard field.option.defaultValue == nil, !field.option.choices.isEmpty else { return nil }
+        return noneTitle ?? Self.noneTitle(for: field.flag)
+    }
+
+    private var choiceItems: [String] {
+        unsetChoice == nil ? field.option.choices : [""] + field.option.choices
+    }
+
+    /// The option's choices, unset item first when it has one, as segments or a menu.
+    private func choice(_ shape: StudioChoiceShape, menuWidth: CGFloat) -> some View {
+        StudioChoiceControl(
+            shape: shape,
+            items: choiceItems,
+            selection: choiceBinding,
+            accessibilityLabel: field.label,
+            menuWidth: menuWidth,
+            title: choiceTitle
+        )
+    }
+
+    private func choiceTitle(_ choice: String) -> String {
+        choice.isEmpty ? (unsetChoice ?? "") : StudioContractChoiceTitles.title(for: choice, flag: field.flag)
+    }
+
+    /// "Custom" where the choices are named presets the user can do without; "Default" elsewhere.
+    static func noneTitle(for flag: String) -> String {
+        flag == "--recipe" ? "Custom" : "Default"
+    }
+
     private var choiceBinding: Binding<String> {
         Binding(
             get: {
                 let value = field.value(in: draft).text ?? ""
                 if field.option.choices.contains(value) { return value }
+                if unsetChoice != nil { return "" }
                 return field.option.defaultValue ?? field.option.choices.first ?? value
             },
-            set: { field.write(.text($0), to: &draft) }
+            set: { choice in
+                field.write(choice.isEmpty && unsetChoice != nil ? .unset : .text(choice), to: &draft)
+            }
         )
     }
 
@@ -308,22 +336,95 @@ struct ContractFormControl<Draft>: View {
     }
 }
 
+/// The two ways a choice is drawn.
+enum StudioChoiceShape {
+    /// Every choice as a segment, read at a glance.
+    case segments
+    /// A pop-up menu, for choices that would not read whole as segments.
+    case menu
+}
+
+/// Draws a choice's row with segments when the whole row — its label or flag column and every
+/// segment at full width — fits the width the row is given, and with a menu when it does not.
+/// The rule is the row's real width rather than a count of characters, so "Float16 · Float32"
+/// stays segments in the 280 pt inspector while "Default · Small · Medium · Large" beside
+/// "Variant" becomes a menu instead of truncating. The inspector's choice rows, its variant
+/// row, and the Command view's flag rows all decide this way.
+struct StudioFittingChoice<Row: View>: View {
+    @ViewBuilder let row: (StudioChoiceShape) -> Row
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            row(.segments)
+            row(.menu)
+        }
+    }
+}
+
+/// A choice as `MereSegmentedControl` or as a menu no wider than `menuWidth`.
+struct StudioChoiceControl<Item: Hashable>: View {
+    let shape: StudioChoiceShape
+    let items: [Item]
+    @Binding var selection: Item
+    let accessibilityLabel: String
+    let menuWidth: CGFloat
+    let title: (Item) -> String
+
+    var body: some View {
+        switch shape {
+        case .segments:
+            MereSegmentedControl(items, selection: $selection, accessibilityLabel: accessibilityLabel, title: title)
+        case .menu:
+            Picker(accessibilityLabel, selection: $selection) {
+                ForEach(items, id: \.self) { item in
+                    Text(title(item)).tag(item)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: menuWidth)
+        }
+    }
+}
+
 /// A file or directory option: the chosen name, a Choose button, and a clear button once set.
 struct ContractFormPathRow: View {
     let label: String
     @Binding var path: String
     var isDirectory = false
     var allowedTypes: [UTType] = [.data]
+    var allowsMultipleSelection = false
+    /// Project and Manage pages also let a user paste a path directly.
+    var placeholder: String? = nil
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if let placeholder {
+                Text(label)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                pathControls(placeholder: placeholder)
+            } else {
+                pathControls(placeholder: nil)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
+    }
+
+    private func pathControls(placeholder: String?) -> some View {
         HStack(spacing: 8) {
-            Text(path.isBlank ? "No \(label.lowercased())" : URL(fileURLWithPath: path).lastPathComponent)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(path.isBlank ? MereRunTheme.textMuted : MereRunTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(path.isBlank ? label : path)
-            Spacer(minLength: 4)
+            if let placeholder {
+                TextField(placeholder, text: $path)
+                    .mereField()
+            } else {
+                Text(path.isBlank ? "No \(label.lowercased())" : URL(fileURLWithPath: path).lastPathComponent)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(path.isBlank ? MereRunTheme.textMuted : MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(path.isBlank ? label : path)
+                Spacer(minLength: 4)
+            }
             Button(path.isBlank ? "Choose…" : "Change…") { choose() }
                 .buttonStyle(.mereSecondary)
                 .accessibilityLabel("Choose \(label.lowercased())")
@@ -340,18 +441,16 @@ struct ContractFormPathRow: View {
             }
         }
         .frame(minHeight: 24)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(label)
     }
 
     private func choose() {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = allowsMultipleSelection
         panel.canChooseDirectories = isDirectory
         panel.canChooseFiles = !isDirectory
         if !isDirectory { panel.allowedContentTypes = allowedTypes }
-        if panel.runModal() == .OK, let url = panel.url {
-            path = url.path
+        if panel.runModal() == .OK {
+            path = panel.urls.map(\.path).joined(separator: "\n")
         }
     }
 }

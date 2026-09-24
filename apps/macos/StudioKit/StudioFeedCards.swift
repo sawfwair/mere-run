@@ -36,8 +36,28 @@ package enum StudioFeedCardBuilder {
         mode: StudioMode,
         job: (UUID) -> Job?
     ) -> [StudioFeedCard] {
+        cards(items: items.filter { $0.mode == mode }, job: job)
+    }
+
+    /// The feed of a task on the shared task workspace: rows of the templates the task runs, plus
+    /// rows from before commands were recorded that the task's mode attributed. A legacy page's
+    /// run filed under a hand-picked mode (Earth under Vision's Read) still belongs to its
+    /// command's task, so history survives the page's move; a task that runs another task's
+    /// template (Audio ▸ Separate over `music separate`) shows those rows too.
+    package static func cards(
+        items: [StudioLibraryItem],
+        task: StudioTask,
+        job: (UUID) -> Job?
+    ) -> [StudioFeedCard] {
+        cards(items: items.filter { item in
+            if let templateID = item.templateID { return task.runs(templateID) }
+            return item.mode.task == task
+        }, job: job)
+    }
+
+    private static func cards(items: [StudioLibraryItem], job: (UUID) -> Job?) -> [StudioFeedCard] {
         items
-            .filter { $0.mode == mode && !$0.isConversation }
+            .filter { !$0.isConversation }
             .sorted { $0.createdAt < $1.createdAt }
             .map { item in
                 let job = job(item.id)

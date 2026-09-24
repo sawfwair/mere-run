@@ -86,13 +86,7 @@ struct StudioComposer: View {
     }
 
     private func pickFiles(for slot: StudioAttachmentSlot) {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = slot.allowsMultiple
-        panel.allowedContentTypes = slot.acceptedTypes
-        guard panel.runModal() == .OK else { return }
-        slot.attach(panel.urls, to: &draft)
+        StudioAttachmentPicker.pick(for: slot, into: &draft)
     }
 
     // MARK: - Prompt
@@ -562,19 +556,43 @@ struct StudioComposerChipLabel: View {
     }
 }
 
+/// The open panel every attachment well shares: files of the slot's types, or a folder for a
+/// directory slot, several at once for a list slot.
+@MainActor
+enum StudioAttachmentPicker {
+    static func pick<Draft: StudioAttachmentDraft>(for slot: StudioAttachmentSlot, into draft: inout Draft) {
+        let panel = NSOpenPanel()
+        let picksDirectory = slot.acceptedTypes.contains(.folder)
+        panel.canChooseFiles = !picksDirectory
+        panel.canChooseDirectories = picksDirectory
+        panel.canCreateDirectories = picksDirectory
+        panel.allowsMultipleSelection = slot.allowsMultiple
+        if !picksDirectory { panel.allowedContentTypes = slot.acceptedTypes }
+        guard panel.runModal() == .OK else { return }
+        slot.attach(panel.urls, to: &draft)
+    }
+}
+
 /// One 48×48 slot of the attachment well. Empty: a dashed outline with a plus. Filled: the
 /// file's thumbnail (or a kind glyph for audio and video) with a hover-revealed remove button.
-/// Accepts a drop, a paste (⌘V while focused), and a click to pick.
-struct StudioAttachmentSlotView: View {
+/// Accepts a drop, a paste (⌘V while focused), and a click to pick; an audio slot's context
+/// menu also offers "Record…", which files the recording with the task's domain.
+struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
     let slot: StudioAttachmentSlot
-    @Binding var draft: StudioDraft
+    @Binding var draft: Draft
     let onPick: () -> Void
 
+    @Environment(\.studioTaskScope) private var taskScope
     @State private var isDropTargeted = false
     @State private var hovering = false
+    @State private var isRecording = false
 
-    private static let side: CGFloat = 48
-    private static let cornerRadius: CGFloat = MereRunTheme.Radius.base
+    private var recordingDomain: StudioDomain {
+        StudioTask(rawValue: taskScope)?.domain ?? .audio
+    }
+
+    private static var side: CGFloat { 48 }
+    private static var cornerRadius: CGFloat { MereRunTheme.Radius.base }
 
     private var paths: [String] { slot.paths(in: draft) }
     private var isFilled: Bool { !paths.isEmpty }
@@ -625,6 +643,9 @@ struct StudioAttachmentSlotView: View {
         .onPasteCommand(of: [.fileURL, .image]) { _ in paste() }
         .contextMenu {
             Button("Choose…", action: onPick)
+            if slot.canRecord {
+                Button("Record…") { isRecording = true }
+            }
             if isFilled {
                 Button("Reveal in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting(paths.map { URL(fileURLWithPath: $0) })
@@ -632,7 +653,13 @@ struct StudioAttachmentSlotView: View {
                 Button("Remove") { slot.clear(in: &draft) }
             }
         }
-        .help(isFilled ? paths.joined(separator: "\n") : "Drop, paste, or click to add \(slot.label.lowercased())")
+        .popover(isPresented: $isRecording, arrowEdge: .bottom) {
+            StudioAudioRecordingPopover(domain: recordingDomain) { url in
+                slot.attach([url], to: &draft)
+            }
+        }
+        .help(isFilled ? paths.joined(separator: "\n")
+              : "Drop, paste, or click to add \(slot.label.lowercased())\(slot.canRecord ? "; right-click to record" : "")")
         .accessibilityLabel(slot.label)
         .accessibilityValue(isFilled ? slot.caption(in: draft) : "Empty")
         .accessibilityHint("Drop a file, paste with Command-V, or click to choose")
@@ -652,15 +679,19 @@ struct StudioAttachmentSlotView: View {
 
     @ViewBuilder
     private func thumbnail(for url: URL) -> some View {
-        switch StudioOutputFileKind.classify(url) {
-        case .image:
-            StudioAsyncImagePreview(url: url, maxPixelSize: 160, contentMode: .fill, fallbackSystemImage: "photo")
-        case .audio:
-            kindGlyph("waveform")
-        case .video:
-            kindGlyph("film")
-        default:
-            kindGlyph("doc")
+        if slot.acceptedTypes.contains(.folder) {
+            kindGlyph("folder")
+        } else {
+            switch StudioOutputFileKind.classify(url) {
+            case .image:
+                StudioAsyncImagePreview(url: url, maxPixelSize: 160, contentMode: .fill, fallbackSystemImage: "photo")
+            case .audio:
+                kindGlyph("waveform")
+            case .video:
+                kindGlyph("film")
+            default:
+                kindGlyph("doc")
+            }
         }
     }
 

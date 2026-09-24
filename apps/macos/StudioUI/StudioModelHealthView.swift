@@ -492,24 +492,25 @@ struct StudioModelHealthView: View {
                 .frame(maxWidth: 320)
             }
             if benchmark == .fusedFixture {
-                StudioPathField(
+                ContractFormPathRow(
                     label: "Fused benchmark JSONL fixture",
-                    placeholder: "Benchmark result JSONL",
-                    path: $benchmarkDraft.inputPath
+                    path: $benchmarkDraft.inputPath,
+                    placeholder: "Benchmark result JSONL"
                 )
                 Toggle("Verify existing hashes", isOn: $benchmarkDraft.benchmarkFixtureCheck)
                     .help("Exit unsuccessfully when a stored fixture hash does not match")
             }
             if benchmark == .parakeetCoreML {
-                StudioPathField(
+                ContractFormPathRow(
                     label: "Audio file",
-                    placeholder: "Audio to benchmark",
-                    path: $benchmarkDraft.inputPath
+                    path: $benchmarkDraft.inputPath,
+                    placeholder: "Audio to benchmark"
                 )
-                StudioPathField(
+                ContractFormPathRow(
                     label: "Core ML artifact",
-                    placeholder: "Parakeet Core ML artifact directory",
-                    path: $benchmarkDraft.modelRoot
+                    path: $benchmarkDraft.modelRoot,
+                    isDirectory: true,
+                    placeholder: "Parakeet Core ML artifact directory"
                 )
             }
 
@@ -543,11 +544,8 @@ struct StudioModelHealthView: View {
                 Spacer()
             }
 
-            if benchmarkRequestID != nil {
-                StudioSpecialistResultView(
-                    requestID: benchmarkRequestID,
-                    preferredKinds: [.text]
-                )
+            if let benchmarkItem {
+                StudioRunDetailView(item: benchmarkItem, preferredKinds: [.text])
                 .frame(minHeight: 220)
             }
         }
@@ -572,13 +570,9 @@ struct StudioModelHealthView: View {
             draft.inputPath = benchmarkDraft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
             draft.modelRoot = benchmarkDraft.modelRoot.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        benchmarkRequestID = StudioSpecialistRunner.submit(
-            templateID: benchmark.templateID,
-            mode: .chat,
-            draft: draft,
-            controller: controller,
-            library: library
-        )
+        let request = StudioRunRequest(mode: .chat, templateID: template.id, template: template, draft: draft)
+        benchmarkRequestID = (try? StudioTaskRunner(controller: controller, library: library)
+            .run(request: request, task: .modelsBenchmarks, validating: false))?.id
     }
 
     private func healthMetric(_ title: String, _ value: String, color: Color) -> some View {
@@ -632,13 +626,10 @@ struct StudioModelHealthView: View {
         qualityDraft.operationsStrictPerformance = strictPerformance
         qualityDraft.operationsUpdateBaselines = updatingBaselines
         qualityDraft.operationsListOnly = false
-        qualityRequestID = StudioSpecialistRunner.submit(
-            templateID: .qualityGate,
-            mode: .chat,
-            draft: qualityDraft,
-            controller: controller,
-            library: library
-        )
+        guard let template = CommandCatalog.template(id: .qualityGate) else { return }
+        let request = StudioRunRequest(mode: .chat, templateID: template.id, template: template, draft: qualityDraft)
+        qualityRequestID = (try? StudioTaskRunner(controller: controller, library: library)
+            .run(request: request, task: .modelsHealth, validating: false))?.id
         updateBaselines = false
     }
 

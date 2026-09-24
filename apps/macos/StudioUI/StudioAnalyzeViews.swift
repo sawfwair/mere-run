@@ -448,8 +448,19 @@ struct StudioAnalyzeResultPanel: View {
 
     private var summary: String {
         if let document { return document.summary(detectionCount: detections.count) }
+        if !outputFiles.isEmpty { return outputFiles.count == 1 ? "1 output file" : "\(outputFiles.count) output files" }
         if outputText?.isBlank == false { return "Result" }
         return "No result"
+    }
+
+    /// The files a run wrote when its result is the file itself (enhanced audio, stems, a depth
+    /// directory) rather than a document the canvas decodes; listed so the panel names them.
+    /// Only for the tasks on the shared task workspace: a prompt task's run without a document
+    /// (Track before its JSON lands) keeps the panel it always had.
+    private var outputFiles: [URL] {
+        guard document == nil, item.templateID?.studioTask.usesTaskDraft == true,
+              [.audio, .stems, .depth, .scene, .video].contains(view) else { return [] }
+        return item.allArtifactURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     private var meta: String {
@@ -485,18 +496,25 @@ struct StudioAnalyzeResultPanel: View {
 
     @ViewBuilder
     private var rows: some View {
-        switch view {
-        case .transcript, .timeline:
-            speechRows
-        case .text, .score:
-            textRow
-        default:
-            if !detections.isEmpty {
-                detectionRows
-            } else if document != nil {
-                noMatchesRow
-            } else {
+        if let rendering = StudioResultRenderers.rendering(for: view, document: document, item: item) {
+            // The last of the rendering's own rows ends in a hairline, like the rows below.
+            StudioResultRendererView(rendering: rendering, item: item)
+        } else {
+            switch view {
+            case .transcript, .timeline:
+                speechRows
+            case .text, .score:
                 textRow
+            default:
+                if !outputFiles.isEmpty {
+                    outputRows
+                } else if !detections.isEmpty {
+                    detectionRows
+                } else if document != nil {
+                    noMatchesRow
+                } else {
+                    textRow
+                }
             }
         }
     }
@@ -523,6 +541,47 @@ struct StudioAnalyzeResultPanel: View {
         .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
         hairline(0.27)
+    }
+
+    /// One row per output file: its name and what it is, with Reveal.
+    private var outputRows: some View {
+        boundedRows(count: outputFiles.count) {
+            ForEach(outputFiles, id: \.self) { url in
+                HStack(spacing: 10) {
+                    Image(systemName: Self.glyph(for: url))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(MereRunTheme.accent)
+                        .frame(width: 14)
+                    Text(url.lastPathComponent)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(MereRunTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .help(url.path)
+                    Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                        .buttonStyle(.mereSecondary)
+                        .controlSize(.small)
+                        .accessibilityLabel("Reveal \(url.lastPathComponent) in Finder")
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .accessibilityElement(children: .contain)
+                hairline(0.27)
+            }
+        }
+    }
+
+    private static func glyph(for url: URL) -> String {
+        switch StudioOutputFileKind.classify(url) {
+        case .audio: return "waveform"
+        case .video: return "film"
+        case .image: return "photo"
+        case .model3D: return "cube.transparent"
+        case .text: return "doc.text"
+        case .other:
+            return (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? "folder" : "doc"
+        }
     }
 
     private var detectionRows: some View {

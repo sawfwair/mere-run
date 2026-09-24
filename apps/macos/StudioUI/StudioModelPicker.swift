@@ -2,25 +2,50 @@ import StudioKit
 import SwiftUI
 
 /// The one model menu, shared by every surface that picks a model: the composer's chip, the
-/// Converse thread header, and the inspector's model row. "Auto" (the mode's default) comes
-/// first, then `model list` rows filtered to the mode's categories, installed before
-/// downloadable, then a jump to Models. Every surface binds the same draft field, so a model
-/// picked in one is the model the next run uses.
+/// Converse thread header, the inspector's model row, and the task workspace's chip. "Auto" (the
+/// scope's default) comes first, then `model list` rows filtered to the scope's categories,
+/// installed before downloadable, then a jump to Models. Every surface binds the same draft
+/// field, so a model picked in one is the model the next run uses.
 struct StudioModelPicker<Label: View>: View {
-    let mode: StudioMode
+    let scope: StudioModelScope
     @Binding var model: String
     let modelInventory: [StudioModelInventoryRow]
     let onShowModels: () -> Void
     @ViewBuilder let label: () -> Label
     @Environment(\.studioModelTitles) private var titles
 
+    init(
+        scope: StudioModelScope,
+        model: Binding<String>,
+        modelInventory: [StudioModelInventoryRow],
+        onShowModels: @escaping () -> Void,
+        @ViewBuilder label: @escaping () -> Label
+    ) {
+        self.scope = scope
+        _model = model
+        self.modelInventory = modelInventory
+        self.onShowModels = onShowModels
+        self.label = label
+    }
+
+    init(
+        mode: StudioMode,
+        model: Binding<String>,
+        modelInventory: [StudioModelInventoryRow],
+        onShowModels: @escaping () -> Void,
+        @ViewBuilder label: @escaping () -> Label
+    ) {
+        self.init(scope: StudioModelScope(mode: mode), model: model, modelInventory: modelInventory,
+                  onShowModels: onShowModels, label: label)
+    }
+
     var body: some View {
         Menu {
-            let defaultID = StudioModelNaming.defaultModelID(for: mode)
+            let defaultID = scope.defaultModelID
             Toggle(isOn: Binding(get: { model.isBlank }, set: { _ in model = "" })) {
                 Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID, titles: titles))")
             }
-            let choices = mode.modelChoices(from: modelInventory)
+            let choices = scope.choices(from: modelInventory)
             let installed = choices.filter(\.isInstalled)
             let downloadable = choices.filter { !$0.isInstalled }
             if !installed.isEmpty {
@@ -34,7 +59,7 @@ struct StudioModelPicker<Label: View>: View {
                 }
             }
             if choices.isEmpty {
-                Text("No \(mode.title.lowercased()) models listed yet")
+                Text("No \(scope.noun) models listed yet")
             }
             Divider()
             Button("Browse Models…", action: onShowModels)
@@ -57,19 +82,45 @@ struct StudioModelPicker<Label: View>: View {
 }
 
 /// The model picker drawn as a composer chip: the resolved model's name, a glyph when the model
-/// is not ready to run, and the exact id in the tooltip. The composer's chip strip and the
-/// Converse thread header share it, so a model reads the same way wherever it is picked.
+/// is not ready to run, and the exact id in the tooltip. The composer's chip strip, the Converse
+/// thread header, and the task composer share it, so a model reads the same way wherever it is
+/// picked.
 struct StudioModelChip: View {
-    let mode: StudioMode
+    let scope: StudioModelScope
     @Binding var model: String
-    /// Every row of `model list`, installed or not; the menu filters it to the mode.
+    /// Every row of `model list`, installed or not; the menu filters it to the scope.
     let modelInventory: [StudioModelInventoryRow]
     let readiness: ModelReadinessState
     let onShowModels: () -> Void
     @Environment(\.studioModelTitles) private var titles
 
+    init(
+        scope: StudioModelScope,
+        model: Binding<String>,
+        modelInventory: [StudioModelInventoryRow],
+        readiness: ModelReadinessState,
+        onShowModels: @escaping () -> Void
+    ) {
+        self.scope = scope
+        _model = model
+        self.modelInventory = modelInventory
+        self.readiness = readiness
+        self.onShowModels = onShowModels
+    }
+
+    init(
+        mode: StudioMode,
+        model: Binding<String>,
+        modelInventory: [StudioModelInventoryRow],
+        readiness: ModelReadinessState,
+        onShowModels: @escaping () -> Void
+    ) {
+        self.init(scope: StudioModelScope(mode: mode), model: model, modelInventory: modelInventory,
+                  readiness: readiness, onShowModels: onShowModels)
+    }
+
     var body: some View {
-        StudioModelPicker(mode: mode, model: $model, modelInventory: modelInventory, onShowModels: onShowModels) {
+        StudioModelPicker(scope: scope, model: $model, modelInventory: modelInventory, onShowModels: onShowModels) {
             StudioComposerChipLabel(title: label, leadingSystemImage: statusGlyph)
         }
         .fixedSize()
@@ -79,11 +130,11 @@ struct StudioModelChip: View {
     }
 
     private var resolvedModelID: String {
-        StudioModelNaming.resolvedModelID(for: mode, model: model)
+        scope.resolvedModelID(model: model)
     }
 
     private var label: String {
-        StudioModelNaming.displayLabel(for: mode, model: model, titles: titles)
+        scope.displayLabel(model: model, titles: titles)
     }
 
     /// A glyph before the model name when the model is not ready: missing locally, or unsupported.
