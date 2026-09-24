@@ -209,6 +209,19 @@ The format is based on Keep a Changelog.
   or were denied. `/runtime/status` now reads installed models from a
   background-refreshed scan instead of scanning on every request. The macOS
   app declares removable- and network-volume usage descriptions.
+- Move Studio's Earth tasks — Flood, Fire, TESSERA, and OlmoEarth — onto the
+  shared task workspace, replacing the Geo Lab page. The tile bundle goes in
+  the attachment well; the input column reads its safetensors header against
+  the tensors the command requires and ticks each off with its dtype and shape,
+  so a bundle missing `DEM`, or carrying `S1_ASC` without `S1_ASC_DOY`, is
+  caught before the run with the tensor named, and an empty well says what a
+  bundle must carry. The result panel shows the written file's tensors and
+  metadata with the command's JSON beside them; the inspector keeps the model,
+  Preflight, TESSERA's output dimensions as a picker of the widths the command
+  accepts, and OlmoEarth's patch size, ground sample distance, and space-time
+  tokens; outputs are named after the bundle under the Earth folder and land in
+  the Library like every run. Drafts saved by the Geo Lab page seed the new
+  task drafts once, without their old output paths.
 
 ## 0.55.0 - 2026-09-22
 

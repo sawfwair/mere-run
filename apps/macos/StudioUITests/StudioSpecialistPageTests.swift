@@ -27,12 +27,12 @@ final class StudioSpecialistPageTests: XCTestCase {
         defer { controller.terminateAllProcesses() }
         let library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
         library.observe(controller: controller)
-        let template = try XCTUnwrap(CommandCatalog.template(id: .geoFlood))
+        let template = try XCTUnwrap(CommandCatalog.template(id: .videoAnimate))
         var draft = template.defaultDraft()
-        draft.outputPath = root.appendingPathComponent("flood.safetensors").path
+        draft.outputPath = root.appendingPathComponent("animated.mp4").path
 
         let id = try XCTUnwrap(StudioSpecialistRunner.submit(
-            templateID: .geoFlood, mode: .readImage, draft: draft, controller: controller, library: library
+            templateID: .videoAnimate, mode: .readImage, draft: draft, controller: controller, library: library
         ))
         for _ in 0..<6 { await Task.yield() }
 
@@ -41,16 +41,6 @@ final class StudioSpecialistPageTests: XCTestCase {
         XCTAssertEqual(row.mode, .readImage, "the page's attribution is kept")
         XCTAssertEqual(row.outputText?.contains("required"), true, row.outputText ?? "")
         XCTAssertTrue(processRunner.starts.isEmpty)
-        XCTAssertEqual(controller.taskSessions.value(for: StudioTask.earthFlood.rawValue + ".requestID", default: Optional<UUID>.none), id)
-    }
-
-    /// The checklists match what each command validates.
-    func testEarthChecklistsMatchTheCommands() {
-        XCTAssertEqual(StudioGeoTool.flood.tensorRequirement, .init(required: ["S2L2A", "S1RTC", "DEM"]))
-        XCTAssertEqual(
-            StudioGeoTool.tessera.tensorRequirement,
-            .init(required: ["S2", "S2_DOY"], oneOf: ["S1_ASC + S1_ASC_DOY", "S1_DESC + S1_DESC_DOY"])
-        )
-        XCTAssertEqual(StudioGeoTool.olmoEarth.tensorRequirement, .init(required: ["TIMESTAMPS"], oneOf: ["S2L2A", "S1RTC", "LANDSAT"]))
+        XCTAssertEqual(controller.taskSessions.value(for: StudioTask.videoSubjects.rawValue + ".requestID", default: Optional<UUID>.none), id)
     }
 }

@@ -137,10 +137,12 @@ destination is filled at submit time by
 prompt controller's `runTask`, and the remaining pages' `StudioSpecialistRunner`
 shim — goes through `StudioKit/StudioTaskRunner.swift`. Bespoke result views
 live under `StudioUI/Renderers/` and register by `(view, document)` in
-`StudioResultRenderers`; the Session pages share their transport chrome from
+`StudioResultRenderers`; a task that can say more about its input file than its
+name registers an input view the same way in `StudioInputRenderers`; the
+Session pages share their transport chrome from
 `StudioUI/StudioSessionControls.swift`. A task keeps its bespoke page until it
 is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the root then
-renders the workspace for it instead.
+renders the workspace for it instead. The four Earth tasks are on it.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -423,11 +425,12 @@ of running under the composer. Once a tracked clip exists it plays in place,
 with "Adjust prompts and frames" bringing the scrubber back.
 
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
-steps — for twenty-two tasks, seventeen of which still render their own form
+steps — for twenty-two tasks, thirteen of which still render their own form
 inside their task rather than this canvas (Vision ▸ Depth, Pose, Faces, Flow,
 Geometry, Live; Audio ▸ Who Spoke, Enhance, Separate; Text ▸ Embeddings,
-Anonymize; the four Earth tasks; Sound ▸ Score and Condition). Migrating one is
-a view change, not a design decision.
+Anonymize; Sound ▸ Score and Condition); the four Earth tasks reach it through
+the shared task workspace. Migrating one is a view change, not a design
+decision.
 
 **Chat** is the Converse surface (`StudioUI/StudioConversationView.swift`,
 `StudioUI/StudioThreadList.swift`). A **thread list** replaces the Library column there —
@@ -783,13 +786,23 @@ each question's token fit. The handbook example loads with one click, and reques
 JSON imports and exports.
 
 **Earth** is native Earth-observation inference, with Flood, Fire, TESSERA, and
-OlmoEarth tasks. It covers TerraMind flood and fire tile inference and the
-TESSERA v2 and OlmoEarth v1.2 encoders, names the tensors each input bundle must
-carry before a run rather than after it (required and at-least-one-of, as each
-command checks them), exposes engine-specific controls
-(TESSERA output dimensions; OlmoEarth patch size, ground sample distance, and
-space-time tokens), and preserves every produced safetensors file as a durable
-Library artifact.
+OlmoEarth tasks — TerraMind flood and fire tile inference and the TESSERA v2
+and OlmoEarth v1.2 encoders — each an Analyze task on the shared task
+workspace. The well takes the safetensors tile bundle; the input column reads
+the bundle's header (never the tensors behind it) against the tensors the
+command requires and ticks each one off with its dtype and shape, so a missing
+`DEM` or an unpaired `S1_ASC` is caught before the run in the words the
+command would refuse it with, and an empty well names what a bundle must carry
+(`StudioKit/StudioEarthInputRequirement.swift`,
+`StudioUI/Renderers/StudioEarthInputChecklist.swift`, registered by template in
+`StudioUI/Renderers/StudioInputRenderers.swift`). The result panel shows the
+written safetensors file's header — the logits or embedding tensor, its shape,
+and the writer's metadata — with the command's JSON as the second view. The
+inspector holds the model, Preflight, TESSERA's output dimensions as the picker
+of the widths the command accepts (`StudioUI/StudioEarthControls.swift`), and
+OlmoEarth's patch size, ground sample distance, and space-time tokens. Outputs
+are named after the bundle under the Earth folder, every run is a Library row,
+and the Geo Lab page's saved drafts seed the task drafts once.
 
 **Models ▸ Installed** is a list-and-detail page. In a narrow window, select a
 model to open its full-width details. Choose **All models** or press Escape to

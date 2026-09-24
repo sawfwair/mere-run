@@ -753,8 +753,6 @@ private struct StudioWorkspaceView: View {
                 tasks: [.embeddings, .anonymize],
                 showsTaskPicker: false
             )
-        case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth:
-            StudioGeoLabView(tool: geoToolBinding)
         case .modelsInstalled:
             StudioModelsView(
                 modelStore: models,
@@ -887,27 +885,6 @@ private struct StudioWorkspaceView: View {
                 case .imageValidation, .datasetDiscovery, .runPlan:
                     imageDatasetTask = task
                     navigation.open(task: .imageDatasets)
-                }
-            }
-        )
-    }
-
-    private var geoToolBinding: Binding<StudioGeoTool> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .earthFire: return .fire
-                case .earthTessera: return .tessera
-                case .earthOlmoEarth: return .olmoEarth
-                default: return .flood
-                }
-            },
-            set: { tool in
-                switch tool {
-                case .flood: navigation.open(task: .earthFlood)
-                case .fire: navigation.open(task: .earthFire)
-                case .tessera: navigation.open(task: .earthTessera)
-                case .olmoEarth: navigation.open(task: .earthOlmoEarth)
                 }
             }
         )
