@@ -6,6 +6,21 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio's Segment and Track drawing after a live click-through: a click
+  inside a box with the Point or Negative tool now adds the point there (a box
+  is grabbed only with the Box tool; points and handles always take the press),
+  the selected box and point are plainly marked and Delete, Backspace, and
+  Escape act on them with the layer taking focus on the click, a prompt's tag
+  stays inside the picture at its edges, and the composer starts empty with a
+  placeholder instead of sending `--prompt "a person"` with every drawing.
+  Library ▸ "Use these settings" restores a Segment or Track run's drawn boxes,
+  points, and frames along with its input (they were cleared by the input
+  change). The Analyze picture fits the column above the composer, Track's
+  frame-editor row no longer truncates, a failed run's summary prefers the
+  CLI's `Error:` line over the list of searched model paths, Who Spoke shows a
+  sub-second turn as "0.4 s", a specialist page dates the result it shows, and
+  a unit test no longer creates an empty `caption-<stamp>` folder under
+  `~/Documents/mere.run/Vision` on every test run.
 - Change how `vision segment` and `vision track` group `--box` and `--point`
   prompts: a labeled point now refines the box with the same label that
   contains it (else the first with that label), unlabeled points form one
