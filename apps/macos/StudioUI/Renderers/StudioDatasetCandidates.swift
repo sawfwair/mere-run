@@ -115,38 +115,14 @@ struct StudioDatasetCandidates: View {
     }
 }
 
-/// "Train on it": Image ▸ Train's parked draft gets the folder as its dataset, then the task
-/// opens. On the shared task workspace that is the task draft's `--data`; while the Training
-/// page still owns the task it is the `CommandDraft` the page keeps under `Training.imageDraft`
-/// in its own scope, which an untouched page starts from the template's defaults with a stamped
-/// adapter path, so a handoff into it seeds the same before pointing the dataset at the folder.
+/// "Train on it": Image ▸ Train's parked task draft gets the folder in its dataset well
+/// (`StudioTrainingRun.attachDataset`), then the task opens on it.
 @MainActor
 enum StudioDatasetTrainingHandoff {
-    static let legacyDraftKey = StudioTask.imageTrain.rawValue + ".Training.imageDraft"
-
     static func open(_ candidate: StudioDatasetDiscoveryDocument.Candidate, navigation: NavigationModel, sessions: StudioTaskSessions?) {
         if let sessions {
-            if StudioTask.imageTrain.usesTaskDraft {
-                if var draft = sessions.taskDraft(for: .imageTrain) ?? StudioTaskDraft(task: .imageTrain) {
-                    draft.form["--data"] = .text(candidate.path)
-                    sessions.setTaskDraft(draft, for: .imageTrain)
-                }
-            } else {
-                var draft = sessions.value(for: legacyDraftKey, default: Optional<CommandDraft>.none) ?? legacyFreshDraft()
-                draft.inputPath = candidate.path
-                sessions.set(draft, for: legacyDraftKey)
-            }
+            StudioTrainingRun.attachDataset(candidate.path, to: .imageTrain, sessions: sessions)
         }
         navigation.open(task: .imageTrain)
-    }
-
-    /// What `StudioTrainingView` starts an image draft as.
-    private static func legacyFreshDraft() -> CommandDraft {
-        var draft = CommandCatalog.template(id: .imageTrainLoRA)?.defaultDraft() ?? CommandDraft()
-        draft.outputPath = StudioSpecialistFiles.outputFile(domain: .image, name: "image-adapter", fileExtension: "safetensors").path
-        if draft.seed.isBlank { draft.seed = "42" }
-        draft.checkpointInterval = 250
-        draft.sampleInterval = 250
-        return draft
     }
 }
