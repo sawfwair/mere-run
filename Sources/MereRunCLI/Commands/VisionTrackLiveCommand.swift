@@ -1,6 +1,11 @@
 import ArgumentParser
 import Foundation
 import MereRunCore
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 struct VisionTrackLive: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -84,6 +89,8 @@ struct VisionTrackLive: AsyncParsableCommand {
         let captureURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("mererun-sam31-live-\(UUID().uuidString)")
             .appendingPathExtension("mov")
+        let captureFile = LiveCaptureFile(url: captureURL)
+        defer { captureFile.remove() }
 
         try SAM31CameraCapture.record(
             cameraIndex: camera,
@@ -118,5 +125,39 @@ struct VisionTrackLive: AsyncParsableCommand {
         if let jsonOutputPath = result.jsonOutputPath {
             print("JSON: \(jsonOutputPath)")
         }
+    }
+}
+
+/// Owns the camera recording through tracking, including a termination while capture is blocked.
+/// A dispatch signal source runs cleanup off the POSIX signal handler before the process exits.
+final class LiveCaptureFile: @unchecked Sendable {
+    let url: URL
+
+    private let lock = NSLock()
+    private let source: DispatchSourceSignal
+    private let previousSignalHandler: sig_t?
+    private var active = true
+
+    init(url: URL) {
+        self.url = url
+        previousSignalHandler = signal(SIGTERM, SIG_IGN)
+        source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
+        source.setEventHandler { [weak self] in
+            guard self?.remove() == true else { return }
+            _exit(128 + SIGTERM)
+        }
+        source.resume()
+    }
+
+    @discardableResult
+    func remove() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard active else { return false }
+        active = false
+        try? FileManager.default.removeItem(at: url)
+        source.cancel()
+        _ = signal(SIGTERM, previousSignalHandler)
+        return true
     }
 }

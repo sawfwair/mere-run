@@ -354,6 +354,55 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.seedSearchFrames, 60)
     }
 
+    func testLiveCaptureFileRemovesRecordingOnCompletion() throws {
+        let root = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let recording = try makeTempFile(name: "capture.mov", in: root)
+
+        let captureFile = LiveCaptureFile(url: recording)
+        XCTAssertTrue(captureFile.remove())
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recording.path))
+        XCTAssertFalse(captureFile.remove())
+    }
+
+    func testLiveCaptureFileRemovesRecordingOnSIGTERM() throws {
+        let environmentKey = "MERERUN_TEST_CAPTURE_TERMINATION_PATH"
+        if let recordingPath = ProcessInfo.processInfo.environment[environmentKey] {
+            let recording = URL(fileURLWithPath: recordingPath)
+            try Data("capture".utf8).write(to: recording)
+            let captureFile = LiveCaptureFile(url: recording)
+            try Data().write(to: recording.deletingPathExtension().appendingPathExtension("ready"))
+            withExtendedLifetime(captureFile) { DispatchSemaphore(value: 0).wait() }
+            return
+        }
+
+        let root = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let recording = root.appendingPathComponent("capture.mov")
+        let ready = root.appendingPathComponent("capture.ready")
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
+        child.arguments = [
+            "-XCTest",
+            "MereRunCLITests.VisionSegmentCommandParsingTests/testLiveCaptureFileRemovesRecordingOnSIGTERM",
+            Bundle(for: Self.self).bundleURL.path,
+        ]
+        child.environment = ProcessInfo.processInfo.environment.merging([environmentKey: recording.path]) { _, value in value }
+        try child.run()
+        defer { if child.isRunning { child.terminate(); child.waitUntilExit() } }
+
+        for _ in 0..<500 where !FileManager.default.fileExists(atPath: ready.path) && child.isRunning {
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: ready.path), "Child never created the capture")
+        XCTAssertTrue(child.isRunning, "Child exited before SIGTERM")
+        guard child.isRunning else { return }
+        child.terminate()
+        child.waitUntilExit()
+        XCTAssertEqual(child.terminationStatus, 128 + SIGTERM)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recording.path))
+    }
+
     func testResolveModelRootUsesManagedDefault() throws {
         let temp = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
