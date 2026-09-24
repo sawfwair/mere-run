@@ -319,18 +319,11 @@ package enum StudioContractControl: Equatable {
     case field
     /// A checkbox: `boolean`.
     case toggle
-    /// A segmented control: `choice` with up to four choices.
+    /// A segmented control: `choice` with up to four choices. A row too narrow to show every
+    /// segment whole draws a menu instead.
     case segmented
     /// A pop-up: `choice` with more than four.
     case picker
-
-    /// Whether choices with these titles fit a segmented row at the inspector's width: up to
-    /// four, each short enough to read whole ("TRELLIS.2 PBR 3D" and "Krea fast style" do not).
-    /// The inspector's variant row and a choice control that gained an unset item both ask
-    /// this, so the two never disagree about when a menu takes over.
-    package static func segmentsFit(_ titles: [String]) -> Bool {
-        titles.count <= 4 && titles.allSatisfy { $0.count <= 9 }
-    }
     /// A file or directory well with Choose and a clear button.
     case path
     /// `integer` or `number` whose contract range has both ends.

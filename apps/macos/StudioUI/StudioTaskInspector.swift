@@ -231,21 +231,17 @@ struct StudioTaskInspector: View {
             get: { draft.templateID },
             set: { draft.switchTemplate(to: $0) }
         )
-        return StudioInspectorLabeledRow(task == .threeDFromImage ? "Engine" : "Operation") {
-            // Segments only when every title fits one at the column's width; longer names
-            // ("TRELLIS.2 PBR 3D") read whole from a menu rather than truncated.
-            if StudioContractControl.segmentsFit(templates.map(\.title)) {
-                MereSegmentedControl(templates.map(\.id), selection: selection, accessibilityLabel: "Variant") {
-                    StudioTaskSchema.variantTitle($0.rawValue)
-                }
-            } else {
-                Picker("Variant", selection: selection) {
-                    ForEach(templates) { template in
-                        Text(template.title).tag(template.id)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 170)
+        // Segments when every title fits the column whole; longer names ("TRELLIS.2 PBR 3D")
+        // read from a menu rather than truncated.
+        return StudioFittingChoice { shape in
+            StudioInspectorLabeledRow(task == .threeDFromImage ? "Engine" : "Operation") {
+                StudioChoiceControl(
+                    shape: shape,
+                    items: templates.map(\.id),
+                    selection: selection,
+                    accessibilityLabel: "Variant",
+                    menuWidth: 170
+                ) { StudioTaskSchema.variantTitle($0.rawValue) }
             }
         }
     }

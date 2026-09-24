@@ -87,7 +87,7 @@ struct ContractFormControl<Draft>: View {
     /// The inspector's shape: the option's label, then its control.
     @ViewBuilder
     private var labelled: some View {
-        switch choiceControl {
+        switch field.control {
         case .toggle:
             Toggle(field.label, isOn: flagBinding)
                 .toggleStyle(.checkbox)
@@ -95,21 +95,13 @@ struct ContractFormControl<Draft>: View {
                 .foregroundStyle(MereRunTheme.textSecondary)
                 .help(field.flag)
         case .segmented:
-            StudioInspectorLabeledRow(field.label) {
-                MereSegmentedControl(choiceItems, selection: choiceBinding, accessibilityLabel: field.label, title: choiceTitle)
+            StudioFittingChoice { shape in
+                StudioInspectorLabeledRow(field.label) { choice(shape, menuWidth: 150) }
             }
             .help(field.flag)
         case .picker:
-            StudioInspectorLabeledRow(field.label) {
-                Picker(field.label, selection: choiceBinding) {
-                    ForEach(choiceItems, id: \.self) { choice in
-                        Text(choiceTitle(choice)).tag(choice)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 150)
-            }
-            .help(field.flag)
+            StudioInspectorLabeledRow(field.label) { choice(.menu, menuWidth: 150) }
+                .help(field.flag)
         case .slider:
             slider
         case .stepper:
@@ -136,7 +128,7 @@ struct ContractFormControl<Draft>: View {
     /// are typed rather than dragged here — this is the surface that shows what the argv says.
     @ViewBuilder
     private var flagged: some View {
-        switch choiceControl {
+        switch field.control {
         case .toggle:
             flagRow {
                 Toggle("", isOn: flagBinding)
@@ -147,18 +139,15 @@ struct ContractFormControl<Draft>: View {
                 Spacer(minLength: 0)
             }
         case .segmented:
-            flagRow {
-                MereSegmentedControl(choiceItems, selection: choiceBinding, accessibilityLabel: field.label, title: choiceTitle)
+            StudioFittingChoice { shape in
+                flagRow {
+                    choice(shape, menuWidth: 180)
+                    Spacer(minLength: 0)
+                }
             }
         case .picker:
             flagRow {
-                Picker(field.label, selection: choiceBinding) {
-                    ForEach(choiceItems, id: \.self) { choice in
-                        Text(choiceTitle(choice)).tag(choice)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 180)
+                choice(.menu, menuWidth: 180)
                 Spacer(minLength: 0)
             }
         case .slider, .stepper:
@@ -295,13 +284,16 @@ struct ContractFormControl<Draft>: View {
         unsetChoice == nil ? field.option.choices : [""] + field.option.choices
     }
 
-    /// The control as the contract's rule picks it, except that segments gaining an unset item
-    /// become a menu once there are more than four of them or their titles would not fit a row
-    /// ("Custom · Krea fast style · Krea cinematic style · Klein fast style"), by the rule the
-    /// inspector's variant row uses.
-    private var choiceControl: StudioContractControl {
-        guard field.control == .segmented, unsetChoice != nil else { return field.control }
-        return StudioContractControl.segmentsFit(choiceItems.map(choiceTitle)) ? .segmented : .picker
+    /// The option's choices, unset item first when it has one, as segments or a menu.
+    private func choice(_ shape: StudioChoiceShape, menuWidth: CGFloat) -> some View {
+        StudioChoiceControl(
+            shape: shape,
+            items: choiceItems,
+            selection: choiceBinding,
+            accessibilityLabel: field.label,
+            menuWidth: menuWidth,
+            title: choiceTitle
+        )
     }
 
     private func choiceTitle(_ choice: String) -> String {
@@ -340,6 +332,56 @@ struct ContractFormControl<Draft>: View {
         case "--image", "--input", "--end-image", "--ref-image", "--mask": return [.image]
         case "--lrc-file", "--lyrics-file": return [.plainText]
         default: return [.data]
+        }
+    }
+}
+
+/// The two ways a choice is drawn.
+enum StudioChoiceShape {
+    /// Every choice as a segment, read at a glance.
+    case segments
+    /// A pop-up menu, for choices that would not read whole as segments.
+    case menu
+}
+
+/// Draws a choice's row with segments when the whole row — its label or flag column and every
+/// segment at full width — fits the width the row is given, and with a menu when it does not.
+/// The rule is the row's real width rather than a count of characters, so "Float16 · Float32"
+/// stays segments in the 280 pt inspector while "Default · Small · Medium · Large" beside
+/// "Variant" becomes a menu instead of truncating. The inspector's choice rows, its variant
+/// row, and the Command view's flag rows all decide this way.
+struct StudioFittingChoice<Row: View>: View {
+    @ViewBuilder let row: (StudioChoiceShape) -> Row
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            row(.segments)
+            row(.menu)
+        }
+    }
+}
+
+/// A choice as `MereSegmentedControl` or as a menu no wider than `menuWidth`.
+struct StudioChoiceControl<Item: Hashable>: View {
+    let shape: StudioChoiceShape
+    let items: [Item]
+    @Binding var selection: Item
+    let accessibilityLabel: String
+    let menuWidth: CGFloat
+    let title: (Item) -> String
+
+    var body: some View {
+        switch shape {
+        case .segments:
+            MereSegmentedControl(items, selection: $selection, accessibilityLabel: accessibilityLabel, title: title)
+        case .menu:
+            Picker(accessibilityLabel, selection: $selection) {
+                ForEach(items, id: \.self) { item in
+                    Text(title(item)).tag(item)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: menuWidth)
         }
     }
 }
