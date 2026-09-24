@@ -41,21 +41,21 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         }
         // Every Studio destination (composer and specialist pages alike) files under the configured
         // root, so the run's outputs land in the live directory instead of ~/Pictures etc. The root
-        // lives in a throwaway suite, never in the user's own settings.
-        let suite = try XCTUnwrap(UserDefaults(suiteName: Self.defaultsSuiteName))
-        suite.removePersistentDomain(forName: Self.defaultsSuiteName)
-        suite.set(directory.path, forKey: StudioOutputLocation.rootDefaultsKey)
+        // lives in this process only: a suite named once per process, set through its registration
+        // domain, which cfprefsd never persists — so two `swift test --filter …/testNN` processes
+        // running at once cannot overwrite or clear each other's root.
+        let suite = try XCTUnwrap(UserDefaults(suiteName: "run.mere.studio.live-acceptance.\(UUID().uuidString)"))
+        suite.register(defaults: [StudioOutputLocation.rootDefaultsKey: directory.path])
         StudioOutputLocation.defaults = suite
+        let probe = StudioOutputLocation.outputDirectoryURL(domain: .sound, prompt: "probe", fallbackStem: "probe").path
+        XCTAssertTrue(probe.hasPrefix(directory.path), "The configured root did not take: destinations would file under \(probe)")
         continueAfterFailure = true
     }
 
     override func tearDownWithError() throws {
         StudioOutputLocation.defaults = .standard
-        UserDefaults(suiteName: Self.defaultsSuiteName)?.removePersistentDomain(forName: Self.defaultsSuiteName)
         try super.tearDownWithError()
     }
-
-    private static let defaultsSuiteName = "run.mere.studio.live-acceptance"
 
     // MARK: - Text ▸ Decisions
 
@@ -920,7 +920,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
                 StudioValidationError(message: "The renoise schedule has 3 values but the run has 2 steps.")
             )
         }
-        let badRun = try runCLI(flow, StudioOutputLocation.destination(for: bad).arguments, timeout: 300)
+        let badRun = try runCLI(flow, namedArguments(bad), timeout: 300)
         XCTAssertNotEqual(badRun.exitCode, 0)
         XCTAssertTrue(badRun.stderr.contains("--renoise must contain one value or exactly --steps values"), badRun.stderr.suffix(300).description)
         conclude(flow, "amount='\(amount.argument)' schedule='\(schedule.argument)' both generated through the task draft; bad schedule refused by the runner and exit=\(badRun.exitCode) from the CLI")
@@ -989,6 +989,38 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let decoded = try AVAudioFile(forReading: URL(fileURLWithPath: decodeRequest.draft.outputPath))
         XCTAssertEqual(Double(decoded.length) / decoded.fileFormat.sampleRate, 4, accuracy: 0.5)
         conclude(flow, "latents=\(header.shape) \(header.descriptor) decoded=\(String(format: "%.2f", Double(decoded.length) / decoded.fileFormat.sampleRate))s at \(Int(decoded.fileFormat.sampleRate)) Hz")
+    }
+
+    /// Sound ▸ Video Foley's task draft — the clip in the well, the prompt, a renoise amount —
+    /// runs `sfx video generate` with the Synchformer model and writes the WAV the finished
+    /// card plays under the clip.
+    func test27VideoFoleyGeneratesFromTheTaskDraft() throws {
+        try requireModels(["sfx-woosh-dvflow-8s", "sfx-woosh-synchformer"])
+        let flow = "27-sfx-foley"
+        let clip = try Self.movingSquareVideo(in: fixtures())
+
+        var draft = StudioTaskDraft(templateID: .sfxVideo)
+        draft.prompt = "a small object sliding across a wooden table"
+        draft.setArgument(1, clip.path)
+        draft.form["--steps"] = .integer(2)
+        draft.form["--seed"] = .integer(7)
+        draft.form["--renoise"] = .text(StudioRenoise.amount(0.5).argument)
+        XCTAssertEqual(draft.primaryInputPath, clip.path, "the well fills the clip positional")
+        XCTAssertTrue(StudioTaskSchema.primarySlot(for: .sfxVideo)?.accepts(clip) == true)
+        let (request, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(3)), ["sfx", "video", "generate"])
+        XCTAssertEqual(Array(argv.dropFirst(3).prefix(2)), [draft.prompt, clip.path])
+        XCTAssertEqual(argv.firstIndex(of: "--renoise").map { argv[$0 + 1] }, "0.5")
+        XCTAssertTrue(request.draft.outputPath.hasSuffix(".wav"))
+
+        let run = try runCLI(flow, argv, timeout: 1_800)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        let output = URL(fileURLWithPath: request.draft.outputPath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.path), "No WAV at \(output.path)")
+        let file = try AVAudioFile(forReading: output)
+        let seconds = Double(file.length) / file.fileFormat.sampleRate
+        XCTAssertGreaterThan(seconds, 0.5, "the foley is not empty")
+        conclude(flow, "foley=\(String(format: "%.2f", seconds))s at \(Int(file.fileFormat.sampleRate)) Hz in \(String(format: "%.0f", run.duration))s")
     }
 
     // MARK: - Chat thinking
@@ -1120,6 +1152,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         // XCTest runs these on the main thread; the runner and the session store are main-actor.
         let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        assertDestinations(of: prepared.request.draft, stayUnder: live)
         return (prepared.request, template.arguments(from: prepared.request.draft))
     }
 
@@ -1130,7 +1163,38 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request(), "\(draft.templateID) cannot run from Studio")
         let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        assertDestinations(of: prepared.request.draft, stayUnder: live)
         return (prepared.request, try XCTUnwrap(prepared.request.execution).arguments)
+    }
+
+    /// A task draft's argv with its destination named but not prepared, for a command the
+    /// runner refuses (the CLI's own objection is what the test wants to see).
+    private func namedArguments(_ draft: StudioTaskDraft) -> [String] {
+        let named = StudioOutputLocation.destination(for: draft)
+        if let flag = named.capability?.output.flag, !named.text(flag).isBlank {
+            XCTAssertTrue(named.text(flag).hasPrefix(live.path), "Output escaped the configured root: \(named.text(flag))")
+        }
+        return named.arguments
+    }
+
+    /// Every destination the draft names — the output and the sidecars derived beside it — is
+    /// under the live directory, so a run can never write into the user's own folders.
+    private func assertDestinations(of draft: CommandDraft, stayUnder root: URL, file: StaticString = #filePath, line: UInt = #line) {
+        for (label, path) in [
+            ("output", draft.outputPath), ("JSON sidecar", draft.visionJSONOutputPath),
+            ("mask directory", draft.visionMaskOutputDirectory),
+        ] where !path.isBlank {
+            XCTAssertTrue(path.hasPrefix(root.path), "The \(label) escaped the configured root: \(path)", file: file, line: line)
+        }
+    }
+
+    /// The user's own media folders. A CLI launch naming a file under one of them, outside the
+    /// live directory, is a harness fault (the root did not take) and never runs.
+    private var fencedFolders: [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return ["Music", "Pictures", "Documents", "Movies", "Desktop", "Downloads"].map {
+            home.appendingPathComponent($0, isDirectory: true)
+        }
     }
 
     private func decodeAnalyzeDocument(at path: String) throws -> StudioAnalyzeDocument {
@@ -1546,6 +1610,19 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// Runs the CLI, capturing both streams to files under `live/<flow>/` as evidence.
     @discardableResult
     private func runCLI(_ flow: String, _ argv: [String], timeout: TimeInterval) throws -> CLIResult {
+        struct EscapedRoot: LocalizedError {
+            let path: String
+            var errorDescription: String? { "The CLI would write outside the live directory: \(path)" }
+        }
+        let livePath = live.standardizedFileURL.path
+        for token in argv where token.hasPrefix("/") {
+            let path = URL(fileURLWithPath: token).standardizedFileURL.path
+            guard !path.hasPrefix(livePath + "/"), fencedFolders.contains(where: { path.hasPrefix($0.standardizedFileURL.path + "/") }) else {
+                continue
+            }
+            XCTFail("Refusing to launch the CLI with \(token): it is under the user's own folders, not \(live.path)")
+            throw EscapedRoot(path: token)
+        }
         stepCounter += 1
         let folder = live.appendingPathComponent(flow, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

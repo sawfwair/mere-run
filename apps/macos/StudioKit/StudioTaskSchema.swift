@@ -86,12 +86,14 @@ package enum StudioTaskSchema {
             let types: [UTType]
             if argument.kind == .directory {
                 types = [.folder]
+            } else if let explicit = acceptedTypes(forArgument: argument.name, templateID: templateID) {
+                types = explicit
             } else if slots.isEmpty, !template.inputKind.allowedTypes.isEmpty {
                 // The first file positional is the template's own input, wherever the contract
                 // places it (`sfx video generate <prompt> <input>`).
                 types = template.inputKind.allowedTypes
             } else {
-                types = acceptedTypes(forArgument: argument.name, templateID: templateID)
+                types = [.data]
             }
             slots.append(StudioAttachmentSlot(
                 id: argument.name,
@@ -122,10 +124,14 @@ package enum StudioTaskSchema {
         slots(for: templateID).first
     }
 
-    private static func acceptedTypes(forArgument name: String, templateID: CommandTemplateID) -> [UTType] {
+    /// What a template's file positional takes when its `inputKind` does not say: the second
+    /// image of a pair, or Foley's clip that may also be the Synchformer features the CLI
+    /// accepts in its place (`.npy`). Nil leaves it to the template's input kind.
+    private static func acceptedTypes(forArgument name: String, templateID: CommandTemplateID) -> [UTType]? {
         switch templateID {
         case .visionFlow, .visionFaceCompare, .visionFaceBatch, .visionGeometryMultiview: return [.image]
-        default: return [.data]
+        case .sfxVideo: return [.movie, .video, .audiovisualContent, .data]
+        default: return nil
         }
     }
 
@@ -185,7 +191,7 @@ package enum StudioTaskSchema {
         case "--manifest": return .musicManifest
         case "--face-index", "--reference-face-index", "--candidate-face-index": return .faceIndex
         case "--instruments": return .instruments
-        case "--renoise", "--renoise-strength": return .renoise
+        case "--renoise": return .renoise
         case "--target-rank": return .targetRanks
         default: return nil
         }
