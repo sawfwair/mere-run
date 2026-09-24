@@ -257,7 +257,9 @@ private struct StudioCardHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                Text(item.displayTitle)
+                // A task run without a prompt is headed by its command ("TripoSR 3D"), not the
+                // mode that files it.
+                Text(item.prompt.isBlank && item.templateID?.studioTask.usesTaskDraft == true ? item.displayKindTitle : item.displayTitle)
                     .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(3)
@@ -319,6 +321,18 @@ enum StudioFeedChips {
     static func chips(for item: StudioLibraryItem, titles: StudioModelTitles) -> [String] {
         guard let draft = item.commandDraft else { return [] }
         var chips: [String] = []
+        // A task on the shared workspace records its exact argv; its chips read that rather than
+        // the fields of the mode that files it, which its command never set.
+        if item.templateID?.studioTask.usesTaskDraft == true {
+            let arguments = item.commandArguments ?? []
+            for (flag, label) in [("--resolution", "resolution"), ("--seed", "seed")] {
+                if let index = arguments.firstIndex(of: flag), index + 1 < arguments.count {
+                    chips.append("\(label) \(arguments[index + 1])")
+                }
+            }
+            if !draft.model.isBlank { chips.append(StudioModelNaming.displayName(draft.model, titles: titles)) }
+            return chips
+        }
         switch item.mode {
         case .createImage, .video:
             chips.append("\(draft.width)×\(draft.height)")
