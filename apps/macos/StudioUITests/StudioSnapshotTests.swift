@@ -2895,7 +2895,7 @@ private final class SnapshotFixture {
         }
         let midi = root.appendingPathComponent("harbor-lights-7c1e2a.mid", isDirectory: false)
         try Self.writeDemoMIDI(to: midi)
-        let context = root.appendingPathComponent("harbor-lights-7c1e2a.json", isDirectory: false)
+        let context = root.appendingPathComponent("harbor-lights-7c1e2a-context.json", isDirectory: false)
         try Self.musicalContextDocument.write(to: context, atomically: true, encoding: .utf8)
 
         var taskDraft = StudioTaskDraft(templateID: .musicTranscribe)

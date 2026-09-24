@@ -1055,7 +1055,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(midiURL.pathExtension, "mid")
         XCTAssertTrue(midiURL.deletingPathExtension().lastPathComponent.hasPrefix("tone-music-"), midiURL.lastPathComponent)
         let contextPath = try XCTUnwrap(argv.firstIndex(of: "--context-output").map { argv[$0 + 1] })
-        XCTAssertEqual(contextPath, midiURL.deletingPathExtension().appendingPathExtension("json").path)
+        XCTAssertEqual(contextPath, midiURL.deletingPathExtension().path + "-context.json")
         XCTAssertEqual(argv.firstIndex(of: "--model").map { argv[$0 + 1] }, model)
 
         let run = try runCLI(flow, argv, timeout: 1_800)

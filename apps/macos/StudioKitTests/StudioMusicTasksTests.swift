@@ -153,7 +153,7 @@ final class StudioMusicTasksTests: XCTestCase {
             XCTAssertEqual(output.deletingLastPathComponent().path, root.appendingPathComponent("Music").path)
             XCTAssertTrue(output.lastPathComponent.hasPrefix("harbor-lights-"), output.path)
             XCTAssertEqual(output.pathExtension, "mid")
-            XCTAssertEqual(named.text("--context-output"), output.deletingPathExtension().appendingPathExtension("json").path)
+            XCTAssertEqual(named.text("--context-output"), output.deletingPathExtension().path + "-context.json")
             let request = try XCTUnwrap(named.request())
             XCTAssertEqual(request.draft.outputPath, output.path, "the job lifecycle reads the same file")
             XCTAssertEqual(request.execution?.arguments.firstIndex(of: "--context-output").map { request.execution!.arguments[$0 + 1] },
@@ -195,14 +195,30 @@ final class StudioMusicTasksTests: XCTestCase {
         XCTAssertEqual(importedAnalyze.primaryInputPath, "/tmp/harbor-lights.wav")
         XCTAssertEqual(importedAnalyze.text("--duration"), "45")
 
-        var transcribe = try XCTUnwrap(CommandCatalog.template(id: .musicTranscribe)).defaultDraft()
-        transcribe.inputPath = "/tmp/harbor-lights.wav"
-        transcribe.musicInstruments = "voice,drums"
-        transcribe.musicTranscribeFormat = "jsonl"
-        sessions.set(transcribe, for: StudioTask.musicTranscribe.rawValue + ".MusicTools.transcribeDraft")
-        let importedTranscribe = try XCTUnwrap(sessions.taskDraft(for: .musicTranscribe))
-        XCTAssertEqual(importedTranscribe.text("--instruments"), "voice,drums")
-        XCTAssertEqual(importedTranscribe.text("--format"), "jsonl")
+        // The page stamped a transcription and a context path into every draft it kept; those
+        // were the last run's files, not settings, so the import drops them and routing names
+        // fresh ones beside the recording rather than writing over the old run.
+        try withConfiguredRoot { root in
+            let pageMusic = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Music/mere.run/Music", isDirectory: true)
+            var transcribe = try XCTUnwrap(CommandCatalog.template(id: .musicTranscribe)).defaultDraft()
+            transcribe.inputPath = "/tmp/harbor-lights.wav"
+            transcribe.musicInstruments = "voice,drums"
+            transcribe.musicTranscribeFormat = "jsonl"
+            transcribe.outputPath = pageMusic.appendingPathComponent("transcription-20260903-101500.jsonl").path
+            transcribe.musicContextOutput = pageMusic.appendingPathComponent("musical-context-20260903-101500.json").path
+            sessions.set(transcribe, for: StudioTask.musicTranscribe.rawValue + ".MusicTools.transcribeDraft")
+            let importedTranscribe = try XCTUnwrap(sessions.taskDraft(for: .musicTranscribe))
+            XCTAssertEqual(importedTranscribe.text("--instruments"), "voice,drums")
+            XCTAssertEqual(importedTranscribe.text("--format"), "jsonl")
+            XCTAssertEqual(importedTranscribe.text("--output"), "", "the page's stamped transcription path is not a setting")
+            XCTAssertEqual(importedTranscribe.text("--context-output"), "", "nor is its context path")
+            let named = StudioOutputLocation.destination(for: importedTranscribe)
+            let output = URL(fileURLWithPath: named.text("--output"))
+            XCTAssertEqual(output.deletingLastPathComponent().path, root.appendingPathComponent("Music").path)
+            XCTAssertTrue(output.lastPathComponent.hasPrefix("harbor-lights-"), output.path)
+            XCTAssertEqual(output.pathExtension, "jsonl")
+            XCTAssertEqual(named.text("--context-output"), output.deletingPathExtension().path + "-context.json")
+        }
     }
 
     private func withConfiguredRoot(_ body: (URL) throws -> Void) throws {

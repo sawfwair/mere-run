@@ -725,10 +725,6 @@ private struct StudioWorkspaceView: View {
             StudioSCAILView()
         case .musicRealtime:
             StudioRealtimeMusicView(initialDraft: draft)
-        case .musicAnalyze, .musicTranscribe:
-            // On the shared task workspace (`StudioTask.migratedTasks`); `domainContent` renders
-            // it before this switch is reached.
-            StudioTaskWorkspace(task: destination.task, models: models)
         case .musicSeparate:
             StudioAudioToolsView(tool: .constant(.separate))
         case .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore:

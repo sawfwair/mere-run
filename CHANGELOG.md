@@ -218,8 +218,8 @@ The format is based on Keep a Changelog.
   raw document a segment away. A transcription is named after the recording
   and filed by what it is — MIDI under `~/Music/mere.run/Music`, a JSON or
   JSON Lines event list under `~/Documents/mere.run/Music` — with its
-  musical-context document beside it (`<name>-context.json` next to a JSON
-  transcription; none is asked for when musical context is off); the Library
+  musical-context document beside it as `<name>-context.json` (none is asked
+  for when musical context is off); the Library
   column, "Use these settings",
   Stop, and the readiness card all work for both, and the settings the Music
   Tools page kept are carried over once. The resident music server's

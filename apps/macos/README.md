@@ -700,8 +700,7 @@ instruments are picked in the inspector from the list the CLI prints with
 transcription is named after the recording and filed by what it is — a MIDI
 file under `~/Music/mere.run/Music`, a JSON or JSON Lines event list under
 `~/Documents/mere.run/Music` — with its musical-context document beside it
-(`<name>.json` next to a MIDI, `<name>-context.json` next to a JSON
-transcription); none is asked for when musical context is off.
+as `<name>-context.json`; none is asked for when musical context is off.
 Music ▸ Separate shares the restoration surface with Audio. Music ▸
 Realtime is the Magenta RT2 session: a transport with the live clock, the
 recording's waveform, Prompt A/B steering with a blend slider, temperature,
