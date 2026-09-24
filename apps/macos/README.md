@@ -365,9 +365,14 @@ move, or resize); a box takes it only with the Box tool, so with the Point or
 Negative tool a click inside a box adds the point there — inside a box is where
 a refining point goes — and a drag inside it draws another box. The selected
 box is solid with a white halo and corner handles, the selected point has a
-ring; Delete (or Backspace) removes the selection and Escape clears it, with
-the layer taking keyboard focus on the click (`.focusable(interactions:
-.edit)`) so the key reaches it rather than the composer. A prompt's numbered
+ring; Delete (or Forward Delete) removes the selection and Escape clears it.
+Those keys arrive through one local `NSEvent` key-down monitor
+(`StudioRegionKeyMonitor`, owned by the layer whose prompt was pressed last and
+installed only while it holds a selection) rather than SwiftUI focus, because a
+click that starts the drawing gesture never makes the layer first responder;
+`StudioRegionKeyCommand` in StudioKit decides the key and ignores every key
+while a text field is being edited, so typing in the composer is never
+affected. A prompt's numbered
 tag flips or slides to stay on the picture. Each prompt is a VoiceOver element
 ("Box 1, coffee cup, 120 by 80 at 40, 30"). The prompts live on the draft
 (`StudioDraft.visionRegionPrompts`) in the input's own pixels and become the

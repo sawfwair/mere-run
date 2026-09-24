@@ -159,6 +159,11 @@ struct StudioRegionPromptLayer: View {
     /// pointer event.
     @State private var liveEdit: StudioRegionPrompt?
     @FocusState private var focused: Bool
+    /// The window this layer is in, so the key monitor answers only its keys.
+    @State private var hostWindow: NSWindow?
+    /// This layer's claim on the key monitor; the layer whose prompt was pressed last owns Delete
+    /// and Escape, so two editors on one page never both answer.
+    @State private var keyOwner = UUID()
 
     private enum Metrics {
         static let handleSide: CGFloat = 9
@@ -222,6 +227,13 @@ struct StudioRegionPromptLayer: View {
         .onChange(of: prompts.map(\.id)) { _, ids in
             if let selection, !ids.contains(selection) { self.selection = nil }
         }
+        // A click that starts the drag gesture never makes the layer first responder, so the
+        // keys that act on the selection arrive through a monitor rather than SwiftUI focus.
+        .background(StudioHostWindowReader(window: $hostWindow))
+        .onChange(of: selection != nil, initial: true) { _, hasSelection in
+            if hasSelection { claimKeys() } else { StudioRegionKeyMonitor.shared.release(owner: keyOwner) }
+        }
+        .onDisappear { StudioRegionKeyMonitor.shared.release(owner: keyOwner) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(prompts.isEmpty ? "No boxes or points drawn" : "\(prompts.countDescription) drawn")
         .accessibilityHint("Drag to draw a box. Click to add a point. Option-click for a negative point.")
@@ -391,6 +403,7 @@ struct StudioRegionPromptLayer: View {
 
     private func begin(at location: CGPoint) {
         focused = true
+        claimKeys()
         switch StudioRegionPress.press(tool: tool, hit: hit(at: location), optionHeld: isOptionHeld) {
         case .resize(let id, let corner):
             selection = id
@@ -481,6 +494,16 @@ struct StudioRegionPromptLayer: View {
         liveEdit = original.moved(by: delta, within: imageSize)
     }
 
+    /// Makes this layer the one the key monitor asks about Delete and Escape.
+    private func claimKeys() {
+        StudioRegionKeyMonitor.shared.claim(owner: keyOwner, window: hostWindow) { command in
+            switch command {
+            case .removeSelection: removeSelection()
+            case .clearSelection: selection = nil
+            }
+        }
+    }
+
     private func removeSelectionKeyPress() -> KeyPress.Result {
         guard selection != nil else { return .ignored }
         removeSelection()
@@ -523,6 +546,78 @@ struct StudioRegionPromptLayer: View {
         case .resize(_, let corner): return .frameResize(position: corner.resizePosition)
         case .grab: return .grabIdle
         case .draw: return tool == .box ? .rectSelection : .default
+        }
+    }
+}
+
+/// One local key-down monitor for every prompt layer, owned by whichever layer claimed it last.
+///
+/// The monitor exists only while a layer holds a selection. A key is answered when it lands in
+/// the owner's window and nothing is editing text there (`StudioRegionKeyCommand` decides), and
+/// an answered key is swallowed so the window does not beep or pass it on.
+@MainActor
+final class StudioRegionKeyMonitor {
+    static let shared = StudioRegionKeyMonitor()
+
+    private var monitor: Any?
+    private var owner: UUID?
+    private var window: NSWindow?
+    private var handler: ((StudioRegionKeyCommand) -> Void)?
+
+    func claim(owner: UUID, window: NSWindow?, handler: @escaping (StudioRegionKeyCommand) -> Void) {
+        self.owner = owner
+        self.window = window
+        self.handler = handler
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.handle(event) else { return event }
+            return nil
+        }
+    }
+
+    func release(owner: UUID) {
+        guard self.owner == owner else { return }
+        self.owner = nil
+        window = nil
+        handler = nil
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+    }
+
+    /// Whether `event` acted on the owner's selection.
+    private func handle(_ event: NSEvent) -> Bool {
+        guard let handler, let eventWindow = event.window, window == nil || eventWindow === window else { return false }
+        let command = StudioRegionKeyCommand.command(
+            keyCode: event.keyCode,
+            hasSelection: true,
+            textIsEditing: eventWindow.firstResponder is NSText
+        )
+        guard let command else { return false }
+        handler(command)
+        return true
+    }
+}
+
+/// Hands the window a SwiftUI view ends up in to the view, once AppKit has placed it.
+private struct StudioHostWindowReader: NSViewRepresentable {
+    @Binding var window: NSWindow?
+
+    func makeNSView(context: Context) -> WindowReadingView {
+        let view = WindowReadingView()
+        view.onWindow = { window in
+            DispatchQueue.main.async { self.window = window }
+        }
+        return view
+    }
+
+    func updateNSView(_ view: WindowReadingView, context: Context) {}
+
+    final class WindowReadingView: NSView {
+        var onWindow: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindow?(window)
         }
     }
 }

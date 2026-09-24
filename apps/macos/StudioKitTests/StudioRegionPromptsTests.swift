@@ -236,6 +236,24 @@ final class StudioRegionPromptsTests: XCTestCase {
         }
     }
 
+    /// Delete and Forward Delete remove the selection and Escape clears it, only while there is a
+    /// selection and no text is being edited; every other key, and every key while typing, is
+    /// left alone.
+    func testKeysActOnTheSelectionOnlyWhenNothingIsEditingText() {
+        typealias Key = StudioRegionKeyCommand
+        XCTAssertEqual(Key.command(keyCode: Key.deleteKeyCode, hasSelection: true, textIsEditing: false), .removeSelection)
+        XCTAssertEqual(Key.command(keyCode: Key.forwardDeleteKeyCode, hasSelection: true, textIsEditing: false), .removeSelection)
+        XCTAssertEqual(Key.command(keyCode: Key.escapeKeyCode, hasSelection: true, textIsEditing: false), .clearSelection)
+        for keyCode in [Key.deleteKeyCode, Key.forwardDeleteKeyCode, Key.escapeKeyCode] {
+            XCTAssertNil(Key.command(keyCode: keyCode, hasSelection: true, textIsEditing: true), "typing in a field keeps its keys")
+            XCTAssertNil(Key.command(keyCode: keyCode, hasSelection: false, textIsEditing: false), "nothing selected, nothing to do")
+        }
+        // Return, space, and a letter never touch the selection.
+        for keyCode: UInt16 in [36, 49, 0] {
+            XCTAssertNil(Key.command(keyCode: keyCode, hasSelection: true, textIsEditing: false), "\(keyCode)")
+        }
+    }
+
     /// A press that barely moved on screen, or moved less than a pixel of a zoomed-out picture,
     /// is a click; anything more is a box.
     func testAClickIsAPressThatCouldNotHaveMeantABox() {

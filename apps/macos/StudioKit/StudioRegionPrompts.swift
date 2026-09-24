@@ -526,6 +526,32 @@ package enum StudioRegionClick: Equatable {
     }
 }
 
+// MARK: - Keys while something is selected
+
+/// What a key does to the selection on the prompt layer. The layer reads the keyboard through
+/// an event monitor rather than SwiftUI focus, because a click that starts a drag gesture never
+/// makes the layer first responder, so it decides here from the raw key code: Delete and
+/// Forward Delete remove the selection, Escape clears it, and nothing happens while a text field
+/// is being edited (the composer's prompt, a label), so typing there is never affected.
+package enum StudioRegionKeyCommand: Equatable {
+    case removeSelection
+    case clearSelection
+
+    /// The virtual key codes of an ANSI keyboard, as `NSEvent.keyCode` reports them.
+    package static let deleteKeyCode: UInt16 = 51
+    package static let forwardDeleteKeyCode: UInt16 = 117
+    package static let escapeKeyCode: UInt16 = 53
+
+    package static func command(keyCode: UInt16, hasSelection: Bool, textIsEditing: Bool) -> StudioRegionKeyCommand? {
+        guard hasSelection, !textIsEditing else { return nil }
+        switch keyCode {
+        case deleteKeyCode, forwardDeleteKeyCode: return .removeSelection
+        case escapeKeyCode: return .clearSelection
+        default: return nil
+        }
+    }
+}
+
 // MARK: - Where a tag sits
 
 /// Where a prompt's numbered tag goes so it stays on the picture. A box's tag sits above its
