@@ -729,24 +729,20 @@ private struct StudioWorkspaceView: View {
             StudioRealtimeMusicView(initialDraft: draft)
         case .musicAnalyze, .musicTranscribe:
             StudioMusicToolsView(tool: musicToolBinding, tools: [.analyze, .transcribe])
-        case .musicSeparate:
-            StudioAudioToolsView(tool: .constant(.separate))
         case .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore:
             StudioSFXLabView(
                 task: sfxTaskBinding,
                 tasks: [.video, .condition, .encode, .decode, .score],
                 initialDraft: draft
             )
-        case .voiceClone, .voiceVoices:
-            StudioVoiceView(task: voiceTaskBinding, tasks: [.synthesize, .profiles], initialDraft: draft)
+        case .voiceVoices:
+            StudioVoicesView()
         case .threeDFromImage:
             Studio3DCreationView()
         case .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive:
             StudioVisionLabView(task: visionLabBinding)
-        case .audioWhoSpoke, .audioLive:
-            StudioVoiceView(task: voiceTaskBinding, tasks: [.diarize, .listen], initialDraft: draft)
-        case .audioEnhance, .audioSeparate:
-            StudioAudioToolsView(tool: audioToolBinding)
+        case .audioLive:
+            StudioLiveListenSession(models: models)
         case .textDecide:
             StudioLayaDecisionView()
         case .textEmbeddings, .textAnonymize:
@@ -825,13 +821,6 @@ private struct StudioWorkspaceView: View {
         )
     }
 
-    private var audioToolBinding: Binding<StudioAudioTool> {
-        Binding(
-            get: { destination.task == .audioSeparate ? .separate : .enhance },
-            set: { navigation.open(task: $0 == .separate ? .audioSeparate : .audioEnhance) }
-        )
-    }
-
     private var sfxTaskBinding: Binding<StudioSFXTask> {
         Binding(
             get: {
@@ -851,29 +840,6 @@ private struct StudioWorkspaceView: View {
                 case .encode: navigation.open(task: .soundEncode)
                 case .decode: navigation.open(task: .soundDecode)
                 case .score: navigation.open(task: .soundScore)
-                }
-            }
-        )
-    }
-
-    private var voiceTaskBinding: Binding<StudioVoiceTask> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .voiceVoices: return .profiles
-                case .audioWhoSpoke: return .diarize
-                case .audioLive: return .listen
-                case .audioTranscribe: return .transcribe
-                default: return .synthesize
-                }
-            },
-            set: { task in
-                switch task {
-                case .synthesize: navigation.open(task: .voiceClone)
-                case .profiles: navigation.open(task: .voiceVoices)
-                case .transcribe: navigation.open(task: .audioTranscribe)
-                case .diarize: navigation.open(task: .audioWhoSpoke)
-                case .listen: navigation.open(task: .audioLive)
                 }
             }
         )

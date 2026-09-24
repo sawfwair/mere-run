@@ -205,7 +205,6 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
     case soundScore = "sound.score"
 
     case voiceSpeak = "voice.speak"
-    case voiceClone = "voice.clone"
     case voiceVoices = "voice.voices"
 
     case threeDFromImage = "threeD.fromImage"
@@ -264,7 +263,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
             return .music
         case .soundGenerate, .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore:
             return .sound
-        case .voiceSpeak, .voiceClone, .voiceVoices: return .voice
+        case .voiceSpeak, .voiceVoices: return .voice
         case .threeDFromImage: return .threeD
         case .chatChat, .chatCode, .chatTrain: return .chat
         case .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth, .visionPose,
@@ -298,7 +297,6 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .soundDecode: return "Decode"
         case .soundScore: return "Score"
         case .voiceSpeak: return "Speak"
-        case .voiceClone: return "Clone"
         case .voiceVoices: return "Voices"
         case .threeDFromImage: return "From image"
         case .chatChat: return "Chat"

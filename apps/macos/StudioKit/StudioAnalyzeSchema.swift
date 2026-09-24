@@ -364,7 +364,6 @@ package struct StudioGenerateArchetype: Equatable {
         .soundFoley: StudioGenerateArchetype(task: .soundFoley, hasPrompt: true, primaryOutput: .audio),
         .soundCondition: StudioGenerateArchetype(task: .soundCondition, hasPrompt: true, primaryOutput: .other),
         .threeDFromImage: StudioGenerateArchetype(task: .threeDFromImage, hasPrompt: false, primaryOutput: .model3D),
-        .voiceClone: StudioGenerateArchetype(task: .voiceClone, hasPrompt: true, primaryOutput: .audio),
     ]
 }
 

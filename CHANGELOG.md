@@ -209,6 +209,30 @@ The format is based on Keep a Changelog.
   or were denied. `/runtime/status` now reads installed models from a
   background-refreshed scan instead of scanning on every request. The macOS
   app declares removable- and network-volume usage descriptions.
+- Move Studio's Audio ▸ Who Spoke, Enhance, and Separate (and Music ▸ Separate)
+  onto the shared task workspace: an attachment well (right-click an audio
+  slot to Record…), the model chip, Who Spoke's format and Nemotron 3 input
+  buffer as chips with the segment controls in the inspector, Enhance's and
+  Separate's compute as a chip, results named after the input in the domain's
+  folder, Library history, and "Use these settings". Separate lists every stem
+  with its own player from the manifest the CLI writes; an RTTM timeline draws
+  the speaker lanes the way a JSON one does; an input buffer chosen with
+  Sortformer is refused before the run with the fix named.
+- Make Audio ▸ Live a Session page: Start runs `speech listen` or `speech
+  diarize-live` through the task runner as a cancellable inference job with a
+  Library row, the transport row carries the operation, microphone, options,
+  and model chips, and Stop interrupts the CLI the way Ctrl-C does. Coming
+  back to the page adopts a session still running.
+- Make Voice ▸ Voices a Manage page — a list, a detail with the reference
+  player and transcript, Delete behind a confirmation, and New voice with the
+  reference in an attachment well — and retire Voice ▸ Clone, whose form
+  duplicated Speak's composer: attaching a reference to Speak's well is clone
+  mode. A window last opened on Clone reopens on the default task.
+- Declare Studio option metadata (group, tier, default, range) in the shared
+  contract for `speech diarize`, `speech diarize-live`, `speech listen`,
+  `speech profile create`, `audio enhance`, and `music separate`, so their
+  chips and inspector sections render from the contract; `capabilities --json`
+  gains the fields and nothing else changes.
 
 ## 0.55.0 - 2026-09-22
 

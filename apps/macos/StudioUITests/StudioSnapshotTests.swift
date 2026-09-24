@@ -1311,26 +1311,93 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
-    /// Audio ▸ Who Spoke with a finished diarization: the recording, one lane per speaker over
-    /// its length, and every turn as the Analyze panel's rows with Save timeline…, light and dark.
+    /// Audio ▸ Who Spoke on the shared task workspace with a finished diarization: the recording
+    /// in the well and on the canvas, one lane per speaker over its length, and every turn as the
+    /// Analyze panel's rows with Save timeline…, light and dark. The page's own draft key from
+    /// before the move is what the seed parks, so the board also proves the one-time import.
     func testWhoSpokeTimelineSnapshots() throws {
-        try fixture.seedDiarizationRun()
+        let audio = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: AudioVoiceScript.responses)
+        )
+        defer { audio.tearDown() }
+        try audio.seedDiarizationRun()
         for appearance in StudioSnapshotAppearance.allCases {
             let navigation = NavigationModel()
             let view = StudioRootView()
-                .environmentObject(fixture.controller)
-                .environmentObject(fixture.library)
+                .environmentObject(audio.controller)
+                .environmentObject(audio.library)
                 .environmentObject(navigation)
                 .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
-            try fixture.write(
+            try audio.write(
                 view,
                 size: Self.fidelitySize,
                 appearance: appearance,
                 name: "who-spoke-\(appearance.rawValue)",
-                settle: 2.0,
+                settle: 2.5,
                 afterAppear: { navigation.open(task: .audioWhoSpoke) }
             )
         }
+    }
+
+    /// The Audio and Voice pages through the root, light and dark at 1440×820 and once at
+    /// 960×760: Who Spoke, Enhance, and Separate on the shared task workspace with a finished
+    /// run each (the stems list plays from the manifest), Voice ▸ Voices as the Manage page with
+    /// two saved voices and its New voice form, and Audio ▸ Live idle and then mid-session — a
+    /// `speech listen` job held open by the process seam, adopted by the page, with three
+    /// events streamed into its transcript.
+    // swiftlint:disable:next function_body_length
+    func testAudioAndVoicePageSnapshots() throws {
+        let pages = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: AudioVoiceScript.responses)
+        )
+        defer { pages.tearDown() }
+        try pages.seedDiarizationRun()
+        try pages.seedEnhanceRun()
+        try pages.seedSeparateRun(task: .audioSeparate)
+        let voices = try pages.voiceProfileSeed()
+        let wide = CGSize(width: 1_440, height: 820)
+        let narrow = CGSize(width: 960, height: 760)
+
+        func render(
+            _ task: StudioTask, name: String, size: CGSize, appearance: StudioSnapshotAppearance,
+            profiles: [StudioVoiceProfileRecord] = [], afterAppear: (() -> Void)? = nil
+        ) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(pages.controller)
+                .environmentObject(pages.library)
+                .environmentObject(navigation)
+                .environment(\.studioVoiceProfileSeed, profiles)
+                .frame(width: size.width, height: size.height)
+            try pages.write(view, size: size, appearance: appearance, name: name, settle: 2.5, afterAppear: {
+                navigation.open(task: task)
+                afterAppear?()
+            })
+        }
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let suffix = appearance.rawValue
+            try render(.audioWhoSpoke, name: "audio-who-spoke-\(suffix)", size: wide, appearance: appearance)
+            try render(.audioEnhance, name: "audio-enhance-\(suffix)", size: wide, appearance: appearance)
+            try render(.audioSeparate, name: "audio-separate-\(suffix)", size: wide, appearance: appearance)
+            try render(.voiceVoices, name: "voice-voices-\(suffix)", size: wide, appearance: appearance, profiles: voices)
+            try render(.audioLive, name: "audio-live-idle-\(suffix)", size: wide, appearance: appearance)
+        }
+        try render(.audioWhoSpoke, name: "audio-who-spoke-compact-light", size: narrow, appearance: .light)
+        try render(.audioEnhance, name: "audio-enhance-compact-light", size: narrow, appearance: .light)
+        try render(.audioSeparate, name: "audio-separate-compact-light", size: narrow, appearance: .light)
+        try render(.voiceVoices, name: "voice-voices-new-compact-light", size: narrow, appearance: .light)
+        try render(.audioLive, name: "audio-live-compact-light", size: narrow, appearance: .light)
+
+        let requestID = try pages.seedLiveListenSession()
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.audioLive, name: "audio-live-running-\(appearance.rawValue)", size: wide, appearance: appearance) {
+                pages.speakIntoLiveListenSession()
+            }
+        }
+        XCTAssertTrue(pages.controller.jobs.job(requestID: requestID)?.state.isRunning ?? false, "the seam holds the session open")
     }
 
     /// Music ▸ Analyze with a finished ACE-Step analysis: tempo, key, meter, language, and how
@@ -2825,6 +2892,108 @@ private final class SnapshotFixture {
         controller.taskSessions.set(Optional(row.id), for: StudioTask.audioEnhance.rawValue + ".requestID")
     }
 
+    /// A finished Separate run for `task` (Audio ▸ Separate or Music ▸ Separate): a track, the
+    /// two stems `music separate` wrote beside it, and the manifest it printed and saved, with
+    /// the task draft pointed at the track.
+    func seedSeparateRun(task: StudioTask) throws {
+        guard let template = CommandCatalog.template(id: .musicSeparate) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let track = root.appendingPathComponent("late-set.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: track, seconds: 12)
+        let stems = root.appendingPathComponent("late-set-stems", isDirectory: true)
+        try FileManager.default.createDirectory(at: stems, withIntermediateDirectories: true)
+        var stemURLs: [URL] = []
+        for name in ["vocals", "instrumental"] {
+            let url = stems.appendingPathComponent("\(name).wav", isDirectory: false)
+            try Self.writeSilentWAV(to: url, seconds: 12)
+            stemURLs.append(url)
+        }
+        let manifestURL = stems.appendingPathComponent("separation.json", isDirectory: false)
+        let manifest = Self.separationManifest(source: track, stems: stemURLs, manifest: manifestURL)
+        try manifest.write(to: manifestURL, atomically: true, encoding: .utf8)
+
+        var draft = template.defaultDraft()
+        draft.inputPath = track.path
+        draft.outputPath = stems.path
+        let startedAt = Self.mockupTime(hour: 16, minute: 12)
+        var row = StudioLibraryItem(
+            id: UUID(),
+            mode: .music,
+            prompt: "",
+            inputURL: track,
+            outputURL: stems,
+            createdAt: startedAt,
+            updatedAt: startedAt.addingTimeInterval(21.5),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run music separate late-set.wav --output-dir late-set-stems",
+            outputText: manifest,
+            templateID: .musicSeparate,
+            commandDraft: draft,
+            commandArguments: template.arguments(from: draft),
+            artifactURLs: [stems] + stemURLs + [manifestURL]
+        )
+        row.inputIdentity = StudioInputIdentity.read(track)
+        library.upsert(row)
+        var taskDraft = StudioTaskDraft(templateID: .musicSeparate)
+        taskDraft.setArgument(0, track.path)
+        controller.taskSessions.setTaskDraft(taskDraft, for: task)
+        controller.taskSessions.set(Optional(row.id), for: task.rawValue + ".requestID")
+    }
+
+    /// Two saved voices for Voice ▸ Voices, their references written here so the detail's
+    /// player has a file to load.
+    func voiceProfileSeed() throws -> [StudioVoiceProfileRecord] {
+        let made = Self.mockupTime(hour: 10, minute: 5)
+        var records: [StudioVoiceProfileRecord] = []
+        let voices: [(id: String, name: String, language: String?, transcript: String)] = [
+            ("6F9B2C1E-0D44-4C1B-9A7E-3B2C4D5E6F70", "Narrator", "en",
+             "Harbour lights are blinking slow on the water where the old boats go. I left my coat on the ferry rail and watched the evening turn to pale."),
+            ("A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D", "Field host", nil,
+             "Good morning everyone, and thank you for joining the quarterly review."),
+        ]
+        for voice in voices {
+            let reference = root.appendingPathComponent("\(voice.name.lowercased().replacingOccurrences(of: " ", with: "-"))-reference.wav")
+            try Self.writeSilentWAV(to: reference, seconds: 6)
+            records.append(StudioVoiceProfileRecord(
+                id: UUID(uuidString: voice.id)!, name: voice.name, createdAt: made, updatedAt: made,
+                transcript: voice.transcript, language: voice.language,
+                referenceAudioRelativePath: reference.path, modelFingerprint: nil
+            ))
+        }
+        return records
+    }
+
+    /// A `speech listen` session started through the task runner and held open by the process
+    /// seam, with its ready event already on stdout, the way the page finds one when it appears.
+    func seedLiveListenSession() throws -> UUID {
+        guard let runner = liveSessionRunner else {
+            throw StudioSnapshotError.noContentView
+        }
+        runner.liveSessionMarkers = ["listen"]
+        var draft = StudioTaskDraft(templateID: .speechListen)
+        draft.form["--language"] = .text("en")
+        controller.taskSessions.setTaskDraft(draft, for: .audioLive)
+        controller.checkReadiness(for: .audioLive, modelID: StudioTaskSchema.modelID(for: draft))
+        let request = try StudioTaskRunner(controller: controller, library: library).run(draft.liveListenLaunch(), task: .audioLive)
+        guard let live = runner.liveStarts.last else {
+            throw StudioSnapshotError.noContentView
+        }
+        live.stdout(#"{"protocol":1,"type":"ready"}"# + "\n")
+        live.stderr("Listening. Press Ctrl-C to stop.\n")
+        return request.id
+    }
+
+    /// Two committed utterances and a partial one, as `speech listen --jsonl` streams them.
+    func speakIntoLiveListenSession() {
+        guard let live = liveSessionRunner?.liveStarts.last else { return }
+        live.stdout(#"{"protocol":1,"type":"commit","utteranceId":"u1","revision":4,"text":"Good morning everyone, and thank you for joining the quarterly review."}"# + "\n")
+        live.stdout(#"{"protocol":1,"type":"commit","utteranceId":"u2","revision":3,"text":"Today we will walk through the roadmap and the numbers behind it."}"# + "\n")
+        live.stdout(#"{"protocol":1,"type":"partial","utteranceId":"u3","revision":2,"text":"Before we start, I want to flag that the shipping dates"}"# + "\n")
+        live.stderr("Committed utterance u2\n")
+    }
+
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
     /// as the row's output text the way the Library keeps stdout.
     func seedMusicAnalysisRun() throws {
@@ -2888,6 +3057,50 @@ private final class SnapshotFixture {
         \(segments)
           ]
         }
+        """
+    }
+
+    /// The `separation.json` `music separate` writes for two stems, as `MusicSeparationManifest`
+    /// encodes it (snake_case, sorted keys).
+    private static func separationManifest(source: URL, stems: [URL], manifest: URL) -> String {
+        let stemEntries = stems.map { url in
+            """
+              {
+                "name" : "\(url.deletingPathExtension().lastPathComponent)",
+                "path" : "\(url.path)",
+                "sha256" : "0000000000000000000000000000000000000000000000000000000000000000"
+              }
+            """
+        }.joined(separator: ",\n")
+        return """
+        {
+          "chunk_size" : 352800,
+          "chunks" : 3,
+          "created_at" : "2026-09-24T16:12:21Z",
+          "elapsed_seconds" : 21.5,
+          "manifest_path" : "\(manifest.path)",
+          "model" : {
+            "compute_type" : "float16",
+            "id" : "music-separate-bs-roformer-viperx-1297",
+            "license" : "MIT",
+            "repository" : "mere-run/bs-roformer",
+            "revision" : "main",
+            "weights_sha256" : "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "overlap" : 2,
+          "schema_version" : 1,
+          "source" : {
+            "channels" : 1,
+            "frames" : 192000,
+            "path" : "\(source.path)",
+            "sample_rate" : 16000,
+            "sha256" : "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "stems" : [
+        \(stemEntries)
+          ]
+        }
+
         """
     }
 
@@ -3189,6 +3402,28 @@ private enum RunsScript {
 /// The model inventory the Models ▸ Installed fidelity render shows: the mockup's sample
 /// lineup, expressed the way `mere.run model list`, `model capabilities`, `model storage`,
 /// `model info`, `model runtime get`, and `adapter list` print it.
+/// What the Audio and Voice boards' CLI reads answer: the inventory with the diarization,
+/// enhancement, and separation models installed, so the composers are live, and the two
+/// microphones `speech listen --list-devices` lists for Audio ▸ Live's device chip.
+private enum AudioVoiceScript {
+    static let models = [
+        (id: "speech-diarization-sortformer", category: "speech-diarization", title: "Sortformer"),
+        (id: "speech-diarization-nemotron3", category: "speech-diarization", title: "Nemotron 3 Diarization"),
+        (id: "audio-enhance-ap-bwe-16kto48k", category: "audio", title: "AP-BWE 16k to 48k"),
+        (id: "music-separate-bs-roformer-viperx-1297", category: "music", title: "BS-RoFormer ViperX"),
+    ]
+
+    static var responses: [SnapshotProcessRunner.Response] {
+        ModelsInventoryScript.analyzeReadinessResponses(alsoInstalling: models) + [
+            .init(
+                matches: { $0.starts(with: ["speech", "listen"]) && $0.contains("--list-devices") },
+                stdout: "* BuiltInMicrophoneDevice\tMacBook Pro Microphone\n  AppleUSBAudioEngine:0001\tStudio USB Mic\n",
+                exitCode: 0
+            ),
+        ]
+    }
+}
+
 private enum ModelsInventoryScript {
     static let defaultModelID = "image-zimage-nano"
     static let pullingModelID = "vision-chat-qwen3.6-vl-4b"
@@ -3281,10 +3516,17 @@ private enum ModelsInventoryScript {
     /// `model list` and `model capabilities` with Vision ▸ Find's model installed, so the Analyze
     /// board renders its result rather than a readiness card.
     static var analyzeReadinessResponses: [SnapshotProcessRunner.Response] {
+        analyzeReadinessResponses(alsoInstalling: [])
+    }
+
+    /// The same answers with more models installed, for the boards of other Analyze tasks.
+    static func analyzeReadinessResponses(
+        alsoInstalling more: [(id: String, category: String, title: String)]
+    ) -> [SnapshotProcessRunner.Response] {
         let extraModels = [
             (id: "vision-ground-falcon-perception", category: "vision-ground", title: "Falcon Perception"),
             (id: "speech-asr-parakeet", category: "speech-asr", title: "Parakeet")
-        ]
+        ] + more
         let list = modelList.replacingOccurrences(
             of: "image-zimage-nano          image        installed  2.1 GB",
             with: (["image-zimage-nano          image        installed  2.1 GB"]

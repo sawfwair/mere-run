@@ -281,7 +281,7 @@ Tasks per domain (archetype in parentheses):
   Train (Project).
 - Sound: Generate, Video Foley (Generate); Score, Condition, Encode, Decode
   (Analyze).
-- Voice: Speak, Clone (Generate); Voices (Manage).
+- Voice: Speak (Generate; its composer is the clone surface too); Voices (Manage).
 - 3D: From image (Generate) with engine picker TripoSR / TRELLIS.2 / InstantMesh.
 - Chat: threads with a Code preset (Converse); Train text LoRA (Project).
 - Vision: Read, Find, Segment, Track, Depth, Pose, Faces, Flow, Geometry
