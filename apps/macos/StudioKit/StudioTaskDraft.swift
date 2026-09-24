@@ -53,8 +53,8 @@ package struct StudioTaskDraft: Codable, Equatable {
 
     /// The switches a page turned on for every run of a template because the surface reads the
     /// command's machine output: `--json` where the result is printed as JSON and a renderer
-    /// decodes it. Applied to a fresh draft only; a parked or restored draft keeps what it ran
-    /// with.
+    /// decodes it, `--pretty` where the JSON view shows what was printed. Applied to a fresh
+    /// draft only; a parked or restored draft keeps what it ran with.
     package static func launcherDefaults(for templateID: CommandTemplateID) -> [String] {
         switch templateID {
         case .imageDatasetDiscover, .imageRunPlan,
@@ -64,6 +64,10 @@ package struct StudioTaskDraft: Codable, Equatable {
         case .visionTrackLive:
             // The Live page drew boxes and labels on the clip unless they were turned off.
             return ["--json", "--show-boxes", "--show-labels"]
+        case .textEmbed:
+            return ["--pretty"]
+        case .textAnonymize:
+            return ["--json", "--pretty"]
         default:
             return []
         }

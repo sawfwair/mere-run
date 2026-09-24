@@ -95,7 +95,6 @@ private struct StudioWorkspaceView: View {
     private var modelUsageTermsByID: [String: StudioModelUsageTerms] {
         Dictionary(uniqueKeysWithValues: models.rows.compactMap { row in row.usageTerms.map { (row.id, $0) } })
     }
-    @State private var imageDatasetTask: StudioUtilityTask = .datasetDiscovery
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
     @FocusState private var promptFocused: Bool
     init(controller: MereRunController, library: StudioLibraryStore, navigation: NavigationModel,
@@ -711,12 +710,6 @@ private struct StudioWorkspaceView: View {
     @ViewBuilder
     private var legacyContent: some View {
         switch destination.task {
-        case .imageDatasets:
-            StudioUtilityLabView(
-                task: $imageDatasetTask,
-                tasks: [.datasetDiscovery, .imageValidation, .runPlan],
-                showsTaskPicker: true
-            )
         case .imageTrain:
             StudioTrainingView(kind: .image)
         case .chatTrain:
@@ -737,12 +730,6 @@ private struct StudioWorkspaceView: View {
             StudioLiveListenSession(models: models)
         case .textDecide:
             StudioLayaDecisionView()
-        case .textEmbeddings, .textAnonymize:
-            StudioUtilityLabView(
-                task: utilityTaskBinding,
-                tasks: [.embeddings, .anonymize],
-                showsTaskPicker: false
-            )
         case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth:
             StudioGeoLabView(tool: geoToolBinding)
         case .modelsInstalled:
@@ -794,21 +781,6 @@ private struct StudioWorkspaceView: View {
     }
 
     // MARK: Task bindings for re-hosted views
-
-    private var utilityTaskBinding: Binding<StudioUtilityTask> {
-        Binding(
-            get: { destination.task == .textAnonymize ? .anonymize : .embeddings },
-            set: { task in
-                switch task {
-                case .embeddings: navigation.open(task: .textEmbeddings)
-                case .anonymize: navigation.open(task: .textAnonymize)
-                case .imageValidation, .datasetDiscovery, .runPlan:
-                    imageDatasetTask = task
-                    navigation.open(task: .imageDatasets)
-                }
-            }
-        )
-    }
 
     private var geoToolBinding: Binding<StudioGeoTool> {
         Binding(

@@ -147,11 +147,12 @@ chrome from `StudioUI/StudioSessionControls.swift`. A task keeps its bespoke
 page until it is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the
 root then renders the workspace for it instead. Sound ▸ Video Foley and
 Condition (Generate); Sound ▸ Encode, Decode, and Score, Music ▸ Analyze and
-Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, and Audio ▸ Who
-Spoke, Enhance, and Separate (Analyze) render on it; Vision ▸ Live and Audio ▸
-Live (Session) and Voice ▸ Voices (Manage) render their own pages over the same
-task draft. The SFX Lab, Music Tools, Vision Lab, Voice, and Audio Tools pages
-they replaced are gone.
+Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, Audio ▸ Who Spoke,
+Enhance, and Separate, Text ▸ Embeddings and Anonymize, and Image ▸ Datasets
+(Analyze) render on it; Vision ▸ Live and Audio ▸ Live (Session) and Voice ▸
+Voices (Manage) render their own pages over the same task draft. The SFX Lab,
+Music Tools, Vision Lab, Voice, Audio Tools, and Utility Lab pages they replaced
+are gone.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -438,8 +439,12 @@ steps — for every input-first task. Sound ▸ Score, Encode, and Decode render
 this canvas through the shared task workspace (Score's result is the CLAP gauge,
 Encode's the `.npy` header, Decode's the decoded audio), as do Music ▸ Analyze
 and Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, and Audio ▸
-Who Spoke, Enhance, and Separate; the other specialist tasks (Text ▸
-Embeddings, Anonymize; the four Earth tasks) still render their own form
+Who Spoke, Enhance, and Separate. Text ▸ Embeddings, Text ▸ Anonymize, and
+Image ▸ Datasets render on it too: the typed text or the folder, plan file, or
+nothing a Datasets variant takes on the left, and the cosine matrix, the
+protected text and spans, the candidate folders (each with "Train on it"), the
+run plan report, or the validation artifacts as the result panel's rows
+(`StudioUI/Renderers/`). The four Earth tasks still render their own form
 inside their task until their page moves. Migrating one is a view change, not
 a design decision.
 A view that is about the result rather than the input — Points, Vectors, Depth,
@@ -670,13 +675,20 @@ multi-reference editing, structured prompts, LoRA catalog IDs or local adapters,
 Krea tuning, and preflight. Image ▸ Train adds dataset previews, preflight,
 launch and resume, loss metrics, samples, checkpoints, and run comparison for
 Krea 2 and FLUX.2 Klein; Klein's per-target ranks are rows of module suffix and
-rank rather than a typed `suffix=rank` list. Image ▸ Datasets renders validation
-artifacts, candidate dataset diagnostics, and the run plan as a report
-(`StudioKit/StudioRunPlanReport.swift`, `StudioUI/StudioRunPlanReportView.swift`):
-a preflight's steps, resolution, batch, rank, learning rate, checkpoint and
-preview cadence, schedule, memory switches, dataset counts, model, and output,
-read from the CLI's typed envelope, or a materialized run's files, each
-revealable in Finder.
+rank rather than a typed `suffix=rank` list. Image ▸ Datasets is one Analyze task
+over three commands — Discover, Validate, and Run plan — picked by the
+Operation chip. Discover takes a folder in the well and lists the candidate
+datasets it found with their counts and problems
+(`StudioKit/StudioTextDatasetResults.swift`, `StudioUI/Renderers/StudioDatasetCandidates.swift`);
+"Train on it" on a row opens Image ▸ Train with that folder as the dataset.
+Validate takes no input and lists the artifacts it wrote. Run plan takes a plan
+file and renders the report (`StudioKit/StudioRunPlanReport.swift`,
+`StudioUI/Renderers/StudioRunPlanReportView.swift`): a preflight's steps,
+resolution, batch, rank, learning rate, checkpoint and preview cadence,
+schedule, memory switches, dataset counts, model, and output, read from the
+CLI's typed envelope, or a materialized run's files, each revealable in
+Finder; Preflight is a chip and the run directory for Materialize is an
+Output-section row in the inspector.
 
 **Video** ▸ Generate uses model-family-aware controls: LTX uses `--quality` and
 `--output-mode`, while native MiniMax-H3 exposes its exact `17n+5` frame
@@ -844,8 +856,13 @@ Library row's artifact, so the row reads like Transcribe's. The packaged
 app and embedded CLI carry the microphone usage description and audio-input
 entitlement those capture paths require.
 
-**Text** ▸ Embeddings adds vector norms and cosine-similarity inspection;
-Text ▸ Anonymize shows original and protected PII spans. Text ▸ Decisions
+**Text** ▸ Embeddings and Text ▸ Anonymize are Analyze tasks whose input is
+typed on the canvas: Embeddings takes one text per line and shows each vector's
+norm with the cosine similarity of every pair
+(`StudioUI/Renderers/StudioEmbeddingsMatrix.swift`); Anonymize takes the paste
+as one text and shows it beside the protected text with every span the filter
+marked (`StudioUI/Renderers/StudioAnonymizationSpans.swift`), or the protected
+text alone in its Text view. Both file their JSON under Text. Text ▸ Decisions
 (`StudioUI/StudioLayaDecisionView.swift`, `StudioKit/StudioDecisions.swift`) builds
 the Laya request instead of asking for one: the text to judge, then ordered
 choice, score (levels lowest first), and yes-or-no questions, with optional

@@ -277,7 +277,7 @@ struct StudioPoseSubjectRows: View {
     let result: StudioPoseOverlayResult
 
     var body: some View {
-        StudioResultRowList(count: result.subjects.count) {
+        StudioResultBoundedRows(count: result.subjects.count) {
             ForEach(Array(result.subjects.enumerated()), id: \.offset) { _, subject in
                 HStack(spacing: 10) {
                     Circle()
@@ -351,7 +351,7 @@ struct StudioFaceBatchRows: View {
     let document: StudioFaceBatchDocument
 
     var body: some View {
-        StudioResultRowList(count: document.entries.count) {
+        StudioResultBoundedRows(count: document.entries.count) {
             ForEach(Array(document.entries.enumerated()), id: \.offset) { _, entry in
                 HStack(spacing: 10) {
                     Image(systemName: entry.ok ? "face.dashed" : "exclamationmark.triangle")

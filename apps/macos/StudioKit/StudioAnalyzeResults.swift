@@ -261,13 +261,21 @@ package enum StudioAnalyzeDocument: Equatable {
     case clap(StudioCLAPScore.Output)
     case tensor(StudioTensorHeader)
     case separation(StudioSeparationManifest)
+    case embeddings(StudioEmbeddingDocument)
+    case anonymization(StudioAnonymizationDocument)
+    case datasetDiscovery(StudioDatasetDiscoveryDocument)
+    case runPlan(StudioRunPlanReport)
+    case validation(StudioImageValidationReport)
 
     /// Decodes whichever document `data` holds. The binary formats announce themselves (`.flo`'s
     /// magic float, `MThd`, `.npy`'s magic, a safetensors length prefix); the JSON writers each
     /// emit an object with a distinguishing key (`queries`, `prompts`, `frames`, `faces`,
-    /// `subjects`, `face`, `cosineSimilarity`, `metadata`, `stems`) or, for `vision face batch`,
-    /// one object per line, so the shape identifies itself; an RTTM timeline is read into the
-    /// diarization document; a payload that is none of those is read as a transcript.
+    /// `subjects`, `face`, `cosineSimilarity`, `metadata`, `stems`, an embedding's `usage`, an
+    /// envelope's `candidates` or `run_plan`) or, for `vision face batch`, one object per line,
+    /// so the shape identifies itself; the commands that print their result are read from the
+    /// one object in the captured output; an RTTM timeline is read into the diarization
+    /// document; a payload that is none of those is read as a transcript. A run whose row alone
+    /// says what it produced is `derived(from:)` instead.
     package static func decode(_ data: Data) -> StudioAnalyzeDocument? {
         if let field = try? StudioFlowField.decode(data) { return .flow(field) }
         if let midi = StudioMIDISummary.decode(data) { return .midi(midi) }
@@ -316,6 +324,7 @@ package enum StudioAnalyzeDocument: Equatable {
         guard let text = String(data: data, encoding: .utf8), !text.isBlank else { return nil }
         if let analysis = StudioMusicAnalysisDocument.decode(text) { return .musicAnalysis(analysis) }
         if let clap = StudioCLAPScore.decode(text) { return .clap(clap) }
+        if let object = StudioStructuredOutput.objectData(in: text), let printed = decodePrinted(object) { return printed }
         // A JSON document none of the writers' shapes match (a camera file, a scene manifest) is
         // not a transcript; the panel lists the run's files instead.
         if let first = text.trimmingCharacters(in: .whitespacesAndNewlines).first, first == "{" || first == "[" {
@@ -324,6 +333,24 @@ package enum StudioAnalyzeDocument: Equatable {
         if let timeline = StudioDiarizationDocument.rttm(text) { return .diarization(timeline) }
         let transcript = StudioTranscriptDocument.parse(text)
         return transcript.segments.isEmpty && transcript.text.isEmpty ? nil : .transcript(transcript)
+    }
+
+    /// The document a finished run's Library row stands for when its command prints nothing the
+    /// canvas decodes: `image validate` names its artifact folder and suite in its argv. Read
+    /// before the row's output, which for such a run is only the CLI's progress lines.
+    package static func derived(from item: StudioLibraryItem) -> StudioAnalyzeDocument? {
+        StudioImageValidationReport(item: item).map(StudioAnalyzeDocument.validation)
+    }
+
+    /// The JSON the text and dataset commands print (and `text embed`/`anonymize` also write to
+    /// `--output`), read from the one object in the captured output so the stderr lines a
+    /// Library row keeps after it do not get in the way.
+    private static func decodePrinted(_ object: Data) -> StudioAnalyzeDocument? {
+        if let document = StudioEmbeddingDocument.decode(object) { return .embeddings(document) }
+        if let document = StudioAnonymizationDocument.decode(object) { return .anonymization(document) }
+        if let document = StudioDatasetDiscoveryDocument.decode(object) { return .datasetDiscovery(document) }
+        if let report = StudioRunPlanReport.decode(object) { return .runPlan(report) }
+        return nil
     }
 
     /// The model the run used, as the document records it.
@@ -338,9 +365,11 @@ package enum StudioAnalyzeDocument: Equatable {
         case .faceEmbedding(let document): return document.modelID
         case .faceComparison(let document): return document.modelID
         case .depthManifest(let manifest): return manifest.model.modelID
-        case .transcript, .faces, .pose, .flow, .faceBatch, .midi, .tensor: return nil
         case .separation(let manifest): return manifest.model.id
-        case .transcript, .faces, .pose, .flow, .midi, .tensor: return nil
+        case .embeddings(let document): return document.model
+        case .anonymization(let document): return document.model
+        case .transcript, .faces, .pose, .flow, .faceBatch, .midi, .tensor, .datasetDiscovery, .runPlan, .validation:
+            return nil
         }
     }
 
@@ -442,7 +471,7 @@ package enum StudioAnalyzeDocument: Equatable {
                 maskURL: nil
             )]
         case .diarization, .transcript, .pose, .flow, .faceComparison, .faceBatch, .depthManifest, .musicAnalysis, .midi, .clap,
-             .tensor, .separation:
+             .tensor, .separation, .embeddings, .anonymization, .datasetDiscovery, .runPlan, .validation:
             return []
         }
     }
@@ -486,6 +515,16 @@ package enum StudioAnalyzeDocument: Equatable {
             return header.summary
         case .separation(let manifest):
             return manifest.summary
+        case .embeddings(let document):
+            return document.summary
+        case .anonymization(let document):
+            return document.summary
+        case .datasetDiscovery(let document):
+            return document.headline
+        case .runPlan(let report):
+            return report.title
+        case .validation(let report):
+            return report.summary
         }
     }
 

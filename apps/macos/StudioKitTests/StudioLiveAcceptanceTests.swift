@@ -883,16 +883,16 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let flow = "14-run-plan"
         let plan = try runPlanFile(flow: flow)
 
-        // StudioUtilityLabView.commandDraft for Run plan ▸ Preflight.
-        var preflight = CommandDraft()
-        preflight.inputPath = plan.path
-        preflight.preflight = true
-        preflight.materializePath = ""
-        preflight.json = true
-        let (_, argv) = try specialistRequest(templateID: .imageRunPlan, mode: .createImage, draft: preflight)
+        // Image ▸ Datasets ▸ Run plan: the task draft's fresh state is Preflight with JSON on.
+        var preflight = StudioTaskDraft(templateID: .imageRunPlan)
+        preflight.setArgument(0, plan.path)
+        let (_, argv) = try taskRequest(preflight, task: .imageDatasets)
         XCTAssertEqual(argv, ["image", "run-plan", plan.path, "--preflight", "--json"])
         let run = try runCLI(flow, argv, timeout: 600)
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        guard case .runPlan = StudioAnalyzeDocument.decode(Data(run.libraryOutputText.utf8)) else {
+            return XCTFail("The Analyze canvas did not read the preflight as a run plan report: \(run.stdout.prefix(400))")
+        }
         let report = try XCTUnwrap(StudioRunPlanReport.decode(outputText: run.libraryOutputText), "The preflight envelope did not decode: \(run.stdout.prefix(800))")
         XCTAssertEqual(report.title, "Training plan")
         XCTAssertEqual(report.command, ["image", "train-lora"])
@@ -907,19 +907,20 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(report.sections.first { $0.title == "Dataset" }?.rows.first { $0.label == "Usable pairs" }?.value, "2 of 2 images")
         XCTAssertNotNil(report.sections.first { $0.title == "Training" }?.rows.first { $0.label == "Steps" })
 
-        // Run plan ▸ Materialize into the page's default run-plan folder.
-        var materialize = CommandDraft()
-        materialize.inputPath = plan.path
-        materialize.preflight = false
-        materialize.materializePath = StudioOutputLocation.specialistDirectory(domain: .image, name: "run-plan", configuredRoot: live.path).path
-        materialize.json = true
-        let (_, materializeArgv) = try specialistRequest(templateID: .imageRunPlan, mode: .createImage, draft: materialize)
+        // Run plan ▸ Materialize: Preflight off, a run directory chosen in the inspector's Output
+        // section (the page's default run-plan folder).
+        var materialize = preflight
+        materialize.form["--preflight"] = .flag(false)
+        let runDirectory = StudioOutputLocation.specialistDirectory(domain: .image, name: "run-plan", configuredRoot: live.path).path
+        materialize.form["--materialize"] = .text(runDirectory)
+        let (_, materializeArgv) = try taskRequest(materialize, task: .imageDatasets)
+        XCTAssertEqual(materializeArgv, ["image", "run-plan", plan.path, "--json", "--materialize", runDirectory])
         let materialized = try runCLI(flow, materializeArgv, timeout: 600)
         XCTAssertEqual(materialized.exitCode, 0, materialized.failureDescription)
         let materializedReport = try XCTUnwrap(StudioRunPlanReport.decode(outputText: materialized.libraryOutputText), "The materialize envelope did not decode: \(materialized.stdout.prefix(800))")
         XCTAssertEqual(materializedReport.title, "Materialized run")
         guard case .materialized(let run) = materializedReport.result else { return XCTFail("Expected a materialization") }
-        XCTAssertEqual(URL(fileURLWithPath: run.runDirectory).standardizedFileURL.path, URL(fileURLWithPath: materialize.materializePath).standardizedFileURL.path)
+        XCTAssertEqual(URL(fileURLWithPath: run.runDirectory).standardizedFileURL.path, URL(fileURLWithPath: runDirectory).standardizedFileURL.path)
         XCTAssertTrue(FileManager.default.fileExists(atPath: run.planPath), "plan.json should exist at \(run.planPath)")
         XCTAssertTrue(FileManager.default.fileExists(atPath: run.runManifestPath), "The run manifest should exist at \(run.runManifestPath)")
         XCTAssertEqual(materializedReport.sections.map(\.title), ["Files", "Before"])
@@ -1341,7 +1342,94 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         conclude(flow, "argv=\(argv.joined(separator: " "))")
     }
 
+    // MARK: - Text ▸ Embeddings and Anonymize
+
+    /// Both text utilities from their task drafts: Embeddings writes its vectors under the Text
+    /// folder and the canvas reads them as a cosine matrix; Anonymize keeps the paste as one
+    /// text, prints JSON, and its spans decode for the renderer.
+    func test25EmbeddingsAndAnonymizeDecodeFromTheTaskDrafts() throws {
+        let flow = "25-text-utilities"
+        try requireModels(["text-embed-qwen3-0.6b", "text-anonymize-privacy-filter"])
+
+        var embed = StudioTaskDraft(templateID: .textEmbed)
+        embed.prompt = "semantic search query\nrelated document"
+        embed.form["--max-tokens"] = .integer(256)
+        let (_, embedArgv) = try taskRequest(embed, task: .textEmbeddings)
+        XCTAssertEqual(Array(embedArgv.prefix(4)), ["text", "embed", "semantic search query", "related document"])
+        let vectorsPath = try XCTUnwrap(Self.value(of: "--output", in: embedArgv))
+        XCTAssertTrue(vectorsPath.hasPrefix(live.appendingPathComponent("Text").path), "Embeddings should file under Text: \(vectorsPath)")
+        let embedded = try runCLI(flow, embedArgv, timeout: 600)
+        XCTAssertEqual(embedded.exitCode, 0, embedded.failureDescription)
+        guard case .embeddings(let vectors) = try decodeAnalyzeDocument(at: vectorsPath) else {
+            return XCTFail("The vectors file did not decode as embeddings")
+        }
+        XCTAssertEqual(vectors.vectors.count, 2)
+        XCTAssertGreaterThan(vectors.dimensions, 0)
+        let similarity = vectors.cosineSimilarity(vectors.vectors[0], vectors.vectors[1])
+        XCTAssertTrue((-1...1).contains(similarity), "cosine \(similarity)")
+        guard case .embeddings = StudioAnalyzeDocument.decode(Data(embedded.libraryOutputText.utf8)) else {
+            return XCTFail("The printed response did not decode as embeddings either")
+        }
+
+        var anonymize = StudioTaskDraft(templateID: .textAnonymize)
+        let paste = "My name is Alice Smith and my email is alice@example.com."
+        anonymize.prompt = paste
+        let (_, anonymizeArgv) = try taskRequest(anonymize, task: .textAnonymize)
+        XCTAssertEqual(Array(anonymizeArgv.prefix(3)), ["text", "anonymize", paste])
+        XCTAssertTrue(anonymizeArgv.contains("--json"))
+        let protectedPath = try XCTUnwrap(Self.value(of: "--output", in: anonymizeArgv))
+        XCTAssertTrue(protectedPath.hasPrefix(live.appendingPathComponent("Text").path), "Anonymize should file under Text: \(protectedPath)")
+        let anonymized = try runCLI(flow, anonymizeArgv, timeout: 600)
+        XCTAssertEqual(anonymized.exitCode, 0, anonymized.failureDescription)
+        guard case .anonymization(let spans) = try decodeAnalyzeDocument(at: protectedPath) else {
+            return XCTFail("The protected-text file did not decode as an anonymization")
+        }
+        XCTAssertEqual(spans.results.count, 1, "the paste is one text")
+        XCTAssertGreaterThan(spans.spanCount, 0, "the filter should mark the name or the email")
+        XCTAssertNotEqual(spans.protectedText, paste)
+        conclude(flow, "embed dims=\(vectors.dimensions) cosine=\(String(format: "%.3f", similarity)) file=\(vectorsPath) anonymize spans=\(spans.results[0].spans.map(\.label)) protected='\(spans.protectedText)'")
+    }
+
+    // MARK: - Image ▸ Datasets ▸ Discover
+
+    /// Discover from its task draft over a folder holding one two-pair dataset: the well's
+    /// folder becomes `--root`, the envelope decodes into candidates, and the leaf is trainable.
+    func test34DatasetDiscoverFindsTheFixtureDataset() throws {
+        let flow = "34-dataset-discover"
+        let root = fixtures().appendingPathComponent("discover-root", isDirectory: true)
+        let leaf = root.appendingPathComponent("squares", isDirectory: true)
+        try FileManager.default.createDirectory(at: leaf, withIntermediateDirectories: true)
+        for (index, color) in [(0, CGColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 1)), (1, CGColor(red: 0.2, green: 0.4, blue: 0.9, alpha: 1))] {
+            let image = leaf.appendingPathComponent("sample-\(index).png")
+            if !FileManager.default.fileExists(atPath: image.path) {
+                try Self.writeImage(to: image, size: CGSize(width: 256, height: 256), square: CGRect(x: 64, y: 64, width: 128, height: 128), color: color, type: .png, exifOrientation: nil)
+            }
+            try "a \(index == 0 ? "red" : "blue") square on a white background".write(to: leaf.appendingPathComponent("sample-\(index).txt"), atomically: true, encoding: .utf8)
+        }
+
+        var discover = StudioTaskDraft(templateID: .imageDatasetDiscover)
+        XCTAssertTrue(discover.attach(dropped: [root], slots: discover.slots), "the folder lands in the --root slot")
+        let (_, argv) = try taskRequest(discover, task: .imageDatasets)
+        XCTAssertEqual(argv, ["image", "dataset", "discover", "--root", root.path, "--max-depth", "4", "--min-usable-pairs", "1", "--json"])
+        let run = try runCLI(flow, argv, timeout: 120)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        guard case .datasetDiscovery(let document) = try XCTUnwrap(StudioAnalyzeDocument.decode(Data(run.libraryOutputText.utf8))) else {
+            return XCTFail("The discover envelope did not decode: \(run.stdout.prefix(600))")
+        }
+        let squares = try XCTUnwrap(document.candidates.first { URL(fileURLWithPath: $0.path).standardizedFileURL.path == leaf.standardizedFileURL.path }, "candidates: \(document.candidates.map(\.path))")
+        XCTAssertEqual(squares.usablePairs, 2)
+        XCTAssertEqual(squares.images, 2)
+        XCTAssertTrue(squares.trainable, "status \(squares.status): \(squares.problems)")
+        conclude(flow, "scanned=\(document.scannedDirectories) candidates=\(document.candidates.count) trainable=\(document.trainableCount) headline='\(document.headline)'")
+    }
+
     // MARK: - Studio request builders
+
+    /// The word after `flag` in an argv, or nil when the flag is absent.
+    private static func value(of flag: String, in argv: [String]) -> String? {
+        guard let index = argv.firstIndex(of: flag), index + 1 < argv.count else { return nil }
+        return argv[index + 1]
+    }
 
     /// A composer task's request, prepared the way `StudioPromptTaskController` prepares it: the
     /// destination folder is created (under the configured root) before the CLI launches.

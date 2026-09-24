@@ -33,6 +33,18 @@ enum StudioResultRendering: Equatable {
     case depthManifest(StudioDepthManifest)
     /// The stems `music separate` wrote, from its manifest when the run's document is one.
     case stems(StudioSeparationManifest?)
+    /// Text ▸ Embeddings' vectors and their cosine similarity.
+    case embeddings(StudioEmbeddingDocument)
+    /// Text ▸ Anonymize's inputs beside their protected text and marked spans.
+    case anonymizationSpans(StudioAnonymizationDocument)
+    /// Text ▸ Anonymize's protected text alone.
+    case anonymizedText(StudioAnonymizationDocument)
+    /// Image ▸ Datasets ▸ Discover's candidate folders, each with "Train on it".
+    case datasetCandidates(StudioDatasetDiscoveryDocument)
+    /// Image ▸ Datasets ▸ Run plan's preflight or materialization report.
+    case runPlan(StudioRunPlanReport)
+    /// Image ▸ Datasets ▸ Validate's artifact folder.
+    case validationArtifacts(StudioImageValidationReport)
 }
 
 /// What a renderer draws in the Analyze input column, in place of the input, when the chosen
@@ -98,6 +110,21 @@ enum StudioResultRenderers {
             return .stems(manifest)
         case (.stems, _):
             return .stems(nil)
+        // The JSON view puts the raw document in the input column; the panel beside it keeps
+        // the document's own rows rather than falling to the detection rows it has none of.
+        case (.vectors, .embeddings(let document)), (.json, .embeddings(let document)):
+            return .embeddings(document)
+        case (.spans, .anonymization(let document)):
+            return .anonymizationSpans(document)
+        case (.text, .anonymization(let document)):
+            return .anonymizedText(document)
+        case (.candidates, .datasetDiscovery(let document)), (.json, .datasetDiscovery(let document)):
+            return .datasetCandidates(document)
+        case (.report, .runPlan(let report)), (.json, .runPlan(let report)):
+            return .runPlan(report)
+        case (.json, .validation(let report)):
+            // Validate's only view; the CLI's words are in the input column, the folder is the result.
+            return .validationArtifacts(report)
         default:
             return nil
         }
@@ -168,7 +195,8 @@ enum StudioResultRenderers {
         case .tensor:
             return item.outputURL.map { [$0] } ?? []
         case .clap, .musicAnalysis, .pianoRoll, .poseSubjects, .flowStatistics, .faceEmbedding, .faceComparison,
-             .faceBatch, .depthManifest, .stems:
+             .faceBatch, .depthManifest, .stems, .embeddings, .anonymizationSpans, .anonymizedText, .datasetCandidates,
+             .runPlan, .validationArtifacts:
             return []
         case .syncReview(_, let audio), .audioOutput(let audio):
             return [audio]
@@ -195,55 +223,13 @@ struct StudioCardRenderingView: View {
             .background(MereRunTheme.surfaceRaised.opacity(0.6))
             .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         case .clap, .audioOutput, .musicAnalysis, .pianoRoll, .poseSubjects, .flowStatistics, .faceEmbedding,
-             .faceComparison, .faceBatch, .depthManifest, .stems:
+             .faceComparison, .faceBatch, .depthManifest, .stems, .embeddings, .anonymizationSpans, .anonymizedText,
+             .datasetCandidates, .runPlan, .validationArtifacts:
             StudioResultRendererView(rendering: rendering, item: item)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         case .syncReview:
             StudioResultRendererView(rendering: rendering, item: item)
-        }
-    }
-}
-
-/// One output file as a result row: its name, Reveal, and — where the panel's own action row
-/// does not offer it — Quick Look.
-private struct StudioResultFileRow: View {
-    let url: URL
-    let glyph: String
-    var quickLook = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: glyph)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(MereRunTheme.accent)
-                    .frame(width: 14)
-                Text(url.lastPathComponent)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .help(url.path)
-                if quickLook {
-                    Button("Quick Look") { QuickLookCoordinator.shared.preview(url) }
-                        .buttonStyle(.mereSecondary)
-                        .controlSize(.small)
-                        .accessibilityLabel("Quick Look \(url.lastPathComponent)")
-                }
-                Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                    .buttonStyle(.mereSecondary)
-                    .controlSize(.small)
-                    .accessibilityLabel("Reveal \(url.lastPathComponent) in Finder")
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .contain)
-            .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
-            Rectangle()
-                .fill(MereRunTheme.border.opacity(0.27))
-                .frame(height: 1)
         }
     }
 }
@@ -282,6 +268,18 @@ struct StudioResultRendererView: View {
             StudioDepthManifestRows(manifest: manifest)
         case .stems(let manifest):
             StudioStemsList(item: item, manifest: manifest)
+        case .embeddings(let document):
+            StudioEmbeddingsMatrix(document: document)
+        case .anonymizationSpans(let document):
+            StudioAnonymizationSpans(document: document)
+        case .anonymizedText(let document):
+            StudioAnonymizedText(document: document)
+        case .datasetCandidates(let document):
+            StudioDatasetCandidatesRow(document: document)
+        case .runPlan(let report):
+            StudioRunPlanReportView(report: report)
+        case .validationArtifacts(let report):
+            StudioImageValidationArtifacts(report: report)
         }
     }
 }
@@ -299,7 +297,7 @@ private struct StudioAudioOutputRows: View {
             Rectangle()
                 .fill(MereRunTheme.border.opacity(0.27))
                 .frame(height: 1)
-            StudioResultFileRow(url: url, glyph: "waveform")
+            StudioResultFileRow(url: url)
         }
     }
 }
@@ -326,66 +324,17 @@ struct StudioResultCanvasView: View {
     }
 }
 
-// MARK: - Shared rows
-
-/// One labelled fact in the result panel, the way the tensor inspector and the run plan report
-/// lay theirs out.
-struct StudioResultFactRow: View {
-    let label: String
-    let value: String
-
-    init(_ label: String, _ value: String) {
-        self.label = label
-        self.value = value
-    }
+/// The candidates renderer with its "Train on it" wired to the window's navigation and the
+/// Training page's parked draft. Kept apart from `StudioResultRendererView` so the panel itself
+/// never requires a navigation model in its environment.
+private struct StudioDatasetCandidatesRow: View {
+    let document: StudioDatasetDiscoveryDocument
+    @EnvironmentObject private var navigation: NavigationModel
+    @Environment(\.studioTaskSessions) private var sessions
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(label)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textSecondary)
-                    .frame(width: 72, alignment: .leading)
-                Text(value)
-                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(MereRunTheme.textPrimary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .accessibilityElement(children: .combine)
-            StudioResultHairline()
-        }
-    }
-}
-
-/// The hairline under each panel row.
-struct StudioResultHairline: View {
-    var body: some View {
-        Rectangle()
-            .fill(MereRunTheme.border.opacity(0.27))
-            .frame(height: 1)
-    }
-}
-
-/// Rows that size to their content, scrolling inside the panel past a handful so the action
-/// row stays in reach: the panel's own rule.
-struct StudioResultRowList<Content: View>: View {
-    let count: Int
-    @ViewBuilder let content: () -> Content
-
-    private static var rowsMaxHeight: CGFloat { 320 }
-    private static var scrollingRowThreshold: Int { 7 }
-
-    var body: some View {
-        if count > Self.scrollingRowThreshold {
-            ScrollView {
-                VStack(spacing: 0) { content() }
-            }
-            .frame(height: Self.rowsMaxHeight)
-        } else {
-            VStack(spacing: 0) { content() }
+        StudioDatasetCandidates(document: document) { candidate in
+            StudioDatasetTrainingHandoff.open(candidate, navigation: navigation, sessions: sessions)
         }
     }
 }

@@ -110,12 +110,14 @@ struct StudioAnalyzeCanvas: View {
     }
 
     /// The run whose result is on screen: the picked Library row when it finished, else the most
-    /// recent finished run of this task.
+    /// recent finished run of this task. On a task with variants, only a run of the chosen
+    /// variant: Datasets ▸ Validate does not show the last Discover's candidates.
     private var resultCard: StudioFeedCard? {
-        if let selectedID, let picked = cards.first(where: { $0.id == selectedID }), picked.kind == .generation {
+        let finished = cards.filter { $0.kind == .generation && (templateID == nil || $0.item.templateID == templateID) }
+        if let selectedID, let picked = finished.first(where: { $0.id == selectedID }) {
             return picked
         }
-        return cards.last { $0.kind == .generation }
+        return finished.last
     }
 
     /// The cards that sit above the result: everything still in flight, plus the newest failure.
@@ -131,9 +133,10 @@ struct StudioAnalyzeCanvas: View {
 
     /// An input-first task shows its input the moment there is one: attaching a picture and then
     /// still being told to "Choose image…" would be absurd, so the serif empty state is only for
-    /// an empty well with nothing to report.
+    /// an empty well with nothing to report. A typed input is entered on the canvas itself, so
+    /// its editor is always up.
     private var hasBody: Bool {
-        inputURL != nil || hasTypedInput || inputKind == .none || resultCard != nil || !pendingCards.isEmpty
+        inputURL != nil || inputKind == .text || inputKind == .none || resultCard != nil || !pendingCards.isEmpty
             || showsReadinessCard
     }
 
@@ -310,6 +313,18 @@ struct StudioAnalyzeCanvas: View {
                 .padding(MereRunTheme.Spacing.sm)
                 .frame(height: min(mediaHeight, 320))
                 .background(MereRunTheme.surface)
+                .overlay(alignment: .topLeading) {
+                    // The task's placeholder, where the editor has none of its own.
+                    if !hasTypedInput, !presentation.promptPlaceholder.isEmpty {
+                        Text(presentation.promptPlaceholder)
+                            .font(.system(size: 13))
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .padding(.horizontal, MereRunTheme.Spacing.sm + 5)
+                            .padding(.vertical, MereRunTheme.Spacing.sm + 1)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
                 .mereMediaFrame()
                 .accessibilityLabel(presentation.promptPlaceholder.isEmpty ? "Input text" : presentation.promptPlaceholder)
         } else {
@@ -564,8 +579,9 @@ struct StudioAnalyzeCanvas: View {
         let itemID = item.id
         let url = StudioAnalyzeDocumentSource.url(for: item)
         let fallbackText = item.outputText
+        let derived = StudioAnalyzeDocument.derived(from: item)
         let result = await Task.detached(priority: .userInitiated) {
-            StudioAnalyzeLoadedResult.load(itemID: itemID, url: url, fallbackText: fallbackText)
+            StudioAnalyzeLoadedResult.load(itemID: itemID, url: url, fallbackText: fallbackText, derived: derived)
         }.value
         guard !Task.isCancelled else { return }
         loaded = result
@@ -616,7 +632,12 @@ struct StudioAnalyzeLoadedResult: Equatable {
     let raw: String?
     let document: StudioAnalyzeDocument?
 
-    static func load(itemID: UUID, url: URL?, fallbackText: String?) -> StudioAnalyzeLoadedResult {
+    /// - Parameter derived: the document the run's row alone stands for
+    ///   (`StudioAnalyzeDocument.derived(from:)`), which wins over reading its output.
+    static func load(itemID: UUID, url: URL?, fallbackText: String?, derived: StudioAnalyzeDocument? = nil) -> StudioAnalyzeLoadedResult {
+        if let derived {
+            return StudioAnalyzeLoadedResult(itemID: itemID, url: nil, raw: fallbackText, document: derived)
+        }
         if let url, let data = try? Data(contentsOf: url), !data.isEmpty {
             return StudioAnalyzeLoadedResult(
                 itemID: itemID,

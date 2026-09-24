@@ -282,6 +282,18 @@ The format is based on Keep a Changelog.
   `speech profile create`, `audio enhance`, and `music separate`, so their
   chips and inspector sections render from the contract; `capabilities --json`
   gains the fields and nothing else changes.
+- Move Studio's Text ▸ Embeddings, Text ▸ Anonymize, and Image ▸ Datasets onto
+  the shared task workspace, in place of the Utility Lab form. Embeddings and
+  Anonymize take their text on the canvas (one text per line to embed; a paste
+  kept as one text to protect) and show the cosine matrix, or the protected
+  text with its spans, beside it; Image ▸ Datasets is one task with an
+  Operation chip over Discover (a folder in the well, candidate datasets with
+  "Train on it"), Validate (no input, the artifacts it wrote), and Run plan (a
+  plan file, the preflight or materialize report; Preflight is a chip, the run
+  directory an Output row). Each has the Library column, the inspector, the
+  Command view, "Use these settings", and Stop, and files its output under the
+  Text or Image folder like every other run. The typed-text and dataset
+  decoders are typed `Decodable` readers of the CLI's own output.
 
 ## 0.55.0 - 2026-09-22
 

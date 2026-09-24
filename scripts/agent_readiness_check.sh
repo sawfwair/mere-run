@@ -112,7 +112,6 @@ dynamic_boundary_files=(
   "apps/macos/StudioUI/Studio3DCreationView.swift"
   "apps/macos/StudioUI/StudioMusicToolsView.swift"
   "apps/macos/StudioUI/StudioTrainingView.swift"
-  "apps/macos/StudioUI/StudioUtilityLabView.swift"
   "Sources/MereRunCLI/Support/ResumeLoRABootstrap.swift"
   "Sources/MereRunCore/Asset3D/MeshGLBWriter.swift"
   "Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift"

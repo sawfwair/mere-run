@@ -123,6 +123,19 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertEqual(condition.templateID, .sfxConditionText, "a task with no input slot runs on its prompt")
     }
 
+    /// A typed input is the run's whole subject: `text anonymize` with nothing typed would launch
+    /// and wait on stdin, so an empty editor is refused before anything is recorded.
+    func testAnEmptyTypedInputIsRefused() throws {
+        controller.readinessByTask[.textAnonymize] = .ready
+        var draft = StudioTaskDraft(templateID: .textAnonymize)
+        draft.prompt = ""
+        XCTAssertThrowsError(try runner.run(draft, task: .textAnonymize)) { error in
+            XCTAssertEqual(error as? StudioValidationError, StudioValidationError(message: "Type the text first."))
+        }
+        XCTAssertTrue(library.items.isEmpty)
+        XCTAssertTrue(processRunner.starts.isEmpty)
+    }
+
     func testALegacyPagesRequestRunsThroughTheSamePath() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .sfxAEEncode))
         var draft = template.defaultDraft()

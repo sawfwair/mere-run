@@ -1482,6 +1482,13 @@ package struct CommandTemplate: Identifiable, Equatable {
 }
 
 extension CommandTemplate {
+    /// Whether a repeatable prompt positional takes one text per line (`text embed`, where each
+    /// line is a document to compare) or the whole passage as one text (`text anonymize`, whose
+    /// page sent the paste as one argument so a paragraph keeps its lines together).
+    package var promptSplitsLines: Bool {
+        id != .textAnonymize
+    }
+
     /// The primary Studio workspace that owns this command's durable Library entry.
     ///
     /// Advanced exposes specialist commands without adding dozens of modes to the main sidebar.

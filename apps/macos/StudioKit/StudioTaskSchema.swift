@@ -70,9 +70,10 @@ package enum StudioTaskSchema {
 
     /// The attachment well's slots for a template: every positional the contract declares as a
     /// file (a repeatable one is an ordered list), then every file or directory option in the
-    /// Inputs group that is not an output, a model location, or a composite editor's flag.
-    /// Accepted types come from the template's own `inputKind` for the primary input and from a
-    /// per-flag table for the rest; a directory option takes a folder.
+    /// Inputs group (`image dataset discover --root` among them) that is not an output, a model
+    /// location, or a composite editor's flag. Accepted types come from the template's own
+    /// `inputKind` for the primary input and from a per-flag table for the rest; a directory
+    /// option takes a folder.
     package static func slots(for templateID: CommandTemplateID) -> [StudioAttachmentSlot] {
         guard let capability = templateID.capability, let template = CommandCatalog.template(id: templateID) else {
             return []
@@ -175,11 +176,12 @@ package enum StudioTaskSchema {
     // MARK: Fields
 
     /// Flags the inspector never shows: the destinations routing fills, and the machine-readable
-    /// switches the launcher owns (`--json` comes from `StudioTaskDraft.launcherDefaults`;
-    /// `--receipt` and `--progress-json` are added at launch). `--preflight` and `--dry-run` stay
-    /// visible: the pages offered them, and a preflight is how a run plan is checked.
+    /// switches the launcher owns (`--json` and `--pretty` come from
+    /// `StudioTaskDraft.launcherDefaults`; `--receipt` and `--progress-json` are added at
+    /// launch). `--preflight` and `--dry-run` stay visible: the pages offered them, and a
+    /// preflight is how a run plan is checked.
     package static func hiddenFlags(for capability: MereRunCommandCapability) -> Set<String> {
-        outputFlags(for: capability).union(["--json", "--receipt", "--progress-json"])
+        outputFlags(for: capability).union(["--json", "--pretty", "--receipt", "--progress-json"])
     }
 
     /// The composite editors a template's options render as, keyed by flag. `--model` is the
@@ -344,12 +346,15 @@ extension MereRunCapabilityOption {
 
 extension StudioTaskDraft {
     /// The free text the composer's prompt field edits: the prompt positional (or one line per
-    /// argument for a repeatable one) or the `--prompt` option; empty for a template with none.
+    /// argument for a repeatable one whose template splits lines) or the `--prompt` option;
+    /// empty for a template with none.
     package var prompt: String {
         get {
             switch capability.flatMap(StudioTaskSchema.promptField) {
             case .argument(let index, let repeatable):
-                return repeatable ? form.arguments.dropFirst(index).joined(separator: "\n") : argument(index)
+                return repeatable && template?.promptSplitsLines != false
+                    ? form.arguments.dropFirst(index).joined(separator: "\n")
+                    : argument(index)
             case .flag(let flag):
                 return text(flag)
             case nil:
@@ -359,7 +364,7 @@ extension StudioTaskDraft {
         set {
             switch capability.flatMap(StudioTaskSchema.promptField) {
             case .argument(let index, let repeatable):
-                if repeatable {
+                if repeatable, template?.promptSplitsLines != false {
                     let lines = newValue.components(separatedBy: .newlines).filter { !$0.isBlank }
                     form.arguments = Array(form.arguments.prefix(index)) + lines
                 } else {

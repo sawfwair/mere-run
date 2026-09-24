@@ -91,6 +91,11 @@ package final class StudioTaskRunner {
            task.presentation.attaching(slot).requiresAttachment, draft.primaryInputPath.isBlank {
             throw StudioValidationError(message: "Attach \(slot.label.lowercased()) first.")
         }
+        // A typed input is the run's whole subject; `text anonymize` would otherwise launch and
+        // wait on a stdin nobody can type into.
+        if task.analyzeArchetype?.inputKind(for: draft.templateID) == .text, draft.prompt.isBlank {
+            throw StudioValidationError(message: "Type the text first.")
+        }
         let request = try self.request(for: draft, task: task)
         submit(request, task: task)
         return request
