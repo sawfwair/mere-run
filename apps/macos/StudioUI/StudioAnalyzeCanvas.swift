@@ -73,6 +73,7 @@ struct StudioAnalyzeCanvas: View {
         static let contentWidth: CGFloat = 940
         static let resultColumnWidth: CGFloat = 360
         static let columnSpacing: CGFloat = 20
+        static let stackedBreakpoint: CGFloat = 760
         static let insets = EdgeInsets(top: 22, leading: 24, bottom: 6, trailing: 24)
         /// The input strip's row and its gap to the columns.
         static let inputStripHeight: CGFloat = 28 + 10
@@ -187,19 +188,15 @@ struct StudioAnalyzeCanvas: View {
 
     private var content: some View {
         GeometryReader { geometry in
+            let stacked = geometry.size.width < Metrics.stackedBreakpoint
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    inputStrip
+                    inputStrip(stacked: stacked)
                         .padding(.bottom, 10)
-                    HStack(alignment: .top, spacing: Metrics.columnSpacing) {
-                        inputColumn
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        resultColumn
-                            .frame(width: Metrics.resultColumnWidth)
-                    }
+                    columns(stacked: stacked)
                 }
                 .padding(Metrics.insets)
-                .frame(maxWidth: Metrics.contentWidth)
+                .frame(maxWidth: min(Metrics.contentWidth, geometry.size.width))
                 .frame(maxWidth: .infinity)
             }
             .onChange(of: geometry.size.height, initial: true) { _, height in
@@ -208,9 +205,40 @@ struct StudioAnalyzeCanvas: View {
         }
     }
 
+    @ViewBuilder
+    private func columns(stacked: Bool) -> some View {
+        if stacked {
+            VStack(alignment: .leading, spacing: Metrics.columnSpacing) {
+                inputColumn.frame(maxWidth: .infinity, alignment: .leading)
+                resultColumn.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            HStack(alignment: .top, spacing: Metrics.columnSpacing) {
+                inputColumn.frame(maxWidth: .infinity, alignment: .leading)
+                resultColumn.frame(width: Metrics.resultColumnWidth)
+            }
+        }
+    }
+
     // MARK: - Input strip
 
-    private var inputStrip: some View {
+    @ViewBuilder
+    private func inputStrip(stacked: Bool) -> some View {
+        if stacked {
+            VStack(alignment: .leading, spacing: 8) {
+                inputSourceRow
+                resultViewPicker
+            }
+        } else {
+            HStack(spacing: 10) {
+                inputSourceRow
+                Spacer(minLength: 8)
+                resultViewPicker
+            }
+        }
+    }
+
+    private var inputSourceRow: some View {
         HStack(spacing: 10) {
             Text("Input")
                 .font(.system(size: 12, weight: .medium))
@@ -222,17 +250,20 @@ struct StudioAnalyzeCanvas: View {
                     .buttonStyle(.mereSecondary)
                     .help("Pick a different \(inputKind.noun)")
             }
-            Spacer(minLength: 8)
-            // Nothing has been found yet, so there is nothing to switch between.
-            if views.count > 1, resultCard != nil {
-                MereSegmentedControl(
-                    views,
-                    selection: Binding(get: { view }, set: { chosenView = $0 }),
-                    accessibilityLabel: "Result view"
-                ) { $0.title }
-            }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var resultViewPicker: some View {
+        // Nothing has been found yet, so there is nothing to switch between.
+        if views.count > 1, resultCard != nil {
+            MereSegmentedControl(
+                views,
+                selection: Binding(get: { view }, set: { chosenView = $0 }),
+                accessibilityLabel: "Result view"
+            ) { $0.title }
+        }
     }
 
     private var inputDescription: String {
