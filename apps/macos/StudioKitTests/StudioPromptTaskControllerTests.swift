@@ -300,12 +300,14 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(generated))
 
         // A template whose task has moved onto a task draft restores through it, so the sample
-        // is one that still has no composer to land in.
+        // is one whose task still keeps its own page (Video ▸ Subjects) and whose mode's composer
+        // does not build it: nothing to land in.
         let otherTemplate = try XCTUnwrap(CommandCatalog.templates.first {
-            $0.libraryMode == .createImage && $0.id != .imageGenerate && !$0.id.studioTask.usesTaskDraft
+            let task = $0.id.studioTask
+            return task.mode == nil && !task.usesTaskDraft && $0.libraryMode.defaultTemplateID != $0.id
         })
         let other = library.start(
-            request: StudioRunRequest(mode: .createImage, templateID: otherTemplate.id, template: otherTemplate, draft: otherTemplate.defaultDraft()),
+            request: StudioRunRequest(mode: otherTemplate.libraryMode, templateID: otherTemplate.id, template: otherTemplate, draft: otherTemplate.defaultDraft()),
             commandPreview: "fixture"
         )
         XCTAssertFalse(StudioLibraryDraftRestoration.canRestore(other), otherTemplate.id.rawValue)
