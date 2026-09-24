@@ -220,13 +220,16 @@ The format is based on Keep a Changelog.
   statistics; Depth shows the preview or review clip from the run's folder;
   Geometry embeds Quick Look over the point cloud with the depth and normal
   previews beside it. The face is still picked by clicking it (now in the
-  inspector, one picker per picture for Compare) and multi-view cameras are
-  still edited per view, with the camera file written only while it matches
-  the views. Vision ▸ Live becomes a Session page: Start/Stop, the camera and
-  model as chips, the prompts one per line, the capture's progress while it
-  runs, and the annotated clip with its track spans when it lands. A fresh
-  Depth or Geometry draft on the workspace runs for real; the Command Console
-  keeps its dry-run default and the inspector keeps a Dry run row.
+  inspector, one picker per picture for Compare, numbered from one) and
+  multi-view cameras are still edited per view, with the camera file written
+  only while it matches the views and copied beside the run's output folder
+  when the run starts. Vision ▸ Live becomes a Session page: Start/Stop, the
+  camera and model as chips, the prompts one per line, the capture's progress
+  while it runs, and the annotated clip with its track spans when it lands; a
+  capture the Mac refuses the camera for fails with the System Settings path
+  instead of staying "running". A fresh Depth or Geometry draft on the
+  workspace runs for real; the Command Console keeps its dry-run default and
+  the inspector keeps a Dry run row.
 
 ## 0.55.0 - 2026-09-22
 

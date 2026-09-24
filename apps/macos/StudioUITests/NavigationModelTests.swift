@@ -205,26 +205,28 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertEqual(navigation.destination.task, .visionPose)
     }
 
-    /// The variant a Vision task shows is its parked draft's template, not navigation state: it
-    /// survives leaving for another task and coming back, and switching keeps the picture.
+    /// The variant a Vision task shows is its parked draft's template, not navigation state: the
+    /// session store hands the same draft back across a round trip, and switching keeps the
+    /// picture. Navigation has nothing to remember for it.
     func testVisionVariantIsTheTaskDraftsTemplate() throws {
-        let sessions = StudioTaskSessions()
-        let navigation = NavigationModel(destination: StudioDestination(domain: .vision, task: .visionRead))
-        navigation.open(task: .visionFaces)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("vision-variant-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("sessions.json")
+        let sessions = StudioTaskSessions(url: url)
         XCTAssertEqual(sessions.taskDraft(for: .visionFaces)?.templateID, .visionFaceDetect, "Faces opens on Detect")
 
         var draft = try XCTUnwrap(sessions.taskDraft(for: .visionFaces))
         draft.setArgument(0, "/tmp/portrait.png")
         draft.switchTemplate(to: .visionFaceCompare)
         sessions.setTaskDraft(draft, for: .visionFaces)
-        XCTAssertEqual(navigation.destination.task, .visionFaces)
+        sessions.flush()
 
-        navigation.open(task: .visionRead)
-        navigation.open(task: .visionFaces)
-        let parked = try XCTUnwrap(sessions.taskDraft(for: .visionFaces))
+        let reopened = StudioTaskSessions(url: url)
+        let parked = try XCTUnwrap(reopened.taskDraft(for: .visionFaces))
         XCTAssertEqual(parked.templateID, .visionFaceCompare, "coming back keeps the variant")
         XCTAssertEqual(parked.argument(0), "/tmp/portrait.png", "and the picture")
-        XCTAssertEqual(sessions.taskDraft(for: .visionGeometry)?.templateID, .visionGeometry, "another task keeps its own")
+        XCTAssertEqual(reopened.taskDraft(for: .visionGeometry)?.templateID, .visionGeometry, "another task keeps its own")
     }
 
     func testOpenDomainRemembersTheLastTaskShownThere() {

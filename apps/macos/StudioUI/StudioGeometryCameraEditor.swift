@@ -149,6 +149,12 @@ struct StudioGeometryCameraOverride: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if paths.count < 2 {
+                Text("Add at least two ordered views to the well; the model solves the cameras between them.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             StudioGeometryCameraEditor(enabled: $enabled, document: $document, views: views, message: $message)
             if let message {
                 Label(message, systemImage: "exclamationmark.triangle")
@@ -169,7 +175,8 @@ struct StudioGeometryCameraOverride: View {
     }
 
     /// Keeps the flag current: a saved copy of a valid document under a name made from its
-    /// content, pruned to the recent few plus every file a Library row still names.
+    /// content, pruned to the recent few plus every file a Library row's argv still names (a
+    /// finished run has its own copy beside its output; a queued one still reads the draft).
     private func saveDraftCameras() async {
         guard enabled, !document.cameras.isEmpty, document.problems(views: views).isEmpty else {
             forgetStudioDraft()
@@ -179,7 +186,9 @@ struct StudioGeometryCameraOverride: View {
         guard !Task.isCancelled else { return }
         do {
             let url = try StudioCameraDocuments.storeDraft(page: Self.page, content: document.json())
-            let referenced = Set(library.items.compactMap { $0.commandDraft?.camerasPath })
+            let referenced = Set(library.items.flatMap { item in
+                StudioCameraDocuments.referencedPaths(in: item.commandArguments ?? []) + [item.commandDraft?.camerasPath].compactMap { $0 }
+            })
             StudioCameraDocuments.pruneDrafts(page: Self.page, current: url, referenced: referenced)
             if draft.text(Self.flag) != url.path { draft.form[Self.flag] = .text(url.path) }
         } catch {

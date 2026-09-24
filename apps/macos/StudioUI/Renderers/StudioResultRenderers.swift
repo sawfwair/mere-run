@@ -65,9 +65,23 @@ enum StudioResultRenderers {
         }
     }
 
+    /// A run's directory listing, read once per row version: the canvas asks for its rendering
+    /// on every body evaluation, and walking the output folder each time would not do.
+    @MainActor private static var artifactsCache: [UUID: (updatedAt: Date, artifacts: StudioVisionRunArtifacts)] = [:]
+
+    @MainActor
+    static func runArtifacts(for item: StudioLibraryItem) -> StudioVisionRunArtifacts {
+        if let cached = artifactsCache[item.id], cached.updatedAt == item.updatedAt { return cached.artifacts }
+        let artifacts = StudioVisionRunArtifacts.read(item: item)
+        if artifactsCache.count > 32 { artifactsCache.removeAll() }
+        artifactsCache[item.id] = (item.updatedAt, artifacts)
+        return artifacts
+    }
+
     /// The rendering that takes the input column for `view`, or nil when the column shows the
     /// input itself. `item` is the run on screen only while its result describes the input on
     /// screen; a directory output (depth, geometry) is read from the row's artifacts.
+    @MainActor
     static func canvasRendering(
         for view: StudioAnalyzeResultView,
         document: StudioAnalyzeDocument?,
@@ -83,11 +97,11 @@ enum StudioResultRenderers {
             return .flow(field)
         case (.depth, _), (.video, _):
             guard let item, item.templateID == .visionDepth || item.templateID == .visionDepthVideo else { return nil }
-            let artifacts = StudioVisionRunArtifacts.read(item: item)
+            let artifacts = runArtifacts(for: item)
             return artifacts.isEmpty ? nil : .depth(artifacts)
         case (.scene, _):
             guard let item, item.templateID == .visionGeometry || item.templateID == .visionGeometryMultiview else { return nil }
-            let artifacts = StudioVisionRunArtifacts.read(item: item)
+            let artifacts = runArtifacts(for: item)
             return artifacts.isEmpty ? nil : .scene(artifacts)
         default:
             return nil

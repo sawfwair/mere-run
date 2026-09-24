@@ -763,7 +763,11 @@ image size, normalized focal length and center, and a world-to-camera rotation
 and translation — with the CLI's own checks (positive size and focal length, a
 proper rotation, and an image size equal to the image's decoded size, which new
 cameras take from the image), writing its saved draft file into `--cameras` only
-while the cameras match the views; camera files import and export.
+while the cameras match the views; at submit the runner copies that file beside
+the run's output directory as `<folder>.cameras.json` and points `--cameras`
+there, so the run's folder is self-contained. Camera files import and export.
+Faces are numbered from one everywhere the picture is read; the flag counts
+from zero.
 
 **Vision ▸ Live** is a Session page (`StudioUI/StudioLiveTrackSession.swift`) over
 `vision track-live`: Start/Stop, the camera (this Mac's cameras by name, in the

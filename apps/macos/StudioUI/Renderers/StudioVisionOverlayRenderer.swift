@@ -130,8 +130,8 @@ struct StudioVisionOverlayView: View {
             .buttonStyle(.plain)
             .frame(width: max(frame.width, 8), height: max(frame.height, 8))
             .position(x: frame.midX, y: frame.midY)
-            .help("Face \(face.index), \(Int(face.detection.score * 100))% confidence")
-            .accessibilityLabel("Face \(face.index), \(Int(face.detection.score * 100)) percent")
+            .help("Face \(face.index + 1), \(Int(face.detection.score * 100))% confidence")
+            .accessibilityLabel("Face \(face.index + 1), \(Int(face.detection.score * 100)) percent")
             .accessibilityAddTraits(selection.wrappedValue == face.index ? .isSelected : [])
         }
     }
@@ -161,7 +161,7 @@ struct StudioVisionOverlayView: View {
     }
 
     /// The picker's rendering: the chosen face in the accent with a soft fill, the rest as quiet
-    /// white outlines, each numbered the way `--face-index` counts them.
+    /// white outlines, each numbered from one the way the inspector's row reads.
     private func drawSelectableFaces(
         _ result: StudioFaceOverlayResult,
         selected: Int,
@@ -181,7 +181,7 @@ struct StudioVisionOverlayView: View {
                 lineWidth: isSelected ? 2.5 : 1.5
             )
             drawTag(
-                Text("\(face.index)"),
+                Text("\(face.index + 1)"),
                 above: frame, in: rect,
                 fill: isSelected ? MereRunTheme.accent : Color.white.opacity(0.85),
                 foreground: isSelected ? MereRunTheme.onAccent : Color.black.opacity(0.8),
@@ -246,17 +246,27 @@ struct StudioFacePickerView: View {
     @Binding var selection: Int
 
     @State private var faces: StudioFaceOverlayResult?
+    @State private var didLoad = false
 
     var body: some View {
         Group {
             if let faces {
                 StudioVisionOverlayView(imageURL: imageURL, overlay: .faces(faces), selectedFaceIndex: $selection)
+            } else if didLoad {
+                ContentUnavailableView(
+                    "Overlay unavailable", systemImage: "exclamationmark.triangle",
+                    description: Text("\(documentURL.lastPathComponent) is not a face detection result.")
+                )
             } else {
                 ProgressView().controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: documentURL) { faces = StudioFaceOverlayResult.load(from: documentURL) }
+        .task(id: documentURL) {
+            didLoad = false
+            faces = StudioFaceOverlayResult.load(from: documentURL)
+            didLoad = true
+        }
     }
 }
 

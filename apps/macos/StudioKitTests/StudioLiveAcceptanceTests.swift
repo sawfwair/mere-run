@@ -41,21 +41,21 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         }
         // Every Studio destination (composer and specialist pages alike) files under the configured
         // root, so the run's outputs land in the live directory instead of ~/Pictures etc. The root
-        // lives in a throwaway suite, never in the user's own settings.
-        let suite = try XCTUnwrap(UserDefaults(suiteName: Self.defaultsSuiteName))
-        suite.removePersistentDomain(forName: Self.defaultsSuiteName)
-        suite.set(directory.path, forKey: StudioOutputLocation.rootDefaultsKey)
+        // lives in this process only: a suite named once per process, set through its registration
+        // domain, which cfprefsd never persists — so two `swift test --filter …/testNN` processes
+        // running at once cannot overwrite or clear each other's root.
+        let suite = try XCTUnwrap(UserDefaults(suiteName: "run.mere.studio.live-acceptance.\(UUID().uuidString)"))
+        suite.register(defaults: [StudioOutputLocation.rootDefaultsKey: directory.path])
         StudioOutputLocation.defaults = suite
+        let probe = StudioOutputLocation.outputDirectoryURL(domain: .vision, prompt: "probe", fallbackStem: "probe").path
+        XCTAssertTrue(probe.hasPrefix(directory.path), "The configured root did not take: destinations would file under \(probe)")
         continueAfterFailure = true
     }
 
     override func tearDownWithError() throws {
         StudioOutputLocation.defaults = .standard
-        UserDefaults(suiteName: Self.defaultsSuiteName)?.removePersistentDomain(forName: Self.defaultsSuiteName)
         try super.tearDownWithError()
     }
-
-    private static let defaultsSuiteName = "run.mere.studio.live-acceptance"
 
     // MARK: - Text ▸ Decisions
 
@@ -502,15 +502,13 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         draft.form["--reference-view"] = .text("saddle-balanced")
         draft.form["--confidence-percentile"] = .number(40)
         draft.form["--dry-run"] = .unset
-        // The camera file lives in the live directory's Vision folder, the way the editor's draft
-        // file lives in the app's own folder; routing names each run's directory after the first
-        // view, and the name follows the whole argv (the camera file, the dry-run switch).
+        // The cameras the way the inspector keeps them: a draft file in the app's own folder that
+        // the runner copies beside each run's output directory, as `<folder>.cameras.json`, and
+        // points `--cameras` at. The directory itself is named after the first view.
         let visionFolder = live.appendingPathComponent("Vision", isDirectory: true)
-        try FileManager.default.createDirectory(at: visionFolder, withIntermediateDirectories: true)
-        let camerasURL = StudioCameraDocuments.url(besideOutputDirectory: visionFolder.appendingPathComponent("view-a-320x240").path)
-        try cameras.json().write(to: camerasURL, options: .atomic)
-        XCTAssertEqual(camerasURL.lastPathComponent, "view-a-320x240.cameras.json")
-        XCTAssertEqual(try StudioGeometryCameraDocument.importing(Data(contentsOf: camerasURL)).cameras.map(\.imageWidth), [320, 320])
+        let page = try XCTUnwrap(StudioCameraDocuments.draftPage(for: .visionGeometryMultiview))
+        let cameraDraft = try StudioCameraDocuments.storeDraft(page: page, content: cameras.json())
+        XCTAssertTrue(StudioCameraDocuments.isDraft(cameraDraft.path, page: page))
 
         func request(camerasPath: String, dryRun: Bool) throws -> (argv: [String], output: String) {
             var variant = draft
@@ -521,16 +519,19 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             XCTAssertEqual(URL(fileURLWithPath: output).deletingLastPathComponent().path, visionFolder.path)
             XCTAssertTrue(URL(fileURLWithPath: output).lastPathComponent.hasPrefix("view-a-320x240"), "named after the first view: \(output)")
             XCTAssertEqual(Array(built.argv.prefix(4)), ["vision", "geometry-multiview", viewA.path, viewB.path], "the views stay ordered")
+            let placed = try XCTUnwrap(built.argv.firstIndex(of: "--cameras").map { built.argv[$0 + 1] })
+            XCTAssertEqual(URL(fileURLWithPath: placed).deletingLastPathComponent().path, visionFolder.path, "the camera file sits beside the output")
+            XCTAssertTrue(URL(fileURLWithPath: placed).lastPathComponent.hasPrefix(URL(fileURLWithPath: output).lastPathComponent + ".cameras"), placed)
+            XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: placed)), try Data(contentsOf: URL(fileURLWithPath: camerasPath)), "the same document")
             return (built.argv, output)
         }
 
         // Correct cameras: dry run, then the real solve.
-        let (dryArgv, _) = try request(camerasPath: camerasURL.path, dryRun: true)
-        XCTAssertEqual(dryArgv.firstIndex(of: "--cameras").map { dryArgv[$0 + 1] }, camerasURL.path)
+        let (dryArgv, _) = try request(camerasPath: cameraDraft.path, dryRun: true)
         let dry = try runCLI(flow, dryArgv, timeout: 600)
         XCTAssertEqual(dry.exitCode, 0, dry.failureDescription)
 
-        let (argv, root) = try request(camerasPath: camerasURL.path, dryRun: false)
+        let (argv, root) = try request(camerasPath: cameraDraft.path, dryRun: false)
         let run = try runCLI(flow, argv, timeout: 1_800)
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
         let files = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
@@ -546,12 +547,11 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let wrong = StudioGeometryCameraDocument(cameras: [.identity(), second])
         let wrongProblems = wrong.problems(views: views)
         XCTAssertEqual(wrongProblems, ["Camera 1 is sized 1920 × 1080 but view-a-320x240.png is 320 × 240."])
-        let wrongURL = StudioCameraDocuments.url(besideOutputDirectory: visionFolder.appendingPathComponent("view-a-320x240").path)
-        XCTAssertNotEqual(wrongURL, camerasURL, "a second camera file for the same name takes a new one")
-        try wrong.json().write(to: wrongURL, options: .atomic)
-        let (wrongDryArgv, _) = try request(camerasPath: wrongURL.path, dryRun: true)
+        let wrongDraft = try StudioCameraDocuments.storeDraft(page: page, content: wrong.json())
+        XCTAssertNotEqual(wrongDraft, cameraDraft, "a different document is a different draft file")
+        let (wrongDryArgv, _) = try request(camerasPath: wrongDraft.path, dryRun: true)
         let wrongDry = try runCLI(flow, wrongDryArgv, timeout: 600)
-        let (wrongArgv, _) = try request(camerasPath: wrongURL.path, dryRun: false)
+        let (wrongArgv, _) = try request(camerasPath: wrongDraft.path, dryRun: false)
         let wrongRun = try runCLI(flow, wrongArgv, timeout: 1_800)
         XCTAssertNotEqual(wrongRun.exitCode, 0, "The CLI accepted a camera whose image size is not the image's")
         let message = (wrongRun.stderr + wrongRun.stdout).lowercased()
@@ -1092,17 +1092,38 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         // XCTest runs these on the main thread; the runner and the session store are main-actor.
         let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        assertDestinations(of: prepared.request.draft, stayUnder: live)
         return (prepared.request, template.arguments(from: prepared.request.draft))
     }
 
-    /// A task draft's request, prepared the way `StudioTaskRunner.run(_:task:)` prepares it: the
-    /// destination named by `StudioOutputLocation.destination(for:)`, then Command edits,
-    /// validation, and the folder, so the tests build exactly what the task workspace submits.
+    /// Every destination the draft names — the output and the sidecars derived beside it — is
+    /// under the live directory, so a run can never write into the user's own folders.
+    private func assertDestinations(of draft: CommandDraft, stayUnder root: URL, file: StaticString = #filePath, line: UInt = #line) {
+        for (label, path) in [
+            ("output", draft.outputPath), ("JSON sidecar", draft.visionJSONOutputPath),
+            ("mask directory", draft.visionMaskOutputDirectory),
+        ] where !path.isBlank {
+            XCTAssertTrue(path.hasPrefix(root.path), "The \(label) escaped the configured root: \(path)", file: file, line: line)
+        }
+    }
+
+    /// The user's own media folders. A CLI launch naming a file under one of them, outside the
+    /// live directory, is a harness fault (the root did not take) and never runs.
+    private var fencedFolders: [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return ["Music", "Pictures", "Documents", "Movies", "Desktop", "Downloads"].map {
+            home.appendingPathComponent($0, isDirectory: true)
+        }
+    }
+
+    /// A task draft's request, prepared the way `StudioTaskRunner.run(_:task:)` prepares it
+    /// (`StudioTaskRunner.prepare(draft:sessions:)`): the destination named, Command edits,
+    /// validation, the folder, and a camera draft copied beside the output — so the tests build
+    /// exactly what the task workspace submits.
     private func taskRequest(_ draft: StudioTaskDraft) throws -> (request: StudioRunRequest, argv: [String]) {
-        let named = StudioOutputLocation.destination(for: draft)
-        let base = try XCTUnwrap(named.request(), "\(draft.templateID) cannot run from Studio")
-        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        assertDestinations(of: prepared.request.draft, stayUnder: live)
         let argv = try XCTUnwrap(prepared.request.execution?.arguments, "a task draft records its argv")
         // Every destination stays under the live directory; a run that would write into the
         // user's own folders is an error, not a CLI launch.
@@ -1534,6 +1555,19 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// Runs the CLI, capturing both streams to files under `live/<flow>/` as evidence.
     @discardableResult
     private func runCLI(_ flow: String, _ argv: [String], timeout: TimeInterval) throws -> CLIResult {
+        struct EscapedRoot: LocalizedError {
+            let path: String
+            var errorDescription: String? { "The CLI would write outside the live directory: \(path)" }
+        }
+        let livePath = live.standardizedFileURL.path
+        for token in argv where token.hasPrefix("/") {
+            let path = URL(fileURLWithPath: token).standardizedFileURL.path
+            guard !path.hasPrefix(livePath + "/"), fencedFolders.contains(where: { path.hasPrefix($0.standardizedFileURL.path + "/") }) else {
+                continue
+            }
+            XCTFail("Refusing to launch the CLI with \(token): it is under the user's own folders, not \(live.path)")
+            throw EscapedRoot(path: token)
+        }
         stepCounter += 1
         let folder = live.appendingPathComponent(flow, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

@@ -339,6 +339,116 @@ final class StudioVisionResultsTests: XCTestCase {
         }
     }
 
+    /// A fresh task draft runs the command the page ran with its initial stored values: every
+    /// option the page sent is either in the fresh argv or left to a CLI default equal to the
+    /// page's initial value, so the first run from the workspace does what the first run from
+    /// the page did. The CLI defaults are the commands' own (`Sources/MereRunCLI/Commands`).
+    func testFreshDraftsRunThePagesInitialCommand() throws {
+        let cliDefaults: [String: String] = [
+            "--score-threshold": "0.65", "--execution-provider": "auto", "--max-hands": "2",
+            "--minimum-confidence": "0.1", "--accuracy": "high", "--input-size": "518", "--max-frames": "240",
+            "--max-edge": "1024", "--resolution-level": "9", "--process-resolution": "504",
+            "--reference-view": "saddle-balanced", "--confidence-percentile": "40", "--camera": "0",
+            "--duration-seconds": "10", "--init-frame": "0", "--seed-search-frames": "30", "--threshold": "0.05",
+            "--resolution": "1008",
+        ]
+        let pageInitial: [(CommandTemplateID, (inout CommandDraft) -> Void)] = [
+            (.visionFaceDetect, { $0.visionFaceScoreThreshold = 0.65; $0.visionExecutionProvider = "auto"; $0.visionMaxFaces = 0
+                $0.visionIncludeEmbeddings = false; $0.json = true }),
+            (.visionPose, { $0.visionPoseBody = true; $0.visionPoseHands = true; $0.visionPoseFace = true; $0.visionMaxHands = 2
+                $0.visionMinimumConfidence = 0.1; $0.json = true }),
+            (.visionFlow, { $0.visionFlowAccuracy = "high"; $0.json = true }),
+            (.visionDepth, { $0.visionMaxEdge = 1_024; $0.visionNative = false; $0.visionCheckpoint = nil; $0.dryRun = false; $0.json = true }),
+            (.visionDepthVideo, { $0.visionInputSize = 518; $0.visionMaxFrames = 240; $0.dryRun = false; $0.json = true }),
+            (.visionGeometry, { $0.visionResolutionLevel = 9; $0.visionTokenCount = 0; $0.visionMaxPoints = 0; $0.dryRun = false; $0.json = true }),
+            (.visionGeometryMultiview, { $0.visionProcessResolution = 504; $0.visionReferenceView = "saddle-balanced"
+                $0.visionConfidencePercentile = 40; $0.visionMaxPoints = 0; $0.dryRun = false; $0.json = true }),
+            (.visionTrackLive, { $0.prompt = "a person"; $0.visionCamera = 0; $0.durationSeconds = 10; $0.visionInitFrame = 0
+                $0.visionSeedSearchFrames = 30; $0.visionThreshold = 0.05; $0.visionResolution = 1_008; $0.force = true
+                $0.visionShowLabels = true; $0.json = true }),
+        ]
+        for (templateID, configure) in pageInitial {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            let capability = try XCTUnwrap(templateID.capability)
+            var page = template.defaultDraft()
+            page.inputPath = ""
+            page.outputPath = ""
+            configure(&page)
+            func flags(_ arguments: [String]) -> [String: String] {
+                let parsed = StudioCommandRows.parse(arguments: arguments, commandPathCount: capability.command.count)
+                return Dictionary(parsed.flags.map { ($0.0, $0.1 ?? "") }, uniquingKeysWith: { first, _ in first })
+            }
+            let pageFlags = flags(template.arguments(from: page))
+            let freshFlags = flags(StudioTaskDraft(templateID: templateID).arguments)
+            let outputs = StudioTaskSchema.outputFlags(for: capability)
+            for (flag, value) in pageFlags where !outputs.contains(flag) && flag != "--prompt" {
+                if let fresh = freshFlags[flag] {
+                    XCTAssertEqual(fresh, value, "\(templateID) \(flag)")
+                } else {
+                    XCTAssertEqual(cliDefaults[flag], value, "\(templateID) leaves \(flag) to the CLI, whose default must be the page's value")
+                }
+            }
+            for (flag, value) in freshFlags where !outputs.contains(flag) {
+                XCTAssertEqual(pageFlags[flag], value, "\(templateID) fresh draft adds \(flag) the page never sent")
+            }
+        }
+    }
+
+    // MARK: - Cameras beside the output
+
+    /// The inspector keeps its camera document as a draft file; the runner copies it beside the
+    /// run's output directory and points `--cameras` there, so the run's folder is self-contained
+    /// and pruning the draft folder cannot take a finished run's file. A file the user picked
+    /// stays where it is.
+    @MainActor
+    func testACameraDraftIsCopiedBesideTheOutputAtSubmit() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cameras-beside-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let suiteName = "StudioVisionResultsTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.set(root.appendingPathComponent("outputs").path, forKey: StudioOutputLocation.rootDefaultsKey)
+        StudioOutputLocation.defaults = defaults
+        defer {
+            StudioOutputLocation.defaults = .standard
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        let viewA = root.appendingPathComponent("a.png")
+        let viewB = root.appendingPathComponent("b.png")
+        try Data([0x89]).write(to: viewA)
+        try Data([0x89]).write(to: viewB)
+        let page = try XCTUnwrap(StudioCameraDocuments.draftPage(for: .visionGeometryMultiview))
+        let document = StudioGeometryCameraDocument(cameras: [.identity(), .identity()])
+        let draftFile = try StudioCameraDocuments.storeDraft(page: page, content: document.json())
+
+        var draft = StudioTaskDraft(templateID: .visionGeometryMultiview)
+        StudioTaskSchema.slots(for: .visionGeometryMultiview)[0].attach([viewA, viewB], to: &draft)
+        draft.form["--cameras"] = .text(draftFile.path)
+        let prepared = try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions())
+        let argv = try XCTUnwrap(prepared.request.execution?.arguments)
+        let output = try XCTUnwrap(argv.firstIndex(of: "--output").map { argv[$0 + 1] })
+        let placed = try XCTUnwrap(StudioCameraDocuments.referencedPaths(in: argv).first)
+        XCTAssertEqual(URL(fileURLWithPath: placed).deletingLastPathComponent().path, URL(fileURLWithPath: output).deletingLastPathComponent().path)
+        XCTAssertEqual(URL(fileURLWithPath: placed).lastPathComponent, URL(fileURLWithPath: output).lastPathComponent + ".cameras.json")
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: placed)), try document.json(), "the same document, byte for byte")
+        XCTAssertFalse(StudioCameraDocuments.isDraft(placed, page: page), "the run's copy is not a draft the editor may prune")
+
+        // A file the user picked is left alone.
+        let picked = root.appendingPathComponent("mine.cameras.json")
+        try document.json().write(to: picked)
+        draft.form["--cameras"] = .text(picked.path)
+        let kept = try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions())
+        XCTAssertEqual(StudioCameraDocuments.referencedPaths(in: kept.request.execution?.arguments ?? []), [picked.path])
+
+        // One view is not a multi-view solve.
+        var single = StudioTaskDraft(templateID: .visionGeometryMultiview)
+        StudioTaskSchema.slots(for: .visionGeometryMultiview)[0].attach([viewA], to: &single)
+        XCTAssertThrowsError(try StudioTaskRunner.prepare(draft: single, sessions: StudioTaskSessions())) { error in
+            XCTAssertEqual((error as? StudioValidationError)?.message, "Add at least two ordered views.")
+        }
+        XCTAssertEqual(StudioCameraDocuments.referencedPaths(in: ["vision", "--cameras", "/a.json", "--dry-run", "--cameras"]), ["/a.json"])
+    }
+
     /// Faces ▸ Compare reached from Detect keeps the picture as the reference and the second
     /// picture goes to the candidate positional; Batch from Detect keeps it as the first image.
     func testFaceVariantsKeepThePictureAcrossTheSwitch() {

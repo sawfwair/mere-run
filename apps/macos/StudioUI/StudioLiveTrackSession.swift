@@ -92,7 +92,26 @@ struct StudioLiveTrackSession: View {
         if let job, job.state.isActive { return job.state.isRunning ? .live : .queued }
         switch item.status {
         case .queued: return .queued
-        case .running, .completed, .failed, .cancelled, .interrupted: return .ended(exitCode: item.exitCode)
+        case .running:
+            // Submitted but never launched: the system is still asking for the camera (the
+            // controller retries once it answers), or it said no.
+            return isWaitingForCameraAccess ? .queued : .ended(exitCode: item.exitCode)
+        case .completed, .failed, .cancelled, .interrupted: return .ended(exitCode: item.exitCode)
+        }
+    }
+
+    /// The row was submitted, no job exists, and macOS has not answered the camera prompt yet.
+    private var isWaitingForCameraAccess: Bool {
+        guard let item, item.status == .running, job == nil else { return false }
+        return AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined
+    }
+
+    /// The Mac will not give mere.run the camera; the page says so above the empty state.
+    private var cameraAccessHint: String? {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .denied, .restricted: return StudioTaskRunner.cameraDeniedMessage
+        case .authorized, .notDetermined: return nil
+        @unknown default: return nil
         }
     }
 
@@ -147,9 +166,11 @@ struct StudioLiveTrackSession: View {
         .task(id: item?.id) { await loadTracking() }
     }
 
-    /// The Session shell, ticking once a second while the capture runs so the clock moves.
+    /// The Session shell, ticking once a second while the capture runs so the clock moves. The
+    /// schedule starts at the row's own start, so a re-render never restarts it.
     private func surface(job: Job?) -> some View {
-        TimelineView(.periodic(from: .now, by: phase == .live ? 1 : 3_600)) { context in
+        let start = job?.startedAt ?? item?.createdAt ?? .distantPast
+        return TimelineView(.periodic(from: start, by: phase == .live ? 1 : 3_600)) { context in
             StudioSessionSurface(
                 phase: phase,
                 clock: clock(at: context.date, job: job),
@@ -239,6 +260,9 @@ struct StudioLiveTrackSession: View {
                 if let error {
                     MereBanner(severity: .error, text: error, onDismiss: { self.error = nil })
                 }
+                if let cameraAccessHint {
+                    MereBanner(severity: .warning, text: cameraAccessHint)
+                }
                 stateView(job: job)
             }
             .padding(24)
@@ -278,6 +302,15 @@ struct StudioLiveTrackSession: View {
         case .queued, .live:
             if let job {
                 StudioLiveTrackProgress(job: job, cameraName: cameraTitle, durationSeconds: durationSeconds)
+            } else if isWaitingForCameraAccess {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Waiting for camera access. Allow mere.run to use the camera in the prompt macOS is showing.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(MereRunTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
             }
         case .ended:
             if let item { endedView(item: item, job: job) }
@@ -286,9 +319,10 @@ struct StudioLiveTrackSession: View {
 
     @ViewBuilder
     private func endedView(item: StudioLibraryItem, job: Job?) -> some View {
-        let clip = item.allArtifactURLs.first {
+        // Only a finished capture's clip plays: a Stop mid-tracking can leave a truncated file.
+        let clip = item.status == .completed ? item.allArtifactURLs.first {
             StudioOutputFileKind.classify($0) == .video && FileManager.default.fileExists(atPath: $0.path)
-        }
+        } : nil
         VStack(alignment: .leading, spacing: 10) {
             if let clip {
                 StudioVideoPlayerView(url: clip)
@@ -321,6 +355,10 @@ struct StudioLiveTrackSession: View {
                         outputText: item.outputText, logLines: job?.log.lines.map(\.text) ?? [], exitCode: item.exitCode
                     )
                 )
+            } else if item.status == .running {
+                Text("The capture never started. Check the log below, then start again.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(MereRunTheme.textSecondary)
             } else {
                 Text("The capture finished but no clip was found. Check the log below.")
                     .font(.system(size: 13))
@@ -336,11 +374,14 @@ struct StudioLiveTrackSession: View {
 
     // MARK: Settings column
 
-    /// The contract's sections with the fields the transport row's chips already own (the
-    /// camera and the model) left out.
+    /// The contract's sections without the fields the transport row's chips own: the model, and
+    /// the camera while there is a list to pick from (with no camera found, the index stays a
+    /// number field here, as the page's stepper was).
     private var sections: [(section: StudioTaskSection, fields: [StudioContractField<StudioTaskDraft>])] {
         StudioTaskSchema.sections(for: Self.task, draft: draft).compactMap { section in
-            let fields = section.fields.filter { $0.flag != "--camera" && $0.overrideID != .model }
+            let fields = section.fields.filter { field in
+                field.overrideID != .model && (field.flag != "--camera" || cameras.isEmpty)
+            }
             return fields.isEmpty ? nil : (section, fields)
         }
     }
