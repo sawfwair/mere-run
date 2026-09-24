@@ -931,16 +931,16 @@ private struct StudioVisionOverlayPreview: View {
         // landmarks in the stored pixels the CLI decoded, so they map through the orientation.
         image = StudioImagePreviewLoader.downsampledImage(from: imageURL, maxPixelSize: 1_600)?.image
         orientation = StudioImageMetadata.read(imageURL)?.orientation ?? .up
-        do {
-            let data = try Data(contentsOf: jsonURL)
-            switch kind {
-            case .faces:
-                faces = try JSONDecoder().decode(StudioFaceOverlayResult.self, from: data)
-            case .pose:
-                pose = try JSONDecoder().decode(StudioPoseOverlayResult.self, from: data)
+        switch kind {
+        case .faces:
+            faces = StudioFaceOverlayResult.load(from: jsonURL)
+            if faces == nil { error = "\(jsonURL.lastPathComponent) is not a face detection result." }
+        case .pose:
+            do {
+                pose = try JSONDecoder().decode(StudioPoseOverlayResult.self, from: Data(contentsOf: jsonURL))
+            } catch {
+                self.error = error.localizedDescription
             }
-        } catch {
-            self.error = error.localizedDescription
         }
     }
 

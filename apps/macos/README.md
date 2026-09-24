@@ -983,7 +983,8 @@ into the run directory; nothing binary is committed. It is skipped unless
 when a model it needs is not installed (`mere.run model list --json`). The CLI
 is the package's debug build, or `MERERUN_LIVE_CLI`. Every step's argv, stdout,
 stderr, and exit code are kept under `<dir>/<flow>/`, and `<dir>/summary.log`
-gets one line per flow:
+gets one line per flow. A full pass loads a dozen models and takes several
+minutes; one flow at a time is `--filter StudioLiveAcceptanceTests/test04`:
 
 ```
 swift build

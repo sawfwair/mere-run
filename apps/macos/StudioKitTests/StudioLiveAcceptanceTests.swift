@@ -18,13 +18,14 @@ import XCTest
 ///
 /// Skipped unless `MERERUN_LIVE_ACCEPTANCE_DIR` names a directory, mirroring `StudioSnapshotTests`,
 /// and each test skips on its own when a model it needs is not installed. The CLI is
-/// `MERERUN_LIVE_CLI` or the package's debug build (`swift build` first).
+/// `MERERUN_LIVE_CLI`, or the `mere.run` beside this test bundle in the build products
+/// (`swift build --show-bin-path`), so `swift build` first. A full pass loads a dozen models and
+/// takes several minutes; one flow at a time is `--filter StudioLiveAcceptanceTests/test04`.
 ///
 ///     MERERUN_LIVE_ACCEPTANCE_DIR=/tmp/live swift test --filter StudioLiveAcceptanceTests
 final class StudioLiveAcceptanceTests: XCTestCase {
     private var live: URL!
     private var cli: URL!
-    private var previousOutputRoot: String?
     private var stepCounter = 0
 
     override func setUpWithError() throws {
@@ -39,20 +40,22 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             throw XCTSkip("No mere.run binary at \(cli.path); build first or set MERERUN_LIVE_CLI.")
         }
         // Every Studio destination (composer and specialist pages alike) files under the configured
-        // root, so the run's outputs land in the live directory instead of ~/Pictures etc.
-        previousOutputRoot = UserDefaults.standard.string(forKey: StudioOutputLocation.rootDefaultsKey)
-        UserDefaults.standard.set(directory.path, forKey: StudioOutputLocation.rootDefaultsKey)
+        // root, so the run's outputs land in the live directory instead of ~/Pictures etc. The root
+        // lives in a throwaway suite, never in the user's own settings.
+        let suite = try XCTUnwrap(UserDefaults(suiteName: Self.defaultsSuiteName))
+        suite.removePersistentDomain(forName: Self.defaultsSuiteName)
+        suite.set(directory.path, forKey: StudioOutputLocation.rootDefaultsKey)
+        StudioOutputLocation.defaults = suite
         continueAfterFailure = true
     }
 
     override func tearDownWithError() throws {
-        if let previousOutputRoot {
-            UserDefaults.standard.set(previousOutputRoot, forKey: StudioOutputLocation.rootDefaultsKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: StudioOutputLocation.rootDefaultsKey)
-        }
+        StudioOutputLocation.defaults = .standard
+        UserDefaults(suiteName: Self.defaultsSuiteName)?.removePersistentDomain(forName: Self.defaultsSuiteName)
         try super.tearDownWithError()
     }
+
+    private static let defaultsSuiteName = "run.mere.studio.live-acceptance"
 
     // MARK: - Text ▸ Decisions
 
@@ -639,7 +642,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         var run = try runCLI(flow, argv, timeout: 2_400)
         var modelUsed = draft.model
-        if run.exitCode != 0, Self.installedModels.contains("music-acestep-xl-turbo-lm4b") {
+        if run.exitCode != 0, try Self.installedModels.get().contains("music-acestep-xl-turbo-lm4b") {
             // The page's default checkpoint may lack a language model; the LM-bearing checkpoint is the fallback.
             var retry = draft
             retry.model = "music-acestep-xl-turbo-lm4b"
@@ -913,7 +916,8 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// `ConversationTranscript.splitThinking` keeps it beside the answer, never in it.
     func test17ChatWithThinkingShownSplitsReasoningFromTheAnswer() throws {
         let flow = "17-chat-thinking"
-        let candidates = ["text-chat-gemma4-turbo", "text-chat-gemma4-12b-4bit", "text-chat-nemotron-35-lightning"].filter(Self.installedModels.contains)
+        let installed = try Self.installedModels.get()
+        let candidates = ["text-chat-gemma4-turbo", "text-chat-gemma4-12b-4bit", "text-chat-nemotron-35-lightning"].filter(installed.contains)
         guard !candidates.isEmpty else { throw XCTSkip("No thinking-capable chat model installed") }
         var outcome: (model: String, reply: ConversationTranscript.Reply, run: CLIResult)?
         for model in candidates {
@@ -1058,7 +1062,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     private func faceImage(flow: String) throws -> URL {
         if let url = Self.faceImageURL { return url }
         struct Unavailable: Error {}
-        guard !Self.faceImageFailed, Self.installedModels.contains("image-klein-nano") else { throw Unavailable() }
+        guard !Self.faceImageFailed, (try? Self.installedModels.get())?.contains("image-klein-nano") == true else { throw Unavailable() }
         let url = fixtures().appendingPathComponent("portrait-512.png")
         if !FileManager.default.fileExists(atPath: url.path) {
             var draft = StudioDraft()
@@ -1520,28 +1524,48 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     }
 
     private func requireModels(_ ids: [String]) throws {
-        let missing = ids.filter { !Self.installedModels.contains($0) }
+        let installed = try Self.installedModels.get()
+        let missing = ids.filter { !installed.contains($0) }
         if !missing.isEmpty { throw XCTSkip("Not installed: \(missing.joined(separator: ", "))") }
     }
 
-    /// `mere.run model list --json`, read once.
-    private static let installedModels: Set<String> = {
-        guard let cli = Optional(cliURL()), FileManager.default.isExecutableFile(atPath: cli.path) else { return [] }
+    /// The installed managed models per `mere.run model list --json`, read once. A failure to
+    /// read the inventory is kept as the error, so a test that needs a model skips with the reason
+    /// rather than silently as "not installed".
+    private static let installedModels: Result<Set<String>, Error> = Result {
+        struct InventoryUnavailable: LocalizedError {
+            let reason: String
+            var errorDescription: String? { "mere.run model list --json failed: \(reason)" }
+        }
+        struct Inventory: Decodable {
+            struct Rows: Decodable { let rows: [Row] }
+            struct Row: Decodable {
+                let id: String
+                let status: String
+            }
+            let inventory: Rows
+        }
+        let cli = cliURL()
+        guard FileManager.default.isExecutableFile(atPath: cli.path) else {
+            throw InventoryUnavailable(reason: "no executable at \(cli.path)")
+        }
         let process = Process()
         process.executableURL = cli
         process.arguments = ["model", "list", "--json"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-        guard (try? process.run()) != nil else { return [] }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        let diagnostics = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         process.waitUntilExit()
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let rows = (object["inventory"] as? [String: Any])?["rows"] as? [[String: Any]] else { return [] }
-        return Set(rows.compactMap { row in
-            (row["status"] as? String) == "installed" ? row["id"] as? String : nil
-        })
-    }()
+        guard process.terminationStatus == 0 else {
+            throw InventoryUnavailable(reason: "exit \(process.terminationStatus): \(diagnostics.suffix(300))")
+        }
+        let inventory = try JSONDecoder().decode(Inventory.self, from: data)
+        return Set(inventory.inventory.rows.filter { $0.status == "installed" }.map(\.id))
+    }
 
     private static func liveDirectory() -> URL? {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_LIVE_ACCEPTANCE_DIR"],
@@ -1549,14 +1573,16 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         return URL(fileURLWithPath: NSString(string: path).expandingTildeInPath, isDirectory: true)
     }
 
+    /// `MERERUN_LIVE_CLI`, or the `mere.run` built beside this test bundle: the bundle sits in the
+    /// build products directory (`swift build --show-bin-path`), whatever the triple and
+    /// configuration.
     private static func cliURL() -> URL {
         if let path = ProcessInfo.processInfo.environment["MERERUN_LIVE_CLI"], !path.isEmpty {
             return URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
         }
-        // apps/macos/StudioKitTests/<file> → the package root.
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        return root.appendingPathComponent(".build/arm64-apple-macosx/debug/mere.run")
+        return Bundle(for: StudioLiveAcceptanceTests.self).bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("mere.run")
     }
 
     private static func shellQuoted(_ word: String) -> String {
