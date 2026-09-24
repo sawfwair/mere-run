@@ -267,6 +267,9 @@ package enum StudioContractChoiceTitles {
     }
 
     private static let table: [String: String] = [
+        "--kind auto": "Auto",
+        "--kind lora": "LoRA",
+        "--kind lokr": "LoKr",
         "--mode style": "Preset voice",
         "--mode clone": "Cloned voice",
         "--response-format text": "Text",

@@ -67,6 +67,11 @@ struct ContractFormControl<Draft>: View {
     let field: StudioContractField<Draft>
     @Binding var draft: Draft
     var labelStyle: ContractFormLabelStyle = .label
+    /// What the choice that leaves an option unset is called, for a choice option the contract
+    /// gives no default: "Default" unless the caller says otherwise ("Custom" for a recipe, "From
+    /// recipe" while one is chosen). A choice with a contract default has no such item: the
+    /// default is what runs.
+    var noneTitle: String?
 
     /// The flag column's width, so every row's control starts at the same x the way the board
     /// draws the raw form.
@@ -82,7 +87,7 @@ struct ContractFormControl<Draft>: View {
     /// The inspector's shape: the option's label, then its control.
     @ViewBuilder
     private var labelled: some View {
-        switch field.control {
+        switch choiceControl {
         case .toggle:
             Toggle(field.label, isOn: flagBinding)
                 .toggleStyle(.checkbox)
@@ -91,16 +96,14 @@ struct ContractFormControl<Draft>: View {
                 .help(field.flag)
         case .segmented:
             StudioInspectorLabeledRow(field.label) {
-                MereSegmentedControl(field.option.choices, selection: choiceBinding, accessibilityLabel: field.label) {
-                    StudioContractChoiceTitles.title(for: $0, flag: field.flag)
-                }
+                MereSegmentedControl(choiceItems, selection: choiceBinding, accessibilityLabel: field.label, title: choiceTitle)
             }
             .help(field.flag)
         case .picker:
             StudioInspectorLabeledRow(field.label) {
                 Picker(field.label, selection: choiceBinding) {
-                    ForEach(field.option.choices, id: \.self) { choice in
-                        Text(StudioContractChoiceTitles.title(for: choice, flag: field.flag)).tag(choice)
+                    ForEach(choiceItems, id: \.self) { choice in
+                        Text(choiceTitle(choice)).tag(choice)
                     }
                 }
                 .labelsHidden()
@@ -133,7 +136,7 @@ struct ContractFormControl<Draft>: View {
     /// are typed rather than dragged here — this is the surface that shows what the argv says.
     @ViewBuilder
     private var flagged: some View {
-        switch field.control {
+        switch choiceControl {
         case .toggle:
             flagRow {
                 Toggle("", isOn: flagBinding)
@@ -145,15 +148,13 @@ struct ContractFormControl<Draft>: View {
             }
         case .segmented:
             flagRow {
-                MereSegmentedControl(field.option.choices, selection: choiceBinding, accessibilityLabel: field.label) {
-                    StudioContractChoiceTitles.title(for: $0, flag: field.flag)
-                }
+                MereSegmentedControl(choiceItems, selection: choiceBinding, accessibilityLabel: field.label, title: choiceTitle)
             }
         case .picker:
             flagRow {
                 Picker(field.label, selection: choiceBinding) {
-                    ForEach(field.option.choices, id: \.self) { choice in
-                        Text(StudioContractChoiceTitles.title(for: choice, flag: field.flag)).tag(choice)
+                    ForEach(choiceItems, id: \.self) { choice in
+                        Text(choiceTitle(choice)).tag(choice)
                     }
                 }
                 .labelsHidden()
@@ -280,14 +281,49 @@ struct ContractFormControl<Draft>: View {
         )
     }
 
+    // MARK: Choices
+
+    /// The item that leaves the option unset, when the contract declares no default: an empty
+    /// choice ahead of the declared ones, so a fresh form never shows a selection the argv does
+    /// not carry.
+    private var unsetChoice: String? {
+        guard field.option.defaultValue == nil, !field.option.choices.isEmpty else { return nil }
+        return noneTitle ?? Self.noneTitle(for: field.flag)
+    }
+
+    private var choiceItems: [String] {
+        unsetChoice == nil ? field.option.choices : [""] + field.option.choices
+    }
+
+    /// The control as the contract's rule picks it, except that segments gaining an unset item
+    /// become a menu once there are more than four of them or their titles would not fit a row
+    /// ("Custom · Krea fast style · Krea cinematic style · Klein fast style").
+    private var choiceControl: StudioContractControl {
+        guard field.control == .segmented, unsetChoice != nil else { return field.control }
+        let titles = choiceItems.map(choiceTitle)
+        return choiceItems.count > 4 || titles.joined(separator: " ").count > 36 ? .picker : .segmented
+    }
+
+    private func choiceTitle(_ choice: String) -> String {
+        choice.isEmpty ? (unsetChoice ?? "") : StudioContractChoiceTitles.title(for: choice, flag: field.flag)
+    }
+
+    /// "Custom" where the choices are named presets the user can do without; "Default" elsewhere.
+    static func noneTitle(for flag: String) -> String {
+        flag == "--recipe" ? "Custom" : "Default"
+    }
+
     private var choiceBinding: Binding<String> {
         Binding(
             get: {
                 let value = field.value(in: draft).text ?? ""
                 if field.option.choices.contains(value) { return value }
+                if unsetChoice != nil { return "" }
                 return field.option.defaultValue ?? field.option.choices.first ?? value
             },
-            set: { field.write(.text($0), to: &draft) }
+            set: { choice in
+                field.write(choice.isEmpty && unsetChoice != nil ? .unset : .text(choice), to: &draft)
+            }
         )
     }
 
