@@ -297,11 +297,11 @@ struct ContractFormControl<Draft>: View {
 
     /// The control as the contract's rule picks it, except that segments gaining an unset item
     /// become a menu once there are more than four of them or their titles would not fit a row
-    /// ("Custom · Krea fast style · Krea cinematic style · Klein fast style").
+    /// ("Custom · Krea fast style · Krea cinematic style · Klein fast style"), by the rule the
+    /// inspector's variant row uses.
     private var choiceControl: StudioContractControl {
         guard field.control == .segmented, unsetChoice != nil else { return field.control }
-        let titles = choiceItems.map(choiceTitle)
-        return choiceItems.count > 4 || titles.joined(separator: " ").count > 36 ? .picker : .segmented
+        return StudioContractControl.segmentsFit(choiceItems.map(choiceTitle)) ? .segmented : .picker
     }
 
     private func choiceTitle(_ choice: String) -> String {
