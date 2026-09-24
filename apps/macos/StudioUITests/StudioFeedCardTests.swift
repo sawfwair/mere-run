@@ -99,6 +99,34 @@ final class StudioFeedCardTests: XCTestCase {
         XCTAssertEqual(StudioFailureSummary.lastMeaningfulLine(in: "USAGE: mere.run vision segment <image>\nSee 'mere.run --help'"), nil)
     }
 
+    /// What `speech diarize` wrote for a model that is not on this Mac: the reason, then the
+    /// upstream repo and every location it searched as a list. The reason leads the card; a
+    /// searched path, the `Searched:` heading, and the repo line are never the summary.
+    func testFailureSummaryPrefersTheErrorLineOverTheLocationsItSearched() {
+        let stderr = """
+        Error: Model not found: speech-diarization-nemotron3
+        Upstream repo: nvidia/diar_streaming_sortformer_4spk-v2.1
+        Searched:
+        - /Users/example/.mere.run/models/speech-diarization-nemotron3
+        - /Volumes/SALVATION/models/speech-diarization-nemotron3
+        """
+        XCTAssertEqual(
+            StudioFailureSummary.summary(outputText: nil, logLines: stderr.components(separatedBy: .newlines), exitCode: 1),
+            "Model not found: speech-diarization-nemotron3"
+        )
+        XCTAssertEqual(StudioFailureSummary.summary(outputText: stderr, exitCode: 1), "Model not found: speech-diarization-nemotron3")
+        XCTAssertEqual(StudioFailureSummary.lastMeaningfulLine(in: stderr), "Model not found: speech-diarization-nemotron3")
+        XCTAssertFalse(StudioFailureSummary.isMeaningful("- /Volumes/SALVATION/models/speech-diarization-nemotron3"))
+        XCTAssertFalse(StudioFailureSummary.isMeaningful("Searched:"))
+        XCTAssertFalse(StudioFailureSummary.isMeaningful("Upstream repo: nvidia/diar_streaming_sortformer_4spk-v2.1"))
+        // An error line wins over prose printed after it, but only when the CLI marked one.
+        XCTAssertEqual(
+            StudioFailureSummary.summary(outputText: "error: no such root\nCleaning up temporary files", exitCode: 1),
+            "No such root"
+        )
+        XCTAssertEqual(StudioFailureSummary.summary(outputText: "Loading model\nOut of memory", exitCode: 1), "Out of memory")
+    }
+
     func testRunningStatusCompactsStepProgress() {
         let progress = StudioProgressParser.parse(#"{"event":"progress","stage":"denoising","step":14,"total_steps":24}"#)
         XCTAssertEqual(StudioRunningStatus.text(progress: progress, fallback: "Running"), "Denoising 15/24")
