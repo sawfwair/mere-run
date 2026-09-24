@@ -15,6 +15,10 @@ enum StudioResultRendering: Equatable {
     /// An audio result the input column cannot play for the run (`sfx ae decode` takes a
     /// latents file, not audio): the waveform player over the file's row.
     case audioOutput(URL)
+    /// What `music analyze` understood about a recording.
+    case musicAnalysis(StudioMusicAnalysisDocument)
+    /// The notes `music transcribe` wrote to MIDI.
+    case pianoRoll(StudioMIDISummary)
 }
 
 /// The registry the Analyze result panel asks before drawing its own rows: given the view the
@@ -47,6 +51,10 @@ enum StudioResultRenderers {
                       StudioOutputFileKind.classify($0) == .audio && FileManager.default.fileExists(atPath: $0.path)
                   }) else { return nil }
             return .audioOutput(audio)
+        case (.analysis, .musicAnalysis(let analysis)):
+            return .musicAnalysis(analysis)
+        case (.notes, .midi(let summary)):
+            return .pianoRoll(summary)
         default:
             return nil
         }
@@ -73,7 +81,7 @@ enum StudioResultRenderers {
         switch rendering {
         case .tensor:
             return item.outputURL.map { [$0] } ?? []
-        case .clap:
+        case .clap, .musicAnalysis, .pianoRoll:
             return []
         case .syncReview(_, let audio), .audioOutput(let audio):
             return [audio]
@@ -99,7 +107,7 @@ struct StudioCardRenderingView: View {
             }
             .background(MereRunTheme.surfaceRaised.opacity(0.6))
             .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
-        case .clap, .audioOutput:
+        case .clap, .audioOutput, .musicAnalysis, .pianoRoll:
             StudioResultRendererView(rendering: rendering, item: item)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
@@ -168,6 +176,10 @@ struct StudioResultRendererView: View {
             StudioSyncReviewTile(videoURL: video, audioURL: audio)
         case .audioOutput(let audio):
             StudioAudioOutputRows(url: audio)
+        case .musicAnalysis(let analysis):
+            StudioMusicAnalysisRenderer(analysis: analysis)
+        case .pianoRoll(let summary):
+            StudioPianoRollRenderer(summary: summary, midiURL: StudioAnalyzeDocumentSource.url(for: item))
         }
     }
 }

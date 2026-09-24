@@ -53,6 +53,7 @@ extension StudioTask {
     /// renders the archetype's canvas over the task's `StudioTaskDraft` instead.
     package static let migratedTasks: Set<StudioTask> = [
         .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore,
+        .musicAnalyze, .musicTranscribe,
     ]
 
     /// Temporary gate: true while this task still renders its bespoke page. A mode-backed task

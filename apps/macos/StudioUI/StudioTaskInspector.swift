@@ -191,7 +191,9 @@ struct StudioTaskInspector: View {
             variantControl
         case .renoise:
             StudioRenoiseOverride(draft: $draft)
-        case .cameras, .orderedViews, .musicManifest, .faceIndex, .instruments, .targetRanks:
+        case .instruments:
+            StudioInstrumentPicker(draft: $draft)
+        case .cameras, .orderedViews, .musicManifest, .faceIndex, .targetRanks:
             // The page PR that owns the editor replaces this with it; until then every flag the
             // editor would write stays reachable as its plain control.
             plainControls(for: override, in: fields)

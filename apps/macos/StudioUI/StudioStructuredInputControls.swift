@@ -6,8 +6,10 @@ import SwiftUI
 
 // MARK: - Instruments
 
-/// Music ▸ Transcribe's expected instruments: chips picked from the list the CLI prints with
-/// `--list-instruments`, searchable; a plain field when the list cannot be read.
+/// Music ▸ Transcribe's expected instruments, the inspector's `.instruments` editor: chips
+/// picked from the list the CLI prints with `--list-instruments`, searchable; a plain field when
+/// the list cannot be read. It binds the task draft's `--instruments` value directly, so the
+/// Command view and the argv carry exactly what the chips say.
 struct StudioInstrumentPicker: View {
     @EnvironmentObject private var controller: MereRunController
     /// The `--instruments` value: comma-separated names, blank for automatic.
@@ -17,15 +19,28 @@ struct StudioInstrumentPicker: View {
     @State private var isPicking = false
     @State private var search = ""
 
+    static let label = "Expected instruments"
+
+    init(value: Binding<String>) {
+        _value = value
+    }
+
+    init(draft: Binding<StudioTaskDraft>) {
+        _value = Binding(
+            get: { draft.wrappedValue.text("--instruments") },
+            set: { draft.wrappedValue.form["--instruments"] = $0.isEmpty ? .unset : .text($0) }
+        )
+    }
+
     private var selected: [String] { StudioInstrumentList.decode(value) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Expected instruments")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(Self.label)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                Spacer(minLength: 0)
                 if let names {
                     Button {
                         search = ""
@@ -42,9 +57,9 @@ struct StudioInstrumentPicker: View {
                 }
             }
             if loadFailed {
-                TextField("voice, drums, electric_bass — blank means automatic", text: $value)
-                    .mereField()
-                Text("The instrument list could not be read from the CLI; type group names separated by commas.")
+                StudioInspectorTextField(placeholder: "voice, drums, electric_bass", text: $value)
+                    .accessibilityLabel(Self.label)
+                Text("The instrument list could not be read from the CLI; type group names separated by commas, or leave it blank for automatic.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -52,6 +67,7 @@ struct StudioInstrumentPicker: View {
                 Text(names == nil ? "Reading the instrument list…" : "Automatic — the model decides which instruments it hears.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 FlowLayout(spacing: 6) {
                     ForEach(selected, id: \.self) { name in
@@ -60,6 +76,9 @@ struct StudioInstrumentPicker: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Self.label)
+        .accessibilityValue(selected.isEmpty ? "Automatic" : selected.map(StudioInstrumentList.displayName).joined(separator: ", "))
         .task { await load() }
     }
 
@@ -124,8 +143,8 @@ struct StudioInstrumentPicker: View {
         value = StudioInstrumentList.encode(selected.filter { $0 != name })
     }
 
-    /// Reads the CLI's list once per launch, kept on the controller so rebuilding the page does not
-    /// spawn the CLI again; a failure leaves the plain field.
+    /// Reads the CLI's list once per launch, kept on the controller so rebuilding the inspector
+    /// does not spawn the CLI again; a failure leaves the plain field.
     private func load() async {
         guard names == nil else { return }
         if let cached = controller.cachedInstrumentNames {
