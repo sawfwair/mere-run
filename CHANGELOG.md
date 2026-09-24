@@ -6,6 +6,10 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Let a plugin catalog declare a setup step that runs through its verified
+  entrypoint after installation. For an installed restricted model,
+  `mere.run model pull MODEL --accept-model-license` now records explicit terms
+  acceptance without downloading the model again.
 - Show essential Music, Sound ▸ Video Foley, and 3D settings in Studio's
   composer and result chips. Stack Audio Analyze's result below its input
   when the Library narrows the workspace.
