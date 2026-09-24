@@ -123,6 +123,20 @@ final class SAM31ImageSegmenterTests: MereRunCoreTestCase {
         let pointsOnly = encoder(points: points, targetHeight: 2, targetWidth: 2)
         XCTAssertEqual(pointsOnly.sparseEmbeddings.shape, [1, 3, 8])
         XCTAssertTrue(MLX.allClose(pointsOnly.sparseEmbeddings[0, 0], tokens[2]).item(Bool.self))
+
+        // A box alone is its two corners and the pad; a mask with points keeps the points' pad
+        // and takes its dense embedding from the mask.
+        let boxOnly = encoder(boxes: MLXArray([0, 0, 4, 4] as [Float], [1, 1, 4]), targetHeight: 2, targetWidth: 2)
+        XCTAssertEqual(boxOnly.sparseEmbeddings.shape, [1, 3, 8])
+        XCTAssertTrue(MLX.allClose(boxOnly.sparseEmbeddings[0, 2], encoder.notAPointEmbed.weight[0]).item(Bool.self))
+        let maskAndPoints = encoder(points: points, masks: MLX.ones([1, 8, 8, 1], dtype: .float32), targetHeight: 2, targetWidth: 2)
+        XCTAssertEqual(maskAndPoints.sparseEmbeddings.shape, [1, 3, 8])
+        XCTAssertEqual(maskAndPoints.denseEmbeddings.shape, [1, 4, 8])
+        XCTAssertTrue(MLX.allClose(maskAndPoints.sparseEmbeddings[0, 0], tokens[2]).item(Bool.self))
+
+        // The pad token ignores its coordinate: wherever it is placed, it is the same embedding.
+        XCTAssertTrue(MLX.allClose(single(0, 0, label: -1), single(7, 3, label: -1)).item(Bool.self))
+        XCTAssertTrue(MLX.allClose(single(7, 3, label: -1), encoder.notAPointEmbed.weight[0]).item(Bool.self))
     }
 
     func testDenseMaskPromptIncludesTheUpstreamNotAPointToken() {
