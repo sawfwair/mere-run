@@ -109,7 +109,6 @@ dynamic_boundary_files=(
   "Sources/AudioSTT/Qwen3ASR/Qwen3ASRTokenizer.swift"
   # Studio artifact explorers deliberately accept polymorphic manifests/results from saved
   # runs.
-  "apps/macos/StudioUI/StudioMusicToolsView.swift"
   "apps/macos/StudioUI/StudioTrainingView.swift"
   "Sources/MereRunCLI/Support/ResumeLoRABootstrap.swift"
   "Sources/MereRunCore/Asset3D/MeshGLBWriter.swift"
