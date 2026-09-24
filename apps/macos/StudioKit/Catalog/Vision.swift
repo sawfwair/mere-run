@@ -69,7 +69,6 @@ extension CommandCatalog {
             promptLabel: "Prompt",
             inputKind: .image,
             outputKind: .file("png"),
-            defaultPrompt: "a person",
             defaultModel: "vision-segment-sam31"
         ),
         CommandTemplate(
@@ -81,7 +80,6 @@ extension CommandCatalog {
             promptLabel: "Prompt",
             inputKind: .video,
             outputKind: .file("mp4"),
-            defaultPrompt: "a person",
             defaultModel: "vision-segment-sam31"
         ),
         CommandTemplate(

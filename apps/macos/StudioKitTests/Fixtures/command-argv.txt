@@ -2726,7 +2726,7 @@ visionPose	videoOutputMode=video-only	vision pose 1 --json-output 1 --max-hands 
 visionPose	videoQuality=draft	vision pose 1 --json-output 1 --max-hands 3 --minimum-confidence 0.6 --json 1
 visionPose	videoQuality=final	vision pose 1 --json-output 1 --max-hands 3 --minimum-confidence 0.6 --json 1
 visionPose	voiceMode=clone	vision pose 1 --json-output 1 --max-hands 3 --minimum-confidence 0.6 --json 1
-visionSegment	default	vision segment '' --prompt 'a person' --model vision-segment-sam31 --output ~/Pictures/mere.run/Vision/segment-<stamp>.png --threshold 0.05 --resolution 1008
+visionSegment	default	vision segment '' --model vision-segment-sam31 --output ~/Pictures/mere.run/Vision/segment-<stamp>.png --threshold 0.05 --resolution 1008
 visionSegment	maximal	vision segment 1 --prompt 1 --box 1 --point 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 --threshold 0.55 --resolution 1009 --show-boxes --multimask 1
 visionSegment	maximal-booleans-off	vision segment 1 --prompt 1 --box 1 --point 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 --threshold 0.55 --resolution 1009 1
 visionSegment	modelRoot=video-minimax-h3-ref2va	vision segment 1 --prompt 1 --box 1 --point 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 --threshold 0.55 --resolution 1009 --show-boxes --multimask 1
@@ -2770,7 +2770,7 @@ visionServe	videoOutputMode=video-only	vision serve --host 1 --port 8092 --model
 visionServe	videoQuality=draft	vision serve --host 1 --port 8092 --model 1 --max-frame-bytes 1 --max-batch-size 9 --max-batch-bytes 1 --preflight --json 1
 visionServe	videoQuality=final	vision serve --host 1 --port 8092 --model 1 --max-frame-bytes 1 --max-batch-size 9 --max-batch-bytes 1 --preflight --json 1
 visionServe	voiceMode=clone	vision serve --host 1 --port 8092 --model 1 --max-frame-bytes 1 --max-batch-size 9 --max-batch-bytes 1 --preflight --json 1
-visionTrack	default	vision track '' --prompt 'a person' --model vision-segment-sam31 --output ~/Pictures/mere.run/Vision/track-video-<stamp>.mp4 --init-frame 0 --threshold 0.05 --resolution 1008
+visionTrack	default	vision track '' --model vision-segment-sam31 --output ~/Pictures/mere.run/Vision/track-video-<stamp>.mp4 --init-frame 0 --threshold 0.05 --resolution 1008
 visionTrack	maximal	vision track 1 --prompt 1 --box 1 --point 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 --init-frame 1 --threshold 0.55 --resolution 1009 --end-frame 1 --show-boxes --show-labels --preflight --json 1
 visionTrack	maximal-booleans-off	vision track 1 --prompt 1 --box 1 --point 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 --init-frame 1 --threshold 0.55 --resolution 1009 --end-frame 1 1
 visionTrack	modelRoot=video-minimax-h3-ref2va	vision track 1 --prompt 1 --box 1 --point 1 --model 1 --output 1 --json-output 1 --mask-output-dir 1 --init-frame 1 --threshold 0.55 --resolution 1009 --end-frame 1 --show-boxes --show-labels --preflight --json 1

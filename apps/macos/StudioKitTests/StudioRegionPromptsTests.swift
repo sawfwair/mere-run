@@ -476,6 +476,33 @@ final class StudioRegionPromptsTests: XCTestCase {
 
     // MARK: - Into the command
 
+    /// Segment and Track start with nothing typed: the composer shows its placeholder and a run
+    /// carries only what was drawn, so "a person" never rides along as a real `--prompt`.
+    func testSegmentAndTrackStartWithAnEmptyPromptAndRunOnADrawingAlone() throws {
+        for mode in [StudioMode.segment, .track] {
+            var draft = StudioDraft()
+            draft.reset(for: mode)
+            XCTAssertEqual(draft.prompt, "", "\(mode)")
+            XCTAssertFalse(mode.promptPlaceholder.isEmpty, "\(mode)")
+            XCTAssertEqual(CommandCatalog.template(id: mode.defaultTemplateID)?.defaultPrompt, "", "\(mode)")
+
+            draft.inputPath = mode == .track ? "/tmp/clip.mp4" : "/tmp/mug.png"
+            XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)) { error in
+                XCTAssertEqual(error as? StudioCommandError, .missingPrompt("A prompt or a drawn box or point"))
+            }
+            draft.visionRegionPrompts = [cup]
+            let drawn = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+            let arguments = drawn.template.arguments(from: drawn.draft)
+            XCTAssertFalse(arguments.contains("--prompt"), "\(mode): \(arguments)")
+            XCTAssertTrue(arguments.contains("--box"), "\(mode)")
+
+            draft.visionRegionPrompts = nil
+            draft.prompt = "the mug"
+            let typed = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+            XCTAssertEqual(typed.draft.prompt, "the mug", "\(mode)")
+        }
+    }
+
     func testDrawnPromptsBecomeTheSegmentAndTrackCommandsBoxAndPointFlags() throws {
         var segment = StudioDraft()
         segment.reset(for: .segment)

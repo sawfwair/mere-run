@@ -285,11 +285,9 @@ visionOCR	outputPath	~/Documents/mere.run/Vision/ocr-<stamp>
 visionOCR	temperature	0.2
 visionSegment	model	vision-segment-sam31
 visionSegment	outputPath	~/Pictures/mere.run/Vision/segment-<stamp>.png
-visionSegment	prompt	a person
 visionServe	port	8091
 visionTrack	model	vision-segment-sam31
 visionTrack	outputPath	~/Pictures/mere.run/Vision/track-video-<stamp>.mp4
-visionTrack	prompt	a person
 visionTrackLive	model	vision-segment-sam31
 visionTrackLive	outputPath	~/Pictures/mere.run/Vision/track-camera-<stamp>.mp4
 visionTrackLive	prompt	a person

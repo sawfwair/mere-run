@@ -762,6 +762,7 @@ final class StudioTypesTests: XCTestCase {
             }),
             (.visionTrack, "vision.track", {
                 $0.inputPath = "/tmp/a.mp4"
+                $0.prompt = "the runner"
                 $0.preflight = true
                 $0.json = true
             }),
