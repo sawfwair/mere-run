@@ -189,6 +189,10 @@ struct StudioTaskInspector: View {
             modelPicker
         case .variant:
             variantControl
+        case .earthDimensions:
+            StudioEarthDimensionsControl(draft: $draft)
+        case .earthSampling:
+            StudioEarthSamplingControl(draft: $draft)
         case .cameras, .orderedViews, .musicManifest, .faceIndex, .instruments, .renoise, .targetRanks:
             // The page PR that owns the editor replaces this with it; until then every flag the
             // editor would write stays reachable as its plain control.

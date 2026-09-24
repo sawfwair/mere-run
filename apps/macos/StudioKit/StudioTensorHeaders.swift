@@ -219,3 +219,47 @@ package enum StudioTensorHeader: Equatable {
         }
     }
 }
+
+extension StudioTensorHeader {
+    /// The extensions of the tensor files Studio runs write; their header is read on its own.
+    package static let fileExtensions: Set<String> = ["safetensors", "npy"]
+
+    /// Whichever header the file carries, read from its front without the tensors behind it.
+    package static func loadHeader(from url: URL) -> StudioTensorHeader? {
+        if let npy = StudioNPYMetadata.loadHeader(from: url) { return .npy(npy) }
+        if let header = StudioSafetensorsHeader.loadHeader(from: url) { return .safetensors(header) }
+        return nil
+    }
+}
+
+extension StudioNPYMetadata {
+    /// The `.npy` header from the file's first bytes: the dictionary is at most a few kilobytes,
+    /// and `byteCount` comes from the file's size rather than a read of it.
+    package static func loadHeader(from url: URL) -> StudioNPYMetadata? {
+        guard let handle = try? FileHandle(forReadingFrom: url), let prefix = try? handle.read(upToCount: 65_536),
+              let header = decode(prefix) else { return nil }
+        try? handle.close()
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? header.byteCount
+        return StudioNPYMetadata(
+            version: header.version, descriptor: header.descriptor, shape: header.shape,
+            fortranOrder: header.fortranOrder, byteCount: size
+        )
+    }
+}
+
+extension StudioSafetensorsHeader {
+    /// The header alone, without reading the tensors behind it: an Earth tile bundle can be
+    /// hundreds of megabytes, and the checklist needs only the names and shapes in front.
+    package static func loadHeader(from url: URL) -> StudioSafetensorsHeader? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard let prefix = try? handle.read(upToCount: 8), prefix.count == 8 else { return nil }
+        let length = prefix.enumerated().reduce(UInt64(0)) { total, byte in
+            total | UInt64(byte.element) << (8 * UInt64(byte.offset))
+        }
+        guard length > 0, length <= 100_000_000, let json = try? handle.read(upToCount: Int(length)),
+              let header = decode(prefix + json) else { return nil }
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? header.byteCount
+        return StudioSafetensorsHeader(tensors: header.tensors, metadata: header.metadata, byteCount: size)
+    }
+}

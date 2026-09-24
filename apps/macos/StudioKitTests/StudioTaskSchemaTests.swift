@@ -286,7 +286,7 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertEqual(StudioTaskSchema.modelID(for: draft), "audio-enhance-ap-bwe-16kto48k")
         XCTAssertEqual(StudioModelScope(templateID: .visionDepth).categories, ["vision-depth"])
         XCTAssertEqual(StudioModelScope(templateID: .imageGenerate).categories, StudioMode.createImage.modelCategories)
-        XCTAssertTrue(StudioModelScope(templateID: .geoTessera).categories.isEmpty, "no filter when the inventory has no category")
+        XCTAssertTrue(StudioModelScope(templateID: .musicRealtime).categories.isEmpty, "no filter when the inventory has no category")
     }
 
     func testTaskDraftPersistsWithoutSecrets() throws {

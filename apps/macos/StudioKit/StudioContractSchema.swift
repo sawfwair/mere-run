@@ -691,6 +691,12 @@ package enum StudioContractOverrideID: String, CaseIterable, Hashable {
     case renoise
     /// Per-target LoRA ranks over `--target-rank`.
     case targetRanks
+    /// The output widths `geo tessera --dimensions` accepts (the students' 16–128, the teacher's
+    /// 1024, or the checkpoint's own), which the contract declares as a bare integer.
+    case earthDimensions
+    /// `geo olmoearth`'s spatial patch size (1, 2, 4, or 8 pixels) and ground sample distance in
+    /// metres (above zero), which the contract declares as a bare integer and number.
+    case earthSampling
 }
 
 /// One composite editor: the flags it owns, and any draft field behind it that has no flag of its

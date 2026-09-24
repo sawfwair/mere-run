@@ -447,7 +447,12 @@ struct StudioAnalyzeCanvas: View {
 
     @ViewBuilder
     private var fileView: some View {
-        if let inputURL {
+        if let rendering = StudioInputRenderers.rendering(for: templateID, url: inputURL) {
+            // A task that can say what its input file holds draws the file itself.
+            StudioInputRendererView(rendering: rendering)
+                .frame(maxWidth: .infinity)
+                .mereMediaFrame()
+        } else if let inputURL {
             VStack(spacing: MereRunTheme.Spacing.sm) {
                 Image(systemName: inputKind == .directory ? "folder" : "doc.text")
                     .font(.system(size: 34, weight: .medium))
@@ -611,11 +616,19 @@ struct StudioAnalyzeLoadedResult: Equatable {
     let document: StudioAnalyzeDocument?
 
     static func load(itemID: UUID, url: URL?, fallbackText: String?) -> StudioAnalyzeLoadedResult {
+        // A tensor result (Earth's safetensors, `sfx ae encode`'s `.npy`) can be hundreds of
+        // megabytes: only its header is read, and the JSON view shows what the command printed.
+        if let url, StudioTensorHeader.fileExtensions.contains(url.pathExtension.lowercased()) {
+            let header = StudioTensorHeader.loadHeader(from: url)
+            return StudioAnalyzeLoadedResult(itemID: itemID, url: url, raw: fallbackText, document: header.map { .tensor($0) })
+        }
         if let url, let data = try? Data(contentsOf: url), !data.isEmpty {
+            // A binary result with no text of its own (a flow field, MIDI) shows the command's
+            // printed output in the JSON view instead.
             return StudioAnalyzeLoadedResult(
                 itemID: itemID,
                 url: url,
-                raw: String(data: data, encoding: .utf8),
+                raw: String(data: data, encoding: .utf8) ?? fallbackText,
                 document: StudioAnalyzeDocument.decode(data)
             )
         }

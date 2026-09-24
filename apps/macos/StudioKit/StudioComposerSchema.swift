@@ -439,6 +439,7 @@ package struct StudioModelScope: Equatable {
         case .textDecide: return ["text-decide"]
         case .geoFlood: return ["vision-flood"]
         case .geoFire: return ["vision-fire"]
+        case .geoTessera, .geoOlmoEarth: return ["vision-embed"]
         case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview: return ["image-3d"]
         case .speechSynthesize, .speechProfileCreate: return ["speech-tts"]
         default:

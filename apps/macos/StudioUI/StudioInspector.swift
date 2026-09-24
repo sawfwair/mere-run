@@ -235,7 +235,8 @@ struct StudioInspector: View {
             ) { $0.title }
         case .attachment, .regionPrompts:
             EmptyView()
-        case .variant, .cameras, .orderedViews, .musicManifest, .faceIndex, .instruments, .renoise, .targetRanks:
+        case .variant, .cameras, .orderedViews, .musicManifest, .faceIndex, .instruments, .renoise, .targetRanks,
+             .earthDimensions, .earthSampling:
             // Task-draft editors (`StudioTaskInspector`); a prompt mode never declares them.
             EmptyView()
         }
