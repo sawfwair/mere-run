@@ -396,25 +396,21 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let subject = try face ?? Self.squareImage(in: fixtures(), name: "square-640x480.png")
         let expectedSize = face == nil ? (640, 480) : (512, 512)
 
-        // The Vision Lab page's draft for Face detection.
-        let template = try XCTUnwrap(CommandCatalog.template(id: .visionFaceDetect))
-        let root = StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision", configuredRoot: live.path)
-        var draft = template.defaultDraft()
-        draft.inputPath = subject.path
-        draft.model = template.defaultDraft().model
-        draft.visionFaceScoreThreshold = 0.65
-        draft.visionExecutionProvider = "auto"
-        draft.visionMaxFaces = 0
-        draft.visionIncludeEmbeddings = false
-        draft.json = true
-        draft.visionJSONOutputPath = root.appendingPathComponent("result.json").path
-        let (request, argv) = try specialistRequest(templateID: .visionFaceDetect, mode: .readImage, draft: draft)
-        XCTAssertEqual(Array(argv.prefix(3)), ["vision", "face", "detect"])
-        XCTAssertTrue(argv.contains("--json-output"))
+        // Vision ▸ Faces on the task workspace: the picture in the well, the page's settings.
+        var draft = StudioTaskDraft(templateID: .visionFaceDetect)
+        StudioTaskSchema.slots(for: .visionFaceDetect)[0].attach([subject], to: &draft)
+        draft.form["--score-threshold"] = .number(0.65)
+        draft.form["--execution-provider"] = .text("auto")
+        let (request, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(4)), ["vision", "face", "detect", subject.path])
+        let jsonOutput = try XCTUnwrap(argv.firstIndex(of: "--json-output").map { argv[$0 + 1] }, "routing fills the result document")
+        XCTAssertTrue(jsonOutput.hasPrefix(live.appendingPathComponent("Vision").path), "the document files under Vision: \(jsonOutput)")
+        XCTAssertEqual(URL(fileURLWithPath: jsonOutput).pathExtension, "json")
+        XCTAssertEqual(request.templateID, .visionFaceDetect)
 
         let run = try runCLI(flow, argv, timeout: 900)
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
-        let result = try XCTUnwrap(StudioFaceOverlayResult.load(from: URL(fileURLWithPath: request.draft.visionJSONOutputPath)), "The overlay's decoder rejected the face document")
+        let result = try XCTUnwrap(StudioFaceOverlayResult.load(from: URL(fileURLWithPath: jsonOutput)), "The overlay's decoder rejected the face document")
         XCTAssertEqual(result.width, expectedSize.0)
         XCTAssertEqual(result.height, expectedSize.1)
         for record in result.faces {
@@ -427,9 +423,23 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         if face != nil {
             XCTAssertGreaterThanOrEqual(result.faces.count, 1, "The generated portrait should contain a detectable face")
         }
-        // The stdout JSON the page ignores should also be the same document.
-        XCTAssertEqual(try JSONDecoder().decode(StudioFaceOverlayResult.self, from: Data(run.stdout.utf8)), result)
-        conclude(flow, "subject=\(subject.lastPathComponent) faces=\(result.faces.count) scores=\(result.faces.map { String(format: "%.2f", $0.detection.score) }) json=\(request.draft.visionJSONOutputPath)")
+        // The Analyze canvas reads the same file as a face document, one box per face.
+        guard case .faces(let decoded) = try decodeAnalyzeDocument(at: jsonOutput) else {
+            return XCTFail("The Analyze canvas did not read the face document as faces")
+        }
+        XCTAssertEqual(decoded, result)
+        XCTAssertEqual(
+            StudioAnalyzeDocument.faces(decoded).detections(imageSize: CGSize(width: result.width, height: result.height)).count,
+            result.faces.count
+        )
+        // Once the row is in the Library, the face picker finds this document for the picture.
+        let row = StudioLibraryItem(
+            id: request.id, mode: request.mode, prompt: "", inputURL: subject, outputURL: nil, createdAt: Date(), updatedAt: Date(),
+            status: .completed, exitCode: 0, commandPreview: "", outputText: nil, templateID: .visionFaceDetect,
+            artifactURLs: [URL(fileURLWithPath: jsonOutput)]
+        )
+        XCTAssertEqual(StudioFacePick.detectionDocumentURL(for: subject.path, in: [row]), URL(fileURLWithPath: jsonOutput))
+        conclude(flow, "subject=\(subject.lastPathComponent) faces=\(result.faces.count) scores=\(result.faces.map { String(format: "%.2f", $0.detection.score) }) json=\(jsonOutput)")
     }
 
     // MARK: - Vision ▸ Depth (still)
@@ -438,32 +448,36 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         try requireModels(["vision-depth-marigold-v2"])
         let flow = "07-depth"
         let subject = try (try? faceImage(flow: flow)) ?? Self.squareImage(in: fixtures(), name: "square-640x480.png")
-        let template = try XCTUnwrap(CommandCatalog.template(id: .visionDepth))
-        let root = StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision", configuredRoot: live.path)
-        XCTAssertEqual(root.deletingLastPathComponent().path, live.appendingPathComponent("Vision").path)
-        XCTAssertTrue(root.lastPathComponent.hasPrefix("vision-"))
 
-        var draft = template.defaultDraft()
-        draft.inputPath = subject.path
-        draft.model = template.defaultDraft().model
-        draft.visionMaxEdge = 1_024
-        draft.visionNative = false
-        draft.visionCheckpoint = nil
-        draft.dryRun = false
-        draft.json = true
-        draft.outputPath = root.path
-        let (request, argv) = try specialistRequest(templateID: .visionDepth, mode: .readImage, draft: draft)
-        XCTAssertEqual(Array(argv.prefix(2)), ["vision", "depth"])
-        XCTAssertTrue(argv.contains("--json"))
+        // Vision ▸ Depth on the task workspace: the picture in the well, a real run (the catalog's
+        // console default is a dry run), the destination named by routing.
+        var draft = StudioTaskDraft(templateID: .visionDepth)
+        StudioTaskSchema.slots(for: .visionDepth)[0].attach([subject], to: &draft)
+        draft.form["--max-edge"] = .integer(1_024)
+        draft.form["--dry-run"] = .unset
+        let (request, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(3)), ["vision", "depth", subject.path])
+        XCTAssertFalse(argv.contains("--dry-run"))
         XCTAssertEqual(argv.firstIndex(of: "--max-edge").map { argv[$0 + 1] }, "1024")
+        let output = try XCTUnwrap(argv.firstIndex(of: "--output").map { argv[$0 + 1] }, "routing names the output directory")
+        XCTAssertEqual(URL(fileURLWithPath: output).deletingLastPathComponent().path, live.appendingPathComponent("Vision").path)
+        XCTAssertTrue(URL(fileURLWithPath: output).lastPathComponent.hasPrefix(subject.deletingPathExtension().lastPathComponent),
+                      "the directory is named after the input: \(output)")
 
         let run = try runCLI(flow, argv, timeout: 1_800)
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
-        let object = try XCTUnwrap(StudioStructuredOutput.objectData(in: run.stdout).flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any], "--json should print one JSON object")
-        let files = (try? FileManager.default.contentsOfDirectory(atPath: request.draft.outputPath)) ?? []
-        XCTAssertFalse(files.isEmpty, "The CLI should have written into \(request.draft.outputPath)")
-        XCTAssertTrue(files.contains { $0.lowercased().hasSuffix(".png") }, "Expected a depth preview PNG in \(files)")
-        conclude(flow, "output=\(request.draft.outputPath) files=\(files.sorted()) jsonKeys=\(object.keys.sorted())")
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: output)) ?? []
+        XCTAssertFalse(files.isEmpty, "The CLI should have written into \(output)")
+        XCTAssertTrue(files.contains { $0.lowercased().hasSuffix("-depth.png") }, "Expected a depth preview PNG in \(files)")
+        // What the Depth view shows: the preview PNG, read from the row's directory output.
+        let row = StudioLibraryItem(
+            id: request.id, mode: request.mode, prompt: "", inputURL: subject, outputURL: URL(fileURLWithPath: output, isDirectory: true),
+            createdAt: Date(), updatedAt: Date(), status: .completed, exitCode: 0, commandPreview: "", outputText: nil, templateID: .visionDepth
+        )
+        let artifacts = StudioVisionRunArtifacts.read(item: row)
+        XCTAssertEqual(artifacts.previews.map(\.lastPathComponent), files.filter { $0.hasSuffix("-depth.png") }.sorted())
+        XCTAssertFalse(artifacts.documents.isEmpty, "the depth manifest is beside the preview")
+        conclude(flow, "output=\(output) files=\(files.sorted()) previews=\(artifacts.previews.map(\.lastPathComponent))")
     }
 
     // MARK: - Vision ▸ Multi-view geometry (cameras)
@@ -480,59 +494,70 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         second.translation = [0.1, 0, 0]
         let cameras = StudioGeometryCameraDocument(cameras: [.identity(size: views[0].pixelSize), second])
         XCTAssertEqual(cameras.problems(views: views), [])
-        let template = try XCTUnwrap(CommandCatalog.template(id: .visionGeometryMultiview))
 
-        func makeDraft(root: URL, camerasPath: String, dryRun: Bool) -> CommandDraft {
-            var draft = template.defaultDraft()
-            draft.inputPath = viewA.path
-            draft.visionAdditionalInputs = viewB.path
-            draft.model = template.defaultDraft().model
-            draft.camerasPath = camerasPath
-            draft.visionProcessResolution = 504
-            draft.visionReferenceView = "saddle-balanced"
-            draft.visionConfidencePercentile = 40
-            draft.visionMaxPoints = 0
-            draft.dryRun = dryRun
-            draft.json = true
-            draft.outputPath = root.path
-            return draft
+        // Vision ▸ Geometry (multi-view) on the task workspace: both views in the ordered well,
+        // the page's settings, the camera file beside the directory routing names.
+        var draft = StudioTaskDraft(templateID: .visionGeometryMultiview)
+        StudioTaskSchema.slots(for: .visionGeometryMultiview)[0].attach([viewA, viewB], to: &draft)
+        draft.form["--process-resolution"] = .integer(504)
+        draft.form["--reference-view"] = .text("saddle-balanced")
+        draft.form["--confidence-percentile"] = .number(40)
+        draft.form["--dry-run"] = .unset
+        // The cameras the way the inspector keeps them: a draft file in the app's own folder that
+        // the runner copies beside each run's output directory, as `<folder>.cameras.json`, and
+        // points `--cameras` at. The directory itself is named after the first view.
+        let visionFolder = live.appendingPathComponent("Vision", isDirectory: true)
+        let page = try XCTUnwrap(StudioCameraDocuments.draftPage(for: .visionGeometryMultiview))
+        let cameraDraft = try StudioCameraDocuments.storeDraft(page: page, content: cameras.json())
+        XCTAssertTrue(StudioCameraDocuments.isDraft(cameraDraft.path, page: page))
+
+        func request(camerasPath: String, dryRun: Bool) throws -> (argv: [String], output: String) {
+            var variant = draft
+            variant.form["--cameras"] = .text(camerasPath)
+            variant.form["--dry-run"] = dryRun ? .flag(true) : .unset
+            let built = try taskRequest(variant)
+            let output = try XCTUnwrap(built.argv.firstIndex(of: "--output").map { built.argv[$0 + 1] })
+            XCTAssertEqual(URL(fileURLWithPath: output).deletingLastPathComponent().path, visionFolder.path)
+            XCTAssertTrue(URL(fileURLWithPath: output).lastPathComponent.hasPrefix("view-a-320x240"), "named after the first view: \(output)")
+            XCTAssertEqual(Array(built.argv.prefix(4)), ["vision", "geometry-multiview", viewA.path, viewB.path], "the views stay ordered")
+            let placed = try XCTUnwrap(built.argv.firstIndex(of: "--cameras").map { built.argv[$0 + 1] })
+            XCTAssertEqual(URL(fileURLWithPath: placed).deletingLastPathComponent().path, visionFolder.path, "the camera file sits beside the output")
+            XCTAssertTrue(URL(fileURLWithPath: placed).lastPathComponent.hasPrefix(URL(fileURLWithPath: output).lastPathComponent + ".cameras"), placed)
+            XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: placed)), try Data(contentsOf: URL(fileURLWithPath: camerasPath)), "the same document")
+            return (built.argv, output)
         }
 
         // Correct cameras: dry run, then the real solve.
-        let root = StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision", configuredRoot: live.path)
-        let camerasURL = StudioCameraDocuments.url(besideOutputDirectory: root.path)
-        try FileManager.default.createDirectory(at: camerasURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try cameras.json().write(to: camerasURL, options: .atomic)
-        XCTAssertEqual(camerasURL.lastPathComponent, "\(root.lastPathComponent).cameras.json")
-        XCTAssertEqual(try StudioGeometryCameraDocument.importing(Data(contentsOf: camerasURL)).cameras.map(\.imageWidth), [320, 320])
-
-        let (_, dryArgv) = try specialistRequest(templateID: .visionGeometryMultiview, mode: .readImage, draft: makeDraft(root: root, camerasPath: camerasURL.path, dryRun: true))
-        XCTAssertEqual(dryArgv.firstIndex(of: "--cameras").map { dryArgv[$0 + 1] }, camerasURL.path)
+        let (dryArgv, _) = try request(camerasPath: cameraDraft.path, dryRun: true)
         let dry = try runCLI(flow, dryArgv, timeout: 600)
         XCTAssertEqual(dry.exitCode, 0, dry.failureDescription)
-        XCTAssertNotNil(StudioStructuredOutput.objectData(in: dry.stdout), "--dry-run --json should print JSON")
 
-        let (request, argv) = try specialistRequest(templateID: .visionGeometryMultiview, mode: .readImage, draft: makeDraft(root: root, camerasPath: camerasURL.path, dryRun: false))
+        let (argv, root) = try request(camerasPath: cameraDraft.path, dryRun: false)
         let run = try runCLI(flow, argv, timeout: 1_800)
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
-        let files = (try? FileManager.default.contentsOfDirectory(atPath: request.draft.outputPath)) ?? []
-        XCTAssertFalse(files.isEmpty, "The scene directory should have been written at \(request.draft.outputPath)")
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+        XCTAssertFalse(files.isEmpty, "The scene directory should have been written at \(root)")
+        let row = StudioLibraryItem(
+            id: UUID(), mode: .readImage, prompt: "", inputURL: viewA, outputURL: URL(fileURLWithPath: root, isDirectory: true),
+            createdAt: Date(), updatedAt: Date(), status: .completed, exitCode: 0, commandPreview: "", outputText: nil, templateID: .visionGeometryMultiview
+        )
+        let artifacts = StudioVisionRunArtifacts.read(item: row)
+        XCTAssertFalse(artifacts.scenes.isEmpty, "the Scene view needs a point cloud in \(files)")
 
         // A camera sized for another image: Studio blocks it, and the CLI must too.
         let wrong = StudioGeometryCameraDocument(cameras: [.identity(), second])
         let wrongProblems = wrong.problems(views: views)
         XCTAssertEqual(wrongProblems, ["Camera 1 is sized 1920 × 1080 but view-a-320x240.png is 320 × 240."])
-        let wrongRoot = StudioOutputLocation.specialistDirectory(domain: .vision, name: "vision-wrong", configuredRoot: live.path)
-        let wrongURL = StudioCameraDocuments.url(besideOutputDirectory: wrongRoot.path)
-        try wrong.json().write(to: wrongURL, options: .atomic)
-        let (_, wrongDryArgv) = try specialistRequest(templateID: .visionGeometryMultiview, mode: .readImage, draft: makeDraft(root: wrongRoot, camerasPath: wrongURL.path, dryRun: true))
+        let wrongDraft = try StudioCameraDocuments.storeDraft(page: page, content: wrong.json())
+        XCTAssertNotEqual(wrongDraft, cameraDraft, "a different document is a different draft file")
+        let (wrongDryArgv, _) = try request(camerasPath: wrongDraft.path, dryRun: true)
         let wrongDry = try runCLI(flow, wrongDryArgv, timeout: 600)
-        let (_, wrongArgv) = try specialistRequest(templateID: .visionGeometryMultiview, mode: .readImage, draft: makeDraft(root: wrongRoot, camerasPath: wrongURL.path, dryRun: false))
+        let (wrongArgv, _) = try request(camerasPath: wrongDraft.path, dryRun: false)
         let wrongRun = try runCLI(flow, wrongArgv, timeout: 1_800)
         XCTAssertNotEqual(wrongRun.exitCode, 0, "The CLI accepted a camera whose image size is not the image's")
         let message = (wrongRun.stderr + wrongRun.stdout).lowercased()
         XCTAssertTrue(message.contains("1920") || message.contains("dimension") || message.contains("size"), "The rejection should name the size mismatch; got: \(wrongRun.stderr.suffix(400))")
-        conclude(flow, "dryRun=\(dry.exitCode) run=\(run.exitCode) files=\(files.sorted()) wrongSize: dryRun exit=\(wrongDry.exitCode) run exit=\(wrongRun.exitCode) \(StudioFailureSummary.lastMeaningfulLine(in: wrongRun.stderr) ?? "")")
+        conclude(flow, "dryRun=\(dry.exitCode) run=\(run.exitCode) files=\(files.sorted()) scenes=\(artifacts.scenes.map(\.lastPathComponent)) wrongSize: dryRun exit=\(wrongDry.exitCode) run exit=\(wrongRun.exitCode) \(StudioFailureSummary.lastMeaningfulLine(in: wrongRun.stderr) ?? "")")
     }
 
     // MARK: - 3D ▸ InstantMesh (cameras)
@@ -1185,6 +1210,35 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         conclude(flow, "model=\(model) notes=\(summary.notes.count) tracks=\(summary.trackCount) ppq=\(summary.ticksPerQuarter) tempo=\(summary.tempoMicrosecondsPerQuarter.map(String.init) ?? "-") context=\(contextExists)")
     }
 
+    // MARK: - Vision ▸ Live
+
+    /// `vision track-live` has no dry run and a camera capture cannot run headless, so this pins
+    /// the command the Session page submits: the prompts one per line, the camera, the clip and
+    /// its JSON sidecar under Vision, filed under Track.
+    func test31LiveTrackBuildsItsCommandFromTheTaskDraft() throws {
+        let flow = "31-live-track"
+        var draft = StudioTaskDraft(templateID: .visionTrackLive)
+        draft.prompt = "the person\nthe red mug"
+        draft.form["--camera"] = .integer(1)
+        draft.form["--duration-seconds"] = .number(4)
+        let (request, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(2)), ["vision", "track-live"])
+        XCTAssertEqual(argv.indices.filter { argv[$0] == "--prompt" }.map { argv[$0 + 1] }, ["the person", "the red mug"])
+        XCTAssertEqual(argv.firstIndex(of: "--camera").map { argv[$0 + 1] }, "1")
+        XCTAssertEqual(argv.firstIndex(of: "--duration-seconds").map { argv[$0 + 1] }, "4")
+        let output = try XCTUnwrap(argv.firstIndex(of: "--output").map { argv[$0 + 1] })
+        XCTAssertEqual(URL(fileURLWithPath: output).pathExtension, "mp4")
+        XCTAssertEqual(URL(fileURLWithPath: output).deletingLastPathComponent().path, live.appendingPathComponent("Vision").path)
+        XCTAssertEqual(
+            argv.firstIndex(of: "--json-output").map { argv[$0 + 1] },
+            URL(fileURLWithPath: output).deletingPathExtension().appendingPathExtension("json").path,
+            "the tracking document lands beside the clip"
+        )
+        XCTAssertEqual(request.mode, CommandCatalog.template(id: .visionTrackLive)?.libraryMode)
+        XCTAssertEqual(request.templateID, .visionTrackLive)
+        conclude(flow, "argv=\(argv.joined(separator: " "))")
+    }
+
     // MARK: - Studio request builders
 
     /// A composer task's request, prepared the way `StudioPromptTaskController` prepares it: the
@@ -1207,17 +1261,6 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
         assertDestinations(of: prepared.request.draft, stayUnder: live)
         return (prepared.request, template.arguments(from: prepared.request.draft))
-    }
-
-    /// A task draft's request, exactly as `StudioTaskRunner.request(for:)` builds it for the
-    /// shared task workspace: routing names the destination under the configured root, then the
-    /// run is prepared (Command edits, validation, the folder created).
-    private func taskRequest(_ draft: StudioTaskDraft) throws -> (request: StudioRunRequest, argv: [String]) {
-        let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request(), "\(draft.templateID) cannot run from Studio")
-        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
-        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        assertDestinations(of: prepared.request.draft, stayUnder: live)
-        return (prepared.request, try XCTUnwrap(prepared.request.execution).arguments)
     }
 
     /// A task draft's argv with its destination named but not prepared, for a command the
@@ -1248,6 +1291,32 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         return ["Music", "Pictures", "Documents", "Movies", "Desktop", "Downloads"].map {
             home.appendingPathComponent($0, isDirectory: true)
         }
+    }
+
+    /// A task draft's request, prepared the way `StudioTaskRunner.run(_:task:)` prepares it
+    /// (`StudioTaskRunner.prepare(draft:sessions:)`): the destination named, Command edits,
+    /// validation, the folder, and a camera draft copied beside the output — so the tests build
+    /// exactly what the task workspace submits.
+    private func taskRequest(_ draft: StudioTaskDraft) throws -> (request: StudioRunRequest, argv: [String]) {
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions()) }
+        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        assertDestinations(of: prepared.request.draft, stayUnder: live)
+        let argv = try XCTUnwrap(prepared.request.execution?.arguments, "a task draft records its argv")
+        // Every destination stays under the live directory; a run that would write into the
+        // user's own folders is an error, not a CLI launch.
+        for (index, token) in argv.enumerated()
+        where ["--output", "--json-output", "--jsonl-output", "--mask-output-dir"].contains(token) && index + 1 < argv.count {
+            let path = argv[index + 1]
+            guard path.hasPrefix(live.path + "/") else {
+                struct DestinationEscaped: LocalizedError {
+                    let flag: String
+                    let path: String
+                    var errorDescription: String? { "\(flag) escaped the live directory: \(path)" }
+                }
+                throw DestinationEscaped(flag: token, path: path)
+            }
+        }
+        return (prepared.request, argv)
     }
 
     private func decodeAnalyzeDocument(at path: String) throws -> StudioAnalyzeDocument {

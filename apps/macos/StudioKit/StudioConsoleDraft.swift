@@ -215,6 +215,12 @@ package enum StudioConsoleCommand {
                 return problem
             }
         }
+        // Multi-view geometry solves relative cameras between views; one picture is the
+        // single-view command's job, so Studio asks for two, as its page did.
+        if capability.id == "vision.geometry-multiview",
+           draft.arguments.filter({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }).count < 2 {
+            return "Add at least two ordered views."
+        }
         // Any command that declares a reply budget shares the runtime's bounds: Chat, Code, and
         // the vision commands all reject a zero or negative budget, and Chat's context size caps
         // it. Capabilities without `--context-size` read as unbounded above.

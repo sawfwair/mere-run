@@ -252,6 +252,10 @@ package enum StudioAnalyzeDocument: Equatable {
     case faces(StudioFaceOverlayResult)
     case pose(StudioPoseOverlayResult)
     case flow(StudioFlowField)
+    case faceEmbedding(StudioFaceEmbeddingDocument)
+    case faceComparison(StudioFaceComparisonDocument)
+    case faceBatch(StudioFaceBatchDocument)
+    case depthManifest(StudioDepthManifest)
     case musicAnalysis(StudioMusicAnalysisDocument)
     case midi(StudioMIDISummary)
     case clap(StudioCLAPScore.Output)
@@ -260,8 +264,9 @@ package enum StudioAnalyzeDocument: Equatable {
     /// Decodes whichever document `data` holds. The binary formats announce themselves (`.flo`'s
     /// magic float, `MThd`, `.npy`'s magic, a safetensors length prefix); the JSON writers each
     /// emit an object with a distinguishing key (`queries`, `prompts`, `frames`, `faces`,
-    /// `subjects`, `metadata`), so the shape identifies itself; a payload that is none of those
-    /// is read as a transcript.
+    /// `subjects`, `face`, `cosineSimilarity`, `metadata`) or, for `vision face batch`, one
+    /// object per line, so the shape identifies itself; a payload that is none of those is read
+    /// as a transcript.
     package static func decode(_ data: Data) -> StudioAnalyzeDocument? {
         if let field = try? StudioFlowField.decode(data) { return .flow(field) }
         if let midi = StudioMIDISummary.decode(data) { return .midi(midi) }
@@ -285,8 +290,21 @@ package enum StudioAnalyzeDocument: Equatable {
         if let document = try? decoder.decode(StudioPoseOverlayResult.self, from: data) {
             return .pose(document)
         }
+        if let document = try? decoder.decode(StudioFaceEmbeddingDocument.self, from: data) {
+            return .faceEmbedding(document)
+        }
+        if let document = try? decoder.decode(StudioFaceComparisonDocument.self, from: data) {
+            return .faceComparison(document)
+        }
+        if let manifest = try? decoder.decode(StudioDepthManifest.self, from: data) {
+            return .depthManifest(manifest)
+        }
         if let document = try? decoder.decode(StudioMusicAnalysisDocument.self, from: data) {
             return .musicAnalysis(document)
+        }
+        // A batch is one object per line, so it comes after the single-object shapes above.
+        if let document = StudioFaceBatchDocument.decode(data) {
+            return .faceBatch(document)
         }
         // A safetensors file announces itself with its header length and JSON header, so it is
         // read before anything is tried as text; its tensor bytes would otherwise pass as UTF-8.
@@ -294,6 +312,11 @@ package enum StudioAnalyzeDocument: Equatable {
         guard let text = String(data: data, encoding: .utf8), !text.isBlank else { return nil }
         if let analysis = StudioMusicAnalysisDocument.decode(text) { return .musicAnalysis(analysis) }
         if let clap = StudioCLAPScore.decode(text) { return .clap(clap) }
+        // A JSON document none of the writers' shapes match (a camera file, a scene manifest) is
+        // not a transcript; the panel lists the run's files instead.
+        if let first = text.trimmingCharacters(in: .whitespacesAndNewlines).first, first == "{" || first == "[" {
+            return nil
+        }
         let transcript = StudioTranscriptDocument.parse(text)
         return transcript.segments.isEmpty && transcript.text.isEmpty ? nil : .transcript(transcript)
     }
@@ -307,7 +330,10 @@ package enum StudioAnalyzeDocument: Equatable {
         case .diarization(let document): return document.model
         case .musicAnalysis(let document): return document.model
         case .clap(let output): return output.model
-        case .transcript, .faces, .pose, .flow, .midi, .tensor: return nil
+        case .faceEmbedding(let document): return document.modelID
+        case .faceComparison(let document): return document.modelID
+        case .depthManifest(let manifest): return manifest.model.modelID
+        case .transcript, .faces, .pose, .flow, .faceBatch, .midi, .tensor: return nil
         }
     }
 
@@ -394,7 +420,22 @@ package enum StudioAnalyzeDocument: Equatable {
                     maskURL: nil
                 )
             }
-        case .diarization, .transcript, .pose, .flow, .musicAnalysis, .midi, .clap, .tensor:
+        case .faceEmbedding(let document):
+            let face = document.face
+            return [StudioAnalyzeDetection(
+                id: face.index,
+                label: "Face \(face.index + 1)",
+                confidence: face.detection.score,
+                box: CGRect(
+                    x: face.detection.boundingBox.x,
+                    y: face.detection.boundingBox.y,
+                    width: face.detection.boundingBox.width,
+                    height: face.detection.boundingBox.height
+                ),
+                maskURL: nil
+            )]
+        case .diarization, .transcript, .pose, .flow, .faceComparison, .faceBatch, .depthManifest, .musicAnalysis, .midi, .clap,
+             .tensor:
             return []
         }
     }
@@ -419,6 +460,14 @@ package enum StudioAnalyzeDocument: Equatable {
             return document.summary
         case .flow(let field):
             return field.summary
+        case .faceEmbedding(let document):
+            return document.summary
+        case .faceComparison(let document):
+            return document.summary
+        case .faceBatch(let document):
+            return document.summary
+        case .depthManifest(let manifest):
+            return manifest.summary
         case .musicAnalysis(let document):
             return [document.tempoDescription, document.metadata.keyscale, document.analyzedDescription]
                 .compactMap { $0 }.joined(separator: " · ")

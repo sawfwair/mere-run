@@ -29,9 +29,6 @@ package final class NavigationModel: ObservableObject {
     @Published package var deepLinkError: String?
     /// The task last shown in each domain, so returning to a domain lands where you left it.
     @Published package private(set) var rememberedTasks: [StudioDomain: StudioTask] = [:]
-    /// The Vision Lab variant its rail shows (Faces covers detect/embed/compare/batch, Geometry
-    /// covers single and multi-view); kept in step with the Vision toolbar task.
-    @Published private(set) var visionLabTask: StudioVisionTask = .faceDetect
     /// Set by the Command Console scene while its window exists. Opening the console syncs the
     /// composer draft only when this is false, so raising an open console never clobbers edits.
     @Published package var isConsoleOpen = false
@@ -50,14 +47,10 @@ package final class NavigationModel: ObservableObject {
     package init(destination: StudioDestination = .default) {
         self.destination = destination
         rememberedTasks[destination.domain] = destination.task
-        if let variant = destination.task.visionLabTask { visionLabTask = variant }
     }
 
     func open(destination: StudioDestination) {
         rememberedTasks[destination.domain] = destination.task
-        if let variant = destination.task.visionLabTask, visionLabTask.studioTask != destination.task {
-            visionLabTask = variant
-        }
         guard destination != self.destination else { return }
         self.destination = destination
         // The Command view belongs to the task it was opened on; a new task starts closed.
@@ -70,14 +63,8 @@ package final class NavigationModel: ObservableObject {
         requested && !isConsoleOpen
     }
 
-    /// The Vision Lab rail picked a variant: show it and move the toolbar task to its group.
-    func selectVisionLabVariant(_ variant: StudioVisionTask) {
-        visionLabTask = variant
-        open(task: variant.studioTask)
-    }
-
-    /// Scene restore: applies the persisted destination through `open` so remembered tasks and
-    /// the Vision Lab variant learn it, and returns the prompt mode the composer should hold —
+    /// Scene restore: applies the persisted destination through `open` so remembered tasks
+    /// learn it, and returns the prompt mode the composer should hold —
     /// the destination's own mode when it has one, otherwise the persisted last prompt mode.
     @discardableResult
     package func restore(destination: StudioDestination, lastPromptMode: StudioMode) -> StudioMode {

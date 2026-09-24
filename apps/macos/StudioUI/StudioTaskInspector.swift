@@ -193,7 +193,11 @@ struct StudioTaskInspector: View {
             StudioRenoiseOverride(draft: $draft)
         case .instruments:
             StudioInstrumentPicker(draft: $draft)
-        case .cameras, .orderedViews, .musicManifest, .faceIndex, .targetRanks:
+        case .cameras where draft.templateID == .visionGeometryMultiview:
+            StudioGeometryCameraOverride(draft: $draft)
+        case .faceIndex:
+            StudioFaceIndexEditor(draft: $draft, fields: fields)
+        case .cameras, .orderedViews, .musicManifest, .targetRanks:
             // The page PR that owns the editor replaces this with it; until then every flag the
             // editor would write stays reachable as its plain control.
             plainControls(for: override, in: fields)

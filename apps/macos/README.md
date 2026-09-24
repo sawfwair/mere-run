@@ -429,11 +429,15 @@ with "Adjust prompts and frames" bringing the scrubber back.
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
 steps — for every input-first task. Sound ▸ Score, Encode, and Decode render on
 this canvas through the shared task workspace (Score's result is the CLAP gauge,
-Encode's the `.npy` header, Decode's the decoded audio); the other specialist
-tasks (Vision ▸ Depth, Pose, Faces, Flow, Geometry, Live; Audio ▸ Who Spoke,
-Enhance, Separate; Text ▸ Embeddings, Anonymize; the four Earth tasks) still
-render their own form inside their task until their page moves. Migrating one
-is a view change, not a design decision.
+Encode's the `.npy` header, Decode's the decoded audio), as do Music ▸ Analyze
+and Transcribe and Vision ▸ Depth, Pose, Faces, Flow, and Geometry; the other
+specialist tasks (Audio ▸ Who Spoke, Enhance, Separate; Text ▸ Embeddings,
+Anonymize; the four Earth tasks) still render their own form inside their task
+until their page moves. Migrating one is a view change, not a design decision.
+A view that is about the result rather than the input — Points, Vectors, Depth,
+Scene — takes the input column from a renderer registered in
+`StudioUI/Renderers/StudioResultRenderers.swift` (`canvasRendering`), the same
+registry the result panel asks for its rows.
 
 **Chat** is the Converse surface (`StudioUI/StudioConversationView.swift`,
 `StudioUI/StudioThreadList.swift`). A **thread list** replaces the Library column there —
@@ -613,9 +617,9 @@ pictures and clips, `~/Music/mere.run/<Domain>` for audio,
 The suffix is derived, not random, so the path the Command view previews is the
 path the run writes. Settings ▸ General takes one root that overrides all three
 (`mererun.app.outputRoot`). A task on the shared task workspace (Music ▸
-Transcribe) has no path field: `StudioOutputLocation.destination(for:)` names
-its output after the recording in the domain's folder when the run starts,
-with its sidecars beside it. The specialist pages — Vision, 3D, Sound, Voice,
+Transcribe, the Vision tasks) has no path field: `StudioOutputLocation.destination(for:)` names
+its output after the input in the domain's folder when the run starts,
+with its sidecars beside it. The specialist pages — 3D, Sound, Voice,
 Music ▸ Realtime, Train (an adapter is filed under the
 domain it trains for), Video ▸ Subjects, Text ▸ Decisions, the Image utilities
 (validation and run plans under Image; embeddings and anonymization under
@@ -761,23 +765,43 @@ unembedding training defaults.
 LightOn/GLM/Infinity OCR, grounding, text/box/point segmentation and tracking,
 camera capture, Buffalo-L face analysis, native pose and optical flow, still
 (Marigold V2) and video depth, MoGe geometry, and DA3 ordered multiview
-reconstruction. Read, Find,
-Segment, and Track are the Analyze tasks; Depth, Pose, Faces, Flow, Geometry,
-and Live host the lab form that renders face and pose overlays and dense optical
-flow vectors, plays live tracking and depth review video, embeds geometry point
-clouds, and preserves every JSON, EXR, mask, camera, and 3D sidecar as a durable
-Library artifact. Live lists this Mac's cameras by name in the order the CLI
-numbers them. Faces ▸ embedding and comparison choose their face by clicking it
-on the picture once a Face detection run has drawn boxes on that image (the
-index stepper remains for an image nobody has detected faces in). Coordinates
-reach the CLI as typed, ordered arguments; machine-readable results and mask
-directories use explicit output pickers. Geometry's multi-view task edits
-optional calibrated cameras per view — image size, normalized focal length and
-center, and a world-to-camera rotation and translation — with the CLI's own
-checks (positive size and focal length, a proper rotation, and an image size
-equal to the image's decoded size, which new cameras take from the image), and
-writes `<output>.cameras.json` beside the run's output folder; camera files
-import and export.
+reconstruction. Read, Find, Segment, Track, Depth, Pose, Faces, Flow, and
+Geometry are Analyze tasks. The last five run on the shared task workspace
+(`StudioUI/StudioTaskWorkspace.swift`): the picture (or two, or an ordered set)
+in the composer's well, the variant as a chip — Faces: Detect, Embed, Compare,
+Batch; Depth: still, video; Geometry: single, multi-view — the contract's options
+in the inspector, and one `StudioTaskDraft` behind the well, the chips, the
+Command view, and the argv. Their renderers live under `StudioUI/Renderers/`:
+Faces draws boxes, then the five landmarks per face in the Points view and reads
+the embedding, comparison, and batch documents by name; Pose draws its landmarks
+over the picture with one row per subject; Flow draws the field as
+direction-colored vectors with its motion statistics; Depth shows the preview
+PNG (or the review clip) from the run's directory; Geometry embeds Quick Look
+over the point cloud with the depth and normal previews in a strip. Every JSON,
+EXR, mask, camera, and 3D sidecar stays a durable Library artifact, and the
+destination is named by routing rather than a path field. Faces ▸ Embed and
+Compare choose their face by clicking it on the picture in the inspector once a
+Detect run has drawn boxes on that image (a number field remains for a picture
+nobody has detected faces in); Compare offers one picker per picture. Geometry's
+multi-view variant edits optional calibrated cameras per view in the inspector —
+image size, normalized focal length and center, and a world-to-camera rotation
+and translation — with the CLI's own checks (positive size and focal length, a
+proper rotation, and an image size equal to the image's decoded size, which new
+cameras take from the image), writing its saved draft file into `--cameras` only
+while the cameras match the views; at submit the runner copies that file beside
+the run's output directory as `<folder>.cameras.json` and points `--cameras`
+there, so the run's folder is self-contained. Camera files import and export.
+Faces are numbered from one everywhere the picture is read; the flag counts
+from zero.
+
+**Vision ▸ Live** is a Session page (`StudioUI/StudioLiveTrackSession.swift`) over
+`vision track-live`: Start/Stop, the camera (this Mac's cameras by name, in the
+order the CLI numbers them) and the model as chips in the transport row, the
+things to track one per line, the capture's progress and log while it runs, and
+the annotated clip with its track spans once it lands in the Library; the
+settings column holds the rest of the contract. Runs go through the task runner,
+which keeps the camera-access prompt in front of the CLI. Stop ends the capture
+without a clip; the session ends on its own after the duration.
 
 **Audio** ▸ Transcribe is the Analyze task over `speech transcribe`. Who Spoke
 is native Sortformer or Nemotron 3 diarization with JSON and RTTM timelines and
