@@ -189,7 +189,11 @@ struct StudioTaskInspector: View {
             modelPicker
         case .variant:
             variantControl
-        case .cameras, .orderedViews, .musicManifest, .faceIndex, .instruments, .renoise, .targetRanks:
+        case .cameras where draft.templateID == .visionGeometryMultiview:
+            StudioGeometryCameraOverride(draft: $draft)
+        case .faceIndex:
+            StudioFaceIndexEditor(draft: $draft, fields: fields)
+        case .cameras, .orderedViews, .musicManifest, .instruments, .renoise, .targetRanks:
             // The page PR that owns the editor replaces this with it; until then every flag the
             // editor would write stays reachable as its plain control.
             plainControls(for: override, in: fields)
