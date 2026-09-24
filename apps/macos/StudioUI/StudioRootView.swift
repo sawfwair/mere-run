@@ -729,12 +729,6 @@ private struct StudioWorkspaceView: View {
             StudioMusicToolsView(tool: musicToolBinding, tools: [.analyze, .transcribe])
         case .musicSeparate:
             StudioAudioToolsView(tool: .constant(.separate))
-        case .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore:
-            StudioSFXLabView(
-                task: sfxTaskBinding,
-                tasks: [.video, .condition, .encode, .decode, .score],
-                initialDraft: draft
-            )
         case .voiceClone, .voiceVoices:
             StudioVoiceView(task: voiceTaskBinding, tasks: [.synthesize, .profiles], initialDraft: draft)
         case .threeDFromImage:
@@ -827,30 +821,6 @@ private struct StudioWorkspaceView: View {
         Binding(
             get: { destination.task == .audioSeparate ? .separate : .enhance },
             set: { navigation.open(task: $0 == .separate ? .audioSeparate : .audioEnhance) }
-        )
-    }
-
-    private var sfxTaskBinding: Binding<StudioSFXTask> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .soundCondition: return .condition
-                case .soundEncode: return .encode
-                case .soundDecode: return .decode
-                case .soundScore: return .score
-                default: return .video
-                }
-            },
-            set: { task in
-                switch task {
-                case .generate: navigation.open(task: .soundGenerate)
-                case .video: navigation.open(task: .soundFoley)
-                case .condition: navigation.open(task: .soundCondition)
-                case .encode: navigation.open(task: .soundEncode)
-                case .decode: navigation.open(task: .soundDecode)
-                case .score: navigation.open(task: .soundScore)
-                }
-            }
         )
     }
 

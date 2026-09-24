@@ -496,7 +496,7 @@ struct StudioAnalyzeResultPanel: View {
 
     @ViewBuilder
     private var rows: some View {
-        if let rendering = StudioResultRenderers.rendering(for: view, document: document) {
+        if let rendering = StudioResultRenderers.rendering(for: view, document: document, item: item) {
             // The last of the rendering's own rows ends in a hairline, like the rows below.
             StudioResultRendererView(rendering: rendering, item: item)
         } else {

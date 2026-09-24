@@ -1402,6 +1402,58 @@ final class StudioSnapshotTests: XCTestCase {
                             appearance: .light, name: "task-workspace-enhance-inspector-light", settle: 1.5)
     }
 
+    /// The Sound tasks on the shared workspace, each over a seeded finished run: Video Foley's
+    /// feed card reviews the clip against its waveform (light and dark, and at a narrower width),
+    /// Condition's card shows the conditioning tensors' header, Encode's Analyze board the
+    /// `.npy` header, Decode's the decoded audio, Score's the CLAP gauge; then Foley's inspector
+    /// with the renoise editor on Fixed amount. Readiness is answered from a scripted inventory
+    /// with the Woosh models installed.
+    func testSoundWorkspaceSnapshots() throws {
+        let sound = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.soundReadinessResponses)
+        )
+        defer { sound.tearDown() }
+        try sound.seedSoundRuns()
+        let sessions = sound.controller.taskSessions
+        let runner = StudioTaskRunner(controller: sound.controller, library: sound.library)
+
+        func render(_ task: StudioTask, name: String, appearance: StudioSnapshotAppearance, size: CGSize) throws {
+            let navigation = NavigationModel(destination: task.destination)
+            let view = StudioTaskWorkspace(task: task, models: sound.controller.modelStore)
+                .environmentObject(sound.controller)
+                .environmentObject(sound.library)
+                .environmentObject(navigation)
+                .environment(\.studioTaskSessions, sessions)
+                .environment(\.studioTaskScope, task.rawValue)
+                .environment(\.studioTaskRunner, runner)
+                .frame(width: size.width, height: size.height)
+            try sound.write(view, size: size, appearance: appearance, name: name, settle: 2.5)
+        }
+
+        let wide = CGSize(width: 1_140, height: 820)
+        for appearance in StudioSnapshotAppearance.allCases {
+            try render(.soundFoley, name: "task-workspace-sound-foley-\(appearance.rawValue)", appearance: appearance, size: wide)
+            try render(.soundScore, name: "task-workspace-sound-score-\(appearance.rawValue)", appearance: appearance, size: wide)
+        }
+        try render(.soundFoley, name: "task-workspace-sound-foley-narrow-light", appearance: .light, size: CGSize(width: 820, height: 760))
+        try render(.soundCondition, name: "task-workspace-sound-condition-light", appearance: .light, size: wide)
+        try render(.soundEncode, name: "task-workspace-sound-encode-light", appearance: .light, size: wide)
+        try render(.soundDecode, name: "task-workspace-sound-decode-light", appearance: .light, size: wide)
+
+        let draft = try XCTUnwrap(sessions.taskDraft(for: .soundFoley))
+        let inspector = StudioTaskInspector(
+            task: .soundFoley, draft: .constant(draft), modelInventory: sound.controller.modelStore.rows,
+            readiness: .ready, onShowModels: {}, onClose: {}
+        )
+        .environmentObject(sound.controller)
+        .environment(\.studioTaskSessions, sessions)
+        .environment(\.studioTaskScope, StudioTask.soundFoley.rawValue)
+        .frame(width: StudioLayoutPolicy.inspectorWidth, height: 820)
+        try sound.write(inspector, size: CGSize(width: StudioLayoutPolicy.inspectorWidth, height: 820),
+                        appearance: .light, name: "task-workspace-sound-foley-inspector-light", settle: 1.5)
+    }
+
     /// Runs opened on a failed graph run: its state and what went wrong, the facts, each step
     /// with its own state, the outputs with Reveal, and the raw report folded away. `executor
     /// list`, `run list`, and `run inspect` are answered by a scripted runner; no CLI runs.
@@ -2825,6 +2877,96 @@ private final class SnapshotFixture {
         controller.taskSessions.set(Optional(row.id), for: StudioTask.audioEnhance.rawValue + ".requestID")
     }
 
+    /// One finished run per Sound task, each with its task draft parked: Video Foley's clip and
+    /// the WAV made for it, Condition's safetensors, Encode's `.npy`, Decode's WAV from it, and
+    /// Score's printed CLAP result. Rows file under Sound ▸ Generate's mode, as the SFX Lab
+    /// page filed them.
+    func seedSoundRuns() throws {
+        let sound = root.appendingPathComponent("sound", isDirectory: true)
+        try FileManager.default.createDirectory(at: sound, withIntermediateDirectories: true)
+        let clip = sound.appendingPathComponent("walk.mp4", isDirectory: false)
+        try Self.writeFixtureMP4(to: clip, size: CGSize(width: 640, height: 360), frames: 36)
+        let foley = sound.appendingPathComponent("walk.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: foley, seconds: 3)
+        let conditioning = sound.appendingPathComponent("heavy-wooden-door.safetensors", isDirectory: false)
+        try Self.writeSafetensors(to: conditioning, tensors: [
+            ("text_embeddings", [1, 77, 1_024]), ("pooled_embedding", [1, 1_024]), ("attention_mask", [1, 77])
+        ])
+        let hit = sound.appendingPathComponent("hit.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: hit, seconds: 2)
+        let latents = sound.appendingPathComponent("hit.npy", isDirectory: false)
+        try Self.writeNPY(to: latents, descriptor: "<f4", shape: "(1, 128, 87)")
+        let decoded = sound.appendingPathComponent("hit-decoded.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: decoded, seconds: 2)
+        let bottle = sound.appendingPathComponent("bottle.wav", isDirectory: false)
+        try Self.writeSilentWAV(to: bottle, seconds: 4)
+
+        struct Run {
+            let task: StudioTask
+            let templateID: CommandTemplateID
+            let prompt: String
+            let input: URL?
+            let output: URL?
+            let outputText: String?
+            let startedAt: Date
+            let elapsed: TimeInterval
+            let edit: (inout CommandDraft) -> Void
+        }
+        let runs: [Run] = [
+            Run(task: .soundFoley, templateID: .sfxVideo, prompt: "Footsteps on wet gravel, close perspective", input: clip,
+                output: foley, outputText: nil, startedAt: Self.mockupTime(hour: 14, minute: 2), elapsed: 46) {
+                $0.sfxRenoise = "0.35"
+                $0.seed = "11"
+            },
+            Run(task: .soundCondition, templateID: .sfxConditionText, prompt: "Heavy wooden door creaking open", input: nil,
+                output: conditioning, outputText: nil, startedAt: Self.mockupTime(hour: 13, minute: 48), elapsed: 3.2) { _ in },
+            Run(task: .soundEncode, templateID: .sfxAEEncode, prompt: "", input: hit, output: latents, outputText: nil,
+                startedAt: Self.mockupTime(hour: 13, minute: 40), elapsed: 2.1) { _ in },
+            Run(task: .soundDecode, templateID: .sfxAEDecode, prompt: "", input: latents, output: decoded, outputText: nil,
+                startedAt: Self.mockupTime(hour: 13, minute: 42), elapsed: 1.7) { _ in },
+            Run(task: .soundScore, templateID: .sfxClapScore, prompt: "A glass bottle breaking on concrete", input: bottle,
+                output: nil, outputText: """
+                Loading sfx-woosh-clap
+                {"prompt":"A glass bottle breaking on concrete","score":0.634,"audio":"\(bottle.path)","model":"sfx-woosh-clap"}
+                """, startedAt: Self.mockupTime(hour: 13, minute: 55), elapsed: 1.4) { _ in },
+        ]
+        for run in runs {
+            guard let template = CommandCatalog.template(id: run.templateID) else { throw StudioSnapshotError.noContentView }
+            var draft = template.defaultDraft()
+            draft.prompt = run.prompt
+            draft.inputPath = run.input?.path ?? ""
+            draft.outputPath = run.output?.path ?? ""
+            run.edit(&draft)
+            let arguments = template.arguments(from: draft)
+            var row = StudioLibraryItem(
+                id: UUID(),
+                mode: .sfx,
+                prompt: run.prompt,
+                inputURL: run.input,
+                outputURL: run.output,
+                createdAt: run.startedAt,
+                updatedAt: run.startedAt.addingTimeInterval(run.elapsed),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: (["mere.run"] + arguments).joined(separator: " "),
+                outputText: run.outputText,
+                templateID: run.templateID,
+                commandDraft: draft,
+                commandArguments: arguments,
+                artifactURLs: run.output.map { [$0] } ?? []
+            )
+            if let input = run.input { row.inputIdentity = StudioInputIdentity.read(input) }
+            library.upsert(row)
+            // The parked draft is the run's settings with the destination left to routing.
+            var parked = draft
+            parked.outputPath = ""
+            let taskDraft = StudioTaskDraft(templateID: run.templateID, form: StudioConsoleCommand.seed(template: template, draft: parked))
+            controller.taskSessions.setTaskDraft(taskDraft, for: run.task)
+            controller.taskSessions.set(Optional(row.id), for: run.task.rawValue + ".requestID")
+        }
+        controller.taskSessions.set(StudioRenoise.Mode.amount, for: StudioTask.soundFoley.rawValue + ".renoiseMode")
+    }
+
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
     /// as the row's output text the way the Library keeps stdout.
     func seedMusicAnalysisRun() throws {
@@ -2919,6 +3061,39 @@ private final class SnapshotFixture {
     }
 
     /// A valid 16 kHz mono 16-bit PCM WAV of near-silence with a quiet tone so a waveform draws.
+    /// A NumPy 1.0 file whose header declares `descriptor` and `shape`, with a zeroed payload.
+    static func writeNPY(to url: URL, descriptor: String, shape: String) throws {
+        var header = "{'descr': '\(descriptor)', 'fortran_order': False, 'shape': \(shape), }"
+        let remainder = (16 - ((10 + header.utf8.count + 1) % 16)) % 16
+        header += String(repeating: " ", count: remainder) + "\n"
+        var data = Data([0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59, 0x01, 0x00])
+        data.append(UInt8(header.utf8.count & 0xff))
+        data.append(UInt8((header.utf8.count >> 8) & 0xff))
+        data.append(Data(header.utf8))
+        data.append(Data(repeating: 0, count: 16))
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// A safetensors file of float32 tensors in the order given, with zeroed payloads.
+    static func writeSafetensors(to url: URL, tensors: [(name: String, shape: [Int])]) throws {
+        var offset = 0
+        var entries: [String] = []
+        for tensor in tensors {
+            let bytes = tensor.shape.reduce(1, *) * 4
+            entries.append(
+                "\"\(tensor.name)\":{\"dtype\":\"F32\",\"shape\":[\(tensor.shape.map(String.init).joined(separator: ","))]," +
+                "\"data_offsets\":[\(offset),\(offset + bytes)]}"
+            )
+            offset += bytes
+        }
+        let header = "{\(entries.joined(separator: ",")),\"__metadata__\":{\"model\":\"sfx-woosh-dflow\"}}"
+        var data = Data()
+        withUnsafeBytes(of: UInt64(header.utf8.count).littleEndian) { data.append(contentsOf: $0) }
+        data.append(Data(header.utf8))
+        data.append(Data(repeating: 0, count: offset))
+        try data.write(to: url, options: .atomic)
+    }
+
     static func writeSilentWAV(to url: URL, seconds: Int) throws {
         let sampleRate = 16_000
         let frames = sampleRate * seconds
@@ -3281,10 +3456,26 @@ private enum ModelsInventoryScript {
     /// `model list` and `model capabilities` with Vision ▸ Find's model installed, so the Analyze
     /// board renders its result rather than a readiness card.
     static var analyzeReadinessResponses: [SnapshotProcessRunner.Response] {
-        let extraModels = [
+        readinessResponses(installing: [
             (id: "vision-ground-falcon-perception", category: "vision-ground", title: "Falcon Perception"),
             (id: "speech-asr-parakeet", category: "speech-asr", title: "Parakeet")
-        ]
+        ])
+    }
+
+    /// The same with the Sound tasks' Woosh models installed, so the Sound boards render their
+    /// results and composers rather than readiness cards.
+    static var soundReadinessResponses: [SnapshotProcessRunner.Response] {
+        readinessResponses(installing: [
+            (id: "sfx-woosh-dvflow-8s", category: "sfx", title: "Woosh DVFlow 8s"),
+            (id: "sfx-woosh-dflow", category: "sfx", title: "Woosh DFlow"),
+            (id: "sfx-woosh-clap", category: "sfx", title: "Woosh CLAP")
+        ])
+    }
+
+    /// The inventory with `extraModels` installed beside the default rows.
+    private static func readinessResponses(
+        installing extraModels: [(id: String, category: String, title: String)]
+    ) -> [SnapshotProcessRunner.Response] {
         let list = modelList.replacingOccurrences(
             of: "image-zimage-nano          image        installed  2.1 GB",
             with: (["image-zimage-nano          image        installed  2.1 GB"]

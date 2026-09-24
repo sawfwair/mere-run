@@ -217,8 +217,35 @@ struct StudioTargetRankEditor: View {
 
 // MARK: - Renoise
 
-/// Sound ▸ Generate's Woosh renoise: the model's default, one amount, or one amount per step. The
-/// page keeps `mode` beside the draft, so "Per step" survives an empty field and a rebuilt view.
+/// Woosh renoise on the task inspector (Sound ▸ Video Foley), the `.renoise` override: the
+/// model's default, one amount, or one amount per step, written to `--renoise` exactly as the
+/// CLI reads it. The mode is kept beside the task draft (`"<task>.renoiseMode"`) so "Per step"
+/// survives an empty field and a rebuilt inspector; the problems the CLI would raise are shown
+/// under the control, and the runner refuses the run while one stands.
+struct StudioRenoiseOverride: View {
+    @Binding var draft: StudioTaskDraft
+    @StudioStoredValue("renoiseMode") private var mode = StudioRenoise.Mode.automatic
+
+    private var value: Binding<String> {
+        Binding(
+            get: { draft.text("--renoise") },
+            set: { draft.form["--renoise"] = $0.isEmpty ? .unset : .text($0) }
+        )
+    }
+
+    /// The run's step count, which a per-step schedule must match: the form's `--steps`, else
+    /// the template's own default.
+    private var steps: Int {
+        Int(draft.text("--steps")) ?? draft.seed.steps
+    }
+
+    var body: some View {
+        StudioRenoiseControl(value: value, mode: $mode, steps: steps)
+    }
+}
+
+/// The renoise control itself: a mode segment, then the amount slider or the schedule field,
+/// then whatever the CLI would object to. Drawn in the inspector's own controls.
 struct StudioRenoiseControl: View {
     /// The `--renoise` value; blank for the model's default.
     @Binding var value: String
@@ -228,15 +255,13 @@ struct StudioRenoiseControl: View {
     private var renoise: StudioRenoise { StudioRenoise(mode: mode, argument: value) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Renoise")
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-            Picker("Renoise", selection: $mode) {
-                ForEach(StudioRenoise.Mode.allCases) { Text($0.title).tag($0) }
+                .font(.callout.weight(.medium))
+                .foregroundStyle(MereRunTheme.textSecondary)
+            MereSegmentedControl(StudioRenoise.Mode.allCases, selection: $mode, accessibilityLabel: "Renoise") {
+                Self.segmentTitle($0)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             switch mode {
             case .automatic:
                 Text("The model's own renoise setting.")
@@ -247,35 +272,43 @@ struct StudioRenoiseControl: View {
                     get: { renoise.amountValue ?? StudioRenoise.defaultAmount },
                     set: { value = StudioRenoise.amount(($0 * 100).rounded() / 100).argument }
                 )
-                HStack {
-                    Slider(value: amount, in: 0...1, step: 0.01)
-                    Text(renoise.amountValue.map { $0.formatted(.number.precision(.fractionLength(2))) } ?? value)
-                        .font(MereRunTheme.captionFont)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .frame(minWidth: 34, alignment: .trailing)
+                StudioInspectorSlider(label: "Amount", value: amount, range: 0...1, step: 0.01) { _ in
+                    // Text that is not a number stays visible until it is fixed, never replaced.
+                    renoise.amountValue.map(StudioComposerPresets.decimalText) ?? value
                 }
-                .accessibilityLabel("Renoise amount")
             case .schedule:
-                TextField("One amount per step, 0 to 1: 0.3, 0.3, 0.2, …", text: $value)
-                    .mereField()
-                    .accessibilityLabel("Renoise schedule")
+                StudioInspectorTextField(
+                    placeholder: "One amount per step, 0 to 1: 0.3, 0.3, 0.2, …",
+                    text: $value,
+                    isMonospaced: true
+                )
+                .accessibilityLabel("Renoise schedule")
             }
             ForEach(renoise.problems(steps: steps), id: \.self) { problem in
                 Label(problem, systemImage: "exclamationmark.circle")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .onAppear {
-            // The draft's argument may have come from elsewhere (a Library rerun, a draft written
-            // before the page kept a mode): show the mode it reads as, keeping its value.
+            // The draft's argument may have come from elsewhere (a Library rerun, a page draft
+            // imported once): show the mode it reads as, keeping its value.
             let resolved = StudioRenoise.resolvedMode(stored: mode, argument: value)
             if resolved != mode { mode = resolved }
         }
         .onChange(of: mode) { _, mode in
             let kept = StudioRenoise.argument(switching: value, to: mode)
             if kept != value { value = kept }
+        }
+    }
+
+    /// The segment's word, short enough for three to share the inspector's width.
+    static func segmentTitle(_ mode: StudioRenoise.Mode) -> String {
+        switch mode {
+        case .automatic: return "Auto"
+        case .amount: return "Amount"
+        case .schedule: return "Per step"
         }
     }
 }
