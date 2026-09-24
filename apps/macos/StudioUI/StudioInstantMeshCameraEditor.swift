@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 
 // 3D ▸ InstantMesh takes optional calibrated cameras for its ordered views. The editor shows one
 // camera per view as numeric fields and leaves the JSON to `StudioCameraDocuments`; the page
-// writes the file each run needs. The 3D page PR wraps this as the `.cameras` override of the
-// task inspector; the numeric pieces it is built from are in `StudioCameraControls.swift`.
+// writes the file each run needs. The task inspector presents it as the `.cameras` override;
+// the numeric pieces it is built from are in `StudioCameraControls.swift`.
 
 /// The cameras for `image reconstruct-3d-multiview --cameras`: a 3 × 4 camera-to-world pose and
 /// `fx, fy, cx, cy` per view. InstantMesh resizes every view to its conditioning size, so image

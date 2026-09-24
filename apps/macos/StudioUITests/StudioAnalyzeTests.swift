@@ -324,13 +324,13 @@ final class StudioAnalyzeTests: XCTestCase {
     }
 
     /// The Analyze table is complete for every task whose archetype is Analyze, the Generate
-    /// table for every mode-less Generate task, and neither says anything about the rest — so a
-    /// page PR never has to edit either table, and a task cannot silently lose its surface.
+    /// table for every mode-less Generate task, and neither says anything about the rest. This
+    /// catches a task that has lost its shared surface declaration.
     func testEveryArchetypeTaskDeclaresItsShapeAndTheOthersDoNot() {
         let analyze = Set(StudioTask.allCases.filter { $0.archetype == .analyze })
         let generate = Set(StudioTask.allCases.filter { $0.archetype == .generate && $0.mode == nil })
         XCTAssertEqual(Set(StudioTask.allCases.filter(\.isAnalyzeTask)), analyze.union([.visionLive]),
-                       "Live keeps its Analyze declaration for the tracked clip until its Session page lands")
+                       "Live keeps its Analyze declaration for the tracked clip on its Session page")
         XCTAssertEqual(Set(StudioGenerateArchetype.archetypes.keys), generate)
         for task in analyze {
             let archetype = StudioAnalyzeArchetype.archetypes[task]

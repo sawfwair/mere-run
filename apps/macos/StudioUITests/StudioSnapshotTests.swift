@@ -1648,8 +1648,7 @@ final class StudioSnapshotTests: XCTestCase {
     /// The shared task workspace, rendered directly: Audio ▸ Enhance as an Analyze
     /// task with an audio well, once with a finished enhance run seeded so the input strip, the
     /// player, and the result column draw, light and dark; its inspector column beside it; and
-    /// Vision ▸ Pose empty, so the serif empty state and the well's attach button show. The page
-    /// PRs render their own boards the same way once their gates flip.
+    /// Vision ▸ Pose empty, so the serif empty state and the well's attach button show.
     func testTaskWorkspaceSnapshots() throws {
         let workspace = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,
