@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio's live sessions: an Audio ▸ Live session run from the Command
+  view now streams into the page's transcript and the page follows it instead
+  of offering a second Start, the menu's Stop (⌘.) on Audio ▸ Live lets the CLI
+  flush its last events like the page's Stop, and Stop on Vision ▸ Live while
+  macOS is still asking for the camera cancels the run instead of starting the
+  capture once access is granted.
 - Fix Studio's Vision ▸ Geometry (multi-view) cameras: a camera file that
   does not match the views, or will not read, now refuses the run instead of
   letting the model estimate cameras, and a camera file restored from a run or

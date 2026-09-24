@@ -407,6 +407,72 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertEqual(row.outputText, "Good morning everyone.\nToday we walk through the roadmap.", "the row reads like a transcript, not the event stream")
     }
 
+    /// A session the Command view runs is the session the page shows: it launches with the
+    /// switches the transcript reads (`--jsonl --quiet`), the preview says so, and a page that
+    /// is up adopts it as it starts rather than offering Start on a microphone in use.
+    func testACommandViewSessionStreamsIntoThePageThatIsUp() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.tearDown() }
+        fixture.controller.checkReadiness(for: .audioLive, modelID: "")
+        let session = fixture.controller.liveListen
+        session.adoptCurrentSession(runner: fixture.runner)
+        XCTAssertNil(session.requestID, "nothing to adopt while the page is up and idle")
+
+        let draft = StudioTaskDraft(templateID: .speechListen)
+        XCTAssertFalse(draft.arguments.contains("--jsonl"), "the draft keeps only settings")
+        let preview = StudioTaskRunner.launchPreview(draft)
+        XCTAssertTrue(preview.arguments.contains("--jsonl") && preview.arguments.contains("--quiet"), "Will run shows them")
+        let request = try fixture.runner.run(draft, task: .audioLive)
+        let start = try XCTUnwrap(fixture.processRunner.starts.last)
+        XCTAssertTrue(start.configuration.arguments.contains("--jsonl"))
+        XCTAssertTrue(start.configuration.arguments.contains("--quiet"))
+        for _ in 0..<6 { await Task.yield() }
+        XCTAssertEqual(session.requestID, request.id, "the page follows the session it did not start")
+
+        start.stdout(#"{"protocol":1,"type":"commit","utteranceId":"u1","revision":1,"text":"Welcome back."}"# + "\n")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(session.transcript.committedText, "Welcome back.")
+        let speakers = try fixture.runner.run(StudioTaskDraft(templateID: .speechDiarizeLive), task: .audioLive)
+        let speakersStart = try XCTUnwrap(fixture.processRunner.starts.last)
+        XCTAssertTrue(speakersStart.configuration.arguments.contains("--quiet"))
+        XCTAssertFalse(speakersStart.configuration.arguments.contains("--jsonl"), "speaker activity prints its own lines")
+        XCTAssertNotEqual(speakers.id, request.id)
+    }
+
+    /// The menu's Stop (⌘.) stops Audio ▸ Live the way the page's Stop does: SIGINT first, so
+    /// the CLI flushes its last events, and termination only after the grace.
+    func testTheMenusStopInterruptsALiveSessionFirst() throws {
+        let fixture = try makeFixture()
+        defer { fixture.tearDown() }
+        fixture.controller.checkReadiness(for: .audioLive, modelID: "")
+        let prompt = StudioPromptTaskController(controller: fixture.controller, library: fixture.library)
+        _ = try prompt.runner.run(StudioTaskDraft(templateID: .speechListen), task: .audioLive)
+        let process = try XCTUnwrap(fixture.processRunner.processes.last)
+
+        prompt.stop(task: .audioLive)
+        XCTAssertEqual(process.interruptCallCount, 1, "Ctrl-C, not an immediate termination")
+        XCTAssertEqual(process.terminateCallCount, 0)
+    }
+
+    /// Stop on Vision ▸ Live while macOS still asks for the camera: no job exists yet, so the
+    /// submitted row is cancelled, and the launch waiting on the answer no longer goes ahead.
+    func testStoppingARunThatHasNotLaunchedCancelsIt() throws {
+        let fixture = try makeFixture()
+        defer { fixture.tearDown() }
+        let template = try XCTUnwrap(CommandCatalog.template(id: .visionTrackLive))
+        let request = StudioRunRequest(mode: template.libraryMode, templateID: .visionTrackLive, template: template,
+                                       draft: template.defaultDraft())
+        fixture.library.start(request: request, commandPreview: "fixture", status: .running)
+        fixture.controller.taskSessions.set(Optional(request.id), for: StudioTask.visionLive.rawValue + ".requestID")
+        XCTAssertTrue(fixture.runner.isAwaitingLaunch(request.id), "the camera prompt's retry would launch it")
+
+        fixture.runner.stop(task: .visionLive)
+
+        XCTAssertEqual(fixture.library.items.first { $0.id == request.id }?.status, .cancelled)
+        XCTAssertFalse(fixture.runner.isAwaitingLaunch(request.id), "so the retry does not")
+        XCTAssertTrue(fixture.processRunner.starts.isEmpty)
+    }
+
     func testVoiceCreateAndDeleteRunThroughTheTaskRunner() throws {
         let fixture = try makeFixture()
         defer { fixture.tearDown() }

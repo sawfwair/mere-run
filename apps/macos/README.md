@@ -867,8 +867,10 @@ order the CLI numbers them) and the model as chips in the transport row, the
 things to track one per line, the capture's progress and log while it runs, and
 the annotated clip with its track spans once it lands in the Library; the
 settings column holds the rest of the contract. Runs go through the task runner,
-which keeps the camera-access prompt in front of the CLI. Stop ends the capture
-without a clip; the session ends on its own after the duration.
+which keeps the camera-access prompt in front of the CLI; Stop while macOS is
+still asking cancels the run, so the capture does not start once access is
+granted. Stop ends the capture without a clip; the session ends on its own after
+the duration.
 
 **Audio** ▸ Transcribe, Who Spoke, Enhance, and Separate are Analyze tasks on
 the shared task workspace. Who Spoke runs `speech diarize` with native
@@ -888,9 +890,11 @@ surface over `speech listen` and `speech diarize-live`: Start submits the task
 draft through the task runner as an inference job with a Library row, the
 transport row carries the operation, microphone, options, and model chips,
 events stream into the transcript or the speaker activity as they arrive, and
-Stop interrupts the CLI the way Ctrl-C does (terminating it if it does not
-finish). The session belongs to the controller, so leaving the page loses
-nothing; when it ends, its text is written to the Audio folder and becomes the
+Stop — the page's, the Library's, or the menu's ⌘. — interrupts the CLI the way
+Ctrl-C does (terminating it if it does not finish). The runner adds the
+session's `--jsonl --quiet` at launch, so a session the Command view runs streams
+into the page too, and the page adopts it as it starts. The session belongs to
+the controller, so leaving the page loses nothing; when it ends, its text is written to the Audio folder and becomes the
 Library row's artifact, so the row reads like Transcribe's. The packaged
 app and embedded CLI carry the microphone usage description and audio-input
 entitlement those capture paths require.

@@ -85,7 +85,11 @@ extension StudioPromptTaskController {
         return runner.currentJob(for: task)
     }
 
+    /// A conversation turn is cancelled; every other task stops the way its own page does
+    /// (`StudioTaskRunner.stop`), so ⌘. on Audio ▸ Live interrupts the session first and lets
+    /// the CLI flush its last events.
     package func stop(task: StudioTask) {
+        guard task.mode?.isConversational == true else { return runner.stop(task: task) }
         if let job = currentJob(for: task) { controller.jobs.cancel(job.id) }
     }
 }

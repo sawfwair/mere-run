@@ -47,12 +47,16 @@ package final class StudioTaskRunner {
         return StudioOutputLocation.preparing(resolved, fileManager: fileManager)
     }
 
-    /// The draft as a run launches it: the launch-time defaults a task's page applies (Image ▸
-    /// Train's recipe clears the options it governs and a Klein base gets its checkpoint and
-    /// preview cadence). The runner and the Command view's "Will run" both go through this, so a
-    /// Run from either surface and the preview agree; every other task's draft is left as it is.
+    /// The draft as a run launches it: the launch-time defaults a task's page applies (a Klein
+    /// base gets its checkpoint and preview cadence; Audio ▸ Live's commands print events only,
+    /// as JSON lines where the transcript reads them). The runner and the Command view's
+    /// "Will run" both go through this, so a Run from either surface and the preview agree;
+    /// every other task's draft is left as it is.
     package static func launching(_ draft: StudioTaskDraft) -> StudioTaskDraft {
-        StudioTrainingRun.launchDraft(draft)
+        switch draft.templateID {
+        case .speechListen, .speechDiarizeLive: return draft.liveListenLaunch()
+        default: return StudioTrainingRun.launchDraft(draft)
+        }
     }
 
     /// The draft a Run launches, destinations and all: `launching`, then named by
@@ -143,8 +147,11 @@ package final class StudioTaskRunner {
         library.start(request: request, commandPreview: preview,
                       status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued)
         // `run(studio:)` keeps the camera-access gate in front of `vision track-live`. While the
-        // system is still asking, the controller retries once the answer comes.
-        let launched = controller.run(studio: request)
+        // system is still asking, the controller retries once the answer comes — unless Stop
+        // cancelled the row in the meantime.
+        let launched = controller.run(studio: request, stillWanted: { [controller, library] in
+            Self.isAwaitingLaunch(request.id, controller: controller, library: library)
+        })
         guard !launched else { return true }
         if request.template.id == .visionTrackLive,
            AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined { return false }
@@ -188,13 +195,31 @@ package final class StudioTaskRunner {
     package static let sessionStopGrace: Duration = .seconds(4)
 
     /// Stops the task's current job: a session the way Ctrl-C does, so the CLI flushes what it
-    /// has (then terminated after `sessionStopGrace`); anything else terminated at once.
+    /// has (then terminated after `sessionStopGrace`); anything else terminated at once. A run
+    /// submitted but not launched yet — Vision ▸ Live while macOS asks for the camera — has no
+    /// job to stop; its row is cancelled, so the launch waiting on the answer never happens.
     package func stop(task: StudioTask) {
-        guard let job = currentJob(for: task) else { return }
+        guard let job = currentJob(for: task) else {
+            let remembered = sessions.value(for: task.rawValue + ".requestID", default: Optional<UUID>.none)
+            if let remembered, isAwaitingLaunch(remembered) { library.setStatus(.cancelled, id: remembered) }
+            return
+        }
         if task.archetype == .session {
             controller.jobs.interruptThenCancel(job.id, after: Self.sessionStopGrace)
         } else {
             controller.jobs.cancel(job.id)
         }
+    }
+
+    /// Whether a submitted run is still waiting to launch: its row is running or queued and no
+    /// job exists for it yet.
+    package func isAwaitingLaunch(_ requestID: UUID) -> Bool {
+        Self.isAwaitingLaunch(requestID, controller: controller, library: library)
+    }
+
+    private static func isAwaitingLaunch(_ requestID: UUID, controller: MereRunController, library: StudioLibraryStore) -> Bool {
+        guard controller.jobs.job(requestID: requestID) == nil,
+              let row = library.items.first(where: { $0.id == requestID }) else { return false }
+        return row.status == .running || row.status == .queued
     }
 }
