@@ -368,6 +368,8 @@ package final class MereRunController: ObservableObject {
 
     /// The resident servers besides the API server, in the order the menu bar lists them.
     package var residentServers: [StudioServiceProcess] { [visionServer, musicServer, worldServer] }
+    /// Audio ▸ Live's session, owned here so its transcript outlives the page.
+    package lazy var liveListen = StudioLiveListenModel(controller: self)
     package let jobs: JobStore
     /// The job whose live state mirrors into the published console fields (the run the
     /// single-pane console/canvas currently shows). Background jobs still complete into the

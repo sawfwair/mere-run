@@ -260,13 +260,14 @@ package enum StudioAnalyzeDocument: Equatable {
     case midi(StudioMIDISummary)
     case clap(StudioCLAPScore.Output)
     case tensor(StudioTensorHeader)
+    case separation(StudioSeparationManifest)
 
     /// Decodes whichever document `data` holds. The binary formats announce themselves (`.flo`'s
     /// magic float, `MThd`, `.npy`'s magic, a safetensors length prefix); the JSON writers each
     /// emit an object with a distinguishing key (`queries`, `prompts`, `frames`, `faces`,
-    /// `subjects`, `face`, `cosineSimilarity`, `metadata`) or, for `vision face batch`, one
-    /// object per line, so the shape identifies itself; a payload that is none of those is read
-    /// as a transcript.
+    /// `subjects`, `face`, `cosineSimilarity`, `metadata`, `stems`) or, for `vision face batch`,
+    /// one object per line, so the shape identifies itself; an RTTM timeline is read into the
+    /// diarization document; a payload that is none of those is read as a transcript.
     package static func decode(_ data: Data) -> StudioAnalyzeDocument? {
         if let field = try? StudioFlowField.decode(data) { return .flow(field) }
         if let midi = StudioMIDISummary.decode(data) { return .midi(midi) }
@@ -274,6 +275,9 @@ package enum StudioAnalyzeDocument: Equatable {
         let decoder = JSONDecoder()
         if let document = try? decoder.decode(StudioVisionTrackDocument.self, from: data) {
             return .tracking(document)
+        }
+        if let manifest = StudioSeparationManifest.decode(data) {
+            return .separation(manifest)
         }
         if let document = try? decoder.decode(StudioVisionSegmentDocument.self, from: data) {
             return .segmentation(document)
@@ -317,6 +321,7 @@ package enum StudioAnalyzeDocument: Equatable {
         if let first = text.trimmingCharacters(in: .whitespacesAndNewlines).first, first == "{" || first == "[" {
             return nil
         }
+        if let timeline = StudioDiarizationDocument.rttm(text) { return .diarization(timeline) }
         let transcript = StudioTranscriptDocument.parse(text)
         return transcript.segments.isEmpty && transcript.text.isEmpty ? nil : .transcript(transcript)
     }
@@ -334,6 +339,8 @@ package enum StudioAnalyzeDocument: Equatable {
         case .faceComparison(let document): return document.modelID
         case .depthManifest(let manifest): return manifest.model.modelID
         case .transcript, .faces, .pose, .flow, .faceBatch, .midi, .tensor: return nil
+        case .separation(let manifest): return manifest.model.id
+        case .transcript, .faces, .pose, .flow, .midi, .tensor: return nil
         }
     }
 
@@ -435,7 +442,7 @@ package enum StudioAnalyzeDocument: Equatable {
                 maskURL: nil
             )]
         case .diarization, .transcript, .pose, .flow, .faceComparison, .faceBatch, .depthManifest, .musicAnalysis, .midi, .clap,
-             .tensor:
+             .tensor, .separation:
             return []
         }
     }
@@ -477,6 +484,8 @@ package enum StudioAnalyzeDocument: Equatable {
             return String(format: "CLAP score %.2f", output.score)
         case .tensor(let header):
             return header.summary
+        case .separation(let manifest):
+            return manifest.summary
         }
     }
 
@@ -629,6 +638,7 @@ package enum StudioAnalyzeDocumentSource {
     package static func preferredExtensions(for templateID: CommandTemplateID?) -> [String] {
         switch templateID {
         case .visionFlow: return ["flo"]
+        case .speechDiarize: return ["rttm"]
         case .musicTranscribe: return ["mid", "midi"]
         case .sfxAEEncode: return ["npy"]
         case .sfxConditionText, .geoFlood, .geoFire, .geoTessera, .geoOlmoEarth: return ["safetensors"]

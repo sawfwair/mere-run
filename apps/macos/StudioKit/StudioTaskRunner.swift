@@ -139,10 +139,22 @@ package final class StudioTaskRunner {
     package func currentJob(for task: StudioTask) -> Job? {
         let remembered = sessions.value(for: task.rawValue + ".requestID", default: Optional<UUID>.none)
         if let remembered, let job = controller.jobs.job(requestID: remembered), job.state.isActive { return job }
-        return controller.jobs.all.last { $0.state.isActive && $0.request.templateID?.studioTask == task }
+        return controller.jobs.all.last { job in
+            job.state.isActive && (job.request.templateID.map(task.runs) ?? false)
+        }
     }
 
+    /// How long a Session task's Stop waits for the CLI to finish on SIGINT before terminating it.
+    package static let sessionStopGrace: Duration = .seconds(4)
+
+    /// Stops the task's current job: a session the way Ctrl-C does, so the CLI flushes what it
+    /// has (then terminated after `sessionStopGrace`); anything else terminated at once.
     package func stop(task: StudioTask) {
-        if let job = currentJob(for: task) { controller.jobs.cancel(job.id) }
+        guard let job = currentJob(for: task) else { return }
+        if task.archetype == .session {
+            controller.jobs.interruptThenCancel(job.id, after: Self.sessionStopGrace)
+        } else {
+            controller.jobs.cancel(job.id)
+        }
     }
 }

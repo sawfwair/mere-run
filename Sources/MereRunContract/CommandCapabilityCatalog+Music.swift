@@ -434,17 +434,22 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--model-path", label: "Model path", kind: .directory),
-            .init(flag: "--output-dir", label: "Output directory", kind: .directory),
-            .init(flag: "--overlap", label: "Overlap", kind: .integer),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model-path", label: "Model path", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--output-dir", label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(
+                flag: "--overlap", label: "Chunk overlap", kind: .integer,
+                tier: .standard, range: .init(min: 1, max: 64, step: 1)
+            ),
             .init(
                 flag: "--dtype",
-                label: "Compute type",
+                label: "Compute",
                 kind: .choice,
-                choices: ["float16", "float32"]
+                choices: ["float16", "float32"],
+                defaultValue: "float16",
+                tier: .essential
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .directory, flag: "--output-dir")
     )

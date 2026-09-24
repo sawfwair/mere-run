@@ -52,7 +52,7 @@ Models ▸ Installed's Pull… catalog, and the Guide. Everything else that
 interrupts is an alert or a confirmation dialog — third-party model terms,
 removals, thread rename, Library delete, and a bad `mererun://` link.
 
-Fifty-four tasks fall into three shapes:
+Fifty-three tasks fall into three shapes:
 
 - Twelve **prompt tasks** back a `StudioMode` and render the composer, a canvas,
   and the Library column: Image ▸ Generate, Video ▸ Generate, Music ▸ Compose,
@@ -62,7 +62,11 @@ Fifty-four tasks fall into three shapes:
   Audio ▸ Transcribe — are input-first, so their canvas is the **Analyze**
   surface rather than the generation feed. Chat and Code get the **Converse**
   surface and a thread list in place of the Library.
-- The other forty-two tasks host a full-height view of their own: the project
+- Four more — Audio ▸ Who Spoke, Enhance, Separate and Music ▸ Separate — are
+  mode-less Analyze tasks on the shared task workspace
+  (`StudioUI/StudioTaskWorkspace.swift`), whose draft is their command's
+  contract form.
+- The other thirty-seven tasks host a full-height view of their own: the project
   boards (Video ▸ Subjects, the three Train tasks), the session pages
   (Music ▸ Realtime, Audio ▸ Live, Vision ▸ Live, Server ▸ Serving), the
   management pages (Models, Runs, Plugins, Voice ▸ Voices), and the analysis
@@ -142,9 +146,12 @@ rendering in place of its output grid); the Session pages share their transport
 chrome from `StudioUI/StudioSessionControls.swift`. A task keeps its bespoke
 page until it is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the
 root then renders the workspace for it instead. Sound ▸ Video Foley and
-Condition (Generate), Sound ▸ Encode, Decode, and Score (Analyze), and Music ▸
-Analyze and Music ▸ Transcribe (Analyze) render on it; the SFX Lab and Music
-Tools pages they replaced are gone.
+Condition (Generate); Sound ▸ Encode, Decode, and Score, Music ▸ Analyze and
+Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, and Audio ▸ Who
+Spoke, Enhance, and Separate (Analyze) render on it; Vision ▸ Live and Audio ▸
+Live (Session) and Voice ▸ Voices (Manage) render their own pages over the same
+task draft. The SFX Lab, Music Tools, Vision Lab, Voice, and Audio Tools pages
+they replaced are gone.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -430,10 +437,11 @@ with "Adjust prompts and frames" bringing the scrubber back.
 steps — for every input-first task. Sound ▸ Score, Encode, and Decode render on
 this canvas through the shared task workspace (Score's result is the CLAP gauge,
 Encode's the `.npy` header, Decode's the decoded audio), as do Music ▸ Analyze
-and Transcribe and Vision ▸ Depth, Pose, Faces, Flow, and Geometry; the other
-specialist tasks (Audio ▸ Who Spoke, Enhance, Separate; Text ▸ Embeddings,
-Anonymize; the four Earth tasks) still render their own form inside their task
-until their page moves. Migrating one is a view change, not a design decision.
+and Transcribe, Vision ▸ Depth, Pose, Faces, Flow, and Geometry, and Audio ▸
+Who Spoke, Enhance, and Separate; the other specialist tasks (Text ▸
+Embeddings, Anonymize; the four Earth tasks) still render their own form
+inside their task until their page moves. Migrating one is a view change, not
+a design decision.
 A view that is about the result rather than the input — Points, Vectors, Depth,
 Scene — takes the input column from a renderer registered in
 `StudioUI/Renderers/StudioResultRenderers.swift` (`canvasRendering`), the same
@@ -617,13 +625,13 @@ pictures and clips, `~/Music/mere.run/<Domain>` for audio,
 The suffix is derived, not random, so the path the Command view previews is the
 path the run writes. Settings ▸ General takes one root that overrides all three
 (`mererun.app.outputRoot`). A task on the shared task workspace (Music ▸
-Transcribe, the Vision tasks) has no path field: `StudioOutputLocation.destination(for:)` names
-its output after the input in the domain's folder when the run starts,
-with its sidecars beside it. The specialist pages — 3D, Sound, Voice,
-Music ▸ Realtime, Train (an adapter is filed under the
+Transcribe, the Vision and Audio tasks) has no path field:
+`StudioOutputLocation.destination(for:)` names its output after the input in
+the domain's folder when the run starts, with its sidecars beside it. The
+specialist pages — 3D, Music ▸ Realtime, Train (an adapter is filed under the
 domain it trains for), Video ▸ Subjects, Text ▸ Decisions, the Image utilities
 (validation and run plans under Image; embeddings and anonymization under
-Text), and the Voice recorder — propose their destinations from the same rule
+Text), and the audio recorder — propose their destinations from the same rule
 (`StudioOutputLocation.specialistDirectory` and `specialistFile`):
 `<Domain>/<page>-<timestamp>` under the same roots, so a run started from a page
 and one started from the Command Console file side by side. A specialist or
@@ -738,8 +746,16 @@ audio), and Score (the CLAP gauge over the audio) run on the same workspace, so
 the Library, "Use these settings", Stop, readiness, and output routing behave
 as they do for every other task.
 
-**Voice** ▸ Speak, Clone, and Voices host styled or cloned synthesis, reusable
-profiles, reference recording, streaming feedback, and A/B playback.
+**Voice** ▸ Speak is styled or cloned synthesis: attaching a reference recording
+to its composer well switches it to clone mode, and its inspector picks a saved
+voice. Voices (`StudioUI/StudioVoicesView.swift`) is the Manage surface for
+those saved voices: a list, a detail that plays the reference and shows its
+transcript, Delete behind a confirmation, and New voice — a name, a reference
+recording in an attachment well (chosen, dropped, or recorded with Record…),
+an optional transcript, and a language — run as `speech profile create`
+through the task runner. Any audio attachment well offers Record… in its
+context menu (`StudioUI/StudioAudioRecorder.swift`); the recording is filed
+with the task's domain.
 
 **3D** is the domain for TripoSR, native TRELLIS.2 PBR reconstruction, and
 ordered 4- and 6-view InstantMesh. It has engine-specific controls, immutable
@@ -803,21 +819,30 @@ settings column holds the rest of the contract. Runs go through the task runner,
 which keeps the camera-access prompt in front of the CLI. Stop ends the capture
 without a clip; the session ends on its own after the duration.
 
-**Audio** ▸ Transcribe is the Analyze task over `speech transcribe`. Who Spoke
-is native Sortformer or Nemotron 3 diarization with JSON and RTTM timelines and
-segment-tuning controls; a JSON timeline is drawn as one lane per speaker over
-the recording (`StudioUI/StudioSpeakerTimeline.swift`) and as the Analyze
-panel's turn rows, with Save timeline…. Enhance and Separate are the restoration surface for
-native AP-BWE and UniverSR enhancement plus ViperX two-stem, four-stem,
-dereverb, and denoise RoFormer workflows, with model-specific compute and chunk
-controls, source and output previews, and every generated stem kept in the
-Library. Audio ▸ Live offers transcription over `speech listen` and live
-speaker activity over `speech diarize-live`. It enumerates capture devices,
-streams results as they arrive, and owns the child process directly so the
-operator can stop it, then copy or save the result. The packaged app and
-embedded CLI carry the
-microphone usage description and audio-input entitlement those capture paths
-require.
+**Audio** ▸ Transcribe, Who Spoke, Enhance, and Separate are Analyze tasks on
+the shared task workspace. Who Spoke runs `speech diarize` with native
+Sortformer or Nemotron 3 (the model chip), the output format and the Nemotron
+input buffer as chips, and the threshold, minimum segment, and merge gap in
+the inspector; a JSON or RTTM timeline is drawn as one lane per speaker over
+the recording (`StudioUI/Renderers/StudioSpeakerTimeline.swift`) and as the
+panel's turn rows, with Save timeline…. Enhance runs `audio enhance` (AP-BWE
+or UniverSR from the model chip, compute as a chip, the UniverSR bandwidth,
+ODE, guidance, chunk, and seed controls in the inspector) and plays the
+enhanced file; Separate — under Audio and under Music — runs `music separate`
+(ViperX two-stem, four-stem, dereverb, and denoise from the model chip) and
+lists every stem with its own player
+(`StudioUI/Renderers/StudioStemsList.swift`), read from the manifest the CLI
+writes. Audio ▸ Live (`StudioUI/StudioLiveListenSession.swift`) is the Session
+surface over `speech listen` and `speech diarize-live`: Start submits the task
+draft through the task runner as an inference job with a Library row, the
+transport row carries the operation, microphone, options, and model chips,
+events stream into the transcript or the speaker activity as they arrive, and
+Stop interrupts the CLI the way Ctrl-C does (terminating it if it does not
+finish). The session belongs to the controller, so leaving the page loses
+nothing; when it ends, its text is written to the Audio folder and becomes the
+Library row's artifact, so the row reads like Transcribe's. The packaged
+app and embedded CLI carry the microphone usage description and audio-input
+entitlement those capture paths require.
 
 **Text** ▸ Embeddings adds vector norms and cosine-similarity inspection;
 Text ▸ Anonymize shows original and protected PII spans. Text ▸ Decisions

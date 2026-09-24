@@ -281,8 +281,11 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         XCTAssertEqual(controller.taskSessions.taskDraft(for: .audioEnhance), restored)
         XCTAssertNil(controller.taskSessions.value(for: StudioTask.audioEnhance.rawValue + ".commandOverride",
                                                    default: Optional<StudioTaskCommandState>.none))
-        XCTAssertFalse(StudioLibraryDraftRestoration.canRestore(item), "not offered while the page is the surface")
-        XCTAssertFalse(prompt.useSettings(from: item))
+        // Enhance is on the shared workspace, so the Library offers the action and it lands in
+        // the task draft through the same path.
+        XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(item), "offered once the task is on the workspace")
+        XCTAssertTrue(prompt.useSettings(from: item))
+        XCTAssertEqual(controller.taskSessions.taskDraft(for: .audioEnhance), restored)
         XCTAssertTrue(runner.starts.isEmpty)
     }
 

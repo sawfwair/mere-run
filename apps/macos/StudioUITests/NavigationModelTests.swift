@@ -73,6 +73,19 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertNil(StudioDestination(rawValue: ""))
     }
 
+    /// Voice ▸ Clone is retired (Speak's composer is the clone surface). A window that last
+    /// showed it decodes its saved destination to nothing, so `@SceneStorage` falls back to the
+    /// default and restore lands on Image ▸ Generate rather than crashing or on a stale task.
+    func testRetiredCloneDestinationFallsBackToTheDefault() {
+        XCTAssertNil(StudioTask(rawValue: "voice.clone"))
+        XCTAssertNil(StudioDestination(rawValue: "voice/voice.clone"))
+        XCTAssertEqual(StudioDomain.voice.tasks, [.voiceSpeak, .voiceVoices])
+        let navigation = NavigationModel()
+        let mode = navigation.restore(destination: StudioDestination(rawValue: "voice/voice.clone") ?? .default, lastPromptMode: .speak)
+        XCTAssertEqual(navigation.destination, .default)
+        XCTAssertEqual(mode, .createImage)
+    }
+
     func testEveryModeMapsToExactlyOneTaskAndBack() {
         for mode in StudioMode.allCases {
             let destination = StudioDestination(mode: mode)

@@ -27,7 +27,7 @@ extension StudioTask {
     /// The shell this task renders in. Exhaustive so a new task must say what it is.
     package var archetype: StudioSurfaceArchetype {
         switch self {
-        case .imageGenerate, .videoGenerate, .musicCompose, .soundGenerate, .voiceSpeak, .voiceClone,
+        case .imageGenerate, .videoGenerate, .musicCompose, .soundGenerate, .voiceSpeak,
              .soundFoley, .soundCondition, .threeDFromImage:
             return .generate
         case .chatChat, .chatCode:
@@ -48,13 +48,16 @@ extension StudioTask {
         }
     }
 
-    /// The mode-less tasks that have moved onto the shared task workspace
-    /// (`StudioTaskWorkspace`). A page PR adds its task here, deletes its page, and the root
-    /// renders the archetype's canvas over the task's `StudioTaskDraft` instead.
+    /// The mode-less tasks that have moved off their bespoke pages onto a `StudioTaskDraft`. A
+    /// page PR adds its task here and deletes its page: an Analyze or Generate task then renders
+    /// the shared task workspace (`StudioTaskWorkspace`), and a Session or Manage task its own
+    /// page over the same draft, so the Command view, Library restoration, and Stop read one
+    /// value for all of them.
     package static let migratedTasks: Set<StudioTask> = [
         .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore,
         .musicAnalyze, .musicTranscribe,
         .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive,
+        .audioWhoSpoke, .audioEnhance, .audioSeparate, .musicSeparate, .audioLive, .voiceVoices,
     ]
 
     /// Temporary gate: true while this task still renders its bespoke page. A mode-backed task
@@ -80,7 +83,9 @@ extension StudioTask {
     /// The templates this task can run, in picker order. One for most tasks; Vision ▸ Faces or
     /// 3D ▸ From image offer several as a variant chip. Templates that list or delete records
     /// (`speech profile list`) or open a viewer (`image visualize-run`) are not runs, so they are
-    /// left to the Manage and Project pages that own them.
+    /// left to the Manage and Project pages that own them; `audio edit` is instruction-first
+    /// speech generation with an optional reference, not a restoration of the attached audio, so
+    /// Audio ▸ Enhance does not offer it (the Command Console still does).
     package var variantTemplates: [CommandTemplate] {
         let templates = commandTemplates.filter { !Self.nonVariantTemplates.contains($0.id) }
         guard let primary = primaryTemplateID, let index = templates.firstIndex(where: { $0.id == primary }) else {
@@ -109,7 +114,7 @@ extension StudioTask {
     }
 
     private static let nonVariantTemplates: Set<CommandTemplateID> = [
-        .speechProfileList, .speechProfileDelete, .imageVisualizeRun,
+        .speechProfileList, .speechProfileDelete, .imageVisualizeRun, .audioEdit,
     ]
 }
 
@@ -285,14 +290,6 @@ extension StudioTask {
                 emptyMessage: "Attach audio and describe what it should be; CLAP says how well they match.",
                 promptPlaceholder: "What should the sound be?",
                 examplePrompts: ["a dog barking", "rain on a tin roof"],
-                requiresAttachment: true
-            )
-        case .voiceClone:
-            return StudioTaskPresentation(
-                title: title, systemImage: "waveform.badge.mic",
-                emptyTitle: "Speak in a borrowed voice.",
-                emptyMessage: "Attach a reference recording and type the line to say in that voice.",
-                promptPlaceholder: "Type what to say...",
                 requiresAttachment: true
             )
         case .voiceVoices:

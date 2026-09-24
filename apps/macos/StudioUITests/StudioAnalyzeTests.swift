@@ -363,8 +363,11 @@ final class StudioAnalyzeTests: XCTestCase {
     }
 
     /// Every task is shelled by exactly one archetype, and until a page PR flips its gate a
-    /// mode-less task keeps its page: no Library column, no inspector, no task draft.
+    /// mode-less task keeps its page: no Library column, no inspector, no task draft. A migrated
+    /// Analyze or Generate task shows the prompt chrome; a migrated Session or Manage task keeps
+    /// the full width for its own page over the same draft.
     func testArchetypeGatesKeepEveryLegacyPageInPlace() {
+        let chromeArchetypes: Set<StudioSurfaceArchetype> = [.generate, .converse, .analyze]
         for task in StudioTask.allCases {
             if task.mode != nil {
                 XCTAssertFalse(task.usesLegacyPage, "\(task)")
@@ -373,28 +376,26 @@ final class StudioAnalyzeTests: XCTestCase {
             } else {
                 XCTAssertEqual(task.usesLegacyPage, !StudioTask.migratedTasks.contains(task), "\(task)")
             }
-            // A migrated Session task (Live) keeps a task draft but takes the full width.
             XCTAssertEqual(
                 task.showsPromptChrome,
-                (task.isPromptTask || task.usesTaskDraft) && [.generate, .converse, .analyze].contains(task.archetype),
-                "\(task)"
+                task.isPromptTask || (task.usesTaskDraft && chromeArchetypes.contains(task.archetype)), "\(task)"
             )
         }
         // Whatever set of tasks has moved so far, each is a mode-less task with a shell: Generate
-        // or Analyze on the shared workspace, or a Session task with a page of its own (Vision ▸
-        // Live). A Project or Manage task keeps its own page until it has a shell.
+        // or Analyze on the shared workspace's two canvases, or a Session or Manage page of its
+        // own over the same task draft. A Project task keeps its page until it has a shell.
         for task in StudioTask.migratedTasks {
             XCTAssertNil(task.mode, "\(task) is a prompt task; it has a workspace already")
-            XCTAssertTrue([.generate, .analyze, .session].contains(task.archetype), "\(task) has no shell yet")
+            XCTAssertTrue([.generate, .analyze, .session, .manage].contains(task.archetype), "\(task) has no shell yet")
             XCTAssertTrue(task.usesTaskDraft, "\(task)")
-            XCTAssertEqual(task.showsPromptChrome, task.archetype != .session, "\(task): a Session task takes the full width")
+            XCTAssertEqual(task.showsPromptChrome, chromeArchetypes.contains(task.archetype), "\(task)")
             XCTAssertFalse(task.variantTemplates.isEmpty, "\(task) has nothing to run")
             switch task.archetype {
             case .analyze:
                 XCTAssertNotNil(task.analyzeArchetype, "\(task) declares no Analyze shape")
             case .generate:
                 XCTAssertNotNil(task.generateArchetype, "\(task) declares no Generate shape")
-            default:
+            case .session, .manage, .converse, .project:
                 break
             }
         }

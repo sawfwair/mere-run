@@ -174,6 +174,22 @@ package final class JobStore: ObservableObject {
         return true
     }
 
+    /// Stops a session the way Ctrl-C does: SIGINT, which a CLI that traps it (`speech listen`)
+    /// uses to flush its last output and exit cleanly, then SIGTERM if it is still running after
+    /// `grace`. A job that has not started is removed from its queue at once.
+    package func interruptThenCancel(_ id: JobID, after grace: Duration) {
+        guard let job = jobs[id], job.state.isActive else { return }
+        guard job.state.isRunning, interrupt(id) else {
+            cancel(id)
+            return
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: grace)
+            guard let self, let job = self.jobs[id], job.state.isActive else { return }
+            self.cancel(id)
+        }
+    }
+
     /// Writes raw text to a running job's stdin. Throws when the job is not running or its
     /// process was launched without stdin.
     package func send(_ text: String, to id: JobID) throws {

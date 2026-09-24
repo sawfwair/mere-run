@@ -252,7 +252,7 @@ package enum StudioTaskDraftMigration {
         case .musicTranscribe: return "MusicTools.transcribeDraft"
         case .musicServe: return "MusicTools.serveDraft"
         case .audioEnhance: return "AudioTools.enhanceDraft"
-        case .musicSeparate: return "AudioTools.separateDraft"
+        case .musicSeparate: return "AudioTools.separationDraft"
         case .sfxVideo: return "SFXLab.videoDraft"
         case .sfxConditionText: return "SFXLab.conditionDraft"
         case .sfxAEEncode: return "SFXLab.encodeDraft"

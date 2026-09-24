@@ -692,22 +692,17 @@ private struct StudioWorkspaceView: View {
     // MARK: - Domain content
 
     /// The task's surface by archetype: the prompt workspace for a mode-backed task, the shared
-    /// task workspace for a task whose page PR has landed (`StudioTask.migratedTasks`), and the
-    /// task's own page for everything else. A page PR flips its task's gate and deletes its case
-    /// below; the switch's default is the workspace, so nothing else in this file changes.
+    /// task workspace for an Analyze or Generate task whose page PR has landed
+    /// (`StudioTask.migratedTasks`), and the task's own page for everything else — a migrated
+    /// Session or Manage task included, whose page reads the same task draft. A page PR flips its
+    /// task's gate and deletes its case below; the switch's default is the workspace, so nothing
+    /// else in this file changes.
     @ViewBuilder
     private var domainContent: some View {
         if destination.task.mode != nil {
             promptWorkspace
-        } else if destination.task.usesTaskDraft {
-            // A Session task has no composer or feed, so it renders its own page; the cleanup
-            // PR generalizes this dispatch once every Session and Manage page has moved.
-            switch destination.task {
-            case .visionLive:
-                StudioLiveTrackSession(models: models)
-            default:
-                StudioTaskWorkspace(task: destination.task, models: models)
-            }
+        } else if destination.task.usesTaskDraft, destination.task.showsPromptChrome {
+            StudioTaskWorkspace(task: destination.task, models: models)
         } else {
             legacyContent
         }
@@ -732,16 +727,14 @@ private struct StudioWorkspaceView: View {
             StudioSCAILView()
         case .musicRealtime:
             StudioRealtimeMusicView(initialDraft: draft)
-        case .musicSeparate:
-            StudioAudioToolsView(tool: .constant(.separate))
-        case .voiceClone, .voiceVoices:
-            StudioVoiceView(task: voiceTaskBinding, tasks: [.synthesize, .profiles], initialDraft: draft)
+        case .voiceVoices:
+            StudioVoicesView()
         case .threeDFromImage:
             Studio3DCreationView()
-        case .audioWhoSpoke, .audioLive:
-            StudioVoiceView(task: voiceTaskBinding, tasks: [.diarize, .listen], initialDraft: draft)
-        case .audioEnhance, .audioSeparate:
-            StudioAudioToolsView(tool: audioToolBinding)
+        case .visionLive:
+            StudioLiveTrackSession(models: models)
+        case .audioLive:
+            StudioLiveListenSession(models: models)
         case .textDecide:
             StudioLayaDecisionView()
         case .textEmbeddings, .textAnonymize:
@@ -801,36 +794,6 @@ private struct StudioWorkspaceView: View {
     }
 
     // MARK: Task bindings for re-hosted views
-
-    private var audioToolBinding: Binding<StudioAudioTool> {
-        Binding(
-            get: { destination.task == .audioSeparate ? .separate : .enhance },
-            set: { navigation.open(task: $0 == .separate ? .audioSeparate : .audioEnhance) }
-        )
-    }
-
-    private var voiceTaskBinding: Binding<StudioVoiceTask> {
-        Binding(
-            get: {
-                switch destination.task {
-                case .voiceVoices: return .profiles
-                case .audioWhoSpoke: return .diarize
-                case .audioLive: return .listen
-                case .audioTranscribe: return .transcribe
-                default: return .synthesize
-                }
-            },
-            set: { task in
-                switch task {
-                case .synthesize: navigation.open(task: .voiceClone)
-                case .profiles: navigation.open(task: .voiceVoices)
-                case .transcribe: navigation.open(task: .audioTranscribe)
-                case .diarize: navigation.open(task: .audioWhoSpoke)
-                case .listen: navigation.open(task: .audioLive)
-                }
-            }
-        )
-    }
 
     private var utilityTaskBinding: Binding<StudioUtilityTask> {
         Binding(

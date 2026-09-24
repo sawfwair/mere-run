@@ -31,6 +31,8 @@ enum StudioResultRendering: Equatable {
     case faceBatch(StudioFaceBatchDocument)
     /// A depth run's manifest: size, inference size, checkpoint, range.
     case depthManifest(StudioDepthManifest)
+    /// The stems `music separate` wrote, from its manifest when the run's document is one.
+    case stems(StudioSeparationManifest?)
 }
 
 /// What a renderer draws in the Analyze input column, in place of the input, when the chosen
@@ -92,6 +94,10 @@ enum StudioResultRenderers {
             return .faceBatch(document)
         case (_, .depthManifest(let manifest)):
             return .depthManifest(manifest)
+        case (.stems, .separation(let manifest)):
+            return .stems(manifest)
+        case (.stems, _):
+            return .stems(nil)
         default:
             return nil
         }
@@ -162,7 +168,7 @@ enum StudioResultRenderers {
         case .tensor:
             return item.outputURL.map { [$0] } ?? []
         case .clap, .musicAnalysis, .pianoRoll, .poseSubjects, .flowStatistics, .faceEmbedding, .faceComparison,
-             .faceBatch, .depthManifest:
+             .faceBatch, .depthManifest, .stems:
             return []
         case .syncReview(_, let audio), .audioOutput(let audio):
             return [audio]
@@ -189,7 +195,7 @@ struct StudioCardRenderingView: View {
             .background(MereRunTheme.surfaceRaised.opacity(0.6))
             .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
         case .clap, .audioOutput, .musicAnalysis, .pianoRoll, .poseSubjects, .flowStatistics, .faceEmbedding,
-             .faceComparison, .faceBatch, .depthManifest:
+             .faceComparison, .faceBatch, .depthManifest, .stems:
             StudioResultRendererView(rendering: rendering, item: item)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
@@ -274,6 +280,8 @@ struct StudioResultRendererView: View {
             StudioFaceBatchRows(document: document)
         case .depthManifest(let manifest):
             StudioDepthManifestRows(manifest: manifest)
+        case .stems(let manifest):
+            StudioStemsList(item: item, manifest: manifest)
         }
     }
 }

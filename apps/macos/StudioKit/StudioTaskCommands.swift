@@ -76,8 +76,15 @@ extension CommandTemplateID {
 
 extension StudioTask {
     package var commandTemplates: [CommandTemplate] {
-        let owner: StudioTask = self == .audioSeparate ? .musicSeparate : (self == .voiceClone ? .voiceSpeak : self)
+        let owner: StudioTask = self == .audioSeparate ? .musicSeparate : self
         return CommandCatalog.templates.filter { $0.id.studioTask == owner && $0.externalURL == nil }
+    }
+
+    /// Whether this task runs `templateID`: one of its own variants, which for Audio ▸ Separate
+    /// is Music ▸ Separate's command. The feed and Stop read a row's task through this, so a run
+    /// shows on the page that started it.
+    package func runs(_ templateID: CommandTemplateID) -> Bool {
+        variantTemplates.contains { $0.id == templateID }
     }
 }
 

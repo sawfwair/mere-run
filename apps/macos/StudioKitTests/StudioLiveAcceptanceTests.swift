@@ -617,19 +617,22 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let flow = "10-who-spoke"
         let conversation = try twoSpeakerClip(flow: flow)
 
-        // StudioVoiceView's diarization draft: the template's default with the input attached.
-        let template = try XCTUnwrap(CommandCatalog.template(id: .speechDiarize))
-        var draft = template.defaultDraft()
-        draft.inputPath = conversation.path
-        draft.outputPath = StudioOutputLocation.specialistFile(domain: .audio, name: "speakers", fileExtension: "json", configuredRoot: live.path).path
-        let (request, argv) = try specialistRequest(templateID: .speechDiarize, mode: .listen, draft: draft)
-        XCTAssertEqual(Array(argv.prefix(2)), ["speech", "diarize"])
+        // The task workspace's draft: the template's default with the conversation in the well;
+        // the runner names the output after the input in the Audio folder.
+        var draft = StudioTaskDraft(templateID: .speechDiarize)
+        draft.setArgument(0, conversation.path)
+        let (request, argv) = try taskRequest(draft, task: .audioWhoSpoke)
+        XCTAssertEqual(Array(argv.prefix(3)), ["speech", "diarize", conversation.path])
         XCTAssertEqual(argv.firstIndex(of: "--format").map { argv[$0 + 1] }, "json", "The template default asks for JSON explicitly")
-        XCTAssertEqual(argv.firstIndex(of: "--output").map { argv[$0 + 1] } ?? argv.firstIndex(of: "-o").map { argv[$0 + 1] }, request.draft.outputPath)
+        let outputPath = try XCTUnwrap(argv.firstIndex(of: "--output").map { argv[$0 + 1] })
+        XCTAssertEqual(outputPath, request.draft.outputPath)
+        XCTAssertTrue(outputPath.hasPrefix(live.appendingPathComponent("Audio").path), "Who Spoke files under Audio: \(outputPath)")
+        XCTAssertTrue(URL(fileURLWithPath: outputPath).lastPathComponent.hasPrefix("two-speakers"), "named after the input: \(outputPath)")
+        XCTAssertEqual(request.mode, .listen)
 
         let run = try runCLI(flow, argv, timeout: 900)
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
-        let outputURL = URL(fileURLWithPath: request.draft.outputPath)
+        let outputURL = URL(fileURLWithPath: outputPath)
         let document = try XCTUnwrap(StudioDiarizationDocument.load(from: outputURL), "The speaker timeline decoder could not read \(outputURL.path)")
         XCTAssertGreaterThanOrEqual(document.speakerCount, 2, "Two voices were synthesized; summary: \(document.summary)")
         XCTAssertGreaterThanOrEqual(document.segments.count, 2)
@@ -647,6 +650,105 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         guard case .diarization = analyze else { return XCTFail("The shared decoder read the timeline as \(analyze)") }
         XCTAssertEqual(analyze.speechSegments.count, document.segments.count)
         conclude(flow, "speakers=\(document.speakerCount) turns=\(document.segments.count) duration=\(String(format: "%.1f", document.durationSeconds))s lanes=\(speakers.map { "\($0.name):\($0.talkTimeDescription)/\($0.turnCount)" })")
+    }
+
+    // MARK: - Audio ▸ Enhance
+
+    func test21EnhanceWritesBesideItsInputFromTheTaskDraft() throws {
+        try requireModels(["audio-enhance-ap-bwe-16kto48k"])
+        let flow = "21-enhance"
+        let memo = try Self.toneMusic(in: fixtures(), name: "narrow-memo.wav", seconds: 4)
+
+        var draft = StudioTaskDraft(templateID: .audioEnhance)
+        draft.setArgument(0, memo.path)
+        let (request, argv) = try taskRequest(draft, task: .audioEnhance)
+        XCTAssertEqual(Array(argv.prefix(3)), ["audio", "enhance", memo.path])
+        XCTAssertEqual(argv.firstIndex(of: "--model").map { argv[$0 + 1] }, "audio-enhance-ap-bwe-16kto48k")
+        XCTAssertEqual(argv.firstIndex(of: "--dtype").map { argv[$0 + 1] }, "float32", "the compute chip's default")
+        let output = try XCTUnwrap(argv.firstIndex(of: "--output").map { argv[$0 + 1] })
+        XCTAssertEqual(output, request.draft.outputPath)
+        XCTAssertTrue(output.hasPrefix(live.appendingPathComponent("Audio").path), "Enhance files under Audio: \(output)")
+        XCTAssertTrue(URL(fileURLWithPath: output).lastPathComponent.hasPrefix("narrow-memo"), "named after the input: \(output)")
+
+        let run = try runCLI(flow, argv, timeout: 900)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        let enhanced = try AVAudioFile(forReading: URL(fileURLWithPath: output))
+        XCTAssertEqual(enhanced.fileFormat.sampleRate, 48_000, "AP-BWE writes 48 kHz")
+        XCTAssertGreaterThan(enhanced.length, 0)
+        conclude(flow, "output=\(output) rate=\(Int(enhanced.fileFormat.sampleRate)) frames=\(enhanced.length)")
+    }
+
+    // MARK: - Audio ▸ Separate
+
+    func test32SeparateWritesStemsAndAManifestFromTheTaskDraft() throws {
+        try requireModels(["music-separate-bs-roformer-viperx-1297"])
+        let flow = "32-separate"
+        let music = try Self.toneMusic(in: fixtures())
+
+        // Audio ▸ Separate runs Music ▸ Separate's command; the output folder follows the command's
+        // domain, named after the input.
+        var draft = try XCTUnwrap(StudioTaskDraft(task: .audioSeparate))
+        draft.setArgument(0, music.path)
+        let (request, argv) = try taskRequest(draft, task: .audioSeparate)
+        XCTAssertEqual(Array(argv.prefix(3)), ["music", "separate", music.path])
+        XCTAssertEqual(argv.firstIndex(of: "--dtype").map { argv[$0 + 1] }, "float16")
+        let outputDirectory = try XCTUnwrap(argv.firstIndex(of: "--output-dir").map { argv[$0 + 1] })
+        XCTAssertEqual(outputDirectory, request.draft.outputPath)
+        XCTAssertTrue(outputDirectory.hasPrefix(live.path), "the stems folder escaped the configured root: \(outputDirectory)")
+        XCTAssertTrue(URL(fileURLWithPath: outputDirectory).lastPathComponent.hasPrefix("tone-music"), "named after the input: \(outputDirectory)")
+
+        let run = try runCLI(flow, argv, timeout: 1_800)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        let manifestURL = URL(fileURLWithPath: outputDirectory).appendingPathComponent("separation.json")
+        let manifest = try XCTUnwrap(StudioSeparationManifest.load(from: manifestURL), "no manifest at \(manifestURL.path)")
+        XCTAssertGreaterThanOrEqual(manifest.stems.count, 2)
+        for stem in manifest.stems {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: stem.path), "missing stem \(stem.path)")
+        }
+        // The stems view reads the same manifest from the row's captured stdout.
+        guard case .separation(let printed) = try XCTUnwrap(StudioAnalyzeDocument.decode(Data(run.stdout.utf8))) else {
+            return XCTFail("stdout did not decode as the separation manifest: \(run.stdout.prefix(400))")
+        }
+        XCTAssertEqual(printed.stems.map(\.name), manifest.stems.map(\.name))
+        conclude(flow, "stems=\(manifest.stems.map(\.name)) chunks=\(manifest.chunks) elapsed=\(String(format: "%.1f", manifest.elapsedSeconds))s dir=\(outputDirectory)")
+    }
+
+    // MARK: - Voice ▸ Voices
+
+    func test22ProfileCreateAndDeleteRoundTrip() throws {
+        try requireModels(["speech-tts-qwen3-nano"])
+        let flow = "22-voice-profiles"
+        _ = try twoSpeakerClip(flow: flow)
+        let reference = fixtures().appendingPathComponent("turn-a1.wav")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: reference.path))
+        let name = "Live acceptance \(UUID().uuidString.prefix(8))"
+
+        // The Voices page's New voice form: name, the reference in the well, a transcript so no
+        // transcriber runs, and a language.
+        var draft = StudioTaskDraft(templateID: .speechProfileCreate)
+        draft.form["--name"] = .text(name)
+        let slot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .speechProfileCreate))
+        slot.attach([reference], to: &draft)
+        draft.form["--text"] = .text("Good morning everyone, and thank you for joining the quarterly review.")
+        draft.form["--language"] = .text("en")
+        let (request, argv) = try taskRequest(draft, task: .voiceVoices)
+        XCTAssertEqual(Array(argv.prefix(3)), ["speech", "profile", "create"])
+        XCTAssertEqual(request.mode, .speak, "profiles file under Voice")
+
+        let creation = try runCLI(flow, argv, timeout: 600)
+        XCTAssertEqual(creation.exitCode, 0, creation.failureDescription)
+        let id = try XCTUnwrap(UUID(uuidString: creation.stdout.trimmingCharacters(in: .whitespacesAndNewlines)), "the CLI prints the new profile's id")
+        let created = try XCTUnwrap(StudioVoiceProfileStore.load().first { $0.id == id }, "the page reads the manifest the CLI wrote")
+        XCTAssertEqual(created.name, name)
+        XCTAssertEqual(created.language, "en")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: created.referenceAudioURL.path), "reference missing at \(created.referenceAudioURL.path)")
+
+        let (_, deleteArgv) = try taskRequest(.deletingVoiceProfile(id), task: .voiceVoices)
+        XCTAssertEqual(deleteArgv, ["speech", "profile", "delete", "--id", id.uuidString])
+        let deletion = try runCLI(flow, deleteArgv, timeout: 120)
+        XCTAssertEqual(deletion.exitCode, 0, deletion.failureDescription)
+        XCTAssertNil(StudioVoiceProfileStore.load().first { $0.id == id }, "the profile is gone from the manifest")
+        conclude(flow, "created=\(id.uuidString) name=\"\(name)\" reference=\(created.referenceAudioURL.lastPathComponent) deleted=\(deletion.exitCode == 0)")
     }
 
     // MARK: - Music ▸ Analyze
@@ -1317,6 +1419,46 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             }
         }
         return (prepared.request, argv)
+    }
+
+    /// A task draft's request, prepared the way `StudioTaskRunner.run` prepares it: the output
+    /// named after the input under the configured root, Command edits applied, validated. The
+    /// argv is the execution the Library keeps, exactly what the app launches. A destination
+    /// outside the live directory throws before any CLI runs, so a lost defaults suite can never
+    /// send a run into the user's own folders.
+    private func taskRequest(_ draft: StudioTaskDraft, task: StudioTask) throws -> (request: StudioRunRequest, argv: [String]) {
+        let prepared = try MainActor.assumeIsolated { () throws -> (request: StudioRunRequest, fallbackReason: String?) in
+            let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request(), "\(task) has no request")
+            return try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions())
+        }
+        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        let argv = try XCTUnwrap(prepared.request.execution?.arguments)
+        if let flag = prepared.request.template.id.capability?.output.flag,
+           let index = argv.firstIndex(of: flag), index + 1 < argv.count {
+            try requireUnderLive(argv[index + 1], "\(task) output")
+        }
+        return (prepared.request, argv)
+    }
+
+    private struct DestinationEscaped: LocalizedError {
+        let what: String
+        let path: String
+        let root: String
+        var errorDescription: String? { "\(what) would land outside the live directory \(root); refusing to run the CLI: \(path)" }
+    }
+
+    /// Throws unless `path` sits under `MERERUN_LIVE_ACCEPTANCE_DIR`. Both sides are compared
+    /// without the `/private` prefix Foundation adds to or strips from `/tmp` and `/var` paths.
+    private func requireUnderLive(_ path: String, _ what: String) throws {
+        func normalized(_ url: URL) -> String {
+            let standardized = url.standardizedFileURL.path
+            return standardized.hasPrefix("/private/") ? String(standardized.dropFirst("/private".count)) : standardized
+        }
+        let root = normalized(live)
+        let target = normalized(URL(fileURLWithPath: path))
+        guard target.hasPrefix(root + "/") else {
+            throw DestinationEscaped(what: what, path: target, root: root)
+        }
     }
 
     private func decodeAnalyzeDocument(at path: String) throws -> StudioAnalyzeDocument {

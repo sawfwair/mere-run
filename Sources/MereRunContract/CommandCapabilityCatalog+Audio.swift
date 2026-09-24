@@ -29,28 +29,47 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--model-path", label: "Model path", kind: .directory),
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--overlap", label: "AP-BWE overlap", kind: .integer),
-            .init(flag: "--input-rate", label: "Input bandwidth", kind: .integer),
+            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model-path", label: "Model path", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(
+                flag: "--overlap", label: "AP-BWE overlap", kind: .integer,
+                tier: .standard, range: .init(min: 1, max: 64, step: 1)
+            ),
+            .init(
+                flag: "--input-rate", label: "UniverSR input bandwidth", kind: .choice,
+                choices: ["8000", "12000", "16000", "24000"], tier: .standard
+            ),
             .init(
                 flag: "--ode-method",
                 label: "UniverSR ODE method",
                 kind: .choice,
-                choices: ["euler", "midpoint", "rk4"]
+                choices: ["euler", "midpoint", "rk4"],
+                defaultValue: "midpoint",
+                tier: .standard
             ),
-            .init(flag: "--ode-steps", label: "UniverSR ODE steps", kind: .integer),
-            .init(flag: "--guidance-scale", label: "UniverSR guidance", kind: .number),
-            .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--chunk-seconds", label: "Chunk seconds", kind: .integer),
+            .init(
+                flag: "--ode-steps", label: "UniverSR ODE steps", kind: .integer,
+                defaultValue: "4", tier: .standard, range: .init(min: 1, max: 100, step: 1)
+            ),
+            .init(
+                flag: "--guidance-scale", label: "UniverSR guidance", kind: .number,
+                defaultValue: "1.5", tier: .standard, range: .init(min: 0, max: 10, step: 0.1)
+            ),
+            .init(flag: "--seed", label: "Seed", kind: .integer, defaultValue: "42", tier: .standard),
+            .init(
+                flag: "--chunk-seconds", label: "UniverSR chunk (s)", kind: .integer,
+                defaultValue: "10", tier: .standard, range: .init(min: 3, max: 600, step: 1)
+            ),
             .init(
                 flag: "--dtype",
-                label: "Compute type",
+                label: "Compute",
                 kind: .choice,
-                choices: ["float16", "float32"]
+                choices: ["float16", "float32"],
+                defaultValue: "float32",
+                tier: .essential
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
