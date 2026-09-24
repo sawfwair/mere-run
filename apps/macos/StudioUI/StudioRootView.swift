@@ -700,7 +700,14 @@ private struct StudioWorkspaceView: View {
         if destination.task.mode != nil {
             promptWorkspace
         } else if destination.task.usesTaskDraft {
-            StudioTaskWorkspace(task: destination.task, models: models)
+            // A Session task has no composer or feed, so it renders its own page; the cleanup
+            // PR generalizes this dispatch once every Session and Manage page has moved.
+            switch destination.task {
+            case .visionLive:
+                StudioLiveTrackSession(models: models)
+            default:
+                StudioTaskWorkspace(task: destination.task, models: models)
+            }
         } else {
             legacyContent
         }
@@ -739,9 +746,6 @@ private struct StudioWorkspaceView: View {
             StudioVoiceView(task: voiceTaskBinding, tasks: [.synthesize, .profiles], initialDraft: draft)
         case .threeDFromImage:
             Studio3DCreationView()
-        case .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive:
-            // Migrated: `domainContent` renders these on the shared task workspace.
-            EmptyView()
         case .audioWhoSpoke, .audioLive:
             StudioVoiceView(task: voiceTaskBinding, tasks: [.diarize, .listen], initialDraft: draft)
         case .audioEnhance, .audioSeparate:
