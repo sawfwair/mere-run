@@ -239,6 +239,7 @@ final class StudioSoundTaskTests: XCTestCase {
         XCTAssertEqual(imported.primaryInputPath, "/tmp/tent.mov")
         XCTAssertEqual(imported.text("--renoise"), "0.25")
         XCTAssertEqual(imported.text("--sync-batch-size"), "3")
+        XCTAssertEqual(imported.text("--output"), "", "the page's timestamped destination is not a setting")
         XCTAssertEqual(StudioRenoise.resolvedMode(stored: .automatic, argument: imported.text("--renoise")), .amount,
                        "the override shows an imported amount as Fixed amount")
 
@@ -281,7 +282,10 @@ final class StudioSoundTaskTests: XCTestCase {
         XCTAssertEqual(restored.prompt, "hooves on cobbles")
         XCTAssertEqual(restored.primaryInputPath, "/tmp/horse.mp4")
         XCTAssertEqual(restored.text("--renoise"), "0.2")
-        XCTAssertEqual(Self.settings(of: restored.arguments), Self.settings(of: template.arguments(from: page)))
+        XCTAssertEqual(restored.text("--output"), "", "the row's destination was that run's; routing names the next one")
+        var settingsOnly = page
+        settingsOnly.outputPath = ""
+        XCTAssertEqual(Self.settings(of: restored.arguments), Self.settings(of: template.arguments(from: settingsOnly)))
     }
 
     // MARK: Results
