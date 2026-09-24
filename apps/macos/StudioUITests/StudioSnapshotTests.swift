@@ -2904,8 +2904,8 @@ private final class SnapshotFixture {
         }
         let folder = root.appendingPathComponent("3D/mug", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let mesh = folder.appendingPathComponent("mug.obj", isDirectory: false)
-        try Self.cubeOBJ.write(to: mesh, atomically: true, encoding: .utf8)
+        let mesh = folder.appendingPathComponent("mug.glb", isDirectory: false)
+        try Self.cubeGLB().write(to: mesh, options: .atomic)
         let manifest = folder.appendingPathComponent("mug-manifest.json", isDirectory: false)
         try """
         {"schemaVersion": 1, "inputPaths": ["\(mugURL.path)"], "outputDirectory": "\(folder.path)",
@@ -2960,31 +2960,44 @@ private final class SnapshotFixture {
         }
     }
 
-    /// A unit cube as Wavefront OBJ: eight corners, twelve triangles.
-    private static let cubeOBJ = """
-    o mug
-    v -0.5 -0.5 -0.5
-    v 0.5 -0.5 -0.5
-    v 0.5 0.5 -0.5
-    v -0.5 0.5 -0.5
-    v -0.5 -0.5 0.5
-    v 0.5 -0.5 0.5
-    v 0.5 0.5 0.5
-    v -0.5 0.5 0.5
-    f 1 3 2
-    f 1 4 3
-    f 5 6 7
-    f 5 7 8
-    f 1 2 6
-    f 1 6 5
-    f 2 3 7
-    f 2 7 6
-    f 3 4 8
-    f 3 8 7
-    f 4 1 5
-    f 4 5 8
-
-    """
+    /// A unit cube as binary glTF: eight corners and twelve triangles in one buffer, the shape the
+    /// 3D commands' GLB exports take.
+    private static func cubeGLB() -> Data {
+        let corners: [Float] = [
+            -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5,
+            -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
+        ]
+        let triangles: [UInt16] = [
+            0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
+            1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7,
+        ]
+        var binary = Data()
+        triangles.forEach { binary.append(contentsOf: withUnsafeBytes(of: $0.littleEndian, Array.init)) }
+        corners.forEach { binary.append(contentsOf: withUnsafeBytes(of: $0.bitPattern.littleEndian, Array.init)) }
+        let indexBytes = triangles.count * 2
+        var json = Data("""
+        {"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
+        "meshes":[{"primitives":[{"attributes":{"POSITION":1},"indices":0}]}],
+        "buffers":[{"byteLength":\(binary.count)}],
+        "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":\(indexBytes),"target":34963},
+        {"buffer":0,"byteOffset":\(indexBytes),"byteLength":\(corners.count * 4),"target":34962}],
+        "accessors":[{"bufferView":0,"componentType":5123,"count":\(triangles.count),"type":"SCALAR"},
+        {"bufferView":1,"componentType":5126,"count":\(corners.count / 3),"type":"VEC3","min":[-0.5,-0.5,-0.5],"max":[0.5,0.5,0.5]}]}
+        """.utf8)
+        while json.count % 4 != 0 { json.append(0x20) }
+        func word(_ value: UInt32) -> [UInt8] { withUnsafeBytes(of: value.littleEndian, Array.init) }
+        var glb = Data()
+        glb.append(contentsOf: word(0x4654_6C67))
+        glb.append(contentsOf: word(2))
+        glb.append(contentsOf: word(UInt32(12 + 8 + json.count + 8 + binary.count)))
+        glb.append(contentsOf: word(UInt32(json.count)))
+        glb.append(contentsOf: word(0x4E4F_534A))
+        glb.append(json)
+        glb.append(contentsOf: word(UInt32(binary.count)))
+        glb.append(contentsOf: word(0x004E_4942))
+        glb.append(binary)
+        return glb
+    }
 
     /// A finished Music ▸ Analyze run: the song and the JSON `music analyze` printed for it, kept
     /// as the row's output text the way the Library keeps stdout.

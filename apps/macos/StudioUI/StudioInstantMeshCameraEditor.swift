@@ -37,11 +37,13 @@ struct StudioInstantMeshCameraEditor: View {
                     onRemove: { document.cameras.removeAll { $0.id == camera.id } }
                 ) {
                     if camera.values.count == 16 {
-                        HStack(alignment: .top, spacing: 14) {
+                        // Four cells across, the width the pose rows already take, so the card
+                        // fits the inspector column.
+                        VStack(alignment: .leading, spacing: 8) {
                             StudioNumberGroup("Pose, camera to world") {
                                 StudioMatrixGrid(values: $camera.values, columns: 4, range: 0..<12, label: "pose")
                             }
-                            VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .top, spacing: 4) {
                                 StudioNumberGroup("Focal") {
                                     StudioNumberCell(value: $camera.values[12], label: "fx")
                                     StudioNumberCell(value: $camera.values[13], label: "fy")

@@ -178,6 +178,8 @@ final class StudioThreeDTaskTests: XCTestCase {
 
         XCTAssertEqual(try refusal(draft(views: Array(views.prefix(3)), cameras: nil)), "Add exactly 4 or 6 ordered source views.")
         XCTAssertEqual(try refusal(draft(views: [], cameras: nil)), "Add exactly 4 or 6 ordered source views.")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("outputs").path),
+                       "a refused run creates no destination")
         XCTAssertNil(try refusal(draft(views: views, cameras: nil)), "four views run without cameras")
 
         let short = root.appendingPathComponent("short.cameras.json")
@@ -197,8 +199,6 @@ final class StudioThreeDTaskTests: XCTestCase {
         let shortDraft = draft(views: views, cameras: short)
         let run = try XCTUnwrap(StudioConsoleRun(template: template, draft: shortDraft.form, seed: shortDraft.seed))
         XCTAssertEqual(run.validationMessage, "Add one camera per view: 4 views, 3 cameras.")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("outputs").path),
-                       "a refused run creates no destination")
     }
 
     // MARK: Output routing
@@ -231,14 +231,14 @@ final class StudioThreeDTaskTests: XCTestCase {
     // MARK: Library
 
     /// "Use these settings" on an InstantMesh row brings back every view in order and the camera
-    /// file it ran with.
+    /// file it ran with, and leaves the run's own output directory behind for routing to name anew.
     func testUseTheseSettingsRestoresTheViewsAndCameras() throws {
         let views = (1...6).map { "/tmp/views/\($0).png" }
         var draft = StudioTaskDraft(templateID: .imageReconstruct3DMultiview)
         StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0].attach(views.map { URL(fileURLWithPath: $0) }, to: &draft)
         draft.form["--cameras"] = .text("/tmp/cameras.json")
         draft.form["--resolution"] = .integer(192)
-        let request = try XCTUnwrap(draft.request())
+        let request = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request())
         let row = StudioLibraryItem(
             id: request.id, mode: request.mode, prompt: "", inputURL: nil, outputURL: nil, createdAt: Date(), updatedAt: Date(),
             status: .completed, exitCode: 0, commandPreview: "", outputText: nil, templateID: .imageReconstruct3DMultiview,
@@ -250,7 +250,12 @@ final class StudioThreeDTaskTests: XCTestCase {
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0].paths(in: restored), views)
         XCTAssertEqual(restored.text("--cameras"), "/tmp/cameras.json")
         XCTAssertEqual(restored.text("--resolution"), "192")
-        XCTAssertEqual(restored.arguments, draft.arguments)
+        XCTAssertEqual(restored.text("--output"), "", "the run's own directory is not restored")
+        let recorded = try XCTUnwrap(request.execution?.arguments)
+        let outputIndex = try XCTUnwrap(recorded.firstIndex(of: "--output"))
+        var withoutDestination = recorded
+        withoutDestination.removeSubrange(outputIndex...(outputIndex + 1))
+        XCTAssertEqual(restored.arguments, withoutDestination, "everything but the destination is the recorded command")
     }
 
     /// The same normalization `StudioTaskSchemaTests` uses: the catalog builder and the contract

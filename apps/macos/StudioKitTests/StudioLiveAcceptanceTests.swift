@@ -44,7 +44,9 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         // lives in a throwaway suite, never in the user's own settings.
         let suite = try XCTUnwrap(UserDefaults(suiteName: Self.defaultsSuiteName))
         suite.removePersistentDomain(forName: Self.defaultsSuiteName)
-        suite.set(directory.path, forKey: StudioOutputLocation.rootDefaultsKey)
+        // The registration domain is never written to disk and the suite is named per process,
+        // so an interrupted or concurrent pass can neither leave the root behind nor read another's.
+        suite.register(defaults: [StudioOutputLocation.rootDefaultsKey: directory.path])
         StudioOutputLocation.defaults = suite
         continueAfterFailure = true
     }
@@ -55,7 +57,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    private static let defaultsSuiteName = "run.mere.studio.live-acceptance"
+    private static let defaultsSuiteName = "run.mere.studio.live-acceptance.\(ProcessInfo.processInfo.processIdentifier)"
 
     // MARK: - Text ▸ Decisions
 
@@ -565,8 +567,14 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(URL(fileURLWithPath: request.draft.outputPath).deletingLastPathComponent().path, live.appendingPathComponent("3D").path)
         let run = try runCLI(flow, argv, timeout: 600)
         XCTAssertEqual(run.exitCode, 0, run.failureDescription)
-        let plan = StudioStructuredOutput.objectData(in: run.stdout).flatMap { try? JSONDecoder().decode(DryRunPlan.self, from: $0) }
-        XCTAssertNotNil(plan, "--dry-run --json should print a JSON plan")
+        let plan = try XCTUnwrap(
+            StudioStructuredOutput.objectData(in: run.stdout).flatMap { try? JSONDecoder().decode(DryRunPlan.self, from: $0) },
+            "--dry-run --json should print the InstantMesh plan: \(run.stdout.prefix(400))"
+        )
+        XCTAssertEqual(plan.cameraRig, "supplied-c2w-intrinsics", "the plan uses Studio's cameras, not the released rig")
+        XCTAssertEqual(plan.inputPaths.count, 4)
+        XCTAssertEqual(plan.extractionResolution, 256)
+        XCTAssertTrue(plan.checkpointVerified)
 
         // Three cameras for four views: the runner refuses the draft with the editor's words,
         // before anything is created; the CLI must refuse the same argv too.
@@ -583,13 +591,16 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         try requireUnderLive(shortArgv, outputPath: shortArgv.firstIndex(of: "--output").map { shortArgv[$0 + 1] } ?? "")
         let shortRun = try runCLI(flow, shortArgv, timeout: 600)
         XCTAssertNotEqual(shortRun.exitCode, 0, "The CLI accepted 3 cameras for 4 views")
-        conclude(flow, "dryRun exit=\(run.exitCode) plan=\(plan.map { "\($0.command.joined(separator: " ")) \($0.mode ?? "")" } ?? "none") shortCameras studio=refused cli exit=\(shortRun.exitCode) \(StudioFailureSummary.lastMeaningfulLine(in: shortRun.stderr) ?? "")")
+        conclude(flow, "dryRun exit=\(run.exitCode) rig=\(plan.cameraRig) views=\(plan.inputPaths.count) resolution=\(plan.extractionResolution) shortCameras studio=refused cli exit=\(shortRun.exitCode) \(StudioFailureSummary.lastMeaningfulLine(in: shortRun.stderr) ?? "")")
     }
 
-    /// What a `--dry-run --json` plan says about itself, read by name.
+    /// What `image reconstruct-3d-multiview --dry-run --json` prints (`InstantMeshPlanPayload`),
+    /// read by name.
     private struct DryRunPlan: Decodable {
-        let command: [String]
-        let mode: String?
+        let cameraRig: String
+        let checkpointVerified: Bool
+        let extractionResolution: Int
+        let inputPaths: [String]
     }
 
     // MARK: - Audio ▸ Who Spoke
@@ -1107,11 +1118,19 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         for (index, argument) in argv.enumerated() where destinationFlags.contains(argument) && index + 1 < argv.count {
             paths.append(argv[index + 1])
         }
-        let root = live.standardizedFileURL.path + "/"
         for path in paths where !path.isEmpty {
-            let standardized = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL.path
-            guard standardized.hasPrefix(root) else { throw DestinationEscapedLiveDirectory(path: path) }
+            guard Self.resolved(path).hasPrefix(liveRoot) else { throw DestinationEscapedLiveDirectory(path: path) }
         }
+    }
+
+    /// The live directory and a path in one spelling: tilde expanded, `.` and `..` folded, and
+    /// the `/private` prefix dropped — Foundation drops it only for paths that already exist,
+    /// which a run's not-yet-created directory does not — so prefix checks compare like with like.
+    private var liveRoot: String { Self.resolved(live.path) + "/" }
+
+    private static func resolved(_ path: String) -> String {
+        let folded = NSString(string: NSString(string: path).expandingTildeInPath).standardizingPath
+        return folded.hasPrefix("/private/") ? String(folded.dropFirst("/private".count)) : folded
     }
 
     /// A composer task's request, prepared the way `StudioPromptTaskController` prepares it: the
@@ -1132,7 +1151,30 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         // XCTest runs these on the main thread; the runner and the session store are main-actor.
         let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        return (prepared.request, template.arguments(from: prepared.request.draft))
+        let argv = template.arguments(from: prepared.request.draft)
+        try requireUnderLive(argv, outputPath: prepared.request.draft.outputPath)
+        return (prepared.request, argv)
+    }
+
+    private struct ArgumentReachesUserFolder: LocalizedError {
+        let path: String
+        var errorDescription: String? { "An argument points into a user folder outside the live directory: \(path)" }
+    }
+
+    /// The last fence before a launch: no argument may name a path under the user's own media
+    /// or document folders unless it sits inside the live directory. Inputs are drawn under the
+    /// live directory too, so a path there can only be a destination that escaped routing.
+    private func requireNoUserFolderPaths(in argv: [String]) throws {
+        let home = Self.resolved(NSHomeDirectory())
+        let fenced = ["Music", "Pictures", "Documents", "Movies", "Desktop", "Downloads"].map { "\(home)/\($0)/" }
+        for argument in argv {
+            let candidate = argument.hasPrefix("--") && argument.contains("=") ? String(argument.drop { $0 != "=" }.dropFirst()) : argument
+            guard candidate.hasPrefix("/") || candidate.hasPrefix("~") else { continue }
+            let path = Self.resolved(candidate) + "/"
+            if fenced.contains(where: { path.hasPrefix($0) }), !path.hasPrefix(liveRoot) {
+                throw ArgumentReachesUserFolder(path: candidate)
+            }
+        }
     }
 
     private func decodeAnalyzeDocument(at path: String) throws -> StudioAnalyzeDocument {
@@ -1548,6 +1590,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// Runs the CLI, capturing both streams to files under `live/<flow>/` as evidence.
     @discardableResult
     private func runCLI(_ flow: String, _ argv: [String], timeout: TimeInterval) throws -> CLIResult {
+        try requireNoUserFolderPaths(in: argv)
         stepCounter += 1
         let folder = live.appendingPathComponent(flow, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
