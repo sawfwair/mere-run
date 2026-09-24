@@ -48,7 +48,7 @@ extension StudioPromptTaskController {
         }
         let request = try preparedRequest(mode: mode, draft: draft)
         let prepared = prepareOutput(request.draft)
-        let effective = Self.replacingDestination(of: request, with: prepared.draft)
+        let effective = StudioOutputLocation.request(request, preparedAs: prepared)
         submitLibraryRequest(effective)
         return Submission(request: effective, outputFallbackReason: prepared.fallbackReason)
     }
@@ -74,15 +74,6 @@ extension StudioPromptTaskController {
         library.start(request: request, commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true),
                       status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued)
         controller.run(studio: request)
-    }
-
-    private static func replacingDestination(of request: StudioRunRequest, with draft: CommandDraft) -> StudioRunRequest {
-        guard draft != request.draft else { return request }
-        return StudioRunRequest(id: request.id, mode: request.mode, templateID: request.templateID,
-            template: request.template, draft: draft, createdAt: request.createdAt,
-            conversationID: request.conversationID,
-            execution: request.execution?.replacing(request.templateID.capability?.output.flag ?? "--output", with: draft.outputPath),
-            parentID: request.parentID)
     }
 
     /// Selection determines Stop, even when another task submitted a newer job.

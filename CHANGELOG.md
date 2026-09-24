@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio task drafts that wrote every run to one file: a fresh draft no
+  longer keeps the template's stamped destination, and a saved draft drops any
+  destination in one of Studio's own folders, so Music ▸ Transcribe in JSON
+  names a new `.json` file each run and a changed output root takes effect. A
+  destination chosen in the Command view keeps its folder but steps aside to
+  `-2`, `-3`… instead of overwriting an earlier run's file or folder, training
+  adapters included. Run again keeps the extension a run's `--format` wrote,
+  a run that falls back to App Outputs moves every sidecar in its command with
+  it, and the Command view's "Will run" shows the destination the run writes.
 - Let a plugin catalog declare a setup step that runs through its verified
   entrypoint after installation. For an installed restricted model,
   `mere.run model pull MODEL --accept-model-license` now records explicit terms

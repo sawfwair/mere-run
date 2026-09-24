@@ -111,8 +111,17 @@ package enum StudioLibraryReplay {
         let original = StudioExecution(templateID: templateID,
                                        arguments: item.commandArguments ?? template.arguments(from: stored))
         let draft = original.project(onto: stored)
+        // A command whose file follows its `--format` (a JSON transcription, an RTTM diarization)
+        // wrote the recorded file's extension, not the template's default one.
+        let recordedExtension = URL(fileURLWithPath: draft.outputPath).pathExtension
+        let outputKind: CommandOutputKind
+        if case .file = template.outputKind, !recordedExtension.isEmpty {
+            outputKind = .file(recordedExtension)
+        } else {
+            outputKind = template.outputKind
+        }
         let namedOutput = draft.outputPath.isBlank ? "" : StudioOutputLocation.namedOutputPath(
-            templateID: templateID, outputKind: template.outputKind,
+            templateID: templateID, outputKind: outputKind,
             prompt: draft.prompt, seed: variationSeed ?? draft.seed,
             fingerprint: UUID().uuidString, fallbackStem: template.title, existing: draft.outputPath
         )

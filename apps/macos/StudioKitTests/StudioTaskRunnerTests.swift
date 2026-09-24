@@ -79,6 +79,21 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertNil(runner.currentJob(for: .audioEnhance), "a cancelled job is no longer the task's current one")
     }
 
+    /// The Command view's "Will run" is the launch preview: the draft's own blank destination
+    /// named the way the runner names it, so the argv it shows is the argv that runs.
+    func testTheLaunchPreviewShowsTheDestinationTheRunWrites() throws {
+        controller.readinessByTask[.audioEnhance] = .ready
+        let draft = try enhanceDraft()
+        XCTAssertEqual(draft.text("--output"), "", "the draft keeps no destination")
+
+        let preview = StudioTaskRunner.launchPreview(draft)
+        let previewed = preview.text("--output")
+        XCTAssertTrue(previewed.hasPrefix(root.appendingPathComponent("outputs/Audio").path), previewed)
+        let request = try runner.run(draft, task: .audioEnhance)
+        XCTAssertEqual(request.draft.outputPath, previewed)
+        XCTAssertEqual(request.execution?.arguments, preview.arguments)
+    }
+
     func testBlockedReadinessAndAnIncompleteCommandLeaveHistoryUntouched() throws {
         controller.readinessByTask[.audioEnhance] = .missingModel("audio-enhance-ap-bwe-16kto48k")
         XCTAssertThrowsError(try runner.run(try enhanceDraft(), task: .audioEnhance)) { error in

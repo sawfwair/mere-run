@@ -44,11 +44,14 @@ package final class StudioTaskSessions {
     @ObservationIgnored private var taskDraftCache: [String: (data: Data?, draft: StudioTaskDraft)] = [:]
 
     /// The task draft under `key`: the parked one decoded once per stored value, or the fresh
-    /// one `remember` handed out while nothing is parked.
+    /// one `remember` handed out while nothing is parked. A parked draft is read without the
+    /// destinations the app named into it (`withoutAppDestinations`), so the next run is named
+    /// afresh rather than written over an earlier one's file.
     func cachedTaskDraft(for key: String) -> StudioTaskDraft? {
         let data = entries[key]
         if let cached = taskDraftCache[key], cached.data == data { return cached.draft }
-        guard let data, let draft = try? JSONDecoder.mereRunApp.decode(StudioTaskDraft.self, from: data) else { return nil }
+        guard let data, let parked = try? JSONDecoder.mereRunApp.decode(StudioTaskDraft.self, from: data) else { return nil }
+        let draft = parked.withoutAppDestinations()
         taskDraftCache[key] = (data, draft)
         return draft
     }

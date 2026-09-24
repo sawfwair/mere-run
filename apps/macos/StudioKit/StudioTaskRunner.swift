@@ -55,6 +55,13 @@ package final class StudioTaskRunner {
         StudioTrainingRun.launchDraft(draft)
     }
 
+    /// The draft a Run launches, destinations and all: `launching`, then named by
+    /// `StudioOutputLocation.destination(for:)`. The Command view's "Will run" reads this, so it
+    /// shows the files the run will write rather than the draft's blank destination.
+    package static func launchPreview(_ draft: StudioTaskDraft) -> StudioTaskDraft {
+        StudioOutputLocation.destination(for: launching(draft))
+    }
+
     /// The request a task draft runs: its launch-time defaults applied, its destination named,
     /// validated and prepared, then a camera draft the inspector wrote copied beside the output
     /// (`StudioCameraDocuments`) so the run's folder carries its own file. Static so the

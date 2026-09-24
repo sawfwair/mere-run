@@ -11,9 +11,9 @@ struct StudioTaskCommandView: View {
     let onRun: () -> Void
     let onClose: () -> Void
     var canRun = true
-    /// The form as the run launches it (`StudioTaskRunner.launching`), so "Will run" and the
-    /// validation read the launch-time defaults a task applies without writing them into the
-    /// fields; identity for a command that has none.
+    /// The form as the run launches it (`StudioTaskRunner.launchPreview`), so "Will run" and the
+    /// validation read the launch-time defaults and the named destination a task applies without
+    /// writing them into the fields; identity for a command that has none.
     var launching: (StudioConsoleDraft) -> StudioConsoleDraft = { $0 }
 
     var body: some View {

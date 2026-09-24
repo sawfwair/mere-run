@@ -172,7 +172,10 @@ final class StudioTrainingRunTests: XCTestCase {
             page.seed = "42"
             page.trainingRecipe = recipe
             page.overrideTrainingRecipe = false
-            let expected = template.arguments(from: page)
+            // The page stamped its adapter path; a task draft leaves the destination to routing.
+            var expected = template.arguments(from: page)
+            let output = try XCTUnwrap(expected.firstIndex(of: "--output"))
+            expected.removeSubrange(output...output + 1)
 
             var draft = StudioTrainingRun.baseline(for: .imageTrainLoRA)
             draft.form["--recipe"] = .text(recipe)

@@ -17,9 +17,10 @@ final class StudioTaskSchemaTests: XCTestCase {
     // MARK: Identity
 
     /// A fresh task draft runs the template's own default command (the same option/value pairs
-    /// the catalog builder emits, plus the `--json` a page set on every run), and a populated
-    /// draft's argv is exactly what `StudioTaskCommandView` shows as "Will run"
-    /// (`StudioConsoleRun`), so the composer, the inspector, and the Command view cannot disagree.
+    /// the catalog builder emits, plus the `--json` a page set on every run, minus the stamped
+    /// destination that routing names at submit time instead), and a populated draft's argv is
+    /// exactly what `StudioTaskCommandView` shows as "Will run" (`StudioConsoleRun`), so the
+    /// composer, the inspector, and the Command view cannot disagree.
     func testEveryTaskDraftBuildsTheCommandViewsArgv() throws {
         for task in migratingTasks {
             XCTAssertFalse(task.variantTemplates.isEmpty, "\(task) has no template to run")
@@ -28,10 +29,12 @@ final class StudioTaskSchemaTests: XCTestCase {
                 let draft = StudioTaskDraft(templateID: template.id)
                 let launcher = Set(StudioTaskDraft.launcherDefaults(for: template.id))
                 let consoleOnly = Set(StudioTaskDraft.consoleOnlyDefaults(for: template.id))
+                let destinations = StudioTaskSchema.outputFlags(for: capability)
                 XCTAssertEqual(
                     Self.pairs(of: draft.arguments, capability: capability).subtracting(launcher),
                     Self.pairs(of: template.arguments(from: template.defaultDraft()), capability: capability)
-                        .subtracting(launcher).subtracting(consoleOnly),
+                        .subtracting(launcher).subtracting(consoleOnly)
+                        .filter { pair in !destinations.contains { pair.hasPrefix($0 + "=") } },
                     "\(template.id) fresh draft is the template's own command"
                 )
                 for flag in launcher {

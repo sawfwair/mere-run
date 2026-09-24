@@ -70,6 +70,33 @@ final class StudioResultWorkflowTests: XCTestCase {
         XCTAssertNotEqual(try XCTUnwrap(batch.replay(outputPath: "/tmp/out/faces-2.jsonl").form).text("--jsonl-output"), "/tmp/out/faces.jsonl")
     }
 
+    /// A command whose file follows its `--format` replays into a file of that format: a JSON
+    /// transcription stays JSON and an RTTM diarization stays RTTM, never the template's default
+    /// `.mid` or `.json`.
+    func testReplayKeepsTheExtensionTheRunsFormatWrote() throws {
+        let store = library()
+        let transcribe = try XCTUnwrap(CommandCatalog.template(id: .musicTranscribe))
+        var transcription = transcribe.defaultDraft()
+        transcription.inputPath = "/tmp/harbor-lights.wav"
+        transcription.musicTranscribeFormat = "json"
+        transcription.outputPath = "/tmp/out/harbor-lights-a1b2c3.json"
+        let transcribed = store.start(request: StudioRunRequest(mode: .music, templateID: .musicTranscribe,
+            template: transcribe, draft: transcription), commandPreview: "fixture")
+        let rerun = try XCTUnwrap(StudioLibraryReplay.request(for: transcribed))
+        XCTAssertEqual(URL(fileURLWithPath: rerun.draft.outputPath).pathExtension, "json", rerun.draft.outputPath)
+        XCTAssertEqual(try XCTUnwrap(rerun.execution?.form).text("--output"), rerun.draft.outputPath)
+
+        let diarize = try XCTUnwrap(CommandCatalog.template(id: .speechDiarize))
+        var speakers = diarize.defaultDraft()
+        speakers.inputPath = "/tmp/standup.wav"
+        speakers.speechDiarizationFormat = "rttm"
+        speakers.outputPath = "/tmp/out/standup-d4e5f6.rttm"
+        let diarized = store.start(request: StudioRunRequest(mode: .listen, templateID: .speechDiarize,
+            template: diarize, draft: speakers), commandPreview: "fixture")
+        let again = try XCTUnwrap(StudioLibraryReplay.request(for: diarized))
+        XCTAssertEqual(URL(fileURLWithPath: again.draft.outputPath).pathExtension, "rttm", again.draft.outputPath)
+    }
+
     func testComparisonShowsSeedChangesAndOmitsDestinationNoise() throws {
         let store = library()
         let first = try image(store)

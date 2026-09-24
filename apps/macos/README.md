@@ -638,7 +638,13 @@ path the run writes. Settings ▸ General takes one root that overrides all thre
 (`mererun.app.outputRoot`). A task on the shared task workspace (Music ▸
 Transcribe, the Vision and Audio tasks) has no path field:
 `StudioOutputLocation.destination(for:)` names its output after the input in
-the domain's folder when the run starts, with its sidecars beside it. The
+the domain's folder when the run starts, with its sidecars beside it. Its draft
+never keeps a destination Studio named: a fresh draft starts without one, and a
+saved draft is read without any that sits in one of Studio's folders (under the
+root, a per-media `mere.run` folder, or App Outputs). A destination typed into
+the Command view elsewhere keeps its folder, with `-2`, `-3`… added while that
+path exists or a submitted run holds it, so no run writes over another's. The
+Command view's "Will run" shows the destination the run will write. The
 task-specific pages use the same domain roots: training adapters are filed under
 the domain they train for, Decisions uses `outputDirectoryURL`, and Music ▸
 Realtime, Video ▸ Subjects, and the audio recorder use timestamped file names

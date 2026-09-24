@@ -23,7 +23,10 @@ package struct StudioTaskDraft: Codable, Equatable {
 
     /// A fresh draft for `templateID`: the console's reading of the template's default draft, so
     /// the workspace starts on exactly the command the page and the Command view already ran,
-    /// plus the launcher switches the page set on every run (`launcherDefaults`).
+    /// plus the launcher switches the page set on every run (`launcherDefaults`). The default
+    /// draft's stamped destination is not carried: a draft never holds a destination the app
+    /// names, so routing names a fresh one for each run, with the extension its `--format` asks
+    /// for and under whatever root is configured when it runs.
     package init(templateID: CommandTemplateID) {
         self.templateID = templateID
         guard let template = CommandCatalog.template(id: templateID) else {
@@ -37,6 +40,7 @@ package struct StudioTaskDraft: Codable, Equatable {
         for flag in Self.consoleOnlyDefaults(for: templateID) {
             form.values[flag] = nil
         }
+        self = withoutDestinations()
     }
 
     /// The switches the catalog turns on so the Command Console opens a heavy command safely
@@ -146,9 +150,23 @@ package struct StudioTaskDraft: Codable, Equatable {
     /// or a legacy page's `--output` and sidecars were that run's, never settings: carrying them
     /// into a draft would write the next run over the last one's files.
     package func withoutDestinations() -> StudioTaskDraft {
+        clearingDestinations { _ in true }
+    }
+
+    /// The same draft without the destinations that sit in one of the app's own folders
+    /// (`StudioOutputLocation.isAppOwned`), whatever the kind of file: a saved draft from before
+    /// drafts stopped keeping them, or one named under a root the settings have since moved.
+    /// A destination the user chose elsewhere is a setting and stays.
+    package func withoutAppDestinations() -> StudioTaskDraft {
+        clearingDestinations { StudioOutputLocation.isAppOwned($0) }
+    }
+
+    private func clearingDestinations(where clears: (String) -> Bool) -> StudioTaskDraft {
         guard let capability else { return self }
         var cleared = self
-        for flag in StudioTaskSchema.outputFlags(for: capability) { cleared.form.values[flag] = nil }
+        for flag in StudioTaskSchema.outputFlags(for: capability) where clears(form.text(flag)) {
+            cleared.form.values[flag] = nil
+        }
         return cleared
     }
 
