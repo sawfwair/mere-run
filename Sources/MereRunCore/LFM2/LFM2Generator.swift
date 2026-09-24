@@ -356,7 +356,7 @@ public actor LFM2Generator: ChatGenerator {
         }
 
         let lfm2DSparkModel: LFM2DSparkModel?
-        if visionConfig == nil,
+        if (visionConfig == nil || !quantized),
            let dsparkPath = LFM2Resources.installedDSparkPath(
                for: modelId,
                config: config
@@ -371,7 +371,11 @@ public actor LFM2Generator: ChatGenerator {
                 LFM2DSparkConfig.self,
                 from: Data(contentsOf: dsparkRoot.appendingPathComponent("config.json"))
             )
-            try Self.validateDSparkCompatibility(target: config, dspark: dsparkConfig)
+            try Self.validateDSparkCompatibility(
+                target: config,
+                dspark: dsparkConfig,
+                isVisionTarget: visionConfig != nil
+            )
             let loaded = LFM2DSparkModel(config: dsparkConfig)
             try HFSafetensorsWeightsLoader.applyWeights(
                 url: dsparkRoot.appendingPathComponent("model.safetensors"),
@@ -404,8 +408,12 @@ public actor LFM2Generator: ChatGenerator {
 
     static func validateDSparkCompatibility(
         target: LFM2Config,
-        dspark: LFM2DSparkConfig
+        dspark: LFM2DSparkConfig,
+        isVisionTarget: Bool = false
     ) throws {
+        guard dspark.hiddenLayerCount == (isVisionTarget ? 4 : 5) else {
+            throw LFM2Error.generationFailed("LFM2.5 DSpark drafter does not match the target modality.")
+        }
         guard target.vocabSize == dspark.vocabularySize else {
             throw LFM2Error.generationFailed("LFM2.5 DSpark vocabulary does not match its target.")
         }
@@ -579,7 +587,9 @@ public actor LFM2Generator: ChatGenerator {
             effectiveKVCacheMode = .default
         }
         var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
-        let draftCache = imageReferences.isEmpty ? dspark?.makeCache() : nil
+        let prefillDSpark = loadedVisionConfig != nil && generationConfig.temperature != 0
+            ? nil : dspark
+        let draftCache = prefillDSpark?.makeCache()
         let prefixCheckpoints = imageReferences.isEmpty
             ? semanticPrefixCheckpoints(
                 tokenizerAndTemplate: tokenizerAndTemplate,
@@ -592,7 +602,7 @@ public actor LFM2Generator: ChatGenerator {
             : []
         var prefillStartIndex = 0
         var prefillExistingLogits: MLXArray?
-        if imageReferences.isEmpty, dspark == nil, let seed = prefixKVCacheSeed(
+        if imageReferences.isEmpty, prefillDSpark == nil, let seed = prefixKVCacheSeed(
             modelPath: loadedModelPath,
             promptTokens: promptTokens,
             cacheMode: effectiveKVCacheMode
@@ -611,7 +621,7 @@ public actor LFM2Generator: ChatGenerator {
             startIndex: prefillStartIndex,
             existingLogits: prefillExistingLogits,
             checkpointTokenCounts: prefixCheckpoints,
-            dspark: dspark,
+            dspark: prefillDSpark,
             draftCache: draftCache,
             residencyEpoch: residencyEpoch,
             progressHandler: progressHandler
@@ -619,6 +629,7 @@ public actor LFM2Generator: ChatGenerator {
         try requireCurrentResidency(residencyEpoch)
         let prefillSeconds = Date().timeIntervalSince(prefillStart)
         let tokenBudget = max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
+        let dsparkProposalLimit = loadedVisionConfig == nil ? nil : 8
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
         let generationStream = LFM2GenerationStream(showThinking: request.showThinking, handler: progressHandler)
@@ -629,6 +640,7 @@ public actor LFM2Generator: ChatGenerator {
            effectiveKVCacheMode == .default,
            !continuousBatchingEnabled,
            !request.logprobCapture.isEnabled,
+           (loadedVisionConfig == nil || generationConfig.temperature == 0),
            LFM2DSparkPolicy.enabled(),
            tokenBudget >= LFM2DSparkPolicy.minimumOutputTokens() {
             let result = try LFM2DSparkDecoder.decode(
@@ -640,6 +652,7 @@ public actor LFM2Generator: ChatGenerator {
                 generationConfig: generationConfig,
                 eosTokens: eosSet,
                 tokenBudget: tokenBudget,
+                proposalLimit: dsparkProposalLimit,
                 historySeedTokens: promptTokens,
                 decodeToken: { tokenizerAndTemplate.decode(token: $0) },
                 emitPiece: { _, piece in
@@ -673,6 +686,8 @@ public actor LFM2Generator: ChatGenerator {
                 reason = "continuous batching uses final-target decode"
             } else if request.logprobCapture.isEnabled {
                 reason = "logprob capture requires final-target decode"
+            } else if loadedVisionConfig != nil && generationConfig.temperature != 0 {
+                reason = "vision DSpark requires temperature 0"
             } else if !LFM2DSparkPolicy.enabled() {
                 reason = "disabled by MERERUN_LFM25_DSPARK"
             } else if tokenBudget < LFM2DSparkPolicy.minimumOutputTokens() {
@@ -683,7 +698,7 @@ public actor LFM2Generator: ChatGenerator {
             latestDSparkStats = LFM2DSparkStats(
                 enabled: dspark != nil,
                 active: false,
-                speculativeTokens: dspark?.config.blockSize ?? 0,
+                speculativeTokens: min(dspark?.config.blockSize ?? 0, dsparkProposalLimit ?? Int.max),
                 reason: reason
             )
             decodeResult = try await decodeTokens(

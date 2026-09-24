@@ -53,10 +53,10 @@ To read the guide in macOS Studio, follow these steps:
 Prompt examples include a **Copy** control. Input examples serve as
 file-preparation checklists. Reading a guide doesn't start inference.
 
-To read this guide in a terminal, run the following command:
+To read this guide for the BF16 model in a terminal, run the following command:
 
 ```bash
-mere.run guide --model vision-chat-lfm25-3b-8bit
+mere.run guide --model vision-chat-lfm25-3b-bf16
 ```
 
 To inspect the available command options, run the following command:
@@ -70,14 +70,19 @@ save the prompt or input, model ID, parameters, and output together.
 
 ## Covered models
 
-This guide covers the `vision-chat-lfm25-3b-8bit` model.
+This guide covers `vision-chat-lfm25-3b-8bit` and
+`vision-chat-lfm25-3b-bf16`. Pulling the BF16 model also installs its DSpark
+companion. To use the provider's measured greedy decoding path, set
+`--temperature 0` and request at least 16 output tokens. DSpark accelerates
+decoding after image encoding and prompt prefill; it does not accelerate those
+earlier stages.
 
 ## Sources and validation
 
 This original mere.run recipe draws on provider material and local command
 documentation. Check the local controls before applying provider examples.
 
-Editorial review date: September 4, 2026.
+Editorial review date: September 24, 2026.
 
 These recipes have not been validated with model inference. Review generated
 results before relying on a recipe.
@@ -85,6 +90,7 @@ results before relying on a recipe.
 For model and runtime details, see the following sources:
 
 - [Vision capabilities](https://docs.liquid.ai/lfm/key-concepts/vision-capabilities)
+- [LFM2.5-VL-DSpark release](https://www.liquid.ai/blog/lfm2-5-vl-dspark)
 - [Text runtime documentation](https://github.com/sawfwair/mere-run/blob/main/docs/runtime/text.md)
 
 Source links require a network connection. The complete recipe and examples are

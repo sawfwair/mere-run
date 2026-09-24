@@ -55,6 +55,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-lfm25-2.6b-4bit (LiquidAI LFM2.5 2.6B dense MLX 4-bit native Swift runtime)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
           - vision-chat-lfm25-3b-8bit (LiquidAI LFM2.5-VL 3B MLX 8-bit native vision-language runtime)
+          - vision-chat-lfm25-3b-bf16 (LiquidAI LFM2.5-VL 3B BF16 native vision-language runtime with DSpark)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.

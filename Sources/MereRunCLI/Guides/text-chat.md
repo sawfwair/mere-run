@@ -6,7 +6,7 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, `vision-chat-lfm25-3b-bf16`, and `text-chat-psi-agent`.
 `text-chat-gemma4-12b` is the managed dense Google Gemma 4 12B-it checkpoint, routed through the native Swift Gemma 4 runtime for text chat.
 Pulling `text-chat-gemma4-12b` or `vision-chat-gemma4-12b` also installs the managed `text-chat-gemma4-12b-mtp` assistant; greedy serial Gemma 12B decode uses it for verified decode-tail MTP when the prompt is above the configured threshold.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
@@ -32,6 +32,9 @@ over a comparable Q4_0 runtime. The 1.2B model is the memory-first tier. The
 standard 2.6B MLX model remains the faster compact 2.6B lane.
 `text-chat-lfm25-a1b-8bit` is the managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot and runs through the native Swift LFM2 runtime.
 `vision-chat-lfm25-3b-8bit` adds LiquidAI's SigLIP2 vision tower and multimodal projector to the dense LFM2.5 2.6B language backbone. Use `--image` with a local path or base64 data URL.
+`vision-chat-lfm25-3b-bf16` runs the same vision task at BF16 precision. Its
+managed pull installs a DSpark companion for faster decode after image prefill.
+Use `--temperature 0` for the measured greedy decoding path.
 `text-chat-laguna-s-2-1` is the opt-in managed Poolside 118B-A8B NVFP4 target
 for 96 GB-and-up Apple Silicon. Pulling it installs the pinned DFlash
 companion; generation defaults to the validated
@@ -58,6 +61,7 @@ mere.run model pull text-chat-gemma4-12b-4bit
 mere.run model pull text-chat-lfm25-1.2b-qad-4bit --accept-model-license
 mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
+mere.run model pull vision-chat-lfm25-3b-bf16 --accept-model-license
 mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 mere.run model pull text-chat-laguna-s-2-1
 mere.run model pull text-chat-laguna-xs-2-1

@@ -61,8 +61,9 @@ public enum ChatRequestResolver {
         }
         switch policy {
         case .command:
-            if modelID == LFM2Resources.visionModelId {
-                temperature = 0.2
+            if modelID == LFM2Resources.visionModelId
+                || modelID == LFM2Resources.visionBF16ModelId {
+                temperature = modelID == LFM2Resources.visionBF16ModelId ? 0 : 0.2
                 topK = 50
             } else if NemotronOmniResources.handles(modelSpec: modelID) {
                 temperature = NemotronOmniResources.thinkingTemperature

@@ -106,6 +106,7 @@ enum LFM2DSparkDecoder {
         generationConfig: GenerationConfig,
         eosTokens: Set<Int>,
         tokenBudget: Int,
+        proposalLimit: Int? = nil,
         historySeedTokens: [Int],
         decodeToken: ((Int) -> String)?,
         emitPiece: ((Int, String) -> Void)?,
@@ -130,7 +131,7 @@ enum LFM2DSparkDecoder {
         var fallbackReason: String?
         var pendingSampledAnchor: Int?
         let captures = Set(dspark.config.features.targetLayerIDs)
-        let speculativeTokens = dspark.config.blockSize
+        let speculativeTokens = min(dspark.config.blockSize, proposalLimit ?? dspark.config.blockSize)
 
         func emit(_ token: Int) {
             generated.append(token)

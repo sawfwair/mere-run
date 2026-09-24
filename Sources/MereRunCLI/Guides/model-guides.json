@@ -286,7 +286,8 @@
     "title": "LFM2.5 vision (Liquid AI)",
     "category": "Text and multimodal",
     "models": [
-      "vision-chat-lfm25-3b-8bit"
+      "vision-chat-lfm25-3b-8bit",
+      "vision-chat-lfm25-3b-bf16"
     ],
     "resourceName": "handbook-lfm25-vision.md"
   },

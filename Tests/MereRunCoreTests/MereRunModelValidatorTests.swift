@@ -74,7 +74,7 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         switch id {
         case .lfm25Small1_2BQAD4Bit, .lfm25Dense2_6B4Bit, .lfm25Dense2_6BQAD4Bit:
             modelType = "lfm2"
-        case .lfm25VL3B8Bit:
+        case .lfm25VL3B8Bit, .lfm25VL3BBF16:
             modelType = "lfm2_vl"
         default:
             modelType = "lfm2_moe"
@@ -86,7 +86,7 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
         try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
-        if id == .lfm25VL3B8Bit {
+        if id == .lfm25VL3B8Bit || id == .lfm25VL3BBF16 {
             try TestFileSystem.writeFile(root.appendingPathComponent("processor_config.json"), contents: Data("{}".utf8))
         }
     }
@@ -734,6 +734,26 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(
             report.manifest?.upstreamRepoId,
             "\(LFM2Resources.visionUpstreamRepoId)@\(LFM2Resources.visionUpstreamRevision)"
+        )
+    }
+
+    func testLFM2BF16VisionRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(LFM2Resources.visionBF16ModelId, isDirectory: true)
+        try writeMinimalValidLFM2Model(at: root, id: .lfm25VL3BBF16)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: LFM2Resources.visionBF16ModelId
+        )
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+        XCTAssertEqual(report.manifest?.precision, .bf16)
+        XCTAssertEqual(Set(report.manifest?.supports ?? []), Set([.chat, .visionChat]))
+        XCTAssertEqual(
+            report.manifest?.upstreamRepoId,
+            "\(LFM2Resources.visionBF16RepoId)@\(LFM2Resources.visionBF16Revision)"
         )
     }
 
