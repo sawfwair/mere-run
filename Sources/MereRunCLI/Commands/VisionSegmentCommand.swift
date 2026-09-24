@@ -40,9 +40,10 @@ struct VisionSegment: AsyncParsableCommand {
     @Option(
         name: [.long],
         help: """
-        Point prompt in image pixels: x,y,positive[,label] or x,y,negative[,label]. A labeled point refines the first \
-        --box with that label, or forms one object with the other points of that label. Unlabeled points form one object \
-        together, or refine the one unlabeled --box when there is exactly one.
+        Point prompt in image pixels: x,y,positive[,label] or x,y,negative[,label]. A labeled point refines the --box \
+        with that label around it (else the first with that label), or forms one object with the other points of that \
+        label. Unlabeled points form one object together, or refine the one unlabeled --box when there is exactly one. \
+        Points that match no box need a positive point among them.
         """
     )
     var point: [String] = []

@@ -28,7 +28,7 @@ final class SAM31PromptSetTests: XCTestCase {
         XCTAssertEqual(objects[3].pointPrompts.map(\.x), [7])
     }
 
-    func testLabeledPointsJoinTheFirstBoxWithTheirLabel() throws {
+    func testLabeledPointsJoinTheBoxWithTheirLabelThatContainsThemElseTheFirst() throws {
         let promptSet = SAM31PromptSet(
             boxPrompts: [
                 SAM31PromptBox(x1: 0, y1: 0, x2: 10, y2: 10, label: "cup"),
@@ -38,16 +38,50 @@ final class SAM31PromptSetTests: XCTestCase {
             pointPrompts: [
                 SAM31PromptPoint(x: 5, y: 5, isPositive: true, label: "cup"),
                 SAM31PromptPoint(x: 45, y: 45, isPositive: false, label: " plate "),
-                SAM31PromptPoint(x: 8, y: 8, isPositive: false, label: "cup")
+                SAM31PromptPoint(x: 25, y: 25, isPositive: false, label: "cup"),
+                SAM31PromptPoint(x: 90, y: 90, isPositive: true, label: "cup")
             ]
         )
 
         let objects = try promptSet.normalized()
 
         XCTAssertEqual(objects.map(\.objectID), ["cup", "cup-2", "plate"])
-        XCTAssertEqual(objects[0].pointPrompts.map(\.x), [5, 8])
-        XCTAssertEqual(objects[1].pointPrompts, [])
+        XCTAssertEqual(objects[0].pointPrompts.map(\.x), [5, 90], "inside the first box, and outside every box")
+        XCTAssertEqual(objects[1].pointPrompts.map(\.x), [25], "inside the second box of the same label")
         XCTAssertEqual(objects[2].pointPrompts.map(\.x), [45])
+    }
+
+    func testPointOnlyGroupsNeedAPositivePoint() {
+        let unlabeled = SAM31PromptSet(pointPrompts: [SAM31PromptPoint(x: 1, y: 1, isPositive: false)])
+        XCTAssertThrowsError(try unlabeled.normalized()) { error in
+            guard case SAM31PromptSet.ValidationError.noPositivePoint(let label) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertNil(label)
+            XCTAssertEqual(error.localizedDescription, "The unlabeled point prompts are all negative and match no box. Add a positive point, or a box for them to refine.")
+        }
+        let labeled = SAM31PromptSet(
+            boxPrompts: [SAM31PromptBox(x1: 0, y1: 0, x2: 10, y2: 10, label: "cup")],
+            pointPrompts: [
+                SAM31PromptPoint(x: 5, y: 5, isPositive: false, label: "cup"),
+                SAM31PromptPoint(x: 50, y: 50, isPositive: false, label: "shadow")
+            ]
+        )
+        XCTAssertThrowsError(try labeled.normalized()) { error in
+            guard case SAM31PromptSet.ValidationError.noPositivePoint(let label) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(label, "shadow", "the negative point on the box is fine; the stray one is not")
+        }
+        // A negative point refining a box, or beside a positive point, is a valid object.
+        XCTAssertNoThrow(try SAM31PromptSet(
+            boxPrompts: [box],
+            pointPrompts: [SAM31PromptPoint(x: 15, y: 25, isPositive: false)]
+        ).normalized())
+        XCTAssertNoThrow(try SAM31PromptSet(pointPrompts: [
+            SAM31PromptPoint(x: 1, y: 1, isPositive: false),
+            SAM31PromptPoint(x: 2, y: 2, isPositive: true)
+        ]).normalized())
     }
 
     func testLabeledPointsWithoutABoxFormOneObjectPerLabelInFirstAppearanceOrder() throws {

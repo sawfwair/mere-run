@@ -1251,11 +1251,12 @@ Defaults:
 Notes:
 
 - still-image runs accept text, box, and point prompts in the same invocation
-- boxes and points combine by label: a labeled `--point` refines the first
-  `--box` with the same label, or forms one object with the other points of
-  that label; unlabeled points form one object together, or refine the one
-  unlabeled `--box` when there is exactly one (a lone negative point does
-  nothing on its own)
+- boxes and points combine by label: a labeled `--point` refines the `--box`
+  with the same label that contains it (else the first box with that label),
+  or forms one object with the other points of that label; unlabeled points
+  form one object together, or refine the one unlabeled `--box` when there is
+  exactly one. Points that match no box must include a positive point; a
+  negative point on its own is rejected, since it describes nothing
 - `--mask-output-dir` writes one PNG mask per exported detection candidate
 - empty detection sets still produce annotated output plus JSON metadata
 
@@ -1309,7 +1310,11 @@ Defaults:
 Notes:
 
 - text prompts seed objects on `--init-frame`, then the native tracker reuses geometry prompts for later frames
-- box and point prompts seed explicit tracked objects directly on the init frame
+- box and point prompts seed explicit tracked objects directly on the init frame,
+  grouped by label the way `vision segment` groups them; points act only on the
+  init frame and when an object the propagated box lost is re-seeded from its
+  seed geometry, never on the box propagated from the previous frame, since
+  they were placed on the init frame and the object has moved
 - `--mask-output-dir` writes per-frame mask PNGs under frame-named subdirectories
 - prompt sets must include at least one text, box, or point prompt
 - `--preflight --json` prints a structured report without loading SAM,
