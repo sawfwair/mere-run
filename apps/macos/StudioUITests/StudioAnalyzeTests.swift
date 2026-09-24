@@ -300,6 +300,14 @@ final class StudioAnalyzeTests: XCTestCase {
         XCTAssertEqual(fitted, CGRect(x: 0, y: 100, width: 400, height: 200))
     }
 
+    /// The picture takes the height left above the composer, within the cap that keeps it from
+    /// outgrowing the column and the floor that keeps a short window usable.
+    func testMediaHeightFitsTheColumnAboveTheComposer() {
+        XCTAssertEqual(StudioAnalyzeMediaLayout.mediaHeight(availableHeight: 560, chromeHeight: 98), 462)
+        XCTAssertEqual(StudioAnalyzeMediaLayout.mediaHeight(availableHeight: 900, chromeHeight: 98), 520)
+        XCTAssertEqual(StudioAnalyzeMediaLayout.mediaHeight(availableHeight: 300, chromeHeight: 98), 220)
+    }
+
     // MARK: - Per-task views
 
     func testViewSegmentsMatchWhatEachTaskProduces() {

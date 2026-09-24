@@ -90,6 +90,11 @@ struct StudioTrackFrameEditor: View {
         FrameRequest(url: url, frame: currentFrame, exact: !isScrubbing)
     }
 
+    /// What the editor adds around the frame: the toolbar, the scrubber, the range line, the
+    /// mark buttons, and the gaps between them. The canvas takes this out of the media height
+    /// so the whole editor fits above the composer.
+    static let rowsHeight: CGFloat = 38 + 28 + 24 + 36
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             StudioRegionToolbarRow(
@@ -99,6 +104,11 @@ struct StudioTrackFrameEditor: View {
             frameView
                 .mereMediaFrame()
             scrubberRow
+            Text(rangeDescription)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
             markRow
         }
         .task(id: request) { await loadFrame(request) }
@@ -109,7 +119,7 @@ struct StudioTrackFrameEditor: View {
     }
 
     private var hint: String {
-        if onSeedFrame { return "Drag for a box, click for a point, Option-click for a negative point." }
+        if onSeedFrame { return StudioRegionTool.gestureHint }
         return "Prompts are drawn on frame \(grid.clamped(initFrame)); tracking covers the range below."
     }
 
@@ -193,30 +203,38 @@ struct StudioTrackFrameEditor: View {
         }
     }
 
+    /// The buttons that make the frame in view the prompt frame or the end of tracking, and the
+    /// chip that says when it already is. Short titles so the row fits beside the frame at the
+    /// default window; the full sentence is each control's help. When even the titles do not
+    /// fit, the buttons keep their icons alone.
     private var markRow: some View {
+        ViewThatFits(in: .horizontal) {
+            markControls(iconsOnly: false)
+            markControls(iconsOnly: true)
+        }
+    }
+
+    @ViewBuilder
+    private func markControls(iconsOnly: Bool) -> some View {
         HStack(spacing: 6) {
             if onSeedFrame {
-                markState("Prompts on this frame", systemImage: "flag.fill")
+                markState("Prompt frame", systemImage: "flag.fill", iconsOnly: iconsOnly)
+                    .help("The prompts are drawn on this frame; the tracker segments them here")
             } else {
-                Button {
+                markButton("Prompts here", systemImage: "flag", iconsOnly: iconsOnly) {
                     initFrame = currentFrame
                     if let endFrame, endFrame < currentFrame { self.endFrame = nil }
-                } label: {
-                    Label("Draw prompts on this frame", systemImage: "flag")
                 }
-                .buttonStyle(.mereSecondary)
-                .help("Move the prompts to this frame; the tracker segments them here, then follows them through the whole range")
+                .help("Draw the prompts on this frame instead: the tracker segments them here, then follows them through the whole range")
             }
 
             if endFrame == currentFrame {
-                markState("Tracking ends here", systemImage: "flag.checkered")
+                markState("Ends here", systemImage: "flag.checkered", iconsOnly: iconsOnly)
+                    .help("Tracking stops after this frame")
             } else {
-                Button {
+                markButton("End here", systemImage: "flag.checkered", iconsOnly: iconsOnly) {
                     endFrame = currentFrame
-                } label: {
-                    Label("End tracking here", systemImage: "flag.checkered")
                 }
-                .buttonStyle(.mereSecondary)
                 .disabled(!canEndHere)
                 .help(
                     canEndHere
@@ -226,25 +244,27 @@ struct StudioTrackFrameEditor: View {
             }
 
             if endFrame != nil {
-                Button {
+                markButton("Track to end", systemImage: "xmark.circle", iconsOnly: iconsOnly) {
                     endFrame = nil
-                } label: {
-                    Label("Track to the end", systemImage: "xmark.circle")
                 }
-                .buttonStyle(.mereSecondary)
-                .help("Clear the end frame")
+                .help("Clear the end frame and track to the end of the clip")
             }
-            Spacer(minLength: 8)
-            Text(rangeDescription)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(MereRunTheme.textMuted)
-                .lineLimit(1)
+            Spacer(minLength: 0)
         }
     }
 
+    private func markButton(_ title: String, systemImage: String, iconsOnly: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            markLabel(title, systemImage: systemImage, iconsOnly: iconsOnly)
+        }
+        .buttonStyle(.mereSecondary)
+        .fixedSize()
+        .accessibilityLabel(title)
+    }
+
     /// What the frame in view already is, in the place its button would be.
-    private func markState(_ text: String, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
+    private func markState(_ text: String, systemImage: String, iconsOnly: Bool) -> some View {
+        markLabel(text, systemImage: systemImage, iconsOnly: iconsOnly)
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(MereRunTheme.accent)
             .padding(.horizontal, 10)
@@ -253,7 +273,19 @@ struct StudioTrackFrameEditor: View {
                 RoundedRectangle(cornerRadius: MereRunTheme.Radius.base)
                     .fill(MereRunTheme.accentSoft)
             }
+            .fixedSize()
+            .accessibilityLabel(text)
             .accessibilityAddTraits(.isStaticText)
+    }
+
+    @ViewBuilder
+    private func markLabel(_ title: String, systemImage: String, iconsOnly: Bool) -> some View {
+        if iconsOnly {
+            Image(systemName: systemImage)
+        } else {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.titleAndIcon)
+        }
     }
 
     private var rangeDescription: String {

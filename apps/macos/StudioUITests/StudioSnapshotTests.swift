@@ -612,6 +612,17 @@ final class StudioSnapshotTests: XCTestCase {
                 .background(MereRunTheme.background)
             try analyze.write(view, size: editorSize, appearance: appearance, name: "f6-region-editor-\(appearance.rawValue)")
         }
+        // The positive point selected (its ring and halo), with two more points hard against the
+        // picture's top-right corner and left edge, whose tags flip and slide to stay on it.
+        let edgePrompts = prompts + [
+            .point(CGPoint(x: 1_010, y: 12), isPositive: true, label: "rim"),
+            .point(CGPoint(x: 8, y: 1_015), isPositive: false)
+        ]
+        let pointSelected = RegionEditorPreview(image: image, prompts: edgePrompts, selection: prompts[2].id)
+            .padding(24)
+            .frame(width: editorSize.width, height: editorSize.height)
+            .background(MereRunTheme.background)
+        try analyze.write(pointSelected, size: editorSize, appearance: .light, name: "f6-region-editor-point-selected")
 
         var segment = StudioDraft()
         segment.reset(for: .segment)
@@ -651,6 +662,60 @@ final class StudioSnapshotTests: XCTestCase {
                 settle: 3.0,
                 afterAppear: { navigation.open(task: render.task) }
             )
+        }
+    }
+
+    /// The Analyze board at the default window (1440×820, Library showing) and narrower: Segment
+    /// on a portrait picture, which has to fit the column above the composer rather than run
+    /// under it, and Track's frame editor, whose range line and mark buttons have to fit their
+    /// rows; each with a box and a point drawn.
+    func testAnalyzeBoardWindowFitSnapshots() throws {
+        let analyze = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .analyze,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.analyzeReadinessResponses)
+        )
+        defer { analyze.tearDown() }
+
+        var segment = StudioDraft()
+        segment.reset(for: .segment)
+        segment.inputPath = analyze.portraitURL.path
+        segment.visionRegionPrompts = [
+            .box(CGRect(x: 180, y: 300, width: 360, height: 520), label: "figure"),
+            .point(CGPoint(x: 360, y: 560), isPositive: true),
+            .point(CGPoint(x: 700, y: 40), isPositive: false)
+        ]
+
+        var track = StudioDraft()
+        track.reset(for: .track)
+        track.inputPath = analyze.clipURL.path
+        track.visionRegionPrompts = [
+            .box(CGRect(x: 60, y: 40, width: 220, height: 150), label: "band"),
+            .point(CGPoint(x: 170, y: 115), isPositive: true)
+        ]
+        track.visionInitFrame = 21
+
+        let sizes: [(name: String, size: CGSize)] = [
+            ("1440", Self.shellSize),
+            ("1100", CGSize(width: 1_100, height: 760))
+        ]
+        for (label, size) in sizes {
+            for (name, task) in [("segment-portrait", StudioTask.visionSegment), ("track", .visionTrack)] {
+                let navigation = NavigationModel()
+                let view = StudioRootView(seededDrafts: [.segment: segment, .track: track])
+                    .environmentObject(analyze.controller)
+                    .environmentObject(analyze.library)
+                    .environmentObject(navigation)
+                    .frame(width: size.width, height: size.height)
+                try analyze.write(
+                    view,
+                    size: size,
+                    appearance: .light,
+                    name: "f6-analyze-\(name)-\(label)",
+                    settle: 3.0,
+                    afterAppear: { navigation.open(task: task) }
+                )
+            }
         }
     }
 
@@ -1341,6 +1406,8 @@ private final class SnapshotFixture {
     private(set) var narrationURL: URL!
     /// A 640×360 clip of 60 frames at 12 fps for Track's seed-frame scrubber.
     private(set) var clipURL: URL!
+    /// A 720×1280 portrait picture, the shape that has to fit the column above the composer.
+    private(set) var portraitURL: URL!
 
     /// The prompts the region-editor renders draw on the 1024×1024 mug: the cup's box (labeled,
     /// selected in the shot), the saucer's, a positive point on the handle, a negative one on
@@ -1636,6 +1703,9 @@ private final class SnapshotFixture {
         let clip = directory.appendingPathComponent("band.mp4", isDirectory: false)
         try Self.writeFixtureMP4(to: clip, size: CGSize(width: 640, height: 360), frames: 60)
         clipURL = clip
+        let portrait = directory.appendingPathComponent("portrait.png", isDirectory: false)
+        try Self.writeFixturePNG(to: portrait, size: CGSize(width: 720, height: 1_280), hueOffset: 0.6)
+        portraitURL = portrait
         let segmented = directory.appendingPathComponent("mug_segmented.png", isDirectory: false)
         try Self.writeMugPNG(to: segmented, side: 1_024)
         let segmentDocument = directory.appendingPathComponent("mug_segmented.json", isDirectory: false)

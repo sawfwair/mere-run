@@ -319,3 +319,17 @@ extension StudioTask {
         self == .visionSegment || self == .visionTrack
     }
 }
+
+/// How tall the input may be on the Analyze canvas: whatever the column has above the composer
+/// once the input strip and the drawing toolbar have their rows, so a portrait picture fits the
+/// visible area instead of running under the composer. Capped so a tall window never gets a
+/// picture wider than the column can use, and floored so a short window still shows something
+/// to draw on (the canvas scrolls then).
+package enum StudioAnalyzeMediaLayout {
+    package static let maximumHeight: CGFloat = 520
+    package static let minimumHeight: CGFloat = 220
+
+    package static func mediaHeight(availableHeight: CGFloat, chromeHeight: CGFloat) -> CGFloat {
+        min(maximumHeight, max(minimumHeight, availableHeight - chromeHeight))
+    }
+}
