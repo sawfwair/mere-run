@@ -455,8 +455,11 @@ struct StudioAnalyzeResultPanel: View {
 
     /// The files a run wrote when its result is the file itself (enhanced audio, stems, a depth
     /// directory) rather than a document the canvas decodes; listed so the panel names them.
+    /// Only for the tasks on the shared task workspace: a prompt task's run without a document
+    /// (Track before its JSON lands) keeps the panel it always had.
     private var outputFiles: [URL] {
-        guard document == nil, [.audio, .stems, .depth, .scene, .video].contains(view) else { return [] }
+        guard document == nil, item.templateID?.studioTask.usesTaskDraft == true,
+              [.audio, .stems, .depth, .scene, .video].contains(view) else { return [] }
         return item.allArtifactURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 

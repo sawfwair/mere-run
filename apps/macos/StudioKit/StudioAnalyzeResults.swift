@@ -288,10 +288,10 @@ package enum StudioAnalyzeDocument: Equatable {
         if let document = try? decoder.decode(StudioMusicAnalysisDocument.self, from: data) {
             return .musicAnalysis(document)
         }
-        guard let text = String(data: data, encoding: .utf8), !text.isBlank else {
-            // Not text at all: a safetensors file is the one binary left.
-            return StudioSafetensorsHeader.decode(data).map { .tensor(.safetensors($0)) }
-        }
+        // A safetensors file announces itself with its header length and JSON header, so it is
+        // read before anything is tried as text; its tensor bytes would otherwise pass as UTF-8.
+        if let header = StudioSafetensorsHeader.decode(data) { return .tensor(.safetensors(header)) }
+        guard let text = String(data: data, encoding: .utf8), !text.isBlank else { return nil }
         if let analysis = StudioMusicAnalysisDocument.decode(text) { return .musicAnalysis(analysis) }
         if let clap = StudioCLAPScore.decode(text) { return .clap(clap) }
         let transcript = StudioTranscriptDocument.parse(text)

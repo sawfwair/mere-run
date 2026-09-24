@@ -133,7 +133,7 @@ the well, the chips, the inspector, the Command view, Library restoration, and
 the argv read one value. The well's slots, the chips, and the inspector sections
 come from the template's contract (`StudioKit/StudioTaskSchema.swift`); the
 destination is filled at submit time by
-`StudioOutputLocation.destination(for:)`; every run — the workspace's, the
+`StudioOutputLocation.destination(for:)`; every task run — the workspace's, the
 prompt controller's `runTask`, and the remaining pages' `StudioSpecialistRunner`
 shim — goes through `StudioKit/StudioTaskRunner.swift`. Bespoke result views
 live under `StudioUI/Renderers/` and register by `(view, document)` in

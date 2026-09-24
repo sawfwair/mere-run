@@ -9,7 +9,7 @@ changes. Studio runs the public CLI; it does not implement model inference.
 | Owner | Responsibility |
 | --- | --- |
 | `StudioPromptTaskController` | Active prompt draft, conversation identity, task restoration, Analyze handoffs, and request preparation |
-| `StudioTaskRunner` | The one submission path for every run that is not a conversation turn: destination naming, Command edits, validation, Library attribution, and the job Stop acts on |
+| `StudioTaskRunner` | The one submission path for every task run that is not a conversation turn (servers, model pulls, and Realtime keep their own): destination naming, Command edits, validation, Library attribution, and the job Stop acts on |
 | `StudioTaskSessions` | Inactive drafts, the shared task workspace's `StudioTaskDraft` per task, per-thread Chat and Code drafts, selection memory, result focus, Command overrides, and versioned persistence |
 | `NavigationModel` | Destination, selected Library item, and panel visibility |
 | `StudioRootView` | Window composition, navigation wiring, layout, focus, dialogs, and platform interactions |

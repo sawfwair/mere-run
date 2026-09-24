@@ -147,7 +147,7 @@ struct StudioModelChip: View {
     }
 
     private var help: String {
-        let identity = resolvedModelID.isEmpty ? "Auto — the task's default model" : "Model: \(resolvedModelID)"
+        let identity = resolvedModelID.isEmpty ? "Auto — the mode's default model" : "Model: \(resolvedModelID)"
         switch readiness {
         case .ready, .unknown, .notChecked: return identity
         default: return "\(identity) · \(readiness.message(titles: titles))"

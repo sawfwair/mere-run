@@ -14,7 +14,7 @@ selection memory, result focus, command overrides, and persistence. Keep session
 values. `CommandTemplate.validationMessage(for:execution:)` applies the same
 validation during preparation and final job admission.
 
-`StudioTaskRunner` is the one submission path for every run that is not a
+`StudioTaskRunner` is the one submission path for every task run that is not a
 conversation turn: it names the destination
 (`StudioOutputLocation.destination(for:)`), applies Command edits, validates,
 records the Library row under the template's own mode, and remembers
