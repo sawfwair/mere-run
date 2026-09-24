@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Accept base64 image data URLs in Qwen-family vision chat requests, including
+  Ornith screenshots sent through the local OpenAI-compatible API.
+
 ## 0.56.0 - 2026-09-24
 
 - Add pinned LFM2.5-VL 3B BF16 and vision DSpark checkpoints with managed
