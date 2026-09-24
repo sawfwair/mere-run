@@ -177,7 +177,10 @@ Specialist workspaces (the 19 sheets, about 15,000 lines):
 - Eight of the surfaces (Geospatial, Audio, Health benchmarks, 3D, Music Tools,
   Vision Lab, SFX Lab, Utility Lab) are forms over a command family whose shape
   the contract already declares. Their real value is the bespoke result
-  renderers (pose overlay, flow field, piano roll, CLAP gauge, PII spans).
+  renderers (pose overlay, flow field, piano roll, CLAP gauge, PII spans). SFX
+  Lab has since moved onto the shared task workspace (Video Foley and Condition
+  as Generate tasks; Encode, Decode, and Score as Analyze tasks), with the CLAP
+  gauge and the sync review kept as renderers.
 
 Architecture (`MereRunController.swift`, `CommandCatalog.swift`,
 `MereRunRootView.swift`):

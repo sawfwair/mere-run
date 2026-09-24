@@ -209,6 +209,18 @@ The format is based on Keep a Changelog.
   or were denied. `/runtime/status` now reads installed models from a
   background-refreshed scan instead of scanning on every request. The macOS
   app declares removable- and network-volume usage descriptions.
+- Move Studio's Sound specialist tasks onto the shared task workspace and
+  remove the SFX Lab page. Video Foley is a Generate task: the clip goes in the
+  attachment well, the sound description in the composer, and the finished card
+  plays the picture over the waveform it produced; Condition generates the
+  conditioning tensors and shows their header. Encode, Decode, and Score are
+  Analyze tasks: Encode shows the `.npy` header, Decode plays the decoded audio,
+  and Score draws the CLAP alignment as a gauge. The inspector's Renoise editor
+  (Automatic, a fixed amount, or one amount per step) writes `--renoise` with a
+  point decimal whatever the locale, and a per-step schedule that does not match
+  the step count is refused before the run starts, in the workspace and the
+  Command Console alike. Output paths are named by routing instead of typed;
+  the page's saved drafts import once.
 
 ## 0.55.0 - 2026-09-22
 

@@ -194,9 +194,49 @@ package enum StudioTensorHeader: Equatable {
     case npy(StudioNPYMetadata)
     case safetensors(StudioSafetensorsHeader)
 
+    /// The most header either format can declare that is read from disk; a longer one is not
+    /// a tensor file Studio wrote.
+    private static let headerReadLimit = 16 * 1_024 * 1_024
+
+    /// Reads the header alone — the magic, the declared header length, then that many bytes —
+    /// and reports the whole file's size, so a card or panel never loads the tensor payload.
     package static func load(from url: URL) -> StudioTensorHeader? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return decode(data)
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard let fileSize = try? handle.seekToEnd(), (try? handle.seek(toOffset: 0)) != nil,
+              let prefix = try? handle.read(upToCount: 12), prefix.count >= 8 else { return nil }
+        let headerLength: Int
+        let headerStart: Int
+        if Array(prefix.prefix(6)) == [0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59] {
+            if prefix[6] <= 1 {
+                headerLength = Int(prefix[8]) | (Int(prefix[9]) << 8)
+                headerStart = 10
+            } else {
+                guard prefix.count >= 12 else { return nil }
+                headerLength = Int(prefix[8]) | (Int(prefix[9]) << 8) | (Int(prefix[10]) << 16) | (Int(prefix[11]) << 24)
+                headerStart = 12
+            }
+        } else {
+            let length = prefix.prefix(8).enumerated().reduce(UInt64(0)) { total, byte in
+                total | UInt64(byte.element) << (8 * UInt64(byte.offset))
+            }
+            guard length <= UInt64(headerReadLimit) else { return nil }
+            headerLength = Int(length)
+            headerStart = 8
+        }
+        guard headerLength <= headerReadLimit, (try? handle.seek(toOffset: 0)) != nil,
+              let data = try? handle.read(upToCount: headerStart + headerLength) else { return nil }
+        switch decode(data) {
+        case .npy(let npy):
+            return .npy(StudioNPYMetadata(
+                version: npy.version, descriptor: npy.descriptor, shape: npy.shape,
+                fortranOrder: npy.fortranOrder, byteCount: Int(fileSize)
+            ))
+        case .safetensors(let header):
+            return .safetensors(StudioSafetensorsHeader(tensors: header.tensors, metadata: header.metadata, byteCount: Int(fileSize)))
+        case nil:
+            return nil
+        }
     }
 
     /// `.npy` announces itself with a magic string; anything else is tried as safetensors.

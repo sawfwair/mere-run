@@ -41,21 +41,21 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         }
         // Every Studio destination (composer and specialist pages alike) files under the configured
         // root, so the run's outputs land in the live directory instead of ~/Pictures etc. The root
-        // lives in a throwaway suite, never in the user's own settings.
-        let suite = try XCTUnwrap(UserDefaults(suiteName: Self.defaultsSuiteName))
-        suite.removePersistentDomain(forName: Self.defaultsSuiteName)
-        suite.set(directory.path, forKey: StudioOutputLocation.rootDefaultsKey)
+        // lives in this process only: a suite named once per process, set through its registration
+        // domain, which cfprefsd never persists — so two `swift test --filter …/testNN` processes
+        // running at once cannot overwrite or clear each other's root.
+        let suite = try XCTUnwrap(UserDefaults(suiteName: "run.mere.studio.live-acceptance.\(UUID().uuidString)"))
+        suite.register(defaults: [StudioOutputLocation.rootDefaultsKey: directory.path])
         StudioOutputLocation.defaults = suite
+        let probe = StudioOutputLocation.outputDirectoryURL(domain: .sound, prompt: "probe", fallbackStem: "probe").path
+        XCTAssertTrue(probe.hasPrefix(directory.path), "The configured root did not take: destinations would file under \(probe)")
         continueAfterFailure = true
     }
 
     override func tearDownWithError() throws {
         StudioOutputLocation.defaults = .standard
-        UserDefaults(suiteName: Self.defaultsSuiteName)?.removePersistentDomain(forName: Self.defaultsSuiteName)
         try super.tearDownWithError()
     }
-
-    private static let defaultsSuiteName = "run.mere.studio.live-acceptance"
 
     // MARK: - Text ▸ Decisions
 
@@ -855,12 +855,15 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
     // MARK: - Sound ▸ Generate (renoise)
 
+    /// The renoise argument the task inspector's editor writes — one amount or one amount per
+    /// step, with a point for decimals whatever the locale — carried through the task draft and
+    /// the runner to the CLI, which accepts it; a schedule that does not match the step count is
+    /// refused by the runner before anything is recorded, and by the CLI when sent anyway.
     func test16SoundGenerateRenoiseArgumentIsLocaleSafeAndAccepted() throws {
         try requireModels(["sfx-woosh-dflow"])
         let flow = "16-sfx-renoise"
-        let template = try XCTUnwrap(CommandCatalog.template(id: .sfxGenerate))
 
-        // The page's slider writes the amount through StudioRenoise, never through a locale formatter.
+        // The editor's slider writes the amount through StudioRenoise, never through a locale formatter.
         let german = Locale(identifier: "de_DE")
         XCTAssertEqual(0.5.formatted(.number.locale(german)), "0,5", "de_DE formats decimals with a comma")
         let amount = StudioRenoise.amount(0.5)
@@ -875,24 +878,22 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(tooLong.problems(steps: 2), ["The renoise schedule has 3 values but the run has 2 steps."])
         XCTAssertEqual(StudioRenoise.amount("0,5").problems(steps: 2), ["Renoise must be a number between 0 and 1, with a point for decimals."])
 
-        func makeDraft(renoise: String, name: String) -> CommandDraft {
-            var draft = template.defaultDraft()
+        // Sound ▸ Generate's task draft: the same contract form the Command view edits.
+        func makeDraft(renoise: String) -> StudioTaskDraft {
+            var draft = StudioTaskDraft(templateID: .sfxGenerate)
             draft.prompt = "a short whoosh"
-            draft.secondaryText = ""
             draft.model = "sfx-woosh-dflow"
-            draft.durationSeconds = 1
-            draft.steps = 2
-            draft.cfgScale = 4.5
-            draft.seed = "7"
-            draft.sfxRenoise = renoise
-            draft.outputPath = StudioOutputLocation.specialistFile(domain: .sound, name: name, fileExtension: "wav", configuredRoot: live.path).path
+            draft.form["--duration"] = .number(1)
+            draft.form["--steps"] = .integer(2)
+            draft.form["--cfg"] = .number(4.5)
+            draft.form["--seed"] = .integer(7)
+            draft.form["--renoise"] = .text(renoise)
             return draft
         }
-        for (renoise, name) in [(amount.argument, "sfx-amount"), (schedule.argument, "sfx-schedule")] {
-            let draft = makeDraft(renoise: renoise, name: name)
-            let (request, argv) = try specialistRequest(templateID: .sfxGenerate, mode: .sfx, draft: draft)
+        for renoise in [amount.argument, schedule.argument] {
+            let (request, argv) = try taskRequest(makeDraft(renoise: renoise))
             XCTAssertEqual(argv.firstIndex(of: "--renoise").map { argv[$0 + 1] }, renoise)
-            XCTAssertEqual(argv.firstIndex(of: "--steps").map { argv[$0 + 1] } ?? argv.firstIndex(of: "-s").map { argv[$0 + 1] }, "2")
+            XCTAssertEqual(argv.firstIndex(of: "--steps").map { argv[$0 + 1] }, "2")
             XCTAssertTrue(request.draft.outputPath.hasPrefix(live.appendingPathComponent("Sound").path), request.draft.outputPath)
             let run = try runCLI(flow, argv, timeout: 900)
             XCTAssertEqual(run.exitCode, 0, run.failureDescription)
@@ -901,12 +902,125 @@ final class StudioLiveAcceptanceTests: XCTestCase {
                 XCTAssertEqual(Double(file.length) / file.fileFormat.sampleRate, 1, accuracy: 0.25)
             }
         }
-        // The page blocks a schedule that does not match the step count; the CLI does too.
-        let (_, badArgv) = try specialistRequest(templateID: .sfxGenerate, mode: .sfx, draft: makeDraft(renoise: tooLong.argument, name: "sfx-bad"))
-        let bad = try runCLI(flow, badArgv, timeout: 300)
-        XCTAssertNotEqual(bad.exitCode, 0)
-        XCTAssertTrue(bad.stderr.contains("--renoise must contain one value or exactly --steps values"), bad.stderr.suffix(300).description)
-        conclude(flow, "amount='\(amount.argument)' schedule='\(schedule.argument)' both generated; bad schedule exit=\(bad.exitCode)")
+        // Video Foley's draft carries the same argument through its own template.
+        var foley = StudioTaskDraft(templateID: .sfxVideo)
+        foley.prompt = "a short whoosh"
+        foley.setArgument(1, live.appendingPathComponent("clip.mp4").path)
+        foley.form["--steps"] = .integer(2)
+        foley.form["--renoise"] = .text(schedule.argument)
+        XCTAssertEqual(foley.arguments.firstIndex(of: "--renoise").map { foley.arguments[$0 + 1] }, schedule.argument)
+        XCTAssertNil(StudioConsoleCommand.validationMessage(for: try XCTUnwrap(foley.capability), draft: foley.form))
+
+        // The runner refuses a schedule that does not match the step count before anything is
+        // created; the CLI refuses the same argv.
+        let bad = makeDraft(renoise: tooLong.argument)
+        XCTAssertThrowsError(try taskRequest(bad)) { error in
+            XCTAssertEqual(
+                error as? StudioValidationError,
+                StudioValidationError(message: "The renoise schedule has 3 values but the run has 2 steps.")
+            )
+        }
+        let badRun = try runCLI(flow, namedArguments(bad), timeout: 300)
+        XCTAssertNotEqual(badRun.exitCode, 0)
+        XCTAssertTrue(badRun.stderr.contains("--renoise must contain one value or exactly --steps values"), badRun.stderr.suffix(300).description)
+        conclude(flow, "amount='\(amount.argument)' schedule='\(schedule.argument)' both generated through the task draft; bad schedule refused by the runner and exit=\(badRun.exitCode) from the CLI")
+    }
+
+    // MARK: - Sound ▸ Score and the autoencoder
+
+    /// Sound ▸ Score's task draft — the prompt positional and the audio well — runs `sfx clap
+    /// score`, and its printed JSON decodes into the `.clap` document the gauge renders.
+    func test23ClapScoreDecodesForTheGauge() throws {
+        try requireModels(["sfx-woosh-clap"])
+        let flow = "23-sfx-clap"
+        let tone = try Self.toneMusic(in: fixtures(), name: "sfx-tone.wav", seconds: 4)
+
+        var draft = StudioTaskDraft(templateID: .sfxClapScore)
+        draft.prompt = "a steady electronic tone with a kick drum"
+        draft.setArgument(1, tone.path)
+        XCTAssertEqual(draft.primaryInputPath, tone.path, "the well fills the audio positional")
+        let (request, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(3)), ["sfx", "clap", "score"])
+        XCTAssertEqual(Array(argv.dropFirst(3).prefix(2)), [draft.prompt, tone.path])
+        XCTAssertEqual(request.mode, .sfx)
+
+        let run = try runCLI(flow, argv, timeout: 900)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        let document = try XCTUnwrap(
+            StudioAnalyzeDocument.decode(Data(run.libraryOutputText.utf8)),
+            "stdout did not decode: \(run.stdout.prefix(600))"
+        )
+        guard case .clap(let output) = document else { return XCTFail("The shared decoder read the score as \(document)") }
+        XCTAssertTrue((0...1).contains(output.score), "CLAP similarity is a cosine in 0…1, got \(output.score)")
+        XCTAssertEqual(output.prompt, draft.prompt)
+        XCTAssertEqual(URL(fileURLWithPath: try XCTUnwrap(output.audio)).standardizedFileURL.path, tone.standardizedFileURL.path)
+        XCTAssertEqual(document.summary(detectionCount: 0), String(format: "CLAP score %.2f", output.score))
+        conclude(flow, "score=\(output.score) model=\(output.model ?? "-")")
+    }
+
+    /// Sound ▸ Encode writes the Woosh latents the Analyze board reads as a tensor header, and
+    /// Sound ▸ Decode takes that file back to audio, each through its task draft and the runner.
+    func test26SoundLatentsRoundTripThroughEncodeAndDecode() throws {
+        try requireModels(["sfx-woosh-dflow"])
+        let flow = "26-sfx-latents"
+        let tone = try Self.toneMusic(in: fixtures(), name: "sfx-tone.wav", seconds: 4)
+
+        var encode = StudioTaskDraft(templateID: .sfxAEEncode)
+        encode.setArgument(0, tone.path)
+        let (encodeRequest, encodeArgv) = try taskRequest(encode)
+        XCTAssertEqual(Array(encodeArgv.prefix(3)), ["sfx", "ae", "encode"])
+        XCTAssertTrue(encodeRequest.draft.outputPath.hasPrefix(live.appendingPathComponent("Sound").path), encodeRequest.draft.outputPath)
+        XCTAssertTrue(encodeRequest.draft.outputPath.hasSuffix(".npy"))
+        let encodeRun = try runCLI(flow, encodeArgv, timeout: 900)
+        XCTAssertEqual(encodeRun.exitCode, 0, encodeRun.failureDescription)
+        let latents = URL(fileURLWithPath: encodeRequest.draft.outputPath)
+        guard case .tensor(.npy(let header))? = StudioAnalyzeDocument.decode(try Data(contentsOf: latents)) else {
+            return XCTFail("The latents did not read as an .npy header")
+        }
+        XCTAssertTrue(header.shape.hasPrefix("(1, 128,"), "Woosh latents are [1, 128, frames], got \(header.shape)")
+
+        var decode = StudioTaskDraft(templateID: .sfxAEDecode)
+        decode.setArgument(0, latents.path)
+        let (decodeRequest, decodeArgv) = try taskRequest(decode)
+        XCTAssertEqual(Array(decodeArgv.prefix(3)), ["sfx", "ae", "decode"])
+        XCTAssertTrue(decodeRequest.draft.outputPath.hasSuffix(".wav"))
+        let decodeRun = try runCLI(flow, decodeArgv, timeout: 900)
+        XCTAssertEqual(decodeRun.exitCode, 0, decodeRun.failureDescription)
+        let decoded = try AVAudioFile(forReading: URL(fileURLWithPath: decodeRequest.draft.outputPath))
+        XCTAssertEqual(Double(decoded.length) / decoded.fileFormat.sampleRate, 4, accuracy: 0.5)
+        conclude(flow, "latents=\(header.shape) \(header.descriptor) decoded=\(String(format: "%.2f", Double(decoded.length) / decoded.fileFormat.sampleRate))s at \(Int(decoded.fileFormat.sampleRate)) Hz")
+    }
+
+    /// Sound ▸ Video Foley's task draft — the clip in the well, the prompt, a renoise amount —
+    /// runs `sfx video generate` with the Synchformer model and writes the WAV the finished
+    /// card plays under the clip.
+    func test27VideoFoleyGeneratesFromTheTaskDraft() throws {
+        try requireModels(["sfx-woosh-dvflow-8s", "sfx-woosh-synchformer"])
+        let flow = "27-sfx-foley"
+        let clip = try Self.movingSquareVideo(in: fixtures())
+
+        var draft = StudioTaskDraft(templateID: .sfxVideo)
+        draft.prompt = "a small object sliding across a wooden table"
+        draft.setArgument(1, clip.path)
+        draft.form["--steps"] = .integer(2)
+        draft.form["--seed"] = .integer(7)
+        draft.form["--renoise"] = .text(StudioRenoise.amount(0.5).argument)
+        XCTAssertEqual(draft.primaryInputPath, clip.path, "the well fills the clip positional")
+        XCTAssertTrue(StudioTaskSchema.primarySlot(for: .sfxVideo)?.accepts(clip) == true)
+        let (request, argv) = try taskRequest(draft)
+        XCTAssertEqual(Array(argv.prefix(3)), ["sfx", "video", "generate"])
+        XCTAssertEqual(Array(argv.dropFirst(3).prefix(2)), [draft.prompt, clip.path])
+        XCTAssertEqual(argv.firstIndex(of: "--renoise").map { argv[$0 + 1] }, "0.5")
+        XCTAssertTrue(request.draft.outputPath.hasSuffix(".wav"))
+
+        let run = try runCLI(flow, argv, timeout: 1_800)
+        XCTAssertEqual(run.exitCode, 0, run.failureDescription)
+        let output = URL(fileURLWithPath: request.draft.outputPath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.path), "No WAV at \(output.path)")
+        let file = try AVAudioFile(forReading: output)
+        let seconds = Double(file.length) / file.fileFormat.sampleRate
+        XCTAssertGreaterThan(seconds, 0.5, "the foley is not empty")
+        conclude(flow, "foley=\(String(format: "%.2f", seconds))s at \(Int(file.fileFormat.sampleRate)) Hz in \(String(format: "%.0f", run.duration))s")
     }
 
     // MARK: - Chat thinking
@@ -1038,7 +1152,49 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         // XCTest runs these on the main thread; the runner and the session store are main-actor.
         let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        assertDestinations(of: prepared.request.draft, stayUnder: live)
         return (prepared.request, template.arguments(from: prepared.request.draft))
+    }
+
+    /// A task draft's request, exactly as `StudioTaskRunner.request(for:)` builds it for the
+    /// shared task workspace: routing names the destination under the configured root, then the
+    /// run is prepared (Command edits, validation, the folder created).
+    private func taskRequest(_ draft: StudioTaskDraft) throws -> (request: StudioRunRequest, argv: [String]) {
+        let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request(), "\(draft.templateID) cannot run from Studio")
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
+        XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
+        assertDestinations(of: prepared.request.draft, stayUnder: live)
+        return (prepared.request, try XCTUnwrap(prepared.request.execution).arguments)
+    }
+
+    /// A task draft's argv with its destination named but not prepared, for a command the
+    /// runner refuses (the CLI's own objection is what the test wants to see).
+    private func namedArguments(_ draft: StudioTaskDraft) -> [String] {
+        let named = StudioOutputLocation.destination(for: draft)
+        if let flag = named.capability?.output.flag, !named.text(flag).isBlank {
+            XCTAssertTrue(named.text(flag).hasPrefix(live.path), "Output escaped the configured root: \(named.text(flag))")
+        }
+        return named.arguments
+    }
+
+    /// Every destination the draft names — the output and the sidecars derived beside it — is
+    /// under the live directory, so a run can never write into the user's own folders.
+    private func assertDestinations(of draft: CommandDraft, stayUnder root: URL, file: StaticString = #filePath, line: UInt = #line) {
+        for (label, path) in [
+            ("output", draft.outputPath), ("JSON sidecar", draft.visionJSONOutputPath),
+            ("mask directory", draft.visionMaskOutputDirectory),
+        ] where !path.isBlank {
+            XCTAssertTrue(path.hasPrefix(root.path), "The \(label) escaped the configured root: \(path)", file: file, line: line)
+        }
+    }
+
+    /// The user's own media folders. A CLI launch naming a file under one of them, outside the
+    /// live directory, is a harness fault (the root did not take) and never runs.
+    private var fencedFolders: [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return ["Music", "Pictures", "Documents", "Movies", "Desktop", "Downloads"].map {
+            home.appendingPathComponent($0, isDirectory: true)
+        }
     }
 
     private func decodeAnalyzeDocument(at path: String) throws -> StudioAnalyzeDocument {
@@ -1454,6 +1610,19 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// Runs the CLI, capturing both streams to files under `live/<flow>/` as evidence.
     @discardableResult
     private func runCLI(_ flow: String, _ argv: [String], timeout: TimeInterval) throws -> CLIResult {
+        struct EscapedRoot: LocalizedError {
+            let path: String
+            var errorDescription: String? { "The CLI would write outside the live directory: \(path)" }
+        }
+        let livePath = live.standardizedFileURL.path
+        for token in argv where token.hasPrefix("/") {
+            let path = URL(fileURLWithPath: token).standardizedFileURL.path
+            guard !path.hasPrefix(livePath + "/"), fencedFolders.contains(where: { path.hasPrefix($0.standardizedFileURL.path + "/") }) else {
+                continue
+            }
+            XCTFail("Refusing to launch the CLI with \(token): it is under the user's own folders, not \(live.path)")
+            throw EscapedRoot(path: token)
+        }
         stepCounter += 1
         let folder = live.appendingPathComponent(flow, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

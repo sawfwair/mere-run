@@ -137,10 +137,13 @@ destination is filled at submit time by
 prompt controller's `runTask`, and the remaining pages' `StudioSpecialistRunner`
 shim — goes through `StudioKit/StudioTaskRunner.swift`. Bespoke result views
 live under `StudioUI/Renderers/` and register by `(view, document)` in
-`StudioResultRenderers`; the Session pages share their transport chrome from
-`StudioUI/StudioSessionControls.swift`. A task keeps its bespoke page until it
-is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the root then
-renders the workspace for it instead.
+`StudioResultRenderers` (a finished feed card asks the same registry for a
+rendering in place of its output grid); the Session pages share their transport
+chrome from `StudioUI/StudioSessionControls.swift`. A task keeps its bespoke
+page until it is added to `StudioTask.migratedTasks` (`usesLegacyPage`); the
+root then renders the workspace for it instead. Sound ▸ Video Foley and
+Condition (Generate) and Sound ▸ Encode, Decode, and Score (Analyze) render on
+it; the SFX Lab page they replaced is gone.
 
 To open the offline handbook, in **Help**, select **mere.run Guide**. The
 **Models** collection contains original recipes for 139 managed IDs, grouped
@@ -423,11 +426,13 @@ of running under the composer. Once a tracked clip exists it plays in place,
 with "Adjust prompts and frames" bringing the scrubber back.
 
 `StudioKit/StudioAnalyzeSchema.swift` declares the surface — the result views and the next
-steps — for twenty-two tasks, seventeen of which still render their own form
-inside their task rather than this canvas (Vision ▸ Depth, Pose, Faces, Flow,
-Geometry, Live; Audio ▸ Who Spoke, Enhance, Separate; Text ▸ Embeddings,
-Anonymize; the four Earth tasks; Sound ▸ Score and Condition). Migrating one is
-a view change, not a design decision.
+steps — for every input-first task. Sound ▸ Score, Encode, and Decode render on
+this canvas through the shared task workspace (Score's result is the CLAP gauge,
+Encode's the `.npy` header, Decode's the decoded audio); the other specialist
+tasks (Vision ▸ Depth, Pose, Faces, Flow, Geometry, Live; Audio ▸ Who Spoke,
+Enhance, Separate; Text ▸ Embeddings, Anonymize; the four Earth tasks) still
+render their own form inside their task until their page moves. Migrating one
+is a view change, not a design decision.
 
 **Chat** is the Converse surface (`StudioUI/StudioConversationView.swift`,
 `StudioUI/StudioThreadList.swift`). A **thread list** replaces the Library column there —
@@ -705,9 +710,16 @@ elsewhere import, and the clip list exports. The resident ACE-Step server's
 health and lifecycle live under Server ▸ Music server.
 
 **Sound** ▸ Generate and Video Foley produce effects, with Woosh renoise as the
-model's default, one amount on a slider, or one amount per step; Condition, Encode, Decode,
-and Score cover conditioning, AE encode and decode, CLAP scoring, waveform
-review, NPY metadata, and durable artifacts.
+model's default, one amount on a slider, or one amount per step (the task
+inspector's Renoise editor; a per-step schedule that does not match the step
+count is refused before the run starts). Video Foley is a Generate task on the
+shared task workspace: the clip goes in the well, the prompt in the composer,
+and the finished card plays the picture over the waveform it produced.
+Condition (prompt to conditioning tensors, shown as their header), Encode
+(audio to `.npy` latents, shown as the tensor header), Decode (latents back to
+audio), and Score (the CLAP gauge over the audio) run on the same workspace, so
+the Library, "Use these settings", Stop, readiness, and output routing behave
+as they do for every other task.
 
 **Voice** ▸ Speak, Clone, and Voices host styled or cloned synthesis, reusable
 profiles, reference recording, streaming feedback, and A/B playback.
@@ -1022,7 +1034,9 @@ show — Decisions, Segment with a drawn box and points on a generated photo
 (with an EXIF-rotated copy), Track's prompt frame and range, Find handing its
 boxes to Segment, Faces, Depth, multi-view geometry and InstantMesh cameras,
 Who Spoke, Music analyze, instruments, and the training manifest, run plans and
-`run inspect`, Sound's renoise, a chat turn with thinking shown, and a failed
+`run inspect`, Sound's renoise through the task draft and the runner, a CLAP
+score decoding for the gauge, the Woosh latents round trip through Encode and
+Decode, a short Video Foley run on a synthesized clip, a chat turn with thinking shown, and a failed
 turn's one-line reason. Inputs are drawn, synthesized, or generated with the CLI
 into the run directory; nothing binary is committed. It is skipped unless
 `MERERUN_LIVE_ACCEPTANCE_DIR` names a directory, and each test skips on its own
