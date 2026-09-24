@@ -296,14 +296,15 @@ package enum StudioAnalyzeDocument: Equatable {
         if let document = try? decoder.decode(StudioFaceComparisonDocument.self, from: data) {
             return .faceComparison(document)
         }
-        if let document = StudioFaceBatchDocument.decode(data) {
-            return .faceBatch(document)
-        }
         if let manifest = try? decoder.decode(StudioDepthManifest.self, from: data) {
             return .depthManifest(manifest)
         }
         if let document = try? decoder.decode(StudioMusicAnalysisDocument.self, from: data) {
             return .musicAnalysis(document)
+        }
+        // A batch is one object per line, so it comes after the single-object shapes above.
+        if let document = StudioFaceBatchDocument.decode(data) {
+            return .faceBatch(document)
         }
         // A safetensors file announces itself with its header length and JSON header, so it is
         // read before anything is tried as text; its tensor bytes would otherwise pass as UTF-8.
