@@ -447,6 +447,9 @@ struct StudioGenerationCard: View {
         if !mediaFiles.isEmpty {
             StudioOutputGrid(urls: mediaFiles, tileSide: Self.tileSide, onOpen: { actions.focus(item, $0) })
         }
+        if let rendering = StudioResultRenderers.cardRendering(for: item) {
+            StudioResultRendererView(rendering: rendering, item: item)
+        }
         ForEach(textFiles, id: \.self) { url in
             StudioTextFilePreview(url: url)
                 .frame(maxHeight: 240)

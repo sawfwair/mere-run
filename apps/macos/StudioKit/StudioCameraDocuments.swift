@@ -324,10 +324,13 @@ package enum StudioCameraDocuments {
         StudioDraftFiles.prune(in: draftFolder(page: page, fileManager: fileManager), prefix: "cameras-", current: current, referenced: referenced, keeping: keeping, fileManager: fileManager)
     }
 
+    /// Where the pages' draft files live: `~/Library/Application Support/MereRun`, beside App
+    /// Outputs. Tests point it at a temporary folder, the way `StudioOutputLocation.defaults` is
+    /// pointed at a throwaway suite, so rendering an editor never writes into the user's own.
+    nonisolated(unsafe) package static var draftRoot: URL = StudioOutputLocation.appOutputsRoot().deletingLastPathComponent()
+
     private static func draftFolder(page: String, fileManager: FileManager) -> URL {
-        StudioOutputLocation.appOutputsRoot(fileManager: fileManager)
-            .deletingLastPathComponent()
-            .appendingPathComponent(page, isDirectory: true)
+        draftRoot.appendingPathComponent(page, isDirectory: true)
     }
 }
 
