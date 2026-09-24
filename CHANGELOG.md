@@ -215,10 +215,12 @@ The format is based on Keep a Changelog.
   picked there from the list the CLI prints — and read the result on the
   Analyze board: tempo, key, meter, language, caption, and lyrics under
   Analysis, and the transcribed notes on the piano roll under Notes, with the
-  raw document a segment away. A transcription and its musical-context
-  document are named after the recording under `~/Music/mere.run/Music`
-  (a JSON transcription's context is `<name>-context.json`; none is asked for
-  when musical context is off), the Library column, "Use these settings",
+  raw document a segment away. A transcription is named after the recording
+  and filed by what it is — MIDI under `~/Music/mere.run/Music`, a JSON or
+  JSON Lines event list under `~/Documents/mere.run/Music` — with its
+  musical-context document beside it (`<name>-context.json` next to a JSON
+  transcription; none is asked for when musical context is off); the Library
+  column, "Use these settings",
   Stop, and the readiness card all work for both, and the settings the Music
   Tools page kept are carried over once. The resident music server's
   controls are unchanged under Server ▸ Music server.

@@ -9,7 +9,7 @@ struct StudioPianoRollRenderer: View {
     /// The MIDI file the notes were read from, when the run's artifacts name it.
     let midiURL: URL?
 
-    private static let rollHeight: CGFloat = 240
+    private static let rollMinHeight: CGFloat = 320
 
     private var metrics: [(label: String, value: String)] {
         [
@@ -43,7 +43,7 @@ struct StudioPianoRollRenderer: View {
             .padding(.vertical, 10)
             hairline
             StudioMIDIPianoRoll(summary: summary)
-                .frame(height: Self.rollHeight)
+                .frame(minHeight: Self.rollMinHeight)
             hairline
             if let midiURL {
                 HStack(spacing: 6) {
@@ -77,66 +77,115 @@ struct StudioPianoRollRenderer: View {
 }
 
 /// Every note as a bar: time left to right over the whole file, pitch bottom to top over the
-/// range the file uses, hue by channel, opacity by velocity.
+/// range the file uses, hue by channel, opacity by velocity. The file's range and length are
+/// read once; a dense file (a long orchestral transcription) is drawn per pixel column and pitch
+/// row instead of per note, so the drawing costs the size of the roll, not the size of the file.
 private struct StudioMIDIPianoRoll: View {
     let summary: StudioMIDISummary
+    private let pitches: ClosedRange<Int>?
+    private let totalTicks: Int
+
+    /// Above this many notes the roll rasterizes into cells before drawing.
+    private static let bucketingThreshold = 4_000
+
+    init(summary: StudioMIDISummary) {
+        self.summary = summary
+        pitches = summary.pitchRange
+        totalTicks = max(1, summary.totalTicks)
+    }
 
     var body: some View {
-        GeometryReader { proxy in
-            Canvas { context, size in
-                let notes = summary.notes
-                guard !notes.isEmpty,
-                      let pitches = summary.pitchRange else {
-                    let text = context.resolve(
-                        Text("No note events found")
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.textMuted)
-                    )
-                    context.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2))
-                    return
-                }
-                let pitchSpan = max(1, pitches.upperBound - pitches.lowerBound + 1)
-                let totalTicks = max(1, summary.totalTicks)
-                let rowHeight = max(2, size.height / CGFloat(pitchSpan))
-                for note in notes {
-                    let x = CGFloat(note.startTick) / CGFloat(totalTicks) * size.width
-                    let width = max(
-                        2,
-                        CGFloat(note.durationTicks) / CGFloat(totalTicks) * size.width
-                    )
-                    let pitchOffset = note.pitch - pitches.lowerBound
-                    let y = size.height - CGFloat(pitchOffset + 1) * rowHeight
-                    let hue = Double(note.channel) / 16
-                    context.fill(
-                        Path(
-                            roundedRect: CGRect(
-                                x: x,
-                                y: y,
-                                width: width,
-                                height: max(1.5, rowHeight - 1)
-                            ),
-                            cornerRadius: 1.5
-                        ),
-                        with: .color(
-                            Color(
-                                hue: hue,
-                                saturation: 0.7,
-                                brightness: 0.92,
-                                opacity: 0.45 + 0.55 * Double(note.velocity) / 127
-                            )
-                        )
-                    )
-                }
-            }
-            .background {
-                LinearGradient(
-                    colors: [MereRunTheme.surfaceRaised, MereRunTheme.surface],
-                    startPoint: .top,
-                    endPoint: .bottom
+        Canvas { context, size in
+            guard !summary.notes.isEmpty, let pitches else {
+                let text = context.resolve(
+                    Text("No note events found")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
                 )
+                context.draw(text, at: CGPoint(x: size.width / 2, y: size.height / 2))
+                return
             }
+            let pitchSpan = max(1, pitches.upperBound - pitches.lowerBound + 1)
+            let rowHeight = max(2, size.height / CGFloat(pitchSpan))
+            let ticksPerPoint = CGFloat(totalTicks) / max(1, size.width)
+            if summary.notes.count > Self.bucketingThreshold {
+                for run in bucketedRuns(pitches: pitches, ticksPerPoint: ticksPerPoint, width: size.width) {
+                    let y = size.height - CGFloat(run.pitch - pitches.lowerBound + 1) * rowHeight
+                    fill(&context, x: CGFloat(run.startColumn), width: CGFloat(run.endColumn - run.startColumn + 1),
+                         y: y, rowHeight: rowHeight, channel: run.channel, velocity: run.velocity)
+                }
+            } else {
+                for note in summary.notes {
+                    let x = CGFloat(note.startTick) / ticksPerPoint
+                    let width = max(2, CGFloat(note.durationTicks) / ticksPerPoint)
+                    let y = size.height - CGFloat(note.pitch - pitches.lowerBound + 1) * rowHeight
+                    fill(&context, x: x, width: width, y: y, rowHeight: rowHeight, channel: note.channel, velocity: note.velocity)
+                }
+            }
+        }
+        .background {
+            LinearGradient(
+                colors: [MereRunTheme.surfaceRaised, MereRunTheme.surface],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
         .accessibilityElement()
         .accessibilityLabel("Piano roll with \(summary.notes.count) notes")
+    }
+
+    private func fill(
+        _ context: inout GraphicsContext, x: CGFloat, width: CGFloat, y: CGFloat, rowHeight: CGFloat,
+        channel: Int, velocity: Int
+    ) {
+        context.fill(
+            Path(roundedRect: CGRect(x: x, y: y, width: width, height: max(1.5, rowHeight - 1)), cornerRadius: 1.5),
+            with: .color(Color(
+                hue: Double(channel) / 16,
+                saturation: 0.7,
+                brightness: 0.92,
+                opacity: 0.45 + 0.55 * Double(velocity) / 127
+            ))
+        )
+    }
+
+    /// One filled span per pitch row: the pixel columns the notes of that pitch cover, merged
+    /// where they touch, carrying the loudest note's velocity and its channel.
+    private struct Run {
+        var pitch: Int
+        var startColumn: Int
+        var endColumn: Int
+        var channel: Int
+        var velocity: Int
+    }
+
+    private func bucketedRuns(pitches: ClosedRange<Int>, ticksPerPoint: CGFloat, width: CGFloat) -> [Run] {
+        let columns = max(1, Int(width.rounded(.up)))
+        // Per pitch row, per column: (velocity, channel) of the loudest note touching that cell.
+        var cells: [Int: (velocity: Int, channel: Int)] = [:]
+        for note in summary.notes {
+            let first = min(columns - 1, Int(CGFloat(note.startTick) / ticksPerPoint))
+            let last = min(columns - 1, max(first, Int(CGFloat(note.startTick + note.durationTicks) / ticksPerPoint)))
+            let row = (note.pitch - pitches.lowerBound) * columns
+            for column in first...last {
+                let key = row + column
+                if let existing = cells[key], existing.velocity >= note.velocity { continue }
+                cells[key] = (note.velocity, note.channel)
+            }
+        }
+        var runs: [Run] = []
+        for key in cells.keys.sorted() {
+            guard let cell = cells[key] else { continue }
+            let pitch = pitches.lowerBound + key / columns
+            let column = key % columns
+            if var last = runs.last, last.pitch == pitch, last.endColumn + 1 == column, last.channel == cell.channel {
+                last.endColumn = column
+                last.velocity = max(last.velocity, cell.velocity)
+                runs[runs.count - 1] = last
+            } else {
+                runs.append(Run(pitch: pitch, startColumn: column, endColumn: column, channel: cell.channel, velocity: cell.velocity))
+            }
+        }
+        return runs
     }
 }

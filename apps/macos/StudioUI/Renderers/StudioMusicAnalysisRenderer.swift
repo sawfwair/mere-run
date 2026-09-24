@@ -28,8 +28,8 @@ struct StudioMusicAnalysisRenderer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Tiles at their own width, three to a row, so five of them fit the result column
-            // without clipping a value.
+            // Tiles at their own width, three to a row, so five of them fit the result column;
+            // a value longer than its share of the row truncates rather than pushing the row out.
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(tileRows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .top, spacing: 22) {
@@ -42,8 +42,9 @@ struct StudioMusicAnalysisRenderer: View {
                                     .font(.system(size: 14, weight: .bold, design: .rounded))
                                     .foregroundStyle(MereRunTheme.textPrimary)
                                     .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .help(tile.value)
                             }
-                            .fixedSize()
                             .accessibilityElement(children: .combine)
                         }
                         Spacer(minLength: 0)

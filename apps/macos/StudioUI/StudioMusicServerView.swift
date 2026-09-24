@@ -105,7 +105,7 @@ struct StudioMusicServerView: View {
     private var status: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Resident Server")
+                Text("Resident server")
                     .font(MereRunTheme.sectionFont)
                 Spacer()
             }

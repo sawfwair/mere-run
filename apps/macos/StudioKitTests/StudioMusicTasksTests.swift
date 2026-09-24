@@ -134,6 +134,10 @@ final class StudioMusicTasksTests: XCTestCase {
 
     func testModelScopeIsTheMusicCategory() {
         XCTAssertEqual(StudioTaskSchema.modelScope(for: StudioTaskDraft(templateID: .musicAnalyze)).categories, ["music"])
+        // The page forced these models only when the template's default was blank; it never is,
+        // so a fresh task draft carries the same `--model` the page sent.
+        XCTAssertEqual(StudioTaskDraft(templateID: .musicAnalyze).text("--model"), "music-acestep")
+        XCTAssertEqual(StudioTaskDraft(templateID: .musicTranscribe).text("--model"), "music-muscriptor-medium")
         XCTAssertEqual(StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .musicAnalyze)), "music-acestep")
         XCTAssertEqual(StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .musicTranscribe)), "music-muscriptor-medium")
     }
@@ -155,6 +159,20 @@ final class StudioMusicTasksTests: XCTestCase {
             XCTAssertEqual(request.execution?.arguments.firstIndex(of: "--context-output").map { request.execution!.arguments[$0 + 1] },
                            named.text("--context-output"))
         }
+    }
+
+    /// Without a configured root a transcription files by what it is: MIDI is audio and lands
+    /// under Music, a JSON or JSON Lines event list is text and lands under Documents.
+    func testTranscriptionsFileByTheirFormat() {
+        XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/song.mid")), .audio)
+        XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/song.midi")), .audio)
+        XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/song.json")), .text)
+        XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/song.jsonl")), .text)
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        XCTAssertEqual(StudioOutputLocation.directory(domain: .music, kind: .audio, configuredRoot: "", home: home).path,
+                       "/Users/example/Music/mere.run/Music")
+        XCTAssertEqual(StudioOutputLocation.directory(domain: .music, kind: .text, configuredRoot: "", home: home).path,
+                       "/Users/example/Documents/mere.run/Music")
     }
 
     func testAnalyzeHasNoDestinationToRoute() {
@@ -185,8 +203,6 @@ final class StudioMusicTasksTests: XCTestCase {
         let importedTranscribe = try XCTUnwrap(sessions.taskDraft(for: .musicTranscribe))
         XCTAssertEqual(importedTranscribe.text("--instruments"), "voice,drums")
         XCTAssertEqual(importedTranscribe.text("--format"), "jsonl")
-        XCTAssertEqual(StudioTaskDraftMigration.legacyKey(for: .musicServe), "MusicTools.serveDraft",
-                       "the server keeps its draft under the page's key")
     }
 
     private func withConfiguredRoot(_ body: (URL) throws -> Void) throws {

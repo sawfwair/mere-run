@@ -1338,7 +1338,8 @@ final class StudioSnapshotTests: XCTestCase {
     /// away, light and dark.
     /// Music ▸ Analyze and Music ▸ Transcribe on the shared task workspace, through the root.
     /// Analyze with a finished run seeded (the song in the well and the input strip with its
-    /// player, the Analysis panel's tiles, caption, lyrics, and folded model reply), light and
+    /// player, the Analysis panel's tiles, caption, lyrics, and folded model reply) beside its
+    /// inspector, where the checkpoint root files under Model as a folder chooser, light and
     /// dark; Transcribe with a seeded MIDI transcription (the piano roll under Notes, with Quick
     /// Look and Reveal) beside its inspector, whose instruments editor shows the chips picked
     /// from the CLI's list, light and dark; and Transcribe at the compact width without the
@@ -1368,7 +1369,7 @@ final class StudioSnapshotTests: XCTestCase {
 
         for appearance in StudioSnapshotAppearance.allCases {
             try render(.musicAnalyze, name: "music-analyze-\(appearance.rawValue)", appearance: appearance,
-                       size: Self.fidelitySize, inspector: false)
+                       size: Self.fidelitySize, inspector: true)
             try render(.musicTranscribe, name: "music-transcribe-\(appearance.rawValue)", appearance: appearance,
                        size: Self.fidelitySize, inspector: true)
         }

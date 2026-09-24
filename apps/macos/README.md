@@ -697,8 +697,11 @@ MIDI it wrote on a piano roll under Notes, with Quick Look and Reveal for the
 file (`StudioUI/Renderers/StudioPianoRollRenderer.swift`), and its expected
 instruments are picked in the inspector from the list the CLI prints with
 `--list-instruments` (a plain field when the list cannot be read). The
-transcription and its musical-context document are named after the recording
-under `~/Music/mere.run/Music`; none is asked for when musical context is off.
+transcription is named after the recording and filed by what it is — a MIDI
+file under `~/Music/mere.run/Music`, a JSON or JSON Lines event list under
+`~/Documents/mere.run/Music` — with its musical-context document beside it
+(`<name>.json` next to a MIDI, `<name>-context.json` next to a JSON
+transcription); none is asked for when musical context is off.
 Music ▸ Separate shares the restoration surface with Audio. Music ▸
 Realtime is the Magenta RT2 session: a transport with the live clock, the
 recording's waveform, Prompt A/B steering with a blend slider, temperature,
