@@ -62,6 +62,19 @@ enum StudioResultCanvasRendering: Equatable {
     case scene(StudioVisionRunArtifacts)
 }
 
+/// A rendering on a finished feed card and where it sits: in place of the output grid, when
+/// the run's files have no picture to tile (a WAV reviewed against its clip, a tensor's
+/// header), or under the tiles, when it says more about what they show (a mesh's counts).
+struct StudioCardRendering: Equatable {
+    enum Placement: Equatable {
+        case replacesOutputs
+        case belowOutputs
+    }
+
+    let rendering: StudioResultRendering
+    let placement: Placement
+}
+
 /// The registry the Analyze result panel asks before drawing its own rows: given the view the
 /// strip has selected and the decoded document, the bespoke rendering for that pair, or nil
 /// when the panel's generic rows (detections, speech turns, text) already say it.
@@ -175,28 +188,22 @@ enum StudioResultRenderers {
         }
     }
 
-    /// The generation feed's counterpart: what a finished card draws in place of its output
-    /// grid, keyed by what the run wrote rather than by task. Video Foley's WAV is reviewed
-    /// against the clip it was made for; a tensor output (`sfx condition text`) shows its
-    /// header, since a `.safetensors` file has no picture to tile. Nil leaves the grid to it.
-    static func cardRendering(for item: StudioLibraryItem, files: [URL]) -> StudioResultRendering? {
+    /// The generation feed's counterpart: what a finished card draws for the run's outputs and
+    /// where, keyed by what the run wrote rather than by task. Video Foley's WAV is reviewed
+    /// against the clip it was made for and a tensor output (`sfx condition text`) shows its
+    /// header, each in place of the output grid a WAV or a `.safetensors` file has no picture
+    /// for; a 3D run's manifests are summarized under its mesh tile. Nil leaves the grid alone.
+    static func cardRendering(for item: StudioLibraryItem, files: [URL]) -> StudioCardRendering? {
+        if item.templateID?.studioTask == .threeDFromImage, let summary = StudioMeshSummary.load(item: item) {
+            return StudioCardRendering(rendering: .meshSummary(summary), placement: .belowOutputs)
+        }
         guard let output = item.outputURL, files.contains(output) else { return nil }
         if item.templateID == .sfxVideo, let video = item.inputURL, StudioOutputFileKind.classify(video) == .video,
            StudioOutputFileKind.classify(output) == .audio, FileManager.default.fileExists(atPath: video.path) {
-            return .syncReview(video: video, audio: output)
+            return StudioCardRendering(rendering: .syncReview(video: video, audio: output), placement: .replacesOutputs)
         }
-        if ["safetensors", "npy"].contains(output.pathExtension.lowercased()), let header = StudioTensorHeader.load(from: output) {
-            return .tensor(header)
-        }
-        return nil
-    }
-
-    /// The rendering a Generate feed card adds under its output tiles for one finished row, read
-    /// from the files the run left: a mesh summary for a 3D run's manifests. Nil for a row whose
-    /// tiles say everything. (A rendering that replaces the tiles is another registry entry.)
-    static func cardFooterRendering(for item: StudioLibraryItem) -> StudioResultRendering? {
-        if item.templateID?.studioTask == .threeDFromImage, let summary = StudioMeshSummary.load(item: item) {
-            return .meshSummary(summary)
+        if StudioTensorHeader.fileExtensions.contains(output.pathExtension.lowercased()), let header = StudioTensorHeader.load(from: output) {
+            return StudioCardRendering(rendering: .tensor(header), placement: .replacesOutputs)
         }
         return nil
     }

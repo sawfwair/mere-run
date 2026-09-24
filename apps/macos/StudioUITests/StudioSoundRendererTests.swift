@@ -52,7 +52,8 @@ final class StudioSoundRendererTests: XCTestCase {
         try Data([0]).write(to: foley)
         let item = row(templateID: .sfxVideo, input: clip, output: foley)
 
-        XCTAssertEqual(StudioResultRenderers.cardRendering(for: item, files: [foley]), .syncReview(video: clip, audio: foley))
+        XCTAssertEqual(StudioResultRenderers.cardRendering(for: item, files: [foley]),
+                       StudioCardRendering(rendering: .syncReview(video: clip, audio: foley), placement: .replacesOutputs))
         XCTAssertEqual(StudioResultRenderers.renderedFiles(of: .syncReview(video: clip, audio: foley), item: item), [foley])
         XCTAssertNil(StudioResultRenderers.cardRendering(for: item, files: []), "the WAV is not on disk yet")
         let gone = row(templateID: .sfxVideo, input: root.appendingPathComponent("missing.mp4"), output: foley)
@@ -66,7 +67,9 @@ final class StudioSoundRendererTests: XCTestCase {
         try TensorFixtures.safetensors([("pooled", [1, 1_024])]).write(to: safetensors)
         let item = row(templateID: .sfxConditionText, input: nil, output: safetensors)
 
-        guard case .tensor(.safetensors(let header))? = StudioResultRenderers.cardRendering(for: item, files: [safetensors]) else {
+        let card = StudioResultRenderers.cardRendering(for: item, files: [safetensors])
+        XCTAssertEqual(card?.placement, .replacesOutputs, "a tensor file has no picture to tile")
+        guard case .tensor(.safetensors(let header))? = card?.rendering else {
             return XCTFail("the conditioning tensors were not read")
         }
         XCTAssertEqual(header.tensors.map(\.name), ["pooled"])

@@ -440,13 +440,13 @@ struct StudioGenerationCard: View {
     }
 
     var body: some View {
-        // What the card draws in place of the output grid when the run's outputs have a bespoke
-        // rendering (Video Foley's sync review, a tensor's header): found once per body, since
-        // finding it stats the artifacts and reads a tensor file's header.
-        let rendering = StudioResultRenderers.cardRendering(for: item, files: files)
+        // What the card draws for the run's outputs when they have a bespoke rendering (Video
+        // Foley's sync review or a tensor's header in place of the grid, a mesh's counts under
+        // it): found once per body, since finding it stats the artifacts and reads a file's front.
+        let card = StudioResultRenderers.cardRendering(for: item, files: files)
         VStack(alignment: .leading, spacing: 12) {
             StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date()))
-            outputs(rendering: rendering)
+            outputs(card: card)
             actionRow
         }
         .padding(.vertical, 14)
@@ -457,15 +457,16 @@ struct StudioGenerationCard: View {
     }
 
     @ViewBuilder
-    private func outputs(rendering: StudioResultRendering?) -> some View {
+    private func outputs(card: StudioCardRendering?) -> some View {
+        let rendering = card?.rendering
         let sidecars = sidecars(besides: rendering)
-        if let rendering {
-            StudioCardRenderingView(rendering: rendering, item: item)
+        if let card, card.placement == .replacesOutputs {
+            StudioCardRenderingView(rendering: card.rendering, item: item)
         } else if !mediaFiles.isEmpty {
             StudioOutputGrid(urls: mediaFiles, tileSide: Self.tileSide, onOpen: { actions.focus(item, $0) })
         }
-        if let rendering = StudioResultRenderers.cardFooterRendering(for: item) {
-            StudioResultRendererView(rendering: rendering, item: item)
+        if let card, card.placement == .belowOutputs {
+            StudioResultRendererView(rendering: card.rendering, item: item)
         }
         ForEach(textFiles, id: \.self) { url in
             StudioTextFilePreview(url: url)
