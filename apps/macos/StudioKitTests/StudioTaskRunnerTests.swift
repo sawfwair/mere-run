@@ -156,6 +156,21 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertEqual(condition.templateID, .sfxConditionText, "a task with no input slot runs on its prompt")
     }
 
+    /// Faces ▸ Batch takes its pictures in the well or as a list file (`--input-list`); a run
+    /// with only the list is not refused as an empty well, one with neither still is.
+    func testAListFileFillsFacesBatchesWell() throws {
+        controller.readinessByTask[.visionFaces] = .ready
+        var batch = StudioTaskDraft(templateID: .visionFaceBatch)
+        XCTAssertThrowsError(try runner.run(batch, task: .visionFaces)) { error in
+            XCTAssertEqual((error as? StudioValidationError)?.message.hasPrefix("Attach"), true, error.localizedDescription)
+        }
+        let list = root.appendingPathComponent("portraits.txt")
+        try Data("/tmp/a.png\n/tmp/b.png\n".utf8).write(to: list)
+        batch.form["--input-list"] = .text(list.path)
+        let request = try runner.run(batch, task: .visionFaces)
+        XCTAssertEqual(request.templateID, .visionFaceBatch)
+    }
+
     /// A typed input is the run's whole subject: `text anonymize` with nothing typed would launch
     /// and wait on stdin, so an empty editor is refused before anything is recorded.
     func testAnEmptyTypedInputIsRefused() throws {

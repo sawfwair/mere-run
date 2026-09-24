@@ -341,4 +341,43 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
             return nil
         }, "the printed lines are never scraped")
     }
+
+    /// `image run-plan` refuses `--materialize` beside `--preflight`, which a fresh Run plan
+    /// draft turns on: choosing one in the inspector clears the other, and a form holding both
+    /// (typed in the Command view) is refused before the CLI sees it.
+    func testRunPlanPreflightAndMaterializeExcludeEachOther() throws {
+        var plan = StudioTaskDraft(templateID: .imageRunPlan)
+        XCTAssertEqual(plan.form["--preflight"].flag, true, "a fresh Run plan checks the plan")
+        let fields = StudioTaskSchema.fields(for: .imageDatasets, draft: plan)
+        let materialize = try XCTUnwrap(fields.first { $0.flag == "--materialize" })
+        let preflight = try XCTUnwrap(fields.first { $0.flag == "--preflight" })
+
+        materialize.write(.text("/tmp/runs/style-a"), to: &plan)
+        XCTAssertEqual(plan.text("--preflight"), "", "materializing turns the check off")
+        preflight.write(.flag(true), to: &plan)
+        XCTAssertEqual(plan.text("--materialize"), "", "and checking stops materializing")
+        preflight.write(.flag(false), to: &plan)
+        materialize.write(.text("/tmp/runs/style-b"), to: &plan)
+        preflight.write(.flag(false), to: &plan)
+        XCTAssertEqual(plan.text("--materialize"), "/tmp/runs/style-b", "turning a switch off clears nothing")
+
+        let capability = try XCTUnwrap(CommandTemplateID.imageRunPlan.capability)
+        plan.form["--preflight"] = .flag(true)
+        XCTAssertEqual(
+            StudioCommandChecks.message(for: capability, draft: plan.form),
+            "Choose Preflight or Materialize, not both: a preflight does not write the run folder."
+        )
+    }
+
+    /// Validate ▸ Compare compares a fresh run against a reference folder; without one the CLI
+    /// compares nothing, so the run is refused until the folder is chosen.
+    func testValidateCompareNeedsAReferenceFolder() throws {
+        let capability = try XCTUnwrap(CommandTemplateID.imageValidate.capability)
+        var validate = StudioTaskDraft(templateID: .imageValidate)
+        XCTAssertNil(StudioCommandChecks.message(for: capability, draft: validate.form))
+        validate.form["--compare"] = .flag(true)
+        XCTAssertEqual(StudioCommandChecks.message(for: capability, draft: validate.form), "Choose the reference folder to compare against.")
+        validate.form["--reference-dir"] = .text("/tmp/validation-reference")
+        XCTAssertNil(StudioCommandChecks.message(for: capability, draft: validate.form))
+    }
 }

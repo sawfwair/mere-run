@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Fix Studio checks before a run: Image ▸ Datasets ▸ Run plan's Materialize
+  and Preflight clear each other (the CLI refuses both, and a fresh Run plan
+  starts with Preflight on), Validate with Compare asks for its reference
+  folder, and Vision ▸ Faces ▸ Batch runs on an input list file alone instead
+  of asking for images.
 - Fix Studio's live sessions: an Audio ▸ Live session run from the Command
   view now streams into the page's transcript and the page follows it instead
   of offering a second Start, the menu's Stop (⌘.) on Audio ▸ Live lets the CLI

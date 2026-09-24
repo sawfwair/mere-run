@@ -11,9 +11,16 @@ import UniformTypeIdentifiers
 /// One option of a task's template bound to the task draft: the console's per-flag entry, or a
 /// positional, or the variant the draft runs.
 extension StudioContractBinding where Draft == StudioTaskDraft {
+    /// One flag's entry. Setting a flag the CLI refuses beside another
+    /// (`StudioTaskSchema.exclusiveFlags`) clears that other one.
     package static func flag(_ flag: String) -> Self {
         let inner = StudioContractBinding<StudioConsoleDraft>.flag(flag)
-        return Self(fieldID: flag, read: { inner.read($0.form) }, write: { draft, value in inner.write(&draft.form, value) })
+        return Self(fieldID: flag, read: { inner.read($0.form) }, write: { draft, value in
+            inner.write(&draft.form, value)
+            if !draft.text(flag).isBlank, let other = StudioTaskSchema.exclusiveFlags(for: draft.templateID)[flag] {
+                draft.form.values[other] = nil
+            }
+        })
     }
 
     package static func argument(_ index: Int) -> Self {
@@ -176,6 +183,16 @@ package enum StudioTaskSchema {
         "--materialize", "--training-output-root", "--structured-prompt-output", "--recipe-output", "--lrc-output",
         "--daw-bundle",
     ]
+
+    /// Options of one template the CLI refuses together, each mapped to the one it excludes:
+    /// `image run-plan` either checks a plan (`--preflight`) or writes its run folder
+    /// (`--materialize`). `StudioCommandChecks` refuses a form that holds both anyway.
+    package static func exclusiveFlags(for templateID: CommandTemplateID) -> [String: String] {
+        switch templateID {
+        case .imageRunPlan: return ["--preflight": "--materialize", "--materialize": "--preflight"]
+        default: return [:]
+        }
+    }
 
     // MARK: Fields
 

@@ -20,9 +20,27 @@ package enum StudioCommandChecks {
             return geometryMultiviewMessage(draft: draft)
         case MereRunCapabilityCatalog.speechDiarize.id:
             return diarizeMessage(draft: draft)
+        case MereRunCapabilityCatalog.imageRunPlan.id:
+            return runPlanMessage(draft: draft)
+        case MereRunCapabilityCatalog.imageValidate.id:
+            return validateMessage(draft: draft)
         default:
             return nil
         }
+    }
+
+    /// `image run-plan` refuses `--materialize` beside `--preflight`; a check does not write the
+    /// run folder.
+    private static func runPlanMessage(draft: StudioConsoleDraft) -> String? {
+        !draft.text("--preflight").isBlank && !draft.text("--materialize").isBlank
+            ? "Choose Preflight or Materialize, not both: a preflight does not write the run folder." : nil
+    }
+
+    /// `image validate --compare` compares against a reference folder, and without
+    /// `--reference-dir` compares nothing.
+    private static func validateMessage(draft: StudioConsoleDraft) -> String? {
+        !draft.text("--compare").isBlank && draft.text("--reference-dir").isBlank
+            ? "Choose the reference folder to compare against." : nil
     }
 
     /// Woosh's renoise is one amount or one amount per step; the CLI rejects anything else

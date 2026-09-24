@@ -103,10 +103,13 @@ package final class StudioTaskRunner {
         let readiness = controller.readiness(for: task)
         if readiness.blocksRun { throw StudioValidationError(message: readiness.message(titles: controller.modelStore.titles)) }
         // The contract leaves an input optional when the command has another mode without one
-        // (`music transcribe --list-instruments`); the task's surface says whether a run needs
-        // the well filled, so an empty well never launches the CLI to fail on its own.
+        // (`music transcribe --list-instruments`) or another way to take it (Faces ▸ Batch's
+        // pictures or its `--input-list` file); the task's surface says whether a run needs the
+        // well filled, so an empty well never launches the CLI to fail on its own. Where the
+        // contract itself requires the first slot, only that slot fills the well.
         if let slot = StudioTaskSchema.primarySlot(for: draft.templateID),
-           task.presentation.attaching(slot).requiresAttachment, draft.primaryInputPath.isBlank {
+           task.presentation.attaching(slot).requiresAttachment,
+           slot.isRequired ? draft.primaryInputPath.isBlank : draft.slots.allSatisfy({ $0.paths(in: draft).isEmpty }) {
             throw StudioValidationError(message: "Attach \(slot.label.lowercased()) first.")
         }
         // A typed input is the run's whole subject; `text anonymize` would otherwise launch and
