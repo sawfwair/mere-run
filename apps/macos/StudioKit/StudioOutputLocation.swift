@@ -464,16 +464,23 @@ package enum StudioOutputLocation {
 
     // MARK: - Task drafts
 
+    /// The sidecars `destination(for:)` derives beside a primary output, with the extension each
+    /// takes. `--mask-output-dir` is derived too, as a directory. `StudioExecution.replay` moves
+    /// these same flags (plus the music sidecars it re-derives from a recorded run) when a run is
+    /// replayed, so a replay keeps its documents together.
+    package static let derivedSidecars: [(flag: String, fileExtension: String)] = [
+        ("--json-output", "json"), ("--jsonl-output", "jsonl"), ("--context-output", "json"), ("--timings-output", "json"),
+    ]
+
     /// The draft with its destination filled the way the composer names a prompt run's: the
     /// capability's output flag set to `namedOutputPath` (the domain's folder, the prompt's slug
-    /// or the input's name, a derived identifier), and every sidecar the capability declares
-    /// (`--json-output`, `--jsonl-output`, `--context-output`, `--timings-output`,
-    /// `--mask-output-dir`) beside it with the same stem — the list `StudioExecution.replay`
-    /// re-derives. A destination the user pointed outside the app's folder in the Command view
-    /// is kept; sidecars already named are kept too. The task runner calls this at submit time
-    /// so two runs in one second still get distinct names (`reserve` treats a submitted path as
-    /// taken), and the Command view's "Will run" shows the resolved path because it previews the
-    /// same form.
+    /// or the input's name, a derived identifier), and every sidecar in `derivedSidecars` the
+    /// capability declares beside it with the same stem, plus `--mask-output-dir`. A destination
+    /// the user pointed outside the app's folder in the Command view is kept; sidecars already
+    /// named are kept too. The identifier is derived from what the run does (template, prompt,
+    /// model, inputs, options) and never from where it writes, so calling this again on its own
+    /// result names the same file: the Command view's "Will run" and the run agree. The task
+    /// runner calls it at submit time, when `reserve` makes two runs in one second step apart.
     package static func destination(
         for draft: StudioTaskDraft,
         fileManager: FileManager = .default
@@ -494,12 +501,16 @@ package enum StudioOutputLocation {
         let primaryInput = draft.primaryInputPath
         let existing = draft.text(flag)
         if outputKind != .none, existing.isBlank || isAppChosen(existing, templateID: templateID, kind: outputKind) {
+            // The argv without its destinations: the same command pointed at another folder is
+            // the same run.
+            var bare = draft
+            for output in StudioTaskSchema.outputFlags(for: capability) { bare.form.values[output] = nil }
             let path = namedOutputPath(
                 templateID: templateID,
                 outputKind: outputKind,
                 prompt: draft.prompt,
                 seed: draft.text("--seed"),
-                fingerprint: ([templateID.rawValue] + draft.arguments).joined(separator: "\u{1}"),
+                fingerprint: ([templateID.rawValue] + bare.arguments).joined(separator: "\u{1}"),
                 fallbackStem: primaryInput.isBlank
                     ? template.title
                     : URL(fileURLWithPath: primaryInput).deletingPathExtension().lastPathComponent,
@@ -511,8 +522,7 @@ package enum StudioOutputLocation {
         guard !output.isBlank else { return named }
         let stem = URL(fileURLWithPath: output).deletingPathExtension()
         let declared = Set(capability.options.map(\.flag))
-        for (sidecar, ext) in [("--json-output", "json"), ("--jsonl-output", "jsonl"),
-                               ("--context-output", "json"), ("--timings-output", "json")]
+        for (sidecar, ext) in derivedSidecars
         where sidecar != flag && declared.contains(sidecar) && named.text(sidecar).isBlank {
             named.form[sidecar] = .text(stem.appendingPathExtension(ext).path)
         }

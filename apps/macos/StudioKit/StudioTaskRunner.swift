@@ -31,13 +31,18 @@ package final class StudioTaskRunner {
     /// directories: apply the task's Command edits, validate the effective command, and make its
     /// destination real (or move it to App Outputs and say why). Static so the live-acceptance
     /// tests build exactly what the app runs.
+    ///
+    /// `validating: false` skips the throw and lets job admission fail the run instead, which
+    /// records a failed Library row with the reason — what the legacy pages show, since they have
+    /// no banner of their own to put a thrown message in.
     package static func prepare(
         _ base: StudioRunRequest,
         sessions: StudioTaskSessions,
+        validating: Bool = true,
         fileManager: FileManager = .default
     ) throws -> (request: StudioRunRequest, fallbackReason: String?) {
         let resolved = sessions.resolving(base)
-        if let message = resolved.template.validationMessage(for: resolved.draft, execution: resolved.execution) {
+        if validating, let message = resolved.template.validationMessage(for: resolved.draft, execution: resolved.execution) {
             throw StudioValidationError(message: message)
         }
         return StudioOutputLocation.preparing(resolved, fileManager: fileManager)
@@ -66,10 +71,12 @@ package final class StudioTaskRunner {
     }
 
     /// Runs a request a page built from its own `CommandDraft` (the legacy pages and the Command
-    /// view's Run on them), prepared the same way.
+    /// view's Run on them), prepared the same way. The Command view validates first and shows
+    /// the reason in its banner; a legacy page's own Run passes `validating: false` so an
+    /// incomplete command becomes a failed row in its result view, as it always did.
     @discardableResult
-    package func run(request base: StudioRunRequest, task: StudioTask) throws -> StudioRunRequest {
-        let prepared = try Self.prepare(base, sessions: sessions)
+    package func run(request base: StudioRunRequest, task: StudioTask, validating: Bool = true) throws -> StudioRunRequest {
+        let prepared = try Self.prepare(base, sessions: sessions, validating: validating)
         if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
         submit(prepared.request, task: task)
         return prepared.request

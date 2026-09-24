@@ -151,8 +151,11 @@ package enum StudioConsoleCommand {
         secretFlags: Set<String> = []
     ) -> [String] {
         var argv = capability.command
-        for (index, _) in capability.arguments.enumerated() {
-            guard index < draft.arguments.count else { break }
+        // A repeatable last positional (`vision face batch a b c`) takes every value after it.
+        let positionals = capability.arguments.last?.repeatable == true
+            ? draft.arguments.count
+            : min(capability.arguments.count, draft.arguments.count)
+        for index in 0..<positionals {
             let value = draft.arguments[index].trimmingCharacters(in: .whitespacesAndNewlines)
             guard !value.isEmpty else { continue }
             argv.append(value)
@@ -261,7 +264,9 @@ package enum StudioConsoleCommand {
                     let previous = console.text(flag)
                     console[flag] = .text(option.repeatable && !previous.isEmpty ? previous + "\n" + value : value)
                 }
-            } else if !token.hasPrefix("-"), console.arguments.count < capability.arguments.count {
+            } else if !token.hasPrefix("-"),
+                      console.arguments.count < capability.arguments.count || capability.arguments.last?.repeatable == true {
+                // A repeatable last positional (`vision face batch a b c`) keeps taking bare tokens.
                 console.arguments.append(token)
             } else {
                 extras.append(token)

@@ -113,7 +113,28 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertEqual(library.items.first?.templateID, .sfxAEEncode)
         XCTAssertEqual(processRunner.starts.count, 1)
         XCTAssertEqual(runner.currentJob(for: .soundEncode)?.request.requestID, request.id)
-        XCTAssertEqual(StudioSpecialistRunnerShimProbe.taskFor(.sfxAEEncode), .soundEncode)
+    }
+
+    /// A legacy page's Run with an incomplete command (the shim's path, `validating: false`)
+    /// still records the row and lets admission fail it, so the page's result view shows the
+    /// failure with its reason as it always did; the Command view's path throws instead.
+    func testALegacyPagesInvalidRequestIsRecordedAndFailedByAdmission() async throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .sfxAEEncode))
+        var draft = template.defaultDraft()
+        draft.outputPath = root.appendingPathComponent("outputs/Sound/hit.npy").path
+        let base = StudioRunRequest(mode: .sfx, templateID: .sfxAEEncode, template: template, draft: draft)
+
+        XCTAssertThrowsError(try runner.run(request: base, task: .soundEncode), "the Command view's Run validates first")
+        XCTAssertTrue(library.items.isEmpty)
+
+        let request = try runner.run(request: base, task: .soundEncode, validating: false)
+        for _ in 0..<6 { await Task.yield() }
+
+        let row = try XCTUnwrap(library.items.first { $0.id == request.id })
+        XCTAssertEqual(row.status, .failed)
+        XCTAssertEqual(row.outputText?.contains("required"), true, row.outputText ?? "")
+        XCTAssertTrue(processRunner.starts.isEmpty, "admission failed it before a process started")
+        XCTAssertEqual(controller.jobs.job(requestID: request.id)?.state.isPreflightFailure, true)
     }
 
     /// The same announcement the prompt controller makes: a destination that cannot be created
@@ -141,13 +162,5 @@ final class StudioTaskRunnerTests: XCTestCase {
         XCTAssertNil(prepared.fallbackReason)
         XCTAssertEqual(prepared.request.draft, draft)
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("outputs/Audio").path))
-    }
-}
-
-/// The shim's task lookup, kept testable without a view: `StudioSpecialistRunner` files a
-/// page's run under the template's owning task.
-private enum StudioSpecialistRunnerShimProbe {
-    static func taskFor(_ templateID: CommandTemplateID) -> StudioTask {
-        templateID.studioTask
     }
 }

@@ -22,7 +22,8 @@ package struct StudioTaskDraft: Codable, Equatable {
     }
 
     /// A fresh draft for `templateID`: the console's reading of the template's default draft, so
-    /// the workspace starts on exactly the command the page and the Command view already ran.
+    /// the workspace starts on exactly the command the page and the Command view already ran,
+    /// plus the launcher switches the page set on every run (`launcherDefaults`).
     package init(templateID: CommandTemplateID) {
         self.templateID = templateID
         guard let template = CommandCatalog.template(id: templateID) else {
@@ -30,6 +31,24 @@ package struct StudioTaskDraft: Codable, Equatable {
             return
         }
         form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
+        for flag in Self.launcherDefaults(for: templateID) where form.values[flag] == nil {
+            form[flag] = .flag(true)
+        }
+    }
+
+    /// The switches a page turned on for every run of a template because the surface reads the
+    /// command's machine output: `--json` where the result is printed as JSON and a renderer
+    /// decodes it. Applied to a fresh draft only; a parked or restored draft keeps what it ran
+    /// with.
+    package static func launcherDefaults(for templateID: CommandTemplateID) -> [String] {
+        switch templateID {
+        case .imageDatasetDiscover, .imageRunPlan,
+             .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionPose, .visionFlow,
+             .visionDepth, .visionDepthVideo, .visionGeometry, .visionGeometryMultiview, .visionTrackLive:
+            return ["--json"]
+        default:
+            return []
+        }
     }
 
     /// A fresh draft for a task, on its first variant.
@@ -88,7 +107,10 @@ package struct StudioTaskDraft: Codable, Equatable {
         for (flag, value) in previous.form.values where declared.contains(flag) {
             form[flag] = value
         }
-        let positionals = min(capability.arguments.count, previous.form.arguments.count)
+        // Positionals carry by position while both templates declare one of the same kind. A
+        // repeatable source positional (Batch's images) carries only its first value: the
+        // values after it were never a second declared argument.
+        let positionals = min(capability.arguments.count, before.arguments.count, previous.form.arguments.count)
         for index in 0..<positionals where capability.arguments[index].kind == before.arguments[index].kind {
             form.arguments[safe: index] = previous.form.arguments[index]
         }
@@ -159,12 +181,19 @@ extension StudioTaskDraft: StudioSessionPersistable {
 
 extension StudioTaskSessions {
     /// The task's parked draft, or a fresh one on its first variant. Written under
-    /// `"<task>.taskDraft"`, beside the prompt tasks' `"<task>.draft"`.
+    /// `"<task>.taskDraft"`, beside the prompt tasks' `"<task>.draft"`. The workspace, the
+    /// inspector column, and the Command view all read this several times per render, so the
+    /// decoded value is memoized against the stored bytes rather than decoded on every read.
     package func taskDraft(for task: StudioTask) -> StudioTaskDraft? {
-        if let parked = value(for: Self.taskDraftKey(task), default: Optional<StudioTaskDraft>.none) {
-            return parked
+        let key = Self.taskDraftKey(task)
+        if let known = cachedTaskDraft(for: key) { return known }
+        guard let fresh = StudioTaskDraftMigration.imported(for: task, from: self) ?? StudioTaskDraft(task: task) else {
+            return nil
         }
-        return StudioTaskDraftMigration.imported(for: task, from: self) ?? StudioTaskDraft(task: task)
+        // Every reader gets this same value until the first edit parks it, so the Command
+        // view's edits land on the draft the workspace shows rather than on a second fresh one.
+        rememberFreshTaskDraft(fresh, for: key)
+        return fresh
     }
 
     package func setTaskDraft(_ draft: StudioTaskDraft, for task: StudioTask) {

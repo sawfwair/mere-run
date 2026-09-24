@@ -320,14 +320,10 @@ enum StudioSpecialistRunner {
         guard let template = CommandCatalog.template(id: templateID) else { return nil }
         let base = StudioRunRequest(mode: mode, templateID: templateID, template: template, draft: draft)
         let runner = StudioTaskRunner(controller: controller, library: library)
-        // The pages validated their own forms before calling; a request the contract still
-        // rejects is reported in the console status, where the pages' own Run already looks.
-        do {
-            return try runner.run(request: base, task: templateID.studioTask).id
-        } catch {
-            controller.status = error.localizedDescription
-            return nil
-        }
+        // A command the contract rejects is still recorded: admission fails it, and the page's
+        // result view shows the failed row with the reason, as before. Only preparation without
+        // validation can throw nothing, so the `try` never fires here.
+        return (try? runner.run(request: base, task: templateID.studioTask, validating: false))?.id
     }
 }
 

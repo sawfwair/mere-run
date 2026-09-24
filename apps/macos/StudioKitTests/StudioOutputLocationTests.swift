@@ -466,16 +466,24 @@ final class StudioOutputLocationTests: XCTestCase {
         try withConfiguredRoot { root in
             var enhance = StudioTaskDraft(templateID: .audioEnhance)
             enhance.setArgument(0, "/tmp/voice-memo.wav")
+            // Enhance's seed (42) would be the identifier and mask an unstable fingerprint, so the
+            // stability checks below run on templates without one as well.
+            enhance.form["--seed"] = .unset
             let named = StudioOutputLocation.destination(for: enhance)
             let output = named.text("--output")
             XCTAssertEqual(URL(fileURLWithPath: output).deletingLastPathComponent().path, root.appendingPathComponent("Audio").path)
             XCTAssertTrue(URL(fileURLWithPath: output).lastPathComponent.hasPrefix("voice-memo-"), output)
             XCTAssertEqual(URL(fileURLWithPath: output).pathExtension, "wav")
-            XCTAssertEqual(StudioOutputLocation.destination(for: named).text("--output"), output, "naming is stable until the run is submitted")
+            XCTAssertEqual(StudioOutputLocation.destination(for: named).text("--output"), output,
+                           "naming reads the same on its own result: the Command view's preview is the run")
+            var edited = named
+            edited.form["--overlap"] = .integer(4)
+            XCTAssertNotEqual(StudioOutputLocation.destination(for: edited).text("--output"), output, "a different run is a different file")
 
             var transcribe = StudioTaskDraft(templateID: .musicTranscribe)
             transcribe.setArgument(0, "/tmp/harbor-lights.wav")
             let midi = StudioOutputLocation.destination(for: transcribe)
+            XCTAssertEqual(StudioOutputLocation.destination(for: midi), midi, "sidecars and output are stable too")
             XCTAssertEqual(URL(fileURLWithPath: midi.text("--output")).pathExtension, "mid", "the format decides the extension")
             XCTAssertEqual(
                 midi.text("--context-output"),
@@ -493,6 +501,7 @@ final class StudioOutputLocationTests: XCTestCase {
             var depth = StudioTaskDraft(templateID: .visionDepth)
             depth.setArgument(0, "/tmp/street.png")
             let directory = StudioOutputLocation.destination(for: depth).text("--output")
+            XCTAssertEqual(StudioOutputLocation.destination(for: StudioOutputLocation.destination(for: depth)).text("--output"), directory)
             XCTAssertEqual(URL(fileURLWithPath: directory).deletingLastPathComponent().path, root.appendingPathComponent("Vision").path)
             XCTAssertTrue(URL(fileURLWithPath: directory).lastPathComponent.hasPrefix("street-"), "a directory output, named the same way")
             XCTAssertTrue(URL(fileURLWithPath: directory).pathExtension.isEmpty)

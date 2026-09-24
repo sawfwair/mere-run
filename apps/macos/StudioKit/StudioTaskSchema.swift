@@ -77,6 +77,10 @@ package enum StudioTaskSchema {
         guard let capability = templateID.capability, let template = CommandCatalog.template(id: templateID) else {
             return []
         }
+        // A variant that takes no input (`image validate`) has no well; its folders are options.
+        if templateID.studioTask.analyzeArchetype?.inputKind(for: templateID) == StudioAnalyzeInputKind.none {
+            return []
+        }
         var slots: [StudioAttachmentSlot] = []
         for (index, argument) in capability.arguments.enumerated() where argument.kind == .file || argument.kind == .directory {
             let types: [UTType]
@@ -95,7 +99,8 @@ package enum StudioTaskSchema {
                 isRequired: argument.required
             ))
         }
-        let excluded = outputFlags(for: capability).union(modelLocationFlags).union(overrideFlags(for: templateID))
+        let excluded = outputFlags(for: capability).union(chosenOutputFlags).union(modelLocationFlags)
+            .union(overrideFlags(for: templateID))
         for option in capability.options where [.file, .directory].contains(option.kind) {
             guard StudioContractGroup(contractGroup: option.group) == .inputs, !excluded.contains(option.flag) else { continue }
             let types: [UTType] = option.kind == .directory ? [.folder] : acceptedTypes(forFlag: option.flag)
@@ -140,24 +145,32 @@ package enum StudioTaskSchema {
 
     // MARK: Output
 
-    /// The destination flags routing owns (`StudioOutputLocation.destination(for:)`): the
-    /// capability's own output flag and every sidecar written beside it.
+    /// The destination flags routing fills (`StudioOutputLocation.destination(for:)`): the
+    /// capability's own output flag and every sidecar derived beside it.
     package static func outputFlags(for capability: MereRunCommandCapability) -> Set<String> {
-        var flags: Set<String> = [
-            "--json-output", "--jsonl-output", "--mask-output-dir", "--context-output", "--timings-output",
-            "--structured-prompt-output", "--recipe-output", "--lrc-output", "--daw-bundle", "--materialize",
-            "--training-output-root",
-        ]
+        var flags = Set(StudioOutputLocation.derivedSidecars.map(\.flag))
+        flags.insert("--mask-output-dir")
         if let flag = capability.output.flag { flags.insert(flag) }
         return flags.intersection(capability.options.map(\.flag))
     }
 
+    /// Destinations routing does not fill because they change what the run does or where a
+    /// secondary result goes (`image run-plan --materialize`, `image dataset discover
+    /// --training-output-root`, the music sidecars): shown in the inspector's Output section as
+    /// path rows, never as well slots.
+    package static let chosenOutputFlags: Set<String> = [
+        "--materialize", "--training-output-root", "--structured-prompt-output", "--recipe-output", "--lrc-output",
+        "--daw-bundle",
+    ]
+
     // MARK: Fields
 
-    /// Flags the inspector never shows: the destinations routing fills, the machine-readable
-    /// switches the launcher owns, and the preflight pair that belongs to the Command view.
+    /// Flags the inspector never shows: the destinations routing fills, and the machine-readable
+    /// switches the launcher owns (`--json` comes from `StudioTaskDraft.launcherDefaults`;
+    /// `--receipt` and `--progress-json` are added at launch). `--preflight` and `--dry-run` stay
+    /// visible: the pages offered them, and a preflight is how a run plan is checked.
     package static func hiddenFlags(for capability: MereRunCommandCapability) -> Set<String> {
-        outputFlags(for: capability).union(["--json", "--receipt", "--progress-json", "--preflight", "--dry-run"])
+        outputFlags(for: capability).union(["--json", "--receipt", "--progress-json"])
     }
 
     /// The composite editors a template's options render as, keyed by flag. `--model` is the
@@ -202,8 +215,15 @@ package enum StudioTaskSchema {
         var claimed: Set<StudioContractOverrideID> = []
         for declared in capability.options where !hidden.contains(declared.flag) && declared.flag != prompt {
             // A model location the contract filed under Inputs (a `.directory` option) belongs
-            // with the model it points at.
-            let option = modelLocationFlags.contains(declared.flag) ? declared.filed(under: .model) : declared
+            // with the model it points at; a destination the user chooses belongs under Output.
+            let option: MereRunCapabilityOption
+            if modelLocationFlags.contains(declared.flag) {
+                option = declared.filed(under: .model)
+            } else if chosenOutputFlags.contains(declared.flag) {
+                option = declared.filed(under: .output)
+            } else {
+                option = declared
+            }
             if let override = overrideID(forFlag: option.flag, templateID: draft.templateID) {
                 // A composite editor renders once, where the first of its flags is declared.
                 guard claimed.insert(override).inserted else { continue }

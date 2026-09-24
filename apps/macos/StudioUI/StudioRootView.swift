@@ -624,9 +624,9 @@ private struct StudioWorkspaceView: View {
             return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false)
         }
         if let taskDraft = taskDraftBinding {
-            // The Command view previews the task draft's own form; `destination(for:)` names the
-            // output at submit time, so the preview shows the folder the run will write to.
-            return taskDraft.wrappedValue.request()
+            // The Command view previews the task draft's own form with its destination named the
+            // way the runner names it at submit time, so "Will run" shows the argv that runs.
+            return StudioOutputLocation.destination(for: taskDraft.wrappedValue).request()
         }
         let key = destination.task.rawValue
         let chosen = controller.taskSessions.value(for: key + ".commandTemplate", default: Optional<CommandTemplateID>.none)

@@ -34,7 +34,6 @@ struct StudioTaskWorkspace: View {
     @Environment(\.studioTaskSessions) private var sessions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var models: StudioModelStore
-    @StudioStoredValue(initialValue: nil, "taskDraft") private var storedDraft: StudioTaskDraft?
     @StateObject private var jobMonitor = StudioJobMonitor()
     @FocusState private var promptFocused: Bool
     @State private var error: String?
@@ -50,10 +49,12 @@ struct StudioTaskWorkspace: View {
     // MARK: Draft
 
     /// The task's draft: the parked one, else the page draft imported once, else a fresh one on
-    /// the task's first template. Writes go straight to the session store.
+    /// the task's first template. The session store memoizes the decoded value and every reader
+    /// (this view, the root's inspector column, the Command view) goes through it, so writes
+    /// land in one place and a re-render never decodes the same bytes twice.
     private var draft: StudioTaskDraft {
-        get { storedDraft ?? sessions?.taskDraft(for: task) ?? StudioTaskDraft(task: task) ?? StudioTaskDraft(templateID: .custom) }
-        nonmutating set { storedDraft = newValue }
+        get { sessions?.taskDraft(for: task) ?? StudioTaskDraft(task: task) ?? StudioTaskDraft(templateID: .custom) }
+        nonmutating set { sessions?.setTaskDraft(newValue, for: task) }
     }
 
     private var draftBinding: Binding<StudioTaskDraft> {
@@ -154,7 +155,6 @@ struct StudioTaskWorkspace: View {
         .onAppear {
             jobMonitor.attach(controller.jobs)
             refreshReadiness()
-            if storedDraft == nil { storedDraft = draft }
         }
         .onChange(of: draft.model) { _, _ in
             error = nil

@@ -36,6 +36,28 @@ package final class StudioTaskSessions {
         return value
     }
 
+    /// The task drafts as last read, keyed by session key and remembered with the bytes they
+    /// were decoded from (nil for a fresh draft nothing has written yet). Not observed: `entries`
+    /// is, so a write still re-renders every reader; this only saves decoding the same bytes
+    /// again on the next read, and lets a fresh draft be handed to every reader without writing
+    /// the store from inside a view update.
+    @ObservationIgnored private var taskDraftCache: [String: (data: Data?, draft: StudioTaskDraft)] = [:]
+
+    /// The task draft under `key`: the parked one decoded once per stored value, or the fresh
+    /// one `remember` handed out while nothing is parked.
+    func cachedTaskDraft(for key: String) -> StudioTaskDraft? {
+        let data = entries[key]
+        if let cached = taskDraftCache[key], cached.data == data { return cached.draft }
+        guard let data, let draft = try? JSONDecoder.mereRunApp.decode(StudioTaskDraft.self, from: data) else { return nil }
+        taskDraftCache[key] = (data, draft)
+        return draft
+    }
+
+    /// Keeps a fresh draft as the answer for `key` until something is parked under it.
+    func rememberFreshTaskDraft(_ draft: StudioTaskDraft, for key: String) {
+        taskDraftCache[key] = (nil, draft)
+    }
+
     package func contains(_ key: String) -> Bool { entries[key] != nil }
 
     package func set<Value: Codable>(_ value: Value, for key: String) {

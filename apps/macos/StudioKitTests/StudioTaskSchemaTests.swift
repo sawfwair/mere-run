@@ -16,27 +16,57 @@ final class StudioTaskSchemaTests: XCTestCase {
 
     // MARK: Identity
 
+    /// A fresh task draft runs the template's own default command (the same option/value pairs
+    /// the catalog builder emits, plus the `--json` a page set on every run), and a populated
+    /// draft's argv is exactly what `StudioTaskCommandView` shows as "Will run"
+    /// (`StudioConsoleRun`), so the composer, the inspector, and the Command view cannot disagree.
     func testEveryTaskDraftBuildsTheCommandViewsArgv() throws {
         for task in migratingTasks {
             XCTAssertFalse(task.variantTemplates.isEmpty, "\(task) has no template to run")
             for template in task.variantTemplates {
                 let capability = try XCTUnwrap(template.id.capability, "\(template.id) has no contract")
                 let draft = StudioTaskDraft(templateID: template.id)
-                XCTAssertEqual(draft.arguments, StudioConsoleCommand.arguments(for: capability, draft: draft.form), "\(template.id)")
-                XCTAssertEqual(draft.run?.arguments, draft.arguments, "\(template.id) Command view argv")
+                let launcher = Set(StudioTaskDraft.launcherDefaults(for: template.id))
                 XCTAssertEqual(
-                    draft.arguments,
-                    StudioConsoleCommand.arguments(
-                        for: capability,
-                        draft: StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
-                    ),
+                    Self.pairs(of: draft.arguments, capability: capability).subtracting(launcher),
+                    Self.pairs(of: template.arguments(from: template.defaultDraft()), capability: capability).subtracting(launcher),
                     "\(template.id) fresh draft is the template's own command"
                 )
-                let request = try XCTUnwrap(draft.request(), "\(template.id) request")
+                for flag in launcher {
+                    XCTAssertTrue(draft.arguments.contains(flag), "\(template.id) launcher default \(flag)")
+                    XCTAssertTrue(capability.options.contains { $0.flag == flag }, "\(template.id) declares \(flag)")
+                }
+
+                var populated = draft
+                for slot in populated.slots {
+                    slot.attach([URL(fileURLWithPath: "/tmp/input-\(slot.id).png")], to: &populated)
+                }
+                if capability.options.contains(where: { $0.flag == "--model" }) { populated.model = "some-model" }
+                populated.prompt = "a prompt"
+                let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: populated.form, seed: populated.seed))
+                XCTAssertEqual(populated.arguments, launch.arguments, "\(template.id) Command view argv")
+                XCTAssertEqual(populated.run?.arguments, launch.arguments)
+                let request = try XCTUnwrap(populated.request(), "\(template.id) request")
                 XCTAssertEqual(request.mode, template.libraryMode, "attribution comes from the template")
-                XCTAssertEqual(request.execution?.arguments, draft.arguments)
+                XCTAssertEqual(request.execution?.arguments, launch.arguments)
             }
         }
+    }
+
+    /// The same normalization `StudioConsoleDraftTests` uses: the catalog builders and the
+    /// contract emit options in different orders.
+    private static func pairs(of arguments: [String], capability: MereRunCommandCapability) -> Set<String> {
+        let parsed = StudioCommandRows.parse(arguments: arguments, commandPathCount: capability.command.count)
+        var units = Set(parsed.positional.enumerated().filter { !$0.element.isEmpty }.map { "\($0.offset)=\($0.element)" })
+        for (flag, value) in parsed.flags {
+            guard let value else {
+                units.insert(flag)
+                continue
+            }
+            guard !value.isEmpty else { continue }
+            units.insert("\(flag)=\(value)")
+        }
+        return units
     }
 
     // MARK: Fields
@@ -111,7 +141,7 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageReconstruct3DMultiview).first?.storage, .flagList("--view"))
     }
 
-    func testSlotsWriteTheTaskDraft() {
+    func testSlotsWriteTheTaskDraft() throws {
         var draft = StudioTaskDraft(templateID: .visionFlow)
         let slots = StudioTaskSchema.slots(for: .visionFlow)
         slots[0].attach([URL(fileURLWithPath: "/tmp/a.png")], to: &draft)
@@ -132,6 +162,14 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertTrue(batch.attach(dropped: [URL(fileURLWithPath: "/tmp/list.txt")], slots: batch.slots))
         XCTAssertEqual(batch.text("--input-list"), "/tmp/list.txt")
         XCTAssertFalse(batch.attach(dropped: [URL(fileURLWithPath: "/tmp/clip.mp4")], slots: batch.slots))
+        // The argv carries every image, and reading that argv back (Use these settings, the
+        // Command view) keeps them all as positionals rather than spilling them into extras.
+        let batchCapability = try XCTUnwrap(CommandTemplateID.visionFaceBatch.capability)
+        XCTAssertEqual(Array(batch.arguments.prefix(6)), ["vision", "face", "batch", "/tmp/1.png", "/tmp/2.png", "/tmp/3.png"])
+        let reread = StudioConsoleCommand.seed(capability: batchCapability, arguments: batch.arguments)
+        XCTAssertEqual(reread.arguments, ["/tmp/1.png", "/tmp/2.png", "/tmp/3.png"])
+        XCTAssertEqual(reread.extraArguments, "")
+        XCTAssertEqual(reread.text("--input-list"), "/tmp/list.txt")
 
         var views = StudioTaskDraft(templateID: .imageReconstruct3DMultiview)
         StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0]
@@ -186,6 +224,46 @@ final class StudioTaskSchemaTests: XCTestCase {
         depth.switchTemplate(to: .visionDepthVideo)
         XCTAssertEqual(depth.text("--model"), "", "a different default model is not carried")
         XCTAssertEqual(StudioTaskSchema.fields(for: .visionDepth, draft: depth).first?.overrideID, .variant, "the variant leads")
+
+        // Batch holds one repeatable positional with three values; Compare declares two single
+        // ones. Only the first image carries, into Compare's first argument.
+        var batch = StudioTaskDraft(templateID: .visionFaceBatch)
+        batch.form.arguments = ["/tmp/1.png", "/tmp/2.png", "/tmp/3.png"]
+        batch.switchTemplate(to: .visionFaceCompare)
+        XCTAssertEqual(batch.form.arguments.filter { !$0.isEmpty }, ["/tmp/1.png"])
+        XCTAssertEqual(batch.argument(1), "", "Compare's candidate stays empty")
+        var compare = StudioTaskDraft(templateID: .visionFaceCompare)
+        compare.form.arguments = ["/tmp/a.png", "/tmp/b.png"]
+        compare.switchTemplate(to: .visionFaceBatch)
+        XCTAssertEqual(compare.form.arguments, ["/tmp/a.png"], "a second single positional has no place in a repeatable one")
+        var empty = StudioTaskDraft(templateID: .visionFaceBatch)
+        empty.switchTemplate(to: .visionFaceCompare)
+        XCTAssertTrue(empty.form.arguments.allSatisfy(\.isEmpty), "nothing to carry")
+    }
+
+    /// The pages turned `--json` on for every run whose surface reads the printed result; a fresh
+    /// task draft does the same so a renderer gets JSON, and a parked draft keeps what it ran with.
+    func testLauncherDefaultsTurnOnMachineOutputWherePagesDid() {
+        XCTAssertTrue(StudioTaskDraft(templateID: .imageRunPlan).arguments.contains("--json"))
+        XCTAssertTrue(StudioTaskDraft(templateID: .imageDatasetDiscover).arguments.contains("--json"))
+        XCTAssertTrue(StudioTaskDraft(templateID: .visionPose).arguments.contains("--json"))
+        XCTAssertFalse(StudioTaskDraft(templateID: .audioEnhance).arguments.contains("--json"), "enhance writes a file")
+        let restored = StudioTaskDraft(templateID: .imageRunPlan, form: StudioConsoleDraft(arguments: ["/tmp/plan.json"]))
+        XCTAssertFalse(restored.arguments.contains("--json"), "a restored draft is not changed")
+        // Preflight, materialize, and the discover output root stay reachable in the inspector.
+        let plan = StudioTaskDraft(templateID: .imageRunPlan)
+        let planFlags = StudioTaskSchema.fields(for: .imageDatasets, draft: plan).flatMap(\.draftFieldIDs)
+        XCTAssertTrue(planFlags.contains("--preflight"))
+        XCTAssertTrue(planFlags.contains("--materialize"))
+        XCTAssertFalse(planFlags.contains("--json"), "the launcher switch is not a control")
+        XCTAssertEqual(StudioTaskSchema.sections(for: .imageDatasets, draft: plan).first { $0.group == .output }?.fields.map(\.flag),
+                       ["--materialize"])
+        let discover = StudioTaskDraft(templateID: .imageDatasetDiscover)
+        XCTAssertTrue(StudioTaskSchema.fields(for: .imageDatasets, draft: discover).contains { $0.flag == "--training-output-root" })
+        XCTAssertFalse(StudioTaskSchema.slots(for: .imageDatasetDiscover).contains { $0.id == "--training-output-root" })
+        XCTAssertEqual(StudioTaskSchema.slots(for: .imageValidate), [], "validate takes no input; its folders are options")
+        XCTAssertTrue(StudioTaskSchema.fields(for: .imageDatasets, draft: StudioTaskDraft(templateID: .imageValidate))
+            .contains { $0.flag == "--reference-dir" })
     }
 
     // MARK: Sections and scope
