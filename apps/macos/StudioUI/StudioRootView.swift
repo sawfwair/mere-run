@@ -710,7 +710,7 @@ private struct StudioWorkspaceView: View {
              .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore,
              .threeDFromImage, .visionDepth, .visionPose, .visionFaces, .visionFlow,
              .visionGeometry, .audioWhoSpoke, .audioEnhance, .audioSeparate,
-             .textEmbeddings, .textAnonymize, .textClassify, .earthFlood, .earthFire, .earthTessera,
+             .textEmbeddings, .textAnonymize, .earthFlood, .earthFire, .earthTessera,
              .earthOlmoEarth:
             // One workspace per task: Audio ▸ Separate and Music ▸ Separate share a template, and
             // a reused view would keep the other task's state and never check its readiness.
@@ -734,6 +734,8 @@ private struct StudioWorkspaceView: View {
             StudioLiveListenSession(models: models)
         case .textDecide:
             StudioLayaDecisionView()
+        case .textClassify:
+            StudioGLiNERClassificationView()
         case .modelsInstalled:
             StudioModelsView(
                 modelStore: models,

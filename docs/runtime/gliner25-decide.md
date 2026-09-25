@@ -50,6 +50,19 @@ The `tasks` array preserves task order. Each task can include `prompt` and
 The encoder accepts at most 512 subword tokens for the complete schema and
 text. The command rejects longer requests so labels remain intact.
 
+In the macOS Studio app, open **Text → Classify** to enter the text and edit
+label tasks directly. Add labels, optional descriptions and prompts, and a
+threshold for multi-label tasks. **Check fit** reports the token count before
+loading the model. **Classify** shows selected labels and the score for each
+supplied label. The page also imports and exports the same request JSON used
+by the CLI.
+
+**Decide** is the checkpoint's name. Studio uses **Classify** for this page
+because its output is a set of supplied labels and their scores. Studio's
+**Decisions** page uses Laya for typed choice, ordered score, and yes-or-no
+questions. You can express those tasks with GLiNER labels, but the GLiNER
+result remains a classification over the labels you provided.
+
 The model specializes in English operational classification. It does not
 answer open questions or provide explanations. For multilingual classification,
 use a model trained for those languages.

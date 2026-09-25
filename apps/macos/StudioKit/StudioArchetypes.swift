@@ -392,8 +392,7 @@ extension StudioTask {
             return StudioTaskPresentation(
                 title: title, systemImage: "tag",
                 emptyTitle: "Classify text.",
-                emptyMessage: "Attach a JSON request with text and ordered label tasks.",
-                requiresAttachment: true
+                emptyMessage: "Add text and label tasks to classify with GLiNER2.5 Decide."
             )
         case .earthFlood:
             return StudioTaskPresentation(
