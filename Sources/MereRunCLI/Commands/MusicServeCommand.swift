@@ -85,12 +85,9 @@ struct MusicServe: AsyncParsableCommand {
             )
         }
 
-        if isMiniMaxMusic3Request {
+        if MusicModelRuntime.serving(model: model) == .miniMaxMusic3 {
             try await runMiniMaxMusic3(apiKey: resolvedAPIKey)
             return
-        }
-        if miniMaxLoadingStrategy != nil || miniMaxPerformanceMode != nil {
-            throw ValidationError("--memory-mode and --performance-mode require MiniMax Music 3.")
         }
 
         let root = try await ACEStepCLIHelper.resolveCheckpointsRoot(
@@ -145,36 +142,9 @@ struct MusicServe: AsyncParsableCommand {
         try await server.run(host: host, port: port)
     }
 
-    private var isMiniMaxMusic3Request: Bool {
-        if model == ModelResolver.ModelID.miniMaxMusic3.rawValue
-            || model == MiniMaxMusic3Resources.repository
-        {
-            return true
-        }
-        return MiniMaxMusic3Resources.looksLikeRoot(
-            ACEStepCLIHelper.resolveUserPath(model)
-        )
-    }
-
     private func runMiniMaxMusic3(apiKey: String?) async throws {
-        if checkpointsRoot != nil
-            || decoderSubdirectory != "acestep-v15-turbo"
-            || vaeSubdirectory != "vae"
-            || lmSubdirectory != nil
-            || lmModel != nil
-            || textSubdirectory != nil
-            || !adapters.isEmpty
-            || adapterKind != .auto
-            || !adapterScales.isEmpty
-        {
-            throw ValidationError(
-                "ACE-Step component, planner, and adapter options do not apply to MiniMax Music 3."
-            )
-        }
         let rootURL: URL
-        if model == ModelResolver.ModelID.miniMaxMusic3.rawValue
-            || model == MiniMaxMusic3Resources.repository
-        {
+        if MusicModelRuntime.namesManagedMiniMaxMusic3(model) {
             do {
                 rootURL = try ModelResolver().resolve(.miniMaxMusic3).rootURL
             } catch {

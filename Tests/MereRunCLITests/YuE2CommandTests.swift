@@ -10,7 +10,7 @@ final class YuE2CommandTests: XCTestCase {
     func testNativeDefaultsAndScoreOptions() throws {
         let command = try parse()
         let plan = try command.resolvedYuE2Plan(explicitDurationSeconds: nil)
-        XCTAssertTrue(command.isYuE2Request)
+        XCTAssertEqual(MusicModelRuntime.generation(model: command.model), .yue2)
         XCTAssertEqual(plan.steps, 32)
         XCTAssertEqual(plan.seed, 831001)
         XCTAssertEqual(plan.planning, .full)
@@ -34,11 +34,26 @@ final class YuE2CommandTests: XCTestCase {
         XCTAssertEqual(try command.resolvedYuE2Plan(explicitDurationSeconds: nil).semanticSampling.minimumTokens, 51)
     }
 
-    func testIncompatibleInputsAreRejectedBeforeLoadingWeights() throws {
+    func testOptionsOfOtherRuntimesAreRejectedAtTheGate() throws {
         let rejected = [
             ["--compose"], ["--performance-mode", "q8"], ["--sample-rate", "32000"],
             ["--source-audio", "/tmp/source.wav"], ["--quality", "draft"], ["--use-lm"],
-            ["--adapter", "/tmp/adapter"], ["--score-mode", "off", "--abc-output", "/tmp/score.abc"],
+            ["--adapter", "/tmp/adapter"], ["--lrc-file", "/tmp/song.lrc"], ["--vocal-language", "fr"],
+        ]
+        for arguments in rejected {
+            let argv = ["mere.run", "music", "generate", "piano pop", "--model", "music-yue2"] + arguments
+            XCTAssertThrowsError(try CLICapabilityGate.check(arguments: argv), arguments.joined(separator: " ")) { error in
+                XCTAssertTrue(
+                    (error as? CLICapabilityGate.Rejection)?.errorDescription?.contains("YuE2") == true,
+                    "\(error)"
+                )
+            }
+        }
+    }
+
+    func testIncompatibleInputsAreRejectedBeforeLoadingWeights() throws {
+        let rejected = [
+            ["--score-mode", "off", "--abc-output", "/tmp/score.abc"],
             ["--max-frames", "0"], ["--max-frames", "9001"], ["--min-frames", "100", "--max-frames", "50"],
             ["--semantic-top-p", "0"], ["--semantic-temperature", "nan"], ["--steps", "0"],
             ["--no-recipe", "--recipe-output", "/tmp/recipe.json"], ["--instrumental"],
