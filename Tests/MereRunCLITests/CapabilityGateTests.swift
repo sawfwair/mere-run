@@ -215,11 +215,12 @@ private func expect(
     }
 }
 
-/// Nothing that runs today may start failing (design §10). Every (capability, family, option)
-/// cell the CLI accepted before the gate, which the contract records as a family that uses the
-/// option or ignores it, passes with a value the family takes; and an empty text value, which
-/// the commands read as not passed, passes wherever the family does not use the option.
-@Test func everyCellTheCLIAcceptedBeforeStillRuns() {
+/// The gate agrees with the contract's own record of what each family takes: every (capability,
+/// family, option) cell the contract says a family uses or ignores passes with a value the
+/// family takes, and an empty text value, which the commands read as not passed, passes wherever
+/// the family does not use the option. This only checks the gate against the contract; whether
+/// the contract matches what main ran is `MainBehaviourRegressionTests`' job.
+@Test func everyCellTheContractSaysAFamilyTakesPassesTheGate() {
     var cells = 0
     for capability in MereRunCapabilityCatalog.document.commands {
         guard let routing = capability.routing else { continue }
