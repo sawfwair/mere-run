@@ -827,7 +827,7 @@ private struct StudioWorkspaceView: View {
             return true
         } isTargeted: { targeted in
             withAnimation(MereRunTheme.Motion.quick) {
-                isDropTargeted = targeted && !mode.attachmentSlots.isEmpty
+                isDropTargeted = targeted && !mode.attachmentSlots(for: draft).isEmpty
             }
         }
         .overlay {
@@ -874,7 +874,7 @@ private struct StudioWorkspaceView: View {
         } else {
             StudioFeedCanvas(
                 presentation: StudioTaskPresentation(mode: mode),
-                slots: mode.attachmentSlots,
+                slots: mode.attachmentSlots(for: draft),
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,

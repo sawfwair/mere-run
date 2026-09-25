@@ -105,7 +105,7 @@ package enum StudioCommandRows {
         let capability = template.id.capabilityID.flatMap { MereRunCapabilityCatalog.command(id: $0) }
         let commandPathCount = capability?.command.count ?? Self.commandPathCount(of: arguments)
         let parsed = parse(arguments: arguments, commandPathCount: commandPathCount)
-        let declared = capability?.options ?? []
+        let declared = capability.map { StudioModelOptionScope.options(for: $0, model: draft.model) } ?? []
         let declaredByFlag = Dictionary(declared.map { ($0.flag, $0) }, uniquingKeysWith: { first, _ in first })
 
         var emitted: [String: [String?]] = [:]

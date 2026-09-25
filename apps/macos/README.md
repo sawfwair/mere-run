@@ -527,7 +527,10 @@ inspector never shows them as text while a Command-view edit still flows back
 into the drawing.
 
 The **Command** panel (⌥⌘C or the header toggle) exposes the current task's
-complete editable contract. It replaces the inspector and uses a 440-point
+editable options for the selected model. The inspector, composer attachments,
+and Command panel use the same model scope. Switching models preserves entered
+values, but a run omits options that do not apply to the selected model.
+The panel replaces the inspector and uses a 440-point
 column when space permits, otherwise an overlay. Each row is headed by the
 option's label with its flag beneath in small monospace, over the same typed
 controls the Console draws. The preview, validation, and
@@ -545,9 +548,10 @@ typed rather than dragged, so the console has no per-command view of its own:
 `StudioConsoleDraft` keeps one value per flag, `StudioConsoleCommand` reads a
 template's own argv into those values and builds the argv back out of them, and
 the eyebrows, controls, dependencies, positional arguments and "Will run" block
-all come from `MereRunCapabilityCatalog`. Nothing is filtered by tier and
-nothing is compared against a default: the console emits a flag exactly when the
-draft holds a value, because what it shows is what it runs.
+all come from `MereRunCapabilityCatalog`. Nothing is filtered by tier. For
+commands with model-specific options, the form shows only those of the selected
+model and the run omits hidden values. For other commands, the console emits a
+flag exactly when the draft holds a value.
 `StudioConsoleDraftTests` holds the identity that makes that safe: for every
 template in the catalog, seeding from its default command and rebuilding
 produces the same command. Options the contract does not describe go in Extra
@@ -713,12 +717,13 @@ launch sets a checkpoint and a preview every 250 steps when neither was chosen.
 Runs go through the task runner, so Stop, the Library row, and the root's
 Command view share the draft; the pages' saved drafts import once.
 
-**Video** ▸ Generate uses model-family-aware controls: LTX uses `--quality` and
+**Video** ▸ Generate uses controls for the selected model: LTX uses `--quality` and
 `--output-mode`, while native MiniMax-H3 exposes its exact `17n+5` frame
 cadence, adaptive or explicit denoising schedule, weight-residency policy,
 exact/balanced/maximum denoise acceleration, and ordered Ref2VA image, video,
 and audio references, without emitting incompatible LTX flags. Its attachment
-well takes a start image, an end keyframe, and source audio. Video ▸ Subjects is
+well offers only the start image, end keyframe, and source audio inputs that the
+selected model supports. Video ▸ Subjects is
 the SCAIL subject flow as a three-stage project board (Plan → Track → Animate)
 with a stage rail, a mask preview that scrubs by frame and flips between masks
 and the driving clip, subject rows, and stats read only from the CLI's manifest,

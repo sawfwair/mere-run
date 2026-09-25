@@ -104,19 +104,22 @@ package enum StudioConsoleCommand {
 
     /// Every option the capability declares, in contract order. Nothing is filtered: the console
     /// is the surface that must reach an option no designed task has a control for.
-    package static func optionFields(for capability: MereRunCommandCapability) -> [StudioContractField<StudioConsoleDraft>] {
-        capability.options.map { StudioContractField(option: $0, bindings: [.flag($0.flag)]) }
+    package static func optionFields(
+        for capability: MereRunCommandCapability, model: String? = nil
+    ) -> [StudioContractField<StudioConsoleDraft>] {
+        let options = model.map { StudioModelOptionScope.options(for: capability, model: $0) } ?? capability.options
+        return options.map { StudioContractField(option: $0, bindings: [.flag($0.flag)]) }
     }
 
     /// The rows of one eyebrow group, in the order both the console and the Command view show
     /// them: positionals first, then the contract's own groups.
-    package static func groups(for capability: MereRunCommandCapability) -> [StudioConsoleGroup] {
+    package static func groups(for capability: MereRunCommandCapability, model: String? = nil) -> [StudioConsoleGroup] {
         var groups: [StudioConsoleGroup] = []
         let arguments = argumentFields(for: capability)
         if !arguments.isEmpty {
             groups.append(StudioConsoleGroup(group: .arguments, fields: arguments))
         }
-        let options = optionFields(for: capability)
+        let options = optionFields(for: capability, model: model)
         for group in StudioContractGroup.allCases {
             let fields = options.filter { $0.group == group }
             guard !fields.isEmpty else { continue }
@@ -409,7 +412,9 @@ package struct StudioConsoleRun {
         for (flag, keyPath) in secretFields where draft.values[flag] != nil {
             launchSeed[keyPath: keyPath] = draft.text(flag)
         }
-        let allArguments = StudioConsoleCommand.arguments(for: capability, draft: draft)
+        let model = StudioModelOptionScope.model(for: capability, form: draft, seed: seed)
+        let scoped = StudioModelOptionScope.scopedDraft(draft, capability: capability, model: model)
+        let allArguments = StudioConsoleCommand.arguments(for: capability, draft: scoped)
         let effective = StudioConsoleCommand.seed(capability: capability, arguments: allArguments)
         var execution = StudioExecution(templateID: template.id, arguments: allArguments)
         for flag in secretFields.keys { execution = execution.replacing(flag, with: nil) }

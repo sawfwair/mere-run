@@ -244,20 +244,41 @@ extension StudioMode {
         }
     }
 
+    /// The current model's attachment wells. Switching models keeps the draft's file paths so
+    /// switching back restores them, while the current run only offers supported inputs.
+    package func attachmentSlots(for draft: StudioDraft) -> [StudioAttachmentSlot] {
+        guard let capability = StudioContractSchema.capability(for: self, draft: draft) else {
+            return attachmentSlots
+        }
+        let flags: [String: String]
+        switch self {
+        case .music:
+            flags = ["source": "--source-audio", "timbre": "--reference-audio"]
+        case .video:
+            flags = ["startFrame": "--image", "endFrame": "--end-image", "audio": "--audio"]
+        default:
+            return attachmentSlots
+        }
+        return attachmentSlots.filter { slot in
+            guard let flag = flags[slot.id] else { return true }
+            return StudioModelOptionScope.allows(flag, in: capability, model: draft.model)
+        }
+    }
+
     /// Whether the composer shows the well: any non-transient slot, or a transient one that is filled.
     package func showsAttachmentWell(for draft: StudioDraft) -> Bool {
-        attachmentSlots.contains { !$0.isTransient || $0.isFilled(in: draft) }
+        attachmentSlots(for: draft).contains { !$0.isTransient || $0.isFilled(in: draft) }
     }
 
     /// The slot a file dropped on the canvas or pasted with ⌘V lands in: the first empty slot
     /// that accepts it, else the first slot that accepts it.
     package func attachmentSlot(for url: URL, in draft: StudioDraft) -> StudioAttachmentSlot? {
-        attachmentSlots.slot(for: url, in: draft)
+        attachmentSlots(for: draft).slot(for: url, in: draft)
     }
 
     /// The slot a pasted bitmap (no file on the pasteboard) lands in.
     package func pastedImageSlot(in draft: StudioDraft) -> StudioAttachmentSlot? {
-        attachmentSlots.pastedImageSlot(in: draft)
+        attachmentSlots(for: draft).pastedImageSlot(in: draft)
     }
 }
 
@@ -265,7 +286,7 @@ extension StudioDraft {
     /// Routes each dropped file to the slot it belongs in. Returns whether anything was attached.
     @discardableResult
     package mutating func attach(dropped urls: [URL], for mode: StudioMode) -> Bool {
-        attach(dropped: urls, slots: mode.attachmentSlots)
+        attach(dropped: urls, slots: mode.attachmentSlots(for: self))
     }
 
     /// Settings that follow an attachment so the slot is never silently ignored: LTX audio

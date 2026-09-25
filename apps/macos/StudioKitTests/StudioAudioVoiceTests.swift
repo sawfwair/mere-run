@@ -89,6 +89,7 @@ final class StudioAudioVoiceTests: XCTestCase {
         draft.form["--ode-method"] = .text("rk4")
         draft.form["--ode-steps"] = .integer(8)
         draft.form["--guidance-scale"] = .number(2)
+        draft.form["--seed"] = .text("42")
         draft.form["--chunk-seconds"] = .integer(12)
         draft.form["--dtype"] = .text("float16")
         XCTAssertEqual(draft.arguments, template.arguments(from: legacy))

@@ -81,7 +81,7 @@ package enum StudioTaskSchema {
     /// location, or a composite editor's flag. Accepted types come from the template's own
     /// `inputKind` for the primary input and from a per-flag table for the rest; a directory
     /// option takes a folder.
-    package static func slots(for templateID: CommandTemplateID) -> [StudioAttachmentSlot] {
+    package static func slots(for templateID: CommandTemplateID, model: String? = nil) -> [StudioAttachmentSlot] {
         guard let capability = templateID.capability, let template = CommandCatalog.template(id: templateID) else {
             return []
         }
@@ -114,7 +114,8 @@ package enum StudioTaskSchema {
         let excluded = outputFlags(for: capability).union(chosenOutputFlags).union(modelLocationFlags)
             .union(overrideFlags(for: templateID))
         var optionSlots: [StudioAttachmentSlot] = []
-        for option in capability.options where [.file, .directory].contains(option.kind) {
+        let options = model.map { StudioModelOptionScope.options(for: capability, model: $0) } ?? capability.options
+        for option in options where [.file, .directory].contains(option.kind) {
             guard StudioContractGroup(contractGroup: option.group) == .inputs, !excluded.contains(option.flag) else { continue }
             let types: [UTType] = option.kind == .directory ? [.folder] : acceptedTypes(forFlag: option.flag)
             optionSlots.append(StudioAttachmentSlot(
@@ -246,10 +247,11 @@ package enum StudioTaskSchema {
             return nil
         })
         let hidden = hiddenFlags(for: capability).union(slotFlags)
+        let options = StudioModelOptionScope.options(for: capability, model: draft.model)
         var prompt: String?
         if case .flag(let flag) = promptField(for: capability) { prompt = flag }
         var claimed: Set<StudioContractOverrideID> = []
-        for declared in capability.options where !hidden.contains(declared.flag) && declared.flag != prompt {
+        for declared in options where !hidden.contains(declared.flag) && declared.flag != prompt {
             // A model location the contract filed under Inputs (a `.directory` option) belongs
             // with the model it points at; a destination the user chooses belongs under Output.
             let option: MereRunCapabilityOption
@@ -263,7 +265,7 @@ package enum StudioTaskSchema {
             if let override = overrideID(forFlag: option.flag, templateID: draft.templateID) {
                 // A composite editor renders once, where the first of its flags is declared.
                 guard claimed.insert(override).inserted else { continue }
-                let owned = capability.options.filter { overrideID(forFlag: $0.flag, templateID: draft.templateID) == override }
+                let owned = options.filter { overrideID(forFlag: $0.flag, templateID: draft.templateID) == override }
                 fields.append(StudioContractField(
                     option: option, bindings: owned.map { .flag($0.flag) }, overrideID: override
                 ))
@@ -431,7 +433,7 @@ extension StudioTaskDraft {
     }
 
     package var slots: [StudioAttachmentSlot] {
-        StudioTaskSchema.slots(for: templateID)
+        StudioTaskSchema.slots(for: templateID, model: model)
     }
 
     /// The model this draft names, as the model chip binds it.

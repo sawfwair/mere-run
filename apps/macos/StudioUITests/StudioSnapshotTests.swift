@@ -95,6 +95,38 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    func testMusicModelCommandSnapshots() throws {
+        let music = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses(installing: [
+                (id: "music-acestep", category: "music", title: "ACE-Step 1.5"),
+                (id: "music-yue2", category: "music", title: "YuE2")
+            ]))
+        )
+        defer { music.tearDown() }
+
+        for model in ["music-yue2", "music-acestep"] {
+            var draft = StudioDraft()
+            draft.reset(for: .music)
+            draft.model = model
+            draft.prompt = "Acoustic folk waltz, brushed drums, dusty piano"
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [.music: draft])
+                .environmentObject(music.controller)
+                .environmentObject(music.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try music.write(
+                view, size: Self.fidelitySize, appearance: .light,
+                name: "music-command-\(model)", settle: 2.5,
+                afterAppear: {
+                    navigation.open(task: .musicCompose)
+                    navigation.toggleCommandColumn()
+                }
+            )
+        }
+    }
+
     /// The Library column at the mockup's 1440×900 on Image ▸ Generate: list mode light and dark
     /// (which must still read as `Main.png`'s column), grid mode light and dark with the same rows
     /// as three-across thumbnails, and one render with three rows selected so the batch bar shows.

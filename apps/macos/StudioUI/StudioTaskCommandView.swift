@@ -35,7 +35,10 @@ struct StudioTaskCommandView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(template.title).font(.headline)
                     if let capability = template.id.capability {
-                        ForEach(StudioConsoleCommand.groups(for: capability)) { group in
+                        ForEach(StudioConsoleCommand.groups(
+                            for: capability,
+                            model: StudioModelOptionScope.model(for: capability, form: form, seed: seed)
+                        )) { group in
                             VStack(alignment: .leading, spacing: 8) {
                                 MereEyebrow(group.title)
                                 ContractForm(fields: group.fields,

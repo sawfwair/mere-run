@@ -10,6 +10,32 @@ import XCTest
 final class StudioMusicTasksTests: XCTestCase {
     // MARK: Argv parity with the page
 
+    func testYuE2ComposerOmitsTheACEStepQualityDefault() throws {
+        var draft = StudioDraft()
+        draft.prompt = "Acoustic folk waltz, brushed drums, dusty piano"
+        draft.model = "music-yue2"
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft)
+        let arguments = request.template.arguments(from: request.draft)
+        XCTAssertEqual(request.draft.model, "music-yue2")
+        XCTAssertFalse(arguments.contains("--quality"))
+
+        draft.model = "/tmp/custom-yue2-checkpoint"
+        let localRequest = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft)
+        XCTAssertFalse(localRequest.template.arguments(from: localRequest.draft).contains("--quality"))
+
+        draft.musicQuality = "final"
+        let explicitRequest = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft)
+        let explicitArguments = explicitRequest.template.arguments(from: explicitRequest.draft)
+        XCTAssertEqual(explicitRequest.draft.musicQuality, "final")
+        XCTAssertFalse(explicitArguments.contains("--quality"))
+
+        draft.model = "music-acestep"
+        let aceRequest = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft)
+        let aceArguments = aceRequest.template.arguments(from: aceRequest.draft)
+        XCTAssertEqual(aceArguments.firstIndex(of: "--quality").map { aceArguments[$0 + 1] }, "final")
+    }
+
     func testAnalyzeTaskDraftBuildsThePagesArgv() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .musicAnalyze))
         var page = template.defaultDraft()

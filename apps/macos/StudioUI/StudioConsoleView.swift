@@ -273,7 +273,10 @@ private struct StudioConsoleForm: View {
                     if let url = template.externalURL {
                         externalSection(url)
                     } else if let capability {
-                        ForEach(StudioConsoleCommand.groups(for: capability)) { group in
+                        ForEach(StudioConsoleCommand.groups(
+                            for: capability,
+                            model: StudioModelOptionScope.model(for: capability, form: draft, seed: controller.draft)
+                        )) { group in
                             groupView(group, capability: capability)
                         }
                         extraArgumentsSection(lines: 1...4)

@@ -251,7 +251,8 @@ extension CommandArguments {
         args.pair(F.useLM, F.noLM, ["use": true, "disable": false][draft.musicLMMode])
         if draft.musicAnalyzeSourceAudio { args.flag(F.analyzeSourceAudio) }
         if draft.useDuration { args.option(F.duration, format(draft.durationSeconds)) }
-        args.option(F.quality, draft.musicQuality)
+        // ACE-Step resolves an omitted quality to "song"; other music models reject the flag.
+        if draft.musicQuality != "song" { args.option(F.quality, draft.musicQuality) }
         if draft.musicOverrideSteps { args.option(F.steps, String(draft.steps)) }
         if !draft.musicShift.isBlank { args.option(F.shift, draft.musicShift) }
         if !draft.musicInferMethod.isBlank { args.option(F.inferMethod, draft.musicInferMethod) }

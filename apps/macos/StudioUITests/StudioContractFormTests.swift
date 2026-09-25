@@ -173,6 +173,7 @@ final class StudioContractFormTests: XCTestCase {
 
         var video = StudioDraft()
         video.reset(for: .video)
+        video.model = "video-minimax-h3-fl2va-mlx"
         let weights = try XCTUnwrap(
             StudioContractSchema.boundFields(for: .video, draft: video).first { $0.flag == "--h3-weight-mode" }
         )

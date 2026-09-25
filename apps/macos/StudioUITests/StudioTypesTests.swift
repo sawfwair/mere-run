@@ -1088,6 +1088,7 @@ final class StudioTypesTests: XCTestCase {
     func testImageGenerateBuildsMultiReferenceStructuredPromptLoRAAndKreaControls() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
         var draft = template.defaultDraft()
+        draft.model = "image-krea2-raw"
         draft.referenceImagePaths = "/tmp/face.png\n/tmp/style.png"
         draft.keepOriginalAspect = true
         draft.strength = 0.4
@@ -1128,6 +1129,7 @@ final class StudioTypesTests: XCTestCase {
     func testImageStudioMapsReferenceLoRAStructuredPromptAndPreflightControls() throws {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
+        draft.model = "image-krea2-raw"
         draft.prompt = "editorial portrait"
         draft.referenceImagePaths = "/tmp/person.png\n/tmp/wardrobe.png"
         draft.keepOriginalAspect = true

@@ -505,7 +505,9 @@ package enum StudioContractSchema {
     /// Options the contract declares that the Studio draft does not carry are left out: the app
     /// has no state to bind them to, so a control for them could not change the command.
     package static func fields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField<StudioDraft>] {
-        fields(for: mode, readImageAction: draft.readImageAction)
+        let fields = fields(for: mode, readImageAction: draft.readImageAction)
+        guard let capability = capability(for: mode, draft: draft) else { return fields }
+        return fields.filter { StudioModelOptionScope.allows($0.flag, in: capability, model: draft.model) }
     }
 
     package static func fields(
@@ -608,7 +610,7 @@ package enum StudioContractSchema {
     package static func boundFields(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> [StudioContractField<StudioDraft>] {
         guard let capability = capability(for: mode, draft: draft) else { return [] }
         let bindings = StudioContractBindings.bindings(for: mode)
-        return capability.options.compactMap { option in
+        return StudioModelOptionScope.options(for: capability, model: draft.model).compactMap { option in
             guard let binding = bindings[option.flag] else { return nil }
             return StudioContractField(option: option, bindings: [binding])
         }

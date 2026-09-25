@@ -1468,6 +1468,11 @@ package struct CommandTemplate: Identifiable, Equatable {
 
     package func arguments(from draft: CommandDraft) -> [String] {
         var args = CommandArguments.build(for: id, draft: draft)
+        if let capability = id.capability {
+            args = StudioModelOptionScope.generatedArguments(
+                args, capability: capability, model: StudioModelOptionScope.model(for: capability, draft: draft)
+            )
+        }
         switch id {
         // `custom` is already the raw command line a person typed, and the two launcher rows
         // hand off to another product, so neither takes the extra-arguments field.

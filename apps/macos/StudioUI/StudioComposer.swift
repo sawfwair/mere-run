@@ -63,7 +63,7 @@ struct StudioComposer: View {
     // MARK: - Attachment well
 
     private var visibleSlots: [StudioAttachmentSlot] {
-        mode.attachmentSlots.filter { !$0.isTransient || $0.isFilled(in: draft) }
+        mode.attachmentSlots(for: draft).filter { !$0.isTransient || $0.isFilled(in: draft) }
     }
 
     private var attachmentWell: some View {
@@ -452,12 +452,12 @@ struct StudioComposer: View {
     /// Only a collapsed well (Chat's per-turn image) needs the paperclip; declared slots pick
     /// from the well itself.
     private var showsPaperclip: Bool {
-        !mode.attachmentSlots.isEmpty && !mode.showsAttachmentWell(for: draft)
+        !mode.attachmentSlots(for: draft).isEmpty && !mode.showsAttachmentWell(for: draft)
     }
 
     private var paperclipButton: some View {
         Button {
-            if let slot = mode.attachmentSlots.first { pickFiles(for: slot) }
+            if let slot = mode.attachmentSlots(for: draft).first { pickFiles(for: slot) }
         } label: {
             Image(systemName: "paperclip")
                 .font(.system(size: 15, weight: .medium))
