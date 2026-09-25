@@ -189,6 +189,21 @@ final class StudioSnapshotTests: XCTestCase {
         try render(cases[0].draft, mode: .video, task: .videoGenerate, command: true,
                    name: "scope-video-fasth3-command-light", appearance: .light)
 
+        // A local folder while the CLI identifies it, and once it could not: every option shows,
+        // none locked to another model's value, and the note says why.
+        let folder = "/tmp/checkpoints/my-ltx-folder"
+        for (state, identity) in [("pending", StudioModelIdentity.pending), ("failed", .unidentified)] {
+            let folderSource = StudioScopeSource(identities: StudioFixedModelIdentities([folder: identity]))
+            let folderDraft = draft(.video) {
+                $0.prompt = "A lighthouse at dusk, waves breaking on the rocks"
+                $0.model = folder
+            }
+            for appearance in StudioSnapshotAppearance.allCases {
+                try render(folderDraft, mode: .video, task: .videoGenerate, command: false,
+                           name: "scope-video-folder-\(state)-\(appearance.rawValue)", appearance: appearance, source: folderSource)
+            }
+        }
+
         // OCR picks its backend in the Command Console: GLM-OCR reads neither LightOnOCR's model
         // nor its token budget, which the console lists under the note.
         if let ocr = CommandCatalog.template(id: .visionOCR) {
@@ -210,11 +225,11 @@ final class StudioSnapshotTests: XCTestCase {
 
         func render(
             _ draft: StudioDraft, mode: StudioMode, task: StudioTask, command: Bool,
-            name: String, appearance: StudioSnapshotAppearance
+            name: String, appearance: StudioSnapshotAppearance, source overriding: StudioScopeSource? = nil
         ) throws {
             let navigation = NavigationModel()
             let view = StudioRootView(seededDrafts: [mode: draft])
-                .environment(\.studioScopeSource, source)
+                .environment(\.studioScopeSource, overriding ?? source)
                 .environmentObject(scoped.controller)
                 .environmentObject(scoped.library)
                 .environmentObject(navigation)
