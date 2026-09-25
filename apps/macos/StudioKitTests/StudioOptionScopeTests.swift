@@ -148,6 +148,29 @@ final class StudioOptionScopeTests: XCTestCase {
         XCTAssertNil(StudioInspectorSchema.notice(for: .video, draft: draft, source: identified))
     }
 
+    /// H-a: a local folder whose family is not known yet runs no family's rule. Video's Quality
+    /// and FPS, and music's Candidates, are free controls, not another model's locked value.
+    func testAnUnplacedFolderLocksNoControl() throws {
+        let folder = "/tmp/checkpoints/my-model"
+        for identity in [StudioModelIdentity.pending, .unidentified] {
+            let source = StudioScopeSource(identities: StudioFixedModelIdentities([folder: identity]))
+            for mode in [StudioMode.video, .music, .chat] {
+                var draft = StudioDraft.baseline(for: mode)
+                draft.model = folder
+                let fields = StudioContractSchema.fields(for: mode, draft: draft, source: source)
+                XCTAssertFalse(fields.isEmpty)
+                let locked = fields.filter { $0.fixedValue != nil || $0.allowedValues != nil }.map(\.flag)
+                XCTAssertEqual(locked, [], "\(mode) \(identity)")
+            }
+        }
+        // A model the contract places still locks what its own family fixes.
+        var fastH3 = StudioDraft.baseline(for: .video)
+        fastH3.model = "video-minimax-h3-fasth3-vsa-datafree-mlx"
+        let steps = StudioContractSchema.fields(for: .video, draft: fastH3, source: StudioScopeSource(identities: StudioFixedModelIdentities()))
+            .first { $0.flag == "--steps" }
+        XCTAssertEqual(steps?.fixedValue, "5")
+    }
+
     func testTheIdentityStoreSendsTheWholeCommandLineAndAsksOncePerRoutingFlags() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("scope-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

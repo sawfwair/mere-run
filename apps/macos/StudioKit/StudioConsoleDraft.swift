@@ -111,7 +111,9 @@ package enum StudioConsoleCommand {
         for capability: MereRunCommandCapability,
         scope: StudioOptionScope? = nil
     ) -> [StudioContractField<StudioConsoleDraft>] {
-        (scope?.options ?? capability.options).map { StudioContractField(option: $0, bindings: [.flag($0.flag)]) }
+        (scope?.options ?? capability.options).map {
+            StudioContractField(option: $0, bindings: [.flag($0.flag)], family: scope?.family?.id)
+        }
     }
 
     /// The rows of one eyebrow group, in the order both the console and the Command view show

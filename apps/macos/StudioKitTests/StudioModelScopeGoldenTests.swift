@@ -52,6 +52,29 @@ final class StudioModelScopeGoldenTests: XCTestCase {
         }
     }
 
+    /// A folder the CLI is still identifying, or could not identify, runs a family nobody knows
+    /// yet: no surface scopes it to a family, and no family's rule locks a control to that
+    /// family's value or steps it through that family's set.
+    func testAnUnplacedFolderLocksNoControl() {
+        let folder = "/tmp/model-scope/unplaced"
+        for identity in [StudioModelIdentity.pending, .unidentified] {
+            let source = StudioScopeSource(identities: StudioFixedModelIdentities([folder: identity]))
+            for capability in MereRunCapabilityCatalog.document.commands {
+                guard let routing = capability.routing, routing.modelFlags.contains("--model") else { continue }
+                for surface in ModelScopeFixtures.surfaces(for: capability) {
+                    let fields = ModelScopeFixtures.unplacedFields(surface, capability: capability, folder: folder, source: source)
+                    let name = "\(capability.id) \(surface.name) \(identity)"
+                    guard let fields else { continue }
+                    XCTAssertEqual(fields.scope?.family, nil, "\(name) scopes an unplaced folder to a family")
+                    for (flag, fixed, allowed) in fields.fields {
+                        XCTAssertNil(fixed, "\(name) locks \(flag) to another family's value")
+                        XCTAssertNil(allowed, "\(name) steps \(flag) through another family's values")
+                    }
+                }
+            }
+        }
+    }
+
     func testTheHarnessReachesEveryRoutedCommandStudioRuns() {
         for capability in MereRunCapabilityCatalog.document.commands where capability.routing != nil {
             let surfaces = ModelScopeFixtures.surfaces(for: capability)
@@ -116,6 +139,37 @@ enum ModelScopeFixtures {
             surfaces.append(.console(template.id))
         }
         return surfaces
+    }
+
+    /// What `surface` draws when its model is `folder`: the scope it drew from, and each field's
+    /// flag with the value it locks and the values it steps through. nil when the surface has no
+    /// template to draw.
+    static func unplacedFields(
+        _ surface: Surface,
+        capability: MereRunCommandCapability,
+        folder: String,
+        source: StudioScopeSource
+    ) -> (scope: StudioOptionScope?, fields: [(flag: String, fixed: String?, allowed: [Double]?)])? {
+        switch surface {
+        case let .composer(mode, action):
+            var draft = StudioDraft.baseline(for: mode)
+            draft.readImageAction = action
+            draft.model = folder
+            let fields = StudioContractSchema.fields(for: mode, draft: draft, source: source)
+            return (source.scope(mode: mode, draft: draft), fields.map { ($0.flag, $0.fixedValue, $0.allowedValues) })
+        case let .task(task, templateID):
+            var draft = StudioTaskDraft(templateID: templateID)
+            draft.form["--model"] = .text(folder)
+            let fields = StudioTaskSchema.fields(for: task, draft: draft, source: source)
+            return (source.scope(for: draft), fields.map { ($0.flag, $0.fixedValue, $0.allowedValues) })
+        case .console(let templateID):
+            guard let template = CommandCatalog.template(id: templateID) else { return nil }
+            var form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
+            form["--model"] = .text(folder)
+            let scope = source.scope(capability: capability, form: form)
+            let fields = StudioConsoleCommand.groups(for: capability, scope: scope).flatMap(\.fields)
+            return (scope, fields.map { ($0.flag, $0.fixedValue, $0.allowedValues) })
+        }
     }
 
     /// One fixture per routed capability: `family<TAB>surface<TAB>set<TAB>flags`, sorted.

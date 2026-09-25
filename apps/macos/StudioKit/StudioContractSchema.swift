@@ -354,16 +354,24 @@ package struct StudioContractField<Draft>: Identifiable {
     package let bindings: [StudioContractBinding<Draft>]
     /// nil renders from the contract; otherwise the caller's override builder draws this row.
     package var overrideID: StudioContractOverrideID?
+    /// The rule of the family the command line runs, when that family is known. An option the
+    /// scope did not narrow still carries every family's rule, so the field reads only this one:
+    /// a folder nobody has identified yet locks no control to another model's value.
+    private let rule: MereRunOptionFamilyRule?
 
+    /// `family` is the runtime family the form's command line resolves to (`StudioOptionScope
+    /// .family`), nil while it is not known.
     package init(
         option: MereRunCapabilityOption,
         bindings: [StudioContractBinding<Draft>],
-        overrideID: StudioContractOverrideID? = nil
+        overrideID: StudioContractOverrideID? = nil,
+        family: String? = nil
     ) {
         precondition(!bindings.isEmpty, "\(option.flag) needs at least one draft binding to render")
         self.option = option
         self.bindings = bindings
         self.overrideID = overrideID
+        rule = family.flatMap { family in option.familyRules.first { $0.family == family } }
     }
 
     /// The binding the contract-rendered control reads and writes.
@@ -401,7 +409,7 @@ package struct StudioContractField<Draft>: Identifiable {
     /// The one value the family runs the option with, when its rule fixes it (FastH3's 5 steps,
     /// MiniMax-H3's 24 fps): the inspector shows it rather than a control that cannot change it.
     package var fixedValue: String? {
-        guard option.kind != .boolean, let values = option.familyRules.first?.values, values.count == 1 else { return nil }
+        guard option.kind != .boolean, let values = rule?.values, values.count == 1 else { return nil }
         return values[0]
     }
 
@@ -409,7 +417,7 @@ package struct StudioContractField<Draft>: Identifiable {
     /// RoFormer model's chunk overlap is any divisor of its chunk size. nil for any other option.
     package var allowedValues: [Double]? {
         guard option.kind == .integer || option.kind == .number,
-              let values = option.familyRules.first?.values, values.count > 1 else { return nil }
+              let values = rule?.values, values.count > 1 else { return nil }
         return values.compactMap(Double.init).sorted()
     }
 
@@ -552,7 +560,7 @@ package enum StudioContractSchema {
         source: StudioScopeSource = .live
     ) -> [StudioContractField<StudioDraft>] {
         guard let scope = source.scope(mode: mode, draft: draft) else { return [] }
-        return fields(for: mode, options: scope.options)
+        return fields(for: mode, options: scope.options, family: scope.family?.id)
     }
 
     /// Every option of the mode's capability the app has a draft field for, whatever the model:
@@ -562,10 +570,14 @@ package enum StudioContractSchema {
         readImageAction: StudioReadImageAction = .inspect
     ) -> [StudioContractField<StudioDraft>] {
         guard let capability = capability(for: mode, readImageAction: readImageAction) else { return [] }
-        return fields(for: mode, options: capability.options)
+        return fields(for: mode, options: capability.options, family: nil)
     }
 
-    private static func fields(for mode: StudioMode, options: [MereRunCapabilityOption]) -> [StudioContractField<StudioDraft>] {
+    private static func fields(
+        for mode: StudioMode,
+        options: [MereRunCapabilityOption],
+        family: String?
+    ) -> [StudioContractField<StudioDraft>] {
         let bindings = StudioContractBindings.bindings(for: mode)
         let offered = Set(options.map(\.flag))
         var claimed: Set<StudioContractOverrideID> = []
@@ -573,7 +585,7 @@ package enum StudioContractSchema {
         for option in options {
             guard let override = StudioContractOverrides.override(forFlag: option.flag, mode: mode) else {
                 guard let binding = bindings[option.flag] else { continue }
-                fields.append(StudioContractField(option: option, bindings: [binding]))
+                fields.append(StudioContractField(option: option, bindings: [binding], family: family))
                 continue
             }
             // A composite editor renders once, where the first of its offered flags is declared,
@@ -582,7 +594,7 @@ package enum StudioContractSchema {
             guard claimed.insert(override.id).inserted else { continue }
             let owned = override.flags.filter(offered.contains).compactMap { bindings[$0] } + override.companions
             guard !owned.isEmpty else { continue }
-            fields.append(StudioContractField(option: option, bindings: owned, overrideID: override.id))
+            fields.append(StudioContractField(option: option, bindings: owned, overrideID: override.id, family: family))
         }
         return uncoveredFields(for: mode) + fields
     }
@@ -689,7 +701,7 @@ package enum StudioContractSchema {
         let bindings = StudioContractBindings.bindings(for: mode)
         return scope.options.compactMap { option in
             guard let binding = bindings[option.flag] else { return nil }
-            return StudioContractField(option: option, bindings: [binding])
+            return StudioContractField(option: option, bindings: [binding], family: scope.family?.id)
         }
     }
 

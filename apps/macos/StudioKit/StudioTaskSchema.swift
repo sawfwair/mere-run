@@ -273,11 +273,11 @@ package enum StudioTaskSchema {
                 guard claimed.insert(override).inserted else { continue }
                 let owned = options.filter { overrideID(forFlag: $0.flag, templateID: draft.templateID) == override }
                 fields.append(StudioContractField(
-                    option: option, bindings: owned.map { .flag($0.flag) }, overrideID: override
+                    option: option, bindings: owned.map { .flag($0.flag) }, overrideID: override, family: scope.family?.id
                 ))
                 continue
             }
-            fields.append(StudioContractField(option: option, bindings: [.flag(option.flag)]))
+            fields.append(StudioContractField(option: option, bindings: [.flag(option.flag)], family: scope.family?.id))
         }
         return fields
     }
