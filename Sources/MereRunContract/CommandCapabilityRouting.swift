@@ -28,6 +28,11 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// selectors then only say when a named model runs, so the default rules are not checked
     /// against them. `false`: such an invocation is `.unmatched`.
     public let selectorsOverrideModel: Bool
+    /// `true` when the command's own router picks the family from the whole command line and the
+    /// declared rules only approximate it: speech transcribe sends a language Parakeet does not
+    /// recognize to Qwen3-ASR. The CLI's gate asks that router; a shell without it asks
+    /// `catalog resolve` about the command line.
+    public let routedByCommand: Bool
 
     enum CodingKeys: String, CodingKey {
         case modelFlags = "model_flags"
@@ -36,6 +41,7 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         case excludedModels = "excluded_models"
         case identifiedModels = "identified_models"
         case selectorsOverrideModel = "selectors_override_model"
+        case routedByCommand = "routed_by_command"
     }
 
     public init(
@@ -44,7 +50,8 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         families: [MereRunRuntimeFamily],
         excludedModels: [MereRunExcludedModel] = [],
         identifiedModels: [String] = [],
-        selectorsOverrideModel: Bool = false
+        selectorsOverrideModel: Bool = false,
+        routedByCommand: Bool = false
     ) {
         self.modelFlags = modelFlags
         self.defaultModels = defaultModels
@@ -52,6 +59,7 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         self.excludedModels = excludedModels
         self.identifiedModels = identifiedModels
         self.selectorsOverrideModel = selectorsOverrideModel
+        self.routedByCommand = routedByCommand
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,10 +70,11 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         excludedModels = try container.decode([MereRunExcludedModel].self, forKey: .excludedModels)
         identifiedModels = try container.decodeIfPresent([String].self, forKey: .identifiedModels) ?? []
         selectorsOverrideModel = try container.decodeIfPresent(Bool.self, forKey: .selectorsOverrideModel) ?? false
+        routedByCommand = try container.decodeIfPresent(Bool.self, forKey: .routedByCommand) ?? false
     }
 
-    /// `identified_models` is written only when non-empty and `selectors_override_model` only
-    /// when true, so other routing serializes as before.
+    /// `identified_models` is written only when non-empty, and `selectors_override_model` and
+    /// `routed_by_command` only when true, so other routing serializes as before.
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(modelFlags, forKey: .modelFlags)
@@ -74,6 +83,7 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         try container.encode(excludedModels, forKey: .excludedModels)
         if !identifiedModels.isEmpty { try container.encode(identifiedModels, forKey: .identifiedModels) }
         if selectorsOverrideModel { try container.encode(true, forKey: .selectorsOverrideModel) }
+        if routedByCommand { try container.encode(true, forKey: .routedByCommand) }
     }
 
     public func family(id: String) -> MereRunRuntimeFamily? {
@@ -88,6 +98,15 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// capability with no model flag). The model flag of the chosen family is then only checked.
     public var routesBySelectors: Bool {
         modelFlags.isEmpty || families.contains { $0.modelFlag != nil }
+    }
+
+    /// Every flag the resolver reads to pick the family: the model flags, the selectors, and the
+    /// flags default rules test. No other option changes which family runs.
+    public var routingFlags: Set<String> {
+        Set(
+            modelFlags + families.compactMap(\.modelFlag) + families.flatMap(\.selectors).map(\.flag)
+                + defaultModels.flatMap(\.whenAny).map(\.flag)
+        )
     }
 }
 

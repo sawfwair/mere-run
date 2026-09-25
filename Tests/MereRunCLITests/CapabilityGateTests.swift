@@ -31,11 +31,7 @@ private struct GateCase: CustomStringConvertible {
 /// plus each family rule's allowed, disallowed, missing, and excess values.
 private func gateCases(for capability: MereRunCommandCapability) -> [GateCase] {
     guard let routing = capability.routing else { return [] }
-    let routingFlags = Set(
-        routing.modelFlags + routing.families.compactMap(\.modelFlag)
-            + routing.families.flatMap(\.selectors).map(\.flag)
-            + routing.defaultModels.flatMap(\.whenAny).map(\.flag)
-    )
+    let routingFlags = routing.routingFlags
     var cases: [GateCase] = []
     for family in routing.families {
         guard let base = minimalArguments(for: family, in: capability, routing: routing) else { continue }
@@ -225,11 +221,7 @@ private func expect(
     var cells = 0
     for capability in MereRunCapabilityCatalog.document.commands {
         guard let routing = capability.routing else { continue }
-        let routingFlags = Set(
-            routing.modelFlags + routing.families.compactMap(\.modelFlag)
-                + routing.families.flatMap(\.selectors).map(\.flag)
-                + routing.defaultModels.flatMap(\.whenAny).map(\.flag)
-        )
+        let routingFlags = routing.routingFlags
         for family in routing.families {
             guard let base = minimalArguments(for: family, in: capability, routing: routing) else { continue }
             for option in capability.options where !routingFlags.contains(option.flag) {
@@ -265,6 +257,13 @@ private func expect(
         #expect(report.violations.isEmpty && report.warnings.count == 1, "\(commandLine) got \(report)")
         #expect(throws: Never.self, "\(commandLine)") { try CLICapabilityGate.check(arguments: ["mere.run"] + commandLine) }
     }
+}
+
+/// A command whose router the gate runs says so in its routing, so shells without the router know
+/// to ask `catalog resolve`.
+@Test func everyCommandRouterIsDeclaredInTheContract() {
+    let declared = MereRunCapabilityCatalog.document.commands.filter { $0.routing?.routedByCommand == true }.map(\.id)
+    #expect(Set(CLIFamilyRouters.routers.keys) == Set(declared))
 }
 
 /// The generator itself must produce rejecting, warning, and rule cases, and the gate's

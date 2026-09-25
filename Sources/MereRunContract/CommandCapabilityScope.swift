@@ -29,6 +29,35 @@ public enum MereRunModelIdentification: Equatable, Sendable {
     case family(String)
 }
 
+extension MereRunFamilyResolutionReport {
+    /// The resolution this report describes: what a shell that asked `catalog resolve` about a
+    /// command line takes as its family. `capability` is the one the report is about.
+    public func resolution(in capability: MereRunCommandCapability) -> MereRunFamilyResolution {
+        switch source {
+        case .unrouted:
+            return .unrouted
+        case .unidentified:
+            return .unidentified(model: model ?? "")
+        case .excluded:
+            guard let model, let excluded = capability.routing?.excludedModel(id: model) else {
+                return .unidentified(model: model ?? "")
+            }
+            return .excluded(excluded)
+        case .unmatched:
+            return .unmatched(model: model, detail: violations.first ?? "")
+        case .model, .defaultModel, .selector, .identified:
+            guard let family else { return .unidentified(model: model ?? "") }
+            let resolved: MereRunFamilyResolution.Source = switch source {
+            case .defaultModel: .defaultModel
+            case .selector: .selector
+            case .identified: .identified
+            default: .model
+            }
+            return .family(id: family, model: model, source: resolved)
+        }
+    }
+}
+
 /// One way an invocation leaves its family's scope.
 public struct MereRunOptionViolation: Equatable, Sendable {
     public enum Severity: String, Codable, Sendable {
@@ -215,9 +244,22 @@ extension MereRunCommandCapability {
         chooseDefault: ([String]) -> String? = { _ in nil },
         routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolutionReport {
-        let resolution = resolveFamily(
-            invocation, platform: platform, identify: identify, chooseDefault: chooseDefault, routedFamily: routedFamily
+        report(
+            for: resolveFamily(
+                invocation, platform: platform, identify: identify, chooseDefault: chooseDefault, routedFamily: routedFamily
+            ),
+            invocation,
+            identify: identify
         )
+    }
+
+    /// The gate's report for `invocation` once its family is resolved: what a shell that asked
+    /// `catalog resolve` for the family, and scopes the rest of the command line itself, shows.
+    public func report(
+        for resolution: MereRunFamilyResolution,
+        _ invocation: MereRunCommandInvocation,
+        identify: (String) -> MereRunModelIdentification? = { _ in nil }
+    ) -> MereRunFamilyResolutionReport {
         let report = { (family: MereRunRuntimeFamily?, model: String?, source: MereRunFamilyResolutionReport.Source,
                         violations: [String], warnings: [String]) in
             MereRunFamilyResolutionReport(

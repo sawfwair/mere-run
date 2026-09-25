@@ -58,7 +58,10 @@ extension MereRunCapabilityCatalog {
                 selectors: [.init(flag: "--backend", values: ["auto", "qwen"])]
             )
         ],
-        selectorsOverrideModel: true
+        selectorsOverrideModel: true,
+        // Which languages leave Parakeet depends on its checkpoint's vocabulary and on how the
+        // language is spelled; `SpeechTranscriptionResolver.route` decides.
+        routedByCommand: true
     )
 
     /// An exact managed id picks the family; a local folder is Nemotron 3 when it holds the NeMo

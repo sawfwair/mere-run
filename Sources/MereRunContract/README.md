@@ -100,9 +100,11 @@ ask `catalog resolve`. A named model normally has to agree with the selectors;
 `selectors_override_model: true` says the selectors win instead, so a model
 whose family's selectors fail runs the default the rules pick and the named
 model draws a warning (speech transcribe swaps a Parakeet id for Qwen3-ASR
-under `--task translate`). Single-runtime commands declare one family.
-Commands without a model, and the multi-runtime commands still being scoped,
-omit `routing`. Each domain keeps its routing in
+under `--task translate`). `routed_by_command: true` says the command's own
+router has the last word over the declared rules (speech transcribe's language
+routing): the CLI's gate runs it, and shells ask `catalog resolve`.
+Single-runtime commands declare one family. Commands without a model omit
+`routing`. Each domain keeps its routing in
 `CommandCapabilityCatalog+<Domain>Routing.swift`.
 
 Per option, `families` lists the families that use it (absent: every family),
