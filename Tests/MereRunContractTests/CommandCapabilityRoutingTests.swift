@@ -70,32 +70,50 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
     }
 }
 
-/// Capabilities whose macOS default the CLI picks by machine among models of different
-/// families. A blank command line stays unidentified, and the command chooses when it runs.
-private let machineChosenDefaults: [String: String] = [
-    "geo.tessera": "TESSERAResources.defaultModelID runs the teacher on 32 GB Macs and up, a student below."
-]
-
+/// A macOS default rule names one family, or lists candidates the CLI picks between by machine.
+/// Candidates that span families resolve through the caller's `chooseDefault`; Core's
+/// `ModelFamilyIdentifier` must register a chooser for them (`ManagedModelFamilyCoverageTests`).
 @Test func everyDefaultRuleResolvesToOneFamilyOnMacOS() {
     for (capability, routing) in routed {
-        if machineChosenDefaults[capability.id] != nil {
-            let blank = MereRunCommandInvocation(capability: capability, arguments: [])
-            if case .unidentified = capability.resolveFamily(blank) { continue }
-            Issue.record("\(capability.id) resolves its default statically now; remove it from machineChosenDefaults")
-            continue
-        }
         for rule in routing.defaultModels where rule.applies(on: "macos") {
             let families = rule.family.map { [$0] }
                 ?? Array(Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) }))
-            #expect(families.count == 1, "\(capability.id): default \(rule.models) resolves to \(families)")
+            let machineChosen = rule.family == nil && rule.models.count > 1
+                && rule.models.allSatisfy { model in routing.families.contains { $0.models.contains(model) } }
+            #expect(families.count == 1 || machineChosen && families.count > 1,
+                    "\(capability.id): default \(rule.models) resolves to \(families)")
             #expect(families.allSatisfy { routing.family(id: $0) != nil }, "\(capability.id): default names an unknown family")
         }
         let blank = MereRunCommandInvocation(capability: capability, arguments: [])
-        guard case .family = capability.resolveFamily(blank) else {
-            Issue.record("\(capability.id): a blank command line must resolve to a family on macOS")
+        let chosen = capability.resolveFamily(blank, chooseDefault: { $0.last })
+        guard case .family = chosen else {
+            Issue.record("\(capability.id): a blank command line must resolve to a family on macOS, got \(chosen)")
             continue
         }
     }
+}
+
+@Test func aDefaultThatSpansFamiliesResolvesThroughTheMachineChooser() {
+    enum TierFamily: String, MereRunFamilyID { case small, large }
+    let tiers = MereRunCommandCapability(
+        id: "tier.run", command: ["tier", "run"], title: "Run", summary: "A test capability.",
+        options: [MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string)],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            defaultModels: [.always("tier-small", "tier-large")],
+            families: [
+                .init(TierFamily.small, title: "Small", models: ["tier-small"]),
+                .init(TierFamily.large, title: "Large", models: ["tier-large"])
+            ]
+        )
+    )
+    let blank = MereRunCommandInvocation(capability: tiers, arguments: [])
+    #expect(tiers.resolveFamily(blank) == .unidentified(model: "tier-small, tier-large"))
+    #expect(tiers.resolveFamily(blank, chooseDefault: { _ in "tier-large" }) == .family(id: "large", model: "tier-large", source: .defaultModel))
+    #expect(tiers.resolveFamily(blank, chooseDefault: { _ in "tier-other" }) == .unidentified(model: "tier-small, tier-large"),
+            "a choice outside the candidates is not trusted")
+    #expect(tiers.resolutionReport(blank, chooseDefault: { _ in "tier-small" }).family == "small")
 }
 
 @Test func optionScopesNameDeclaredFamiliesAndValidValues() {

@@ -110,18 +110,21 @@ public struct MereRunFamilyResolutionReport: Codable, Equatable, Sendable {
 }
 
 extension MereRunCommandCapability {
-    /// The one family resolver. `identify` answers models the contract does not list.
+    /// The one family resolver. `identify` answers models the contract does not list;
+    /// `chooseDefault` picks among a default rule's candidates when they span families and the
+    /// CLI chooses by machine, returning the candidate this machine runs.
     public func resolveFamily(
         _ invocation: MereRunCommandInvocation,
         platform: String = "macos",
-        identify: (String) -> MereRunModelIdentification? = { _ in nil }
+        identify: (String) -> MereRunModelIdentification? = { _ in nil },
+        chooseDefault: ([String]) -> String? = { _ in nil }
     ) -> MereRunFamilyResolution {
         guard let routing else { return .unrouted }
         if routing.routesBySelectors {
             return resolveBySelectors(invocation, routing: routing, platform: platform, identify: identify)
         }
         guard let model = modelValue(invocation, flags: routing.modelFlags) else {
-            return resolveDefault(invocation, routing: routing, platform: platform)
+            return resolveDefault(invocation, routing: routing, platform: platform, chooseDefault: chooseDefault)
         }
         return resolve(model: model, invocation, routing: routing, identify: identify, allowIdentify: true)
     }
@@ -171,9 +174,10 @@ extension MereRunCommandCapability {
     public func resolutionReport(
         _ invocation: MereRunCommandInvocation,
         platform: String = "macos",
-        identify: (String) -> MereRunModelIdentification? = { _ in nil }
+        identify: (String) -> MereRunModelIdentification? = { _ in nil },
+        chooseDefault: ([String]) -> String? = { _ in nil }
     ) -> MereRunFamilyResolutionReport {
-        let resolution = resolveFamily(invocation, platform: platform, identify: identify)
+        let resolution = resolveFamily(invocation, platform: platform, identify: identify, chooseDefault: chooseDefault)
         let report = { (family: MereRunRuntimeFamily?, model: String?, source: MereRunFamilyResolutionReport.Source,
                         violations: [String], warnings: [String]) in
             MereRunFamilyResolutionReport(
@@ -269,7 +273,8 @@ extension MereRunCommandCapability {
     private func resolveDefault(
         _ invocation: MereRunCommandInvocation,
         routing: MereRunCapabilityRouting,
-        platform: String
+        platform: String,
+        chooseDefault: ([String]) -> String?
     ) -> MereRunFamilyResolution {
         guard let rule = routing.defaultModels.first(where: { rule in
             rule.applies(on: platform) && (rule.whenAny.isEmpty || rule.whenAny.contains { holds($0, invocation, family: nil) })
@@ -278,10 +283,18 @@ extension MereRunCommandCapability {
         }
         let familyIDs = rule.family.map { [$0] }
             ?? Array(Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) }))
-        guard familyIDs.count == 1, let family = routing.family(id: familyIDs[0]) else {
+        let family: MereRunRuntimeFamily
+        let model: String?
+        if familyIDs.count == 1, let only = routing.family(id: familyIDs[0]) {
+            family = only
+            model = rule.models.count == 1 ? rule.models.first : nil
+        } else if let chosen = chooseDefault(rule.models), rule.models.contains(chosen),
+                  let owner = routing.families.first(where: { $0.models.contains(chosen) }) {
+            family = owner
+            model = chosen
+        } else {
             return .unidentified(model: rule.models.joined(separator: ", "))
         }
-        let model = rule.models.count == 1 ? rule.models.first : nil
         guard selectorsHold(family, invocation) else {
             return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: [family]))
         }
