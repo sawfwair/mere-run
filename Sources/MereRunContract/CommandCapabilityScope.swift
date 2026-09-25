@@ -159,7 +159,8 @@ extension MereRunCommandCapability {
             }
             if let families = option.families, !families.contains(family) {
                 let titles = families.compactMap { routing.family(id: $0)?.title }
-                return [unsupported(option.flag, family: runtime, ignored: option.ignoredBy.contains(family), usedBy: titles)]
+                let ignored = option.ignoredBy.contains(family) || option.readsAsOmitted(values)
+                return [unsupported(option.flag, family: runtime, ignored: ignored, usedBy: titles)]
             }
             guard let rule else { return [] }
             return ruleViolations(option, values: values, rule: rule, family: runtime)
@@ -360,6 +361,15 @@ extension MereRunCommandCapability {
 }
 
 // MARK: - Violations
+
+extension MereRunCapabilityOption {
+    /// An empty string value reads as omitted: commands treat an empty text option as not passed
+    /// (`sfx generate --negative-prompt ""`), so a family that refuses the option only warns.
+    /// Files, directories, numbers, and choices keep refusing an empty value.
+    func readsAsOmitted(_ values: [String]) -> Bool {
+        kind == .string && values.allSatisfy(\.isEmpty)
+    }
+}
 
 extension MereRunCommandCapability {
     private func unsupported(

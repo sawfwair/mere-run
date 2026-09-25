@@ -364,6 +364,34 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(report.warnings == ["--cfg has no effect with Quick. It applies to Full."])
 }
 
+@Test func anEmptyTextValueOnlyWarns() {
+    enum NoteFamily: String, MereRunFamilyID { case plain, noted }
+    let note = MereRunCommandCapability(
+        id: "note.write", command: ["note", "write"], title: "Write", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string),
+            MereRunCapabilityOption(flag: "--note", label: "Note", kind: .string).scoped(NoteFamily.only(.noted)),
+            MereRunCapabilityOption(flag: "--attachment", label: "Attachment", kind: .file).scoped(NoteFamily.only(.noted))
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            families: [
+                .init(NoteFamily.plain, title: "Plain", models: ["note-plain"]),
+                .init(NoteFamily.noted, title: "Noted", models: ["note-noted"])
+            ]
+        )
+    )
+    let messages = { (arguments: [String]) in
+        note.violations(MereRunCommandInvocation(capability: note, arguments: arguments), family: "plain")
+            .map { "\($0.severity.rawValue): \($0.message)" }
+    }
+    #expect(messages(["--note", ""]) == ["warning: --note has no effect with Plain. It applies to Noted."])
+    #expect(messages(["--note", "x"]) == ["error: --note is not supported by Plain. It applies to Noted."])
+    #expect(messages(["--attachment", ""]) == ["error: --attachment is not supported by Plain. It applies to Noted."],
+            "an empty file still counts as passed")
+}
+
 @Test func optionsForAFamilyApplyItsRules() throws {
     #expect(clip.options(forFamily: nil) == clip.options)
     let remote = clip.options(forFamily: "remote").map(\.flag)
