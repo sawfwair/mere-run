@@ -7,9 +7,6 @@ import Testing
 /// Multi-family capabilities whose routing a model-scope domain change declares. Each domain
 /// removes its entries; the integration requires this to be empty.
 private let pendingCapabilities: [String: String] = [
-    "video.generate": "video domain",
-    "video.retake": "video domain",
-    "video.session": "video domain",
     "image.generate": "image domain",
     "image.train-lora": "image domain",
     "music.generate": "music domain",
@@ -34,8 +31,7 @@ private let unroutedCapabilities: [String: String] = [
     "agent.start": "Starts an agent session over a served model; the server owns the runtime.",
     "model.benchmark.chat": "Benchmarks a list of models, each on its own runtime.",
     "model.benchmark.code": "Benchmarks a list of models, each on its own runtime.",
-    "model.benchmark.vlm": "Benchmarks a list of models, each on its own runtime.",
-    "world.serve": "`--backend` selects Cosmos 3 or DreamX World; the model-scope design has not scoped it yet."
+    "model.benchmark.vlm": "Benchmarks a list of models, each on its own runtime."
 ]
 
 /// `defaultCLICommands` entries that name no cataloged capability.
