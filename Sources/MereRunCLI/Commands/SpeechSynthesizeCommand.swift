@@ -21,9 +21,14 @@ struct SpeechSynthesize: AsyncParsableCommand {
         Converts text to speech using Qwen3-TTS-12Hz-1.7B-VoiceDesign.
         Model is downloaded from Hugging Face on first use.
 
+        The CustomVoice checkpoint (speech-tts-qwen3-customvoice) also speaks as a named speaker in
+        style mode: \(Qwen3TTSResources.customVoiceSpeakers.joined(separator: ", ")).
+        A local CustomVoice checkpoint lists its own in config.json (talker_config.spk_id).
+
         Example:
           mere.run speech synthesize "Hello, world!" -o hello.wav
           mere.run speech synthesize "Welcome to mere.run." --voice "A calm British male voice" -o welcome.wav
+          mere.run speech synthesize "Welcome to mere.run." --model speech-tts-qwen3-customvoice --speaker ryan -o welcome.wav
         """
     )
 
@@ -36,8 +41,14 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Canonical model id (speech-tts-qwen3-nano) or a local model path.")
     var model: String = Qwen3TTSResources.defaultModelId
 
-    @Option(name: [.customShort("v"), .long], help: "Voice description for speech style.")
+    @Option(
+        name: [.customShort("v"), .long],
+        help: "Voice description for speech style. With --speaker, an optional delivery instruction; the default description is not sent."
+    )
     var voice: String = TTSRequest.defaultVoiceDescription
+
+    @Option(name: [.long], help: "Named speaker of a CustomVoice checkpoint (style mode), such as ryan or vivian. See the discussion for the list.")
+    var speaker: String?
 
     @Option(name: [.long], help: "Voice mode: style or clone.")
     var mode: TalkModeOption = .style
@@ -82,11 +93,18 @@ struct SpeechSynthesize: AsyncParsableCommand {
         stream ? TTSStreamingOptions(chunkTokenInterval: streamChunkTokens, emitTokenEvents: !quiet || progressJson) : nil
     }
 
+    /// A named speaker already has a voice, so the default description would only fight it: with
+    /// `--speaker`, `--voice` is sent only when it says something else, as upstream's CustomVoice
+    /// takes no instruction unless one is given.
+    private var voiceDescription: String {
+        normalized(speaker) != nil && voice == TTSRequest.defaultVoiceDescription ? "" : voice
+    }
+
     func synthesisPlan(outputURL: URL, cloneReference: TTSCloneReference? = nil) throws -> SpeechSynthesisPlan {
         try SpeechSynthesisPlan(
             request: TTSRequest(
-                text: text, voiceDescription: voice, voiceMode: mode == .clone ? .clone : .style,
-                cloneReference: cloneReference, language: normalizedLanguageOrAuto(language),
+                text: text, voiceDescription: voiceDescription, voiceMode: mode == .clone ? .clone : .style,
+                speaker: normalized(speaker), cloneReference: cloneReference, language: normalizedLanguageOrAuto(language),
                 temperature: temperature, outputURL: outputURL
             ),
             streamingOptions: streamingOptions

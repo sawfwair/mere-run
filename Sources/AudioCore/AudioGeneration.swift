@@ -35,6 +35,9 @@ public struct TTSRequest: Sendable, Hashable {
     public var text: String
     public var voiceDescription: String
     public var voiceMode: TTSVoiceMode
+    /// A named speaker of a CustomVoice checkpoint (its `spk_id` table), style mode only. With
+    /// one, `voiceDescription` is an optional delivery instruction; empty sends none.
+    public var speaker: String?
     public var cloneReference: TTSCloneReference?
     public var language: String
     public var speed: Float
@@ -45,6 +48,7 @@ public struct TTSRequest: Sendable, Hashable {
         text: String,
         voiceDescription: String = TTSRequest.defaultVoiceDescription,
         voiceMode: TTSVoiceMode = .style,
+        speaker: String? = nil,
         cloneReference: TTSCloneReference? = nil,
         language: String = TTSRequest.defaultLanguage,
         speed: Float = TTSRequest.defaultSpeed,
@@ -54,6 +58,7 @@ public struct TTSRequest: Sendable, Hashable {
         self.text = text
         self.voiceDescription = voiceDescription
         self.voiceMode = voiceMode
+        self.speaker = speaker
         self.cloneReference = cloneReference
         self.language = language
         self.speed = speed

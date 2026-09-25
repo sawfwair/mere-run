@@ -18,7 +18,15 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--voice", aliases: ["-v"], label: "Voice", kind: .string,
                 defaultValue: "A calm female voice with clear pronunciation", group: Group.prompt, tier: .essential
-            ).scoped(SpeechSynthesizeFamily.only(.style, ignoredBy: [.clone])),
+            ).scoped(SpeechSynthesizeFamily.only(.style, .customVoice, ignoredBy: [.clone])),
+            // The published CustomVoice checkpoint's speakers (`talker_config.spk_id`). The gate
+            // compares no value: the command checks the name against the checkpoint that runs, so
+            // a local CustomVoice folder can name its own.
+            .init(
+                flag: "--speaker", label: "Speaker", kind: .choice,
+                choices: ["aiden", "dylan", "eric", "ono_anna", "ryan", "serena", "sohee", "uncle_fu", "vivian"],
+                group: Group.prompt, tier: .essential, choiceSpellings: .caseInsensitive
+            ).scoped(SpeechSynthesizeFamily.only(.customVoice, ignoredBy: [.style, .clone])),
             .init(
                 flag: "--mode", label: "Mode", kind: .choice, choices: ["style", "clone"],
                 defaultValue: "style", group: Group.inputs, tier: .standard, choiceSpellings: .exact
@@ -86,7 +94,11 @@ extension MereRunCapabilityCatalog {
                 flag: "--task", label: "Task", kind: .choice, choices: ["transcribe", "translate"],
                 defaultValue: "transcribe", group: Group.prompt, tier: .essential, choiceSpellings: .exact
             ),
-            .init(flag: "--language", label: "Language", kind: .string, group: Group.prompt, tier: .standard),
+            // Translation always targets English, whatever language the audio is in.
+            .init(
+                flag: "--language", label: "Language", kind: .string, group: Group.prompt, tier: .standard,
+                overriddenBy: [.init(flag: "--task", values: ["translate"])]
+            ),
             .init(
                 flag: "--max-tokens", label: "Max tokens", kind: .integer,
                 defaultValue: "448", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8_192, step: 1)

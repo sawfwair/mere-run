@@ -84,16 +84,17 @@ extension CommandArguments {
         args.value(draft.prompt)
         args.option(F.output, draft.outputPath)
         if !draft.model.isBlank { args.option(F.model, draft.model) }
-        // `--mode` picks what the CLI reads: a voice description in style mode, a reference in
-        // clone mode.
+        // `--mode` picks what the CLI reads: a voice description (and, on CustomVoice, a named
+        // speaker) in style mode, a reference in clone mode.
         if draft.voiceMode == "clone" {
             args.option(F.mode, "clone")
             if !draft.voiceProfile.isBlank { args.option(F.profile, draft.voiceProfile) }
             if !draft.refAudioPath.isBlank { args.option(F.refAudio, draft.refAudioPath) }
             if !draft.refText.isBlank { args.option(F.refText, draft.refText) }
             if !draft.saveProfileName.isBlank { args.option(F.saveProfile, draft.saveProfileName) }
-        } else if !draft.secondaryText.isBlank {
-            args.option(F.voice, draft.secondaryText)
+        } else {
+            if let speaker = draft.voiceSpeaker, !speaker.isBlank { args.option(F.speaker, speaker) }
+            if !draft.secondaryText.isBlank { args.option(F.voice, draft.secondaryText) }
         }
         if !draft.language.isBlank, draft.language != "auto" { args.option(F.language, draft.language) }
         args.option(F.temperature, format(draft.temperature))

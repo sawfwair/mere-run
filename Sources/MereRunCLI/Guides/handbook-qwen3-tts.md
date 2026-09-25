@@ -27,8 +27,10 @@ and neutral delivery.
 
 ## Controls and variants
 
-VoiceDesign and CustomVoice are different checkpoints. Use the local speech
-cookbook to select the mode and any reference profile. For cloning, use a clean
+VoiceDesign and CustomVoice are different checkpoints. CustomVoice speaks as a
+named speaker: pass `--speaker` (for example `ryan` or `vivian`) and keep
+`--voice` for an optional delivery instruction. Use the local speech cookbook
+to select the mode and any reference profile. For cloning, use a clean
 single-speaker reference with a matching transcript. Expand ambiguous
 abbreviations and numbers in the spoken text.
 

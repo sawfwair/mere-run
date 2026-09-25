@@ -283,12 +283,14 @@ public final class Qwen3ASRTokenizer {
     /// Create Qwen3-ASR prompt matching mlx-audio reference format.
     /// Format:
     /// <|im_start|>system\n<|im_end|>\n
-    /// <|im_start|>user\n<|audio_start|><|audio_pad|>*N<|audio_end|><|im_end|>\n
+    /// <|im_start|>user\n<|audio_start|><|audio_pad|>*N<|audio_end|>{instruction}<|im_end|>\n
     /// <|im_start|>assistant\nlanguage {lang}<asr_text>
+    /// `instruction` is empty for transcription; translation asks for it there.
     public func createQwen3ASRPrompt(
         audioPlaceholderCount: Int,
         language: String?,
-        supportedLanguages: [String]? = nil
+        supportedLanguages: [String]? = nil,
+        instruction: String? = nil
     ) -> [Int] {
         let trimmed = language?.trimmingCharacters(in: .whitespacesAndNewlines)
         let fallback = "English"
@@ -320,6 +322,9 @@ public final class Qwen3ASRTokenizer {
             tokens.append(contentsOf: Array(repeating: audioTokenId, count: audioPlaceholderCount))
         }
         tokens.append(audioEndTokenId)
+        if let instruction {
+            tokens.append(contentsOf: encode(instruction))
+        }
         tokens.append(imEndId)
         tokens.append(contentsOf: encode("\n"))
 

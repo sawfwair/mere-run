@@ -913,7 +913,8 @@ response body, including partial transcoding output on failure.
 - `model`: `speech-asr-parakeet`, `speech-asr-qwen3`, a local ASR model path,
   or OpenAI names such as `whisper-1` mapped to `speech-asr-parakeet`
 - `language`
-- `task`: `transcribe` or `translate`
+- `task`: `transcribe` or `translate`. Translation runs Qwen3-ASR and
+  returns English; `language` does not change the target
 - `response_format`: `json`, `text`, `verbose_json`, `srt`, or `vtt`
 - `max_tokens`: 1 through 4,096; defaults to 448
 

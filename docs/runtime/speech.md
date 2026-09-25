@@ -41,7 +41,8 @@ the audio does not leave the machine.
 Speech is split across two domains. **Voice ▸ Speak** is the prompt task for
 synthesis, styled or cloned: attaching a reference recording to its composer
 well (or picking a saved voice in the inspector) is clone mode, with streaming
-chunk controls and language selection. **Voice ▸ Voices** is the Manage page
+chunk controls and language selection. With the CustomVoice model selected, the
+inspector offers its named speakers. **Voice ▸ Voices** is the Manage page
 for saved voices — a list, a detail that plays the reference and shows its
 transcript, Delete behind a confirmation, and New voice, which records or
 attaches a reference and runs `speech profile create`.
@@ -121,6 +122,22 @@ swift run mere.run speech synthesize \
   --output ./hello.wav
 ```
 
+`speech-tts-qwen3-customvoice` also speaks as one of its named speakers in
+style mode: `aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`, `sohee`,
+`uncle_fu`, and `vivian`. Pass `--speaker`, and use `--voice` only for an
+optional delivery instruction; the default voice description is
+not sent with a speaker. A local CustomVoice checkpoint's speakers come from
+its `config.json` (`talker_config.spk_id`), and an unknown name stops before
+the weights load. Other checkpoints, and clone mode, ignore `--speaker` with a
+`Warning:` line.
+
+```bash
+swift run mere.run speech synthesize \
+  "Hello from mere.run" \
+  --model speech-tts-qwen3-customvoice --speaker ryan \
+  --output ./ryan.wav
+```
+
 ### Transcribe audio
 
 ```bash
@@ -143,6 +160,16 @@ translate`. A local model folder of the other backend stops the run instead.
 Each backend also ignores the other's options, with a warning: Qwen returns no
 timestamps, so `--timestamps` and `--no-timestamps` apply to Parakeet, and
 Parakeet has no token budget, so `--max-tokens` applies to Qwen.
+
+Translation always produces English, whatever language the audio is in, so
+`--language` has no effect with `--task translate` and the CLI says so.
+Qwen3-ASR's model card documents recognition only; mere.run asks the model for
+an English translation in the prompt, after the audio, and the answer's
+language tag is English. Review translations before relying on them.
+
+```bash
+swift run mere.run speech transcribe ./interview-de.wav --task translate
+```
 
 Streaming transcription chooses the backend and model the same way, except
 that a local model folder runs its own backend whatever the `--language` hint

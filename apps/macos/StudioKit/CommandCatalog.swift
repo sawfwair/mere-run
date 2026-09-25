@@ -869,6 +869,9 @@ package struct CommandDraft: Equatable, Codable {
     package var refAudioPath = ""
     package var refText = ""
     package var saveProfileName = ""
+    /// A CustomVoice named speaker (`--speaker`), style mode only. Optional preserves decoding of
+    /// Library rows created before speakers were exposed.
+    package var voiceSpeaker: String?
     package var speechStreamChunkTokens = 25
     package var speechStreamChunkMS = 200
     package var speechStreamDecodeMS = 2_000

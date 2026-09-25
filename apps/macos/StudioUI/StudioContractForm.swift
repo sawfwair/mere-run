@@ -323,9 +323,14 @@ struct ContractFormControl<Draft>: View {
         choice.isEmpty ? (unsetChoice ?? "") : StudioContractChoiceTitles.title(for: choice, flag: field.flag)
     }
 
-    /// "Custom" where the choices are named presets the user can do without; "Default" elsewhere.
+    /// "Custom" where the choices are named presets the user can do without, "None" for a
+    /// speaker the voice description stands in for, and "Default" elsewhere.
     static func noneTitle(for flag: String) -> String {
-        flag == "--recipe" ? "Custom" : "Default"
+        switch flag {
+        case "--recipe": "Custom"
+        case "--speaker": "None"
+        default: "Default"
+        }
     }
 
     private var choiceBinding: Binding<String> {

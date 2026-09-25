@@ -2425,6 +2425,7 @@ extension CommandFlags {
         package static let output = "--output"
         package static let model = "--model"
         package static let voice = "--voice"
+        package static let speaker = "--speaker"
         package static let mode = "--mode"
         package static let profile = "--profile"
         package static let refAudio = "--ref-audio"

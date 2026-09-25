@@ -297,6 +297,9 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var voiceProfile = ""
     package var refAudioPath = ""
     package var saveProfileName = ""
+    /// A CustomVoice named speaker (`--speaker`) in style mode. Optional preserves saved Studio
+    /// drafts from before speakers were exposed; nil sends none.
+    package var voiceSpeaker: String?
     // Advanced depth the contract-driven inspector binds. Defaults are seeded from the matching
     // template's CommandDraft so the two surfaces never drift.
     package var temperature = 0.7
@@ -424,6 +427,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         voiceProfile = ""
         refAudioPath = ""
         saveProfileName = ""
+        voiceSpeaker = nil
         temperature = base?.temperature ?? 0.7
         topP = base?.topP ?? 0.9
         minP = base?.minP ?? 0
@@ -759,6 +763,8 @@ package enum StudioCommandAdapter {
                 draft.voiceProfile = studioDraft.voiceProfile
                 draft.refAudioPath = studioDraft.refAudioPath
                 draft.saveProfileName = studioDraft.saveProfileName
+            } else {
+                draft.voiceSpeaker = studioDraft.voiceSpeaker
             }
 
         case .listen:

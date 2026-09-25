@@ -28,7 +28,9 @@ mere.run speech transcribe --help
   `mlx`. Core ML requires explicit `--backend parakeet` selection.
 - `--coreml-encoder`: Mere-built Parakeet Core ML artifact directory.
   This option is required with `--provider coreml`.
-- `--task`: `transcribe` or `translate`.
+- `--task`: `transcribe` or `translate`. Translation runs Qwen3-ASR and
+  always produces English, whatever language the audio is in; `--language`
+  has no effect with it.
 - `--language`: optional language hint.
 - `--max-tokens`: Qwen generation cap, default `448`. Parakeet ignores it.
 - `--stream`: streaming ASR mode using the selected backend. A local
@@ -55,7 +57,9 @@ mere.run speech transcribe --help
 - A flag the choice overrules has no effect, and a managed model of the other
   backend is replaced by the chosen backend's default. The CLI prints a
   `Warning:` line for each, and for any option the chosen backend ignores.
-- Use `--task translate --backend auto` for translation.
+- Use `--task translate` to get an English translation of speech in another
+  language. Qwen3-ASR's model card documents recognition only; mere.run asks
+  the model for the translation in its prompt, so review the result.
 - Use `--language en` or another language hint when the audio is short or ambiguous.
 
 ## Examples
@@ -81,10 +85,7 @@ cat ./audio.pcm | mere.run speech transcribe - \
 ```
 
 ```bash
-mere.run speech transcribe ./spanish.wav \
-  --task translate \
-  --backend qwen \
-  --model speech-asr-qwen3
+mere.run speech transcribe ./spanish.wav --task translate
 ```
 
 ## Iteration tips

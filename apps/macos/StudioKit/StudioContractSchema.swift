@@ -276,6 +276,8 @@ package enum StudioContractChoiceTitles {
         "--kind lokr": "LoKr",
         "--mode style": "Preset voice",
         "--mode clone": "Cloned voice",
+        "--speaker ono_anna": "Ono Anna",
+        "--speaker uncle_fu": "Uncle Fu",
         "--response-format text": "Text",
         "--response-format json_object": "JSON",
         "--format json": "JSON",
@@ -1057,6 +1059,7 @@ package enum StudioContractBindings {
         "--voice": .text("secondaryText", \.secondaryText),
         "--mode": .text("voiceMode", \.voiceMode),
         "--profile": .text("voiceProfile", \.voiceProfile),
+        "--speaker": .optionalText("voiceSpeaker", \.voiceSpeaker),
         "--ref-audio": .text("refAudioPath", \.refAudioPath),
         "--save-profile": .text("saveProfileName", \.saveProfileName),
     ]) { first, _ in first } }

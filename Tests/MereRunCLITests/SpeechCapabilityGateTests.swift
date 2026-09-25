@@ -44,6 +44,15 @@ private func temporaryFolder() throws -> URL {
     #expect(translated.warnings == ["--backend parakeet has no effect with Qwen3-ASR; use auto or qwen."])
 }
 
+/// Translation always targets English, so a language hint still routes but changes nothing else.
+@Test func translationSaysALanguageHintHasNoEffect() throws {
+    let translated = try report("speech", "transcribe", "a.wav", "--task", "translate", "--language", "German")
+    #expect(translated.family == "qwen3-asr" && translated.violations.isEmpty)
+    #expect(translated.warnings == ["--language German has no effect with --task translate."])
+    let transcribed = try report("speech", "transcribe", "a.wav", "--backend", "qwen", "--language", "German")
+    #expect(transcribed.family == "qwen3-asr" && transcribed.warnings.isEmpty)
+}
+
 /// A named managed model the other flags overrule is swapped for the chosen backend's default,
 /// as `SpeechTranscriptionResolver` does, with a warning instead of a silent swap.
 @Test func aManagedModelTheFlagsOverruleIsReplacedWithAWarning() throws {
@@ -161,7 +170,7 @@ private func temporaryFolder() throws -> URL {
 
 // MARK: - speech synthesize
 
-@Test func synthesizeScopesOptionsByMode() throws {
+@Test func synthesizeScopesOptionsByModeAndCheckpoint() throws {
     let style = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--voice", "calm", "--profile", "narrator")
     #expect(style.family == "style" && style.model == "speech-tts-qwen3-nano" && style.violations.isEmpty)
     #expect(style.warnings == ["--profile has no effect with Qwen3-TTS style. It applies to Qwen3-TTS clone."])
@@ -169,22 +178,88 @@ private func temporaryFolder() throws -> URL {
     let clone = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--mode", "clone", "-v", "calm",
                            "--ref-audio", "me.wav", "--model", "speech-tts-qwen3-customvoice")
     #expect(clone.family == "clone" && clone.model == "speech-tts-qwen3-customvoice")
-    #expect(clone.warnings == ["--voice has no effect with Qwen3-TTS clone. It applies to Qwen3-TTS style."])
+    #expect(clone.warnings == [
+        "--voice has no effect with Qwen3-TTS clone. It applies to Qwen3-TTS style and Qwen3-TTS CustomVoice."
+    ])
 
-    let local = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--mode", "clone", "--model", "/tmp/qwen3-tts")
-    #expect(local.family == "clone" && local.model == "/tmp/qwen3-tts" && local.source == .selector)
+    let speaker = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--model", "speech-tts-qwen3-customvoice",
+                             "--speaker", "Ryan", "--voice", "whispering")
+    #expect(speaker.family == "custom-voice" && speaker.source == .selector)
+    #expect(speaker.violations.isEmpty && speaker.warnings.isEmpty)
+    let alias = try report("speech", "synthesize", "Hi", "-o", "a.wav", "-m", "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+                           "--speaker", "vivian")
+    #expect(alias.family == "custom-voice" && alias.model == "speech-tts-qwen3-customvoice" && alias.warnings.isEmpty)
 }
 
-/// Every model the contract lists runs in both modes: the command's own model selection takes
-/// it, and the mode alone picks the generator path.
+/// Only CustomVoice has named speakers, and only in style mode: anywhere else `--speaker` has no
+/// effect and the run goes on.
+@Test func synthesizeWarnsAboutASpeakerTheCheckpointOrModeIgnores() throws {
+    let nano = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--speaker", "ryan")
+    #expect(nano.family == "style" && nano.violations.isEmpty)
+    #expect(nano.warnings == ["--speaker has no effect with Qwen3-TTS style. It applies to Qwen3-TTS CustomVoice."])
+    let clone = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--mode", "clone", "--ref-audio", "me.wav",
+                           "--model", "speech-tts-qwen3-customvoice", "--speaker", "ryan")
+    #expect(clone.family == "clone" && clone.violations.isEmpty)
+    #expect(clone.warnings == ["--speaker has no effect with Qwen3-TTS clone. It applies to Qwen3-TTS CustomVoice."])
+    #expect(throws: Never.self) {
+        try CLICapabilityGate.check(arguments: ["mere.run", "speech", "synthesize", "Hi", "-o", "a.wav", "--speaker", "ryan"])
+    }
+}
+
+/// A local folder is identified by its config, as the command reads it: speakers in
+/// `talker_config.spk_id` make it CustomVoice in style mode; `--mode clone` runs any checkpoint.
+@Test func synthesizeIdentifiesALocalCheckpointByItsSpeakers() throws {
+    let root = try temporaryFolder()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let config = root.appendingPathComponent("config.json")
+    try Data(#"{"tts_model_type": "base", "talker_config": {"spk_id": {}}}"#.utf8).write(to: config)
+    let base = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--model", root.path, "--speaker", "ryan")
+    #expect(base.family == "style" && base.source == .identified && base.warnings.count == 1)
+    #expect(try Qwen3TTSResources(rootURL: root).speaker(named: "ryan") == nil)
+
+    try Data(#"{"tts_model_type": "custom_voice", "talker_config": {"spk_id": {"my_voice": 3100}}}"#.utf8).write(to: config)
+    let custom = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--model", root.path, "--speaker", "My_Voice")
+    #expect(custom.family == "custom-voice" && custom.source == .identified && custom.warnings.isEmpty)
+    #expect(try Qwen3TTSResources(rootURL: root).speaker(named: "My_Voice") == "my_voice")
+    let clone = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--mode", "clone", "--model", root.path)
+    #expect(clone.family == "clone" && clone.source == .identified)
+
+    let missing = root.appendingPathComponent("missing").path
+    #expect(try report("speech", "synthesize", "Hi", "-o", "a.wav", "--model", missing).source == .unidentified)
+}
+
+/// Every managed model the contract lists is one the command's model selection takes; style mode
+/// splits them by checkpoint, and clone runs both.
 @Test func synthesizeModelsAgreeWithTheCommandsModelSelection() throws {
     let routing = try #require(MereRunCapabilityCatalog.speechSynthesize.routing)
     for family in routing.families {
         for model in family.models {
             #expect(try SpeechSynthesisModelSelection.resolve(model).modelID == model, "\(family.id) \(model)")
         }
-        #expect(Set(family.models) == Set(routing.families.flatMap(\.models)), "\(family.id) runs every model")
     }
+    #expect(routing.family(id: "style")?.models == [Qwen3TTSResources.defaultModelId])
+    #expect(routing.family(id: "custom-voice")?.models == [Qwen3TTSResources.customVoiceModelId])
+    #expect(Set(routing.family(id: "clone")?.models ?? []) == Qwen3TTSResources.supportedModelIds)
+}
+
+/// The speakers Studio offers are the published CustomVoice checkpoint's.
+@Test func synthesizeSpeakerChoicesAreTheCustomVoiceCheckpoints() throws {
+    let speaker = try #require(MereRunCapabilityCatalog.speechSynthesize.options.first { $0.flag == "--speaker" })
+    #expect(speaker.choices == Qwen3TTSResources.customVoiceSpeakers)
+    #expect(speaker.families == ["custom-voice"] && Set(speaker.ignoredBy) == ["style", "clone"])
+}
+
+/// A named speaker already has a voice: the default description is not sent with one, a
+/// description the user wrote is, and without a speaker nothing changes.
+@Test func synthesizeSendsTheVoiceDescriptionWithASpeakerOnlyWhenItWasWritten() throws {
+    let output = URL(fileURLWithPath: "/tmp/a.wav")
+    let plan = { (arguments: [String]) in try SpeechSynthesize.parse(["Hi", "-o", "a.wav"] + arguments).synthesisPlan(outputURL: output) }
+    let named = try plan(["--speaker", "Ryan"]).request
+    #expect(named.speaker == "Ryan" && named.voiceDescription.isEmpty)
+    let instructed = try plan(["--speaker", "ryan", "--voice", "Very angry"]).request
+    #expect(instructed.speaker == "ryan" && instructed.voiceDescription == "Very angry")
+    let described = try plan([]).request
+    #expect(described.speaker == nil && described.voiceDescription == TTSRequest.defaultVoiceDescription)
 }
 
 // MARK: - What the speech commands accepted before the gate

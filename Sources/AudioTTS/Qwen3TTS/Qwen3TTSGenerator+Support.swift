@@ -21,6 +21,7 @@ public enum Qwen3TTSError: LocalizedError {
     case extractionFailed
     case tokenizationFailed
     case generationFailed(String)
+    case unknownSpeaker(String, available: [String])
 
     public var errorDescription: String? {
         switch self {
@@ -46,6 +47,8 @@ public enum Qwen3TTSError: LocalizedError {
             return "Failed to tokenize input text"
         case .generationFailed(let message):
             return "Generation failed: \(message)"
+        case let .unknownSpeaker(name, available):
+            return "Unknown speaker \(name). This checkpoint's speakers are \(available.joined(separator: ", "))."
         }
     }
 }
