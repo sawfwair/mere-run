@@ -146,6 +146,19 @@ private func expectRuns(
     #expect(named.violations.isEmpty)
 }
 
+/// Retake asks for the diffusion decoder by default, and the session decodes LTX-2.5 Full with
+/// it; LTX-2.5 Distilled installs only the convolutional decoder. Each family shows what it runs.
+@Test func videoDecoderDefaultsFollowEachCommand() throws {
+    func decoder(_ capability: MereRunCommandCapability, _ family: String) -> String? {
+        capability.options(forFamily: family).first { $0.flag == "--video-decoder" }?.defaultValue
+    }
+    for capability in [MereRunCapabilityCatalog.videoRetake, MereRunCapabilityCatalog.videoSession] {
+        #expect(decoder(capability, "ltx25-full") == "diffusion", "\(capability.id)")
+        #expect(decoder(capability, "ltx25-distilled") == "convolutional", "\(capability.id)")
+    }
+    try expectRuns(["video", "session", "--model", "video-ltx25-full-bf16", "--video-decoder", "diffusion"], warnings: 0)
+}
+
 /// Every ACE-Step checkpoint analyzes and trains adapters; LTX-2.5 Full dubs.
 @Test func pickersOfferEveryCheckpointTheCommandRuns() throws {
     for model in ["music-acestep", "music-acestep-xl-turbo", "music-acestep-xl-turbo-lm4b", "music-acestep-xl-sft", "music-acestep-xl-base"] {

@@ -387,7 +387,12 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--audio-modality-scale", label: "Audio modality guidance", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
             .init(flag: "--audio-stg-block", label: "Audio STG block", kind: .integer, repeatable: true).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
             .init(flag: "--audio-guidance-skip-step", label: "Audio guidance skip", kind: .integer).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["diffusion", "convolutional"]).scoped(R.rule(.ltx25Distilled, values: ["convolutional"], severity: .warning)),
+            // Retake asks for the diffusion decoder by default; LTX-2.5 Distilled installs only the
+            // convolutional one and runs that whatever is asked.
+            .init(
+                flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["diffusion", "convolutional"],
+                defaultValue: "diffusion"
+            ).scoped(R.rule(.ltx25Distilled, values: ["convolutional"], severity: .warning)),
             .init(flag: "--hdr", label: "HDR color space", kind: .choice, choices: ["srgb-linear", "acescg", "acescct"]),
             .init(flag: "--hdr-transfer", label: "HDR transfer", kind: .choice, choices: ["acescct", "logc3"]),
             .init(flag: "--preserve-video", label: "Preserve video", kind: .boolean),
@@ -572,7 +577,14 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["convolutional", "diffusion"],
                 group: Group.modelAndAdapters, tier: .expert
-            ).scoped(S.rule(.ltx23Distilled, values: ["convolutional"], severity: .warning), .rule(.ltx23Full, values: ["convolutional"], severity: .warning), .rule(.ltx25Distilled, values: ["convolutional"], severity: .warning)),
+            // The session decodes LTX-2.5 Full with the diffusion decoder unless told otherwise
+            // (`VideoSessionCommand`), and every other checkpoint with the convolutional one.
+            ).scoped(
+                S.rule(.ltx23Distilled, values: ["convolutional"], severity: .warning),
+                .rule(.ltx23Full, values: ["convolutional"], severity: .warning),
+                .rule(.ltx25Distilled, values: ["convolutional"], severity: .warning),
+                .rule(.ltx25Full, defaultValue: "diffusion")
+            ),
             .init(
                 flag: "--ltx-transformer-execution", label: "LTX transformer execution", kind: .choice,
                 choices: ["eager", "compiled"], defaultValue: "eager", group: Group.run, tier: .expert
