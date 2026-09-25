@@ -58,7 +58,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--host", label: "API host", kind: .string),
             .init(flag: "--port", label: "API port", kind: .integer),
             .init(flag: "--pi-path", label: "Pi executable", kind: .file),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .text)
     )

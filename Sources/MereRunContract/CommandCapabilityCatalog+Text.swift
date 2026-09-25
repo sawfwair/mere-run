@@ -19,9 +19,9 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--show-unmasking", label: "Show canvas drafts", kind: .boolean, group: Group.run, tier: .expert
             ),
-            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard),
-            .init(flag: "--system", label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--system", aliases: ["-s"], label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
             .init(
                 flag: "--max-tokens", label: "Max tokens", kind: .integer,
                 defaultValue: "2048", group: Group.sampling, tier: .standard,
@@ -66,7 +66,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--quantized-kv-start", label: "Quantized KV start", kind: .integer,
                 group: Group.run, tier: .expert, range: .init(min: 0, step: 1), dependsOn: "--kv-bits"
             ),
-            .init(flag: "--model-root", label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
+            .init(flag: "--model-root", aliases: ["-m"], label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
                 flag: "--response-format",
@@ -81,8 +81,8 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
                 range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--lora"
             ),
-            .init(flag: "--thinking", label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
-            .init(flag: "--no-thinking", label: "Disable thinking", kind: .boolean, group: Group.sampling, tier: .standard),
+            .init(flag: "--thinking", aliases: ["--show-thinking"], label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
+            .init(flag: "--no-thinking", aliases: ["--no-show-thinking"], label: "Disable thinking", kind: .boolean, group: Group.sampling, tier: .standard),
             .init(
                 flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
@@ -117,7 +117,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--auto-approve-tools", label: "Auto-approve tools", kind: .boolean,
                 group: Group.run, tier: .expert, dependsOn: "--tools"
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
             .init(flag: "--require-installed", label: "Require installed", kind: .boolean, group: Group.run, tier: .expert)
@@ -131,9 +131,9 @@ extension MereRunCapabilityCatalog {
         title: "Code",
         summary: "Run local code generation with GGUF models through llama.cpp.",
         options: [
-            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(
-                flag: "--system", label: "System prompt", kind: .string,
+                flag: "--system", aliases: ["-s"], label: "System prompt", kind: .string,
                 defaultValue: "You are a helpful coding assistant.", group: Group.prompt, tier: .standard
             ),
             .init(
@@ -153,12 +153,13 @@ extension MereRunCapabilityCatalog {
                 flag: "--min-p", label: "Min-p", kind: .number,
                 defaultValue: "0.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
             ),
-            .init(flag: "--model", label: "Model", kind: .file, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .file, group: Group.modelAndAdapters, tier: .essential),
             .init(flag: "--stats", label: "Stats", kind: .boolean, group: Group.run, tier: .expert),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .standard)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text),
+        routing: textCodeRouting
     )
 
     public static let textEmbed = MereRunCommandCapability(
@@ -170,12 +171,13 @@ extension MereRunCapabilityCatalog {
             .init(name: "texts", label: "Texts", kind: .string, required: true, repeatable: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
-            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean)
         ],
-        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true),
+        routing: textEmbedRouting
     )
 
     public static let textAnonymize = MereRunCommandCapability(
@@ -187,27 +189,29 @@ extension MereRunCapabilityCatalog {
             .init(name: "texts", label: "Texts", kind: .string, required: false, repeatable: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
             .init(flag: "--replacement", label: "Replacement template", kind: .string),
             .init(flag: "--json", label: "JSON", kind: .boolean),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean),
-            .init(flag: "--output", label: "Output", kind: .file)
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file)
         ],
-        output: .init(kind: .text, flag: "--output", optional: true)
+        output: .init(kind: .text, flag: "--output", optional: true),
+        routing: textAnonymizeRouting
     )
 
     public static let textDecide = MereRunCommandCapability(
         id: "text.decide", command: ["text", "decide"], title: "Decisions",
         summary: "Evaluate choice, score, and boolean questions with native Laya.",
         options: [
-            .init(flag: "--input", label: "JSON request", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string, defaultValue: "text-decide-laya"),
-            .init(flag: "--output", label: "JSON output", kind: .file),
+            .init(flag: "--input", aliases: ["-i"], label: "JSON request", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, defaultValue: "text-decide-laya"),
+            .init(flag: "--output", aliases: ["-o"], label: "JSON output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean),
             .init(flag: "--preflight", label: "Inspect token budgets", kind: .boolean)
         ],
-        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true),
+        routing: textDecideRouting
     )
 
     public static let textTrainLoRA = MereRunCommandCapability(
@@ -222,15 +226,15 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--resume-step", label: "Resume step", kind: .integer, group: Group.run, tier: .expert
             ),
-            .init(flag: "--data", label: "Dataset", kind: .file, required: true),
-            .init(flag: "--output", label: "Output", kind: .file, required: true),
-            .init(flag: "--model", label: "Base model", kind: .string),
+            .init(flag: "--data", aliases: ["-d"], label: "Dataset", kind: .file, required: true),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, required: true),
+            .init(flag: "--model", aliases: ["-m"], label: "Base model", kind: .string),
             .init(flag: "--model-path", label: "Model path", kind: .directory),
             .init(flag: "--eval", label: "Eval prompts", kind: .file),
             .init(flag: "--adapter-name", label: "Adapter name", kind: .string),
-            .init(flag: "--training-steps", label: "Training steps", kind: .integer),
+            .init(flag: "--training-steps", aliases: ["--steps"], label: "Training steps", kind: .integer),
             .init(flag: "--batch-size", label: "Batch size", kind: .integer),
-            .init(flag: "--learning-rate", label: "Learning rate", kind: .number),
+            .init(flag: "--learning-rate", aliases: ["--lr"], label: "Learning rate", kind: .number),
             .init(flag: "--rank", label: "Rank", kind: .integer),
             .init(flag: "--alpha", label: "Alpha", kind: .number),
             .init(flag: "--max-sequence-length", label: "Sequence length", kind: .integer),

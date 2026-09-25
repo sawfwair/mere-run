@@ -11,32 +11,32 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--sigmas", label: "Sigma schedule", kind: .string, group: Group.sampling, tier: .expert
             ),
-            .init(flag: "--prompt", label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
-            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--negative-prompt", aliases: ["-n"], label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard),
             .init(
-                flag: "--cfg", label: "CFG scale", kind: .number,
+                flag: "--cfg", aliases: ["--cfg-scale"], label: "CFG scale", kind: .number,
                 group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.5)
             ),
             .init(
                 flag: "--sigma-shift", label: "Sigma shift", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 0.1)
             ),
-            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(
-                flag: "--width", label: "Width", kind: .integer,
+                flag: "--width", aliases: ["-W"], label: "Width", kind: .integer,
                 defaultValue: "1024", group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
             ),
             .init(
-                flag: "--height", label: "Height", kind: .integer,
+                flag: "--height", aliases: ["-H"], label: "Height", kind: .integer,
                 defaultValue: "1024", group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
             ),
             .init(
-                flag: "--steps", label: "Steps", kind: .integer,
+                flag: "--steps", aliases: ["-s"], label: "Steps", kind: .integer,
                 group: Group.sampling, tier: .essential, range: .init(min: 1, max: 100, step: 1)
             ),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
-            .init(flag: "--input", label: "Input image", kind: .file, group: Group.inputs, tier: .standard),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--input", aliases: ["-i"], label: "Input image", kind: .file, group: Group.inputs, tier: .standard),
             .init(flag: "--mask", label: "Edit mask", kind: .file, group: Group.inputs, tier: .standard, dependsOn: "--input"),
             .init(
                 flag: "--outpaint", label: "Outpaint padding", kind: .string,
@@ -55,14 +55,14 @@ extension MereRunCapabilityCatalog {
                 group: Group.inputs, tier: .expert, dependsOn: "--ref-image"
             ),
             .init(
-                flag: "--strength", label: "Edit strength", kind: .number,
+                flag: "--strength", aliases: ["--str"], label: "Edit strength", kind: .number,
                 group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05)
             ),
             .init(
                 flag: "--max-sequence-length", label: "Max sequence length", kind: .integer,
                 defaultValue: "512", group: Group.sampling, tier: .expert, range: .init(min: 64, max: 4_096, step: 64)
             ),
-            .init(flag: "--structured-prompt", label: "Structured prompt", kind: .boolean, group: Group.prompt, tier: .standard),
+            .init(flag: "--structured-prompt", aliases: ["--json-prompt"], label: "Structured prompt", kind: .boolean, group: Group.prompt, tier: .standard),
             .init(
                 flag: "--structured-prompt-model", label: "Prompt model", kind: .string,
                 defaultValue: "text-chat-gemma4-12b-4bit", group: Group.prompt, tier: .expert, dependsOn: "--structured-prompt"
@@ -80,7 +80,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--structured-prompt-output", label: "Structured prompt output", kind: .file,
                 group: Group.prompt, tier: .expert, dependsOn: "--structured-prompt"
             ),
-            .init(flag: "--lora", label: "LoRA", kind: .file, repeatable: true, group: Group.modelAndAdapters, tier: .standard),
+            .init(flag: "--lora", aliases: ["-l"], label: "LoRA", kind: .file, repeatable: true, group: Group.modelAndAdapters, tier: .standard),
             .init(
                 flag: "--lora-scale", label: "LoRA scale", kind: .number,
                 defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
@@ -103,7 +103,7 @@ extension MereRunCapabilityCatalog {
             ),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--json", label: "JSON", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             progressJSONOption,
             receiptOption
         ],
@@ -116,14 +116,14 @@ extension MereRunCapabilityCatalog {
         title: "Train image LoRA",
         summary: "Train Krea 2 or FLUX.2 Klein adapters with recipes, previews, checkpoints, and dashboards.",
         options: [
-            .init(flag: "--data", label: "Dataset", kind: .directory),
-            .init(flag: "--output", label: "Output", kind: .file, required: true),
-            .init(flag: "--model", label: "Base model", kind: .string),
-            .init(flag: "--width", label: "Width", kind: .integer),
-            .init(flag: "--height", label: "Height", kind: .integer),
-            .init(flag: "--training-steps", label: "Training steps", kind: .integer),
+            .init(flag: "--data", aliases: ["-d"], label: "Dataset", kind: .directory),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, required: true),
+            .init(flag: "--model", aliases: ["-m"], label: "Base model", kind: .string),
+            .init(flag: "--width", aliases: ["-W"], label: "Width", kind: .integer),
+            .init(flag: "--height", aliases: ["-H"], label: "Height", kind: .integer),
+            .init(flag: "--training-steps", aliases: ["--steps"], label: "Training steps", kind: .integer),
             .init(flag: "--batch-size", label: "Batch size", kind: .integer),
-            .init(flag: "--learning-rate", label: "Learning rate", kind: .number),
+            .init(flag: "--learning-rate", aliases: ["--lr"], label: "Learning rate", kind: .number),
             .init(flag: "--rank", label: "Rank", kind: .integer),
             .init(flag: "--alpha", label: "Alpha", kind: .number),
             .init(flag: "--max-text-length", label: "Max text length", kind: .integer),
@@ -188,7 +188,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--lr-min-factor", label: "LR minimum factor", kind: .number),
             .init(flag: "--adam-weight-decay", label: "Adam weight decay", kind: .number),
             .init(flag: "--synthetic-samples", label: "Synthetic samples", kind: .integer),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )
@@ -200,18 +200,19 @@ extension MereRunCapabilityCatalog {
         summary: "Run deterministic VAE, encoder, transformer, and pipeline checks.",
         options: [
             .init(
-                flag: "--test",
+                flag: "--test", aliases: ["-t"],
                 label: "Suite",
                 kind: .choice,
                 choices: ["vae", "encoder", "transformer", "pipeline", "all"]
             ),
-            .init(flag: "--family", label: "Family", kind: .choice, choices: ["zimage", "klein"]),
-            .init(flag: "--output", label: "Output", kind: .directory),
+            .init(flag: "--family", aliases: ["-m"], label: "Family", kind: .choice, choices: ["zimage", "klein"]),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .directory),
             .init(flag: "--save-reference", label: "Save reference", kind: .boolean),
             .init(flag: "--compare", label: "Compare", kind: .boolean),
             .init(flag: "--reference-dir", label: "Reference directory", kind: .directory)
         ],
-        output: .init(kind: .directory, flag: "--output")
+        output: .init(kind: .directory, flag: "--output"),
+        routing: imageValidateRouting
     )
 
     public static let imageDatasetDiscover = MereRunCommandCapability(
@@ -271,7 +272,7 @@ extension MereRunCapabilityCatalog {
             .init(name: "input", label: "Input image", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Output", kind: .directory),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--resolution", label: "Resolution", kind: .integer, group: Group.run, tier: .essential),
             .init(flag: "--density-threshold", label: "Density threshold", kind: .number),
@@ -281,7 +282,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory, flag: "--output")
+        output: .init(kind: .directory, flag: "--output"),
+        routing: imageReconstruct3DRouting
     )
 
     public static let imageReconstruct3DTrellis2 = MereRunCommandCapability(
@@ -293,7 +295,7 @@ extension MereRunCapabilityCatalog {
             .init(name: "input", label: "Input image", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Output", kind: .directory),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential),
             .init(flag: "--texture-seed", label: "Texture seed", kind: .integer),
@@ -305,7 +307,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory, flag: "--output")
+        output: .init(kind: .directory, flag: "--output"),
+        routing: imageReconstruct3DTrellis2Routing
     )
 
     public static let imageReconstruct3DMultiview = MereRunCommandCapability(
@@ -315,7 +318,7 @@ extension MereRunCapabilityCatalog {
         summary: "Reconstruct a colored mesh from four or six ordered source views.",
         options: [
             .init(flag: "--view", label: "View", kind: .file, repeatable: true),
-            .init(flag: "--output", label: "Output", kind: .directory),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--cameras", label: "Cameras", kind: .file),
             .init(flag: "--resolution", label: "Resolution", kind: .integer, group: Group.run, tier: .essential),
@@ -323,6 +326,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory, flag: "--output")
+        output: .init(kind: .directory, flag: "--output"),
+        routing: imageReconstruct3DMultiviewRouting
     )
 }

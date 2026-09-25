@@ -10,12 +10,12 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--model-path", label: "AuK checkpoint", kind: .directory),
             .init(flag: "--thinker-path", label: "Qwen encoder", kind: .directory),
-            .init(flag: "--output", label: "Output WAV", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "Output WAV", kind: .file),
             .init(flag: "--duration", label: "Duration", kind: .number),
             .init(flag: "--steps", label: "Base steps", kind: .integer),
             .init(flag: "--guidance", label: "Base guidance", kind: .number),
             .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
@@ -29,9 +29,9 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(flag: "--model-path", label: "Model path", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
-            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(
                 flag: "--overlap", label: "AP-BWE overlap", kind: .integer,
                 tier: .standard, range: .init(min: 1, max: 64, step: 1)
@@ -69,7 +69,7 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "float32",
                 tier: .essential
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
@@ -83,8 +83,8 @@ extension MereRunCapabilityCatalog {
             .init(name: "prompt", label: "Audio prompt", kind: .string, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "WAV output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--output", aliases: ["-o"], label: "WAV output", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
             .init(flag: "--enhance-prompt", label: "Enhance prompt", kind: .boolean),

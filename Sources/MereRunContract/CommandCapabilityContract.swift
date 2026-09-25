@@ -76,6 +76,9 @@ public enum MereRunCapabilityOptionGroup {
 
 public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     public let flag: String
+    /// Every other spelling ArgumentParser accepts for this option, long and short (`-m`,
+    /// `--cfg-scale`). The other polarity of an inverted Boolean is its own option, not an alias.
+    public let aliases: [String]
     public let label: String
     public let kind: MereRunCapabilityValueKind
     public let required: Bool
@@ -92,9 +95,18 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     /// Flag of another option on the same capability that must be set for this
     /// option to have any effect.
     public let dependsOn: String?
+    /// Ids of the capability's runtime families (`routing.families`) that use this option.
+    /// `nil`: every family, and every option of a capability without routing.
+    public let families: [String]?
+    /// Families that accept this option today but run without it. Passing it to one of them
+    /// warns; a family in neither `families` nor `ignoredBy` rejects it.
+    public let ignoredBy: [String]
+    /// Per-family narrowing of an option the family uses.
+    public let familyRules: [MereRunOptionFamilyRule]
 
     enum CodingKeys: String, CodingKey {
         case flag
+        case aliases
         case label
         case kind
         case required
@@ -105,10 +117,14 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         case tier
         case range
         case dependsOn = "depends_on"
+        case families
+        case ignoredBy = "ignored_by"
+        case familyRules = "family_rules"
     }
 
     public init(
         flag: String,
+        aliases: [String] = [],
         label: String,
         kind: MereRunCapabilityValueKind,
         required: Bool = false,
@@ -118,9 +134,13 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         group: String? = nil,
         tier: MereRunCapabilityOptionTier? = nil,
         range: MereRunCapabilityRange? = nil,
-        dependsOn: String? = nil
+        dependsOn: String? = nil,
+        families: [String]? = nil,
+        ignoredBy: [String] = [],
+        familyRules: [MereRunOptionFamilyRule] = []
     ) {
         self.flag = flag
+        self.aliases = aliases
         self.label = label
         self.kind = kind
         self.required = required
@@ -131,6 +151,56 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         self.tier = tier
         self.range = range
         self.dependsOn = dependsOn
+        self.families = families
+        self.ignoredBy = ignoredBy
+        self.familyRules = familyRules
+    }
+
+    /// `aliases`, `families`, `ignored_by`, and `family_rules` are additive: a document written
+    /// before they existed decodes with no aliases and an option every family uses.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        flag = try container.decode(String.self, forKey: .flag)
+        aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
+        label = try container.decode(String.self, forKey: .label)
+        kind = try container.decode(MereRunCapabilityValueKind.self, forKey: .kind)
+        required = try container.decode(Bool.self, forKey: .required)
+        repeatable = try container.decode(Bool.self, forKey: .repeatable)
+        choices = try container.decode([String].self, forKey: .choices)
+        defaultValue = try container.decodeIfPresent(String.self, forKey: .defaultValue)
+        group = try container.decodeIfPresent(String.self, forKey: .group)
+        tier = try container.decodeIfPresent(MereRunCapabilityOptionTier.self, forKey: .tier)
+        range = try container.decodeIfPresent(MereRunCapabilityRange.self, forKey: .range)
+        dependsOn = try container.decodeIfPresent(String.self, forKey: .dependsOn)
+        families = try container.decodeIfPresent([String].self, forKey: .families)
+        ignoredBy = try container.decodeIfPresent([String].self, forKey: .ignoredBy) ?? []
+        familyRules = try container.decodeIfPresent([MereRunOptionFamilyRule].self, forKey: .familyRules) ?? []
+    }
+
+    /// Empty additive fields stay absent so a decoder that predates them sees the same JSON it
+    /// always did.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(flag, forKey: .flag)
+        if !aliases.isEmpty { try container.encode(aliases, forKey: .aliases) }
+        try container.encode(label, forKey: .label)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(required, forKey: .required)
+        try container.encode(repeatable, forKey: .repeatable)
+        try container.encode(choices, forKey: .choices)
+        try container.encodeIfPresent(defaultValue, forKey: .defaultValue)
+        try container.encodeIfPresent(group, forKey: .group)
+        try container.encodeIfPresent(tier, forKey: .tier)
+        try container.encodeIfPresent(range, forKey: .range)
+        try container.encodeIfPresent(dependsOn, forKey: .dependsOn)
+        try container.encodeIfPresent(families, forKey: .families)
+        if !ignoredBy.isEmpty { try container.encode(ignoredBy, forKey: .ignoredBy) }
+        if !familyRules.isEmpty { try container.encode(familyRules, forKey: .familyRules) }
+    }
+
+    /// Every spelling ArgumentParser accepts for this option.
+    public var spellings: [String] {
+        [flag] + aliases
     }
 }
 
@@ -151,9 +221,10 @@ extension MereRunCapabilityOption {
         } else {
             section = MereRunCapabilityOptionGroup.run
         }
-        return Self(flag: flag, label: label, kind: kind, required: required, repeatable: repeatable,
-            choices: choices, defaultValue: defaultValue, group: group ?? section,
-            tier: tier ?? (required ? .essential : .standard), range: range, dependsOn: dependsOn)
+        return Self(flag: flag, aliases: aliases, label: label, kind: kind, required: required,
+            repeatable: repeatable, choices: choices, defaultValue: defaultValue, group: group ?? section,
+            tier: tier ?? (required ? .essential : .standard), range: range, dependsOn: dependsOn,
+            families: families, ignoredBy: ignoredBy, familyRules: familyRules)
     }
 }
 
@@ -234,6 +305,9 @@ public struct MereRunCommandCapability: Codable, Equatable, Sendable {
     public let arguments: [MereRunCapabilityArgument]
     public let options: [MereRunCapabilityOption]
     public let output: MereRunCapabilityOutput
+    /// How the capability chooses the runtime family that runs it. Absent for commands that
+    /// load no model, and omitted from JSON then, so an older decoder sees the JSON it always did.
+    public let routing: MereRunCapabilityRouting?
 
     public init(
         id: String,
@@ -242,7 +316,8 @@ public struct MereRunCommandCapability: Codable, Equatable, Sendable {
         summary: String,
         arguments: [MereRunCapabilityArgument] = [],
         options: [MereRunCapabilityOption],
-        output: MereRunCapabilityOutput
+        output: MereRunCapabilityOutput,
+        routing: MereRunCapabilityRouting? = nil
     ) {
         self.id = id
         self.command = command
@@ -251,6 +326,7 @@ public struct MereRunCommandCapability: Codable, Equatable, Sendable {
         self.arguments = arguments
         self.options = options.map { $0.withPresentation(outputFlag: output.flag) }
         self.output = output
+        self.routing = routing
     }
 }
 

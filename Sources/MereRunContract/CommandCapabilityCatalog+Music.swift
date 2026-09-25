@@ -101,7 +101,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--instrumental", label: "Instrumental", kind: .boolean, group: Group.prompt, tier: .standard),
             .init(flag: "--lrc-file", label: "LRC file", kind: .file, group: Group.prompt, tier: .expert),
             .init(flag: "--lrc-output", label: "LRC output", kind: .file, group: Group.output, tier: .expert),
-            .init(flag: "--output", label: "Audio output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--output", aliases: ["-o"], label: "Audio output", kind: .file, group: Group.output, tier: .standard),
             .init(
                 flag: "--export-format", label: "Audio format", kind: .choice, choices: ["pcm16", "pcm24", "float32"],
                 defaultValue: "pcm24", group: Group.output, tier: .expert
@@ -137,12 +137,12 @@ extension MereRunCapabilityCatalog {
                 group: Group.modelAndAdapters, tier: .standard, range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--adapter"
             ),
             .init(
-                flag: "--model", label: "Model", kind: .string,
+                flag: "--model", aliases: ["-m"], label: "Model", kind: .string,
                 defaultValue: "music-acestep", group: Group.modelAndAdapters, tier: .essential
             ),
             .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
             .init(
-                flag: "--decoder-subdirectory", label: "Decoder", kind: .string,
+                flag: "--decoder-subdirectory", aliases: ["--turbo-subdirectory"], label: "Decoder", kind: .string,
                 defaultValue: "acestep-v15-turbo", group: Group.modelAndAdapters, tier: .expert
             ),
             .init(
@@ -167,7 +167,7 @@ extension MereRunCapabilityCatalog {
                 group: Group.sampling, tier: .essential
             ),
             .init(
-                flag: "--steps", label: "Steps", kind: .integer,
+                flag: "--steps", aliases: ["-s"], label: "Steps", kind: .integer,
                 group: Group.sampling, tier: .standard, range: .init(min: 1, max: 200, step: 1)
             ),
             .init(
@@ -205,7 +205,7 @@ extension MereRunCapabilityCatalog {
             ),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
             .init(
-                flag: "--candidates", label: "Candidate count", kind: .integer,
+                flag: "--candidates", aliases: ["--best-of"], label: "Candidate count", kind: .integer,
                 group: Group.sampling, tier: .standard, range: .init(min: 1, max: 16, step: 1)
             ),
             .init(
@@ -234,7 +234,7 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "Fill the audio semantic mask based on the given conditions:", group: Group.prompt, tier: .expert
             ),
             .init(
-                flag: "--task-type",
+                flag: "--task-type", aliases: ["--task"],
                 label: "Task",
                 kind: .choice,
                 choices: ["text2music", "repaint", "cover", "cover-nofsq", "extract", "lego", "complete"],
@@ -285,8 +285,8 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "1", group: Group.inputs, tier: .expert, range: .init(min: 1, max: 16, step: 1), dependsOn: "--flow-edit"
             ),
             .init(flag: "--bpm", label: "BPM", kind: .integer, group: Group.prompt, tier: .standard, range: .init(min: 20, max: 300, step: 1)),
-            .init(flag: "--keyscale", label: "Key", kind: .string, group: Group.prompt, tier: .standard),
-            .init(flag: "--timesignature", label: "Time signature", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--keyscale", aliases: ["--key"], label: "Key", kind: .string, group: Group.prompt, tier: .standard),
+            .init(flag: "--timesignature", aliases: ["--timesig"], label: "Time signature", kind: .string, group: Group.prompt, tier: .standard),
             .init(
                 flag: "--lm-temperature", label: "LM temperature", kind: .number,
                 defaultValue: "0.85", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 2, step: 0.05)
@@ -322,7 +322,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--vae-overlap", label: "VAE overlap", kind: .integer,
                 defaultValue: "64", group: Group.run, tier: .expert, range: .init(min: 0, max: 1_024, step: 8)
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             .init(
                 flag: "--temperature", label: "RT2 temperature", kind: .number,
                 defaultValue: "1.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 2, step: 0.05)
@@ -377,9 +377,9 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory),
-            .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
+            .init(flag: "--decoder-subdirectory", aliases: ["--turbo-subdirectory"], label: "Decoder", kind: .string),
             .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
             .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
             .init(flag: "--lm-model", label: "LM model", kind: .string),
@@ -390,9 +390,10 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--lm-top-p", label: "LM top-p", kind: .number),
             .init(flag: "--include-raw-lm", label: "Raw LM", kind: .boolean),
             .init(flag: "--include-audio-codes", label: "Audio codes", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text),
+        routing: musicAnalyzeRouting
     )
 
     public static let musicTranscribe = MereRunCommandCapability(
@@ -404,17 +405,17 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: false)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--model-path", label: "Model path", kind: .directory),
             .init(flag: "--variant", label: "Variant", kind: .choice, choices: ["small", "medium", "large"],
                   group: Group.run, tier: .essential),
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--format", label: "Format", kind: .choice, choices: ["midi", "json", "jsonl"],
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
+            .init(flag: "--format", aliases: ["-f"], label: "Format", kind: .choice, choices: ["midi", "json", "jsonl"],
                   group: Group.output, tier: .essential),
             .init(flag: "--instruments", label: "Instruments", kind: .string),
             .init(flag: "--list-instruments", label: "List instruments", kind: .boolean),
             .init(flag: "--sampling", label: "Sampling", kind: .boolean),
-            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--temperature", aliases: ["-t"], label: "Temperature", kind: .number),
             .init(flag: "--max-tokens-per-chunk", label: "Tokens per chunk", kind: .integer),
             .init(flag: "--strict-eos", label: "Strict EOS", kind: .boolean),
             .init(flag: "--beam-size", label: "Beam size", kind: .integer),
@@ -422,9 +423,10 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--dtype", label: "Compute type", kind: .choice, choices: ["bfloat16", "float16", "float32"]),
             .init(flag: "--no-musical-context", label: "Disable context", kind: .boolean),
             .init(flag: "--context-output", label: "Context output", kind: .file),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, flag: "--output")
+        output: .init(kind: .file, flag: "--output"),
+        routing: musicTranscribeRouting
     )
 
     public static let musicSeparate = MereRunCommandCapability(
@@ -436,9 +438,9 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(flag: "--model-path", label: "Model path", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
-            .init(flag: "--output-dir", label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(flag: "--output-dir", aliases: ["-o"], label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
             .init(
                 flag: "--overlap", label: "Chunk overlap", kind: .integer,
                 tier: .standard, range: .init(min: 1, max: 64, step: 1)
@@ -451,7 +453,7 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "float16",
                 tier: .essential
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .directory, flag: "--output-dir")
     )
@@ -466,9 +468,9 @@ extension MereRunCapabilityCatalog {
         ],
         options: [
             .init(flag: "--play", label: "Play audio", kind: .boolean),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--duration", label: "Duration", kind: .number),
-            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--no-play", label: "Disable playback", kind: .boolean),
             .init(flag: "--style-conditioning", label: "Style", kind: .choice, choices: ["streaming", "full"]),
             .init(flag: "--temperature", label: "Temperature", kind: .number),
@@ -490,9 +492,10 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--midi-channel", label: "MIDI channel", kind: .string),
             .init(flag: "--midi-note-offset", label: "MIDI transpose", kind: .integer),
             .init(flag: "--midi-cc", label: "MIDI CC map", kind: .string, repeatable: true),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .service, fileExtension: "wav", flag: "--output", optional: true)
+        output: .init(kind: .service, fileExtension: "wav", flag: "--output", optional: true),
+        routing: musicRealtimeRouting
     )
 
     public static let musicTrainAdapter = MereRunCommandCapability(
@@ -501,9 +504,9 @@ extension MereRunCapabilityCatalog {
         title: "Train music adapter",
         summary: "Train a native ACE-Step LoRA or LoKr adapter.",
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--dataset", label: "Dataset", kind: .file, required: true),
-            .init(flag: "--output", label: "Output", kind: .file, required: true),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, required: true),
             .init(flag: "--kind", label: "Adapter kind", kind: .choice, choices: ["auto", "lora", "lokr"]),
             .init(flag: "--rank", label: "Rank", kind: .integer),
             .init(flag: "--alpha", label: "Alpha", kind: .number),
@@ -519,7 +522,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string),
             .init(flag: "--log-every", label: "Progress interval", kind: .integer)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output"),
+        routing: musicTrainAdapterRouting
     )
 
     public static let musicServe = MereRunCommandCapability(
@@ -537,8 +541,8 @@ extension MereRunCapabilityCatalog {
                 choices: ["reference", "optimized", "q8", "q4", "q8-lm", "q4-lm"], group: Group.run, tier: .expert
             ),
             .init(flag: "--host", label: "Host", kind: .string),
-            .init(flag: "--port", label: "Port", kind: .integer),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--port", aliases: ["-p"], label: "Port", kind: .integer),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--checkpoints-root", label: "Checkpoints root", kind: .directory),
             .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
             .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),

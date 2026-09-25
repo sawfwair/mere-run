@@ -11,9 +11,9 @@ extension MereRunCapabilityCatalog {
         ],
         options: [
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard),
-            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(
-                flag: "--model", label: "Model", kind: .string,
+                flag: "--model", aliases: ["-m"], label: "Model", kind: .string,
                 defaultValue: "sfx-woosh-dflow", group: Group.modelAndAdapters, tier: .essential
             ),
             .init(
@@ -21,7 +21,7 @@ extension MereRunCapabilityCatalog {
                 group: Group.sampling, tier: .essential, range: .init(min: 0.5, max: 30, step: 0.5)
             ),
             .init(
-                flag: "--steps", label: "Steps", kind: .integer,
+                flag: "--steps", aliases: ["-s"], label: "Steps", kind: .integer,
                 group: Group.sampling, tier: .standard, range: .init(min: 1, max: 100, step: 1)
             ),
             .init(
@@ -30,7 +30,7 @@ extension MereRunCapabilityCatalog {
             ),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
             .init(flag: "--renoise", label: "Renoise", kind: .string, group: Group.sampling, tier: .expert),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             progressJSONOption,
             receiptOption
         ],
@@ -48,11 +48,11 @@ extension MereRunCapabilityCatalog {
         ],
         options: [
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--synchformer-model", label: "Synchformer", kind: .string),
             .init(flag: "--duration", label: "Duration", kind: .number, group: Group.sampling, tier: .essential),
-            .init(flag: "--steps", label: "Steps", kind: .integer, group: Group.sampling, tier: .essential),
+            .init(flag: "--steps", aliases: ["-s"], label: "Steps", kind: .integer, group: Group.sampling, tier: .essential),
             .init(flag: "--cfg", label: "CFG", kind: .number),
             .init(flag: "--seed", label: "Seed", kind: .integer),
             .init(flag: "--renoise", label: "Renoise", kind: .string),
@@ -60,7 +60,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--clip-batch-size", label: "CLIP batch", kind: .integer),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
@@ -72,9 +72,9 @@ extension MereRunCapabilityCatalog {
         summary: "Encode audio into Woosh latent arrays.",
         arguments: [.init(name: "input", label: "Audio", kind: .file, required: true)],
         options: [
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file, fileExtension: "npy", flag: "--output")
     )
@@ -86,9 +86,9 @@ extension MereRunCapabilityCatalog {
         summary: "Decode Woosh latent arrays into audio.",
         arguments: [.init(name: "input", label: "Latents", kind: .file, required: true)],
         options: [
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file, fileExtension: "wav", flag: "--output")
     )
@@ -103,8 +103,8 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .text)
     )
@@ -116,9 +116,9 @@ extension MereRunCapabilityCatalog {
         summary: "Export text-conditioning tensors for Woosh.",
         arguments: [.init(name: "prompt", label: "Prompt", kind: .string, required: true)],
         options: [
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
     )

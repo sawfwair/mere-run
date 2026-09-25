@@ -31,12 +31,25 @@ private struct ParserHelp: Decodable {
         var flags: Set<String> {
             Set((names ?? []).filter { $0.kind == .long }.map { "--" + $0.name })
         }
+
+        /// Every spelling of the polarity `flag` belongs to: long, short, and single-dash long
+        /// names. An inverted Boolean's `--no-` names form the other polarity.
+        func spellings(sharing flag: String) -> Set<String> {
+            let all = Set((names ?? []).map(\.spelling))
+            guard kind == .flag else { return all }
+            let negative = all.filter { $0.hasPrefix("--no-") }
+            return negative.contains(flag) ? negative : all.subtracting(negative)
+        }
     }
 
     struct Name: Decodable {
         enum Kind: String, Decodable { case long, short, longWithSingleDash }
         let kind: Kind
         let name: String
+
+        var spelling: String {
+            (kind == .long ? "--" : "-") + name
+        }
     }
 }
 
@@ -82,6 +95,9 @@ private func parserCommands() throws -> [String: ParserHelp.Command] {
         for option in capability.options {
             let parsed = try #require(options.first { $0.flags.contains(option.flag) })
             let context = "\(capability.id) \(option.flag)"
+            // The invocation reader folds every spelling into the canonical flag, so the
+            // contract must know each one ArgumentParser accepts.
+            #expect(Set(option.spellings) == parsed.spellings(sharing: option.flag), "\(context): aliases")
             #expect(option.required == !parsed.isOptional, "\(context): required")
             #expect(option.repeatable == parsed.isRepeating, "\(context): repeatable")
             #expect((option.kind == .boolean) == (parsed.kind == .flag), "\(context): flag or value")

@@ -32,6 +32,12 @@ where the pipeline reports steps, `--progress-json`; the line shapes are
 documented on `MereRunCapabilityCatalog.resultReceiptExample` and
 `progressEventExample`.
 
+Each option also lists `aliases`: every other spelling ArgumentParser accepts
+for it, long and short. The other polarity of an inverted Boolean is its own
+option. `capabilityOptionsMatchArgumentParser` requires `flag` plus `aliases` to
+equal the parser's names, because the invocation reader folds every spelling
+into the canonical flag (see Runtime families).
+
 Positional arguments also expose `repeatable`. Earlier v1 documents that omit
 this field decode it as `false`. `capabilityPositionalsMatchArgumentParser`
 checks argument order, names, cardinality, and required values. Narrow, documented
@@ -75,3 +81,38 @@ of ArgumentParser's help metadata and fails if that format changes.
 After changing options, regenerate the shell's derived constants with
 `./scripts/update-studio-command-flags.sh`. Command documentation inventory checks
 continue to read the live command declarations.
+
+## Runtime families
+
+A capability that loads a model declares `routing`
+(`CommandCapabilityRouting.swift`): the `families` of code paths that can run
+it, each with its managed model ids and any `selectors` (flag values that pick
+the family, such as `--backend qwen`); the `model_flags` whose value names the
+model, highest precedence first; `default_models` rules for a blank model; and
+`excluded_models`, managed models a picker might offer that can't run the
+command, each with a `reason`. Single-runtime commands declare one family.
+Commands without a model, and the multi-runtime commands still being scoped,
+omit `routing`. Each domain keeps its routing in
+`CommandCapabilityCatalog+<Domain>Routing.swift`.
+
+Per option, `families` lists the families that use it (absent: every family),
+`ignored_by` the families that accept it without effect, and `family_rules` a
+family's narrowed `values`, `default_value`, `range`, `required`, and
+`max_count`, with a `severity` for values it accepts and replaces. A family in
+neither list rejects the option. Declare families as a per-capability enum that
+conforms to `MereRunFamilyID`, and scope options with its builders:
+`.scoped(F.only(.wan, ignoredBy: [.ltx]), .rule(.wan, required: true))`. Keep
+arithmetic, cross-option, and file-content checks in Core.
+
+`CommandCapabilityInvocation.swift` reads argv after a command path the way
+ArgumentParser does, and `MereRunCapabilityCatalog.capability(forCommandLine:)`
+finds the capability. `CommandCapabilityScope.swift` holds the one resolver
+(`resolveFamily`), the family's narrowed surface (`options(forFamily:)`), and
+its `violations`, each an error or a warning with the sentence the CLI prints.
+`resolutionReport` combines them into the `MereRunFamilyResolutionReport` that
+the CLI's capability gate enforces and `mere.run catalog resolve --json` prints.
+The resolver answers managed ids, defaults, and selectors itself; the CLI
+passes an `identify` closure for aliases and local folders.
+`CommandCapabilityRoutingTests` checks every routed capability's structure and
+each resolver branch; `CapabilityGateTests` runs generated cases for every
+family and option through the CLI gate.

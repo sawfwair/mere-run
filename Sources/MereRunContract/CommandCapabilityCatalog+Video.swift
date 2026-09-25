@@ -57,8 +57,8 @@ extension MereRunCapabilityCatalog {
                 flag: "--h3-window-overlap", label: "H3 window overlap", kind: .integer, defaultValue: "18",
                 group: Group.sampling, tier: .expert
             ),
-            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
                 flag: "--quality",
                 label: "Quality",
@@ -318,7 +318,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--json", label: "JSON", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
             .init(flag: "--timings", label: "Timings", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--timings-output", label: "Timings output", kind: .file, group: Group.run, tier: .expert),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             progressJSONOption,
             receiptOption
         ],
@@ -338,9 +338,9 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--frame-rate", label: "EXR frame rate", kind: .integer),
             .init(flag: "--start-time", label: "Start time", kind: .number, required: true),
             .init(flag: "--end-time", label: "End time", kind: .number, required: true),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--seed", label: "Seed", kind: .integer),
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
             .init(flag: "--enhance-prompt", label: "Enhance prompt", kind: .boolean),
@@ -366,7 +366,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--hdr-transfer", label: "HDR transfer", kind: .choice, choices: ["acescct", "logc3"]),
             .init(flag: "--preserve-video", label: "Preserve video", kind: .boolean),
             .init(flag: "--preserve-audio", label: "Preserve audio", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
     )
@@ -384,9 +384,9 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--ic-lora", label: "Dub-It IC-LoRA", kind: .file, required: true),
             .init(flag: "--ic-lora-strength", label: "IC-LoRA strength", kind: .number),
             .init(flag: "--reference-strength", label: "Reference strength", kind: .number),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--width", label: "Width", kind: .integer),
             .init(flag: "--height", label: "Height", kind: .integer),
             .init(flag: "--seed", label: "Seed", kind: .integer),
@@ -397,9 +397,10 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--prompt-enhancer-model", label: "Prompt enhancer", kind: .string),
             .init(flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory),
             .init(flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["diffusion", "convolutional"]),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output"),
+        routing: videoDubItRouting
     )
 
     public static let videoAnimate = MereRunCommandCapability(
@@ -417,8 +418,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--driving-mask", label: "Driving mask", kind: .file, required: true),
             .init(flag: "--additional-reference", label: "Additional reference", kind: .file, repeatable: true),
             .init(flag: "--additional-reference-mask", label: "Additional reference mask", kind: .file, repeatable: true),
-            .init(flag: "--output", label: "Output", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
             .init(flag: "--mode", label: "Mode", kind: .choice, choices: ["animation", "replacement"]),
             .init(flag: "--profile", label: "Profile", kind: .choice, choices: ["fast", "quality"]),
@@ -439,9 +440,10 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output"),
+        routing: videoAnimateRouting
     )
 
     public static let videoCosmos3 = MereRunCommandCapability(
@@ -462,8 +464,8 @@ extension MereRunCapabilityCatalog {
                     "video-to-video", "policy", "forward-dynamics", "inverse-dynamics", "reasoner"
                 ]
             ),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--actions-output", label: "Actions output", kind: .file),
             .init(flag: "--image", label: "Conditioning image", kind: .file),
             .init(flag: "--video", label: "Conditioning video", kind: .file),
@@ -488,9 +490,10 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--temperature", label: "Temperature", kind: .number),
             .init(flag: "--top-p", label: "Top-p", kind: .number),
             .init(flag: "--max-video-frames", label: "Reasoner video frames", kind: .integer),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, flag: "--output")
+        output: .init(kind: .file, flag: "--output"),
+        routing: videoCosmos3Routing
     )
 
     public static let videoPrepareMasks = MereRunCommandCapability(
@@ -502,12 +505,13 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--plan", label: "Mask plan", kind: .file, required: true),
             .init(flag: "--output-dir", label: "Output directory", kind: .directory, required: true),
             .init(flag: "--preview-frame", label: "Preview frame", kind: .integer),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .directory, flag: "--output-dir")
+        output: .init(kind: .directory, flag: "--output-dir"),
+        routing: videoPrepareMasksRouting
     )
 
     public static let videoExportLatents = MereRunCommandCapability(
@@ -519,16 +523,17 @@ extension MereRunCapabilityCatalog {
             .init(name: "prompt", label: "Prompt", kind: .string, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--width", label: "Width", kind: .integer),
             .init(flag: "--height", label: "Height", kind: .integer),
             .init(flag: "--num-frames", label: "Frames", kind: .integer),
             .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output"),
+        routing: videoExportLatentsRouting
     )
 
     public static let videoSession = MereRunCommandCapability(
@@ -560,9 +565,9 @@ extension MereRunCapabilityCatalog {
                 flag: "--prompt-cache-capacity", label: "Prompt cache capacity", kind: .integer, defaultValue: "8",
                 group: Group.run, tier: .expert
             ),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .service)
     )

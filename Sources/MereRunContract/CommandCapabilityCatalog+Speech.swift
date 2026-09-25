@@ -10,13 +10,13 @@ extension MereRunCapabilityCatalog {
             .init(name: "text", label: "Text", kind: .string, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Output", kind: .file, required: true, group: Group.output, tier: .essential),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, required: true, group: Group.output, tier: .essential),
             .init(
-                flag: "--model", label: "Model", kind: .string,
+                flag: "--model", aliases: ["-m"], label: "Model", kind: .string,
                 defaultValue: "speech-tts-qwen3-nano", group: Group.modelAndAdapters, tier: .essential
             ),
             .init(
-                flag: "--voice", label: "Voice", kind: .string,
+                flag: "--voice", aliases: ["-v"], label: "Voice", kind: .string,
                 defaultValue: "A calm female voice with clear pronunciation", group: Group.prompt, tier: .essential
             ),
             .init(
@@ -43,7 +43,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--stream-chunk-tokens", label: "Chunk tokens", kind: .integer,
                 defaultValue: "25", group: Group.output, tier: .expert, range: .init(min: 1, max: 500, step: 1), dependsOn: "--stream"
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             progressJSONOption,
             receiptOption
         ],
@@ -61,8 +61,8 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(flag: "--run-dir", label: "Run directory", kind: .directory, group: Group.output, tier: .expert),
             .init(flag: "--timestamps", label: "Include timestamps", kind: .boolean),
-            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
             .init(
                 flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen"],
                 defaultValue: "auto", group: Group.modelAndAdapters, tier: .essential
@@ -103,7 +103,7 @@ extension MereRunCapabilityCatalog {
             ),
             .init(flag: "--jsonl", label: "JSON Lines", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--stream"),
             .init(flag: "--no-timestamps", label: "No timestamps", kind: .boolean, group: Group.output, tier: .standard),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
         output: .init(kind: .text, fileExtension: "txt", flag: "--output", optional: true)
@@ -118,12 +118,12 @@ extension MereRunCapabilityCatalog {
             .init(name: "audio", label: "Audio", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
-                flag: "--format", label: "Format", kind: .choice, choices: ["json", "rttm"],
+                flag: "--format", aliases: ["-f"], label: "Format", kind: .choice, choices: ["json", "rttm"],
                 defaultValue: "json", tier: .essential
             ),
-            .init(flag: "--output", label: "Output", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(
                 flag: "--threshold", label: "Activity threshold", kind: .number,
                 defaultValue: "0.5", tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
@@ -144,7 +144,7 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "offline",
                 tier: .essential
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text, flag: "--output", optional: true)
     )
@@ -155,7 +155,7 @@ extension MereRunCapabilityCatalog {
         title: "Live speaker diarization",
         summary: "Stream Nemotron 3 speaker activity from a microphone or 16 kHz PCM stdin.",
         options: [
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(flag: "--device", label: "Input device", kind: .string, group: Group.inputs, tier: .standard),
             .init(flag: "--list-devices", label: "List devices", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--stdin", label: "PCM stdin", kind: .boolean, group: Group.run, tier: .expert),
@@ -167,9 +167,10 @@ extension MereRunCapabilityCatalog {
                 flag: "--threshold", label: "Activity threshold", kind: .number,
                 defaultValue: "0.5", tier: .essential, range: .init(min: 0, max: 1, step: 0.01)
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text),
+        routing: speechDiarizeLiveRouting
     )
 
     public static let speechProfileList = MereRunCommandCapability(
@@ -191,7 +192,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--audio", label: "Reference audio", kind: .file, required: true, group: Group.inputs, tier: .essential),
             .init(flag: "--text", label: "Transcript", kind: .string, group: Group.prompt, tier: .standard),
             .init(flag: "--language", label: "Language", kind: .string, defaultValue: "auto", tier: .standard),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text)
     )
@@ -216,7 +217,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--device", label: "Input device", kind: .string, group: Group.inputs, tier: .standard),
             .init(flag: "--list-devices", label: "List devices", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--language", label: "Language", kind: .string, tier: .essential),
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
                 flag: "--decode-ms", label: "Decode window (ms)", kind: .integer,
                 defaultValue: "2000", tier: .standard, range: .init(min: 1, max: 10_000, step: 100)
@@ -225,9 +226,10 @@ extension MereRunCapabilityCatalog {
                 flag: "--silence-ms", label: "Silence to commit (ms)", kind: .integer,
                 defaultValue: "900", tier: .standard, range: .init(min: 1, max: 5_000, step: 100)
             ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--jsonl", label: "JSONL", kind: .boolean, group: Group.run, tier: .expert)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text),
+        routing: speechListenRouting
     )
 }
