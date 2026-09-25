@@ -150,6 +150,61 @@ import Testing
         #expect(local.family == "cosmos3" && local.source == .selector)
     }
 
+    /// A full checkpoint loads its text-to-video lanes without source `--audio` and then refuses
+    /// stage-one previews, and LTX-2.3 refuses IC-LoRA references (`LTXUnifiedAVGenerator.generate`);
+    /// the audio-to-video lane drops both. The gate refuses the first before loading and warns on
+    /// the second.
+    @Test func fullCheckpointsRefuseReferenceControlsOnlyWithoutSourceAudio() throws {
+        let full23 = try makeRoot(Self.ltx23A2VidFiles + ["vocoder.safetensors"])
+        let a2vid = try makeRoot(Self.ltx23A2VidFiles)
+        defer { for root in [full23, a2vid] { try? FileManager.default.removeItem(at: root) } }
+        let reference = ["--video-conditioning", "r.mp4", "--lora", "ic.safetensors"]
+        let runs: [([String], String)] = [
+            (["--model", "video-ltx25-full-bf16"], "LTX-2.5 Full"),
+            (["--model-root", full23.path], "LTX-2.3 Full"),
+            (["--model-root", a2vid.path], "LTX-2.3 A2Vid")
+        ]
+        for (model, title) in runs {
+            let generate = ["video", "generate", "p"] + model
+            let preview = try report(generate + ["--skip-stage-2"] + reference)
+            #expect(preview.violations.contains(
+                "--skip-stage-2 is not supported by \(title) without --audio. "
+                    + "It applies to LTX-2.5 Distilled and LTX-2.5 Distilled with the diffusion decoder."
+            ), "\(model): \(preview)")
+            #expect(throws: CLICapabilityGate.Rejection.self, "\(model)") {
+                try CLICapabilityGate.check(arguments: ["mere.run"] + generate + ["--skip-stage-2"] + reference)
+            }
+            let withAudio = try report(generate + ["--audio", "a.wav", "--skip-stage-2"] + reference)
+            #expect(withAudio.violations.isEmpty, "\(model): \(withAudio)")
+            #expect(withAudio.warnings.contains("--skip-stage-2 has no effect with \(title). "
+                + "It applies to LTX-2.5 Distilled and LTX-2.5 Distilled with the diffusion decoder."), "\(model)")
+            #expect(throws: Never.self, "\(model)") {
+                try CLICapabilityGate.check(arguments: ["mere.run"] + generate + ["--audio", "a.wav", "--skip-stage-2"] + reference)
+            }
+            // A blank --audio is not source audio, as the command reads it.
+            #expect(try report(generate + ["--audio", " ", "--skip-stage-2"] + reference).violations.count >= 1, "\(model)")
+        }
+
+        for (model, title) in runs.dropFirst() {
+            let generate = ["video", "generate", "p"] + model
+            let refused = try report(generate + reference)
+            #expect(refused.violations == [
+                "--video-conditioning is not supported by \(title) without --audio. It applies to LTX-2.5 Distilled, "
+                    + "LTX-2.5 Distilled with the diffusion decoder and LTX-2.5 Full."
+            ], "\(model): \(refused)")
+            let dropped = try report(generate + ["--audio", "a.wav"] + reference)
+            #expect(dropped.violations.isEmpty && dropped.warnings.contains { $0.hasPrefix("--video-conditioning has no effect") },
+                    "\(model): \(dropped)")
+        }
+        let full25 = try report(["video", "generate", "p", "--model", "video-ltx25-full-bf16"] + reference)
+        #expect(full25.violations.isEmpty && full25.warnings.isEmpty, "\(full25)")
+        // The distilled runtimes run both; Wan and MiniMax-H3 accept and ignore both, as before.
+        let distilled = try report(["video", "generate", "p", "--model", "video-ltx25-distilled-bf16", "--skip-stage-2"] + reference)
+        #expect(distilled.violations.isEmpty && distilled.warnings.isEmpty, "\(distilled)")
+        let wan = try report(["video", "generate", "p", "--model", "video-wan22-ti2v-5b-mlx", "--image", "a.png", "--skip-stage-2"] + reference)
+        #expect(wan.violations.isEmpty && wan.warnings.count == 3, "\(wan)")
+    }
+
     /// The managed LTX-2.5 Distilled checkpoint has no diffusion decoder and decodes with the
     /// convolutional one whatever is asked; a folder that holds it runs `--video-decoder
     /// diffusion`, in every command that loads the distilled runtime.
@@ -194,6 +249,12 @@ import Testing
         }
         return root
     }
+
+    private static let ltx23A2VidFiles = [
+        "split_model.json", "config.json", "connector.safetensors", "transformer-dev.safetensors",
+        "ltx-2.3-22b-distilled-lora-384-1.1.safetensors", "vae_decoder.safetensors", "vae_encoder.safetensors",
+        "audio_vae.safetensors", "spatial_upscaler_x2_v1_1.safetensors"
+    ]
 
     private func tokens(_ flag: String, _ value: String) -> [String] {
         let option = MereRunCapabilityCatalog.videoGenerate.options.first { $0.flag == flag }

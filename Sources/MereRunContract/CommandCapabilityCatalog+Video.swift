@@ -4,6 +4,10 @@ private typealias V = MereRunCapabilityCatalog.VideoGenerateFamily
 private typealias R = MereRunCapabilityCatalog.VideoRetakeFamily
 private typealias S = MereRunCapabilityCatalog.VideoSessionFamily
 
+/// A full checkpoint's run without source audio, where `video generate` loads the text-to-video
+/// lanes rather than the audio-to-video one (`VideoGenerationOperation.prepare`).
+private let withoutSourceAudio: [MereRunFlagCondition] = [.absent("--audio")]
+
 private extension MereRunCapabilityCatalog.VideoGenerateFamily {
     /// `families` use the option, `ignoredBy` accept it without effect, and the rest reject it.
     static func used(by families: [Self], ignoredBy: [Self] = []) -> MereRunOptionScope<Self> {
@@ -303,10 +307,15 @@ extension MereRunCapabilityCatalog {
                 group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
             ).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(flag: "--lora", label: "LTX LoRA", kind: .string, repeatable: true, group: Group.modelAndAdapters, tier: .standard).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
+            // The full LTX-2.3 checkpoints drop the IC-LoRA reference controls on the source-audio
+            // path, and fail on them after loading without it (`LTXUnifiedAVGenerator.generate`).
             .init(
                 flag: "--video-conditioning", label: "IC-LoRA reference video", kind: .string, repeatable: true,
                 group: Group.inputs, tier: .expert
-            ).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA])),
+            ).scoped(
+                V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA]),
+                .rule(.ltx23Full, values: [""], when: withoutSourceAudio), .rule(.ltx23A2Vid, values: [""], when: withoutSourceAudio)
+            ),
             .init(
                 flag: "--conditioning-attention-strength", label: "Reference attention", kind: .number,
                 defaultValue: "1.0", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 1, step: 0.05),
@@ -316,7 +325,13 @@ extension MereRunCapabilityCatalog {
                 flag: "--conditioning-attention-mask", label: "Reference attention mask", kind: .file,
                 group: Group.inputs, tier: .expert, dependsOn: "--video-conditioning"
             ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
-            .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .ltx25Full, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA])),
+            // Every full checkpoint refuses stage-one previews after loading, except on the
+            // source-audio path, which drops them.
+            .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert).scoped(
+                V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .ltx25Full, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA]),
+                .rule(.ltx23Full, values: ["false"], when: withoutSourceAudio), .rule(.ltx23A2Vid, values: ["false"], when: withoutSourceAudio),
+                .rule(.ltx25Full, values: ["false"], when: withoutSourceAudio)
+            ),
             .init(
                 flag: "--reference-downscale-factor", label: "Reference spatial scale", kind: .integer,
                 group: Group.inputs, tier: .expert, range: .init(min: 1, max: 8, step: 1), dependsOn: "--video-conditioning"

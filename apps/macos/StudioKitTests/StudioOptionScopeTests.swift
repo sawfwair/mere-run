@@ -356,6 +356,21 @@ final class StudioOptionScopeTests: XCTestCase {
         XCTAssertEqual(managed.unusedFlags, ["--video-decoder"])
     }
 
+    /// Stage-one previews and IC-LoRA references on a full checkpoint: refused without source
+    /// audio, ignored with it. Studio hides both either way and never sends them there.
+    func testAFullCheckpointNeverSendsStageOnePreviews() throws {
+        let capability = MereRunCapabilityCatalog.videoGenerate
+        let base = ["video", "generate", "a cat", "--model", "video-ltx25-full-bf16"]
+        for audio in [[], ["--audio", "/tmp/a.wav"]] {
+            let argv = base + audio + ["--skip-stage-2"]
+            let scope = StudioScopeSource.contract.scope(capability: capability, commandLine: argv)
+            XCTAssertFalse(scope.allows("--skip-stage-2"), "\(audio)")
+            XCTAssertEqual(scope.unusedFlags, ["--skip-stage-2"], "\(audio)")
+            XCTAssertEqual(scope.refusal != nil, audio.isEmpty, "\(audio): \(String(describing: scope.refusal))")
+            XCTAssertEqual(StudioOptionScopes.filtered(argv, scope: scope), base + audio)
+        }
+    }
+
     func testAFixedValueIsKeptOnlyAsTheFamilyRunsIt() throws {
         let scope = source.scope(capability: Video.capability, commandLine: [
             "video", "generate", "x", "--model", "video-minimax-h3-fasth3-vsa-datafree-mlx", "--steps", "30",
