@@ -1,6 +1,7 @@
 import ArgumentParser
 import MereRunRelayKit
 import Foundation
+import MereRunContract
 import MereRunCore
 #if canImport(Darwin)
 import Darwin
@@ -103,7 +104,7 @@ struct TextChat: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("reasoning-effort")],
-        help: "Reasoning effort from 0 through 1 for Qwen3.8, or 0 through 0.99 for Inkling-Small and Muse Glimmer."
+        help: "Reasoning effort from 0 through 1 for Qwen3.8 and Muse Glimmer, or 0 through 0.99 for Inkling-Small."
     )
     var reasoningEffort: Double?
 
@@ -122,12 +123,12 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Override model root directory (skips auto-download).")
     var modelRoot: String?
 
-    /// Hardware-aware default chat model. Picks the strongest chat model whose
-    /// minimum unified memory fits the machine (via MereRunMachineProfile +
-    /// the capability catalog), and the right engine per platform: Qwen3.6-35B-A3B
-    /// as MLX on Apple Silicon (~64 tok/s on M4 Max) or GGUF/llama.cpp on Linux
-    /// CUDA (~68 tok/s on GB10, vs ~13 for MLX there). Below the A3B memory tier
-    /// it steps down to Gemma 4 12B 4-bit, then nano as the final fallback.
+    /// Hardware-aware default chat model: the first candidate whose minimum unified
+    /// memory fits the machine (via MereRunMachineProfile and the capability catalog).
+    /// Apple Silicon picks Gemma 4 12B 4-bit. Linux first tries Qwen3.6-35B-A3B, as
+    /// GGUF/llama.cpp on CUDA (~68 tok/s on GB10, vs ~13 for MLX there) or MLX
+    /// otherwise, then Gemma 4 12B 4-bit. Nano is the final fallback everywhere. The
+    /// capability contract's text chat default rules list the same candidates.
     static var defaultChatModelId: String {
         let machine = MereRunMachineProfile.current
         let isCUDA: Bool
@@ -156,10 +157,8 @@ struct TextChat: AsyncParsableCommand {
 
     static func backendDescription(for modelID: String) -> String {
         let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if ManagedModelCatalog.spec(for: normalizedModelID)?.validationKind == .codegenGGUF {
-            return "llama.cpp/GGUF"
-        }
-        return NativeMLXRuntime.backendDescription
+        return NativeChatRuntime.commandFamily(modelID: normalizedModelID) == .gguf
+            ? "llama.cpp/GGUF" : NativeMLXRuntime.backendDescription
     }
 
     static func ttftSeconds(for timing: ChatTiming) -> Double? {
@@ -244,14 +243,9 @@ struct TextChat: AsyncParsableCommand {
     var requireInstalled: Bool = false
 
     func run() async throws {
+        // The capability gate already refused options this model's family rejects.
         let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        try Self.validate(responseFormat: responseFormat, modelID: normalizedModelId)
-        try Self.validateReasoningEffort(reasoningEffort, modelID: normalizedModelId)
-        try Self.validateDiffusionOptions(
-            seed: seed,
-            showUnmasking: showUnmasking,
-            modelID: normalizedModelId
-        )
+        let family = NativeChatRuntime.commandFamily(modelID: normalizedModelId)
         let installedModelPath = resolvedInstalledModelPath(modelID: normalizedModelId)
         if preflight {
             try emitPreflight(modelID: normalizedModelId, installedModelPath: installedModelPath)
@@ -351,9 +345,8 @@ struct TextChat: AsyncParsableCommand {
             // them as argument validation failures, as it did before this path moved.
             runtime = try NativeChatRuntime.command(
                 modelID: normalizedModelId,
-                modelPath: LagunaResources.handles(modelSpec: normalizedModelId)
-                    ? (modelRoot ?? installedModelPath) : runtimeModelRoot,
-                gemma4KVCacheQuantization: Gemma4Resources.handles(modelSpec: normalizedModelId)
+                modelPath: family == .laguna ? (modelRoot ?? installedModelPath) : runtimeModelRoot,
+                gemma4KVCacheQuantization: family == .gemma4 || family == .gemma4Unified
                     ? resolveGemma4KVCacheQuantization(for: normalizedModelId)
                     : Gemma4KVCacheQuantization()
             )
@@ -556,7 +549,7 @@ struct TextChat: AsyncParsableCommand {
             messages: messages, maxTokens: requestedMaxTokens, seed: seed,
             reasoningEffort: reasoningEffort,
             lora: lora, requiresJSON: responseFormat == .jsonObject, tools: tools,
-            kvCacheMode: try resolveQ35KVCacheMode(for: modelID),
+            kvCacheMode: try resolveKVCacheMode(for: NativeChatRuntime.commandFamily(modelID: modelID)),
             maxContextTokens: contextSize, showUnmasking: showUnmasking
         )
         do {
@@ -789,61 +782,6 @@ struct TextChat: AsyncParsableCommand {
         )
     }
 
-    static func validate(responseFormat: TextChatResponseFormat, modelID: String) throws {
-        guard responseFormat == .jsonObject else { return }
-        if ManagedModelCatalog.spec(for: modelID)?.validationKind == .codegenGGUF {
-            throw ValidationError(
-                "--response-format json_object is not yet supported by the llama.cpp/GGUF chat runtime; use the native MLX text-chat-q36-nano model."
-            )
-        }
-        if modelID == Psi3ChatResources.defaultModelId
-            || LFM2Resources.handles(modelSpec: modelID)
-            || InklingResources.handles(modelSpec: modelID)
-            || MuseGlimmerResources.handles(modelSpec: modelID)
-            || NemotronHResources.handles(modelSpec: modelID)
-            || NemotronOmniResources.handles(modelSpec: modelID) {
-            throw ValidationError(
-                "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models; Muse Glimmer and Nemotron runtimes support structured tool schemas but not constrained JSON decoding."
-            )
-        }
-        if LagunaResources.handles(modelSpec: modelID) {
-            throw ValidationError(
-                "--response-format json_object is not yet supported by the Laguna native runtime."
-            )
-        }
-    }
-
-    static func validateReasoningEffort(_ value: Double?, modelID: String) throws {
-        guard let value else { return }
-        guard InklingResources.handles(modelSpec: modelID)
-                || MuseGlimmerResources.handles(modelSpec: modelID)
-                || Q35Resources.isQ38ModelId(modelID) else {
-            throw ValidationError(
-                "--reasoning-effort is supported only for Qwen3.8, Inkling-Small, and Muse Glimmer."
-            )
-        }
-        let allowed = InklingResources.handles(modelSpec: modelID)
-            ? (0...0.99).contains(value)
-            : (0...1).contains(value)
-        guard allowed else {
-            let upper = InklingResources.handles(modelSpec: modelID) ? "0.99" : "1"
-            throw ValidationError("--reasoning-effort must be between 0 and \(upper).")
-        }
-    }
-
-    static func validateDiffusionOptions(
-        seed: UInt64?,
-        showUnmasking: Bool,
-        modelID: String
-    ) throws {
-        guard seed != nil || showUnmasking else { return }
-        guard modelID == DiffusionGemmaResources.modelID else {
-            throw ValidationError(
-                "--seed and --show-unmasking are currently supported only by \(DiffusionGemmaResources.modelID)."
-            )
-        }
-    }
-
     func cleanResponse(_ response: String, showThinking: Bool) -> String {
         guard !showThinking else { return response }
         return ChatReasoningMarkup.splitThinkBlocks(in: response).visibleContent
@@ -867,25 +805,16 @@ struct TextChat: AsyncParsableCommand {
         )
     }
 
-    func resolveQ35KVCacheMode(for modelId: String) throws -> RuntimeKVCacheMode? {
-        guard Q35Resources.supportedModelIds.contains(modelId) else { return nil }
-
+    /// The affine KV cache mode for the Qwen-family runtimes. The capability gate limits their
+    /// `--kv-bits` to 4 or 8 and their scheme to uniform; a scheme without a width is the one
+    /// cross-option mistake left to catch here.
+    func resolveKVCacheMode(for family: MereRunCapabilityCatalog.TextChatFamily) throws -> RuntimeKVCacheMode? {
+        guard [.q35, .q35VL, .q38].contains(family) else { return nil }
         guard let kvBits else {
-            if kvQuantScheme != nil || kvGroupSize != nil || quantizedKVStart != nil {
+            if kvQuantScheme != nil {
                 throw ValidationError("Qwen-family KV cache options require --kv-bits 4 or --kv-bits 8.")
             }
             return nil
-        }
-
-        guard kvBits == 4 || kvBits == 8 else {
-            throw ValidationError("Qwen-family --kv-bits must be 4 or 8.")
-        }
-        if let kvQuantScheme,
-           kvQuantScheme.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "uniform" {
-            throw ValidationError("Qwen-family KV cache quantization uses the affine uniform scheme.")
-        }
-        if kvGroupSize != nil || quantizedKVStart != nil {
-            throw ValidationError("Qwen-family KV cache group size and start offset are selected by the runtime.")
         }
         return kvBits == 4 ? .affine4 : .affine8
     }

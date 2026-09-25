@@ -222,6 +222,13 @@ private let clip = MereRunCommandCapability(
     )
 )
 
+/// A capability without routing: every option, no family.
+private let plain = MereRunCommandCapability(
+    id: "plain.run", command: ["plain", "run"], title: "Run", summary: "A test capability.",
+    options: [MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string)],
+    output: .init(kind: .text)
+)
+
 private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     MereRunCommandInvocation(capability: clip, arguments: arguments)
 }
@@ -259,7 +266,7 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     for (given, expected) in cases {
         #expect(clip.resolveFamily(given, identify: identify) == expected, "\(given.values)")
     }
-    #expect(MereRunCapabilityCatalog.textChat.resolveFamily(invocation()) == .unrouted)
+    #expect(plain.resolveFamily(MereRunCommandInvocation(capability: plain, arguments: [])) == .unrouted)
 }
 
 @Test func selectorRoutedFamiliesCheckTheirOwnModelFlag() {
@@ -359,7 +366,7 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
 @Test func routingSerializesAdditively() throws {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
-    let unrouted = String(decoding: try encoder.encode(MereRunCapabilityCatalog.textChat), as: UTF8.self)
+    let unrouted = String(decoding: try encoder.encode(plain), as: UTF8.self)
     #expect(!unrouted.contains("routing") && !unrouted.contains("family_rules") && !unrouted.contains("ignored_by"))
 
     let routing = String(decoding: try encoder.encode(try #require(clip.routing)), as: UTF8.self)

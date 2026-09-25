@@ -15,8 +15,6 @@ private let pendingCapabilities: [String: String] = [
     "music.generate": "music domain",
     "music.separate": "music domain",
     "music.serve": "music domain",
-    "text.chat": "text domain",
-    "text.train-lora": "text domain",
     "speech.transcribe": "speech domain",
     "speech.diarize": "speech domain",
     "speech.synthesize": "speech domain",
@@ -43,8 +41,6 @@ private let nonCapabilityCommands: [String: String] = [
     "vision image-to-3d": "CLI alias of `image reconstruct-3d`, exempt from the contract.",
     "vision image-to-3d-trellis2": "CLI alias of `image reconstruct-3d-trellis2`, exempt from the contract.",
     "vision image-to-3d-multiview": "CLI alias of `image reconstruct-3d-multiview`, exempt from the contract.",
-    "chat": "Mislabel of `text chat`; the text domain fixes the catalog data.",
-    "agent": "Mislabel of `agent start`; the text domain fixes the catalog data.",
     "sfx clap": "Mislabel of `sfx clap score`; the SFX domain fixes the catalog data."
 ]
 

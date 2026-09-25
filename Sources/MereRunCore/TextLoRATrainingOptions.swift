@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 /// Training inputs shared by command and library callers. Viewer and output
 /// presentation options belong to the caller.
@@ -200,6 +201,17 @@ public enum TextLoRATrainingFamily: Sendable, Equatable {
     case lagunaXS
     case inkling
     case lfm2A1B
+
+    /// The contract family this trainer runs as.
+    public var contractFamily: MereRunCapabilityCatalog.TextTrainLoRAFamily {
+        switch self {
+        case .gemma4: .gemma4
+        case .gemma4VLM: .gemma4VLM
+        case .lagunaXS: .lagunaXS
+        case .inkling: .inkling
+        case .lfm2A1B: .lfm2A1B
+        }
+    }
 
     public var manifestFormat: String {
         switch self {

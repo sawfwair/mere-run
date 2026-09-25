@@ -163,13 +163,12 @@ final class StudioContractFormTests: XCTestCase {
         XCTAssertEqual(chat.kvBits, 0)
         XCTAssertFalse(kvBits.emits(in: chat))
         let scheme = try XCTUnwrap(chatFields.first { $0.flag == "--kv-quant-scheme" })
-        XCTAssertFalse(
+        XCTAssertTrue(
             StudioContractSchema.isVisible(scheme, for: .chat, in: chat),
-            "the KV scheme depends on --kv-bits"
+            "Gemma 4 Turbo quantizes its KV cache by default, so the scheme applies without --kv-bits"
         )
         chat.kvBits = 4
         XCTAssertTrue(kvBits.emits(in: chat))
-        XCTAssertTrue(StudioContractSchema.isVisible(scheme, for: .chat, in: chat))
 
         var video = StudioDraft()
         video.reset(for: .video)
