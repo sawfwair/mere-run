@@ -218,19 +218,26 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
     }
 }
 
-/// A listing flag answers before the command reads anything else, so no family runs and no
-/// option, excluded model, or rule is checked.
-@Test func listingFlagsAreBooleansThatStopTheResolver() throws {
+/// A listing flag answers before the command reads anything else, so no option, excluded model,
+/// or rule is checked; a model the command would refuse resolves as no family at all, and any
+/// other keeps its family for the shells that scope their controls by it.
+@Test func listingFlagsAreBooleansThatStopTheChecks() throws {
     for (capability, routing) in routed {
         for flag in routing.listingFlags {
             let option = try #require(capability.options.first { $0.flag == flag }, "\(capability.id) \(flag)")
             #expect(option.kind == .boolean, "\(capability.id) \(flag) must be a Boolean")
-            for excluded in routing.excludedModels {
-                guard let modelFlag = routing.modelFlags.last else { continue }
+            guard let modelFlag = routing.modelFlags.last else { continue }
+            for excluded in routing.excludedModels where excluded.severity == .error {
                 let invocation = MereRunCommandInvocation(capability: capability, arguments: [flag, modelFlag, excluded.id])
                 #expect(capability.resolveFamily(invocation) == .unrouted, "\(capability.id) \(flag) \(excluded.id)")
                 #expect(capability.resolutionReport(invocation).violations.isEmpty)
             }
+            let family = try #require(routing.families.first)
+            let model = try #require(family.models.first)
+            let listed = capability.resolutionReport(
+                MereRunCommandInvocation(capability: capability, arguments: [flag, modelFlag, model])
+            )
+            #expect(listed.family == family.id && listed.violations.isEmpty && listed.warnings.isEmpty, "\(capability.id)")
         }
     }
     let listed = routed.filter { !$0.1.listingFlags.isEmpty }.map(\.0.id).sorted()
@@ -879,9 +886,11 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
 /// ArgumentParser takes a value only from a token that is not option-shaped, keeps the last
 /// occurrence of a single-value option, splits single-dash groups, and reads `-f=value`.
 @Test func invocationReadsSpellingsTheWayArgumentParserDoes() {
-    // `--cfg -1.5` is ArgumentParser's "Missing value": no value, and `-1.5` is not one.
+    // `--cfg -1.5` is ArgumentParser's "Missing value": the flag is passed with no value, and
+    // `-1.5` is not one.
     let negative = invocation("--cfg", "-1.5", "--steps", "-", "--mode", "")
-    #expect(negative.values == ["--steps": ["-"], "--mode": [""]])
+    #expect(negative.values == ["--cfg": [], "--steps": ["-"], "--mode": [""]])
+    #expect(negative.contains("--cfg") && negative.value("--cfg") == nil)
     #expect(negative.undeclared == ["-1.5"])
     let repeated = invocation("--steps", "4", "-s", "40", "--mode", "fast", "--mode=slow", "--image", "a", "--image", "b")
     #expect(repeated.values == ["--steps": ["40"], "--mode": ["slow"], "--image": ["a", "b"]])

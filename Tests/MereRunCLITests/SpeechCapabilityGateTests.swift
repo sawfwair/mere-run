@@ -228,7 +228,7 @@ private func temporaryFolder() throws -> URL {
         ["speech", "diarize-live", "--model", "speech-diarization-sortformer", "--list-devices", "--latency", "0.32"]
     ] {
         let listed = try #require(CLICapabilityGate.evaluate(commandLine: commandLine)).report
-        #expect(listed.source == .unrouted && listed.violations.isEmpty && listed.warnings.isEmpty, "\(commandLine)")
+        #expect(listed.violations.isEmpty && listed.warnings.isEmpty, "\(commandLine)")
         #expect(throws: Never.self) { try CLICapabilityGate.check(arguments: ["mere.run"] + commandLine) }
     }
     #expect(throws: CLICapabilityGate.Rejection.self) {

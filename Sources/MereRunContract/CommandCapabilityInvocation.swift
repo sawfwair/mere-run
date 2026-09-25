@@ -36,13 +36,12 @@ public struct MereRunCommandInvocation: Equatable, Sendable {
             return arguments[index]
         }
         func record(_ option: MereRunCapabilityOption, value: String?) {
-            guard option.kind != .boolean else {
+            // A Boolean has no value. A value-taking option without one is ArgumentParser's parse
+            // error, so the command never runs; the flag still reads as passed, with no value.
+            guard option.kind != .boolean, let value else {
                 values[option.flag] = values[option.flag] ?? []
                 return
             }
-            // A value-taking option without a value is ArgumentParser's parse error; the command
-            // never runs, so nothing is recorded for it.
-            guard let value else { return }
             values[option.flag] = option.repeatable ? values[option.flag, default: []] + [value] : [value]
         }
         while index < arguments.endIndex {

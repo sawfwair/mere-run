@@ -153,14 +153,13 @@ extension MereRunCommandCapability {
         routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolution {
         guard let routing else { return .unrouted }
-        // A listing flag answers before the command reads anything else; no model runs.
-        guard !routing.listingFlags.contains(where: invocation.contains) else { return .unrouted }
         let declared = declaredFamily(
             invocation, routing: routing, platform: platform, identify: identify, chooseDefault: chooseDefault
         )
-        // A router picks between runs; a model the command refuses stays refused.
+        // A router picks between runs; a model the command refuses stays refused, unless a listing
+        // flag answers before the command reads the model at all.
         switch declared {
-        case .excluded, .unmatched: return declared
+        case .excluded, .unmatched: return lists(invocation, routing) ? .unrouted : declared
         case .unrouted, .family, .unidentified: break
         }
         guard let routed = routedFamily().flatMap(routing.family(id:)) else { return declared }
@@ -218,7 +217,8 @@ extension MereRunCommandCapability {
         family: String,
         identify: (String) -> MereRunModelIdentification? = { _ in nil }
     ) -> [MereRunOptionViolation] {
-        guard let routing, let runtime = routing.family(id: family) else { return [] }
+        // A listing flag answers before the command reads any other option.
+        guard let routing, let runtime = routing.family(id: family), !lists(invocation, routing) else { return [] }
         return options.flatMap { option -> [MereRunOptionViolation] in
             let rule = option.familyRules.first { $0.family == family }
             guard let values = invocation.values[option.flag] else {
@@ -616,6 +616,11 @@ extension MereRunCommandCapability {
             flag: option.flag, kind: .unsupported(supportedBy: []), severity: .warning,
             message: "\(option.flag) \(value) has no effect with \(condition.flag)\(instead)."
         )]
+    }
+
+    /// True when the invocation passes a flag that makes the command list something and exit.
+    private func lists(_ invocation: MereRunCommandInvocation, _ routing: MereRunCapabilityRouting) -> Bool {
+        routing.listingFlags.contains(where: invocation.contains)
     }
 
     /// The model `flag` names when it is one the command accepts and replaces with its default.

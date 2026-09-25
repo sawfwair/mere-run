@@ -37,7 +37,9 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// `catalog resolve` about the command line.
     public let routedByCommand: Bool
     /// Boolean flags that make the command list something and exit before it reads another option
-    /// or resolves a model (`speech listen --list-devices`). With one passed, no family runs.
+    /// or resolves a model (`speech listen --list-devices`). With one passed nothing is checked:
+    /// the family still resolves for shells that scope their controls, but no option draws a
+    /// violation or warning, and a model the command would refuse resolves as `.unrouted`.
     public let listingFlags: [String]
 
     enum CodingKeys: String, CodingKey {
