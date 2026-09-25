@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Add `speech synthesize --speaker` for the Qwen3-TTS CustomVoice checkpoint's
+  named speakers (`aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`,
+  `sohee`, `uncle_fu`, `vivian`), in style mode. The name is checked against
+  the checkpoint's `config.json` before the weights load, so a local
+  CustomVoice checkpoint can name its own. With a speaker, `--voice` is an
+  optional delivery instruction and the default description is not sent;
+  `dylan` and `eric` take their Chinese dialects as upstream does. Other
+  checkpoints and clone mode ignore `--speaker` with a warning. Studio's
+  Voice ▸ Speak inspector offers the speakers when CustomVoice is selected.
 - Accept base64 image data URLs in Qwen-family vision chat requests, including
   Ornith screenshots sent through the local OpenAI-compatible API.
 - Check every model-loading command line against the capability contract

@@ -11,6 +11,11 @@ public struct Qwen3TTSResources: Sendable, Hashable {
     public static let customVoiceRepoId = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
     public static let defaultRevision = "main"
     public static let supportedModelIds: Set<String> = [defaultModelId, customVoiceModelId]
+    /// The named speakers in the published CustomVoice checkpoint's `talker_config.spk_id`. A
+    /// local CustomVoice checkpoint can name others; `speakers()` reads the one that runs.
+    public static let customVoiceSpeakers = [
+        "aiden", "dylan", "eric", "ono_anna", "ryan", "serena", "sohee", "uncle_fu", "vivian",
+    ]
     public static let snapshotPatterns = [
         "config.json",
         "generation_config.json",
@@ -125,6 +130,24 @@ public struct Qwen3TTSResources: Sendable, Hashable {
 
     public var generationConfigURL: URL {
         rootURL.appending(path: "generation_config.json")
+    }
+
+    /// The checkpoint's named speakers (`talker_config.spk_id`), sorted. Only a CustomVoice
+    /// checkpoint has any.
+    public func speakers() throws -> [String] {
+        try Qwen3TTSModelConfig.load(from: configURL).talkerConfig.spkId?.keys.sorted() ?? []
+    }
+
+    /// The checkpoint's key for `name`, compared without case as upstream does. `nil` when no
+    /// speaker is named, or when the checkpoint has none: then `--speaker` has no effect, which
+    /// the CLI's capability check already reported.
+    public func speaker(named name: String?) throws -> String? {
+        guard let name else { return nil }
+        let available = try speakers()
+        guard !available.isEmpty else { return nil }
+        let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard available.contains(key) else { throw Qwen3TTSError.unknownSpeaker(name, available: available) }
+        return key
     }
 
     public func validate(fileManager: FileManager = .default) -> [URL] {

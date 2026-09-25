@@ -98,19 +98,26 @@ public actor Qwen3TTSGenerator: TTSGenerator {
                 Memory.clearCache()
             }
             let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
+            // A named speaker is checked against the checkpoint's config before any weights load.
+            let speaker = plan.request.voiceMode == .style
+                ? try Qwen3TTSResources(rootURL: rootURL).speaker(named: plan.request.speaker)
+                : nil
             try Task.checkCancellation()
             if loadedModelPath != rootURL.path {
                 progressHandler?(TTSProgress(stage: .loadingModel, message: "Loading Qwen3-TTS model..."))
                 try await loadModels(from: rootURL, progressHandler: progressHandler)
             }
             try Task.checkCancellation()
-            return try generateLoadedAudio(plan, rootURL: rootURL, progressHandler: progressHandler, continuation: continuation)
+            return try generateLoadedAudio(
+                plan, rootURL: rootURL, speaker: speaker, progressHandler: progressHandler, continuation: continuation
+            )
         }
     }
 
     private func generateLoadedAudio(
         _ plan: SpeechSynthesisPlan,
         rootURL: URL,
+        speaker: String?,
         progressHandler: (@Sendable (TTSProgress) -> Void)?,
         continuation: AsyncThrowingStream<TTSStreamingEvent, Error>.Continuation?
     ) throws -> AudioWaveform {
@@ -139,7 +146,7 @@ public actor Qwen3TTSGenerator: TTSGenerator {
         case .style:
             progressHandler?(TTSProgress(stage: .tokenizing, message: "Preparing inputs..."))
             audio = try generateVoiceDesign(
-                text: request.text, language: request.language, instruct: request.voiceDescription,
+                text: request.text, language: request.language, speaker: speaker, instruct: request.voiceDescription,
                 speakerHintTokens: nil, referencePromptTokens: nil,
                 talker: talker, tokenizer: tokenizer, speechTokenizer: speechTokenizer, config: modelConfig,
                 temperature: request.temperature, progressHandler: progressHandler,

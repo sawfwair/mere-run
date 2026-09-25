@@ -21,6 +21,7 @@ extension MereRunCapabilityCatalog {
 
     enum SpeechSynthesizeFamily: String, MereRunFamilyID {
         case style
+        case customVoice = "custom-voice"
         case clone
     }
 
@@ -75,10 +76,12 @@ extension MereRunCapabilityCatalog {
         ]
     )
 
-    /// `--mode` picks the Qwen3-TTS generator path and so the option surface. The model does not:
-    /// the CLI runs either managed checkpoint, or any local folder, in either mode.
+    /// `--mode` picks the Qwen3-TTS generator path, and in style mode the checkpoint picks the
+    /// rest: CustomVoice speaks as a named `--speaker`, the other checkpoints have none. The CLI
+    /// runs either managed checkpoint in either mode. A local folder is identified by its config
+    /// (`ModelFamilyIdentifier`'s synthesize probe); `--mode clone` runs any checkpoint.
     static let speechSynthesizeRouting = MereRunCapabilityRouting(
-        modelFlags: [],
+        modelFlags: ["--model"],
         defaultModels: [
             .init(whenAny: [.init(flag: "--mode", values: ["clone"])], models: ["speech-tts-qwen3-nano"],
                   family: SpeechSynthesizeFamily.clone.rawValue),
@@ -86,14 +89,17 @@ extension MereRunCapabilityCatalog {
         ],
         families: [
             .init(
-                SpeechSynthesizeFamily.style, title: "Qwen3-TTS style",
-                models: ["speech-tts-qwen3-nano", "speech-tts-qwen3-customvoice"],
-                selectors: [.init(flag: "--mode", values: ["style"])], modelFlag: "--model"
+                SpeechSynthesizeFamily.style, title: "Qwen3-TTS style", models: ["speech-tts-qwen3-nano"],
+                selectors: [.init(flag: "--mode", values: ["style"])]
+            ),
+            .init(
+                SpeechSynthesizeFamily.customVoice, title: "Qwen3-TTS CustomVoice",
+                models: ["speech-tts-qwen3-customvoice"], selectors: [.init(flag: "--mode", values: ["style"])]
             ),
             .init(
                 SpeechSynthesizeFamily.clone, title: "Qwen3-TTS clone",
                 models: ["speech-tts-qwen3-nano", "speech-tts-qwen3-customvoice"],
-                selectors: [.init(flag: "--mode", values: ["clone"])], modelFlag: "--model"
+                selectors: [.init(flag: "--mode", values: ["clone"])]
             )
         ]
     )

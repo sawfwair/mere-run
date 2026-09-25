@@ -6,6 +6,12 @@ clone	composer.speak	validated	--mode --profile --ref-audio --save-profile
 clone	console.speechSynthesize	emitted	--language --mode --model --output --profile --progress-json --quiet --receipt --ref-audio --ref-text --save-profile --stream --stream-chunk-tokens --temperature
 clone	console.speechSynthesize	shown	--language --mode --model --output --profile --progress-json --quiet --receipt --ref-audio --ref-text --save-profile --stream --stream-chunk-tokens --temperature
 clone	console.speechSynthesize	validated	--language --mode --model --output --profile --progress-json --quiet --receipt --ref-audio --ref-text --save-profile --stream --stream-chunk-tokens --temperature
+custom-voice	composer.speak	emitted	--model --output --speaker --temperature --voice
+custom-voice	composer.speak	shown	--mode --model --speaker --voice
+custom-voice	composer.speak	validated	--model --speaker --voice
+custom-voice	console.speechSynthesize	emitted	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
+custom-voice	console.speechSynthesize	shown	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
+custom-voice	console.speechSynthesize	validated	--language --mode --model --output --progress-json --quiet --receipt --speaker --stream --stream-chunk-tokens --temperature --voice
 style	composer.speak	emitted	--model --output --temperature --voice
 style	composer.speak	shown	--mode --model --voice
 style	composer.speak	validated	--voice

@@ -1179,6 +1179,9 @@ Key options:
 - `--output`: required
 - `--model`: canonical speech TTS id or local model path
 - `--voice`
+- `--speaker`: a CustomVoice named speaker in style mode; for
+  `speech-tts-qwen3-customvoice`, one of `aiden`, `dylan`, `eric`,
+  `ono_anna`, `ryan`, `serena`, `sohee`, `uncle_fu`, or `vivian`
 - `--mode`: `style` or `clone`
 - `--profile`
 - `--ref-audio`
@@ -1200,6 +1203,7 @@ Examples:
 swift run mere.run speech synthesize "Hello from mere.run" --output ./hello.wav
 swift run mere.run speech synthesize "Welcome aboard" --voice "A calm British male voice" --output ./welcome.wav
 swift run mere.run speech synthesize "Read this in my cloned voice" --mode clone --profile my-voice --output ./clone.wav
+swift run mere.run speech synthesize "Welcome aboard" --model speech-tts-qwen3-customvoice --speaker ryan --output ./ryan.wav
 ```
 
 ### `mere.run speech transcribe`
