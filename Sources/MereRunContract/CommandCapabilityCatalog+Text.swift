@@ -283,32 +283,34 @@ extension MereRunCapabilityCatalog {
         id: "text.classify", command: ["text", "classify"], title: "Classify",
         summary: "Classify text with caller supplied labels using native GLiNER2.5 Decide.",
         options: [
-            .init(flag: "--input", label: "JSON request", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string,
+            .init(flag: "--input", aliases: ["-i"], label: "JSON request", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string,
                   defaultValue: "text-classify-gliner25-decide"),
-            .init(flag: "--output", label: "JSON output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "JSON output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean),
             .init(flag: "--preflight", label: "Inspect token usage", kind: .boolean),
             .init(flag: "--long", label: "Process long documents", kind: .boolean),
             .init(flag: "--batch", label: "Process a request array", kind: .boolean)
         ],
-        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true),
+        routing: textGLiNERRouting
     )
 
     public static let textExtract = MereRunCommandCapability(
         id: "text.extract", command: ["text", "extract"], title: "Extract",
         summary: "Extract entities, relations, and structures with native GLiNER2.5 Decide.",
         options: [
-            .init(flag: "--input", label: "JSON request", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string,
+            .init(flag: "--input", aliases: ["-i"], label: "JSON request", kind: .file),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string,
                   defaultValue: "text-classify-gliner25-decide"),
-            .init(flag: "--output", label: "JSON output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "JSON output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean),
             .init(flag: "--preflight", label: "Inspect token usage", kind: .boolean),
             .init(flag: "--long", label: "Process long documents", kind: .boolean),
             .init(flag: "--batch", label: "Process a request array", kind: .boolean)
         ],
-        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true),
+        routing: textGLiNERRouting
     )
 
     public static let textTrainLoRA = MereRunCommandCapability(

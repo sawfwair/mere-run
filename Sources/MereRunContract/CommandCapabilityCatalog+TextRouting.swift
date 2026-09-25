@@ -17,6 +17,10 @@ extension MereRunCapabilityCatalog {
         case laya
     }
 
+    enum TextGLiNERFamily: String, MereRunFamilyID {
+        case gliner25Decide = "gliner25-decide"
+    }
+
     /// The code paths `text chat` runs. Where a runtime refuses images on its text-only
     /// checkpoints, the vision-capable ones are a family of their own.
     public enum TextChatFamily: String, CaseIterable, Sendable, MereRunFamilyID {
@@ -214,6 +218,15 @@ extension MereRunCapabilityCatalog {
         defaultModels: [.always("text-anonymize-privacy-filter")],
         families: [
             .init(TextAnonymizeFamily.privacyFilter, title: "Privacy Filter", models: ["text-anonymize-privacy-filter"])
+        ]
+    )
+
+    /// `text classify` and `text extract` run the same GLiNER2.5 Decide checkpoint.
+    static let textGLiNERRouting = MereRunCapabilityRouting(
+        modelFlags: ["--model"],
+        defaultModels: [.always("text-classify-gliner25-decide")],
+        families: [
+            .init(TextGLiNERFamily.gliner25Decide, title: "GLiNER2.5 Decide", models: ["text-classify-gliner25-decide"])
         ]
     )
 
