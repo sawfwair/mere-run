@@ -161,3 +161,14 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Sound FX validation
+
+extension CommandCatalog {
+    /// The reason a sound FX template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    /// No sound FX template has one yet.
+    package static func soundFXValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        nil
+    }
+}

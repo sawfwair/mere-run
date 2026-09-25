@@ -393,3 +393,61 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Music validation
+
+extension CommandCatalog {
+    /// The reason a music template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func musicValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .musicGenerate:
+            if draft.musicInstrumental,
+               !draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank
+                    || !draft.musicLRCFile.isBlank
+            {
+                return "Instrumental cannot be combined with lyrics."
+            }
+            if !draft.musicLRCFile.isBlank
+                && (!draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank) {
+                return "Use synchronized LRC or plain lyrics, not both."
+            }
+            let sourceTasks = ["repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]
+            if (sourceTasks.contains(draft.musicTask) || draft.musicFlowEdit)
+                && draft.musicSourceAudio.isBlank {
+                return "Source audio is required for \(draft.musicTask) and flow-edit workflows."
+            }
+        case .musicTranscribe:
+            if draft.inputPath.isBlank && !draft.musicListInstruments {
+                return "Audio path is required unless listing instruments."
+            }
+        case .musicRealtime:
+            if draft.prompt.isBlank && !draft.musicListMIDIInputs && !draft.musicMIDIMonitor {
+                return "A prompt is required unless listing or monitoring MIDI inputs."
+            }
+            if !draft.musicPlay && draft.outputPath.isBlank && !draft.musicListMIDIInputs
+                && !draft.musicMIDIMonitor {
+                return "Enable playback or choose an output file."
+            }
+        case .musicTrainAdapter:
+            if draft.inputPath.isBlank {
+                return "Dataset manifest is required."
+            }
+            if draft.outputPath.isBlank {
+                return "Adapter output is required."
+            }
+        case .musicServe:
+            if draft.host != "127.0.0.1" && draft.host != "localhost"
+                && draft.host != "::1" && draft.apiKey.isBlank {
+                return "An API key is required for non-loopback music servers."
+            }
+        case .musicSeparate:
+            if let overlap = draft.audioOverlap, overlap <= 0 {
+                return "Overlap must be positive."
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

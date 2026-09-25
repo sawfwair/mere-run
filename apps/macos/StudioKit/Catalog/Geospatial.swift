@@ -94,3 +94,14 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Geospatial validation
+
+extension CommandCatalog {
+    /// The reason a geospatial template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    /// No geospatial template has one yet.
+    package static func geospatialValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        nil
+    }
+}

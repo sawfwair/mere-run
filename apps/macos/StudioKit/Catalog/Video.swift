@@ -325,6 +325,68 @@ extension CommandArguments {
     }
 }
 
+// MARK: - Video validation
+
+extension CommandCatalog {
+    /// The reason a video template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func videoValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .videoGenerate:
+            let family = StudioVideoModelFamily(model: draft.modelRoot.isBlank ? draft.model : draft.modelRoot)
+            if family == .miniMaxH3Ref2VA {
+                if !(draft.inputPath.isBlank && draft.endImagePath.isBlank) {
+                    return "MiniMax-H3 Ref2VA uses ordered image, video, or audio references instead of keyframes."
+                }
+                if (draft.h3ReferenceInputs ?? []).isEmpty {
+                    return "MiniMax-H3 Ref2VA requires at least one ordered reference."
+                }
+            } else if !draft.endImagePath.isBlank && draft.inputPath.isBlank {
+                return "A start image is required when an end keyframe is selected."
+            }
+            if family == .miniMaxH3FL2VA && !(draft.h3ReferenceInputs ?? []).isEmpty {
+                return "MiniMax-H3 FL2VA does not accept ordered references."
+            }
+        case .videoRetake:
+            if draft.retakeStartTime < 0 || draft.retakeStartTime >= draft.retakeEndTime {
+                return "Retake requires a nonnegative start before the end time."
+            }
+            if draft.retakePreserveVideo && draft.retakePreserveAudio {
+                return "Retake must regenerate video, audio, or both."
+            }
+        case .videoDubIt:
+            if draft.loraPath.isBlank {
+                return "Dub-It requires an IC-LoRA file."
+            }
+        case .videoAnimate:
+            if draft.referenceMaskPath.isBlank {
+                return "Reference mask path is required."
+            }
+            if draft.drivingVideoPath.isBlank {
+                return "Driving video path is required."
+            }
+            if draft.drivingMaskPath.isBlank {
+                return "Driving mask path is required."
+            }
+            let additionalReferences = CommandArguments.pathList(draft.referenceImagePaths)
+            let additionalMasks = CommandArguments.pathList(draft.scailAdditionalReferenceMaskPaths ?? "")
+            if additionalReferences.count != additionalMasks.count {
+                return "Each additional SCAIL reference needs one matching reference mask."
+            }
+            if additionalReferences.count > 5 {
+                return "SCAIL supports at most six subjects total."
+            }
+        case .videoPrepareMasks:
+            if draft.outputPath.isBlank {
+                return "Output directory is required."
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}
+
 // MARK: - Video model family
 
 package enum StudioVideoModelFamily: Equatable {

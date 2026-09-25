@@ -104,3 +104,43 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Audio validation
+
+extension CommandCatalog {
+    /// The reason an audio template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func audioValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .audioEdit:
+            if draft.inputPath.isBlank && !draft.useDuration { return "Choose a duration or reference audio." }
+            if draft.useDuration && (!draft.durationSeconds.isFinite || draft.durationSeconds <= 0 || draft.durationSeconds > 300) {
+                return "Duration must be in (0, 300] seconds."
+            }
+            if !["audio-auk-base", "audio-auk-flash"].contains(draft.model) { return "Choose an AuK base or Flash model." }
+            if !(1...1000).contains(draft.steps) { return "Steps must be in 1...1000." }
+            if let guidance = draft.audioGuidanceScale, !guidance.isFinite || guidance < 0 {
+                return "Guidance must be finite and non-negative."
+            }
+        case .audioEnhance:
+            if let overlap = draft.audioOverlap, overlap <= 0 {
+                return "Overlap must be positive."
+            }
+            if draft.model.localizedCaseInsensitiveContains("universr") {
+                if let inputRate = draft.audioInputRate,
+                   ![8_000, 12_000, 16_000, 24_000].contains(inputRate) {
+                    return "UniverSR input bandwidth must be 8000, 12000, 16000, or 24000 Hz."
+                }
+                if (draft.audioODESteps ?? 4) <= 0 {
+                    return "UniverSR ODE steps must be positive."
+                }
+                if (draft.audioChunkSeconds ?? 10) < 3 {
+                    return "UniverSR chunks must be at least 3 seconds."
+                }
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

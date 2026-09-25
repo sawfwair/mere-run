@@ -505,3 +505,41 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Vision validation
+
+extension CommandCatalog {
+    /// The reason a vision template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func visionValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .visionEmbed:
+            if draft.prompt.isBlank && draft.inputPath.isBlank {
+                return "Text or image input is required."
+            }
+        case .visionSegment, .visionTrack:
+            if draft.prompt.isBlank && draft.visionBoxPrompts.isBlank
+                && draft.visionPointPrompts.isBlank {
+                return "Add a text, box, or point prompt."
+            }
+        case .visionFaceCompare, .visionFlow:
+            if draft.visionSecondInputPath.isBlank {
+                return "A second image is required."
+            }
+        case .visionFaceBatch:
+            if draft.inputPath.isBlank && draft.visionAdditionalInputs.isBlank
+                && draft.visionInputList.isBlank {
+                return "Choose images or an input-list file."
+            }
+        case .visionGeometryMultiview:
+            let images = ([draft.inputPath] + CommandArguments.pathList(draft.visionAdditionalInputs))
+                .filter { !$0.isBlank }
+            if images.count < 2 {
+                return "Add at least two ordered views."
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

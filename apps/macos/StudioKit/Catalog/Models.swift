@@ -481,3 +481,47 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Models validation
+
+extension CommandCatalog {
+    /// The reason a models template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func modelsValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .modelBenchmarkLagunaDFlash:
+            if draft.modelRoot.isBlank {
+                return "Laguna model path is required."
+            }
+            if draft.secondaryText.isBlank {
+                return "Laguna DFlash model path is required."
+            }
+        case .modelBenchmarkParakeetCoreML:
+            if draft.inputPath.isBlank {
+                return "An audio file is required."
+            }
+            if draft.modelRoot.isBlank {
+                return "A Parakeet Core ML artifact directory is required."
+            }
+        case .modelPull:
+            if !draft.all && draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Choose a model id, or enable All."
+            }
+        case .modelRemove:
+            if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Model id is required."
+            }
+        case .modelInfo:
+            if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Model id or local model path is required."
+            }
+        case .modelOptimize:
+            if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "MiniMax-H3 model id or local model path is required."
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

@@ -97,7 +97,8 @@ surface for is still reachable the day the contract declares it.
   `CommandTemplate` record type.
 - `StudioKit/Catalog/`: one file per command category, with Music & Video split
   into `Audio.swift`, `Video.swift`, and `Music.swift`, holding that category's
-  `CommandTemplate` records and the function that builds each template's argv.
+  `CommandTemplate` records, the function that builds each template's argv, and
+  the checks a template's draft must pass before it runs.
   `CommandFlags.swift` is generated from `MereRunCapabilityCatalog` by
   `./scripts/update-studio-command-flags.sh`, so every flag the app emits is a
   constant the shared contract declares and a renamed flag is a compile error;
