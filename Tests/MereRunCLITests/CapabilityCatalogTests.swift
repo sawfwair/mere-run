@@ -153,10 +153,19 @@ private let positionalNameAliases: [String: String] = [
 }
 
 @Test func catalogCommandParsesASelectedCapability() throws {
-    let command = try CatalogCommand.parse(["video.generate", "--json"])
+    let command = try #require(try CatalogCommand.parseAsRoot(["video.generate", "--json"]) as? CatalogShowCommand)
     #expect(command.id == "video.generate")
     #expect(command.json)
     #expect(MereRunCapabilityCatalog.command(id: command.id ?? "")?.id == "video.generate")
+}
+
+@Test func catalogResolveTakesTheCommandLineAfterTheTerminator() throws {
+    let command = try #require(
+        try CatalogCommand.parseAsRoot(["resolve", "--json", "--", "music", "analyze", "--model", "x"])
+            as? CatalogResolveCommand
+    )
+    #expect(command.json)
+    #expect(command.commandLine == ["music", "analyze", "--model", "x"])
 }
 
 /// Every public CLI leaf command must either be described by the shared
@@ -166,7 +175,7 @@ private let positionalNameAliases: [String: String] = [
 /// contract, and the app's inverse coverage test is keyed to the contract too,
 /// so an uncataloged command is invisible to both.
 let contractExemptCommandIDs: [String: String] = [
-    "catalog": "Emits the contract itself; shells compile against MereRunContract instead.",
+    "catalog.show": "Emits the contract itself; shells compile against MereRunContract instead.",
     "relay.serve": "Relay console owns the control plane. See apps/macos/README.md.",
     "executor.add.ssh": "Relay console owns executor profiles.",
     "executor.add.relay": "Relay console owns executor profiles.",

@@ -24,6 +24,8 @@ Public tree:
 <!-- BEGIN GENERATED: CLI TREE -->
 - [`mere.run guide`](/cookbooks) — Read offline mere.run command cookbooks.
 - [`mere.run catalog`](/cli) — Inspect the machine-readable command capability contract.
+  - `mere.run catalog show` — Print the capability contract, or one capability by id (the default).
+  - `mere.run catalog resolve` — Show which runtime family a command line would run, and the options it rejects or ignores.
 - [`mere.run image`](/runtime/image) — Generate and validate image models.
   - `mere.run image dataset` — Inspect image training datasets.
     - `mere.run image dataset discover` — Find image-caption dataset candidates under a root directory.
@@ -238,6 +240,26 @@ That is equivalent to setting:
 export MERERUN_MODELS_DIR=/Volumes/FastSSD/mererun-models
 ```
 
+## Model scope check
+
+Before a command queues for machine admission, resolves its model, or downloads
+anything, the CLI checks the command line against the capability contract. It
+picks the runtime family the command will run from the model options, the
+command's default model, and any selector flags, and then:
+
+- stops with the reason and the command to use when the managed model can't
+  run this command, for example an ACE-Step language model passed to
+  `music analyze --model`;
+- stops when the family rejects an option;
+- prints a `Warning:` line on stderr when the family ignores an option, and
+  runs.
+
+A local model folder or an unlisted id passes; the command itself checks it when
+it loads. `--help` is never checked.
+
+To see the decision without running anything, use
+[`mere.run catalog resolve`](#mere-run-catalog-resolve).
+
 ## Canonical managed model IDs
 
 See [`model-sources.md`](./model-sources.md) for the full source story,
@@ -449,6 +471,35 @@ mere.run text chat \
   --lora mere-platform-assistant \
   --prompt "Summarize the active project workspace."
 ```
+
+### `mere.run catalog resolve`
+
+Report which runtime family a command line runs, and what the
+[model scope check](#model-scope-check) decides for it. Pass the command line
+after `--`, without `mere.run`:
+
+```bash
+mere.run catalog resolve -- music analyze song.wav --model music-acestep
+mere.run catalog resolve --json -- speech listen --model speech-asr-parakeet
+```
+
+Nothing is loaded, downloaded, or admitted. The report names:
+
+- `capability`: the capability id, such as `music.analyze`;
+- `family` and `family_title`: the runtime family, when one is known;
+- `model`: the model the family runs, when one is known;
+- `source`: how the family was chosen. `model`, `default`, and `selector` come
+  from the command line; `identified` from inspecting a local model;
+  `unidentified` means a local model or unlisted id the CLI checks only when it
+  loads; `excluded` is a managed model that can't run the command; `unmatched`
+  is a model whose selector flags fit no family; `unrouted` is a command that
+  loads no model;
+- `violations`: why the command would stop, empty when it runs;
+- `warnings`: options the family would run without.
+
+`--json` prints the report as the `MereRunFamilyResolutionReport` type from
+`MereRunContract`. `mere.run catalog` with no subcommand keeps printing the
+capability contract, the same as `mere.run catalog show`.
 
 ### `mere.run plugin`
 

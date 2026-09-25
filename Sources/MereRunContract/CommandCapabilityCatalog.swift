@@ -157,6 +157,7 @@ public enum MereRunCapabilityCatalog {
             openWebUIQuickstart,
             apiServe,
             guide,
+            catalogResolve,
             configSet,
             configGet,
             configUnset,

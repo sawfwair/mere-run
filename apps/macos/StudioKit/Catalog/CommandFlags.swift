@@ -2825,6 +2825,17 @@ extension CommandFlags {
     }
 }
 
+// MARK: - catalog resolve
+
+extension CommandFlags {
+    /// `mere.run catalog resolve` — Resolve a command's runtime
+    package enum CatalogResolve: CommandFlagNamespace {
+        package static let command = ["catalog", "resolve"]
+
+        package static let json = "--json"
+    }
+}
+
 // MARK: - config set
 
 extension CommandFlags {

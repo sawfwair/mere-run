@@ -19,6 +19,22 @@ extension MereRunCapabilityCatalog {
         output: .init(kind: .text)
     )
 
+    /// Prints a `MereRunFamilyResolutionReport` with `--json`; shells ask it about local models
+    /// the contract cannot identify.
+    public static let catalogResolve = MereRunCommandCapability(
+        id: "catalog.resolve",
+        command: ["catalog", "resolve"],
+        title: "Resolve a command's runtime",
+        summary: "Show which runtime family a command line would run, and the options it rejects or ignores.",
+        arguments: [
+            .init(name: "command-line", label: "Command line", kind: .string, required: true, repeatable: true)
+        ],
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
     public static let configSet = MereRunCommandCapability(
         id: "config.set",
         command: ["config", "set"],

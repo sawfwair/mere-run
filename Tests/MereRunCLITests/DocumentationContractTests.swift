@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import MereRunCore
 import XCTest
 @testable import MereRunCLI
 
@@ -148,6 +149,40 @@ final class DocumentationContractTests: XCTestCase {
         )
     }
 
+    /// Documented invocations that name a managed model must pass the capability gate: no
+    /// model the command can't run, no option its runtime family rejects or ignores.
+    func testDocumentedInvocationsOfManagedModelsPassTheCapabilityGate() throws {
+        let managed = Set(ManagedModelCatalog.allModelIDs)
+        let roots = ["docs", "Sources/MereRunCLI/Guides", "skills"].map { repositoryRoot.appendingPathComponent($0) }
+        var checked = 0
+        var failures: [String] = []
+        for root in roots {
+            let markdownFiles = try FileManager.default.subpathsOfDirectory(atPath: root.path)
+                .filter { $0.hasSuffix(".md") }
+                .sorted()
+            for relativePath in markdownFiles {
+                let contents = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+                for (line, invocation) in fencedInvocations(in: contents) {
+                    let tokens = shellWords(invocation)
+                    let commandLine = Array(tokens.drop { $0 != "mere.run" }.dropFirst())
+                    guard commandLine.contains(where: managed.contains),
+                          let (_, report) = CLICapabilityGate.evaluate(commandLine: commandLine) else {
+                        continue
+                    }
+                    checked += 1
+                    for message in report.violations + report.warnings {
+                        failures.append("\(root.lastPathComponent)/\(relativePath):\(line): \(message)")
+                    }
+                }
+            }
+        }
+        XCTAssertGreaterThan(checked, 0)
+        XCTAssertTrue(
+            failures.isEmpty,
+            "Documented invocations must pass the capability gate:\n\(failures.joined(separator: "\n"))"
+        )
+    }
+
     func testGraphStudioDocumentationPreservesTheVersionBoundary() throws {
         let studioURL = repositoryRoot.appendingPathComponent("docs/graph/studio.md")
         let navigationURL = repositoryRoot.appendingPathComponent("docs/.vitepress/config.mts")
@@ -290,6 +325,68 @@ final class DocumentationContractTests: XCTestCase {
         }
         guard trimmed.hasPrefix("mere.run ") || trimmed.hasPrefix("swift run mere.run ") else { return [] }
         return [trimmed]
+    }
+
+    /// `mere.run` command lines in fenced blocks, with `\` continuations joined, and the line
+    /// each starts on.
+    private func fencedInvocations(in markdown: String) -> [(line: Int, invocation: String)] {
+        var result: [(Int, String)] = []
+        var inFence = false
+        var pending: (line: Int, text: String)?
+        for (offset, lineValue) in markdown.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            var trimmed = lineValue.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") {
+                inFence.toggle()
+                pending = nil
+                continue
+            }
+            guard inFence else { continue }
+            if trimmed.hasPrefix("$ ") { trimmed.removeFirst(2) }
+            let continues = trimmed.hasSuffix("\\")
+            let text = continues ? String(trimmed.dropLast()) : trimmed
+            if let started = pending {
+                pending = (started.line, started.text + " " + text)
+            } else if text.hasPrefix("mere.run ") || text.hasPrefix("swift run mere.run ") {
+                pending = (offset + 1, text)
+            }
+            if !continues, let finished = pending {
+                result.append(finished)
+                pending = nil
+            }
+        }
+        return result
+    }
+
+    /// Splits a shell command line into words, honoring single and double quotes. Comments
+    /// and shell operators end the command.
+    private func shellWords(_ line: String) -> [String] {
+        var words: [String] = []
+        var current = ""
+        var quote: Character?
+        var inWord = false
+        for character in line {
+            if let open = quote {
+                if character == open { quote = nil } else { current.append(character) }
+                continue
+            }
+            switch character {
+            case "'", "\"":
+                quote = character
+                inWord = true
+            case " ", "\t":
+                if inWord { words.append(current) }
+                current = ""
+                inWord = false
+            case "#" where !inWord, "|", ";", "&", ">":
+                if inWord { words.append(current) }
+                return words
+            default:
+                current.append(character)
+                inWord = true
+            }
+        }
+        if inWord { words.append(current) }
+        return words
     }
 
     private func invalidCommandPath(_ candidate: String, commands: [CommandNode]) -> String? {

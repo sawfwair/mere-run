@@ -17,13 +17,21 @@ struct MereRunCLI: AsyncParsableCommand {
         try validate(arguments: CommandLine.arguments)
     }
 
-    mutating func validate(arguments: [String]) throws {
+    /// ArgumentParser validates the root before it parses the leaf, so this runs first for every
+    /// command. `arguments` is the process argv, executable first.
+    mutating func validate(
+        arguments: [String],
+        admit: ([String]) throws -> Void = CLIProcessAdmissionBootstrap.acquireIfNeeded
+    ) throws {
         if let modelsRoot, !modelsRoot.isEmpty {
             CLIModelStoreBootstrap.applyOverridePath(modelsRoot)
         } else {
             _ = _mereRunCLIModelStoreBootstrap
         }
-        try CLIProcessAdmissionBootstrap.acquireIfNeeded(arguments: arguments)
+        // Before admission, so a run the contract rejects never queues for permits, resolves
+        // a model, or downloads one.
+        try CLICapabilityGate.check(arguments: arguments)
+        try admit(arguments)
     }
 
     static let configuration = CommandConfiguration(

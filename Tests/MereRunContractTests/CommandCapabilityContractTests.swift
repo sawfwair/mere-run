@@ -129,6 +129,7 @@ import Testing
         "open-webui.quickstart",
         "api.serve",
         "guide",
+        "catalog.resolve",
         "config.set",
         "config.get",
         "config.unset",
@@ -139,7 +140,7 @@ import Testing
         "geo.tessera",
         "geo.olmoearth"
     ])
-    #expect(document.commands.count == 132)
+    #expect(document.commands.count == 133)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

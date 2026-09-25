@@ -8,6 +8,27 @@ The format is based on Keep a Changelog.
 
 - Accept base64 image data URLs in Qwen-family vision chat requests, including
   Ornith screenshots sent through the local OpenAI-compatible API.
+- Check every command line against the capability contract before machine
+  admission, model resolution, or download. A managed model that can't run the
+  command now stops at once with the reason and the command to use, for example
+  `music analyze --model music-acestep-lm-4b`, which previously failed only
+  after resolving the model. The contract now declares which runtime families
+  run each model-loading command and, per option, which families use it, so
+  later changes can reject unsupported options before loading and warn about
+  options a model ignores. This change declares single-runtime commands only
+  and adds no option rejections.
+- Add `mere.run catalog resolve [--json] -- <command line>`, which reports the
+  runtime family a command line runs and any options it would reject or
+  ignore, without loading anything. `mere.run catalog` keeps printing the
+  capability contract; `mere.run catalog show` is the same command.
+- List every spelling of each option, such as `-m` for `--model`, in
+  `catalog --json` as `aliases`, and add the additive `routing`, `families`,
+  `ignored_by`, and `family_rules` fields. `schema_version` stays 1.
+- List `vision track`, `vision track-live`, and `video prepare-masks` for
+  SAM 3.1, `music train-adapter` for ACE-Step, `video dub-it` for LTX-2.5
+  Distilled, `video export-latents` for the merged LTX model, `speech listen`
+  for Qwen3-ASR, and `speech diarize-live` for Nemotron 3 Diarization in their
+  managed-model command lists.
 
 ## 0.56.0 - 2026-09-24
 

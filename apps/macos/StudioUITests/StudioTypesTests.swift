@@ -55,13 +55,15 @@ final class StudioTypesTests: XCTestCase {
             ("config.unset", ["config", "unset", "hf-token"]),
             ("config.list", ["config", "list"]),
             ("config.path", ["config", "path"]),
+            ("catalog.resolve", ["catalog", "resolve", "--json", "--", "vision", "caption", "photo.png"]),
         ]
 
         for (capabilityID, arguments) in fixtures {
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
-            for flag in arguments.compactMap(Self.flagName) {
+            // Everything after `--` is a value (`catalog resolve` takes a whole command line).
+            for flag in arguments.prefix(while: { $0 != "--" }).compactMap(Self.flagName) {
                 XCTAssertTrue(
                     declared.contains(flag),
                     "\(capabilityID) app utility emits undeclared flag \(flag)"
@@ -81,6 +83,7 @@ final class StudioTypesTests: XCTestCase {
             "config.unset",
             "config.list",
             "config.path",
+            "catalog.resolve",
         ]
         let appCapabilityIDs = templateCapabilityIDs.union(appUtilityCapabilityIDs)
         let sharedCapabilityIDs = Set(

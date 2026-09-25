@@ -256,7 +256,7 @@ final class SkillContractTests: XCTestCase {
     }
 
     private func checkDiscovery(_ command: ParsableCommand?, location: String) throws {
-        if let catalog = command as? CatalogCommand, let identifier = catalog.id {
+        if let catalog = command as? CatalogShowCommand, let identifier = catalog.id {
             XCTAssertNotNil(MereRunCapabilityCatalog.command(id: identifier), "\(location): unknown capability")
         }
         if let guide = command as? GuideCommand {
