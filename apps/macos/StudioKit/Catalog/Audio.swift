@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 // MARK: - Audio templates
 
@@ -42,6 +43,7 @@ extension CommandCatalog {
 extension CommandArguments {
     package static func audioEdit(_ draft: CommandDraft) -> [String] {
         typealias F = CommandFlags.AudioEdit
+        let scope = ContractFamilyScope(MereRunCapabilityCatalog.audioEdit, arguments: [F.model, draft.model])
         var args = ArgumentBuilder(F.self)
         args.value(draft.prompt)
         args.option(F.model, draft.model)
@@ -50,8 +52,10 @@ extension CommandArguments {
         if !draft.secondaryText.isBlank { args.option(F.thinkerPath, draft.secondaryText) }
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
         if draft.useDuration { args.option(F.duration, format(draft.durationSeconds)) }
-        args.option(F.steps, String(draft.steps))
-        if let guidance = draft.audioGuidanceScale { args.option(F.guidance, format(guidance)) }
+        if !scope.fixes(F.steps) { args.option(F.steps, String(draft.steps)) }
+        if let guidance = draft.audioGuidanceScale, !scope.fixes(F.guidance) {
+            args.option(F.guidance, format(guidance))
+        }
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
         if draft.quiet { args.flag(F.quiet) }
         return args.arguments
@@ -59,22 +63,25 @@ extension CommandArguments {
 
     package static func audioEnhance(_ draft: CommandDraft) -> [String] {
         typealias F = CommandFlags.AudioEnhance
+        let scope = ContractFamilyScope(MereRunCapabilityCatalog.audioEnhance, arguments: modelArguments(F.model, draft))
         var args = ArgumentBuilder(F.self)
         args.value(draft.inputPath)
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         if !draft.modelRoot.isBlank { args.option(F.modelPath, draft.modelRoot) }
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
-        if let overlap = draft.audioOverlap { args.option(F.overlap, String(overlap)) }
-        if let inputRate = draft.audioInputRate { args.option(F.inputRate, String(inputRate)) }
-        if let method = draft.audioODEMethod, !method.isBlank {
+        if let overlap = draft.audioOverlap, scope.reads(F.overlap) { args.option(F.overlap, String(overlap)) }
+        if let inputRate = draft.audioInputRate, !scope.fixes(F.inputRate) {
+            args.option(F.inputRate, String(inputRate))
+        }
+        if let method = draft.audioODEMethod, !method.isBlank, scope.reads(F.odeMethod) {
             args.option(F.odeMethod, method)
         }
-        if let steps = draft.audioODESteps { args.option(F.odeSteps, String(steps)) }
-        if let guidance = draft.audioGuidanceScale {
+        if let steps = draft.audioODESteps, scope.reads(F.odeSteps) { args.option(F.odeSteps, String(steps)) }
+        if let guidance = draft.audioGuidanceScale, scope.reads(F.guidanceScale) {
             args.option(F.guidanceScale, format(guidance))
         }
-        if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
-        if let seconds = draft.audioChunkSeconds {
+        if !draft.seed.isBlank, scope.reads(F.seed) { args.option(F.seed, draft.seed) }
+        if let seconds = draft.audioChunkSeconds, scope.reads(F.chunkSeconds) {
             args.option(F.chunkSeconds, String(seconds))
         }
         if let dtype = draft.audioDType, !dtype.isBlank { args.option(F.dtype, dtype) }
@@ -105,6 +112,46 @@ extension CommandArguments {
     }
 }
 
+// MARK: - Runtime family scope
+
+/// A capability's options as the contract scopes them for the runtime family a command line
+/// resolves to. When the contract can't name the family without inspecting a local folder, every
+/// option counts as read, so the builder sends what the draft holds and the CLI decides.
+struct ContractFamilyScope {
+    let family: String?
+    private let options: [String: MereRunCapabilityOption]
+
+    /// `arguments` are the ones after the command path that choose the family: the model flag,
+    /// or the selector flags.
+    init(_ capability: MereRunCommandCapability, arguments: [String]) {
+        let invocation = MereRunCommandInvocation(capability: capability, arguments: arguments)
+        if case .family(let id, _, _) = capability.resolveFamily(invocation) {
+            family = id
+        } else {
+            family = nil
+        }
+        options = Dictionary(uniqueKeysWithValues: capability.options(forFamily: family).map { ($0.flag, $0) })
+    }
+
+    /// The family reads `flag`: it neither refuses nor ignores it.
+    func reads(_ flag: String) -> Bool {
+        options[flag] != nil
+    }
+
+    /// The family runs one value of `flag` whatever is passed, so the builder leaves it off.
+    func fixes(_ flag: String) -> Bool {
+        family != nil && options[flag]?.familyRules.first?.values?.count == 1
+    }
+}
+
+extension CommandArguments {
+    /// `[flag, model]` for a chosen model, or nothing, so a blank model resolves to the
+    /// contract's default the way the CLI's own default does.
+    static func modelArguments(_ flag: String, _ draft: CommandDraft) -> [String] {
+        draft.model.isBlank ? [] : [flag, draft.model]
+    }
+}
+
 // MARK: - Audio validation
 
 extension CommandCatalog {
@@ -118,7 +165,12 @@ extension CommandCatalog {
                 return "Duration must be in (0, 300] seconds."
             }
             if !["audio-auk-base", "audio-auk-flash"].contains(draft.model) { return "Choose an AuK base or Flash model." }
-            if !(1...1000).contains(draft.steps) { return "Steps must be in 1...1000." }
+            let scope = ContractFamilyScope(
+                MereRunCapabilityCatalog.audioEdit, arguments: [CommandFlags.AudioEdit.model, draft.model]
+            )
+            if !scope.fixes(CommandFlags.AudioEdit.steps), !(1...1000).contains(draft.steps) {
+                return "Steps must be in 1...1000."
+            }
             if let guidance = draft.audioGuidanceScale, !guidance.isFinite || guidance < 0 {
                 return "Guidance must be finite and non-negative."
             }
@@ -126,7 +178,12 @@ extension CommandCatalog {
             if let overlap = draft.audioOverlap, overlap <= 0 {
                 return "Overlap must be positive."
             }
-            if draft.model.localizedCaseInsensitiveContains("universr") {
+            let scope = ContractFamilyScope(
+                MereRunCapabilityCatalog.audioEnhance,
+                arguments: CommandArguments.modelArguments(CommandFlags.AudioEnhance.model, draft)
+            )
+            // UniverSR's controls, checked when the selected model's family reads them.
+            if scope.reads(CommandFlags.AudioEnhance.odeSteps) {
                 if let inputRate = draft.audioInputRate,
                    ![8_000, 12_000, 16_000, 24_000].contains(inputRate) {
                     return "UniverSR input bandwidth must be 8000, 12000, 16000, or 24000 Hz."

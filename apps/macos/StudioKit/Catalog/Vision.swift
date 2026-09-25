@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 // MARK: - Vision templates
 
@@ -237,32 +238,41 @@ extension CommandArguments {
 
     package static func visionOCR(_ draft: CommandDraft) -> [String] {
         typealias F = CommandFlags.VisionOCR
+        let scope = ContractFamilyScope(
+            MereRunCapabilityCatalog.visionOCR,
+            arguments: [F.backend, draft.backend, F.infinityRuntime, draft.visionInfinityRuntime] + (draft.all ? [F.compare] : [])
+        )
         var args = ArgumentBuilder(F.self)
         if !draft.inputPath.isBlank { args.value(draft.inputPath) }
         args.values(pathList(draft.visionAdditionalInputs))
         args.option(F.backend, draft.backend)
-        if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if !draft.model.isBlank, scope.reads(F.model) { args.option(F.model, draft.model) }
         if !draft.outputPath.isBlank { args.option(F.outputDir, draft.outputPath) }
-        args.option(F.maxTokens, String(draft.maxTokens))
-        args.option(F.temperature, format(draft.temperature))
+        if scope.reads(F.maxTokens) { args.option(F.maxTokens, String(draft.maxTokens)) }
+        if scope.reads(F.temperature) { args.option(F.temperature, format(draft.temperature)) }
         if draft.all { args.flag(F.compare) }
-        if !draft.visionGLMOCRCLI.isBlank { args.option(F.glmocrCli, draft.visionGLMOCRCLI) }
-        if !draft.visionGLMConfig.isBlank { args.option(F.glmConfig, draft.visionGLMConfig) }
-        args.option(F.infinityRuntime, draft.visionInfinityRuntime)
-        args.option(F.infinityParserCli, draft.visionInfinityParserCLI)
-        args.option(F.infinityModel, draft.visionInfinityModel)
-        args.option(F.infinityBackend, draft.visionInfinityBackend)
-        args.option(F.infinityAPIURL, draft.visionInfinityAPIURL)
-        args.option(F.infinityAPIKey, draft.visionInfinityAPIKey)
-        args.option(F.infinityTask, draft.visionInfinityTask)
-        args.option(F.infinityOutputFormat, draft.visionInfinityOutputFormat)
-        args.option(F.infinityBatchSize, String(draft.visionInfinityBatchSize))
-        args.option(F.infinityMinPixels, String(draft.visionInfinityMinPixels))
-        args.option(F.infinityMaxPixels, String(draft.visionInfinityMaxPixels))
-        if !draft.visionInfinityPrompt.isBlank {
+        if !draft.visionGLMOCRCLI.isBlank, scope.reads(F.glmocrCli) { args.option(F.glmocrCli, draft.visionGLMOCRCLI) }
+        if !draft.visionGLMConfig.isBlank, scope.reads(F.glmConfig) { args.option(F.glmConfig, draft.visionGLMConfig) }
+        let infinity: [(flag: String, value: String)] = [
+            (F.infinityRuntime, draft.visionInfinityRuntime),
+            (F.infinityParserCli, draft.visionInfinityParserCLI),
+            (F.infinityModel, draft.visionInfinityModel),
+            (F.infinityBackend, draft.visionInfinityBackend),
+            (F.infinityAPIURL, draft.visionInfinityAPIURL),
+            (F.infinityAPIKey, draft.visionInfinityAPIKey),
+            (F.infinityTask, draft.visionInfinityTask),
+            (F.infinityOutputFormat, draft.visionInfinityOutputFormat),
+            (F.infinityBatchSize, String(draft.visionInfinityBatchSize)),
+            (F.infinityMinPixels, String(draft.visionInfinityMinPixels)),
+            (F.infinityMaxPixels, String(draft.visionInfinityMaxPixels))
+        ]
+        for (flag, value) in infinity where scope.reads(flag) {
+            args.option(flag, value)
+        }
+        if !draft.visionInfinityPrompt.isBlank, scope.reads(F.infinityPrompt) {
             args.option(F.infinityPrompt, draft.visionInfinityPrompt)
         }
-        if !draft.visionInfinityModelCacheDirectory.isBlank {
+        if !draft.visionInfinityModelCacheDirectory.isBlank, scope.reads(F.infinityModelCacheDir) {
             args.option(F.infinityModelCacheDir, draft.visionInfinityModelCacheDirectory)
         }
         if draft.quiet { args.flag(F.quiet) }
