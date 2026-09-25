@@ -296,28 +296,28 @@ final class StudioOptionScopeTests: XCTestCase {
         let scope = { (model: String) in
             self.source.scope(capability: Music.capability, commandLine: [
                 "music", "generate", "song", "--model", model, "--quality", "song", "--source-audio", "/tmp/a.wav",
-                "--target-peak-db", "-1", "--steps", "12",
+                "--target-peak-db=-1", "--steps", "12",
             ])
         }
         let argv = ["music", "generate", "song", "--model", "music-acestep", "--quality", "song",
-                    "--source-audio", "/tmp/a.wav", "--target-peak-db", "-1", "--steps", "12"]
+                    "--source-audio", "/tmp/a.wav", "--target-peak-db=-1", "--steps", "12"]
         XCTAssertEqual(
             StudioOptionScopes.filtered(argv, scope: scope("music-acestep")),
             ["music", "generate", "song", "--model", "music-acestep", "--source-audio", "/tmp/a.wav",
-             "--target-peak-db", "-1", "--steps", "12"],
+             "--target-peak-db=-1", "--steps", "12"],
             "ACE-Step runs song when --quality is left off"
         )
         var yue2 = argv
         yue2[4] = "music-yue2"
         XCTAssertEqual(
             StudioOptionScopes.filtered(yue2, scope: scope("music-yue2")),
-            ["music", "generate", "song", "--model", "music-yue2", "--target-peak-db", "-1", "--steps", "12"]
+            ["music", "generate", "song", "--model", "music-yue2", "--target-peak-db=-1", "--steps", "12"]
         )
         var magenta = argv
         magenta[4] = "music-magenta-rt2-small"
         XCTAssertEqual(
             StudioOptionScopes.filtered(magenta + ["--seed", "3"], scope: scope("music-magenta-rt2-small")),
-            ["music", "generate", "song", "--model", "music-magenta-rt2-small", "--target-peak-db", "-1"],
+            ["music", "generate", "song", "--model", "music-magenta-rt2-small", "--target-peak-db=-1"],
             "an option the family ignores is dropped too"
         )
     }
@@ -338,13 +338,23 @@ final class StudioOptionScopeTests: XCTestCase {
         )
     }
 
-    /// L1: a value is read by the option's kind, not by whether the next token looks like a flag.
+    /// L1: argv is read the way ArgumentParser reads it: by the option's kind, and an option takes
+    /// the next token only when that token is a value, so a negative number rides with `=`.
     func testArgvIsReadByOptionKind() throws {
         let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: "music.generate"))
         let form = StudioConsoleCommand.seed(capability: capability, arguments: [
-            "music", "generate", "song", "--target-peak-db", "-1", "-s", "12", "--instrumental", "--unknown", "value",
+            "music", "generate", "song", "--target-peak-db=-1", "-s", "12", "--instrumental", "--unknown", "value",
         ])
         XCTAssertEqual(form.text("--target-peak-db"), "-1")
+        XCTAssertTrue(StudioConsoleCommand.arguments(for: capability, draft: form).contains("--target-peak-db=-1"),
+                      "the console writes a negative value joined to its flag")
+        XCTAssertEqual(
+            StudioArgvToken.read(["--target-peak-db", "-1", "--steps", "-", "--lyrics", ""], capability: capability),
+            [.option(flag: "--target-peak-db", tokens: ["--target-peak-db"], values: []), .undeclared("-1"),
+             .option(flag: "--steps", tokens: ["--steps", "-"], values: ["-"]),
+             .option(flag: "--lyrics", tokens: ["--lyrics", ""], values: [""])],
+            "ArgumentParser refuses `--target-peak-db -1`; a lone \"-\" and \"\" are values"
+        )
         XCTAssertEqual(form.text("--steps"), "12", "a short alias lands under its canonical flag")
         XCTAssertEqual(form["--instrumental"], .flag(true))
         XCTAssertEqual(form.arguments, ["song"])

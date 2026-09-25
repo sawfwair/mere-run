@@ -175,8 +175,10 @@ package enum StudioConsoleCommand {
                 argv.append(option.flag)
                 continue
             }
+            // A value that starts with "-" rides joined to its flag, the one spelling
+            // ArgumentParser reads as a value (`--target-peak-db=-1`).
             for value in values(option, in: draft) {
-                argv += [option.flag, value]
+                argv += ArgumentBuilder.optionArguments(option.flag, value)
             }
         }
         argv += ShellWords.split(draft.extraArguments)

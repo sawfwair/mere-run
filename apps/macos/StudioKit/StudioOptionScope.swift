@@ -218,9 +218,11 @@ package enum StudioArgvToken: Equatable {
     }
 
     /// `arguments` read the way ArgumentParser reads them for `capability`: every spelling folds
-    /// into its canonical flag through `MereRunCommandInvocation`, and an option takes the next
-    /// token exactly when its kind takes a value (a Boolean never does), whatever that token
-    /// looks like — so `--target-peak-db -1` is one option, not two.
+    /// into its canonical flag through `MereRunCommandInvocation`, and an option whose kind takes
+    /// a value (a Boolean never does) takes the next token when that token is a value: anything
+    /// that does not start with "-", or a lone "-", or "". So `--target-peak-db -1` is the option
+    /// without its value and an undeclared `-1`, as ArgumentParser refuses it with "Missing
+    /// value"; a negative number is spelled `--target-peak-db=-1`, as Studio writes it.
     package static func read(_ arguments: [String], capability: MereRunCommandCapability) -> [StudioArgvToken] {
         var result: [StudioArgvToken] = []
         var index = 0
@@ -244,12 +246,18 @@ package enum StudioArgvToken: Equatable {
                 continue
             }
             let takesNext = option.kind != .boolean && !token.contains("=") && index + 1 < arguments.count
+                && isValue(arguments[index + 1])
             let tokens = Array(arguments[index..<(index + (takesNext ? 2 : 1))])
             let values = MereRunCommandInvocation(capability: capability, arguments: tokens).values[flag] ?? []
             result.append(.option(flag: flag, tokens: tokens, values: values))
             index += tokens.count
         }
         return result
+    }
+
+    /// Whether ArgumentParser reads `token` as an option's value rather than as another option.
+    private static func isValue(_ token: String) -> Bool {
+        !token.hasPrefix("-") || token == "-"
     }
 }
 
