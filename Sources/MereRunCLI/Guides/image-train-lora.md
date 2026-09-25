@@ -110,6 +110,25 @@ the adapter to learn.
   `--adam-weight-decay`.
 - `--quiet`, `-q`: print only the final adapter path.
 
+mere.run checks these options against the selected trainer before it resolves
+or loads the base model, and refuses one the trainer can't use with an error
+that names the trainer that accepts it:
+
+- Krea 2 refuses every Klein-only option above: checkpoints, `--resume-from`,
+  `--max-resolution`, `--progressive`, `--low-ram`, `--gradient-checkpointing`,
+  benchmarks, previews, the LoRA target and rank options, the timestep and loss
+  controls, and `--adam-weight-decay`. It also refuses `--recipe klein-fast-style`.
+- FLUX.2 Klein refuses `--base-quantization-bits` and `--synthetic-samples`, and
+  requires `--data`.
+- A Krea recipe on a Klein base runs with a warning: Klein takes the recipe's
+  size, steps, learning rate, rank, and alpha, but not its learning-rate warmup,
+  cosine schedule, or floor.
+- `image-krea2-turbo` and `image-zimage-base` can't be trained; they fail before
+  anything loads.
+
+`mere.run catalog resolve -- image train-lora …` shows which trainer a command
+line selects.
+
 For CUDA Krea training, set `MLX_CUDA_USE_CUDNN_SDPA=0` if cuDNN SDPA graph
 capture fails during the first training step. Large real datasets may also need
 `MLX_CUDA_GRAPH_CACHE_SIZE=4096` to avoid MLX CUDA graph-cache thrashing.

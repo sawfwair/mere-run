@@ -13,7 +13,7 @@ Use one installed image model:
 - `image-bonsai-binary`, `image-bonsai-ternary`
 - `image-ideogram4-sdnq-uint4`
 - `image-hidream-o1`, `image-hidream-o1-dev`
-- `image-krea2-turbo`
+- `image-krea2-turbo`, `image-krea2-raw`
 
 ## Install And Check
 
@@ -61,6 +61,35 @@ mere.run guide image generate --model image-zimage-nano
 - `--preflight`: inspect model, input, LoRA, structured-prompt, and output paths without running generation.
 - `--json`: with `--preflight`, emit a structured report for scripts and apps.
 - `--quiet`, `-q`: print only the output path.
+
+## Options Per Model Family
+
+mere.run reads the model's family from its manifest and checks the command line
+against it before it resolves or loads the model. An option the family can't
+use fails with an error that names the families that accept it; an option the
+family accepts but doesn't read runs with a `Warning:` line on stderr.
+`mere.run catalog resolve -- image generate --model <id> …` shows the family and
+both lists without running anything.
+
+| Family | Refused | Runs with a warning |
+|---|---|---|
+| FLUX.1-dev | `--input`, `--mask`, `--outpaint`, `--ref-image`, `--sigmas`, `--negative-prompt` | `--sigma-shift`, `--strength`, `--mask-feather`, `--max-sequence-length` above 512 |
+| FLUX.2 Klein, Bonsai | more than 4 `--ref-image` values are dropped (warning) | `--max-sequence-length` |
+| FLUX.2-dev | as Klein | `--negative-prompt` (embedded guidance), `--max-sequence-length` |
+| Z-Image | `--ref-image`, `--sigmas`, a second `--lora` | |
+| HiDream-O1 | `--sigmas`, `--lora` | `--sigma-shift`, `--strength`, `--max-sequence-length` |
+| SenseNova U1.5 | `--sigmas`, `--lora` | `--strength`, `--max-sequence-length` |
+| Krea 2 | `--input`, `--mask`, `--outpaint`, `--ref-image`, `--sigmas`, a second `--lora` | `--cfg`, `--negative-prompt`, `--strength`, `--mask-feather`, `--max-sequence-length` above 512 |
+| Qwen-Image 2.1 | `--strength`, `--sigmas`, `--lora`, `--steps` below 2, more than 10 references | `--max-sequence-length` |
+| Qwen-Image-Edit | `--sigmas`, `--lora`, more than 3 `--ref-image` values | `--sigma-shift`, `--strength`, `--max-sequence-length` |
+| Qwen-Image-Edit Lightning | as Qwen-Image-Edit, plus `--steps` other than 4 and `--cfg` other than 1 | as Qwen-Image-Edit |
+| Ideogram 4 | `--input`, `--mask`, `--outpaint`, `--ref-image`, `--sigmas`, `--lora` | `--negative-prompt`, `--sigma-shift`, `--strength`, `--mask-feather`, `--max-sequence-length` above 2048 |
+
+`--keep-original-aspect` is read only by HiDream-O1, the `--krea-*` options only
+by Krea 2 (`--krea-base-quantization-bits` is refused elsewhere), and
+`--lora-scale` only by the families that load `--lora`; every other family
+warns. `image-klein-shared` holds components the Klein models share and can't
+run `image generate`.
 
 ## Preflight
 
