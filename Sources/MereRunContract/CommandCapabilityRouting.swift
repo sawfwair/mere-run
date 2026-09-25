@@ -15,24 +15,52 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// Managed models that list this command, or that its pickers would otherwise offer, but
     /// that cannot run it. Resolving to one is an error that names `reason`.
     public let excludedModels: [MereRunExcludedModel]
+    /// `true` when the selector flags outrank a named model, as they do for speech transcribe: a
+    /// listed model whose family's selectors do not hold runs as if no model were named. The
+    /// default rules pick the family and model, and the named model draws a warning. The family
+    /// selectors then only say when a named model runs, so the default rules are not checked
+    /// against them. `false`: such an invocation is `.unmatched`.
+    public let selectorsOverrideModel: Bool
 
     enum CodingKeys: String, CodingKey {
         case modelFlags = "model_flags"
         case defaultModels = "default_models"
         case families
         case excludedModels = "excluded_models"
+        case selectorsOverrideModel = "selectors_override_model"
     }
 
     public init(
         modelFlags: [String],
         defaultModels: [MereRunDefaultModelRule] = [],
         families: [MereRunRuntimeFamily],
-        excludedModels: [MereRunExcludedModel] = []
+        excludedModels: [MereRunExcludedModel] = [],
+        selectorsOverrideModel: Bool = false
     ) {
         self.modelFlags = modelFlags
         self.defaultModels = defaultModels
         self.families = families
         self.excludedModels = excludedModels
+        self.selectorsOverrideModel = selectorsOverrideModel
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        modelFlags = try container.decode([String].self, forKey: .modelFlags)
+        defaultModels = try container.decode([MereRunDefaultModelRule].self, forKey: .defaultModels)
+        families = try container.decode([MereRunRuntimeFamily].self, forKey: .families)
+        excludedModels = try container.decode([MereRunExcludedModel].self, forKey: .excludedModels)
+        selectorsOverrideModel = try container.decodeIfPresent(Bool.self, forKey: .selectorsOverrideModel) ?? false
+    }
+
+    /// `selectors_override_model` is the exception and stays absent when false.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(modelFlags, forKey: .modelFlags)
+        try container.encode(defaultModels, forKey: .defaultModels)
+        try container.encode(families, forKey: .families)
+        try container.encode(excludedModels, forKey: .excludedModels)
+        if selectorsOverrideModel { try container.encode(true, forKey: .selectorsOverrideModel) }
     }
 
     public func family(id: String) -> MereRunRuntimeFamily? {
