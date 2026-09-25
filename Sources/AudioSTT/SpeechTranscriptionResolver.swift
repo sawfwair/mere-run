@@ -54,13 +54,16 @@ public enum SpeechTranscriptionResolver {
     /// The routing half of `resolve`, without an audio file: file transcription, streaming, and
     /// the CLI's capability gate share it. Translation and a language hint Parakeet does not list
     /// route to Qwen; otherwise an explicit backend wins, then the named model's backend
-    /// (`ASRBackendRouting.select`).
+    /// (`ASRBackendRouting.select`). With `followsLocalModel`, a local model folder decides the
+    /// backend whatever the language hint says: a stream has always run the folder it was given,
+    /// and the hint only guides that backend's decoding.
     public static func route(
         task: ASRTask,
         language: String?,
         preferredBackend: ASRBackend,
         modelOverride: String? = nil,
-        parakeetExecutionProvider: ParakeetExecutionProvider = .mlx
+        parakeetExecutionProvider: ParakeetExecutionProvider = .mlx,
+        followsLocalModel: Bool = false
     ) throws -> SpeechTranscriptionRoute {
         let normalizedOverride = normalized(
             modelOverride ?? parakeetExecutionProvider.bundledModelURL?.path
@@ -78,9 +81,10 @@ public enum SpeechTranscriptionResolver {
             localAvailable: hasConfig(parakeetRoot)
         )
 
+        let routesByFolder = followsLocalModel && existingPath(from: normalizedOverride) != nil
         let decision = ASRBackendRouting.select(
             task: task,
-            languageHint: language,
+            languageHint: routesByFolder ? nil : language,
             preferredBackend: effectivePreferredBackend,
             availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true),
             parakeetSupportedLanguageCodes: parakeetCodes

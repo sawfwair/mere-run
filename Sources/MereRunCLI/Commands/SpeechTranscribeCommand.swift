@@ -450,11 +450,13 @@ struct SpeechTranscribe: AsyncParsableCommand {
     private func makeLiveSession(
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws -> CLILiveASRSession {
-        // Streaming routes exactly like a file: the same backend, and the same model override.
+        // Streaming routes like a file (the same backend, and the same model override), except
+        // that a local model folder runs whatever the language hint says, as streams always did.
         let route: SpeechTranscriptionRoute
         do {
             route = try SpeechTranscriptionResolver.route(
-                task: task.task, language: language, preferredBackend: backend.backend, modelOverride: model
+                task: task.task, language: language, preferredBackend: backend.backend, modelOverride: model,
+                followsLocalModel: true
             )
         } catch let issue as SpeechTranscriptionIssue {
             throw ValidationError(issue.message)

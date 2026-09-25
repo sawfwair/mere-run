@@ -102,10 +102,14 @@ extension MereRunCapabilityCatalog {
         modelFlags: ["--model"],
         defaultModels: [.always("speech-asr-qwen3")],
         families: [.init(SpeechListenFamily.qwen3ASR, title: "Qwen3-ASR", models: ["speech-asr-qwen3"])],
+        // The live loader takes any id and runs Qwen3-ASR (`CLIQwenASRLoader`), so a Parakeet id
+        // runs and has no effect.
         excludedModels: .models(
             ["speech-asr-parakeet"],
-            reason: "Parakeet transcribes recorded audio only; use `speech transcribe`."
-        )
+            reason: "Parakeet transcribes recorded audio only; use `speech transcribe`.",
+            severity: .warning
+        ),
+        listingFlags: ["--list-devices"]
     )
 
     static let speechDiarizeLiveRouting = MereRunCapabilityRouting(
@@ -121,6 +125,7 @@ extension MereRunCapabilityCatalog {
         excludedModels: .models(
             ["speech-diarization-sortformer"],
             reason: "Sortformer diarizes recorded audio only; use `speech diarize`."
-        )
+        ),
+        listingFlags: ["--list-devices"]
     )
 }

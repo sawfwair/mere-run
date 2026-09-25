@@ -73,7 +73,7 @@ private func temporaryFolder() throws -> URL {
     let translated = try report("speech", "transcribe", "a.wav", "--backend", "parakeet", "--task", "translate",
                                 "--provider", "coreml", "--coreml-encoder", "/tmp/parakeet-coreml")
     #expect(translated.violations == [
-        "--provider coreml is not supported by Qwen3-ASR; it runs mlx. Remove --provider or pass mlx.",
+        "--provider is not supported by Qwen3-ASR. It applies to Parakeet.",
         "--coreml-encoder is not supported by Qwen3-ASR. It applies to Parakeet."
     ])
     #expect(throws: CLICapabilityGate.Rejection.self) {
@@ -131,7 +131,7 @@ private func temporaryFolder() throws -> URL {
 // MARK: - speech diarize
 
 @Test func diarizeRefusesAStreamingBufferForSortformerIncludingTheDefault() throws {
-    let refusal = "--latency 0.64 is not supported by Sortformer; it runs offline. Remove --latency or pass offline."
+    let refusal = "--latency is not supported by Sortformer. It applies to Nemotron 3 Diarization."
     for model in [[], ["--model", "speech-diarization-sortformer"]] {
         let sortformer = try #require(
             CLICapabilityGate.evaluate(commandLine: ["speech", "diarize", "a.wav", "--latency", "0.64"] + model)
@@ -185,4 +185,65 @@ private func temporaryFolder() throws -> URL {
         }
         #expect(Set(family.models) == Set(routing.families.flatMap(\.models)), "\(family.id) runs every model")
     }
+}
+
+// MARK: - What the speech commands accepted before the gate
+
+/// A stream runs the local model folder it is given, whatever the language hint: before the gate
+/// streams ignored `--language`, so a Parakeet folder with a hint its vocabulary lacks ran
+/// Parakeet. Files keep routing the hint to Qwen3-ASR and refuse the folder, as they always did.
+@Test func aStreamRunsItsLocalFolderWhateverTheLanguage() throws {
+    let root = try temporaryFolder()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let config = #"{"target": "nemo.collections.asr.models.rnnt_bpe_models.EncDecRNNTBPEModel", "#
+        + #""model_defaults": {"tdt_durations": [0, 1, 2, 3, 4]}, "preprocessor": {}, "encoder": {}}"#
+    try Data(config.utf8).write(to: root.appendingPathComponent("config.json"))
+
+    let streamed = try SpeechTranscriptionResolver.route(
+        task: .transcribe, language: "zz", preferredBackend: .auto, modelOverride: root.path, followsLocalModel: true
+    )
+    #expect(streamed.decision.backend == .parakeet && streamed.modelOverride == root.path)
+    #expect(throws: SpeechTranscriptionIssue.self) {
+        try SpeechTranscriptionResolver.route(task: .transcribe, language: "zz", preferredBackend: .auto, modelOverride: root.path)
+    }
+    let gate = try report("speech", "transcribe", "-", "--stream", "--input-format", "pcm-s16le", "--model", root.path,
+                          "--language", "zz")
+    #expect(gate.family == "parakeet" && gate.violations.isEmpty, "\(gate)")
+}
+
+/// `speech listen` loads Qwen3-ASR whatever `--model` names, so a Parakeet id runs with a
+/// warning; `--list-devices` lists inputs before any model is read, on both live commands.
+@Test func liveCommandsKeepWhatTheyAcceptedBefore() throws {
+    let parakeet = try report("speech", "listen", "--model", "speech-asr-parakeet")
+    #expect(parakeet.family == "qwen3-asr" && parakeet.model == "speech-asr-qwen3" && parakeet.violations.isEmpty)
+    #expect(parakeet.warnings == [
+        "--model speech-asr-parakeet has no effect: speech listen runs Qwen3-ASR. "
+            + "Parakeet transcribes recorded audio only; use `speech transcribe`."
+    ])
+    let alias = try report("speech", "listen", "-m", "mlx-community/parakeet-tdt-0.6b-v3")
+    #expect(alias.family == "qwen3-asr" && alias.warnings.count == 1)
+    for commandLine in [
+        ["speech", "listen", "--list-devices", "--model", "speech-asr-parakeet"],
+        ["speech", "diarize-live", "--list-devices", "--model", "speech-diarization-sortformer"],
+        ["speech", "diarize-live", "--model", "speech-diarization-sortformer", "--list-devices", "--latency", "0.32"]
+    ] {
+        let listed = try #require(CLICapabilityGate.evaluate(commandLine: commandLine)).report
+        #expect(listed.source == .unrouted && listed.violations.isEmpty && listed.warnings.isEmpty, "\(commandLine)")
+        #expect(throws: Never.self) { try CLICapabilityGate.check(arguments: ["mere.run"] + commandLine) }
+    }
+    #expect(throws: CLICapabilityGate.Rejection.self) {
+        try CLICapabilityGate.check(arguments: ["mere.run", "speech", "diarize-live", "--model", "speech-diarization-sortformer"])
+    }
+}
+
+/// The value a family always runs passes with a warning, so Studio can hide the control; any
+/// other value stays refused.
+@Test func aFamilyThatRunsOneValueWarnsOnItAndRefusesTheRest() throws {
+    let mlx = try report("speech", "transcribe", "a.wav", "--task", "translate", "--provider", "mlx")
+    #expect(mlx.family == "qwen3-asr" && mlx.violations.isEmpty
+        && mlx.warnings == ["--provider has no effect with Qwen3-ASR. It applies to Parakeet."])
+    let offline = try report("speech", "diarize", "a.wav", "--latency", "offline")
+    #expect(offline.family == "sortformer" && offline.violations.isEmpty
+        && offline.warnings == ["--latency has no effect with Sortformer. It applies to Nemotron 3 Diarization."])
+    #expect(try report("speech", "diarize", "a.wav", "--latency", "1.04").violations.count == 1)
 }

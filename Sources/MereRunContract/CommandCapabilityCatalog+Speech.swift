@@ -21,7 +21,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(SpeechSynthesizeFamily.only(.style, ignoredBy: [.clone])),
             .init(
                 flag: "--mode", label: "Mode", kind: .choice, choices: ["style", "clone"],
-                defaultValue: "style", group: Group.inputs, tier: .standard
+                defaultValue: "style", group: Group.inputs, tier: .standard, choiceSpellings: .exact
             ),
             .init(flag: "--profile", label: "Profile", kind: .string, group: Group.inputs, tier: .standard)
                 .scoped(SpeechSynthesizeFamily.only(.clone, ignoredBy: [.style])),
@@ -69,19 +69,22 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .standard),
             .init(
                 flag: "--backend", label: "Backend", kind: .choice, choices: ["auto", "parakeet", "qwen"],
-                defaultValue: "auto", group: Group.modelAndAdapters, tier: .essential
+                defaultValue: "auto", group: Group.modelAndAdapters, tier: .essential, choiceSpellings: .exact
             ).scoped(SpeechTranscribeFamily.rule(.qwen3ASR, values: ["auto", "qwen"], severity: .warning)),
             .init(
                 flag: "--provider", label: "Parakeet provider", kind: .choice, choices: ["mlx", "coreml"],
-                defaultValue: "mlx", group: Group.modelAndAdapters, tier: .standard
-            ).scoped(SpeechTranscribeFamily.rule(.qwen3ASR, values: ["mlx"])),
+                defaultValue: "mlx", group: Group.modelAndAdapters, tier: .standard, choiceSpellings: .exact
+            ).scoped(
+                // Qwen3-ASR always runs MLX: the default passes with no effect, Core ML is refused.
+                SpeechTranscribeFamily.only(.parakeet, ignoredBy: [.qwen3ASR]), .rule(.qwen3ASR, values: ["mlx"])
+            ),
             .init(
                 flag: "--coreml-encoder", label: "Core ML artifact", kind: .directory,
                 group: Group.modelAndAdapters, tier: .expert, dependsOn: "--provider"
             ).scoped(SpeechTranscribeFamily.only(.parakeet)),
             .init(
                 flag: "--task", label: "Task", kind: .choice, choices: ["transcribe", "translate"],
-                defaultValue: "transcribe", group: Group.prompt, tier: .essential
+                defaultValue: "transcribe", group: Group.prompt, tier: .essential, choiceSpellings: .exact
             ),
             .init(flag: "--language", label: "Language", kind: .string, group: Group.prompt, tier: .standard),
             .init(
@@ -149,7 +152,10 @@ extension MereRunCapabilityCatalog {
                 choices: ["offline", "1.04", "0.64", "0.32"],
                 defaultValue: "offline",
                 tier: .essential
-            ).scoped(SpeechDiarizeFamily.rule(.sortformer, values: ["offline"])),
+            ).scoped(
+                // Sortformer runs offline: the default passes with no effect, a buffer is refused.
+                SpeechDiarizeFamily.only(.nemotron3, ignoredBy: [.sortformer]), .rule(.sortformer, values: ["offline"])
+            ),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
         ],
         output: .init(kind: .text, flag: "--output", optional: true),
