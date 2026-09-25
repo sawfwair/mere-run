@@ -24,7 +24,9 @@ infinity-native	composer.readImage.ocr	unreachable
 infinity-native	console.visionOCR	emitted	--backend --infinity-max-pixels --infinity-min-pixels --infinity-model --infinity-output-format --infinity-prompt --infinity-runtime --infinity-task --max-tokens --output-dir --quiet --temperature
 infinity-native	console.visionOCR	shown	--backend --compare --infinity-max-pixels --infinity-min-pixels --infinity-model --infinity-output-format --infinity-prompt --infinity-runtime --infinity-task --max-tokens --output-dir --quiet --temperature
 infinity-native	console.visionOCR	validated	--backend --infinity-max-pixels --infinity-min-pixels --infinity-model --infinity-output-format --infinity-prompt --infinity-runtime --infinity-task --max-tokens --output-dir --quiet --temperature
-lighton	composer.readImage.ocr	unreachable
+lighton	composer.readImage.ocr	emitted	--backend --max-tokens --model --output-dir --temperature
+lighton	composer.readImage.ocr	shown	--model
+lighton	composer.readImage.ocr	validated	--model
 lighton	console.visionOCR	emitted	--backend --max-tokens --model --output-dir --quiet --temperature
 lighton	console.visionOCR	shown	--backend --compare --max-tokens --model --output-dir --quiet --temperature
 lighton	console.visionOCR	validated	--backend --max-tokens --model --output-dir --quiet --temperature

@@ -75,6 +75,22 @@ final class StudioModelScopeGoldenTests: XCTestCase {
         }
     }
 
+    /// A composer reaches a family its draft already runs, whether or not it has a control for
+    /// the family's selectors: FastH3 (no `--h3-adapter`, which Video has no control for), OCR's
+    /// default backend in Read Image, and Parakeet in Listen.
+    func testTheComposerReachesTheFamiliesItsDraftRuns() {
+        let rendered = ModelScopeFixtures.render()
+        let cells = [
+            ("video.generate", "h3-fast", "composer.video"),
+            ("vision.ocr", "lighton", "composer.readImage.ocr"),
+            ("speech.transcribe", "parakeet", "composer.listen"),
+        ]
+        for (capability, family, surface) in cells {
+            let lines = rendered[capability]?.split(separator: "\n") ?? []
+            XCTAssertTrue(lines.contains { $0.hasPrefix("\(family)\t\(surface)\tshown\t") }, "\(capability) \(family) \(surface) is unreachable")
+        }
+    }
+
     func testTheHarnessReachesEveryRoutedCommandStudioRuns() {
         for capability in MereRunCapabilityCatalog.document.commands where capability.routing != nil {
             let surfaces = ModelScopeFixtures.surfaces(for: capability)
@@ -172,6 +188,23 @@ enum ModelScopeFixtures {
         }
     }
 
+    /// Values a family runs its own way, which each surface of the command must hold without
+    /// sending: FastH3 runs exactly 5 steps, AP-BWE reads only 16 kHz input.
+    static let replacedValues: [(capability: String, family: String, flag: String, value: String)] = [
+        ("video.generate", "h3-fast", "--steps", "30"),
+        ("audio.enhance", "ap-bwe", "--input-rate", "24000"),
+    ]
+
+    /// `raw` as the value a control for `option` holds.
+    static func contractValue(_ raw: String, for option: MereRunCapabilityOption?) -> StudioContractValue {
+        switch option?.kind {
+        case .integer?: return Int(raw).map { .integer($0) } ?? .text(raw)
+        case .number?: return Double(raw).map { .number($0) } ?? .text(raw)
+        case .boolean?: return .flag(raw == "true")
+        default: return .text(raw)
+        }
+    }
+
     /// One fixture per routed capability: `family<TAB>surface<TAB>set<TAB>flags`, sorted.
     static func render() -> [String: String] {
         var files: [String: String] = [:]
@@ -182,6 +215,16 @@ enum ModelScopeFixtures {
                 let target = Target(capability: capability, family: family)
                 for surface in surfaces(for: capability) {
                     lines += target.record(surface)
+                }
+            }
+            for cell in replacedValues where cell.capability == capability.id {
+                guard let family = routing.family(id: cell.family) else {
+                    XCTFail("\(cell.capability) has no family \(cell.family)")
+                    continue
+                }
+                let target = Target(capability: capability, family: family)
+                for surface in surfaces(for: capability) {
+                    lines += target.replaced(surface, flag: cell.flag, value: cell.value)
                 }
             }
             files[capability.id] = "# \(capability.id): the flags each Studio surface shows, validates, and sends per runtime family.\n"
@@ -254,11 +297,10 @@ enum ModelScopeFixtures {
 
         // MARK: Prompt modes
 
-        private func composer(
-            _ mode: StudioMode,
-            action: StudioReadImageAction,
-            surface: String
-        ) -> (Set<String>, Set<String>, Set<String>)? {
+        /// The composer's draft with every control it binds filled, run on the family: its model,
+        /// then only the selectors the command line does not already hold. nil when the composer
+        /// cannot reach the family (a selector it has no control for).
+        func composerDraft(_ mode: StudioMode, action: StudioReadImageAction) -> StudioDraft? {
             var draft = StudioDraft.baseline(for: mode)
             draft.readImageAction = action
             draft.prompt = "model scope"
@@ -276,11 +318,36 @@ enum ModelScopeFixtures {
                     companion.write(&draft, ModelScopeFixtures.changed(companion.read(draft)))
                 }
             }
-            for condition in family.selectors {
-                guard let binding = bindings[condition.flag] else { return nil }
-                binding.write(&draft, condition.values?.first.map { StudioContractValue.text($0) } ?? .flag(true))
+            // A selector the command line already holds is left alone. Otherwise a value or a
+            // switch goes into its control, and a flag that must be absent (or a switch that must
+            // be off) goes back to the mode's baseline, never on.
+            let baseline = StudioDraft.baseline(for: mode)
+            for condition in family.selectors where source.scope(mode: mode, draft: draft)?.family?.id != family.id {
+                guard let binding = bindings[condition.flag] else { continue }
+                let tokens = capability.arguments(satisfying: condition)
+                switch tokens.count {
+                case 2: binding.write(&draft, ModelScopeFixtures.contractValue(tokens[1], for: option(condition.flag)))
+                case 1: binding.write(&draft, .flag(true))
+                default: binding.reset(&draft, to: baseline)
+                }
             }
-            guard let scope = source.scope(mode: mode, draft: draft), scope.family?.id == family.id else { return nil }
+            guard source.scope(mode: mode, draft: draft)?.family?.id == family.id else { return nil }
+            return draft
+        }
+
+        private func option(_ flag: String) -> MereRunCapabilityOption? {
+            capability.options.first { $0.flag == flag }
+        }
+
+        private func composer(
+            _ mode: StudioMode,
+            action: StudioReadImageAction,
+            surface: String
+        ) -> (Set<String>, Set<String>, Set<String>)? {
+            guard let draft = composerDraft(mode, action: action), let scope = source.scope(mode: mode, draft: draft) else {
+                return nil
+            }
+            let bindings = StudioContractBindings.bindings(for: mode)
 
             let shown = composerShown(mode, draft: draft, source: source)
             let bindable = composerShown(mode, draft: draft, source: unrouted)
@@ -392,6 +459,58 @@ enum ModelScopeFixtures {
             check(emitted == validated.subtracting(secrets), surface,
                   "sends \(emitted.symmetricDifference(validated.subtracting(secrets)).sorted()) unlike the form it validates")
             return (shown, validated, emitted)
+        }
+
+        // MARK: Replaced values
+
+        /// `surface` holding `value` for `flag`, a value the family runs its own way: the launch
+        /// passes the family's gate, the family still runs, and the surface's note says what runs
+        /// instead. The line records what the launch sends for the flag.
+        func replaced(_ surface: Surface, flag: String, value: String) -> [String] {
+            let prefix = "\(family.id)\t\(surface.name)\treplaced \(flag) \(value)\t"
+            let held: (argv: [String], scope: StudioOptionScope?, notice: StudioScopeNotice?)
+            switch surface {
+            case let .composer(mode, action):
+                guard var draft = composerDraft(mode, action: action) else { return [prefix + "unreachable"] }
+                guard let binding = StudioContractBindings.bindings(for: mode)[flag] else { return [] }
+                let written = ModelScopeFixtures.contractValue(value, for: option(flag))
+                binding.write(&draft, written)
+                // A composite editor's own number (MiniMax-H3's steps beside `--steps`) holds it too.
+                for companion in StudioContractOverrides.override(forFlag: flag, mode: mode)?.companions ?? []
+                    where companion.read(draft).numericValue != nil || companion.read(draft) == .unset {
+                    companion.write(&draft, written)
+                }
+                let scope = source.scope(mode: mode, draft: draft)
+                let request = try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false, source: source)
+                held = (request.map { $0.template.arguments(from: $0.draft, source: source) } ?? [],
+                        scope, scope?.notice(mode: mode, draft: draft))
+            case let .task(_, templateID):
+                var draft = StudioTaskDraft(templateID: templateID)
+                draft.form = filledForm(draft.form)
+                draft.form[flag] = .text(value)
+                held = (draft.run(source: source)?.arguments ?? [], source.scope(for: draft), StudioTaskSchema.notice(for: draft, source: source))
+            case .console(let templateID):
+                guard let template = CommandCatalog.template(id: templateID) else { return [] }
+                var form = filledForm(StudioConsoleCommand.seed(template: template, draft: template.defaultDraft(), source: .contract))
+                form[flag] = .text(value)
+                let scope = source.scope(capability: capability, form: form)
+                let run = StudioConsoleRun(template: template, draft: form, seed: template.defaultDraft(), source: source)
+                held = (run?.arguments ?? [], scope, scope.notice(form: form))
+            }
+            let name = "\(capability.id) \(family.id) \(surface.name) replaced \(flag)"
+            guard held.scope?.family?.id == family.id else {
+                XCTFail("\(name): the value moved the command off its family")
+                return [prefix + "unreachable"]
+            }
+            let arguments = held.argv.starts(with: capability.command) ? Array(held.argv.dropFirst(capability.command.count)) : held.argv
+            let invocation = MereRunCommandInvocation(capability: capability, arguments: arguments)
+            let violations = capability.violations(invocation, family: family.id).filter { $0.kind != .missingRequired }
+            XCTAssertEqual(violations.map(\.message), [], "\(name): the launch sends what the gate answers")
+            let label = option(flag)?.label ?? flag
+            let lines = held.notice.map { [$0.title] + $0.details } ?? []
+            XCTAssertTrue(lines.contains { $0.hasPrefix(label + ":") }, "\(name): the note does not say what runs: \(lines)")
+            let sent = invocation.values[flag].map { "\(flag) " + $0.joined(separator: ",") } ?? "nothing"
+            return [prefix + "sends " + sent]
         }
 
         private func carried(_ form: StudioConsoleDraft) -> Set<String> {
