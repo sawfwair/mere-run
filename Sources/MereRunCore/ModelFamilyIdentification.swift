@@ -10,7 +10,11 @@ public enum ModelFamilyIdentifier {
     public typealias Probe = @Sendable (_ model: String, _ invocation: MereRunCommandInvocation) -> String?
 
     /// Per-capability probes, keyed by capability id. Each domain registers its own.
-    static let probes: [String: Probe] = [:]
+    static let probes: [String: Probe] = [
+        "video.generate": videoGenerate,
+        "video.retake": videoRetake,
+        "video.session": videoSession
+    ]
 
     public static func identify(
         capabilityID: String,
