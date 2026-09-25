@@ -178,7 +178,7 @@ extension MereRunCapabilityCatalog {
             .init(VideoGenerateFamily.ltx23Distilled, title: "LTX-2.3 Distilled", models: ["video-ltx23-av-mlx"]),
             .init(VideoGenerateFamily.ltx23Full, title: "LTX-2.3 Full", models: []),
             .init(VideoGenerateFamily.ltx23A2Vid, title: "LTX-2.3 A2Vid", models: []),
-            .init(VideoGenerateFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoGenerateFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: [ltx25DistilledModel]),
             .init(VideoGenerateFamily.ltx25DistilledDiffusion, title: "LTX-2.5 Distilled with the diffusion decoder", models: []),
             .init(VideoGenerateFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"]),
             .init(VideoGenerateFamily.wan, title: "Wan 2.2 TI2V", models: ["video-wan22-ti2v-5b-mlx"]),
@@ -198,7 +198,7 @@ extension MereRunCapabilityCatalog {
             .init(VideoGenerateFamily.h3Ref2VA, title: "MiniMax-H3 Ref2VA", models: ["video-minimax-h3-ref2va-mlx"])
         ],
         excludedModels: .models(otherVideoModels, reason: otherVideoModelsReason),
-        identifiedModels: ltx23InstallDependentModels
+        identifiedModels: ltx23InstallDependentModels + [ltx25DistilledModel]
     )
 
     private static let fastH3Model = "video-minimax-h3-fasth3-vsa-datafree-mlx"
@@ -208,16 +208,23 @@ extension MereRunCapabilityCatalog {
     /// ids fall back to each other's installs. The CLI identifies the folder each will run.
     private static let ltx23InstallDependentModels = ["video-ltx-av", "video-ltx23-full-mlx", "video-ltx23-a2vid-mlx"]
 
+    /// The managed LTX-2.5 Distilled checkpoint installs only the convolutional decoder, but its
+    /// installed folder runs the diffusion decoder once it holds one. The id is listed and also
+    /// identified: the CLI places an install that holds the decoder in the diffusion family, and
+    /// without its answer (nothing installed, or a shell that has not asked) the listed family
+    /// stands.
+    private static let ltx25DistilledModel = "video-ltx25-distilled-bf16"
+
     /// Retake runs any official LTX-2.5 folder, on the full lane when the full checkpoint
     /// validates. Every other checkpoint fails after resolution (`VideoRetakeCommand.run`).
     /// `video-ltx-av` resolves to a suggested folder, which `MERERUN_VIDEO_LTX_MODEL_ROOT` can
-    /// point at an LTX-2.5 install, so the CLI identifies it; the LTX 2.3 ids only ever land on
-    /// LTX 2.3 folders.
+    /// point at an LTX-2.5 install, so the CLI identifies it, as it does the LTX-2.5 Distilled id;
+    /// the LTX 2.3 ids only ever land on LTX 2.3 folders.
     static let videoRetakeRouting = MereRunCapabilityRouting(
         modelFlags: ["--model-root", "--model"],
         defaultModels: [.always("video-ltx25-distilled-bf16")],
         families: [
-            .init(VideoRetakeFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoRetakeFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: [ltx25DistilledModel]),
             .init(VideoRetakeFamily.ltx25DistilledDiffusion, title: "LTX-2.5 Distilled with the diffusion decoder", models: []),
             .init(VideoRetakeFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
         ],
@@ -225,7 +232,7 @@ extension MereRunCapabilityCatalog {
             videoGenerationModels.filter { !$0.hasPrefix("video-ltx25-") && $0 != "video-ltx-av" },
             reason: "`video retake` needs an official LTX-2.5 checkpoint."
         ).and(otherVideoModels, reason: otherVideoModelsReason),
-        identifiedModels: ["video-ltx-av"]
+        identifiedModels: ["video-ltx-av", ltx25DistilledModel]
     )
 
     /// The session keeps the split or full LTX-2.3 runtime, or either LTX-2.5 runtime, resident
@@ -237,7 +244,7 @@ extension MereRunCapabilityCatalog {
         families: [
             .init(VideoSessionFamily.ltx23Distilled, title: "LTX-2.3 Distilled", models: ["video-ltx23-av-mlx"]),
             .init(VideoSessionFamily.ltx23Full, title: "LTX-2.3 Full", models: []),
-            .init(VideoSessionFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoSessionFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: [ltx25DistilledModel]),
             .init(VideoSessionFamily.ltx25DistilledDiffusion, title: "LTX-2.5 Distilled with the diffusion decoder", models: []),
             .init(VideoSessionFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
         ],
@@ -245,6 +252,6 @@ extension MereRunCapabilityCatalog {
             videoGenerationModels.filter { $0.hasPrefix("video-wan") || $0.hasPrefix("video-minimax-h3-") },
             reason: "The resident session runs LTX-2.3 and LTX-2.5 checkpoints; use `video generate`."
         ).and(otherVideoModels, reason: otherVideoModelsReason),
-        identifiedModels: ltx23InstallDependentModels
+        identifiedModels: ltx23InstallDependentModels + [ltx25DistilledModel]
     )
 }

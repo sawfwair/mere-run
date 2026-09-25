@@ -54,11 +54,13 @@ public enum VideoGenerationModelProfile: String, Sendable {
 
     /// The managed ids whose checkpoint depends on what is installed (the contract's
     /// `identified_models`), each with the layout it names: `video-ltx-av` can run a suggested
-    /// LTX 2.3 folder, and the LTX 2.3 Full and A2Vid ids fall back to each other's installs.
+    /// LTX 2.3 folder, the LTX 2.3 Full and A2Vid ids fall back to each other's installs, and an
+    /// installed LTX 2.5 Distilled folder can hold the diffusion decoder.
     public static let installDependentLayouts: [String: Self] = [
         ModelResolver.ModelID.ltxVideoAV.rawValue: .ltxMerged,
         ModelResolver.ModelID.ltxVideo23FullMLX.rawValue: .ltx23Full,
-        ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue: .ltx23AudioToVideo
+        ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue: .ltx23AudioToVideo,
+        ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue: .ltx25Distilled
     ]
 
     public func ltxRoute(outputMode: LTXVideoOutputMode) -> LTXVideoGenerationRoute? {

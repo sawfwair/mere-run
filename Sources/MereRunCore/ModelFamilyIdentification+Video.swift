@@ -25,7 +25,8 @@ extension ModelFamilyIdentifier {
     /// names the FastH3 id exactly and no `--h3-adapter` replaces the embedded one
     /// (`VideoGenerationOptions.usesEmbeddedFastH3Adapter`). An FL2VA folder stored as legacy
     /// Q4 is its own family: it refuses Turbo adapters. An LTX-2.5 Distilled folder that holds
-    /// the diffusion decoder is its own family too: it runs `--video-decoder diffusion`.
+    /// the diffusion decoder is its own family too, the managed id's install included: it runs
+    /// `--video-decoder diffusion`.
     static let videoGenerate: Probe = { model, invocation in
         let outputMode = VideoGenerationOptions.effectiveOutputMode(
             audio: invocation.value("--audio"),

@@ -52,6 +52,9 @@ The format is based on Keep a Changelog.
     audio-to-video run drops on LTX-2.5 Full too. A value
     the command reads as not passed only warns: an empty text value such as
     `--negative-prompt ""`, a blank `text chat --image`, or `--stems ","`.
+    `--video-decoder diffusion` does not warn on an LTX-2.5 Distilled folder
+    that holds the diffusion decoder, including the managed
+    `video-ltx25-distilled-bf16` install with the decoder added by hand.
     Warnings print once the command line has parsed and validated, never
     beside a validation error, and not under `--quiet`. A command that prints
     a JSON object on stdout (`--json`, `--preflight --json`, `--dry-run

@@ -36,10 +36,12 @@ final class MainBehaviourRegressionTests: XCTestCase {
         let source: String
         let evidence: String
         let env: [String: String]?
+        /// Managed ids installed for this row, each as a copy of the named store.
+        let installed: [String: String]?
         let acceptedDifference: String?
 
         enum CodingKeys: String, CodingKey {
-            case argv, main, source, evidence, env
+            case argv, main, source, evidence, env, installed
             case acceptedDifference = "accepted_difference"
         }
     }
@@ -93,6 +95,17 @@ final class MainBehaviourRegressionTests: XCTestCase {
         return stores
     }
 
+    /// Installs each managed id as a copy of its store, with the manifest a pull writes.
+    private func install(_ installed: [String: String], from stores: String) throws -> [URL] {
+        try installed.map { id, store in
+            let model = try XCTUnwrap(ModelResolver.ModelID(rawValue: id), id)
+            let folder = MereRunModelPaths.modelsDir.appendingPathComponent(id, isDirectory: true)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: stores).appendingPathComponent(store), to: folder)
+            try MereRunModelManifest.template(for: model, createdAt: Date(timeIntervalSince1970: 0)).write(to: folder)
+            return folder
+        }
+    }
+
     func testTheGateNeverRefusesACommandLineMainRan() throws {
         let table = try table()
         let stores = try stores(table).path
@@ -105,6 +118,12 @@ final class MainBehaviourRegressionTests: XCTestCase {
             defer {
                 for key in environment.keys {
                     unsetenv(key)
+                }
+            }
+            let installed = try install(row.installed ?? [:], from: stores)
+            defer {
+                for folder in installed {
+                    try? FileManager.default.removeItem(at: folder)
                 }
             }
             let argv = row.argv.map { $0.replacingOccurrences(of: "$FIXTURE", with: stores) }

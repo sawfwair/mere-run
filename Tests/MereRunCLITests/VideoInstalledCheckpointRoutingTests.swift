@@ -5,8 +5,8 @@ import XCTest
 
 @testable import MereRunCLI
 
-/// The LTX 2.3 ids whose checkpoint depends on what is installed resolve at the gate to the
-/// folder `VideoGenerationModelResolver` will run, and to the layout they name when nothing is
+/// The LTX ids whose checkpoint depends on what is installed resolve at the gate to the folder
+/// `VideoGenerationModelResolver` will run, and to the layout they name when nothing is
 /// installed. Each test points the model store at its own fixture folders, which is process
 /// state, so these run serially like `CapabilityGateRootValidationTests`.
 final class VideoInstalledCheckpointRoutingTests: XCTestCase {
@@ -101,6 +101,51 @@ final class VideoInstalledCheckpointRoutingTests: XCTestCase {
         XCTAssertEqual(generate.source, .identified)
         XCTAssertEqual(try report(["video", "generate", "a", "--quality", "final"]).family, "ltx23-a2vid")
         XCTAssertEqual(try report(["video", "session", "--model", "video-ltx23-full-mlx"]).source, .unidentified)
+    }
+
+    /// The managed LTX-2.5 Distilled checkpoint installs only the convolutional decoder; a
+    /// diffusion decoder added to the installed folder by hand runs `--video-decoder diffusion`
+    /// (`LTXUnifiedAVGenerator.loadStandalone`), in every command that loads the distilled
+    /// runtime, whether the id is named or is the default.
+    func testAnInstalledDistilledFolderWithTheDiffusionDecoderTakesIt() throws {
+        let model = ModelResolver.ModelID.ltxVideo25DistilledBF16
+        let retake = ["video", "retake", "a", "--source", "s.mp4", "--start-time", "0", "--end-time", "1"]
+        let commands = [["video", "generate", "a"], retake, ["video", "session"]]
+        let named = ["--model", model.rawValue, "--video-decoder", "diffusion"]
+        for command in commands {
+            let absent = try report(command + named)
+            XCTAssertEqual(absent.family, "ltx25-distilled", "nothing installed: \(command)")
+            XCTAssertEqual(absent.warnings.count, 1, "nothing installed: \(command)")
+        }
+
+        let root = modelsRoot.appending(path: model.rawValue)
+        for path in LTX25Resources.requiredRelativePaths + [LTX25Resources.textEncoderRelativePath] {
+            let file = root.appending(path: path)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: file)
+        }
+        try MereRunModelManifest.template(for: model, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        for command in commands {
+            let plain = try report(command + named)
+            XCTAssertEqual(plain.family, "ltx25-distilled", "\(command)")
+            XCTAssertEqual(plain.source, .identified, "\(command)")
+            XCTAssertEqual(plain.warnings.count, 1, "\(command)")
+        }
+
+        try Data().write(to: root.appending(path: LTX25Resources.diffusionVideoVAERelativePath))
+        for command in commands {
+            let diffusion = try report(command + named)
+            XCTAssertEqual(diffusion.family, "ltx25-distilled-diffusion", "\(command)")
+            XCTAssertEqual(diffusion.violations, [], "\(command)")
+            XCTAssertEqual(diffusion.warnings, [], "\(command)")
+        }
+        // The distilled id is the default for these command lines.
+        for command in [["video", "generate", "a", "--video-decoder", "diffusion"], retake + ["--video-decoder", "diffusion"]] {
+            let defaulted = try report(command)
+            XCTAssertEqual(defaulted.family, "ltx25-distilled-diffusion", "\(command)")
+            XCTAssertEqual(defaulted.source, .defaultModel, "\(command)")
+            XCTAssertEqual(defaulted.warnings, [], "\(command)")
+        }
     }
 
     /// `MERERUN_VIDEO_LTX_MODEL_ROOT` comes first among the suggested folders; retake runs the
