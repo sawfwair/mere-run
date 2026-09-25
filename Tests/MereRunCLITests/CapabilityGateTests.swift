@@ -48,15 +48,23 @@ private func gateCases(for capability: MereRunCommandCapability) -> [GateCase] {
                 let expectation: GateCase.Expectation = option.ignoredBy.contains(family.id)
                     ? .warns(family: family.id, flag: option.flag)
                     : .rejects(flag: option.flag, familyTitle: family.title)
-                cases.append(GateCase(arguments: withOption([validValue(option, rule: rule)]), expectation: expectation))
+                // A conditional rule does not hold once its condition is broken, and the family
+                // then ignores any value.
+                if let rule, !rule.when.isEmpty, let lifted = arguments(breaking: rule.when, in: capability) {
+                    let value = tokens(option, value: validValue(option, rule: nil))
+                    cases.append(GateCase(arguments: base + lifted + value, expectation: expectation))
+                } else {
+                    cases.append(GateCase(arguments: withOption([validValue(option, rule: rule)]), expectation: expectation))
+                }
                 // An ignoring family's rule lists the values it tolerates; any other is refused.
                 if option.ignoredBy.contains(family.id), let rule {
                     let refused = GateCase.Expectation.rejects(flag: option.flag, familyTitle: family.title)
+                    let holding = rule.when.flatMap(capability.arguments(satisfying:))
                     if let allowed = rule.values, let outside = valueOutside(allowed, option: option) {
-                        cases.append(GateCase(arguments: withOption([outside]), expectation: refused))
+                        cases.append(GateCase(arguments: withOption([outside]) + holding, expectation: refused))
                     }
                     if let outside = rule.range.flatMap({ $0.max.map { $0 + 1 } ?? $0.min.map { $0 - 1 } }) {
-                        cases.append(GateCase(arguments: withOption([render(outside, option)]), expectation: refused))
+                        cases.append(GateCase(arguments: withOption([render(outside, option)]) + holding, expectation: refused))
                     }
                 }
                 continue
@@ -130,6 +138,13 @@ private func gateReport(_ capability: MereRunCommandCapability, _ arguments: [St
             ? .family(String(model.dropFirst(identifiedPlaceholder.count)))
             : ModelFamilyIdentifier.identify(capabilityID: capability.id, model: model, invocation: invocation)
     }
+}
+
+/// Arguments under which a rule's `when` no longer holds: the flag its first condition needs
+/// absent, passed. `nil` for a condition the generator does not know how to break.
+private func arguments(breaking conditions: [MereRunFlagCondition], in capability: MereRunCommandCapability) -> [String]? {
+    guard let first = conditions.first, first.absent else { return nil }
+    return capability.arguments(satisfying: MereRunFlagCondition(flag: first.flag))
 }
 
 /// The tokens that pass `option` with `value`: the flag alone for a Boolean, and the flag with the
@@ -228,14 +243,20 @@ private func expect(
         for family in routing.families {
             guard let base = minimalArguments(for: family, in: capability, routing: routing) else { continue }
             for option in capability.options where !routingFlags.contains(option.flag) {
-                let rule = option.familyRules.first { $0.family == family.id }
+                var rule = option.familyRules.first { $0.family == family.id }
                 let uses = option.families?.contains(family.id) ?? true
+                // A cell a conditional rule refuses is taken once the condition is broken.
+                var lifted: [String] = []
+                if let conditions = rule?.when, !conditions.isEmpty, let breaking = arguments(breaking: conditions, in: capability) {
+                    lifted = breaking
+                    rule = nil
+                }
                 var values: [String] = []
                 if uses || option.ignoredBy.contains(family.id) { values.append(validValue(option, rule: rule)) }
                 if option.kind == .string && !uses { values.append("") }
                 for value in values {
                     cells += 1
-                    let report = gateReport(capability, base + tokens(option, value: value))
+                    let report = gateReport(capability, base + lifted + tokens(option, value: value))
                     #expect(report.family == family.id && report.violations.isEmpty,
                             "\(capability.id) \(family.id) \(option.flag) \"\(value)\" got \(report)")
                 }
@@ -286,7 +307,9 @@ private func expect(
                                                   .init(family: "full", maxCount: 1, severity: .warning)]),
             MereRunCapabilityOption(flag: "--seed", label: "Seed", kind: .integer, families: ["full", "fast"],
                                     familyRules: [.init(family: "full", range: .init(min: 0, max: 99))]),
-            MereRunCapabilityOption(flag: "--hq", label: "HQ", kind: .boolean, families: ["full"])
+            MereRunCapabilityOption(flag: "--hq", label: "HQ", kind: .boolean, families: ["full"]),
+            MereRunCapabilityOption(flag: "--preview", label: "Preview", kind: .boolean, families: ["fast"], ignoredBy: ["full"],
+                                    familyRules: [.init(family: "full", values: ["false"], when: [.absent("--hq")])])
         ],
         output: .init(kind: .text),
         routing: MereRunCapabilityRouting(
@@ -307,8 +330,10 @@ private func expect(
         case .rejects: "rejects"
         }
     }
-    #expect(kinds.filter { $0 == "warns" }.count == 2, "ignored --cfg on Fast and excess --image on Full")
-    #expect(kinds.filter { $0 == "rejects" }.count == 9, "\(cases)")
+    #expect(kinds.filter { $0 == "warns" }.count == 3, "ignored --cfg on Fast, --preview with --hq on Full, and excess --image on Full")
+    #expect(kinds.filter { $0 == "rejects" }.count == 11, "\(cases)")
+    #expect(cases.contains { $0.arguments == ["--model", "demo-full", "--hq", "--preview"] }, "a broken condition lifts the rule")
+    #expect(cases.contains { $0.arguments == ["--model", "demo-full", "--preview"] }, "a holding condition refuses the flag")
     #expect(cases.contains { $0.arguments == ["--model", "demo-fast", "--cfg", "2.0"] }, "an ignoring family refuses other values")
     #expect(cases.contains { $0.arguments == ["--model", "demo-fast", "--steps", "5"] })
     #expect(cases.contains { $0.arguments == ["--mode", "b", "--model", "demo-edit"] })

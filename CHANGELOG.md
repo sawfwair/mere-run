@@ -69,7 +69,8 @@ The format is based on Keep a Changelog.
   `default_models`, `excluded_models` with an optional `severity`,
   `identified_models`, `listing_flags`, and the `selectors_override_model` and
   `routed_by_command` flags, with a numeric `minimum` among a condition's
-  tests); and per option, `families`, `ignored_by`, `family_rules`,
+  tests); and per option, `families`, `ignored_by`, `family_rules` (with the
+  `when` conditions under which a rule holds),
   `choice_spellings` (with `numeric`), `blank_reads_as_omitted`,
   `list_separator`, and `overridden_by`.
   `schema_version` stays 1.
