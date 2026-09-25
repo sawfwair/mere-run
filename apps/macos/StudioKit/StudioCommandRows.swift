@@ -97,15 +97,20 @@ package enum StudioCommandRows {
         return (positional, flags)
     }
 
-    /// The grouped rows for `template` and `draft`: every option the contract declares (set
-    /// ones first within a group, then unset in declaration order), plus any emitted flag the
-    /// contract does not list, plus positional arguments. Repeated flags join with newlines.
-    package static func groups(template: CommandTemplate, draft: CommandDraft) -> [StudioCommandRowGroupRows] {
-        let arguments = template.arguments(from: draft)
-        let capability = template.id.capabilityID.flatMap { MereRunCapabilityCatalog.command(id: $0) }
+    /// The grouped rows for `template` and `draft`: every option the model the argv runs takes
+    /// (`StudioOptionScope`; set ones first within a group, then unset in declaration order),
+    /// plus any emitted flag the contract does not list, plus positional arguments. Repeated
+    /// flags join with newlines.
+    package static func groups(
+        template: CommandTemplate,
+        draft: CommandDraft,
+        source: StudioScopeSource = .live
+    ) -> [StudioCommandRowGroupRows] {
+        let arguments = template.arguments(from: draft, source: source)
+        let capability = source.capability(for: template.id)
         let commandPathCount = capability?.command.count ?? Self.commandPathCount(of: arguments)
         let parsed = parse(arguments: arguments, commandPathCount: commandPathCount)
-        let declared = capability.map { StudioModelOptionScope.options(for: $0, model: draft.model) } ?? []
+        let declared = capability.map { source.scope(capability: $0, commandLine: arguments).options } ?? []
         let declaredByFlag = Dictionary(declared.map { ($0.flag, $0) }, uniquingKeysWith: { first, _ in first })
 
         var emitted: [String: [String?]] = [:]

@@ -529,11 +529,30 @@ external override like the attachment well: the canvas is their editor, so the
 inspector never shows them as text while a Command-view edit still flows back
 into the drawing.
 
+Every surface is scoped to the model the run uses (`StudioKit/StudioOptionScope.swift`).
+The contract resolves the runtime family from the argv the surface would launch:
+the model the draft names (the template's when it names none, the contract's
+default for a task form without `--model`), `--model-root` where it wins, and
+selector flags such as `--backend`. `options(forFamily:)` then decides what the
+composer's fields, chips, and attachment wells, the task inspector, the Command
+view, the Command Console, validation, readiness, and the model pickers offer,
+and what the argv builders send. A value the model doesn't use stays in the
+draft, so switching back brings it back, but the copy a run validates and
+launches resets it, and a note (`StudioUI/StudioScopeNote.swift`) lists it under
+the composer's chips, at the top of the inspectors, and as the Command view's
+"Not sent" line. A local model folder the contract can't place is identified by
+`mere.run catalog resolve --json` (`StudioModelIdentity.swift`), answered once
+per folder and modification date; the surfaces show every option while it runs
+and when it can't tell. Pickers list only the models whose families run the
+command, and a model the command excludes blocks the run with the CLI gate's
+reason. `StudioModelScopeGoldenTests` checks every routed command and family:
+what each surface shows, validates, and sends equals what the contract allows,
+with per-command fixtures under `StudioKitTests/Fixtures/model-scope/`
+(`./scripts/update-studio-model-scope-fixtures.sh` re-records them).
+
 The **Command** panel (⌥⌘C or the header toggle) exposes the current task's
-editable options for the selected model. The inspector, composer attachments,
-and Command panel use the same model scope. Switching models preserves entered
-values, but a run omits options that do not apply to the selected model.
-The panel replaces the inspector and uses a 440-point
+complete editable command for the model it runs. The panel replaces the
+inspector and uses a 440-point
 column when space permits, otherwise an overlay. Each row is headed by the
 option's label with its flag beneath in small monospace, over the same typed
 controls the Console draws. The preview, validation, and
@@ -551,10 +570,10 @@ typed rather than dragged, so the console has no per-command view of its own:
 `StudioConsoleDraft` keeps one value per flag, `StudioConsoleCommand` reads a
 template's own argv into those values and builds the argv back out of them, and
 the eyebrows, controls, dependencies, positional arguments and "Will run" block
-all come from `MereRunCapabilityCatalog`. Nothing is filtered by tier. For
-commands with model-specific options, the form shows only those of the selected
-model and the run omits hidden values. For other commands, the console emits a
-flag exactly when the draft holds a value.
+all come from `MereRunCapabilityCatalog`. Nothing is filtered by tier, and the
+form shows the options of the model the command runs: the rest keep their
+values, listed under the form's note, and are left off the command line.
+Otherwise the console emits a flag exactly when the draft holds a value.
 `StudioConsoleDraftTests` holds the identity that makes that safe: for every
 template in the catalog, seeding from its default command and rebuilding
 produces the same command. Options the contract does not describe go in Extra

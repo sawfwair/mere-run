@@ -26,9 +26,22 @@ package struct StudioExecution: Codable, Equatable {
         templateID.capability.map { StudioConsoleCommand.seed(capability: $0, arguments: arguments) }
     }
 
+    /// The form's checks, then the CLI gate's own sentence for exactly these arguments.
     package var validationMessage: String? {
         guard let capability = templateID.capability, let form else { return nil }
-        return StudioConsoleCommand.validationMessage(for: capability, draft: form)
+        return StudioConsoleCommand.validationMessage(
+            for: capability, draft: form,
+            launching: StudioScopeSource.live.scope(capability: capability, commandLine: arguments)
+        )
+    }
+
+    /// The same command without the options the model it runs does not take (`StudioOptionScopes
+    /// .filtered`): a Library row recorded before its model's options were scoped replays as the
+    /// model runs today, rather than as a command the CLI refuses.
+    package func scoped(source: StudioScopeSource = .live) -> StudioExecution {
+        guard let capability = source.capability(for: templateID) else { return self }
+        let scope = source.scope(capability: capability, commandLine: arguments)
+        return StudioExecution(templateID: templateID, arguments: StudioOptionScopes.filtered(arguments, scope: scope))
     }
 
     /// Projects fields used by history and artifact discovery. The vector remains authoritative:
@@ -129,7 +142,7 @@ package enum StudioLibraryReplay {
         let namedURL = URL(fileURLWithPath: namedOutput)
         let output = namedOutput.isEmpty ? "" : namedURL.deletingPathExtension().path + "-"
             + UUID().uuidString.prefix(8) + (namedURL.pathExtension.isEmpty ? "" : "." + namedURL.pathExtension)
-        let execution = original.replay(outputPath: output, seed: variationSeed)
+        let execution = original.replay(outputPath: output, seed: variationSeed).scoped()
         return StudioRunRequest(mode: item.mode, templateID: templateID, template: template,
                                 draft: stored.withoutSecrets, execution: execution, parentID: item.id)
     }

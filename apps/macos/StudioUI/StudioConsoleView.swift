@@ -245,6 +245,7 @@ private struct StudioConsoleCatalog: View {
 /// same values build.
 private struct StudioConsoleForm: View {
     @EnvironmentObject private var controller: MereRunController
+    @Environment(\.studioScopeSource) private var scopeSource
     @Binding var draft: StudioConsoleDraft
     let run: () -> Void
     let stop: () -> Void
@@ -256,7 +257,13 @@ private struct StudioConsoleForm: View {
     private var capability: MereRunCommandCapability? { template.id.capability }
 
     private var launch: StudioConsoleRun? {
-        StudioConsoleRun(template: template, draft: draft, seed: controller.draft)
+        StudioConsoleRun(template: template, draft: draft, seed: controller.draft, source: scopeSource)
+    }
+
+    /// The form's scope: the options the model it runs takes. What the form holds for the rest
+    /// is listed in the note and kept, not run.
+    private var scope: StudioOptionScope? {
+        capability.map { scopeSource.scope(capability: $0, form: draft) }
     }
 
     private var displayCommand: String {
@@ -273,10 +280,12 @@ private struct StudioConsoleForm: View {
                     if let url = template.externalURL {
                         externalSection(url)
                     } else if let capability {
-                        ForEach(StudioConsoleCommand.groups(
-                            for: capability,
-                            model: StudioModelOptionScope.model(for: capability, form: draft, seed: controller.draft)
-                        )) { group in
+                        if let notice = scope?.notice(form: draft) {
+                            StudioScopeNote(notice: notice)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 14)
+                        }
+                        ForEach(StudioConsoleCommand.groups(for: capability, scope: scope)) { group in
                             groupView(group, capability: capability)
                         }
                         extraArgumentsSection(lines: 1...4)

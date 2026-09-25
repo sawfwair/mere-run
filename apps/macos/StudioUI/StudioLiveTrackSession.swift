@@ -477,7 +477,7 @@ struct StudioLiveTrackSession: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.requiredModelID(for: draft))
+        controller.checkReadiness(for: Self.task, requirement: StudioTaskSchema.requirement(for: draft))
     }
 
     /// Lists the cameras now attached; an index remembered for a camera that is gone falls back

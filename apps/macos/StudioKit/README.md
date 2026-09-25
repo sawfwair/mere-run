@@ -14,6 +14,18 @@ selection memory, result focus, command overrides, and persistence. Keep session
 values. `CommandTemplate.validationMessage(for:execution:)` applies the same
 validation during preparation and final job admission.
 
+`StudioOptionScope` is the one answer to "which options does this run's model
+take". Build it through `StudioScopeSource` from the argv a surface would
+launch (`scope(mode:draft:)`, `scope(capability:form:)`), never from a model
+name. It resolves the family with the contract, asks `StudioModelIdentifying`
+only for a model the contract doesn't list, and hands every surface
+`options(forFamily:)`. Drafts keep hidden values; `StudioDraft.scoped(to:mode:)`
+and `StudioConsoleDraft.scoped(to:)` reset them in the copy that validates and
+launches, and `StudioOptionScopes.filtered` drops what a builder emits anyway.
+`StudioModelIdentityStore.shared` caches `catalog resolve` answers per folder;
+`MereRunController` supplies its resolver. Tests pass a `StudioScopeSource` with
+a routed capability and fixed identities.
+
 `StudioTaskRunner` is the one submission path for every task run that is not a
 conversation turn: it names the destination
 (`StudioOutputLocation.destination(for:)`), applies Command edits, validates,

@@ -27,6 +27,7 @@ struct StudioInspector: View {
     let onClose: () -> Void
 
     @EnvironmentObject private var controller: MereRunController
+    @Environment(\.studioScopeSource) private var scopeSource
     @State private var showAdvanced = false
     @State private var editingSeed = false
     @State private var showImageEditor = false
@@ -35,15 +36,15 @@ struct StudioInspector: View {
     static let width = StudioLayoutPolicy.inspectorWidth
 
     private var sections: [StudioContractSection] {
-        StudioInspectorSchema.sections(for: mode, draft: draft)
+        StudioInspectorSchema.sections(for: mode, draft: draft, source: scopeSource)
     }
 
     private var advancedFields: [StudioContractField<StudioDraft>] {
-        StudioInspectorSchema.advancedFields(for: mode, draft: draft)
+        StudioInspectorSchema.advancedFields(for: mode, draft: draft, source: scopeSource)
     }
 
     private var changedCount: Int {
-        StudioInspectorSchema.changedCount(mode: mode, draft: draft, baseline: baseline)
+        StudioInspectorSchema.changedCount(mode: mode, draft: draft, baseline: baseline, source: scopeSource)
     }
 
     var body: some View {
@@ -51,6 +52,11 @@ struct StudioInspector: View {
             header
             ScrollView {
                 VStack(spacing: 0) {
+                    if let notice = StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) {
+                        StudioScopeNote(notice: notice)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                    }
                     ForEach(sections) { section in
                         sectionView(section)
                     }
@@ -155,8 +161,11 @@ struct StudioInspector: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(showAdvanced ? "Hide advanced settings" : "Show \(advancedFields.count) advanced settings")
                 Spacer(minLength: 0)
-                if showAdvanced, StudioInspectorSchema.advancedChanged(mode: mode, draft: draft, baseline: baseline) {
-                    resetButton { StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline) }
+                if showAdvanced,
+                   StudioInspectorSchema.advancedChanged(mode: mode, draft: draft, baseline: baseline, source: scopeSource) {
+                    resetButton {
+                        StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline, source: scopeSource)
+                    }
                 }
             }
             if showAdvanced {
@@ -171,7 +180,7 @@ struct StudioInspector: View {
     private func form(_ fields: [StudioContractField<StudioDraft>]) -> some View {
         ContractForm(
             fields: fields,
-            dependencies: StudioContractSchema.dependencies(for: mode, draft: draft),
+            dependencies: StudioContractSchema.dependencies(for: mode, draft: draft, source: scopeSource),
             draft: $draft
         ) { override in
             overrideControl(override)
@@ -246,7 +255,10 @@ struct StudioInspector: View {
     // MARK: Model & adapters
 
     private var modelPicker: some View {
-        StudioModelPicker(mode: mode, model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels) {
+        StudioModelPicker(
+            scope: StudioModelScope(mode: mode, readImageAction: draft.readImageAction, source: scopeSource),
+            model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels
+        ) {
             HStack(spacing: 8) {
                 if let glyph = modelStatusGlyph {
                     Image(systemName: glyph)

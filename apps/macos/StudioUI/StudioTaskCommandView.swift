@@ -5,12 +5,17 @@ import SwiftUI
 /// The current task's complete, editable command. The composer and this form share execution state.
 struct StudioTaskCommandView: View {
     @EnvironmentObject private var controller: MereRunController
+    @Environment(\.studioScopeSource) private var scopeSource
     let template: CommandTemplate
     let seed: CommandDraft
     @Binding var form: StudioConsoleDraft
     let onRun: () -> Void
     let onClose: () -> Void
     var canRun = true
+    /// What the composer's draft holds that its model leaves out, for the "Not sent" line: the
+    /// prompt workspace's, whose hidden values never reach the form. nil reads it from the form
+    /// itself, against the template's fresh form.
+    var notSent: (() -> StudioScopeNotice?)?
     /// The form as the run launches it (`StudioTaskRunner.launchPreview`), so "Will run" and the
     /// validation read the launch-time defaults and the named destination a task applies without
     /// writing them into the fields; identity for a command that has none.
@@ -19,8 +24,10 @@ struct StudioTaskCommandView: View {
     var body: some View {
         // One build per body: the argv, the preview, and the validation (which may read a file
         // the command names) all come from it.
-        let launch = StudioConsoleRun(template: template, draft: launching(form), seed: seed)
+        let launch = StudioConsoleRun(template: template, draft: launching(form), seed: seed, source: scopeSource)
         let preview = controller.commandPreview(arguments: launch?.arguments ?? [], masksSecrets: true)
+        let scope = scopeSource.capability(for: template.id).map { scopeSource.scope(capability: $0, form: form) }
+        let notice = notSent.map { $0() } ?? scope?.notice(form: form, baseline: StudioTaskDraft(templateID: template.id).form)
         return VStack(spacing: 0) {
             HStack {
                 Label("Command", systemImage: "terminal").font(.headline)
@@ -34,11 +41,8 @@ struct StudioTaskCommandView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(template.title).font(.headline)
-                    if let capability = template.id.capability {
-                        ForEach(StudioConsoleCommand.groups(
-                            for: capability,
-                            model: StudioModelOptionScope.model(for: capability, form: form, seed: seed)
-                        )) { group in
+                    if let capability = scope?.capability {
+                        ForEach(StudioConsoleCommand.groups(for: capability, scope: scope)) { group in
                             VStack(alignment: .leading, spacing: 8) {
                                 MereEyebrow(group.title)
                                 ContractForm(fields: group.fields,
@@ -68,6 +72,9 @@ struct StudioTaskCommandView: View {
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
                 }.frame(maxHeight: 110)
+                if let notice {
+                    StudioScopeNote(notice: notice, eyebrow: "Not sent")
+                }
                 if let message = launch?.validationMessage {
                     Text(message).font(.callout).foregroundStyle(MereRunTheme.red)
                 }
@@ -87,17 +94,18 @@ struct StudioTaskCommandView: View {
 private struct StudioTaskCommandRegistration: ViewModifier {
     @Environment(\.studioTaskSessions) private var sessions
     @Environment(\.studioTaskScope) private var scope
+    @Environment(\.studioScopeSource) private var scopeSource
     let templateID: CommandTemplateID
     let draft: CommandDraft
 
+    /// Whether the Command edits change what runs, compared as each side launches for the model
+    /// it runs (`StudioTaskCommandState.overrides(source:)`).
     private var hasOverrides: Bool {
         let state = sessions?.value(for: templateID.studioTask.rawValue + ".commandOverride",
                                    default: Optional<StudioTaskCommandState>.none)
-        let source = CommandCatalog.template(id: templateID)?.arguments(from: draft) ?? []
-        guard let state, state.templateID == templateID, let capability = templateID.capability else { return false }
-        let baseline = StudioConsoleCommand.seed(capability: capability, arguments: source)
-        return StudioConsoleCommand.arguments(for: capability, draft: state.resolved(source: source))
-            != StudioConsoleCommand.arguments(for: capability, draft: baseline)
+        guard let state, state.templateID == templateID,
+              let template = CommandCatalog.template(id: templateID) else { return false }
+        return state.overrides(source: template.arguments(from: draft, source: scopeSource), scopeSource: scopeSource)
     }
 
     func body(content: Content) -> some View {

@@ -155,7 +155,7 @@ struct StudioTaskWorkspace: View {
             jobMonitor.attach(controller.jobs)
             refreshReadiness()
         }
-        .onChange(of: StudioTaskSchema.requiredModelID(for: draft)) { _, _ in
+        .onChange(of: StudioTaskSchema.requirement(for: draft)) { _, _ in
             error = nil
             refreshReadiness()
         }
@@ -289,7 +289,7 @@ struct StudioTaskWorkspace: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: task, modelID: StudioTaskSchema.requiredModelID(for: draft))
+        controller.checkReadiness(for: task, requirement: StudioTaskSchema.requirement(for: draft))
     }
 
     private func chooseInput() {

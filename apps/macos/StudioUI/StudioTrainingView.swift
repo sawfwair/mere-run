@@ -370,7 +370,7 @@ struct StudioTrainingView: View {
             seedComparisons()
             refreshReadiness()
         }
-        .onChange(of: StudioTaskSchema.requiredModelID(for: draft)) { _, _ in
+        .onChange(of: StudioTaskSchema.requirement(for: draft)) { _, _ in
             error = nil
             refreshReadiness()
         }
@@ -1189,7 +1189,7 @@ struct StudioTrainingView: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: task, modelID: StudioTaskSchema.requiredModelID(for: draft))
+        controller.checkReadiness(for: task, requirement: StudioTaskSchema.requirement(for: draft))
     }
 
     /// Gets a managed model through the same `model pull` job the readiness row reports.
