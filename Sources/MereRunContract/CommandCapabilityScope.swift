@@ -121,7 +121,7 @@ extension MereRunCommandCapability {
             return resolveBySelectors(invocation, routing: routing, platform: platform, identify: identify)
         }
         guard let model = modelValue(invocation, flags: routing.modelFlags) else {
-            return resolveDefault(invocation, routing: routing, platform: platform)
+            return resolveDefault(invocation, routing: routing, platform: platform, identify: identify)
         }
         return resolve(model: model, invocation, routing: routing, identify: identify, allowIdentify: true)
     }
@@ -232,6 +232,9 @@ extension MereRunCommandCapability {
         }
         let candidates = routing.families.filter { $0.models.contains(model) }
         if !candidates.isEmpty {
+            if let installed = installedFamily(of: model, invocation, routing: routing, identify: identify) {
+                return .family(id: installed.id, model: model, source: .identified)
+            }
             let matching = candidates.filter { selectorsHold($0, invocation) }
             guard let family = matching.first else {
                 return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: candidates))
@@ -260,10 +263,26 @@ extension MereRunCommandCapability {
         }
     }
 
+    /// The family the identifier finds installed for a listed model, when the routing lets what
+    /// is installed decide and the identifier can tell.
+    private func installedFamily(
+        of model: String,
+        _ invocation: MereRunCommandInvocation,
+        routing: MereRunCapabilityRouting,
+        identify: (String) -> MereRunModelIdentification?
+    ) -> MereRunRuntimeFamily? {
+        guard routing.identifiesInstalledModels, case .family(let id)? = identify(model),
+              let family = routing.family(id: id), selectorsHold(family, invocation) else {
+            return nil
+        }
+        return family
+    }
+
     private func resolveDefault(
         _ invocation: MereRunCommandInvocation,
         routing: MereRunCapabilityRouting,
-        platform: String
+        platform: String,
+        identify: (String) -> MereRunModelIdentification?
     ) -> MereRunFamilyResolution {
         guard let rule = routing.defaultModels.first(where: { rule in
             rule.applies(on: platform) && (rule.whenAny.isEmpty || rule.whenAny.contains { holds($0, invocation, family: nil) })
@@ -276,6 +295,9 @@ extension MereRunCommandCapability {
             return .unidentified(model: rule.models.joined(separator: ", "))
         }
         let model = rule.models.count == 1 ? rule.models.first : nil
+        if let model, let installed = installedFamily(of: model, invocation, routing: routing, identify: identify) {
+            return .family(id: installed.id, model: model, source: .identified)
+        }
         guard selectorsHold(family, invocation) else {
             return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: [family]))
         }
