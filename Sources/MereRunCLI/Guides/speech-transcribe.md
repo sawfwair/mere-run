@@ -30,11 +30,12 @@ mere.run speech transcribe --help
   This option is required with `--provider coreml`.
 - `--task`: `transcribe` or `translate`.
 - `--language`: optional language hint.
-- `--max-tokens`: generation cap, default `448`.
+- `--max-tokens`: Qwen generation cap, default `448`. Parakeet ignores it.
 - `--stream`: streaming ASR mode using the selected backend.
 - `--stream-chunk-ms`: audio feed chunk size for streaming.
 - `--stream-decode-ms`: decode interval for streaming.
-- `--timestamps`, `--no-timestamps`: include alignment lines when available.
+- `--timestamps`, `--no-timestamps`: include Parakeet alignment lines. Qwen
+  and streaming output carry none.
 - `--quiet`, `-q`: suppress progress.
 
 ## Usage patterns
@@ -46,8 +47,13 @@ mere.run speech transcribe --help
   is not required. Non-streaming files are processed in 15-second windows with
   two seconds of overlap. The decoder processes as many as 16 windows in
   parallel, and matching aligned tokens are reconciled at each boundary.
-- Live transcription follows the same policy: `auto` selects Parakeet for
-  transcription and Qwen for translation.
+- The backend comes from, in order: `--task translate` (always Qwen), an
+  explicit `--backend`, the `--model`'s own backend, and otherwise Parakeet
+  unless `--language` names a language Parakeet's router does not recognize.
+  Live transcription follows the same policy.
+- A flag the choice overrules has no effect, and a managed model of the other
+  backend is replaced by the chosen backend's default. The CLI prints a
+  `Warning:` line for each, and for any option the chosen backend ignores.
 - Use `--task translate --backend auto` for translation.
 - Use `--language en` or another language hint when the audio is short or ambiguous.
 
@@ -91,7 +97,8 @@ mere.run speech transcribe ./spanish.wav \
 - Streaming backpressure errors: pace PCM input in real time and keep no more
   than five seconds queued.
 - Bad transcript on noisy audio: preprocess audio or try the other backend.
-- Translation with Parakeet requested: use Qwen or `--backend auto`.
+- `Warning: --backend parakeet has no effect with Qwen3-ASR`: translation
+  always runs Qwen; drop `--backend parakeet` or use `--backend qwen`.
 - Core ML is requested for streaming: remove `--provider coreml`; the first
   Core ML milestone supports file transcription only.
 - Unexpected text near a Core ML window boundary: compare the same file with
