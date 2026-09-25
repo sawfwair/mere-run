@@ -97,7 +97,7 @@ struct StudioVoicesView: View {
         .foregroundStyle(MereRunTheme.textPrimary)
         .onAppear {
             jobMonitor.attach(controller.jobs)
-            controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.requiredModelID(for: draft))
+            controller.checkReadiness(for: Self.task, requirement: StudioTaskSchema.requirement(for: draft))
             refreshProfiles()
         }
         .onReceive(controller.runCompletions) { result in

@@ -33,6 +33,7 @@ private struct StudioWorkspaceView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.studioScopeSource) private var scopeSource
     // Persisted per scene so relaunch restores the last place, the last prompt mode, and the panel
     // layout. `studio.mode` keeps its v1 meaning (the last prompt mode) so drafts and readiness
     // stay attached to it while a System or Lab task is shown.
@@ -220,7 +221,7 @@ private struct StudioWorkspaceView: View {
     /// terms send the user to Models first, and the shell's pull, navigate, and recheck.
     private var readinessActions: StudioReadinessActions {
         StudioReadinessActions(
-            scope: StudioModelScope(mode: mode),
+            scope: StudioModelScope(mode: mode, readImageAction: draft.readImageAction, source: scopeSource),
             model: $prompt.draft.model,
             modelInventory: modelInventory,
             pullModel: pullModel,
@@ -620,7 +621,7 @@ private struct StudioWorkspaceView: View {
 
     private var baseTaskRequest: StudioRunRequest? {
         if showsPromptWorkspace {
-            return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false)
+            return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false, source: scopeSource)
         }
         if let taskDraft = taskDraftBinding {
             // The Command view previews the task draft's own form with its launch-time defaults
@@ -665,7 +666,12 @@ private struct StudioWorkspaceView: View {
                         sourceArguments: source.template.arguments(from: source.draft), form: edited),
                         for: request.templateID.studioTask.rawValue + ".commandOverride")
                 }
-            ), onRun: runStudioCommand, onClose: toggleCommand, canRun: canRunCurrentTask, launching: { form in
+            ), onRun: runStudioCommand, onClose: toggleCommand, canRun: canRunCurrentTask,
+            // The composer's hidden values never reach the form (its request is built from the
+            // scoped draft), so the prompt workspace names them itself.
+            notSent: showsPromptWorkspace
+                ? { StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) } : nil,
+            launching: { form in
                 // A task draft's preview is what the runner launches: its launch-time defaults
                 // and the destination routing names.
                 guard taskDraftBinding != nil else { return form }

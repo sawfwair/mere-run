@@ -19,15 +19,18 @@ struct StudioTaskInspector: View {
     let onShowModels: () -> Void
     let onClose: () -> Void
     @Environment(\.studioModelTitles) private var titles
+    @Environment(\.studioScopeSource) private var scopeSource
 
     @State private var showAdvanced = false
 
     static let width = StudioLayoutPolicy.inspectorWidth
 
     private var baseline: StudioTaskDraft { StudioTaskDraft(templateID: draft.templateID) }
-    private var sections: [StudioTaskSection] { StudioTaskSchema.sections(for: task, draft: draft) }
-    private var advancedFields: [StudioContractField<StudioTaskDraft>] { StudioTaskSchema.advanced(for: task, draft: draft) }
-    private var changedCount: Int { StudioTaskSchema.changedCount(for: task, draft: draft) }
+    private var sections: [StudioTaskSection] { StudioTaskSchema.sections(for: task, draft: draft, source: scopeSource) }
+    private var advancedFields: [StudioContractField<StudioTaskDraft>] {
+        StudioTaskSchema.advanced(for: task, draft: draft, source: scopeSource)
+    }
+    private var changedCount: Int { StudioTaskSchema.changedCount(for: task, draft: draft, source: scopeSource) }
     private var dependencies: [String: (carries: Bool, dependsOn: String?)] { StudioTaskSchema.dependencies(for: draft) }
 
     var body: some View {
@@ -35,6 +38,11 @@ struct StudioTaskInspector: View {
             header
             ScrollView {
                 VStack(spacing: 0) {
+                    if let notice = StudioTaskSchema.notice(for: draft, source: scopeSource) {
+                        StudioScopeNote(notice: notice)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                    }
                     ForEach(sections) { section in
                         sectionView(section)
                     }
@@ -244,7 +252,7 @@ struct StudioTaskInspector: View {
     }
 
     private var modelPicker: some View {
-        let scope = StudioTaskSchema.modelScope(for: draft)
+        let scope = StudioTaskSchema.modelScope(for: draft, source: scopeSource)
         return StudioModelPicker(scope: scope, model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels) {
             HStack(spacing: 8) {
                 if let glyph = modelStatusGlyph {

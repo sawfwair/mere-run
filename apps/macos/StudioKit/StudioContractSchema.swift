@@ -66,6 +66,9 @@ package struct StudioContractBinding<Draft> {
     package let fieldID: String
     package let read: (Draft) -> StudioContractValue
     package let write: (inout Draft, StudioContractValue) -> Void
+    /// The draft field a path binding stores its value in, so an attachment slot over the same
+    /// field knows which flag it fills (`StudioMode.attachmentFlag(for:)`). nil for the rest.
+    package var storage: PartialKeyPath<Draft>?
 
     package func isChanged(_ draft: Draft, _ baseline: Draft) -> Bool {
         read(draft) != read(baseline)
@@ -84,7 +87,8 @@ extension StudioContractBinding where Draft == StudioDraft {
             write: { draft, value in
                 guard let text = value.text else { return }
                 draft[keyPath: keyPath] = text
-            }
+            },
+            storage: keyPath
         )
     }
 
@@ -501,34 +505,46 @@ package enum StudioContractSchema {
         return MereRunCapabilityCatalog.command(id: capabilityID)
     }
 
-    /// Every option of the mode's capability the app has a draft field for, in contract order.
-    /// Options the contract declares that the Studio draft does not carry are left out: the app
-    /// has no state to bind them to, so a control for them could not change the command.
-    package static func fields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField<StudioDraft>] {
-        let fields = fields(for: mode, readImageAction: draft.readImageAction)
-        guard let capability = capability(for: mode, draft: draft) else { return fields }
-        return fields.filter { StudioModelOptionScope.allows($0.flag, in: capability, model: draft.model) }
+    /// Every option of the mode's capability the app has a draft field for, in contract order,
+    /// scoped to the model the draft runs (`StudioOptionScope`): an option that model does not
+    /// use is left out, and one its family narrows renders narrowed (the family's choices, range,
+    /// and default). Options the contract declares that the Studio draft does not carry are left
+    /// out too: the app has no state to bind them to, so a control could not change the command.
+    package static func fields(
+        for mode: StudioMode,
+        draft: StudioDraft,
+        source: StudioScopeSource = .live
+    ) -> [StudioContractField<StudioDraft>] {
+        guard let scope = source.scope(mode: mode, draft: draft) else { return [] }
+        return fields(for: mode, options: scope.options)
     }
 
+    /// Every option of the mode's capability the app has a draft field for, whatever the model:
+    /// the whole binding table the scoped forms are cut from.
     package static func fields(
         for mode: StudioMode,
         readImageAction: StudioReadImageAction = .inspect
     ) -> [StudioContractField<StudioDraft>] {
         guard let capability = capability(for: mode, readImageAction: readImageAction) else { return [] }
+        return fields(for: mode, options: capability.options)
+    }
+
+    private static func fields(for mode: StudioMode, options: [MereRunCapabilityOption]) -> [StudioContractField<StudioDraft>] {
         let bindings = StudioContractBindings.bindings(for: mode)
+        let offered = Set(options.map(\.flag))
         var claimed: Set<StudioContractOverrideID> = []
         var fields: [StudioContractField<StudioDraft>] = []
-        for option in capability.options {
+        for option in options {
             guard let override = StudioContractOverrides.override(forFlag: option.flag, mode: mode) else {
                 guard let binding = bindings[option.flag] else { continue }
                 fields.append(StudioContractField(option: option, bindings: [binding]))
                 continue
             }
-            // A composite editor renders once, where the first of its flags is declared, and owns
-            // every draft field behind it — the other flags' bindings plus the ones with no flag
-            // of their own (seconds-or-frames, the outpaint edges).
+            // A composite editor renders once, where the first of its offered flags is declared,
+            // and owns every draft field behind them — the other offered flags' bindings plus the
+            // ones with no flag of their own (seconds-or-frames, the outpaint edges).
             guard claimed.insert(override.id).inserted else { continue }
-            let owned = override.flags.compactMap { bindings[$0] } + override.companions
+            let owned = override.flags.filter(offered.contains).compactMap { bindings[$0] } + override.companions
             guard !owned.isEmpty else { continue }
             fields.append(StudioContractField(option: option, bindings: owned, overrideID: override.id))
         }
@@ -537,8 +553,12 @@ package enum StudioContractSchema {
 
     /// The fields the inspector edits itself: everything except the ones the composer's prompt and
     /// attachment well already own.
-    package static func inspectorFields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField<StudioDraft>] {
-        fields(for: mode, draft: draft).filter { field in
+    package static func inspectorFields(
+        for mode: StudioMode,
+        draft: StudioDraft,
+        source: StudioScopeSource = .live
+    ) -> [StudioContractField<StudioDraft>] {
+        fields(for: mode, draft: draft, source: source).filter { field in
             StudioContractOverrides.override(forFlag: field.flag, mode: mode)?.isExternal != true
         }
     }
@@ -571,8 +591,12 @@ package enum StudioContractSchema {
     /// Essentials appear here as well as on the composer's chips on purpose: the chip strip is the
     /// two-second edit and the inspector is the considered one, and both bind the same draft, so a
     /// change in either shows in the other.
-    package static func sections(for mode: StudioMode, draft: StudioDraft) -> [StudioContractSection] {
-        let fields = inspectorFields(for: mode, draft: draft).filter { $0.tier != .expert }
+    package static func sections(
+        for mode: StudioMode,
+        draft: StudioDraft,
+        source: StudioScopeSource = .live
+    ) -> [StudioContractSection] {
+        let fields = inspectorFields(for: mode, draft: draft, source: source).filter { $0.tier != .expert }
         return StudioContractGroup.allCases.compactMap { group in
             let grouped = fields.filter { $0.group == group }
             guard !grouped.isEmpty else { return nil }
@@ -581,24 +605,37 @@ package enum StudioContractSchema {
     }
 
     /// Everything the mode's command takes that the inspector collapses under "Advanced · N more".
-    package static func expertFields(for mode: StudioMode, draft: StudioDraft) -> [StudioContractField<StudioDraft>] {
-        inspectorFields(for: mode, draft: draft).filter { $0.tier == .expert }
+    package static func expertFields(
+        for mode: StudioMode,
+        draft: StudioDraft,
+        source: StudioScopeSource = .live
+    ) -> [StudioContractField<StudioDraft>] {
+        inspectorFields(for: mode, draft: draft, source: source).filter { $0.tier == .expert }
     }
 
     /// Whether `field` is reachable: every option it declares a dependency on must carry a value.
     /// A dependency the app does not bind (an attachment the well owns, say) is read from the
     /// draft all the same, so an editor stays hidden until its input exists.
-    package static func isVisible(_ field: StudioContractField<StudioDraft>, for mode: StudioMode, in draft: StudioDraft) -> Bool {
-        isVisible(field, in: draft, dependencies: dependencies(for: mode, draft: draft))
+    package static func isVisible(
+        _ field: StudioContractField<StudioDraft>,
+        for mode: StudioMode,
+        in draft: StudioDraft,
+        source: StudioScopeSource = .live
+    ) -> Bool {
+        isVisible(field, in: draft, dependencies: dependencies(for: mode, draft: draft, source: source))
     }
 
     /// One entry per option of the mode's capability the app can read a value for: whether the
     /// draft gives it a value, and what it in turn depends on. Every flag is answered, including
     /// the ones a composite editor or the composer's well owns, so a row gated on an attachment
     /// still knows whether the attachment is there.
-    package static func dependencies(for mode: StudioMode, draft: StudioDraft) -> [String: (carries: Bool, dependsOn: String?)] {
+    package static func dependencies(
+        for mode: StudioMode,
+        draft: StudioDraft,
+        source: StudioScopeSource = .live
+    ) -> [String: (carries: Bool, dependsOn: String?)] {
         var entries: [String: (carries: Bool, dependsOn: String?)] = [:]
-        for field in boundFields(for: mode, draft: draft) {
+        for field in boundFields(for: mode, draft: draft, source: source) {
             entries[field.flag] = (field.emits(in: draft), field.option.dependsOn)
         }
         return entries
@@ -607,10 +644,14 @@ package enum StudioContractSchema {
     /// One field per bound option, before the composite editors fold their flags together. This is
     /// the per-flag view the dependency walk and the Command view need; `fields(for:)` is the
     /// per-row view the forms render.
-    package static func boundFields(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> [StudioContractField<StudioDraft>] {
-        guard let capability = capability(for: mode, draft: draft) else { return [] }
+    package static func boundFields(
+        for mode: StudioMode,
+        draft: StudioDraft = StudioDraft(),
+        source: StudioScopeSource = .live
+    ) -> [StudioContractField<StudioDraft>] {
+        guard let scope = source.scope(mode: mode, draft: draft) else { return [] }
         let bindings = StudioContractBindings.bindings(for: mode)
-        return StudioModelOptionScope.options(for: capability, model: draft.model).compactMap { option in
+        return scope.options.compactMap { option in
             guard let binding = bindings[option.flag] else { return nil }
             return StudioContractField(option: option, bindings: [binding])
         }
@@ -647,8 +688,13 @@ package enum StudioContractSchema {
     }
 
     /// How many of the mode's inspector fields differ from its defaults; the header badge.
-    package static func changedCount(mode: StudioMode, draft: StudioDraft, baseline: StudioDraft) -> Int {
-        inspectorFields(for: mode, draft: draft)
+    package static func changedCount(
+        mode: StudioMode,
+        draft: StudioDraft,
+        baseline: StudioDraft,
+        source: StudioScopeSource = .live
+    ) -> Int {
+        inspectorFields(for: mode, draft: draft, source: source)
             .reduce(0) { $0 + $1.changedCount(draft: draft, baseline: baseline) }
     }
 }

@@ -23,6 +23,7 @@ struct StudioTaskComposer: View {
     let onStop: () -> Void
     let onShowModels: () -> Void
     @Environment(\.studioModelTitles) private var titles
+    @Environment(\.studioScopeSource) private var scopeSource
 
     @State private var editingChip: String?
 
@@ -34,10 +35,12 @@ struct StudioTaskComposer: View {
         static let sendDiameter: CGFloat = 32
     }
 
-    private var slots: [StudioAttachmentSlot] { draft.slots }
+    private var slots: [StudioAttachmentSlot] { draft.slots(source: scopeSource) }
     private var presentation: StudioTaskPresentation { task.presentation }
     private var promptField: StudioTaskPromptField? { draft.capability.flatMap(StudioTaskSchema.promptField) }
-    private var essentials: [StudioContractField<StudioTaskDraft>] { StudioTaskSchema.essentials(for: task, draft: draft) }
+    private var essentials: [StudioContractField<StudioTaskDraft>] {
+        StudioTaskSchema.essentials(for: task, draft: draft, source: scopeSource)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.rowSpacing) {
@@ -48,6 +51,9 @@ struct StudioTaskComposer: View {
                 promptEntry
             }
             chipStrip
+            if let notice = StudioTaskSchema.notice(for: draft, source: scopeSource) {
+                StudioScopeNote(notice: notice)
+            }
         }
         .padding(Metrics.innerInsets)
         .background {
@@ -199,7 +205,7 @@ struct StudioTaskComposer: View {
 
     private var modelChip: some View {
         StudioModelChip(
-            scope: StudioTaskSchema.modelScope(for: draft),
+            scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
             model: $draft.model,
             modelInventory: modelInventory,
             readiness: readiness,

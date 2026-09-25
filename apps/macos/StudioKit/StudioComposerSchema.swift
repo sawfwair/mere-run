@@ -244,49 +244,50 @@ extension StudioMode {
         }
     }
 
-    /// The current model's attachment wells. Switching models keeps the draft's file paths so
-    /// switching back restores them, while the current run only offers supported inputs.
-    package func attachmentSlots(for draft: StudioDraft) -> [StudioAttachmentSlot] {
-        guard let capability = StudioContractSchema.capability(for: self, draft: draft) else {
-            return attachmentSlots
+    /// The contract flag an attachment slot fills: the option whose binding stores the slot's
+    /// draft field. nil for a slot that fills the command's positional input instead.
+    package func attachmentFlag(for slot: StudioAttachmentSlot) -> String? {
+        let field: PartialKeyPath<StudioDraft>
+        switch slot.storage {
+        case .path(let keyPath), .pathList(let keyPath): field = keyPath
+        case .flag, .flagList, .argument, .argumentList: return nil
         }
-        let flags: [String: String]
-        switch self {
-        case .music:
-            flags = ["source": "--source-audio", "timbre": "--reference-audio"]
-        case .video:
-            flags = ["startFrame": "--image", "endFrame": "--end-image", "audio": "--audio"]
-        default:
-            return attachmentSlots
-        }
-        return attachmentSlots.filter { slot in
-            guard let flag = flags[slot.id] else { return true }
-            return StudioModelOptionScope.allows(flag, in: capability, model: draft.model)
-        }
+        return StudioContractBindings.bindings(for: self).first { $0.value.storage == field }?.key
+    }
+
+    /// The wells the model the draft runs takes. A file in a well the model does not take stays in
+    /// the draft, so switching back shows it again, but the run leaves it out.
+    package func attachmentSlots(for draft: StudioDraft, source: StudioScopeSource = .live) -> [StudioAttachmentSlot] {
+        guard let scope = source.scope(mode: self, draft: draft) else { return attachmentSlots }
+        return attachmentSlots.filter { slot in attachmentFlag(for: slot).map(scope.allows) ?? true }
     }
 
     /// Whether the composer shows the well: any non-transient slot, or a transient one that is filled.
-    package func showsAttachmentWell(for draft: StudioDraft) -> Bool {
-        attachmentSlots(for: draft).contains { !$0.isTransient || $0.isFilled(in: draft) }
+    package func showsAttachmentWell(for draft: StudioDraft, source: StudioScopeSource = .live) -> Bool {
+        attachmentSlots(for: draft, source: source).contains { !$0.isTransient || $0.isFilled(in: draft) }
     }
 
     /// The slot a file dropped on the canvas or pasted with ⌘V lands in: the first empty slot
     /// that accepts it, else the first slot that accepts it.
-    package func attachmentSlot(for url: URL, in draft: StudioDraft) -> StudioAttachmentSlot? {
-        attachmentSlots(for: draft).slot(for: url, in: draft)
+    package func attachmentSlot(
+        for url: URL,
+        in draft: StudioDraft,
+        source: StudioScopeSource = .live
+    ) -> StudioAttachmentSlot? {
+        attachmentSlots(for: draft, source: source).slot(for: url, in: draft)
     }
 
     /// The slot a pasted bitmap (no file on the pasteboard) lands in.
-    package func pastedImageSlot(in draft: StudioDraft) -> StudioAttachmentSlot? {
-        attachmentSlots(for: draft).pastedImageSlot(in: draft)
+    package func pastedImageSlot(in draft: StudioDraft, source: StudioScopeSource = .live) -> StudioAttachmentSlot? {
+        attachmentSlots(for: draft, source: source).pastedImageSlot(in: draft)
     }
 }
 
 extension StudioDraft {
     /// Routes each dropped file to the slot it belongs in. Returns whether anything was attached.
     @discardableResult
-    package mutating func attach(dropped urls: [URL], for mode: StudioMode) -> Bool {
-        attach(dropped: urls, slots: mode.attachmentSlots(for: self))
+    package mutating func attach(dropped urls: [URL], for mode: StudioMode, source: StudioScopeSource = .live) -> Bool {
+        attach(dropped: urls, slots: mode.attachmentSlots(for: self, source: source))
     }
 
     /// Settings that follow an attachment so the slot is never silently ignored: LTX audio
@@ -345,9 +346,71 @@ package enum StudioComposerChipKind: String, CaseIterable, Identifiable {
     case model
 
     package var id: String { rawValue }
+
+    /// What VoiceOver calls the chip, as the menu chips name themselves.
+    package var accessibilityTitle: String {
+        switch self {
+        case .dimensions: return "Size"
+        case .duration: return "Length"
+        case .steps: return "Steps"
+        case .seed: return "Seed"
+        case .threshold: return "Threshold"
+        case .readImageAction: return "Task"
+        case .voiceMode: return "Voice"
+        case .thinking: return "Thinking"
+        case .model: return "Model"
+        }
+    }
+
+    /// The flags the chip edits for `mode`: the composite editor of the same name where the mode
+    /// declares one (seconds-or-frames writes `--duration` and `--num-frames`), else the chip's
+    /// own option. Read Image's task chip picks the command rather than one of its flags.
+    package func flags(for mode: StudioMode) -> [String] {
+        if let override = StudioContractOverrideID(rawValue: rawValue),
+           let declared = StudioContractOverrides.overrides(for: mode).first(where: { $0.id == override }) {
+            return declared.flags
+        }
+        switch self {
+        case .dimensions: return ["--width", "--height"]
+        case .duration: return ["--duration"]
+        case .steps: return ["--steps"]
+        case .seed: return ["--seed"]
+        case .threshold: return ["--threshold"]
+        case .readImageAction: return []
+        case .voiceMode: return ["--mode"]
+        case .thinking: return ["--thinking", "--no-thinking"]
+        case .model: return ["--model"]
+        }
+    }
+}
+
+/// One chip in the composer's strip, as the model the draft runs sees it.
+package struct StudioComposerChip: Identifiable, Equatable {
+    package let kind: StudioComposerChipKind
+    /// The value the model's family always runs the chip's option with; the chip shows it and
+    /// cannot change it.
+    package let fixedValue: String?
+    /// The family that fixes it, for the chip's help.
+    package let fixedBy: String?
+
+    package var id: String { kind.id }
 }
 
 extension StudioMode {
+    /// The chips the model the draft runs takes, in strip order: a chip whose flags the model
+    /// uses none of is left out (a model without steps or a seed shows neither chip), and one
+    /// whose value the model fixes is shown read-only.
+    package func composerChips(for draft: StudioDraft, source: StudioScopeSource = .live) -> [StudioComposerChip] {
+        let scope = source.scope(mode: self, draft: draft)
+        return composerChips.compactMap { kind in
+            guard let scope else { return StudioComposerChip(kind: kind, fixedValue: nil, fixedBy: nil) }
+            let declared = kind.flags(for: self).filter { flag in scope.capability.options.contains { $0.flag == flag } }
+            guard declared.isEmpty || declared.contains(where: scope.allows) else { return nil }
+            let fixed = declared.count == 1 ? scope.fixedValue(declared[0]) : nil
+            return StudioComposerChip(kind: kind, fixedValue: fixed, fixedBy: fixed.flatMap { _ in scope.family?.title })
+        }
+    }
+
     /// The two to four essentials this mode shows as chips, in strip order. Everything else stays
     /// in the options popover until the inspector replaces it.
     package var composerChips: [StudioComposerChipKind] {
@@ -381,8 +444,11 @@ extension StudioMode {
     }
 
     /// Inventory rows the model chip lists: this mode's categories, installed first.
-    package func modelChoices(from inventory: [StudioModelInventoryRow]) -> [StudioModelInventoryRow] {
-        StudioModelScope(mode: self).choices(from: inventory)
+    package func modelChoices(
+        from inventory: [StudioModelInventoryRow],
+        readImageAction: StudioReadImageAction = .inspect
+    ) -> [StudioModelInventoryRow] {
+        StudioModelScope(mode: self, readImageAction: readImageAction).choices(from: inventory)
     }
 }
 
@@ -392,37 +458,54 @@ extension StudioMode {
 /// row, and the readiness card share a single picker whichever draft is behind them.
 package struct StudioModelScope: Equatable {
     package let noun: String
-    package let defaultModelID: String
+    package var defaultModelID: String
     /// Empty means every row: a template whose models the inventory does not categorize.
     package let categories: Set<String>
+    /// The managed models that run the command, for a command the contract routes: its
+    /// families' models, less the ones it excludes. nil offers every row of `categories`.
+    package let runnableModels: Set<String>?
 
-    package init(noun: String, defaultModelID: String, categories: Set<String>) {
+    package init(noun: String, defaultModelID: String, categories: Set<String>, runnableModels: Set<String>? = nil) {
         self.noun = noun
         self.defaultModelID = defaultModelID
         self.categories = categories
+        self.runnableModels = runnableModels
     }
 
-    package init(mode: StudioMode) {
+    /// A prompt mode's picker. Its default is the template's model, which the composer sends
+    /// when the draft names none.
+    package init(mode: StudioMode, readImageAction: StudioReadImageAction = .inspect, source: StudioScopeSource = .live) {
+        let templateID = mode == .readImage ? readImageAction.templateID : mode.defaultTemplateID
         self.init(
             noun: mode.title.lowercased(),
             defaultModelID: StudioModelNaming.defaultModelID(for: mode),
-            categories: mode.modelCategories
+            categories: mode.modelCategories,
+            runnableModels: source.capability(for: templateID)?.routing?.runnableModels
         )
     }
 
-    package init(templateID: CommandTemplateID) {
+    /// A task template's picker. Its default is what the command runs with no `--model`: the
+    /// contract's default model where the command is routed, else the template's.
+    package init(templateID: CommandTemplateID, source: StudioScopeSource = .live) {
         let template = CommandCatalog.template(id: templateID)
+        let capability = source.capability(for: templateID)
+        let contractDefault = capability.flatMap { capability in
+            capability.routing == nil ? nil : source.scope(capability: capability, commandLine: capability.command).managedModel
+        }
         self.init(
             noun: template?.title.lowercased() ?? templateID.rawValue,
-            defaultModelID: template?.defaultModel ?? "",
-            categories: Self.categories(for: templateID)
+            defaultModelID: contractDefault ?? template?.defaultModel ?? "",
+            categories: Self.categories(for: templateID),
+            runnableModels: capability?.routing?.runnableModels
         )
     }
 
-    /// Inventory rows the picker lists: the scope's categories, installed first.
+    /// Inventory rows the picker lists: the scope's categories (and, for a routed command, only
+    /// the models that run it), installed first.
     package func choices(from inventory: [StudioModelInventoryRow]) -> [StudioModelInventoryRow] {
         inventory
             .filter { categories.isEmpty || categories.contains($0.category) }
+            .filter { runnableModels?.contains($0.id) ?? true }
             .sorted { lhs, rhs in
                 if lhs.isInstalled != rhs.isInstalled { return lhs.isInstalled }
                 return lhs.id < rhs.id
@@ -472,6 +555,13 @@ package struct StudioModelScope: Equatable {
             }
             return []
         }
+    }
+}
+
+extension MereRunCapabilityRouting {
+    /// The managed models a picker offers for the command: every family's, less the excluded.
+    package var runnableModels: Set<String> {
+        Set(families.flatMap(\.models)).subtracting(excludedModels.map(\.id))
     }
 }
 
@@ -573,6 +663,17 @@ package enum StudioComposerPresets {
 
     package static func dimensionsTitle(_ draft: StudioDraft) -> String {
         "\(draft.width) × \(draft.height)"
+    }
+
+    /// A chip's title for the value the model's family fixes.
+    package static func fixedTitle(_ kind: StudioComposerChipKind, value: String) -> String {
+        switch kind {
+        case .steps: return value == "1" ? "1 step" : "\(value) steps"
+        case .seed: return "Seed \(value)"
+        case .duration: return "\(value) s"
+        case .threshold: return "Threshold \(value)"
+        case .dimensions, .readImageAction, .voiceMode, .thinking, .model: return value
+        }
     }
 
     package static func stepsTitle(_ draft: StudioDraft, mode: StudioMode) -> String {

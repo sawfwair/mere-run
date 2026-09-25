@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Combine
 import Foundation
+import MereRunContract
 import UserNotifications
 
 package enum MereRunLaunch: Equatable {
@@ -280,10 +281,16 @@ package final class MereRunController: ObservableObject {
         }
     }
     @Published package var cliPath: String {
-        didSet { UserDefaults.standard.set(cliPath, forKey: Keys.cliPath) }
+        didSet {
+            UserDefaults.standard.set(cliPath, forKey: Keys.cliPath)
+            if cliPath != oldValue { modelIdentities.forget() }
+        }
     }
     @Published package var modelsRoot: String {
-        didSet { UserDefaults.standard.set(modelsRoot, forKey: Keys.modelsRoot) }
+        didSet {
+            UserDefaults.standard.set(modelsRoot, forKey: Keys.modelsRoot)
+            if modelsRoot != oldValue { modelIdentities.forget() }
+        }
     }
     @Published package var hubCache: String {
         didSet { UserDefaults.standard.set(hubCache, forKey: Keys.hubCache) }
@@ -376,6 +383,12 @@ package final class MereRunController: ObservableObject {
     /// library by request id. Persists past completion so the last run's result stays visible.
     private var foregroundJob: Job?
     private var jobEventSubscription: AnyCancellable?
+    private var identitySubscription: AnyCancellable?
+    /// What the CLI says about models the contract does not list (`catalog resolve`), for every
+    /// surface's `StudioOptionScope`. The controller asks through its utility lane and
+    /// republishes each answer, so a surface showing every option while a folder is identified
+    /// re-renders scoped when the answer lands.
+    package let modelIdentities = StudioModelIdentityStore.shared
 
     /// Conservative cap on simultaneous inference runs. ML inference is memory-heavy, so this
     /// stays small; `JobLane.inference.capacity` is the single knob.
@@ -458,6 +471,12 @@ package final class MereRunController: ObservableObject {
         runtimeAPIKeyStorageNotice = storedKey.notice
         jobEventSubscription = jobs.events.sink { [weak self] event in
             self?.handle(event)
+        }
+        modelIdentities.use { [weak self] commandLine in
+            await self?.resolveFamily(commandLine: commandLine)
+        }
+        identitySubscription = modelIdentities.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
         }
         if resolvesCLIOnInit {
             refreshResolvedCLI()
@@ -904,6 +923,19 @@ package final class MereRunController: ObservableObject {
         return launch.displayCommand(for: masksSecrets ? args.maskingSecrets() : args)
     }
 
+    /// `mere.run catalog resolve --json -- <commandLine>`: which runtime family the CLI would run
+    /// the command line with, answered by the same resolver and model identifier as its gate.
+    /// Nothing is loaded or admitted. nil when the command fails or prints something else.
+    package func resolveFamily(commandLine: [String]) async -> MereRunFamilyResolutionReport? {
+        let result = await utilityCommandResult(args: ["catalog", "resolve", "--json", "--"] + commandLine)
+        guard result.exitCode == 0 else { return nil }
+        do {
+            return try JSONDecoder().decode(MereRunFamilyResolutionReport.self, from: Data(result.stdout.utf8))
+        } catch {
+            return nil
+        }
+    }
+
     package func utilityCommandResult(
         args: [String],
         commandID: UUID = UUID(),
@@ -1088,6 +1120,12 @@ package final class MereRunController: ObservableObject {
     package func checkReadiness(for task: StudioTask, modelID: String) {
         let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         checkReadiness(task: task, requirement: trimmed.isEmpty ? nil : .managedModel(trimmed))
+    }
+
+    /// The same check for a task draft's requirement (`StudioTaskSchema.requirement(for:)`),
+    /// which also blocks a model the command excludes with the CLI gate's reason.
+    package func checkReadiness(for task: StudioTask, requirement: StudioCapabilityRequirement?) {
+        checkReadiness(task: task, requirement: requirement)
     }
 
     /// Readiness for any task: the mode's entry for a prompt task, the task's own otherwise.

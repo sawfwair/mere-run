@@ -102,24 +102,27 @@ package enum StudioConsoleCommand {
         }
     }
 
-    /// Every option the capability declares, in contract order. Nothing is filtered: the console
-    /// is the surface that must reach an option no designed task has a control for.
+    /// Every option the model the form runs takes, in contract order, each narrowed to its
+    /// family (`StudioOptionScope`); every option the capability declares when the family is not
+    /// known. Nothing else is filtered: the console is the surface that must reach an option no
+    /// designed task has a control for. The options the family leaves out are listed under the
+    /// form's note (`StudioOptionScope.notice(form:)`), with their values kept.
     package static func optionFields(
-        for capability: MereRunCommandCapability, model: String? = nil
+        for capability: MereRunCommandCapability,
+        scope: StudioOptionScope? = nil
     ) -> [StudioContractField<StudioConsoleDraft>] {
-        let options = model.map { StudioModelOptionScope.options(for: capability, model: $0) } ?? capability.options
-        return options.map { StudioContractField(option: $0, bindings: [.flag($0.flag)]) }
+        (scope?.options ?? capability.options).map { StudioContractField(option: $0, bindings: [.flag($0.flag)]) }
     }
 
     /// The rows of one eyebrow group, in the order both the console and the Command view show
     /// them: positionals first, then the contract's own groups.
-    package static func groups(for capability: MereRunCommandCapability, model: String? = nil) -> [StudioConsoleGroup] {
+    package static func groups(for capability: MereRunCommandCapability, scope: StudioOptionScope? = nil) -> [StudioConsoleGroup] {
         var groups: [StudioConsoleGroup] = []
         let arguments = argumentFields(for: capability)
         if !arguments.isEmpty {
             groups.append(StudioConsoleGroup(group: .arguments, fields: arguments))
         }
-        let options = optionFields(for: capability, model: model)
+        let options = optionFields(for: capability, scope: scope)
         for group in StudioContractGroup.allCases {
             let fields = options.filter { $0.group == group }
             guard !fields.isEmpty else { continue }
@@ -179,10 +182,13 @@ package enum StudioConsoleCommand {
     }
 
     /// The reason the command cannot run yet, in the contract's own words: a required positional
-    /// or a required option with nothing in it.
+    /// or a required option with nothing in it. With the scope of the command line that
+    /// launches, the CLI gate's own sentence follows the form's checks: an excluded model, a
+    /// family a required option is missing for, an Extra argument the family refuses.
     package static func validationMessage(
         for capability: MereRunCommandCapability,
-        draft: StudioConsoleDraft
+        draft: StudioConsoleDraft,
+        launching scope: StudioOptionScope? = nil
     ) -> String? {
         for (index, argument) in capability.arguments.enumerated() where argument.required {
             let value = index < draft.arguments.count ? draft.arguments[index] : ""
@@ -219,7 +225,7 @@ package enum StudioConsoleCommand {
                 return "\(label) \(issue.message)."
             }
         }
-        return StudioCommandChecks.message(for: capability, draft: draft)
+        return StudioCommandChecks.message(for: capability, draft: draft) ?? scope?.refusal
     }
 
     /// Where the run will write, when the contract names the option that says so. `JobStore`
@@ -242,40 +248,39 @@ package enum StudioConsoleCommand {
     /// The same reading, from argv the caller already has: a Library row records the exact
     /// arguments its run launched, so "Edit command" reopens the console on that command rather
     /// than on the draft it was built from.
+    ///
+    /// Options are read by `StudioArgvToken.read`, so an alias lands under its canonical flag and
+    /// an option takes a separate value exactly when its kind takes one — a negative number after
+    /// a numeric option is its value, not another flag.
     package static func seed(capability: MereRunCommandCapability, arguments argv: [String]) -> StudioConsoleDraft {
         var console = StudioConsoleDraft()
-        let declared = Dictionary(capability.options.map { ($0.flag, $0) }, uniquingKeysWith: { first, _ in first })
         var extras: [String] = []
-        var index = capability.command.count
-        while index < argv.count {
-            let token = argv[index]
-            let parts = token.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
-            let flag = parts.first ?? token
-            if let option = declared[flag] {
+        let tokens = StudioArgvToken.read(Array(argv.dropFirst(capability.command.count)), capability: capability)
+        var index = 0
+        while index < tokens.count {
+            switch tokens[index] {
+            case let .option(flag, _, values):
+                guard let option = capability.options.first(where: { $0.flag == flag }) else { break }
                 if option.kind == .boolean {
-                    console[flag] = .flag(parts.count == 1 || parts[1] != "false")
+                    console[flag] = .flag(true)
                 } else {
-                    let value: String
-                    if parts.count == 2 {
-                        value = parts[1]
-                    } else if index + 1 < argv.count, !argv[index + 1].hasPrefix("--") {
-                        index += 1
-                        value = argv[index]
-                    } else {
-                        value = ""
-                    }
+                    let value = values.first ?? ""
                     let previous = console.text(flag)
                     console[flag] = .text(option.repeatable && !previous.isEmpty ? previous + "\n" + value : value)
                 }
-            } else if !token.hasPrefix("-"),
-                      console.arguments.count < capability.arguments.count || capability.arguments.last?.repeatable == true {
+            case .positional(let token)
+                where console.arguments.count < capability.arguments.count || capability.arguments.last?.repeatable == true:
                 // A repeatable last positional (`vision face batch a b c`) keeps taking bare tokens.
                 console.arguments.append(token)
-            } else {
+            case .positional(let token):
                 extras.append(token)
-                if token.hasPrefix("--"), parts.count == 1, index + 1 < argv.count, !argv[index + 1].hasPrefix("--") {
+            case .undeclared(let token):
+                extras.append(token)
+                // An option the contract does not describe keeps the value typed after it.
+                if token.hasPrefix("--"), !token.contains("="), index + 1 < tokens.count,
+                   case .positional(let value) = tokens[index + 1] {
+                    extras.append(value)
                     index += 1
-                    extras.append(argv[index])
                 }
             }
             index += 1
@@ -397,9 +402,11 @@ package struct StudioConsoleRun {
     package let commandDraft: CommandDraft
     package let validationMessage: String?
 
-    package init?(template: CommandTemplate, draft: StudioConsoleDraft, seed: CommandDraft) {
+    /// The form's scope decides what launches: a value the model does not use stays in `draft`
+    /// but not in `arguments`, and the validation reads what launches.
+    package init?(template: CommandTemplate, draft: StudioConsoleDraft, seed: CommandDraft, source: StudioScopeSource = .live) {
         guard template.externalURL == nil else { return nil }
-        guard let capability = template.id.capability else {
+        guard let capability = source.capability(for: template.id) else {
             var command = seed
             command.extraArguments = draft.extraArguments
             arguments = template.arguments(from: command)
@@ -412,8 +419,7 @@ package struct StudioConsoleRun {
         for (flag, keyPath) in secretFields where draft.values[flag] != nil {
             launchSeed[keyPath: keyPath] = draft.text(flag)
         }
-        let model = StudioModelOptionScope.model(for: capability, form: draft, seed: seed)
-        let scoped = StudioModelOptionScope.scopedDraft(draft, capability: capability, model: model)
+        let scoped = draft.scoped(to: source.scope(capability: capability, form: draft))
         let allArguments = StudioConsoleCommand.arguments(for: capability, draft: scoped)
         let effective = StudioConsoleCommand.seed(capability: capability, arguments: allArguments)
         var execution = StudioExecution(templateID: template.id, arguments: allArguments)
@@ -422,8 +428,10 @@ package struct StudioConsoleRun {
         commandDraft = StudioConsoleCommand.commandDraft(
             seed: launchSeed, template: template, capability: capability, draft: effective
         )
-        validationMessage = StudioConsoleCommand.validationMessage(for: capability, draft: effective)
-            ?? StudioConsoleCommand.connectionValidationMessage(for: template.id, draft: commandDraft)
+        validationMessage = StudioConsoleCommand.validationMessage(
+            for: capability, draft: effective,
+            launching: source.scope(capability: capability, commandLine: allArguments)
+        ) ?? StudioConsoleCommand.connectionValidationMessage(for: template.id, draft: commandDraft)
     }
 }
 

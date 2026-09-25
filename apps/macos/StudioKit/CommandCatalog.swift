@@ -1093,14 +1093,19 @@ package struct CommandTemplate: Identifiable, Equatable {
             return message
         }
 
+        guard let capability = id.capability else { return nil }
+        let arguments = arguments(from: draft)
+        let launching = StudioScopeSource.live.scope(capability: capability, commandLine: arguments)
         // Commands with a reply budget (Chat, Code, the vision prompts) validate the form's argv
         // against the contract, so a budget the runtime would reject never replaces a reply.
-        if let capability = id.capability, capability.options.contains(where: { $0.flag == "--max-tokens" }) {
+        if capability.options.contains(where: { $0.flag == "--max-tokens" }) {
             return StudioConsoleCommand.validationMessage(
-                for: capability, draft: StudioConsoleCommand.seed(template: self, draft: draft)
+                for: capability, draft: StudioConsoleCommand.seed(capability: capability, arguments: arguments),
+                launching: launching
             )
         }
-        return nil
+        // Every other command still hears the CLI gate's own objection before it launches.
+        return launching.refusal
     }
 
     /// The template's own checks, which live beside its argv in `Catalog/<Category>.swift`.
@@ -1124,24 +1129,38 @@ package struct CommandTemplate: Identifiable, Equatable {
         }
     }
 
+    /// The command `draft` runs: the template's argv scoped to the model it runs, then Extra
+    /// arguments verbatim. A builder may emit a flag the selected model does not use (a default
+    /// it always states, a value the model hides); the scope drops it here, while Extra
+    /// arguments stay a raw escape hatch that the CLI's gate answers.
     package func arguments(from draft: CommandDraft) -> [String] {
-        var args = CommandArguments.build(for: id, draft: draft)
-        if let capability = id.capability {
-            args = StudioModelOptionScope.generatedArguments(
-                args, capability: capability, model: StudioModelOptionScope.model(for: capability, draft: draft)
-            )
-        }
+        arguments(from: draft, source: .live)
+    }
+
+    package func arguments(from draft: CommandDraft, source: StudioScopeSource) -> [String] {
+        let generated = CommandArguments.build(for: id, draft: draft)
+        guard let capability = source.capability(for: id) else { return withExtraArguments(generated, draft) }
+        let scope = source.scope(capability: capability, commandLine: withExtraArguments(generated, draft))
+        return withExtraArguments(StudioOptionScopes.filtered(generated, scope: scope), draft)
+    }
+
+    /// The argv the template builds for `draft` before any scope: what a surface reads its scope
+    /// from, and what a task draft is first seeded with, so a value only another model uses is
+    /// there when the user switches to it.
+    package func unscopedArguments(from draft: CommandDraft) -> [String] {
+        withExtraArguments(CommandArguments.build(for: id, draft: draft), draft)
+    }
+
+    private func withExtraArguments(_ generated: [String], _ draft: CommandDraft) -> [String] {
         switch id {
         // `custom` is already the raw command line a person typed, and the two launcher rows
         // hand off to another product, so neither takes the extra-arguments field.
         case .custom, .graphStudio, .nodeConsole:
-            return args
+            return generated
         default:
-            args.append(contentsOf: ShellWords.split(draft.extraArguments))
-            return args
+            return generated + ShellWords.split(draft.extraArguments)
         }
     }
-
 }
 
 extension CommandTemplate {

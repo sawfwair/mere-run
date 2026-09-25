@@ -24,6 +24,15 @@ The format is based on Keep a Changelog.
 - List every spelling of each option, such as `-m` for `--model`, in
   `catalog --json` as `aliases`, and add the additive `routing`, `families`,
   `ignored_by`, and `family_rules` fields. `schema_version` stays 1.
+- Scope Studio to the model a run uses. The composer's fields, chips, and
+  attachment wells, the task inspector, the Command view, and the Command
+  Console show, validate, and send only the options the model's runtime family
+  uses, as the capability contract declares them. A value the model doesn't
+  use stays in the draft and comes back when you switch models, and a note
+  lists it. Model pickers offer only models that run the command, and a model
+  the command excludes blocks the run with its reason. Studio identifies a
+  local model folder with `mere.run catalog resolve` and shows every option
+  until it knows.
 - List `vision track`, `vision track-live`, and `video prepare-masks` for
   SAM 3.1, `music train-adapter` for ACE-Step, `video dub-it` for LTX-2.5
   Distilled, `video export-latents` for the merged LTX model, `speech listen`

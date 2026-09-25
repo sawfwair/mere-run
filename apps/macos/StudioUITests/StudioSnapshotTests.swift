@@ -95,35 +95,79 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
-    func testMusicModelCommandSnapshots() throws {
-        let music = try SnapshotFixture(
+    /// Model scope on Video ▸ Generate, over a contract that routes it to LTX-2.5 Full and FastH3
+    /// (`StudioScopeSnapshotContract`): FastH3 selected, with an end image, timings, and 30 steps
+    /// set — values only LTX uses, or that FastH3 replaces. The inspector opens on the
+    /// "Not used by FastH3" note over FastH3's own options and the composer's steps chip reads a
+    /// locked "5 steps", light and dark; the Command view lists the kept values under "Not sent".
+    /// Then the note's three states on their own, light and dark.
+    func testModelScopeSnapshots() throws {
+        let scoped = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,
             processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses(installing: [
-                (id: "music-acestep", category: "music", title: "ACE-Step 1.5"),
-                (id: "music-yue2", category: "music", title: "YuE2")
+                (id: StudioScopeSnapshotContract.fastH3Model, category: "video", title: "FastH3"),
             ]))
         )
-        defer { music.tearDown() }
+        defer { scoped.tearDown() }
 
-        for model in ["music-yue2", "music-acestep"] {
-            var draft = StudioDraft()
-            draft.reset(for: .music)
-            draft.model = model
-            draft.prompt = "Acoustic folk waltz, brushed drums, dusty piano"
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "A lighthouse at dusk, waves breaking on the rocks"
+        draft.model = StudioScopeSnapshotContract.fastH3Model
+        draft.endImagePath = "/tmp/lighthouse-end.png"
+        draft.timings = true
+        draft.h3Steps = 30
+
+        let renders: [(name: String, appearance: StudioSnapshotAppearance, command: Bool)] = [
+            ("scope-inspector-light", .light, false),
+            ("scope-inspector-dark", .dark, false),
+            ("scope-command-light", .light, true),
+        ]
+        for render in renders {
             let navigation = NavigationModel()
-            let view = StudioRootView(seededDrafts: [.music: draft])
-                .environmentObject(music.controller)
-                .environmentObject(music.library)
+            let view = StudioRootView(seededDrafts: [.video: draft])
+                .environment(\.studioScopeSource, StudioScopeSnapshotContract.source)
+                .environmentObject(scoped.controller)
+                .environmentObject(scoped.library)
                 .environmentObject(navigation)
                 .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
-            try music.write(
-                view, size: Self.fidelitySize, appearance: .light,
-                name: "music-command-\(model)", settle: 2.5,
+            try scoped.write(
+                view, size: Self.fidelitySize, appearance: render.appearance, name: render.name, settle: 2.5,
                 afterAppear: {
-                    navigation.open(task: .musicCompose)
-                    navigation.toggleCommandColumn()
+                    navigation.open(task: .videoGenerate)
+                    if render.command {
+                        navigation.showLibrary = false
+                        navigation.toggleCommandColumn()
+                    } else {
+                        navigation.toggleInspector(for: .videoGenerate)
+                    }
                 }
             )
+        }
+
+        let notes = VStack(alignment: .leading, spacing: 14) {
+            StudioScopeNote(notice: StudioScopeNotice(
+                kind: .identifying, title: "Identifying h3-ref2va-local…",
+                details: ["Every option shows until mere.run knows which model this is."]
+            ))
+            StudioScopeNote(notice: StudioScopeNotice(
+                kind: .unidentified, title: "mere.run couldn't identify my-checkpoint",
+                details: ["Every option is shown, and the CLI checks them when it runs."]
+            ))
+            StudioScopeNote(notice: StudioScopeNotice(
+                kind: .unused, title: "Not used by FastH3: End image, Timings.",
+                details: ["Denoising steps: FastH3 runs 5; your 30 is kept.", "Your values are kept for when you switch back."]
+            ))
+            StudioScopeNote(
+                notice: StudioScopeNotice(kind: .unused, title: "Not used by YuE2: Source audio, Task type.", details: []),
+                eyebrow: "Not sent"
+            )
+        }
+        .padding(16)
+        .frame(width: 320, alignment: .topLeading)
+        .background(MereRunTheme.background)
+        for (name, appearance) in [("scope-note-light", StudioSnapshotAppearance.light), ("scope-note-dark", .dark)] {
+            try scoped.write(notes, size: CGSize(width: 320, height: 380), appearance: appearance, name: name)
         }
     }
 
