@@ -800,7 +800,7 @@ struct VideoGenerate: AsyncParsableCommand {
         encoder.nonConformingFloatEncodingStrategy = .convertToString(
             positiveInfinity: "Infinity", negativeInfinity: "-Infinity", nan: "NaN"
         )
-        return String(decoding: try encoder.encode(envelope), as: UTF8.self)
+        return String(decoding: try encoder.encode(GateWarned(envelope)), as: UTF8.self)
     }
 
     private func runPreflight(outputURL: URL) throws {

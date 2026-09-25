@@ -134,7 +134,7 @@ struct VisionDepth: AsyncParsableCommand {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
-        return String(decoding: try encoder.encode(payload), as: UTF8.self)
+        return String(decoding: try encoder.encode(GateWarned(payload)), as: UTF8.self)
     }
 }
 

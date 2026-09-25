@@ -186,13 +186,10 @@ struct SpeechDiarize: AsyncParsableCommand {
                 mergeGap: mergeGap
             )
         }
-        let rendered = try render(
-            result,
-            sourceURL: audioURL,
-            durationSeconds: Double(audioBuffer.samples.count) / Double(audioBuffer.sampleRate)
-        )
+        let durationSeconds = Double(audioBuffer.samples.count) / Double(audioBuffer.sampleRate)
 
         if let output {
+            let rendered = try render(result, sourceURL: audioURL, durationSeconds: durationSeconds, warnings: [])
             let outputURL = URL(fileURLWithPath: output).standardizedFileURL
             try FileManager.default.createDirectory(
                 at: outputURL.deletingLastPathComponent(),
@@ -209,7 +206,8 @@ struct SpeechDiarize: AsyncParsableCommand {
                 "Detected \(result.numSpeakers) speaker(s) across \(result.segments.count) segment(s).\n"
             )
         }
-        print(rendered)
+        // Only stdout carries the gate's warnings; the file keeps the diarization alone.
+        print(try render(result, sourceURL: audioURL, durationSeconds: durationSeconds, warnings: CLIGateWarnings.current))
     }
 
     static func resolveModelRoot(
@@ -234,7 +232,8 @@ struct SpeechDiarize: AsyncParsableCommand {
     private func render(
         _ result: DiarizationOutput,
         sourceURL: URL,
-        durationSeconds: Double
+        durationSeconds: Double,
+        warnings: [String]
     ) throws -> String {
         switch format {
         case .rttm:
@@ -250,7 +249,7 @@ struct SpeechDiarize: AsyncParsableCommand {
             )
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            return String(decoding: try encoder.encode(payload), as: UTF8.self)
+            return String(decoding: try encoder.encode(GateWarned(payload, warnings: warnings)), as: UTF8.self)
         }
     }
 }

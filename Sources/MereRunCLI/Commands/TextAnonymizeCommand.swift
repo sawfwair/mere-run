@@ -51,14 +51,18 @@ struct TextAnonymize: AsyncParsableCommand {
         )
 
         let data: Data
+        let printed: Data
         if json {
             let encoder = JSONEncoder()
             if pretty {
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             }
-            data = try encoder.encode(AnonymizeResponse(model: OpenAIPrivacyFilterCatalog.modelId, data: results))
+            let response = AnonymizeResponse(model: OpenAIPrivacyFilterCatalog.modelId, data: results)
+            data = try encoder.encode(response)
+            printed = try encoder.encode(GateWarned(response))
         } else {
             data = Data(results.map(\.anonymizedText).joined(separator: "\n").utf8)
+            printed = data
         }
 
         if let outputPath = output {
@@ -70,7 +74,7 @@ struct TextAnonymize: AsyncParsableCommand {
             try data.write(to: outputURL, options: [.atomic])
         }
 
-        if let text = String(data: data, encoding: .utf8) {
+        if let text = String(data: printed, encoding: .utf8) {
             print(text)
         } else {
             throw ValidationError("Failed to encode anonymizer output as UTF-8.")

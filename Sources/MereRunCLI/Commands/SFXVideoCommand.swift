@@ -305,7 +305,7 @@ struct SFXVideoGenerate: AsyncParsableCommand {
     private func runPreflight(inputURL: URL, outputURL: URL) throws {
         let envelope = makePreflightEnvelope(inputURL: inputURL, outputURL: outputURL)
         if json {
-            print(try StructuredRunOutput.encode(envelope))
+            print(try StructuredRunOutput.encode(GateWarned(envelope)))
         } else {
             print(envelope.summary)
             for diagnostic in envelope.diagnostics {

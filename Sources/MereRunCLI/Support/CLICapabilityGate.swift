@@ -16,23 +16,38 @@ enum CLICapabilityGate {
         }
     }
 
+    /// What the gate hands a run it lets through.
+    struct Pass: Equatable {
+        /// The warning sentences. The command's JSON output carries them as `warnings`, under
+        /// `--quiet` too.
+        let warnings: [String]
+        /// The lines to print on stderr once the command has parsed and validated: none under
+        /// `--quiet`, which keeps "has no effect" notes off a quiet run as the commands' own
+        /// notes do.
+        let stderrLines: [String]
+    }
+
     /// `arguments` is the process argv, executable first. Throws when the gate refuses the run;
-    /// otherwise returns the warning lines to print once the command has parsed and validated:
-    /// none under `--quiet`, which keeps "has no effect" notes off a quiet run as the commands'
-    /// own notes do.
-    @discardableResult
-    static func check(arguments: [String]) throws -> [String] {
+    /// otherwise returns its warnings.
+    static func pass(arguments: [String]) throws -> Pass {
         let commandLine = Array(arguments.dropFirst())
         guard !requestsBuiltIn(commandLine),
               let (capability, invocation) = invocation(commandLine: commandLine),
               capability.routing != nil else {
-            return []
+            return Pass(warnings: [], stderrLines: [])
         }
         let report = report(capability, invocation)
         guard report.violations.isEmpty else {
             throw Rejection(messages: report.violations)
         }
-        return invocation.contains("--quiet") ? [] : report.warnings.map { "Warning: \($0)\n" }
+        let quiet = invocation.contains("--quiet")
+        return Pass(warnings: report.warnings, stderrLines: quiet ? [] : report.warnings.map { "Warning: \($0)\n" })
+    }
+
+    /// `pass(arguments:)`'s stderr lines.
+    @discardableResult
+    static func check(arguments: [String]) throws -> [String] {
+        try pass(arguments: arguments).stderrLines
     }
 
     /// The contract's decision for a command line without the executable; `catalog resolve`

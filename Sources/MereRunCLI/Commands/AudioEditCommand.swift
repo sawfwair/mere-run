@@ -91,7 +91,7 @@ struct AudioEdit: ParsableCommand {
                             sourceRevision: AuKGenerator.sourceRevision, validation: "experimental")
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        var data = try encoder.encode(result)
+        var data = try encoder.encode(GateWarned(result))
         data.append(10)
         try FileHandle.standardOutput.write(contentsOf: data)
     }

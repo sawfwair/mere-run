@@ -266,7 +266,9 @@ struct MusicSeparate: ParsableCommand {
         var manifestData = try encoder.encode(manifest)
         manifestData.append(0x0A)
         try manifestData.write(to: manifestURL, options: .atomic)
-        try FileHandle.standardOutput.write(contentsOf: manifestData)
+        var printed = try encoder.encode(GateWarned(manifest))
+        printed.append(0x0A)
+        try FileHandle.standardOutput.write(contentsOf: printed)
 
         if !quiet {
             CLIStderr.write("Saved \(result.stems.count) stems and manifest to \(outputRoot.path)\n")

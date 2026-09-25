@@ -582,7 +582,7 @@ struct TextChat: AsyncParsableCommand {
             )
         )
         if json {
-            print(try StructuredRunOutput.encode(report))
+            print(try StructuredRunOutput.encode(GateWarned(report)))
         } else {
             print(report.summary)
             for diagnostic in report.diagnostics {

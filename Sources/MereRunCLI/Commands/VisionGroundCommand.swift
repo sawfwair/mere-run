@@ -124,7 +124,7 @@ struct VisionGround: AsyncParsableCommand {
             if json {
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-                print(String(decoding: try encoder.encode(report), as: UTF8.self))
+                print(String(decoding: try encoder.encode(GateWarned(report)), as: UTF8.self))
             } else {
                 print("Ready: \(report.capability) with \(report.modelID)")
                 print("Image: \(report.image)")

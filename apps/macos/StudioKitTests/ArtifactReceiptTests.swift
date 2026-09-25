@@ -25,6 +25,16 @@ final class ArtifactReceiptTests: XCTestCase {
         XCTAssertEqual(receipt.outputs.map(\.path), ["/out/render.png", "/out/render.prompt.json"])
         XCTAssertEqual(receipt.outputs.map(\.kind), ["image", "json"])
         XCTAssertEqual(receipt.outputs.map(\.role), [nil, "structured-prompt"])
+        XCTAssertNil(receipt.warnings)
+    }
+
+    func testReceiptCarriesTheGateWarnings() throws {
+        let stdout = #"""
+        {"event":"result","exit":0,"outputs":[{"kind":"audio","path":"/out/song.wav"}],"warnings":["--steps has no effect with ACE-Step Turbo."]}
+        """#
+        let receipt = try XCTUnwrap(StudioRunReceipt.parse(stdout: stdout))
+        XCTAssertEqual(receipt.outputs.map(\.path), ["/out/song.wav"])
+        XCTAssertEqual(receipt.warnings, ["--steps has no effect with ACE-Step Turbo."])
     }
 
     func testMalformedAndAbsentReceiptsAreIgnored() {

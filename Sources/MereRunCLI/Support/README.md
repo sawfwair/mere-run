@@ -20,6 +20,9 @@ Shared helpers and runtime adapters for the public command surface.
 
 - `CLIModelStoreBootstrap.swift`: global model-root handling.
 - `CLIOutput.swift` and `CLIStderr.swift`: output channel discipline.
+- `CLICapabilityGate.swift`: the pre-admission model scope check.
+  `CLIGateWarnings.swift` carries its warnings for the run into the JSON a
+  command prints on stdout (`GateWarned`, and `RunReceipt.warnings`).
 - `TerminalMarkdownPresentation.swift` and `TerminalMarkdownStream.swift`:
   safe, append-only Markdown presentation for interactive token streams while
   preserving raw piped output.

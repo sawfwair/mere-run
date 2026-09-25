@@ -452,6 +452,6 @@ struct TextTrainLoRAResult: Encodable {
     func jsonString() throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return String(decoding: try encoder.encode(self), as: UTF8.self)
+        return String(decoding: try encoder.encode(GateWarned(self)), as: UTF8.self)
     }
 }

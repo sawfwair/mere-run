@@ -113,7 +113,7 @@ struct VisionGeometry: AsyncParsableCommand {
     private static func jsonString<T: Encodable>(_ payload: T) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        return String(decoding: try encoder.encode(payload), as: UTF8.self)
+        return String(decoding: try encoder.encode(GateWarned(payload)), as: UTF8.self)
     }
 }
 

@@ -275,6 +275,28 @@ on stderr. Warnings print once the whole command line has parsed and validated,
 so a run that fails validation shows only its error, and `--quiet` leaves them
 out.
 
+A command that prints a JSON object on stdout also carries the warnings in it,
+under `--quiet` too, as a top-level `warnings` array of the same sentences:
+
+```json
+{"event":"result","exit":0,"outputs":[{"kind":"text","path":"/abs/talk.txt"}],"warnings":["--max-tokens has no effect with Parakeet. It applies to Qwen3-ASR."]}
+```
+
+- It covers `--preflight --json` and `--dry-run --json` reports, `--json`
+  results, `--receipt` lines, and the commands whose result is a JSON object
+  (`audio edit`, `audio enhance`, `music analyze`, `music separate`,
+  `sfx clap score`, `speech diarize --format json`, `text anonymize --json`,
+  `text decide`, `text embed`, and `vision embed`).
+- With no warnings the key is left out, so the JSON is unchanged.
+- Only stdout carries them. A file the command writes, such as an `--output`
+  copy or the `audio enhance` and `music separate` manifests, keeps the result
+  alone.
+- JSON Lines streams (`--jsonl`, `video session`), servers,
+  and outputs that are the product itself rather than a report (`music
+  transcribe --format json`, `vision ocr`) are unchanged. So is
+  `video prepare-masks --json`, whose `warnings` counts mask-quality warnings;
+  its single model has no options it ignores.
+
 To see the decision without running anything, use
 [`mere.run catalog resolve`](#mere-run-catalog-resolve).
 
@@ -3334,6 +3356,8 @@ the rest:
 - The receipt is printed only after a successful run, so `exit` is always `0`;
   a failed run exits nonzero without a receipt. `--receipt` is rejected
   together with `--preflight`, which prints a report and produces no result.
+- A `warnings` array follows when the [model scope check](#model-scope-check)
+  warned about an option; without warnings the key is absent.
 - Supported by `image generate`, `video generate`, `music generate`,
   `sfx generate`, `speech synthesize`, `speech transcribe`, `vision ground`,
   `vision segment`, and `vision track`.

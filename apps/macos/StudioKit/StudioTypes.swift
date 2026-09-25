@@ -1780,6 +1780,8 @@ package struct StudioRunReceipt: Decodable, Equatable {
     package let event: String
     package let exit: Int32
     package let outputs: [Output]
+    /// The CLI's "has no effect" warnings for the run; absent when there were none.
+    package var warnings: [String]?
 
     /// The last receipt in `stdout`, or nil when the run predates `--receipt` or did not emit one.
     /// Lines that merely look like JSON are skipped, so a trailing progress or protocol line

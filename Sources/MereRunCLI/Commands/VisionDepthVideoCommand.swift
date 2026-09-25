@@ -150,7 +150,7 @@ struct VisionDepthVideo: AsyncParsableCommand {
     private static func jsonString<Value: Encodable>(_ value: Value) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        return String(decoding: try encoder.encode(value), as: UTF8.self)
+        return String(decoding: try encoder.encode(GateWarned(value)), as: UTF8.self)
     }
 }
 

@@ -126,6 +126,8 @@ package struct StudioMusicAnalysisDocument: Decodable, Equatable {
     package let rawLMOutput: String?
     /// The serialized audio codes, when the run asked to keep them.
     package let audioCodes: String?
+    /// The CLI's "has no effect" warnings for the run.
+    package var warnings: [String]?
 
     package static func decode(_ text: String) -> StudioMusicAnalysisDocument? {
         guard let data = StudioStructuredOutput.objectData(in: text) else { return nil }
@@ -174,6 +176,8 @@ package enum StudioCLAPScore {
         package let prompt: String?
         package let audio: String?
         package let model: String?
+        /// The CLI's "has no effect" warnings for the run.
+        package var warnings: [String]?
     }
 
     package static func parse(_ text: String) -> Double? {

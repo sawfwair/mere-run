@@ -350,7 +350,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     private func runPreflight(options: ResolvedLoRATrainingOptions) throws {
         let envelope = makePreflightEnvelope(options: options)
         if json {
-            print(try StructuredRunOutput.encode(envelope))
+            print(try StructuredRunOutput.encode(GateWarned(envelope)))
         } else {
             print(envelope.summary)
             for diagnostic in envelope.diagnostics {

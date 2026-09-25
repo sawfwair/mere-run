@@ -373,13 +373,16 @@ private func expect(
 }
 
 /// Warnings are what the gate hands back for printing, never under `--quiet` (as the commands'
-/// own "has no effect" notes), and never when it refuses the run.
+/// own "has no effect" notes), and never when it refuses the run. The JSON output's `warnings`
+/// keep them under `--quiet`.
 @Test func theGateReturnsWarningsOnlyForARunItLetsThrough() throws {
     let ignored = ["mere.run", "text", "chat", "-p", "hi", "--model", "text-chat-gemma4-nano", "--top-k", "5"]
     let lines = try CLICapabilityGate.check(arguments: ignored)
     #expect(lines.count == 1 && lines[0].hasPrefix("Warning: --top-k has no effect with Gemma 4.") && lines[0].hasSuffix("\n"))
     #expect(try CLICapabilityGate.check(arguments: ignored + ["--quiet"]).isEmpty)
     #expect(try CLICapabilityGate.check(arguments: ignored + ["-q"]).isEmpty)
+    let quiet = try CLICapabilityGate.pass(arguments: ignored + ["--quiet"])
+    #expect(quiet.warnings.count == 1 && "Warning: \(quiet.warnings[0])\n" == lines[0])
     #expect(throws: CLICapabilityGate.Rejection(messages: [
         "--show-unmasking is not supported by Gemma 4. It applies to DiffusionGemma."
     ])) {

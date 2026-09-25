@@ -42,21 +42,30 @@ struct MereRunCLI: AsyncParsableCommand {
 
     /// ArgumentParser's entry point, plus the gate's warnings: they print only once the whole
     /// command line has parsed and every command's `validate()` has passed, so a run that ends
-    /// in a usage error shows the error alone. The gate already let this command line through
-    /// in `validate`, so asking it again only collects the warnings.
+    /// in a usage error shows the error alone, and the command's JSON output carries them. The
+    /// gate already let this command line through in `validate`, so asking it again only
+    /// collects the warnings.
     static func main() async {
         do {
-            var command = try parseAsRoot()
-            for line in try CLICapabilityGate.check(arguments: CommandLine.arguments) {
+            let command = try parseAsRoot()
+            let gate = try CLICapabilityGate.pass(arguments: CommandLine.arguments)
+            for line in gate.stderrLines {
                 CLIStderr.write(line)
             }
+            try await run(command, warnings: gate.warnings)
+        } catch {
+            exit(withError: error)
+        }
+    }
+
+    private nonisolated static func run(_ command: sending any ParsableCommand, warnings: [String]) async throws {
+        var command = command
+        try await CLIGateWarnings.$current.withValue(warnings) {
             if var asyncCommand = command as? AsyncParsableCommand {
                 try await asyncCommand.run()
             } else {
                 try command.run()
             }
-        } catch {
-            exit(withError: error)
         }
     }
 

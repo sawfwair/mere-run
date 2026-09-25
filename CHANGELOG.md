@@ -30,7 +30,11 @@ The format is based on Keep a Changelog.
     the command reads as not passed only warns: an empty text value such as
     `--negative-prompt ""`, a blank `text chat --image`, or `--stems ","`.
     Warnings print once the command line has parsed and validated, never
-    beside a validation error, and not under `--quiet`.
+    beside a validation error, and not under `--quiet`. A command that prints
+    a JSON object on stdout (`--json`, `--preflight --json`, `--dry-run
+    --json`, `--receipt`, or a JSON result such as `music analyze`) adds them
+    as a `warnings` array of strings, under `--quiet` too; with none the key
+    is left out and the JSON is unchanged.
   - The check reads a command line the way the parser does: the last of a
     repeated single-value option, grouped short options such as `-qm`,
     `-m=<id>`, and the spellings a command normalizes, such as
