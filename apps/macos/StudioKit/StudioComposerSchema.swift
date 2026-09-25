@@ -461,8 +461,8 @@ package struct StudioModelScope: Equatable {
     package var defaultModelID: String
     /// Empty means every row: a template whose models the inventory does not categorize.
     package let categories: Set<String>
-    /// The managed models that run the command, for a command the contract routes: its
-    /// families' models, less the ones it excludes. nil offers every row of `categories`.
+    /// The managed models that run the command, for a command the contract routes
+    /// (`MereRunCapabilityRouting.runnableModels`). nil offers every row of `categories`.
     package let runnableModels: Set<String>?
 
     package init(noun: String, defaultModelID: String, categories: Set<String>, runnableModels: Set<String>? = nil) {
@@ -559,9 +559,13 @@ package struct StudioModelScope: Equatable {
 }
 
 extension MereRunCapabilityRouting {
-    /// The managed models a picker offers for the command: every family's, less the excluded.
+    /// The managed models a picker offers for the command: every family's; the ones whose family
+    /// depends on the checkpoint installed (`identified_models`: `video-ltx-av` runs whichever
+    /// LTX 2.3 folder is there, so no family lists it); and the ones it runs by default; less the
+    /// excluded.
     package var runnableModels: Set<String> {
-        Set(families.flatMap(\.models)).subtracting(excludedModels.map(\.id))
+        Set(families.flatMap(\.models) + identifiedModels + defaultModels.flatMap(\.models))
+            .subtracting(excludedModels.map(\.id))
     }
 }
 

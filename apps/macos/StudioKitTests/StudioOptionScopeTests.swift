@@ -246,6 +246,50 @@ final class StudioOptionScopeTests: XCTestCase {
         XCTAssertEqual(StudioTaskSchema.requiredModelID(for: draft), "")
     }
 
+    /// H-b: a picker offers every model the contract runs the command with: the families'
+    /// models, the ones whose family depends on what is installed (`identified_models`, such as
+    /// `video-ltx-av`), and the defaults, less the excluded. A template's own default is offered.
+    func testPickersOfferEveryModelTheCommandRuns() {
+        let source = StudioScopeSource(identities: StudioFixedModelIdentities())
+        var pickers: [(name: String, capability: MereRunCommandCapability, scope: StudioModelScope, templateDefault: String?)] = []
+        for templateID in CommandTemplateID.allCases {
+            guard let capability = source.capability(for: templateID), capability.routing != nil else { continue }
+            pickers.append(("task \(templateID)", capability, StudioModelScope(templateID: templateID, source: source),
+                            CommandCatalog.template(id: templateID)?.defaultModel))
+        }
+        for mode in StudioMode.allCases {
+            let actions: [StudioReadImageAction] = mode == .readImage ? StudioReadImageAction.allCases : [.inspect]
+            for action in actions {
+                let templateID = mode == .readImage ? action.templateID : mode.defaultTemplateID
+                guard let capability = source.capability(for: templateID), capability.routing != nil else { continue }
+                pickers.append(("mode \(mode) \(action)", capability, StudioModelScope(mode: mode, readImageAction: action, source: source),
+                                CommandCatalog.template(id: templateID)?.defaultModel))
+            }
+        }
+        XCTAssertFalse(pickers.isEmpty)
+        for picker in pickers {
+            let routing = try? XCTUnwrap(picker.capability.routing)
+            guard let routing, let offered = picker.scope.runnableModels else {
+                XCTFail("\(picker.name) offers every row for a routed command")
+                continue
+            }
+            let excluded = Set(routing.excludedModels.map(\.id))
+            let runs = Set(routing.families.flatMap(\.models) + routing.identifiedModels + routing.defaultModels.flatMap(\.models))
+            XCTAssertEqual(runs.subtracting(excluded).subtracting(offered).sorted(), [], "\(picker.name) drops models the command runs")
+            XCTAssertEqual(offered.intersection(excluded).sorted(), [], "\(picker.name) offers excluded models")
+            if let own = picker.templateDefault, !own.isEmpty, !excluded.contains(own) {
+                XCTAssertTrue(offered.contains(own), "\(picker.name) drops its own default \(own)")
+            }
+            if !picker.scope.defaultModelID.isEmpty {
+                XCTAssertTrue(offered.contains(picker.scope.defaultModelID), "\(picker.name) drops its default \(picker.scope.defaultModelID)")
+            }
+        }
+        let video = StudioModelScope(templateID: .videoGenerate, source: source)
+        for id in ["video-ltx-av", "video-ltx23-full-mlx", "video-ltx23-a2vid-mlx"] {
+            XCTAssertEqual(video.runnableModels?.contains(id), true, id)
+        }
+    }
+
     // MARK: Argv
 
     func testTheBuildersDropWhatTheFamilyDoesNotTakeAndItsOwnDefault() throws {
