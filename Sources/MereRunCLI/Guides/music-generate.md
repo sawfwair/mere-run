@@ -186,8 +186,10 @@ user values win; diagnostics print the effective metadata, not discarded LM
 suggestions.
 ACE-Step cover, cover-nofsq, repaint, and extract tasks skip the LM phase,
 matching upstream. Turbo and SFT checkpoints support text-to-music, repaint,
-cover, and cover-nofsq. Extract, lego, and complete are Base-only; the CLI
-rejects those tasks on Turbo/SFT checkpoints before loading model weights.
+cover, and cover-nofsq. Extract, lego, complete, and `--stems` are Base-only;
+the CLI rejects them for a Turbo or SFT checkpoint before downloading or
+loading it. Turbo always runs guidance 1, so another `--guidance-scale`,
+`--guidance-mode`, or CFG interval prints a warning and has no effect.
 XL-SFT and XL-Base use native continuous scheduling, CFG/APG/ADG, velocity
 stabilization, and Euler or Heun integration.
 
@@ -425,6 +427,13 @@ mere.run music realtime \
   Cover, cover-nofsq, repaint, and extract skip LM even if the flag is present.
 - Base-only task rejected: extract, lego, and complete require
   `music-acestep-xl-base`; Turbo and SFT intentionally reject them.
+- `Warning: --<option> has no effect with <model>`: the selected model accepts
+  the option but runs without it. Remove it, or choose a model the warning
+  names. `mere.run catalog resolve -- music generate ...` shows which model
+  runs and which options it takes.
+- `--progress-json` writes one JSON line per step on stderr for every model.
+  ACE-Step reports `planning`, `denoising` across ranked candidates, a
+  `decoding` milestone per candidate, and `stems`.
 - Audio decode memory pressure: keep tiled VAE enabled, reduce duration, or tune VAE chunk size.
 - Magenta RT2 unsupported runtime: build `vendor/magentart.xcframework` with
   `scripts/rebuild_magentart_xcframework.sh` on Apple Silicon macOS, then

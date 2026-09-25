@@ -15,8 +15,9 @@ struct MusicGenerate: AsyncParsableCommand {
 
         MiniMax Music 3 consumes caption, lyrics, duration/max-frames, steps,
         seed, and guidance scale. Run `mere.run guide music generate --model
-        music-minimax-music3` for the model-specific contract; ACE-Step and
-        Magenta controls are rejected instead of silently ignored.
+        music-minimax-music3` for the model-specific contract. ACE-Step and
+        Magenta controls fail before loading unless they carry their own
+        default, which only prints a warning.
 
         Example:
           mere.run music generate "upbeat electronic groove" \

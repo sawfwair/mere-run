@@ -56,6 +56,35 @@ App-to-CLI tests reject any emitted flag absent from `mere.run catalog --json`.
 - `music-separate-mel-roformer-dereverb`
 - `music-separate-mel-roformer-denoise`
 
+## Options each model uses
+
+`music generate`, `music separate`, and `music serve` check the command line
+against the selected model before admission, download, or load. The model comes
+from `--model`; for ACE-Step, `--checkpoints-root` and `--decoder-subdirectory`
+choose the checkpoint first, and a local root is identified from its files. An
+option the model rejects fails with one message that names the model and the
+models that take the option. An option the model accepts but never reads prints
+a `Warning:` line on stderr, and the run continues. For example, ACE-Step Turbo
+always runs guidance 1, so another `--guidance-scale` only warns.
+
+- ACE-Step Turbo and SFT run text-to-music, repaint, cover, and cover-nofsq;
+  extract, lego, complete, and `--stems` need `music-acestep-xl-base`.
+- MiniMax Music 3 and YuE2 accept an ACE-Step or Magenta RT2 option only at
+  its default, which warns because it has no effect; any other value fails.
+  Both cap `--duration` at 360 seconds and run one candidate.
+- Magenta RT2 rejects lyrics, `--seed`, `--steps`, and the ACE-Step guidance
+  and diffusion controls, and ignores the export, recipe, and ACE-Step
+  planning options.
+- Each RoFormer model accepts the `--overlap` values that divide its chunk
+  size: 352,800 samples for ViperX, dereverb, and denoise, and 485,100 for
+  four-stem.
+
+To see the decision without running anything:
+
+```bash
+mere.run catalog resolve -- music generate "song" --model music-yue2 --instrumental
+```
+
 ## Guides
 
 Music guidance follows the command/cookbook shape used by the rest of

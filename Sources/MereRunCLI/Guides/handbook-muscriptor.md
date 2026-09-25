@@ -28,7 +28,9 @@ against the recording for pitch, onset, note length, and overlapping voices.
 ## Controls and variants
 
 Choose small, medium, or large according to the local model's availability and
-resource limits. Preserve the source audio and exported Musical Instrument
+resource limits. Select the size with the model ID. `--variant` only sizes a
+local checkpoint that has no `config.json`; with a managed model, whose config
+wins, it prints a warning and has no effect. Preserve the source audio and exported Musical Instrument
 Digital Interface (MIDI) files together. Keep any timing or postprocessing
 settings consistent across comparisons.
 
