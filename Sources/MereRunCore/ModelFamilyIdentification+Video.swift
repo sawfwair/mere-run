@@ -24,7 +24,8 @@ extension ModelFamilyIdentifier {
     /// spelled. A FastH3 folder is laid out like FL2VA; it runs as FastH3 only when `--model`
     /// names the FastH3 id exactly and no `--h3-adapter` replaces the embedded one
     /// (`VideoGenerationOptions.usesEmbeddedFastH3Adapter`). An FL2VA folder stored as legacy
-    /// Q4 is its own family: it refuses Turbo adapters.
+    /// Q4 is its own family: it refuses Turbo adapters. An LTX-2.5 Distilled folder that holds
+    /// the diffusion decoder is its own family too: it runs `--video-decoder diffusion`.
     static let videoGenerate: Probe = { model, invocation in
         let outputMode = VideoGenerationOptions.effectiveOutputMode(
             audio: invocation.value("--audio"),
@@ -45,6 +46,9 @@ extension ModelFamilyIdentifier {
            (try? MiniMaxH3Resources(rootURL: root).transformerStorage())?.supportsFL2VATurboAdapters == false {
             return .family("h3-fl2va-q4")
         }
+        if profile == .ltx25Distilled, let root, holdsDiffusionDecoder(root) {
+            return .family("ltx25-distilled-diffusion")
+        }
         return profile.videoGenerateFamily(fastH3: fastH3).map { .family($0) }
     }
 
@@ -53,7 +57,8 @@ extension ModelFamilyIdentifier {
     static let videoRetake: Probe = { model, invocation in
         guard let root = videoRoot(model, invocation, variant: .unifiedAV) else { return nil }
         if isLTX25FullModelRoot(root) { return .family("ltx25-full") }
-        return isLTX25ModelRoot(root) ? .family("ltx25-distilled") : nil
+        guard isLTX25ModelRoot(root) else { return nil }
+        return .family(holdsDiffusionDecoder(root) ? "ltx25-distilled-diffusion" : "ltx25-distilled")
     }
 
     /// `video session`: the split and full LTX 2.3 folders and both LTX 2.5 folders
@@ -64,9 +69,18 @@ extension ModelFamilyIdentifier {
             return model == ModelResolver.ModelID.ltxVideo23FullMLX.rawValue ? .family("ltx23-full") : nil
         }
         if isLTX25FullModelRoot(root) { return .family("ltx25-full") }
-        if isLTX25ModelRoot(root) { return .family("ltx25-distilled") }
+        if isLTX25ModelRoot(root) {
+            return .family(holdsDiffusionDecoder(root) ? "ltx25-distilled-diffusion" : "ltx25-distilled")
+        }
         if isLTX23FullModelRoot(root) { return .family("ltx23-full") }
         return isLTX23SplitModelRoot(root) ? .family("ltx23-distilled") : nil
+    }
+
+    /// The distilled LTX-2.5 runtime loads the diffusion decoder when the folder holds it and
+    /// `--video-decoder diffusion` asks for it, and otherwise decodes with the convolutional one
+    /// (`LTXUnifiedAVGenerator.loadStandalone`).
+    private static func holdsDiffusionDecoder(_ root: URL) -> Bool {
+        FileManager.default.fileExists(atPath: LTX25Resources(rootURL: root).diffusionVideoVAEURL.path)
     }
 
     /// The folder the video commands' resolver uses for `model` without downloading: the
@@ -83,14 +97,14 @@ extension ModelFamilyIdentifier {
 
 extension VideoGenerationModelProfile {
     /// The layout of a `video generate` family's checkpoints; both FastH3 families and legacy Q4
-    /// share FL2VA's.
+    /// share FL2VA's, and a distilled LTX-2.5 folder with the diffusion decoder is still distilled.
     init(videoGenerateFamily family: String) {
         switch family {
         case "ltx-merged": self = .ltxMerged
         case "ltx23-distilled": self = .ltx23Distilled
         case "ltx23-full": self = .ltx23Full
         case "ltx23-a2vid": self = .ltx23AudioToVideo
-        case "ltx25-distilled": self = .ltx25Distilled
+        case "ltx25-distilled", "ltx25-distilled-diffusion": self = .ltx25Distilled
         case "ltx25-full": self = .ltx25Full
         case "wan22-ti2v": self = .wan
         case "h3-fl2va", "h3-fl2va-q4", "h3-fast", "h3-fast-adapter": self = .h3FL2VA

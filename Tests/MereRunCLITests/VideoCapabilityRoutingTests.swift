@@ -77,7 +77,8 @@ import Testing
             == ["--steps 9 is not supported by MiniMax-H3 FastH3; it runs 5. Remove --steps or pass 5."])
         #expect(try report(base + ["--image", "a.png"]).violations
             == ["--image is not supported by MiniMax-H3 FastH3. It applies to LTX (merged), LTX-2.3 Distilled, "
-                + "LTX-2.3 Full, LTX-2.3 A2Vid, LTX-2.5 Distilled, LTX-2.5 Full, Wan 2.2 TI2V, MiniMax-H3 FL2VA, "
+                + "LTX-2.3 Full, LTX-2.3 A2Vid, LTX-2.5 Distilled, LTX-2.5 Distilled with the diffusion decoder, LTX-2.5 Full, "
+                + "Wan 2.2 TI2V, MiniMax-H3 FL2VA, "
                 + "MiniMax-H3 FL2VA 4-bit and MiniMax-H3 FastH3 with an adapter."])
 
         // An explicit adapter replaces the embedded one, and its recipe replaces FastH3's.
@@ -109,7 +110,7 @@ import Testing
             == ["--ltx-preset hq is not supported by Wan 2.2 TI2V; it runs standard. Remove --ltx-preset or pass standard."])
         #expect(try check("video-wan22-ti2v-5b-mlx", ["--image", "a.png", "--variant", "distilled"]).warnings
             == ["--variant has no effect with Wan 2.2 TI2V. It applies to LTX (merged), LTX-2.3 Distilled, LTX-2.3 Full, "
-                + "LTX-2.3 A2Vid, LTX-2.5 Distilled and LTX-2.5 Full."])
+                + "LTX-2.3 A2Vid, LTX-2.5 Distilled, LTX-2.5 Distilled with the diffusion decoder and LTX-2.5 Full."])
         #expect(try check("video-minimax-h3-fl2va-bf16-mlx", ["--enhance-prompt"]).violations.count == 1)
         #expect(try check("video-ltx23-full-mlx", ["--num-generated-keyframes", "0"]).violations.isEmpty)
         #expect(try check("video-ltx23-full-mlx", ["--num-generated-keyframes", "2"]).violations.count == 1)
@@ -147,6 +148,51 @@ import Testing
         #expect(try report(["world", "serve", "--model", "video-cosmos3-edge-mlx"]).source == .unmatched)
         let local = try report(["world", "serve", "--backend", "cosmos3", "--model", "/tmp/cosmos3"])
         #expect(local.family == "cosmos3" && local.source == .selector)
+    }
+
+    /// The managed LTX-2.5 Distilled checkpoint has no diffusion decoder and decodes with the
+    /// convolutional one whatever is asked; a folder that holds it runs `--video-decoder
+    /// diffusion`, in every command that loads the distilled runtime.
+    @Test func aDistilledFolderWithTheDiffusionDecoderTakesIt() throws {
+        let distilled = LTX25Resources.requiredRelativePaths + [LTX25Resources.textEncoderRelativePath]
+        let plain = try makeRoot(distilled)
+        let diffusion = try makeRoot(distilled + [LTX25Resources.diffusionVideoVAERelativePath])
+        defer { for root in [plain, diffusion] { try? FileManager.default.removeItem(at: root) } }
+        let retake = ["video", "retake", "a", "--source", "s.mp4", "--start-time", "0", "--end-time", "1"]
+        for command in [["video", "generate", "p"], retake, ["video", "session"]] {
+            for spelling in [["--model-root", diffusion.path], ["--model", diffusion.path]] {
+                let found = try report(command + spelling + ["--video-decoder", "diffusion"])
+                #expect(found.family == "ltx25-distilled-diffusion" && found.violations.isEmpty && found.warnings.isEmpty,
+                        "\(command) \(spelling): \(found)")
+                #expect(throws: Never.self) { try CLICapabilityGate.check(arguments: ["mere.run"] + command + spelling) }
+            }
+            let convolutional = try report(command + ["--model-root", plain.path, "--video-decoder", "diffusion"])
+            #expect(convolutional.family == "ltx25-distilled" && convolutional.violations.isEmpty
+                && convolutional.warnings.count == 1, "\(command): \(convolutional)")
+        }
+        // Everything else scopes as LTX-2.5 Distilled does.
+        let generate = MereRunCapabilityCatalog.videoGenerate
+        let generateDistilled = generate.options(forFamily: "ltx25-distilled").map(\.flag)
+        #expect(generate.options(forFamily: "ltx25-distilled-diffusion").map(\.flag) == generateDistilled)
+        let dfr = try report(["video", "generate", "p", "--model-root", diffusion.path, "--dfr"])
+        #expect(dfr.violations == ["--dfr is not supported by LTX-2.5 Distilled with the diffusion decoder. It applies to LTX-2.5 Full."])
+        let steps = try report(retake + ["--model-root", diffusion.path, "--steps", "30"])
+        #expect(steps.violations.isEmpty && steps.warnings == ["--steps has no effect with LTX-2.5 Distilled with the diffusion decoder. It applies to LTX-2.5 Full."])
+        let session = MereRunCapabilityCatalog.videoSession
+        #expect(session.options(forFamily: "ltx25-distilled-diffusion").first { $0.flag == "--video-decoder" }?.defaultValue
+            == "convolutional")
+        #expect(session.options(forFamily: "ltx25-distilled-diffusion").first { $0.flag == "--video-decoder" }?.choices
+            == ["convolutional", "diffusion"])
+    }
+
+    private func makeRoot(_ files: [String]) throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appending(path: "video-gate-\(UUID().uuidString)")
+        for path in files {
+            let file = root.appending(path: path)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: file)
+        }
+        return root
     }
 
     private func tokens(_ flag: String, _ value: String) -> [String] {

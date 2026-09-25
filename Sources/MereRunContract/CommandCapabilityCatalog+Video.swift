@@ -33,11 +33,11 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--variant", label: "Compatibility variant", kind: .choice, choices: ["unified-av", "distilled"],
                 group: Group.sampling, tier: .expert
-            ).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full], ignoredBy: [.wan])),
+            ).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full], ignoredBy: [.wan])),
             .init(
                 flag: "--ltx-transformer-execution", label: "LTX transformer execution", kind: .choice,
                 choices: ["eager", "compiled"], defaultValue: "eager", group: Group.run, tier: .expert
-            ).scoped(V.readOnly(by: [.ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--ltx-guidance-projection-cache", label: "LTX guidance projection cache", kind: .choice,
                 choices: ["automatic", "disabled", "enabled"], defaultValue: "disabled", group: Group.run, tier: .expert
@@ -87,39 +87,39 @@ extension MereRunCapabilityCatalog {
                 kind: .choice,
                 choices: LTXVideoQuality.allCases.map(\.rawValue),
                 group: Group.sampling, tier: .essential
-            ).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full]), .rule(.ltxMerged, values: ["draft"]), .rule(.ltx23Distilled, values: ["draft"]), .rule(.ltx23Full, values: ["final"]), .rule(.ltx23A2Vid, values: ["final"]), .rule(.ltx25Distilled, values: ["final"]), .rule(.ltx25Full, values: ["final"])),
+            ).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full]), .rule(.ltxMerged, values: ["draft"]), .rule(.ltx23Distilled, values: ["draft"]), .rule(.ltx23Full, values: ["final"]), .rule(.ltx23A2Vid, values: ["final"]), .rule(.ltx25Distilled, values: ["final"]), .rule(.ltx25DistilledDiffusion, values: ["final"]), .rule(.ltx25Full, values: ["final"])),
             .init(
                 flag: "--output-mode",
                 label: "Output mode",
                 kind: .choice,
                 choices: LTXVideoOutputMode.allCases.map(\.rawValue),
                 group: Group.output, tier: .essential
-            ).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
+            ).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(flag: "--model-root", label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
-            .init(flag: "--auto-duration", label: "Auto duration range", kind: .string, repeatable: true, group: Group.sampling, tier: .expert).scoped(V.used(by: [.ltx25Distilled, .ltx25Full])),
+            .init(flag: "--auto-duration", label: "Auto duration range", kind: .string, repeatable: true, group: Group.sampling, tier: .expert).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--video-decoder", label: "Video decoder", kind: .choice, choices: ["diffusion", "convolutional"],
                 group: Group.run, tier: .expert
-            ).scoped(V.used(by: [.ltx25Distilled, .ltx25Full]), .rule(.ltx25Distilled, values: ["convolutional"], severity: .warning)),
+            ).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full]), .rule(.ltx25Distilled, values: ["convolutional"], severity: .warning)),
             .init(
                 flag: "--hdr", label: "HDR color space", kind: .choice, choices: ["srgb-linear", "acescg", "acescct"],
                 group: Group.output, tier: .expert
-            ).scoped(V.used(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--hdr-transfer", label: "HDR transfer", kind: .choice, choices: ["acescct", "logc3"],
                 group: Group.output, tier: .expert, dependsOn: "--hdr"
-            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25Full])),
-            .init(flag: "--high-quality-hdr", label: "High quality HDR", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--hdr").scoped(V.used(by: [.ltx25Distilled, .ltx25Full])),
-            .init(flag: "--text-embeddings", label: "Precomputed text contexts", kind: .file, group: Group.inputs, tier: .expert).scoped(V.used(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
+            .init(flag: "--high-quality-hdr", label: "High quality HDR", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--hdr").scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
+            .init(flag: "--text-embeddings", label: "Precomputed text contexts", kind: .file, group: Group.inputs, tier: .expert).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--spatial-tile", label: "VAE spatial tile", kind: .integer,
                 group: Group.run, tier: .expert, range: .init(min: 256, max: 4_096, step: 32)
-            ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--spatial-overlap", label: "VAE spatial overlap", kind: .integer,
                 defaultValue: "256", group: Group.run, tier: .expert, range: .init(min: 0, max: 1_024, step: 32)
-            ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
-            .init(flag: "--skip-mp4", label: "EXR only", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--hdr").scoped(V.used(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
+            .init(flag: "--skip-mp4", label: "EXR only", kind: .boolean, group: Group.output, tier: .expert, dependsOn: "--hdr").scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--width", label: "Width", kind: .integer,
                 group: Group.output, tier: .essential, range: .init(min: 256, max: 2_048, step: 16)
@@ -144,7 +144,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--steps", label: "Denoising steps", kind: .integer,
                 group: Group.sampling, tier: .standard, range: .init(min: 1, max: 100, step: 1)
-            ).scoped(V.used(by: [.wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA], ignoredBy: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full]), .rule(.fastH3, values: ["5"])),
+            ).scoped(V.used(by: [.wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA], ignoredBy: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full]), .rule(.fastH3, values: ["5"])),
             .init(
                 flag: "--h3-weight-mode",
                 label: "MiniMax-H3 weight mode",
@@ -171,15 +171,15 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "5.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
             ).scoped(V.readOnly(by: [.wan])),
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard).scoped(V.readOnly(by: [.ltx23Full, .ltx23A2Vid, .ltx25Full, .wan])),
-            .init(flag: "--enhance-prompt", label: "Enhance prompt", kind: .boolean, group: Group.prompt, tier: .standard).scoped(V.used(by: [.ltx25Distilled, .ltx25Full])),
+            .init(flag: "--enhance-prompt", label: "Enhance prompt", kind: .boolean, group: Group.prompt, tier: .standard).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--prompt-enhancer-model", label: "Prompt enhancer", kind: .string,
                 group: Group.prompt, tier: .expert, dependsOn: "--enhance-prompt"
-            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory,
                 group: Group.prompt, tier: .expert, dependsOn: "--enhance-prompt"
-            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--audio", label: "Source audio", kind: .file, group: Group.inputs, tier: .standard,
                 blankReadsAsOmitted: true
@@ -215,11 +215,11 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--ltx-preset", label: "LTX preset", kind: .choice, choices: ["standard", "hq"],
                 defaultValue: "standard", group: Group.sampling, tier: .expert
-            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["standard"]), .rule(.ltx23Distilled, values: ["standard"]), .rule(.ltx23Full, values: ["standard"]), .rule(.ltx23A2Vid, values: ["standard"]), .rule(.ltx25Distilled, values: ["standard"]), .rule(.wan, values: ["standard"]), .rule(.h3FL2VA, values: ["standard"]), .rule(.h3FL2VAQ4, values: ["standard"]), .rule(.fastH3Adapter, values: ["standard"]), .rule(.fastH3, values: ["standard"]), .rule(.h3Ref2VA, values: ["standard"])),
+            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["standard"]), .rule(.ltx23Distilled, values: ["standard"]), .rule(.ltx23Full, values: ["standard"]), .rule(.ltx23A2Vid, values: ["standard"]), .rule(.ltx25Distilled, values: ["standard"]), .rule(.ltx25DistilledDiffusion, values: ["standard"]), .rule(.wan, values: ["standard"]), .rule(.h3FL2VA, values: ["standard"]), .rule(.h3FL2VAQ4, values: ["standard"]), .rule(.fastH3Adapter, values: ["standard"]), .rule(.fastH3, values: ["standard"]), .rule(.h3Ref2VA, values: ["standard"])),
             .init(
                 flag: "--ltx-pipeline", label: "LTX pipeline", kind: .choice, choices: ["two-stage", "keyframe-interpolation", "dev-one-stage"],
                 defaultValue: "two-stage", group: Group.sampling, tier: .expert
-            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["two-stage"]), .rule(.ltx23Distilled, values: ["two-stage"]), .rule(.ltx23Full, values: ["two-stage"]), .rule(.ltx23A2Vid, values: ["two-stage"]), .rule(.ltx25Distilled, values: ["two-stage"]), .rule(.wan, values: ["two-stage"]), .rule(.h3FL2VA, values: ["two-stage"]), .rule(.h3FL2VAQ4, values: ["two-stage"]), .rule(.fastH3Adapter, values: ["two-stage"]), .rule(.fastH3, values: ["two-stage"]), .rule(.h3Ref2VA, values: ["two-stage"])),
+            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["two-stage"]), .rule(.ltx23Distilled, values: ["two-stage"]), .rule(.ltx23Full, values: ["two-stage"]), .rule(.ltx23A2Vid, values: ["two-stage"]), .rule(.ltx25Distilled, values: ["two-stage"]), .rule(.ltx25DistilledDiffusion, values: ["two-stage"]), .rule(.wan, values: ["two-stage"]), .rule(.h3FL2VA, values: ["two-stage"]), .rule(.h3FL2VAQ4, values: ["two-stage"]), .rule(.fastH3Adapter, values: ["two-stage"]), .rule(.fastH3, values: ["two-stage"]), .rule(.h3Ref2VA, values: ["two-stage"])),
             .init(
                 flag: "--ltx-sampler", label: "LTX sampler", kind: .choice,
                 choices: ["euler", "res2s", "euler-ancestral", "cfg-plus-plus", "gradient-estimating-euler"],
@@ -280,20 +280,20 @@ extension MereRunCapabilityCatalog {
                 flag: "--gradient-estimation-gamma", label: "Gradient estimate gamma", kind: .number,
                 defaultValue: "2.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
             ).scoped(V.readOnly(by: [.ltx25Full])),
-            .init(flag: "--image", label: "Start image", kind: .file, group: Group.inputs, tier: .essential).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter]), .rule(.wan, required: true)),
+            .init(flag: "--image", label: "Start image", kind: .file, group: Group.inputs, tier: .essential).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter]), .rule(.wan, required: true)),
             .init(
                 flag: "--image-strength", label: "Start image strength", kind: .number,
                 defaultValue: "1.0", group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05), dependsOn: "--image"
-            ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
-            .init(flag: "--end-image", label: "End image", kind: .file, group: Group.inputs, tier: .standard, dependsOn: "--image").scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter])),
+            ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
+            .init(flag: "--end-image", label: "End image", kind: .file, group: Group.inputs, tier: .standard, dependsOn: "--image").scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter])),
             .init(
                 flag: "--end-image-strength", label: "End image strength", kind: .number,
                 defaultValue: "1.0", group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05), dependsOn: "--end-image"
-            ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--image-conditioning", label: "Timed image guide", kind: .string, repeatable: true,
                 group: Group.inputs, tier: .expert
-            ).scoped(V.used(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--num-generated-keyframes", label: "Generated keyframe count", kind: .integer,
                 defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 1)
@@ -301,35 +301,35 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--generated-keyframe", label: "Generated keyframe", kind: .integer, repeatable: true,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
-            ).scoped(V.used(by: [.ltx25Distilled, .ltx25Full])),
-            .init(flag: "--lora", label: "LTX LoRA", kind: .string, repeatable: true, group: Group.modelAndAdapters, tier: .standard).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
+            ).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
+            .init(flag: "--lora", label: "LTX LoRA", kind: .string, repeatable: true, group: Group.modelAndAdapters, tier: .standard).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--video-conditioning", label: "IC-LoRA reference video", kind: .string, repeatable: true,
                 group: Group.inputs, tier: .expert
-            ).scoped(V.used(by: [.ltx25Distilled, .ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA])),
+            ).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--conditioning-attention-strength", label: "Reference attention", kind: .number,
                 defaultValue: "1.0", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 1, step: 0.05),
                 dependsOn: "--video-conditioning"
-            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--conditioning-attention-mask", label: "Reference attention mask", kind: .file,
                 group: Group.inputs, tier: .expert, dependsOn: "--video-conditioning"
-            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25Full])),
-            .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert).scoped(V.used(by: [.ltx25Distilled], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .ltx25Full, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA])),
+            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
+            .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .ltx25Full, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--reference-downscale-factor", label: "Reference spatial scale", kind: .integer,
                 group: Group.inputs, tier: .expert, range: .init(min: 1, max: 8, step: 1), dependsOn: "--video-conditioning"
-            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(
                 flag: "--reference-temporal-scale-factor", label: "Reference temporal scale", kind: .integer,
                 group: Group.inputs, tier: .expert, range: .init(min: 1, max: 8, step: 1), dependsOn: "--video-conditioning"
-            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25Full])),
+            ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(flag: "--dfr", label: "Diffusion fidelity rendering", kind: .boolean, group: Group.sampling, tier: .expert).scoped(V.used(by: [.ltx25Full])),
             .init(
                 flag: "--temporal-upsample-rounds", label: "Temporal refinement rounds", kind: .integer,
                 defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 2, step: 1), dependsOn: "--dfr"
-            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["0"]), .rule(.ltx23Distilled, values: ["0"]), .rule(.ltx23Full, values: ["0"]), .rule(.ltx23A2Vid, values: ["0"]), .rule(.ltx25Distilled, values: ["0"]), .rule(.wan, values: ["0"]), .rule(.h3FL2VA, values: ["0"]), .rule(.h3FL2VAQ4, values: ["0"]), .rule(.fastH3Adapter, values: ["0"]), .rule(.fastH3, values: ["0"]), .rule(.h3Ref2VA, values: ["0"])),
+            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["0"]), .rule(.ltx23Distilled, values: ["0"]), .rule(.ltx23Full, values: ["0"]), .rule(.ltx23A2Vid, values: ["0"]), .rule(.ltx25Distilled, values: ["0"]), .rule(.ltx25DistilledDiffusion, values: ["0"]), .rule(.wan, values: ["0"]), .rule(.h3FL2VA, values: ["0"]), .rule(.h3FL2VAQ4, values: ["0"]), .rule(.fastH3Adapter, values: ["0"]), .rule(.fastH3, values: ["0"]), .rule(.h3Ref2VA, values: ["0"])),
             .init(
                 flag: "--detailing-lora", label: "Detailing IC-LoRA", kind: .string, repeatable: true,
                 group: Group.modelAndAdapters, tier: .expert, dependsOn: "--dfr"
@@ -341,8 +341,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--reference", label: "Ordered H3 reference", kind: .string, repeatable: true, group: Group.inputs, tier: .standard).scoped(V.used(by: [.h3Ref2VA]), .rule(.h3Ref2VA, required: true, maxCount: 12)),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--json", label: "JSON", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
-            .init(flag: "--timings", label: "Timings", kind: .boolean, group: Group.run, tier: .expert).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
-            .init(flag: "--timings-output", label: "Timings output", kind: .file, group: Group.run, tier: .expert).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
+            .init(flag: "--timings", label: "Timings", kind: .boolean, group: Group.run, tier: .expert).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
+            .init(flag: "--timings-output", label: "Timings output", kind: .file, group: Group.run, tier: .expert).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             progressJSONOption,
             receiptOption
@@ -368,25 +368,25 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--model-root", label: "Model root", kind: .directory),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
+            .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
             .init(flag: "--enhance-prompt", label: "Enhance prompt", kind: .boolean),
             .init(flag: "--prompt-enhancer-model", label: "Prompt enhancer", kind: .string),
             .init(flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory),
-            .init(flag: "--steps", label: "Denoising steps", kind: .integer).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
+            .init(flag: "--steps", label: "Denoising steps", kind: .integer).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
             .init(flag: "--sigmas", label: "Sigma schedule", kind: .string, repeatable: true),
             .init(flag: "--lora", label: "LTX LoRA", kind: .string, repeatable: true),
-            .init(flag: "--video-cfg-guidance-scale", label: "Video CFG", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--video-stg-scale", label: "Video STG", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--video-guidance-rescale", label: "Video rescale", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--video-modality-scale", label: "Video modality guidance", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--video-stg-block", label: "Video STG block", kind: .integer, repeatable: true).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--video-guidance-skip-step", label: "Video guidance skip", kind: .integer).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--audio-cfg-guidance-scale", label: "Audio CFG", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--audio-stg-scale", label: "Audio STG", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--audio-guidance-rescale", label: "Audio rescale", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--audio-modality-scale", label: "Audio modality guidance", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--audio-stg-block", label: "Audio STG block", kind: .integer, repeatable: true).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
-            .init(flag: "--audio-guidance-skip-step", label: "Audio guidance skip", kind: .integer).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled])),
+            .init(flag: "--video-cfg-guidance-scale", label: "Video CFG", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--video-stg-scale", label: "Video STG", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--video-guidance-rescale", label: "Video rescale", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--video-modality-scale", label: "Video modality guidance", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--video-stg-block", label: "Video STG block", kind: .integer, repeatable: true).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--video-guidance-skip-step", label: "Video guidance skip", kind: .integer).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--audio-cfg-guidance-scale", label: "Audio CFG", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--audio-stg-scale", label: "Audio STG", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--audio-guidance-rescale", label: "Audio rescale", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--audio-modality-scale", label: "Audio modality guidance", kind: .number).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--audio-stg-block", label: "Audio STG block", kind: .integer, repeatable: true).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
+            .init(flag: "--audio-guidance-skip-step", label: "Audio guidance skip", kind: .integer).scoped(R.only(.ltx25Full, ignoredBy: [.ltx25Distilled, .ltx25DistilledDiffusion])),
             // Retake asks for the diffusion decoder by default; LTX-2.5 Distilled installs only the
             // convolutional one and runs that whatever is asked.
             .init(
@@ -583,6 +583,7 @@ extension MereRunCapabilityCatalog {
                 S.rule(.ltx23Distilled, values: ["convolutional"], severity: .warning),
                 .rule(.ltx23Full, values: ["convolutional"], severity: .warning),
                 .rule(.ltx25Distilled, values: ["convolutional"], severity: .warning),
+                .rule(.ltx25DistilledDiffusion, defaultValue: "convolutional"),
                 .rule(.ltx25Full, defaultValue: "diffusion")
             ),
             .init(
@@ -592,14 +593,14 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--ltx-guidance-projection-cache", label: "LTX guidance projection cache", kind: .choice,
                 choices: ["automatic", "disabled", "enabled"], defaultValue: "disabled", group: Group.run, tier: .expert
-            ).scoped(S.only(.ltx25Full, ignoredBy: [.ltx23Distilled, .ltx23Full, .ltx25Distilled])),
+            ).scoped(S.only(.ltx25Full, ignoredBy: [.ltx23Distilled, .ltx23Full, .ltx25Distilled, .ltx25DistilledDiffusion])),
             .init(
                 flag: "--ltx-teacache", label: "Enable LTX TeaCache", kind: .boolean, group: Group.run, tier: .expert
             ).scoped(S.only(.ltx25Full, ignoredBy: [.ltx23Full])),
             .init(
                 flag: "--ltx-teacache-threshold", label: "LTX TeaCache threshold", kind: .number, group: Group.run,
                 tier: .expert
-            ).scoped(S.only(.ltx25Full, ignoredBy: [.ltx23Distilled, .ltx23Full, .ltx25Distilled])),
+            ).scoped(S.only(.ltx25Full, ignoredBy: [.ltx23Distilled, .ltx23Full, .ltx25Distilled, .ltx25DistilledDiffusion])),
             .init(
                 flag: "--prompt-cache-capacity", label: "Prompt cache capacity", kind: .integer, defaultValue: "8",
                 group: Group.run, tier: .expert

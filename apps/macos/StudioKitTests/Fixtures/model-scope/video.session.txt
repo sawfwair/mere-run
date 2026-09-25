@@ -9,6 +9,9 @@ ltx23-full	console.videoSession	validated	--ltx-transformer-execution --model --
 ltx25-distilled	console.videoSession	emitted	--ltx-transformer-execution --model --prompt-cache-capacity --quiet --video-decoder
 ltx25-distilled	console.videoSession	shown	--ltx-transformer-execution --model --model-root --prompt-cache-capacity --quiet --video-decoder
 ltx25-distilled	console.videoSession	validated	--ltx-transformer-execution --model --prompt-cache-capacity --quiet --video-decoder
+ltx25-distilled-diffusion	console.videoSession	emitted	--ltx-transformer-execution --model --prompt-cache-capacity --quiet --video-decoder
+ltx25-distilled-diffusion	console.videoSession	shown	--ltx-transformer-execution --model --model-root --prompt-cache-capacity --quiet --video-decoder
+ltx25-distilled-diffusion	console.videoSession	validated	--ltx-transformer-execution --model --prompt-cache-capacity --quiet --video-decoder
 ltx25-full	console.videoSession	emitted	--ltx-guidance-projection-cache --ltx-teacache --ltx-teacache-threshold --ltx-transformer-execution --model --prompt-cache-capacity --quiet --video-decoder
 ltx25-full	console.videoSession	shown	--ltx-guidance-projection-cache --ltx-teacache --ltx-teacache-threshold --ltx-transformer-execution --model --model-root --prompt-cache-capacity --quiet --video-decoder
 ltx25-full	console.videoSession	validated	--ltx-guidance-projection-cache --ltx-teacache --ltx-teacache-threshold --ltx-transformer-execution --model --prompt-cache-capacity --quiet --video-decoder

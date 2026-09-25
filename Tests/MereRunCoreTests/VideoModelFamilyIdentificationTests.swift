@@ -121,6 +121,27 @@ import Testing
         #expect(identify("video.session", a2vid.path) == nil, "an A2Vid folder without a vocoder can't hold a session")
     }
 
+    /// The managed LTX-2.5 Distilled checkpoint installs only the convolutional decoder; a folder
+    /// that also holds the diffusion one runs `--video-decoder diffusion`, in every command that
+    /// loads the distilled runtime. Full folders hold it too and stay full.
+    @Test func aDistilledLTX25FolderWithTheDiffusionDecoderIsItsOwnFamily() throws {
+        let distilled = LTX25Resources.requiredRelativePaths + [LTX25Resources.textEncoderRelativePath]
+        let plain = try makeRoot(distilled)
+        let diffusion = try makeRoot(distilled + [LTX25Resources.diffusionVideoVAERelativePath])
+        let full = try makeRoot(LTX25Resources.fullRequiredRelativePaths)
+        defer { for root in [plain, diffusion, full] { try? FileManager.default.removeItem(at: root) } }
+
+        for arguments in [["--model-root", diffusion.path], ["--model", diffusion.path]] {
+            #expect(identify("video.generate", diffusion.path, arguments) == "ltx25-distilled-diffusion", "\(arguments)")
+        }
+        #expect(VideoGenerationModelProfile(videoGenerateFamily: "ltx25-distilled-diffusion") == .ltx25Distilled)
+        for capabilityID in ["video.generate", "video.retake", "video.session"] {
+            #expect(identify(capabilityID, diffusion.path) == "ltx25-distilled-diffusion", "\(capabilityID)")
+            #expect(identify(capabilityID, plain.path) == "ltx25-distilled", "\(capabilityID)")
+            #expect(identify(capabilityID, full.path) == "ltx25-full", "\(capabilityID)")
+        }
+    }
+
     // MARK: - Fixtures
 
     private func identify(_ capabilityID: String, _ model: String, _ arguments: [String]? = nil) -> String? {

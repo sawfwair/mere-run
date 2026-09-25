@@ -335,6 +335,27 @@ final class StudioOptionScopeTests: XCTestCase {
         )
     }
 
+    /// A distilled LTX-2.5 folder that holds the diffusion decoder, as `catalog resolve` places it,
+    /// offers and sends either decoder; the managed checkpoint shows the convolutional one fixed.
+    func testTheVideoDecoderFollowsWhatADistilledFolderHolds() throws {
+        let capability = MereRunCapabilityCatalog.videoGenerate
+        let folder = "/tmp/checkpoints/ltx25-distilled-with-diffusion"
+        let answer = StudioModelIdentity.resolved(.family(id: "ltx25-distilled-diffusion", model: folder, source: .identified))
+        let source = StudioScopeSource(identities: StudioFixedModelIdentities([folder: answer]))
+        let argv = ["video", "generate", "a cat", "--model-root", folder, "--video-decoder", "diffusion"]
+        let diffusion = source.scope(capability: capability, commandLine: argv)
+        XCTAssertEqual(diffusion.family?.title, "LTX-2.5 Distilled with the diffusion decoder")
+        XCTAssertNil(diffusion.fixedValue("--video-decoder"))
+        XCTAssertEqual(diffusion.option("--video-decoder")?.choices, ["diffusion", "convolutional"])
+        XCTAssertEqual(diffusion.unusedFlags, [])
+        XCTAssertEqual(StudioOptionScopes.filtered(argv, scope: diffusion), argv)
+
+        let managedArgv = ["video", "generate", "a cat", "--model", "video-ltx25-distilled-bf16", "--video-decoder", "diffusion"]
+        let managed = StudioScopeSource.contract.scope(capability: capability, commandLine: managedArgv)
+        XCTAssertEqual(managed.fixedValue("--video-decoder"), "convolutional")
+        XCTAssertEqual(managed.unusedFlags, ["--video-decoder"])
+    }
+
     func testAFixedValueIsKeptOnlyAsTheFamilyRunsIt() throws {
         let scope = source.scope(capability: Video.capability, commandLine: [
             "video", "generate", "x", "--model", "video-minimax-h3-fasth3-vsa-datafree-mlx", "--steps", "30",

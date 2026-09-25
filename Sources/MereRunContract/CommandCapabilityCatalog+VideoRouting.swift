@@ -90,6 +90,9 @@ extension MereRunCapabilityCatalog {
         case ltx23Full = "ltx23-full"
         case ltx23A2Vid = "ltx23-a2vid"
         case ltx25Distilled = "ltx25-distilled"
+        /// An LTX-2.5 Distilled folder that also holds the diffusion video decoder, which the
+        /// managed checkpoint does not install: `--video-decoder diffusion` runs it.
+        case ltx25DistilledDiffusion = "ltx25-distilled-diffusion"
         case ltx25Full = "ltx25-full"
         case wan = "wan22-ti2v"
         case h3FL2VA = "h3-fl2va"
@@ -104,6 +107,9 @@ extension MereRunCapabilityCatalog {
 
     enum VideoRetakeFamily: String, MereRunFamilyID {
         case ltx25Distilled = "ltx25-distilled"
+        /// An LTX-2.5 Distilled folder that also holds the diffusion video decoder, which the
+        /// managed checkpoint does not install: `--video-decoder diffusion` runs it.
+        case ltx25DistilledDiffusion = "ltx25-distilled-diffusion"
         case ltx25Full = "ltx25-full"
     }
 
@@ -111,6 +117,9 @@ extension MereRunCapabilityCatalog {
         case ltx23Distilled = "ltx23-distilled"
         case ltx23Full = "ltx23-full"
         case ltx25Distilled = "ltx25-distilled"
+        /// An LTX-2.5 Distilled folder that also holds the diffusion video decoder, which the
+        /// managed checkpoint does not install: `--video-decoder diffusion` runs it.
+        case ltx25DistilledDiffusion = "ltx25-distilled-diffusion"
         case ltx25Full = "ltx25-full"
     }
 
@@ -170,6 +179,7 @@ extension MereRunCapabilityCatalog {
             .init(VideoGenerateFamily.ltx23Full, title: "LTX-2.3 Full", models: []),
             .init(VideoGenerateFamily.ltx23A2Vid, title: "LTX-2.3 A2Vid", models: []),
             .init(VideoGenerateFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoGenerateFamily.ltx25DistilledDiffusion, title: "LTX-2.5 Distilled with the diffusion decoder", models: []),
             .init(VideoGenerateFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"]),
             .init(VideoGenerateFamily.wan, title: "Wan 2.2 TI2V", models: ["video-wan22-ti2v-5b-mlx"]),
             .init(
@@ -208,6 +218,7 @@ extension MereRunCapabilityCatalog {
         defaultModels: [.always("video-ltx25-distilled-bf16")],
         families: [
             .init(VideoRetakeFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoRetakeFamily.ltx25DistilledDiffusion, title: "LTX-2.5 Distilled with the diffusion decoder", models: []),
             .init(VideoRetakeFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
         ],
         excludedModels: .models(
@@ -227,6 +238,7 @@ extension MereRunCapabilityCatalog {
             .init(VideoSessionFamily.ltx23Distilled, title: "LTX-2.3 Distilled", models: ["video-ltx23-av-mlx"]),
             .init(VideoSessionFamily.ltx23Full, title: "LTX-2.3 Full", models: []),
             .init(VideoSessionFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoSessionFamily.ltx25DistilledDiffusion, title: "LTX-2.5 Distilled with the diffusion decoder", models: []),
             .init(VideoSessionFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
         ],
         excludedModels: .models(
