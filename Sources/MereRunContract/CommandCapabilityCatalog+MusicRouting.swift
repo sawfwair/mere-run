@@ -61,7 +61,10 @@ extension MereRunCapabilityCatalog {
         excludedModels: .models(
             aceStepLanguageModels,
             reason: "It is an ACE-Step language model; pass it as `--lm-model`."
-        )
+        ),
+        // `MERERUN_MUSIC_ACESTEP_ROOT` wins over a managed ACE-Step id's own install, so the CLI
+        // identifies the checkpoint it would load before trusting the id.
+        identifiesInstalledModels: true
     )
 
     static let musicSeparateRouting = MereRunCapabilityRouting(

@@ -84,10 +84,13 @@ extension ACEStepCheckpointVariant {
 extension ModelFamilyIdentifier {
     /// `music generate` names a local model with `--model`, and an ACE-Step checkpoint also with
     /// `--checkpoints-root` or `--decoder-subdirectory`; whichever the gate passed, the probe reads
-    /// the whole command line the way the command does.
+    /// the whole command line the way the command does. A managed id is also probed, because
+    /// `MERERUN_MUSIC_ACESTEP_ROOT` can hold a different checkpoint than the id's own install; an
+    /// alias reads as its managed id, whose install the command falls back to.
     static let musicProbes: [String: Probe] = [
         "music.generate": { _, invocation in
-            let model = invocation.value("--model") ?? ModelResolver.ModelID.aceStep.rawValue
+            let requested = invocation.value("--model") ?? ModelResolver.ModelID.aceStep.rawValue
+            let model = ManagedModelCatalog.spec(for: requested)?.id ?? requested
             switch MusicModelRuntime.generation(model: model) {
             case .yue2: return "yue2"
             case .miniMaxMusic3: return "minimax-music3"

@@ -1,6 +1,7 @@
 import Foundation
 import MereRunContract
 import Testing
+import XCTest
 
 @testable import MereRunCLI
 @testable import MereRunCore
@@ -116,4 +117,70 @@ private func report(_ commandLine: String...) throws -> MereRunFamilyResolutionR
     #expect(managed.violations.isEmpty && managed.warnings == ["--variant has no effect with MuScriptor."])
     let local = try report("music", "transcribe", "a.wav", "--model-path", "/tmp/muscriptor", "--variant", "large")
     #expect(local.source == .unidentified && local.warnings.isEmpty)
+}
+
+/// `MERERUN_MUSIC_ACESTEP_ROOT` is process state, so these set and restore it serially.
+final class MusicACEStepRootOverrideGateTests: XCTestCase {
+    private static let key = "MERERUN_MUSIC_ACESTEP_ROOT"
+    private var original: String?
+
+    override func setUp() {
+        super.setUp()
+        original = ProcessInfo.processInfo.environment[Self.key]
+    }
+
+    override func tearDown() {
+        if let original {
+            setenv(Self.key, original, 1)
+        } else {
+            unsetenv(Self.key)
+        }
+        super.tearDown()
+    }
+
+    private func report(_ arguments: [String]) throws -> MereRunFamilyResolutionReport {
+        try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: ["music", "generate", "song"] + arguments)).report
+    }
+
+    /// The override root wins over a managed Turbo id's own install, so a Base checkpoint there
+    /// runs the Base-only tasks and stems the id alone would refuse.
+    func testAnOverrideRootDecidesTheFamilyOfAManagedOrDefaultModel() throws {
+        let root = try aceStepRoot("acestep-v15-xl-base")
+        defer { try? FileManager.default.removeItem(at: root) }
+        setenv(Self.key, root.path, 1)
+
+        for model in [["--model", "music-acestep"], ["--model", "music-acestep-xl-turbo"], []] {
+            for extra in [["--task-type", "extract"], ["--task-type", "lego"], ["--task", "complete"], ["--stems", "vocals"]] {
+                let report = try report(model + extra)
+                XCTAssertEqual(report.family, "ace-step-base", "\(model + extra)")
+                XCTAssertEqual(report.source, .identified, "\(model + extra)")
+                XCTAssertEqual(report.violations, [], "\(model + extra)")
+            }
+        }
+        // Other runtimes never read the override.
+        XCTAssertEqual(try report(["--model", "music-yue2"]).family, "yue2")
+    }
+
+    /// A Turbo override root keeps a Base id on Turbo, as the command would load it.
+    func testAnOverrideRootAppliesInBothDirections() throws {
+        let root = try aceStepRoot("acestep-v15-turbo")
+        defer { try? FileManager.default.removeItem(at: root) }
+        setenv(Self.key, root.path, 1)
+
+        let report = try report(["--model", "music-acestep-xl-base", "--task-type", "extract"])
+        XCTAssertEqual(report.family, "ace-step-turbo")
+        XCTAssertEqual(
+            report.violations,
+            ["--task-type extract is not supported by ACE-Step Turbo; use text2music, repaint, cover or cover-nofsq."]
+        )
+    }
+
+    /// An override that holds no usable checkpoint leaves the managed id's family in place.
+    func testAnUnusableOverrideFallsBackToTheManagedFamily() throws {
+        let empty = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        setenv(Self.key, empty.path, 1)
+        let report = try report(["--model", "music-acestep-xl-sft", "--task-type", "lego"])
+        XCTAssertEqual(report.family, "ace-step-sft")
+        XCTAssertEqual(report.violations.count, 1)
+    }
 }

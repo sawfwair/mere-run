@@ -61,7 +61,9 @@ App-to-CLI tests reject any emitted flag absent from `mere.run catalog --json`.
 `music generate`, `music separate`, and `music serve` check the command line
 against the selected model before admission, download, or load. The model comes
 from `--model`; for ACE-Step, `--checkpoints-root` and `--decoder-subdirectory`
-choose the checkpoint first, and a local root is identified from its files. An
+choose the checkpoint first, and a local root is identified from its files. With
+`MERERUN_MUSIC_ACESTEP_ROOT` set, a managed ACE-Step ID loads that root's
+checkpoint, and the check follows what the root holds. An
 option the model rejects fails with one message that names the model and the
 models that take the option. An option the model accepts but never reads prints
 a `Warning:` line on stderr, and the run continues. For example, ACE-Step Turbo
