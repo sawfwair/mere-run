@@ -400,6 +400,7 @@ extension MereRunCommandCapability {
     private static func describe(_ range: MereRunCapabilityRange) -> String {
         let format = { (value: Double) in value.rounded() == value ? String(Int(value)) : String(value) }
         switch (range.min, range.max) {
+        case let (min?, max?) where min == max: return format(min)
         case let (min?, max?): return "a value from \(format(min)) to \(format(max))"
         case let (min?, nil): return "a value of at least \(format(min))"
         case let (nil, max?): return "a value of at most \(format(max))"
