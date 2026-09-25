@@ -130,10 +130,11 @@ swift run mere.run speech transcribe ./hello.wav --backend auto
 The backend is chosen in this order:
 
 1. `--task translate` always runs Qwen, because Parakeet does not translate.
-2. `--backend parakeet` or `--backend qwen` runs that backend.
-3. A `--model` runs its own backend.
-4. Otherwise Parakeet runs, unless `--language` names a language Parakeet's
-   router does not recognize, which runs Qwen.
+2. A `--language` that Parakeet's router does not recognize runs Qwen, which
+   supports more languages.
+3. `--backend parakeet` or `--backend qwen` runs that backend.
+4. A `--model` runs its own backend.
+5. Otherwise Parakeet runs.
 
 A managed model of the other backend is replaced by the chosen backend's
 default, and a flag the choice overrules has no effect. The CLI prints a
@@ -211,7 +212,8 @@ mere.run speech transcribe ./short.wav \
   --coreml-encoder /path/to/parakeet-coreml
 ```
 
-Core ML needs `--backend parakeet` and a transcription task. Qwen rejects
+Core ML needs `--backend parakeet` and a transcription task, and an explicit
+Core ML request fails if its language hint would route to Qwen. Qwen rejects
 `--provider coreml` and `--coreml-encoder` before loading, including for
 `--task translate`. To use Qwen, select `--backend qwen` and omit both.
 

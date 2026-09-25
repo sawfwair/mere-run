@@ -28,13 +28,19 @@ extension MereRunCapabilityCatalog {
     /// outranks everything, an explicit `--backend` comes next, then a named model, and Parakeet
     /// otherwise. A named model runs only when the flags leave it its own family, so the
     /// selectors outrank it: `--backend qwen --model speech-asr-parakeet` runs Qwen3-ASR's default
-    /// and warns. With neither a backend nor a model, a `--language` that Parakeet's router does
-    /// not recognize also picks Qwen3-ASR; that normalization lives in the CLI, not here.
+    /// and warns. A `--language` that Parakeet's router does not recognize also picks Qwen3-ASR,
+    /// ahead of an explicit backend or model. Only its literal `auto` is declared here: the rest
+    /// depends on the CLI's normalization and the installed checkpoint, so the CLI's gate asks the
+    /// resolver itself (`routedFamily`), and these rules are what shells without it see.
     static let speechTranscribeRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [
             .init(
-                whenAny: [.init(flag: "--task", values: ["translate"]), .init(flag: "--backend", values: ["qwen"])],
+                whenAny: [
+                    .init(flag: "--task", values: ["translate"]),
+                    .init(flag: "--language", values: ["auto"]),
+                    .init(flag: "--backend", values: ["qwen"])
+                ],
                 models: ["speech-asr-qwen3"]
             ),
             .always("speech-asr-parakeet")

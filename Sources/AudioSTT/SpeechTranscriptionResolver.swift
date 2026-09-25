@@ -51,9 +51,10 @@ public enum SpeechTranscriptionResolver {
         return plan
     }
 
-    /// The routing half of `resolve`, without an audio file: file transcription and streaming
-    /// share it. Translation needs Qwen; otherwise an explicit backend wins, then the named
-    /// model's backend, then the language hint (`ASRBackendRouting.select`).
+    /// The routing half of `resolve`, without an audio file: file transcription, streaming, and
+    /// the CLI's capability gate share it. Translation and a language hint Parakeet does not list
+    /// route to Qwen; otherwise an explicit backend wins, then the named model's backend
+    /// (`ASRBackendRouting.select`).
     public static func route(
         task: ASRTask,
         language: String?,

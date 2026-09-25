@@ -47,10 +47,10 @@ mere.run speech transcribe --help
   is not required. Non-streaming files are processed in 15-second windows with
   two seconds of overlap. The decoder processes as many as 16 windows in
   parallel, and matching aligned tokens are reconciled at each boundary.
-- The backend comes from, in order: `--task translate` (always Qwen), an
-  explicit `--backend`, the `--model`'s own backend, and otherwise Parakeet
-  unless `--language` names a language Parakeet's router does not recognize.
-  Live transcription follows the same policy.
+- The backend comes from, in order: `--task translate` (always Qwen), a
+  `--language` Parakeet's router does not recognize (Qwen), an explicit
+  `--backend`, the `--model`'s own backend, and otherwise Parakeet. Live
+  transcription follows the same policy.
 - A flag the choice overrules has no effect, and a managed model of the other
   backend is replaced by the chosen backend's default. The CLI prints a
   `Warning:` line for each, and for any option the chosen backend ignores.
@@ -97,8 +97,9 @@ mere.run speech transcribe ./spanish.wav \
 - Streaming backpressure errors: pace PCM input in real time and keep no more
   than five seconds queued.
 - Bad transcript on noisy audio: preprocess audio or try the other backend.
-- `Warning: --backend parakeet has no effect with Qwen3-ASR`: translation
-  always runs Qwen; drop `--backend parakeet` or use `--backend qwen`.
+- `Warning: --backend parakeet has no effect with Qwen3-ASR`: translation, and
+  a `--language` Parakeet's router does not recognize, always run Qwen; drop
+  `--backend parakeet`, or use `--backend qwen`.
 - Core ML is requested for streaming: remove `--provider coreml`; the first
   Core ML milestone supports file transcription only.
 - Unexpected text near a Core ML window boundary: compare the same file with

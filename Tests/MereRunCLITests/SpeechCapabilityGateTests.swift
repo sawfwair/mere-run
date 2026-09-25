@@ -85,18 +85,30 @@ private func temporaryFolder() throws -> URL {
     #expect(parakeet.family == "parakeet" && parakeet.violations.isEmpty && parakeet.warnings.isEmpty)
 }
 
-/// The contract's routing agrees with the router the command runs, for files and streams alike,
-/// on every managed model and every backend, task, and explicit language: the same backend and
-/// the same model. The one case left out is the contract's known gap: with neither a backend nor
-/// a model, a language Parakeet's router does not recognize sends the CLI to Qwen3-ASR.
+/// A language Parakeet's router does not recognize runs Qwen3-ASR ahead of an explicit backend or
+/// model, as the CLI always has; the gate asks that router, so it says so and warns.
+@Test func anUnrecognizedLanguageRunsQwenAheadOfAnExplicitChoice() throws {
+    let backend = try report("speech", "transcribe", "a.wav", "--backend", "parakeet", "--language", "zz")
+    #expect(backend.family == "qwen3-asr" && backend.model == "speech-asr-qwen3" && backend.violations.isEmpty)
+    #expect(backend.warnings == ["--backend parakeet has no effect with Qwen3-ASR; use auto or qwen."])
+    let model = try report("speech", "transcribe", "a.wav", "--model", "speech-asr-parakeet", "--language", "auto")
+    #expect(model.family == "qwen3-asr" && model.model == "speech-asr-qwen3" && model.source == .defaultModel)
+    #expect(model.warnings == ["--model speech-asr-parakeet has no effect: the other options select Qwen3-ASR."])
+    let known = try report("speech", "transcribe", "a.wav", "--backend", "parakeet", "--language", "English")
+    #expect(known.family == "parakeet" && known.warnings.isEmpty)
+}
+
+/// The gate names the backend and model the command's router runs, for files and streams alike
+/// (both route through `SpeechTranscriptionResolver.route`), on every model spelling, backend,
+/// task, and language, with no exceptions.
 @Test func transcribeRoutingAgreesWithTheSpeechResolver() throws {
-    let capability = MereRunCapabilityCatalog.speechTranscribe
-    let families = try #require(capability.routing).families
-    let models: [String?] = [nil] + families.flatMap(\.models)
+    let managed = try #require(MereRunCapabilityCatalog.speechTranscribe.routing).families.flatMap(\.models)
+    let models: [String?] = [nil] + managed + ["mlx-community/parakeet-tdt-0.6b-v3", "fixture/custom-asr"]
+    let languages: [String?] = [nil, "en", "English", "zh-CN", "<|fr|>", "auto", "zz", "klingon-ish"]
     for model in models {
         for backend in ASRBackend.allCases {
             for task in [ASRTask.transcribe, .translate] {
-                for language in [nil, "en", "zz"] where model != nil || backend != .auto || language != "zz" {
+                for language in languages {
                     var arguments = ["a.wav", "--backend", backend.rawValue, "--task", task.rawValue]
                     if let model { arguments += ["--model", model] }
                     if let language { arguments += ["--language", language] }
@@ -104,15 +116,12 @@ private func temporaryFolder() throws -> URL {
                     let route = try SpeechTranscriptionResolver.route(
                         task: task, language: language, preferredBackend: backend, modelOverride: model
                     )
-                    let resolved = capability.resolveFamily(MereRunCommandInvocation(capability: capability, arguments: arguments))
-                    guard case let .family(family, resolvedModel, _) = resolved else {
-                        Issue.record("\(context) resolved \(resolved)")
-                        continue
-                    }
                     let parakeet = route.decision.backend == .parakeet
                     let runs = route.modelOverride ?? (parakeet ? ParakeetResources.defaultModelId : Qwen3ASRResources.defaultModelId)
-                    #expect(family == (parakeet ? "parakeet" : "qwen3-asr"), "\(context)")
-                    #expect(resolvedModel == runs, "\(context)")
+                    let report = try #require(CLICapabilityGate.evaluate(commandLine: ["speech", "transcribe"] + arguments)).report
+                    #expect(report.family == (parakeet ? "parakeet" : "qwen3-asr"), "\(context)")
+                    #expect(report.model == (ManagedModelCatalog.spec(for: runs)?.id ?? runs), "\(context)")
+                    #expect(report.violations.isEmpty, "\(context): \(report.violations)")
                 }
             }
         }

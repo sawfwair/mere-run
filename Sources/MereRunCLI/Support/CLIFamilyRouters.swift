@@ -12,7 +12,7 @@ enum CLIFamilyRouters {
 
     /// Keyed by capability id. Each domain registers its own table here.
     static let routers: [String: Router] = Dictionary(uniqueKeysWithValues: [
-        [String: Router](),
+        speechRouters,
     ].flatMap { $0.map { ($0.key, $0.value) } })
 
     static func family(capabilityID: String, invocation: MereRunCommandInvocation) -> String? {
