@@ -232,20 +232,33 @@ struct ContractFormControl<Draft>: View {
     }
 
     /// A range the contract leaves open at one or both ends: nudge it rather than pretend to
-    /// know its span.
+    /// know its span. A family that takes only a set of values steps from one to the next.
+    @ViewBuilder
     private var stepper: some View {
-        let lower: Double = field.option.range?.min ?? -.greatestFiniteMagnitude
-        let upper: Double = field.option.range?.max ?? .greatestFiniteMagnitude
-        let step: Double = field.option.range?.step ?? (field.kind == .integer ? 1 : 0.1)
         let value = numberBinding
-        return StudioInspectorLabeledRow(field.label) {
-            Stepper(value: value, in: lower...upper, step: step) {
-                Text(format(value.wrappedValue))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(MereRunTheme.textPrimary)
+        let label = Text(format(value.wrappedValue))
+            .font(.system(size: 12, design: .monospaced))
+            .foregroundStyle(MereRunTheme.textPrimary)
+        StudioInspectorLabeledRow(field.label) {
+            if field.allowedValues != nil {
+                Stepper {
+                    label
+                } onIncrement: {
+                    value.wrappedValue = field.stepped(from: value.wrappedValue, by: 1)
+                } onDecrement: {
+                    value.wrappedValue = field.stepped(from: value.wrappedValue, by: -1)
+                }
+                .accessibilityLabel(field.label)
+                .accessibilityValue(format(value.wrappedValue))
+            } else {
+                let range = field.option.range
+                let step: Double = range?.step ?? (field.kind == .integer ? 1 : 0.1)
+                Stepper(value: value, in: (range?.min ?? -.greatestFiniteMagnitude)...(range?.max ?? .greatestFiniteMagnitude), step: step) {
+                    label
+                }
+                .accessibilityLabel(field.label)
+                .accessibilityValue(format(value.wrappedValue))
             }
-            .accessibilityLabel(field.label)
-            .accessibilityValue(format(value.wrappedValue))
         }
         .help(field.flag)
     }

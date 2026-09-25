@@ -190,6 +190,22 @@ final class StudioOptionScopeTests: XCTestCase {
                        .unidentified)
     }
 
+    /// A RoFormer model takes any divisor of its chunk size as the overlap: the stepper walks
+    /// that set rather than every integer, and a typed value lands on the nearest one.
+    func testAChunkOverlapStepsThroughTheValuesItsModelTakes() throws {
+        var draft = StudioTaskDraft(templateID: .musicSeparate)
+        draft.model = "music-separate-bs-roformer-4stem"
+        let field = try XCTUnwrap(StudioTaskSchema.fields(for: .musicSeparate, draft: draft).first { $0.flag == "--overlap" })
+        XCTAssertEqual(field.control, .stepper)
+        let divisors = (1...485_100).filter { 485_100.isMultiple(of: $0) }.map(Double.init)
+        XCTAssertEqual(field.allowedValues, divisors)
+        XCTAssertEqual(field.stepped(from: 4, by: 1), 5)
+        XCTAssertEqual(field.stepped(from: 7, by: 1), 9, "8 does not divide the 4-stem chunk")
+        XCTAssertEqual(field.stepped(from: 1, by: -1), 1)
+        XCTAssertEqual(field.stepped(from: 485_100, by: 1), 485_100)
+        XCTAssertEqual(field.clamped(.integer(8)), .integer(7))
+    }
+
     // MARK: Pickers and readiness
 
     func testAnExcludedModelIsNotOfferedAndBlocksWithItsReason() throws {

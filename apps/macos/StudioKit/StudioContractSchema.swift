@@ -332,7 +332,8 @@ package enum StudioContractControl: Equatable {
     case path
     /// `integer` or `number` whose contract range has both ends.
     case slider
-    /// `integer` or `number` whose contract range is open, or absent.
+    /// `integer` or `number` whose contract range is open, or absent, or whose family takes only
+    /// a set of values (`allowedValues`), which it steps through.
     case stepper
     /// A composite editor the app draws itself.
     case override
@@ -388,10 +389,26 @@ package struct StudioContractField<Draft>: Identifiable {
         case .string:
             return .field
         case .integer, .number:
-            guard let range = option.range, let minimum = range.min, let maximum = range.max,
+            guard allowedValues == nil, let range = option.range, let minimum = range.min, let maximum = range.max,
                   maximum > minimum else { return .stepper }
             return .slider
         }
+    }
+
+    /// The only numbers the family takes, ascending, when its rule lists more than one: a
+    /// RoFormer model's chunk overlap is any divisor of its chunk size. nil for any other option.
+    package var allowedValues: [Double]? {
+        guard option.kind == .integer || option.kind == .number,
+              let values = option.familyRules.first?.values, values.count > 1 else { return nil }
+        return values.compactMap(Double.init).sorted()
+    }
+
+    /// The allowed value next to `value` in `direction` (+1 up, -1 down), staying put at either
+    /// end; `value` itself for an option without `allowedValues`.
+    package func stepped(from value: Double, by direction: Int) -> Double {
+        guard let allowed = allowedValues else { return value }
+        let next = direction > 0 ? allowed.first { $0 > value } : allowed.last { $0 < value }
+        return next ?? value
     }
 
     /// The contract's declared default, read as the value the control would sit at.
@@ -440,8 +457,17 @@ package struct StudioContractField<Draft>: Identifiable {
         !isAtDefault(in: draft)
     }
 
-    /// The value clamped into the contract's declared range, and snapped to its step.
+    /// The value clamped into the contract's declared range, and snapped to its step, or to the
+    /// nearest of the family's `allowedValues`.
     package func clamped(_ value: StudioContractValue) -> StudioContractValue {
+        if let allowed = allowedValues, let raw = value.numericValue,
+           let nearest = allowed.min(by: { abs($0 - raw) < abs($1 - raw) }) {
+            switch value {
+            case .integer: return .integer(Int(nearest.rounded()))
+            case .number: return .number(nearest)
+            default: return value
+            }
+        }
         guard let range = option.range, let raw = value.numericValue else { return value }
         var clamped = raw
         if let step = range.step, step > 0 {
