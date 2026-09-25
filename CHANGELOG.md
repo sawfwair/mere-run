@@ -22,8 +22,10 @@ The format is based on Keep a Changelog.
     it, now stops before anything loads, with one message that names the
     model and the models that take the option: `--image` on a text-only chat
     model, `--lora` on Muse Glimmer, a Klein-only option on the Krea 2
-    trainer, `--latency 1.04` on Sortformer, or `--task-type extract` on
-    ACE-Step Turbo.
+    trainer, `--latency 1.04` on Sortformer, `--task-type extract` on
+    ACE-Step Turbo, or `video generate --skip-stage-2` on a full LTX
+    checkpoint without source `--audio` (with it, the audio-to-video run
+    drops the flag, which only warns).
   - An option a model accepts but never reads now prints a warning that it
     has no effect, and the run continues: `--cfg` on Krea 2, `--top-k` on
     Gemma 4, `--voice` in clone mode, `--max-tokens` on Parakeet. A value
@@ -81,7 +83,8 @@ The format is based on Keep a Changelog.
   `default_models`, `excluded_models` with an optional `severity`,
   `identified_models`, `listing_flags`, and the `selectors_override_model` and
   `routed_by_command` flags, with a numeric `minimum` among a condition's
-  tests); and per option, `families`, `ignored_by`, `family_rules`,
+  tests); and per option, `families`, `ignored_by`, `family_rules` (with the
+  `when` conditions under which a rule holds),
   `choice_spellings` (with `numeric`), `blank_reads_as_omitted`,
   `list_separator`, and `overridden_by`.
   `schema_version` stays 1.

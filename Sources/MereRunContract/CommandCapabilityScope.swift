@@ -220,7 +220,9 @@ extension MereRunCommandCapability {
         // A listing flag answers before the command reads any other option.
         guard let routing, let runtime = routing.family(id: family), !lists(invocation, routing) else { return [] }
         return options.flatMap { option -> [MereRunOptionViolation] in
-            let rule = option.familyRules.first { $0.family == family }
+            let rule = option.familyRules.first { rule in
+                rule.family == family && rule.when.allSatisfy { holds($0, invocation, family: family) }
+            }
             guard let values = invocation.values[option.flag] else {
                 guard rule?.required == true else { return [] }
                 return [MereRunOptionViolation(
@@ -250,7 +252,10 @@ extension MereRunCommandCapability {
                 // value is refused with the same message as an option the family rejects.
                 let refused = rule.map { !ruleViolations(option, values: values, rule: $0, family: runtime).isEmpty } ?? false
                 let ignored = option.ignoredBy.contains(family) && !refused || option.readsAsOmitted(values)
-                return [unsupported(option.flag, family: runtime, ignored: ignored, usedBy: titles)]
+                return [unsupported(
+                    option.flag, family: runtime, ignored: ignored, usedBy: titles,
+                    while: ignored ? [] : rule?.when ?? []
+                )]
             }
             guard let rule else { return [] }
             return ruleViolations(option, values: values, rule: rule, family: runtime)
@@ -637,20 +642,29 @@ extension MereRunCommandCapability {
         return routing.excludedModel(id: canonical).flatMap { $0.severity == .warning ? $0 : nil }
     }
 
+    /// `conditions` are the refusing rule's `when`, named so the refusal says when the family
+    /// would take the option ("… without --audio").
     private func unsupported(
         _ flag: String,
         family: MereRunRuntimeFamily,
         ignored: Bool,
-        usedBy: [String]
+        usedBy: [String],
+        while conditions: [MereRunFlagCondition] = []
     ) -> MereRunOptionViolation {
         let appliesTo = usedBy.isEmpty ? "" : " It applies to \(Self.list(usedBy))."
+        let qualifier = conditions.map { condition in
+            if condition.absent { return " without \(condition.flag)" }
+            if let minimum = condition.minimum { return " with \(condition.flag) \(Self.format(minimum)) or more" }
+            guard let values = condition.values else { return " with \(condition.flag)" }
+            return " with \(condition.flag) \(values.joined(separator: "|"))"
+        }.joined(separator: " and")
         return MereRunOptionViolation(
             flag: flag,
             kind: .unsupported(supportedBy: usedBy),
             severity: ignored ? .warning : .error,
             message: ignored
                 ? "\(flag) has no effect with \(family.title).\(appliesTo)"
-                : "\(flag) is not supported by \(family.title).\(appliesTo)"
+                : "\(flag) is not supported by \(family.title)\(qualifier).\(appliesTo)"
         )
     }
 
@@ -661,6 +675,8 @@ extension MereRunCommandCapability {
         family: MereRunRuntimeFamily
     ) -> [MereRunOptionViolation] {
         let flag = option.flag
+        // A Boolean reads as passed, the way a selector reads it.
+        let values = option.kind == .boolean ? ["true"] : values
         var found: [MereRunOptionViolation] = []
         let effect = rule.severity == .warning ? "has no effect with \(family.title)" : "is not supported by \(family.title)"
         if let allowed = rule.values, let value = values.first(where: { !option.reads($0, asOneOf: allowed) }) {

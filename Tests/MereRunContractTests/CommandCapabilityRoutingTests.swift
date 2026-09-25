@@ -145,8 +145,16 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
                             "\(ruleContext): a rule on an ignoring family only lists tolerated values")
                 } else {
                     #expect(used.contains(rule.family), "\(ruleContext): the family must use or ignore the option")
+                    // `options(forFamily:)` has no command line to test a condition against.
+                    #expect(rule.when.isEmpty, "\(ruleContext): only a rule on an ignoring family is conditional")
                 }
-                #expect(option.kind != .boolean, "\(ruleContext): Booleans take no rules")
+                for condition in rule.when {
+                    #expect(condition.flag != option.flag && capability.options.contains { $0.flag == condition.flag },
+                            "\(ruleContext): a condition names another declared option")
+                }
+                // A Boolean is refused outright or not at all, and only while a condition holds.
+                #expect(option.kind != .boolean || rule.values == ["false"] && !rule.when.isEmpty,
+                        "\(ruleContext): a Boolean takes only a conditional refusal")
                 for value in (rule.values ?? []) + [rule.defaultValue].compactMap({ $0 }) {
                     #expect(parses(value, as: option), "\(ruleContext): \(value) is not a valid \(option.kind)")
                     #expect(within(value, option.range), "\(ruleContext): \(value) is outside the option's range")
@@ -700,6 +708,60 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(!press.options(forFamily: "rough").map(\.flag).contains("--passes"), "still hidden on the ignoring family")
     let fine = report(["--model", "press-fine", "--passes", "3"])
     #expect(fine.violations.isEmpty && fine.warnings.isEmpty)
+}
+
+/// A rule that holds only while its conditions do: a full run ignores a preview flag on its
+/// source-audio lane and refuses it on the lane it loads without, as `video generate` does with
+/// `--skip-stage-2`. The refusal says when the family would take the option.
+@Test func aConditionalRuleOnAnIgnoringFamilyRefusesOnlyWhileItHolds() throws {
+    enum CutFamily: String, MereRunFamilyID { case draft, full }
+    let cut = MereRunCommandCapability(
+        id: "cut.render", command: ["cut", "render"], title: "Render", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string),
+            MereRunCapabilityOption(flag: "--audio", label: "Audio", kind: .file, blankReadsAsOmitted: true)
+                .scoped(CutFamily.only(.full)),
+            MereRunCapabilityOption(flag: "--preview", label: "Preview", kind: .boolean)
+                .scoped(CutFamily.only(.draft, ignoredBy: [.full]), .rule(.full, values: ["false"], when: [.absent("--audio")])),
+            MereRunCapabilityOption(flag: "--reference", label: "Reference", kind: .string, repeatable: true)
+                .scoped(CutFamily.only(.draft, ignoredBy: [.full]), .rule(.full, values: [""], when: [.absent("--audio")]))
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            defaultModels: [.always("cut-draft")],
+            families: [
+                .init(CutFamily.draft, title: "Draft", models: ["cut-draft"]),
+                .init(CutFamily.full, title: "Full", models: ["cut-full"])
+            ]
+        )
+    )
+    let report = { (arguments: [String]) in
+        cut.resolutionReport(MereRunCommandInvocation(capability: cut, arguments: ["--model", "cut-full"] + arguments))
+    }
+    #expect(report(["--preview"]).violations == ["--preview is not supported by Full without --audio. It applies to Draft."])
+    #expect(report(["--reference", "r.mp4", "--reference", "s.mp4"]).violations
+        == ["--reference is not supported by Full without --audio. It applies to Draft."])
+    #expect(report(["--preview", "--audio", " "]).violations.count == 1, "a blank --audio is not passed")
+
+    let withAudio = report(["--audio", "a.wav", "--preview", "--reference", "r.mp4"])
+    #expect(withAudio.violations.isEmpty)
+    #expect(withAudio.warnings == [
+        "--preview has no effect with Full. It applies to Draft.",
+        "--reference has no effect with Full. It applies to Draft."
+    ])
+    #expect(report(["--reference", ""]).warnings == ["--reference has no effect with Full. It applies to Draft."],
+            "an empty text value reads as omitted")
+    #expect(!cut.options(forFamily: "full").map(\.flag).contains("--preview"), "still hidden on the ignoring family")
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let preview = try #require(cut.options.first { $0.flag == "--preview" })
+    let json = String(decoding: try encoder.encode(preview), as: UTF8.self)
+    #expect(json.contains(#""family_rules":[{"family":"full","values":["false"],"when":[{"absent":true,"flag":"--audio"}]}]"#))
+    #expect(try JSONDecoder().decode(MereRunCapabilityOption.self, from: Data(json.utf8)) == preview)
+    let unconditional = String(decoding: try encoder.encode(MereRunOptionFamilyRule(family: "full", values: ["1"])), as: UTF8.self)
+    #expect(!unconditional.contains("when"))
 }
 
 @Test func aBooleanSelectorHoldsOnItsPresence() {

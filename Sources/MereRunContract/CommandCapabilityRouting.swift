@@ -348,7 +348,9 @@ public struct MereRunExcludedModel: Codable, Equatable, Sendable {
 /// option's `ignored_by`, with only `values` or a `range`: that family runs without the option but
 /// refuses any value except these, as the CLI's value-based checks let only the value it runs with
 /// through (`--vocal-language en` on YuE2, `--sample-steps 8` on Krea 2). A tolerated value warns
-/// that the option has no effect; any other fails as if the family rejected the option.
+/// that the option has no effect; any other fails as if the family rejected the option. Such a
+/// rule may hold only `when` other flags say so: LTX-2.3 Full drops `--skip-stage-2` with source
+/// `--audio` and fails on it without, so its rule tolerates only `false` when `--audio` is absent.
 public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
     public let family: String
     /// Allowed values, rendered as the CLI parses them. One value means the family fixes it. For a
@@ -368,9 +370,13 @@ public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
     /// CLI rejects it, `.warning` when the CLI accepts it and runs its own value instead. A
     /// missing required option is always an error.
     public let severity: MereRunOptionViolation.Severity
+    /// The rule holds only while every one of these holds; empty means always. Only a rule on an
+    /// ignoring family is conditional, so a family that uses the option always reads the same
+    /// narrowing. A Boolean reads as `true` when passed, so `values: ["false"]` refuses the flag.
+    public let when: [MereRunFlagCondition]
 
     enum CodingKeys: String, CodingKey {
-        case family, values, range, required, severity
+        case family, values, range, required, severity, when
         case defaultValue = "default_value"
         case maxCount = "max_count"
     }
@@ -382,7 +388,8 @@ public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
         range: MereRunCapabilityRange? = nil,
         required: Bool = false,
         maxCount: Int? = nil,
-        severity: MereRunOptionViolation.Severity = .error
+        severity: MereRunOptionViolation.Severity = .error,
+        when: [MereRunFlagCondition] = []
     ) {
         self.family = family
         self.values = values
@@ -391,6 +398,7 @@ public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
         self.required = required
         self.maxCount = maxCount
         self.severity = severity
+        self.when = when
     }
 
     public init(from decoder: Decoder) throws {
@@ -402,9 +410,11 @@ public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
         required = try container.decodeIfPresent(Bool.self, forKey: .required) ?? false
         maxCount = try container.decodeIfPresent(Int.self, forKey: .maxCount)
         severity = try container.decodeIfPresent(MereRunOptionViolation.Severity.self, forKey: .severity) ?? .error
+        when = try container.decodeIfPresent([MereRunFlagCondition].self, forKey: .when) ?? []
     }
 
-    /// `required` and an `.error` severity are the common case and stay absent.
+    /// `required`, an `.error` severity, and an unconditional rule are the common case and stay
+    /// absent.
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(family, forKey: .family)
@@ -414,6 +424,7 @@ public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
         if required { try container.encode(true, forKey: .required) }
         try container.encodeIfPresent(maxCount, forKey: .maxCount)
         if severity != .error { try container.encode(severity, forKey: .severity) }
+        if !when.isEmpty { try container.encode(when, forKey: .when) }
     }
 }
 
@@ -442,10 +453,11 @@ extension MereRunFamilyID {
         range: MereRunCapabilityRange? = nil,
         required: Bool = false,
         maxCount: Int? = nil,
-        severity: MereRunOptionViolation.Severity = .error
+        severity: MereRunOptionViolation.Severity = .error,
+        when: [MereRunFlagCondition] = []
     ) -> MereRunOptionRule<Self> {
         .rule(family, values: values, defaultValue: defaultValue, range: range, required: required,
-              maxCount: maxCount, severity: severity)
+              maxCount: maxCount, severity: severity, when: when)
     }
 }
 
@@ -506,11 +518,12 @@ struct MereRunOptionRule<Family: MereRunFamilyID> {
         range: MereRunCapabilityRange? = nil,
         required: Bool = false,
         maxCount: Int? = nil,
-        severity: MereRunOptionViolation.Severity = .error
+        severity: MereRunOptionViolation.Severity = .error,
+        when: [MereRunFlagCondition] = []
     ) -> Self {
         Self(rule: MereRunOptionFamilyRule(
             family: family.rawValue, values: values, defaultValue: defaultValue, range: range,
-            required: required, maxCount: maxCount, severity: severity
+            required: required, maxCount: maxCount, severity: severity, when: when
         ))
     }
 }

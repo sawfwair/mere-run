@@ -131,7 +131,11 @@ value with its default for every family (`--flow-edit` runs text-to-music
 whatever `--task-type` says); a passed value then only warns. A rule on a family in `ignored_by` lists the only
 `values` or `range` that family tolerates: a runtime that runs without the
 option but refuses anything except its own value (`--vocal-language en` on
-YuE2) warns for those and fails for the rest. Declare families as a
+YuE2) warns for those and fails for the rest. Such a rule may hold only `when`
+its conditions do, and the family otherwise just ignores the option: a full LTX
+checkpoint drops `--skip-stage-2` on its source-audio lane and fails on it
+without, so its rule tolerates only `false` when `--audio` is absent (a
+Boolean reads as `true` when passed). Declare families as a
 per-capability enum that conforms to `MereRunFamilyID`, and scope options with
 its builders:
 `.scoped(F.only(.wan, ignoredBy: [.ltx]), .rule(.wan, required: true))`. Keep
