@@ -71,10 +71,22 @@ package struct StudioOptionScope: Equatable {
     /// Why the CLI would refuse this command line before loading anything, or nil.
     package let refusal: String?
 
+    /// Whether a launch must wait for the CLI: it is still identifying a model the contract cannot
+    /// place, and no earlier answer about the same model and routing flags stands in, so no
+    /// family is known at all. While any other question is out the scope reads a known family —
+    /// the contract's own, or that earlier answer — and a launch goes ahead with it.
+    package var awaitsCLI: Bool {
+        if case .pending = identity { return true }
+        return false
+    }
+
+    /// What a launch says while it waits for the CLI (`awaitsCLI`).
+    package static let awaitingCLIMessage = "mere.run is still identifying this model. Run it again in a moment."
+
     /// Reads `arguments` (the argv after the command path) through the contract resolver, and asks
     /// `identities` about a command line the contract cannot settle alone (`needsCLI`). While that
-    /// answer is out, a family the contract names stands in for it; a model the contract could not
-    /// place shows every option.
+    /// answer is out, the family the contract names stands; for a model the contract could not
+    /// place, the CLI's last answer about the same model stands in, or every option shows.
     package init(capability: MereRunCommandCapability, arguments: [String], identities: any StudioModelIdentifying) {
         let invocation = MereRunCommandInvocation(capability: capability, arguments: arguments)
         let contract = capability.resolveFamily(invocation)
@@ -83,6 +95,8 @@ package struct StudioOptionScope: Equatable {
         var state: StudioIdentityState = .notNeeded
         if let routing = capability.routing, Self.needsCLI(contract, routing) {
             let model = Self.model(invocation, routing)
+            let placed: Bool
+            if case .unidentified = contract { placed = false } else { placed = true }
             switch identities.identity(of: arguments, model: model, for: capability) {
             case .resolved(let answer):
                 resolution = answer
@@ -90,9 +104,13 @@ package struct StudioOptionScope: Equatable {
                 identify = { $0 == model ? identification : nil }
                 resolution = capability.resolveFamily(invocation, identify: identify)
             case .pending:
-                if case .unidentified = contract { state = .pending(model: model ?? "the default model") }
+                if !placed { state = .pending(model: model ?? "the default model") }
+            case .pendingAfter(let previous):
+                // The CLI's answer for the same model and routing flags: the family resolver
+                // reads nothing else, so it stands for the surface and the launch alike.
+                resolution = previous
             case .unidentified:
-                if case .unidentified = contract { state = .failed(model: model ?? "the default model") }
+                if !placed { state = .failed(model: model ?? "the default model") }
             }
         }
         self.capability = capability

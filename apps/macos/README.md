@@ -545,10 +545,16 @@ the family fixes shows locked, and a numeric option whose family takes a set of
 values steps through that set. Where only the CLI can tell the family (a local
 model folder, a managed model that runs whatever checkpoint is installed, a
 machine-chosen default, or transcription's language routing), Studio sends the
-whole command line to `mere.run catalog resolve --json`
-(`StudioModelIdentity.swift`) and remembers the answer until a flag that can
-change the family, or the folder it names, changes; while it waits a family the
-contract names stands in, and an unplaced folder shows every option. Pickers
+whole command line, less any key, to `mere.run catalog resolve --json`
+(`StudioModelIdentity.swift`). It asks once typing stops, reads folder dates off
+the main thread, asks again after a failed answer, and keeps each answer until a
+flag that can change the family or the folder it names changes, a model is pulled
+or removed, or the inventory refreshes. While a question is out, the surface
+shows the family the contract names (adding `--task translate` to a Parakeet
+transcription shows Qwen3-ASR's options at once), or, for a model only the CLI
+can place, its last answer for the same model and routing flags. A folder with
+no answer yet shows every option, and a run of it waits until the CLI says what
+it is. Pickers
 list only the models whose families run the command, and a model the command
 excludes blocks the run with the CLI gate's reason. `StudioModelScopeGoldenTests` checks every routed command and family:
 what each surface shows, validates, and sends equals what the contract allows,

@@ -293,7 +293,10 @@ package final class MereRunController: ObservableObject {
         }
     }
     @Published package var hubCache: String {
-        didSet { UserDefaults.standard.set(hubCache, forKey: Keys.hubCache) }
+        didSet {
+            UserDefaults.standard.set(hubCache, forKey: Keys.hubCache)
+            if hubCache != oldValue { modelIdentities.forget() }
+        }
     }
     @Published package var workingDirectory: String {
         didSet { UserDefaults.standard.set(workingDirectory, forKey: Keys.workingDirectory) }
@@ -1502,6 +1505,8 @@ package final class MereRunController: ObservableObject {
             mirrorForeground(job)
             mirrorCrossRunState(job)
         case .finished(let job, let result):
+            // An installed or removed model changes what `catalog resolve` answers.
+            if [.modelPull, .modelRemove].contains(job.request.templateID) { modelIdentities.forget() }
             guard job.lane == .inference else { return }
             finish(job, result: result)
         }
@@ -1876,8 +1881,11 @@ private extension URL {
 }
 
 extension Array where Element == String {
+    /// The options whose value is a credential, wherever they appear on a command line.
+    package static let secretFlags: Set<String> = ["--api-key", "--infinity-api-key", "--admin-password", "--hf-token", "hf-token"]
+
     package func maskingSecrets() -> [String] {
-        let secretFlags: Set<String> = ["--api-key", "--infinity-api-key", "--admin-password", "--hf-token", "hf-token"]
+        let secretFlags = Self.secretFlags
         var masked = self
         var index = 0
         while index < masked.count {
@@ -1893,6 +1901,25 @@ extension Array where Element == String {
             index += 1
         }
         return masked
+    }
+
+    /// The command line without its credentials, flag and value both (`--api-key sk` and
+    /// `--api-key=sk`): what a helper process that only reads the rest of the line is given, so a
+    /// key never shows in the process list.
+    package func removingSecrets() -> [String] {
+        var kept: [String] = []
+        var index = 0
+        while index < count {
+            let token = self[index]
+            let flag = token.split(separator: "=", maxSplits: 1).first.map(String.init) ?? token
+            if Self.secretFlags.contains(flag) {
+                index += token.contains("=") ? 1 : 2
+                continue
+            }
+            kept.append(token)
+            index += 1
+        }
+        return kept
     }
 
     package func shellQuoted() -> String {

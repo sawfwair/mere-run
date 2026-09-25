@@ -125,6 +125,8 @@ package final class StudioModelStore: ObservableObject {
         titles = StudioModelTitles(rows: rows)
         hasInventory = true
         error = nil
+        // What is installed is what `catalog resolve` identifies against.
+        controller.modelIdentities.forget()
     }
 
     private func isCurrent(_ token: UUID, context: [String]) -> Bool {

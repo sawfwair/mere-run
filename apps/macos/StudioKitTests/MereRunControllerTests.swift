@@ -1,6 +1,7 @@
 @testable import StudioKit
 import Combine
 import Foundation
+import MereRunContract
 import StudioTestSupport
 import XCTest
 
@@ -365,6 +366,19 @@ final class MereRunControllerTests: XCTestCase {
         controller.draft.imagePath = "/tmp/start.png"
         controller.draft.endImagePath = "/tmp/end.png"
         controller.draft.seed = "73"
+        // The session's default model runs whichever LTX-2.3 folder is installed; a launch waits
+        // until `catalog resolve` says which.
+        controller.modelIdentities.use { _ in
+            MereRunFamilyResolutionReport(
+                capability: "video.session", family: "ltx23-full", familyTitle: "LTX-2.3 Full",
+                model: "video-ltx23-full-mlx", source: .identified, violations: [], warnings: []
+            )
+        }
+        let session = try XCTUnwrap(MereRunCapabilityCatalog.command(id: "video.session"))
+        let commandLine = template.arguments(from: controller.draft, source: controller.scopeSource)
+        for _ in 0..<500 where controller.scopeSource.scope(capability: session, commandLine: commandLine).awaitsCLI {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         XCTAssertTrue(controller.run())
         XCTAssertEqual(runner.starts.count, 1)

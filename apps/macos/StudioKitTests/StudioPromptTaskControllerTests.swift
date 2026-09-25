@@ -18,6 +18,10 @@ final class StudioPromptTaskControllerTests: XCTestCase {
             runner = RecordingProcessRunner()
             controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false,
                 taskSessions: StudioTaskSessions(url: root.appendingPathComponent("sessions.json")))
+            // These journeys are about drafts and history, not identification: with no CLI to
+            // ask, a model only the CLI could place (Code's machine-chosen default) runs with
+            // every option, and no `catalog resolve` joins the recorded launches.
+            controller.modelIdentities.use(nil)
             library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
             library.observe(controller: controller)
             prompt = StudioPromptTaskController(controller: controller, library: library)

@@ -227,7 +227,10 @@ package enum StudioConsoleCommand {
                 return "\(label) \(issue.message)."
             }
         }
-        return StudioCommandChecks.message(for: capability, draft: draft) ?? scope?.refusal
+        if let message = StudioCommandChecks.message(for: capability, draft: draft) { return message }
+        // A launch waits for the CLI's answer about a command line only it can place.
+        if scope?.awaitsCLI == true { return StudioOptionScope.awaitingCLIMessage }
+        return scope?.refusal
     }
 
     /// Where the run will write, when the contract names the option that says so. `JobStore`

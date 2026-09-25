@@ -1104,8 +1104,9 @@ package struct CommandTemplate: Identifiable, Equatable {
                 launching: launching
             )
         }
-        // Every other command still hears the CLI gate's own objection before it launches.
-        return launching.refusal
+        // Every other command still hears the CLI gate's own objection before it launches, and
+        // waits for the CLI's answer about a command line only it can place.
+        return launching.awaitsCLI ? StudioOptionScope.awaitingCLIMessage : launching.refusal
     }
 
     /// The template's own checks, which live beside its argv in `Catalog/<Category>.swift`.
