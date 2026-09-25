@@ -132,10 +132,12 @@ private func gateReport(_ capability: MereRunCommandCapability, _ arguments: [St
     }
 }
 
-/// The tokens that make `condition` hold: none for an absent flag, the flag for a Boolean, and
-/// the flag with an allowed or sample value otherwise.
+/// The tokens that pass `option` with `value`: the flag alone for a Boolean, and the flag with the
+/// value otherwise.
 private func tokens(_ option: MereRunCapabilityOption, value: String) -> [String] {
-    option.kind == .boolean ? [option.flag] : [option.flag, value]
+    if option.kind == .boolean { return [option.flag] }
+    // ArgumentParser reads `--flag -1` as a missing value; a negative number rides on `=`.
+    return value.hasPrefix("-") ? ["\(option.flag)=\(value)"] : [option.flag, value]
 }
 
 private func validValue(_ option: MereRunCapabilityOption, rule: MereRunOptionFamilyRule?) -> String {
@@ -315,7 +317,7 @@ private func expect(
     }, context: capability.id)
 }
 
-// MARK: - Excluded models, admission, and the invocation context
+// MARK: - Excluded models, built-ins, admission, and exit status
 
 @Test func excludedModelsFailAtTheGateWithTheirReason() throws {
     for capability in MereRunCapabilityCatalog.document.commands {
@@ -346,13 +348,46 @@ private func expect(
     #expect(local.report.source == .unidentified && local.report.violations.isEmpty)
 }
 
+/// ArgumentParser answers these itself, whatever else the command line says, so the gate must not
+/// refuse them: every help spelling, the help dump, the version, and completion scripts.
+@Test func theGateSkipsEveryArgumentParserBuiltIn() throws {
+    let excluded = ["music", "analyze", "song.wav", "--model", "music-acestep-lm-4b"]
+    let builtIns: [[String]] = [
+        ["-h"], ["--help"], ["-help"], ["--help-hidden"], ["-help-hidden"], ["--experimental-dump-help"],
+        ["--version"], ["--generate-completion-script", "zsh"], ["--generate-completion-script=zsh"], ["-qh"]
+    ]
+    for builtIn in builtIns {
+        #expect(throws: Never.self, "\(builtIn)") { try CLICapabilityGate.check(arguments: ["mere.run"] + excluded + builtIn) }
+    }
+    #expect(throws: Never.self) { try CLICapabilityGate.check(arguments: ["mere.run", "---completion"] + excluded) }
+    // After `--` a help spelling is a positional value, and the command runs.
+    #expect(throws: CLICapabilityGate.Rejection.self) {
+        try CLICapabilityGate.check(arguments: ["mere.run"] + excluded + ["--", "--help"])
+    }
+}
+
+/// Warnings are what the gate hands back for printing, never under `--quiet` (as the commands'
+/// own "has no effect" notes), and never when it refuses the run.
+@Test func theGateReturnsWarningsOnlyForARunItLetsThrough() throws {
+    let ignored = ["mere.run", "text", "chat", "-p", "hi", "--model", "text-chat-gemma4-nano", "--top-k", "5"]
+    let lines = try CLICapabilityGate.check(arguments: ignored)
+    #expect(lines.count == 1 && lines[0].hasPrefix("Warning: --top-k has no effect with Gemma 4.") && lines[0].hasSuffix("\n"))
+    #expect(try CLICapabilityGate.check(arguments: ignored + ["--quiet"]).isEmpty)
+    #expect(try CLICapabilityGate.check(arguments: ignored + ["-q"]).isEmpty)
+    #expect(throws: CLICapabilityGate.Rejection(messages: [
+        "--show-unmasking is not supported by Gemma 4. It applies to DiffusionGemma."
+    ])) {
+        try CLICapabilityGate.check(arguments: ignored + ["--show-unmasking"])
+    }
+}
+
 @Test func catalogResolveNeverTakesAnInferencePermit() {
     let argv = ["mere.run", "catalog", "resolve", "--json", "--", "video", "generate", "x", "--model", "video-ltx25-full-bf16"]
     #expect(CLIInferenceAdmissionClassifier.request(arguments: argv) == nil)
     #expect(CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "video", "generate", "x"]) != nil)
 }
 
-/// Root validation: the gate runs for leaf commands, and before admission. The models-root
+/// Root validation: the gate runs for leaf commands, before admission, and exits 64. The models-root
 /// override it applies is process state, so these restore it like `CLIModelStoreBootstrapTests`.
 final class CapabilityGateRootValidationTests: XCTestCase {
     private var originalModelsDirEnvironmentValue: String?
@@ -392,7 +427,7 @@ final class CapabilityGateRootValidationTests: XCTestCase {
         let rejected = ["mere.run", "music", "analyze", "song.wav", "--model", "music-acestep-lm-4b"]
         XCTAssertThrowsError(try command.validate(arguments: rejected) { admitted.append($0) }) { error in
             XCTAssertEqual(
-                (error as? CLICapabilityGate.Rejection)?.errorDescription,
+                (error as? ValidationError)?.message,
                 "music-acestep-lm-4b can't run music analyze: It is an ACE-Step language model; pass it as `--lm-model`."
             )
         }
@@ -401,7 +436,19 @@ final class CapabilityGateRootValidationTests: XCTestCase {
         let accepted = ["mere.run", "music", "analyze", "song.wav", "--model", "music-acestep"]
         try command.validate(arguments: accepted) { admitted.append($0) }
         XCTAssertEqual(admitted, [accepted])
-        XCTAssertEqual(CLIInvocationContext.report?.capability, "music.analyze")
-        XCTAssertEqual(CLIInvocationContext.family, "ace-step")
+    }
+
+    /// A refusal exits like the options the commands validate themselves: status 64 with the
+    /// usage line, not a runtime failure's 1.
+    func testARefusalExitsWithTheValidationStatus() throws {
+        var command = MereRunCLI()
+        command.modelsRoot = temporaryRoot().path
+        let rejected = ["mere.run", "music", "analyze", "song.wav", "--model", "music-acestep-lm-4b"]
+        XCTAssertThrowsError(try command.validate(arguments: rejected) { _ in }) { error in
+            XCTAssertEqual(MereRunCLI.exitCode(for: error), .validationFailure)
+            let message = MereRunCLI.fullMessage(for: error)
+            XCTAssertTrue(message.hasPrefix("Error: music-acestep-lm-4b can't run music analyze:"), message)
+            XCTAssertTrue(message.contains("Usage: mere.run"), message)
+        }
     }
 }

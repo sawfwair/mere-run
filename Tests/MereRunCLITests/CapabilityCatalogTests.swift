@@ -114,6 +114,21 @@ private func parserCommands() throws -> [String: ParserHelp.Command] {
     }
 }
 
+/// An alias command takes exactly its capability's options, so the gate reads it as that
+/// capability.
+@Test func aliasCommandsTakeTheirCapabilitysOptions() throws {
+    let commands = try parserCommands()
+    for (alias, path) in CLICapabilityGate.aliasCommands {
+        let aliased = try #require(commands[alias.joined(separator: ".")], "\(alias)")
+        let capability = try #require(MereRunCapabilityCatalog.document.commands.first { $0.command == path })
+        let spellings = Set((aliased.arguments ?? []).filter { $0.kind != .positional && $0.shouldDisplay }
+            .flatMap { ($0.names ?? []).map(\.spelling) }).subtracting(["--help", "-h", "--version"])
+        #expect(spellings == Set(capability.options.flatMap(\.spellings)), "\(alias)")
+        let report = try #require(CLICapabilityGate.evaluate(commandLine: alias + ["a.png"])).report
+        #expect(report.capability == capability.id && report.family != nil, "\(alias): \(report)")
+    }
+}
+
 /// Array positionals can be empty at the parser boundary yet be required by the
 /// command's validation. Keep these semantic requirements explicit and narrow.
 private let requiredPositionalOverrides: [String: String] = [

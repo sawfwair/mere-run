@@ -29,9 +29,35 @@ struct MereRunCLI: AsyncParsableCommand {
             _ = _mereRunCLIModelStoreBootstrap
         }
         // Before admission, so a run the contract rejects never queues for permits, resolves
-        // a model, or downloads one.
-        try CLICapabilityGate.check(arguments: arguments)
+        // a model, or downloads one. A refusal is a validation error, as the commands' own
+        // option checks are: usage under the message and exit status 64.
+        // Its warnings print from `main` once every command has validated.
+        do {
+            try CLICapabilityGate.check(arguments: arguments)
+        } catch let rejection as CLICapabilityGate.Rejection {
+            throw ValidationError(rejection.messages.joined(separator: "\n"))
+        }
         try admit(arguments)
+    }
+
+    /// ArgumentParser's entry point, plus the gate's warnings: they print only once the whole
+    /// command line has parsed and every command's `validate()` has passed, so a run that ends
+    /// in a usage error shows the error alone. The gate already let this command line through
+    /// in `validate`, so asking it again only collects the warnings.
+    static func main() async {
+        do {
+            var command = try parseAsRoot()
+            for line in try CLICapabilityGate.check(arguments: CommandLine.arguments) {
+                CLIStderr.write(line)
+            }
+            if var asyncCommand = command as? AsyncParsableCommand {
+                try await asyncCommand.run()
+            } else {
+                try command.run()
+            }
+        } catch {
+            exit(withError: error)
+        }
     }
 
     static let configuration = CommandConfiguration(

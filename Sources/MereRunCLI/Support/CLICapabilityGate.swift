@@ -4,8 +4,9 @@ import MereRunCore
 
 /// Checks a command line against the capability contract before machine admission, model
 /// resolution, download, or load. A model a command can't run, or an option its runtime family
-/// rejects, fails here with one message; an option the family ignores prints a warning and the
-/// run continues. Commands without routing pass untouched.
+/// rejects, fails here with one message; an option the family ignores prints a warning once the
+/// command has parsed and validated, and the run continues. Commands without routing pass
+/// untouched.
 enum CLICapabilityGate {
     struct Rejection: LocalizedError, Equatable {
         let messages: [String]
@@ -15,22 +16,23 @@ enum CLICapabilityGate {
         }
     }
 
-    /// `arguments` is the process argv, executable first.
-    static func check(arguments: [String]) throws {
+    /// `arguments` is the process argv, executable first. Throws when the gate refuses the run;
+    /// otherwise returns the warning lines to print once the command has parsed and validated:
+    /// none under `--quiet`, which keeps "has no effect" notes off a quiet run as the commands'
+    /// own notes do.
+    @discardableResult
+    static func check(arguments: [String]) throws -> [String] {
         let commandLine = Array(arguments.dropFirst())
-        let beforeTerminator = commandLine.prefix { $0 != "--" }
-        guard !beforeTerminator.contains("--help"), !beforeTerminator.contains("-h"),
-              let (capability, report) = evaluate(commandLine: commandLine),
+        guard !requestsBuiltIn(commandLine),
+              let (capability, invocation) = invocation(commandLine: commandLine),
               capability.routing != nil else {
-            return
+            return []
         }
-        CLIInvocationContext.record(report)
-        for warning in report.warnings {
-            CLIStderr.write("Warning: \(warning)\n")
-        }
+        let report = report(capability, invocation)
         guard report.violations.isEmpty else {
             throw Rejection(messages: report.violations)
         }
+        return invocation.contains("--quiet") ? [] : report.warnings.map { "Warning: \($0)\n" }
     }
 
     /// The contract's decision for a command line without the executable; `catalog resolve`
@@ -38,21 +40,30 @@ enum CLICapabilityGate {
     static func evaluate(
         commandLine: [String]
     ) -> (capability: MereRunCommandCapability, report: MereRunFamilyResolutionReport)? {
-        guard let (capability, arguments) = MereRunCapabilityCatalog.capability(
-            forCommandLine: withoutRootOptions(commandLine)
-        ) else {
-            return nil
+        invocation(commandLine: commandLine).map { capability, invocation in
+            (capability, report(capability, invocation))
         }
-        let invocation = MereRunCommandInvocation(capability: capability, arguments: arguments)
-        let report = capability.resolutionReport(
-            invocation,
-            platform: platform,
-            identify: { ModelFamilyIdentifier.identify(capabilityID: capability.id, model: $0, invocation: invocation) },
-            chooseDefault: { ModelFamilyIdentifier.machineDefault(capabilityID: capability.id, candidates: $0) },
-            routedFamily: { CLIFamilyRouters.family(capabilityID: capability.id, invocation: invocation) }
-        )
-        return (capability, report)
     }
+
+    /// True when ArgumentParser answers the command line itself (help, the help dump, the
+    /// version, a completion script) instead of running a command, so there is nothing to check.
+    static func requestsBuiltIn(_ commandLine: [String]) -> Bool {
+        if commandLine.first == "---completion" { return true }
+        return commandLine.prefix { $0 != "--" }.contains { token in
+            let name = token.split(separator: "=", maxSplits: 1).first.map(String.init) ?? token
+            if builtInFlags.contains(name) { return true }
+            // A single-dash group asks for help when one of its letters is `h` (`-qh`).
+            let group = token.dropFirst()
+            return token.hasPrefix("-") && !token.hasPrefix("--") && group.count > 1
+                && group.allSatisfy { $0.isLetter || $0.isNumber } && group.contains("h")
+        }
+    }
+
+    /// ArgumentParser's own flags: help at both visibilities, in each spelling it accepts.
+    private static let builtInFlags: Set<String> = [
+        "-h", "--help", "-help", "--help-hidden", "-help-hidden",
+        "--experimental-dump-help", "--version", "--generate-completion-script"
+    ]
 
     static var platform: String {
         #if os(Linux)
@@ -60,6 +71,39 @@ enum CLICapabilityGate {
         #else
         "macos"
         #endif
+    }
+
+    /// Commands that run a cataloged capability under another name, with the same options; the
+    /// gate reads them as the capability.
+    static let aliasCommands: [[String]: [String]] = [
+        ["vision", "image-to-3d"]: ["image", "reconstruct-3d"],
+        ["vision", "image-to-3d-trellis2"]: ["image", "reconstruct-3d-trellis2"],
+        ["vision", "image-to-3d-multiview"]: ["image", "reconstruct-3d-multiview"]
+    ]
+
+    private static func invocation(
+        commandLine: [String]
+    ) -> (capability: MereRunCommandCapability, invocation: MereRunCommandInvocation)? {
+        var commandLine = withoutRootOptions(commandLine)
+        if let (alias, command) = aliasCommands.first(where: { commandLine.starts(with: $0.key) }) {
+            commandLine = command + commandLine.dropFirst(alias.count)
+        }
+        return MereRunCapabilityCatalog.capability(forCommandLine: commandLine).map { capability, arguments in
+            (capability, MereRunCommandInvocation(capability: capability, arguments: arguments))
+        }
+    }
+
+    private static func report(
+        _ capability: MereRunCommandCapability,
+        _ invocation: MereRunCommandInvocation
+    ) -> MereRunFamilyResolutionReport {
+        capability.resolutionReport(
+            invocation,
+            platform: platform,
+            identify: { ModelFamilyIdentifier.identify(capabilityID: capability.id, model: $0, invocation: invocation) },
+            chooseDefault: { ModelFamilyIdentifier.machineDefault(capabilityID: capability.id, candidates: $0) },
+            routedFamily: { CLIFamilyRouters.family(capabilityID: capability.id, invocation: invocation) }
+        )
     }
 
     /// Drops the root command's `--models-root`, which ArgumentParser accepts anywhere before
@@ -83,33 +127,5 @@ enum CLICapabilityGate {
             index += 1
         }
         return result
-    }
-}
-
-/// What the capability gate resolved for this process's command line. Commands read the
-/// runtime family here instead of re-deriving it.
-enum CLIInvocationContext {
-    private final class Storage: @unchecked Sendable {
-        let lock = NSLock()
-        var report: MereRunFamilyResolutionReport?
-    }
-
-    private static let storage = Storage()
-
-    static var report: MereRunFamilyResolutionReport? {
-        storage.lock.lock()
-        defer { storage.lock.unlock() }
-        return storage.report
-    }
-
-    /// The resolved family id, or `nil` when the gate could not identify one.
-    static var family: String? {
-        report?.family
-    }
-
-    static func record(_ report: MereRunFamilyResolutionReport) {
-        storage.lock.lock()
-        defer { storage.lock.unlock() }
-        storage.report = report
     }
 }

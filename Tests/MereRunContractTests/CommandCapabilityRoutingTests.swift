@@ -563,6 +563,13 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(local.family == "deep" && local.model == "/ears/deep" && local.source == .identified)
     #expect(routed(["-m", "EAR-FAST"], "deep").warnings == ["--model EAR-FAST has no effect: the other options select Deep."])
 
+    // A router picks among runs; it never turns a model the command refuses into one it runs.
+    let excluded = clip.resolveFamily(invocation("--model", "clip-lm"), routedFamily: { "full" })
+    #expect(excluded == clip.resolveFamily(invocation("--model", "clip-lm")))
+    guard case .excluded = excluded else { Issue.record("clip-lm must stay excluded, got \(excluded)"); return }
+    let unmatched = clip.resolveFamily(invocation("--model", "clip-quick", "--backend", "remote"), routedFamily: { "remote" })
+    guard case .unmatched = unmatched else { Issue.record("clip-quick on remote must stay unmatched, got \(unmatched)"); return }
+
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     let routing = try encoder.encode(try #require(listener.routing))
@@ -774,7 +781,7 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
 @Test func invocationReadsArgvTheWayArgumentParserDoes() {
     let read = MereRunCommandInvocation(
         capability: clip,
-        arguments: ["in.png", "-m", "clip-full", "--steps=12", "--hq", "--cfg", "-1.5", "--image", "a", "--image=b",
+        arguments: ["in.png", "-m", "clip-full", "--steps=12", "--hq", "--cfg=-1.5", "--image", "a", "--image=b",
                     "--unknown", "stray", "--", "--steps", "9"]
     )
     #expect(read.values == [
@@ -784,6 +791,21 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(read.undeclared == ["--unknown"])
     #expect(read.contains("--hq") && !read.contains("--mode"))
     #expect(read.value("--image") == "b")
+}
+
+/// ArgumentParser takes a value only from a token that is not option-shaped, keeps the last
+/// occurrence of a single-value option, splits single-dash groups, and reads `-f=value`.
+@Test func invocationReadsSpellingsTheWayArgumentParserDoes() {
+    // `--cfg -1.5` is ArgumentParser's "Missing value": no value, and `-1.5` is not one.
+    let negative = invocation("--cfg", "-1.5", "--steps", "-", "--mode", "")
+    #expect(negative.values == ["--steps": ["-"], "--mode": [""]])
+    #expect(negative.undeclared == ["-1.5"])
+    let repeated = invocation("--steps", "4", "-s", "40", "--mode", "fast", "--mode=slow", "--image", "a", "--image", "b")
+    #expect(repeated.values == ["--steps": ["40"], "--mode": ["slow"], "--image": ["a", "b"]])
+    let grouped = invocation("-ms", "clip-full", "12", "-s=30", "-mx", "clip-quick")
+    #expect(grouped.values == ["--model": ["clip-quick"], "--steps": ["30"]])
+    #expect(grouped.undeclared == ["-x"])
+    #expect(grouped.positionals.isEmpty)
 }
 
 @Test func commandLinesMatchTheLongestCatalogedPath() throws {

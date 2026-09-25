@@ -156,6 +156,11 @@ extension MereRunCommandCapability {
         let declared = declaredFamily(
             invocation, routing: routing, platform: platform, identify: identify, chooseDefault: chooseDefault
         )
+        // A router picks between runs; a model the command refuses stays refused.
+        switch declared {
+        case .excluded, .unmatched: return declared
+        case .unrouted, .family, .unidentified: break
+        }
         guard let routed = routedFamily().flatMap(routing.family(id:)) else { return declared }
         if case .family(let id, _, _) = declared, id == routed.id { return declared }
         return routerChoice(routed, invocation, routing: routing, platform: platform, identify: identify)
