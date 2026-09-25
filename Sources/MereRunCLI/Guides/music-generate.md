@@ -71,7 +71,9 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--lrc-file`, `--lrc-output`: synchronized lyrics input/output.
 - `--daw-bundle`, `--stems`: portable DAW session and Base-only extraction.
 - `--model`, `-m`: managed id, model root, or checkpoints root.
-- `--checkpoints-root`: root containing ACE-Step subdirectories.
+- `--checkpoints-root`: root containing ACE-Step subdirectories. It loads
+  before `--model`, so a language model id there is never loaded; the same
+  holds for a usable `MERERUN_MUSIC_ACESTEP_ROOT`.
 - `--turbo-subdirectory`, `--vae-subdirectory`, `--text-subdirectory`:
   component layout overrides. `--lm-subdirectory` is the legacy same-root LM
   override; prefer `--lm-model` for an independent planner.
@@ -188,7 +190,8 @@ ACE-Step cover, cover-nofsq, repaint, and extract tasks skip the LM phase,
 matching upstream. Turbo and SFT checkpoints support text-to-music, repaint,
 cover, and cover-nofsq. Extract, lego, complete, and `--stems` are Base-only;
 the CLI rejects them for a Turbo or SFT checkpoint before downloading or
-loading it. Turbo always runs guidance 1, so another `--guidance-scale`,
+loading it. `--flow-edit` runs text-to-music whatever `--task-type` says, so a
+task there only warns, and a `--stems` list with no stem in it does nothing. Turbo always runs guidance 1, so another `--guidance-scale`,
 `--guidance-mode`, or CFG interval prints a warning and has no effect.
 XL-SFT and XL-Base use native continuous scheduling, CFG/APG/ADG, velocity
 stabilization, and Euler or Heun integration.

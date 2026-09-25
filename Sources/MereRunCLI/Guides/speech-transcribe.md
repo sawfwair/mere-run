@@ -31,7 +31,8 @@ mere.run speech transcribe --help
 - `--task`: `transcribe` or `translate`.
 - `--language`: optional language hint.
 - `--max-tokens`: Qwen generation cap, default `448`. Parakeet ignores it.
-- `--stream`: streaming ASR mode using the selected backend.
+- `--stream`: streaming ASR mode using the selected backend. A local
+  `--model` folder runs its own backend whatever the `--language` hint says.
 - `--stream-chunk-ms`: audio feed chunk size for streaming.
 - `--stream-decode-ms`: decode interval for streaming.
 - `--timestamps`, `--no-timestamps`: include Parakeet alignment lines. Qwen

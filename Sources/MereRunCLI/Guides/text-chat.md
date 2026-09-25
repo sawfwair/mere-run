@@ -188,7 +188,10 @@ model and derived adapters.
   separate prefill and decode tokens/sec. Gemma4 runs also include MTP state
   and accept/draft counts.
 - `--stream`: stream tokens to stdout.
-- `--lora`: local `.safetensors` adapter path for supported native chat models.
+- `--lora`: local `.safetensors` adapter path for supported native chat models:
+  Gemma 4, Laguna, Inkling-Small, and, among LFM2.5 checkpoints, only
+  `text-chat-lfm25-a1b-8bit`. A blank `--lora`, `--image`, `--audio`, or
+  `--video` reads as not passed.
 - `--lora-scale`: adapter scale; defaults to `1.0`.
 - `--tools`: comma-separated built-ins, currently `write_file` and `shell_exec`.
 - `--tool-loop`: let the model call tools repeatedly.

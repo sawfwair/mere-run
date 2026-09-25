@@ -144,8 +144,9 @@ Each backend also ignores the other's options, with a warning: Qwen returns no
 timestamps, so `--timestamps` and `--no-timestamps` apply to Parakeet, and
 Parakeet has no token budget, so `--max-tokens` applies to Qwen.
 
-Streaming transcription chooses the backend and model the same way and accepts
-raw `pcm-s16le/16000/mono` on stdin. Its transcript carries no timestamps. Use
+Streaming transcription chooses the backend and model the same way, except
+that a local model folder runs its own backend whatever the `--language` hint
+says, and accepts raw `pcm-s16le/16000/mono` on stdin. Its transcript carries no timestamps. Use
 `--backend parakeet` or `--backend qwen` to pin it explicitly:
 
 ```bash
@@ -159,6 +160,9 @@ swift run mere.run speech listen --device <core-audio-uid>
 ```
 
 `speech listen` remains the Qwen-backed macOS microphone convenience command.
+It runs Qwen3-ASR whatever `--model` names, so a Parakeet id prints a
+`Warning:` line and runs Qwen3-ASR. `--list-devices` lists inputs for `speech
+listen` and `speech diarize-live` before any model is read.
 
 #### Record and retry a transcription
 

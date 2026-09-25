@@ -254,8 +254,26 @@ command's default model, and any selector flags, and then:
 - prints a `Warning:` line on stderr when the family ignores an option, and
   runs.
 
-A local model folder or an unlisted id passes; the command itself checks it when
-it loads. `--help` is never checked.
+It reads the command line the way the parser does: a repeated single-value
+option counts once, with its last value; grouped short options such as `-qm`
+and `-m=<id>` spell the same options; and a value the command reads as not
+passed, such as an empty `--negative-prompt` or a blank `text chat --image`,
+counts as omitted.
+
+A local model folder, an upstream repository id, or a managed model whose
+checkpoint depends on what is installed is identified the way the command
+identifies it, from its files, and checked as that family. One the CLI can't
+identify passes, and the command checks it when it loads. The parser's own
+requests (`--help`, `-h`, `-help`, `--experimental-dump-help`, `--version`,
+and completion scripts) and listing flags such as `--list-devices` are never
+checked.
+
+A refusal exits with status 64 and prints the usage line, like the commands'
+own option errors. It comes before any preflight work, so under
+`--preflight --json` a refused command line prints no JSON report; the error is
+on stderr. Warnings print once the whole command line has parsed and validated,
+so a run that fails validation shows only its error, and `--quiet` leaves them
+out.
 
 To see the decision without running anything, use
 [`mere.run catalog resolve`](#mere-run-catalog-resolve).
@@ -480,7 +498,7 @@ after `--`, without `mere.run`:
 
 ```bash
 mere.run catalog resolve -- music analyze song.wav --model music-acestep
-mere.run catalog resolve --json -- speech listen --model speech-asr-parakeet
+mere.run catalog resolve --json -- music analyze song.wav --model music-acestep-lm-4b
 ```
 
 Nothing is loaded, downloaded, or admitted. The report names:
@@ -493,9 +511,14 @@ Nothing is loaded, downloaded, or admitted. The report names:
   `unidentified` means a local model or unlisted id the CLI checks only when it
   loads; `excluded` is a managed model that can't run the command; `unmatched`
   is a model whose selector flags fit no family; `unrouted` is a command that
-  loads no model;
+  loads no model, or a model it would refuse behind a listing flag such as
+  `--list-devices`;
 - `violations`: why the command would stop, empty when it runs;
 - `warnings`: options the family would run without.
+
+A listing flag such as `speech listen --list-devices` answers before the
+command reads any other option, so its command line reports no violations or
+warnings.
 
 `--json` prints the report as the `MereRunFamilyResolutionReport` type from
 `MereRunContract`. `mere.run catalog` with no subcommand keeps printing the

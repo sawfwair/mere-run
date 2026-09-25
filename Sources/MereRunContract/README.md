@@ -103,6 +103,16 @@ model draws a warning (speech transcribe swaps a Parakeet id for Qwen3-ASR
 under `--task translate`). `routed_by_command: true` says the command's own
 router has the last word over the declared rules (speech transcribe's language
 routing): the CLI's gate runs it, and shells ask `catalog resolve`.
+`listing_flags` are Boolean flags that make the command list something and exit
+before it reads a model (`--list-devices`); with one passed nothing is checked,
+and a model the command would refuse resolves as `unrouted`.
+An excluded model with `severity: warning` is one the command accepts and
+replaces with its default (`speech listen` runs Qwen3-ASR whatever `--model`
+names): it resolves as the default and draws one warning. An id that is both
+excluded and identified is refused unless the identifier finds a root the
+command loads before it reads the id (`--checkpoints-root` in place of an
+ACE-Step language model). A selector or default-rule condition names a flag's
+presence, its `values`, a numeric `minimum`, or its `absent`ce.
 Single-runtime commands declare one family. Commands without a model omit
 `routing`. Each domain keeps its routing in
 `CommandCapabilityCatalog+<Domain>Routing.swift`.
@@ -112,8 +122,13 @@ Per option, `families` lists the families that use it (absent: every family),
 family's narrowed `values`, `default_value`, `range`, `required`, and
 `max_count`, with a `severity` for values it accepts and replaces. Numeric
 values match by number, so `0.0` meets a rule of `0`. A family in neither list
-rejects the option, except that an empty value for a `string` option reads as
-omitted and only warns. A rule on a family in `ignored_by` lists the only
+rejects the option, except that a value the command reads as not passed only
+warns: an empty `string` value, a `list_separator` list with no item left
+(`--stems ","`), or a blank value of an option marked `blank_reads_as_omitted`
+(text chat `--image " "`). Such a value also counts as absent for routing.
+`overridden_by` lists conditions under which the command replaces the option's
+value with its default for every family (`--flow-edit` runs text-to-music
+whatever `--task-type` says); a passed value then only warns. A rule on a family in `ignored_by` lists the only
 `values` or `range` that family tolerates: a runtime that runs without the
 option but refuses anything except its own value (`--vocal-language en` on
 YuE2) warns for those and fails for the rest. Declare families as a
@@ -139,7 +154,13 @@ shells without these hooks keep the rules and ask `catalog resolve`, whose
 report `MereRunFamilyResolutionReport.resolution(in:)` reads back and
 `report(for:_:identify:)` completes for the rest of the command line. Values
 compare through `MereRunCapabilityOption.reads(_:asOneOf:)`: numbers by value
-and choices by any spelling `choice_spellings` declares.
+and choices by any spelling `choice_spellings` declares (`ignores_case` for a
+value the CLI trims and lowercases, `numeric` for one it parses as a number).
+A choice the contract compares that ArgumentParser does not enumerate declares
+its `choice_spellings`, even when the CLI takes it exactly as written.
 `CommandCapabilityRoutingTests` checks every routed capability's structure and
 each resolver branch; `CapabilityGateTests` runs generated cases for every
-family and option through the CLI gate.
+family and option through the CLI gate; and `MainBehaviourRegressionTests` runs
+every command line recorded as running on main before the gate
+(`Tests/MereRunCLITests/Fixtures/MainBehaviour/main-behaviour.json`) through the
+gate, which must not refuse any of them.

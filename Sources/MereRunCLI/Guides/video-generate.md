@@ -72,7 +72,7 @@ mere.run video generate --help
 - `--image-conditioning`: repeatable arbitrary timed image as
   `PIXEL_FRAME:PATH[:STRENGTH[:CRF]]`.
 - `--num-generated-keyframes`, `--generated-keyframe`: generated absolute
-  keyframe slots.
+  keyframe slots. Without a model, any positive count selects LTX-2.5 Distilled.
 - `--ltx-pipeline two-stage|keyframe-interpolation|dev-one-stage`,
   `--ltx-preset`, `--ltx-sampler`, `--ltx-sigmas`, and
   guidance/LoRA controls: full/dev, HQ Res2s, and custom sampler recipes.
@@ -109,7 +109,10 @@ command line against the selected family before it loads or resolves the model:
   distilled LTX checkpoints, and `--fps` other than 24 on MiniMax-H3.
 - FastH3 runs exactly 5 steps with `--h3-acceleration quality` and no image
   inputs, unless `--h3-adapter` replaces its embedded adapter; the adapter's
-  recipe then applies. Ref2VA requires `--reference`; Wan 2.2 requires `--image`.
+  recipe then applies. Only the exact FastH3 id runs its embedded adapter; its
+  upstream repository or another spelling runs as FL2VA. The legacy 4-bit
+  `video-minimax-h3-fl2va-mlx` refuses `--h3-adapter`, since Turbo adapters need
+  BF16 or Q8. Ref2VA requires `--reference`; Wan 2.2 requires `--image`.
 - `video-cosmos3-edge-mlx`, `video-scail2-14b-mlx`, and
   `video-dreamx-world-5b-ar-mlx` stop at once; use `video cosmos3`,
   `video animate`, or `world serve`.
