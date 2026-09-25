@@ -105,7 +105,7 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     /// accepts (see `MereRunOptionFamilyRule`).
     public let familyRules: [MereRunOptionFamilyRule]
     /// Other spellings the CLI accepts for a `.choice` value; `nil` when it takes `choices` as
-    /// written. Rules and default-model conditions compare `choice(for:)`, never the raw text.
+    /// written. Rules and default-model conditions compare through `reads(_:asOneOf:)`, never the raw text.
     public let choiceSpellings: MereRunChoiceSpellings?
 
     enum CodingKeys: String, CodingKey {
@@ -221,6 +221,16 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
             : value
         if let aliased = choiceSpellings.aliases[key] { return aliased }
         return choices.first { (choiceSpellings.ignoresCase ? $0.lowercased() : $0) == key } ?? value
+    }
+
+    /// Whether the CLI reads `value` as one of `allowed`: an integer or number by value (`4.0`
+    /// and `04` are `4`), a choice by any spelling `choiceSpellings` names, anything else as
+    /// typed. Family rules, selectors, and default-model conditions all compare through it.
+    public func reads(_ value: String, asOneOf allowed: [String]) -> Bool {
+        guard kind == .integer || kind == .number, let number = Double(value) else {
+            return allowed.contains(choice(for: value))
+        }
+        return allowed.contains { Double($0) == number }
     }
 }
 

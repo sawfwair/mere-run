@@ -40,8 +40,7 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
         #expect(listed.isDisjoint(with: excluded), "\(id): \(listed.intersection(excluded)) are both listed and excluded")
         let identified = Set(routing.identifiedModels)
         #expect(identified.count == routing.identifiedModels.count, "\(id): duplicate identified ids")
-        #expect(identified.isDisjoint(with: listed.union(excluded)),
-                "\(id): \(identified.intersection(listed.union(excluded))) are identified and also listed or excluded")
+        #expect(identified.isDisjoint(with: excluded), "\(id): \(identified.intersection(excluded)) are identified and excluded")
         #expect(identified.isEmpty || !routing.modelFlags.isEmpty, "\(id): identified models need a model flag")
     }
 }
@@ -330,8 +329,10 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(plain.resolveFamily(MereRunCommandInvocation(capability: plain, arguments: [])) == .unrouted)
 }
 
-@Test func installedModelsCanOverrideAListedFamilyOnlyWhenTheRoutingSaysSo() throws {
-    // An override root holds a Full checkpoint whatever quick id or default names it.
+/// A listed model can also be identified: what is installed decides first (an override root holds
+/// a Full checkpoint whatever quick id or default names it), and the listed family applies when
+/// the identifier can't tell.
+@Test func aListedIdentifiedModelFallsBackToItsFamily() throws {
     let identify: (String) -> MereRunModelIdentification? = { _ in .family("full") }
     let listed = invocation("--model", "clip-quick")
     #expect(clip.resolveFamily(listed, identify: identify) == .family(id: "quick", model: "clip-quick", source: .model))
@@ -342,14 +343,14 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
         output: clip.output,
         routing: MereRunCapabilityRouting(
             modelFlags: routing.modelFlags, defaultModels: routing.defaultModels, families: routing.families,
-            excludedModels: routing.excludedModels, identifiesInstalledModels: true
+            excludedModels: routing.excludedModels, identifiedModels: ["clip-quick"]
         )
     )
     let read = { (arguments: [String], identify: (String) -> MereRunModelIdentification?) in
         installed.resolveFamily(MereRunCommandInvocation(capability: installed, arguments: arguments), identify: identify)
     }
     #expect(read(["--model", "clip-quick"], identify) == .family(id: "full", model: "clip-quick", source: .identified))
-    #expect(read([], identify) == .family(id: "full", model: "clip-quick", source: .identified))
+    #expect(read([], identify) == .family(id: "full", model: "clip-quick", source: .defaultModel))
     #expect(read(["--model", "clip-quick"], { _ in nil }) == .family(id: "quick", model: "clip-quick", source: .model))
     #expect(read([], { _ in nil }) == .family(id: "quick", model: "clip-quick", source: .defaultModel))
     #expect(read(["--model", "clip-lm"], identify)
@@ -358,9 +359,8 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     let json = String(decoding: try encoder.encode(try #require(installed.routing)), as: UTF8.self)
-    #expect(json.contains(#""identifies_installed_models":true"#))
+    #expect(json.contains(#""identified_models":["clip-quick"]"#))
     #expect(try JSONDecoder().decode(MereRunCapabilityRouting.self, from: Data(json.utf8)) == installed.routing)
-    #expect(!String(decoding: try encoder.encode(routing), as: UTF8.self).contains("identifies_installed_models"))
 }
 
 @Test func selectorRoutedFamiliesCheckTheirOwnModelFlag() {

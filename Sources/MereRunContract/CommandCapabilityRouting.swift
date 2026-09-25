@@ -15,16 +15,12 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// Managed models that list this command, or that its pickers would otherwise offer, but
     /// that cannot run it. Resolving to one is an error that names `reason`.
     public let excludedModels: [MereRunExcludedModel]
-    /// True when what is installed can change the family a managed id runs: the command loads a
-    /// root an environment override or a local layout names instead of the id's own install
-    /// (`music generate` and `MERERUN_MUSIC_ACESTEP_ROOT`). The resolver then asks `identify`
-    /// about a listed or default model first, and uses the id's family only when it can't tell.
-    /// Shells without an identifier resolve the id as listed.
-    public let identifiesInstalledModels: Bool
-    /// Managed models that run this command on whichever checkpoint the command finds installed,
-    /// so no family lists them: `video-ltx-av` can run an installed LTX 2.3 Full folder. The
-    /// resolver asks `identify` for them, as a default too, and reports them unidentified when it
-    /// can't answer; shells then ask `catalog resolve`.
+    /// Managed models whose family depends on the checkpoint the command finds installed:
+    /// `video-ltx-av` can run an installed LTX 2.3 Full folder, and `MERERUN_MUSIC_ACESTEP_ROOT`
+    /// can hold a different ACE-Step checkpoint than `music-acestep`'s own install. The resolver
+    /// asks `identify` about them first, as an explicit model, through an alias, and as a default.
+    /// Without an answer, a model a family lists resolves to that family, and one no family lists
+    /// is unidentified. Shells without an identifier ask `catalog resolve` for these models.
     public let identifiedModels: [String]
     /// `true` when the selector flags outrank a named model, as they do for speech transcribe: a
     /// listed model whose family's selectors do not hold runs as if no model were named. The
@@ -38,7 +34,6 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         case defaultModels = "default_models"
         case families
         case excludedModels = "excluded_models"
-        case identifiesInstalledModels = "identifies_installed_models"
         case identifiedModels = "identified_models"
         case selectorsOverrideModel = "selectors_override_model"
     }
@@ -48,7 +43,6 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         defaultModels: [MereRunDefaultModelRule] = [],
         families: [MereRunRuntimeFamily],
         excludedModels: [MereRunExcludedModel] = [],
-        identifiesInstalledModels: Bool = false,
         identifiedModels: [String] = [],
         selectorsOverrideModel: Bool = false
     ) {
@@ -56,7 +50,6 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         self.defaultModels = defaultModels
         self.families = families
         self.excludedModels = excludedModels
-        self.identifiesInstalledModels = identifiesInstalledModels
         self.identifiedModels = identifiedModels
         self.selectorsOverrideModel = selectorsOverrideModel
     }
@@ -67,20 +60,18 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         defaultModels = try container.decode([MereRunDefaultModelRule].self, forKey: .defaultModels)
         families = try container.decode([MereRunRuntimeFamily].self, forKey: .families)
         excludedModels = try container.decode([MereRunExcludedModel].self, forKey: .excludedModels)
-        identifiesInstalledModels = try container.decodeIfPresent(Bool.self, forKey: .identifiesInstalledModels) ?? false
         identifiedModels = try container.decodeIfPresent([String].self, forKey: .identifiedModels) ?? []
         selectorsOverrideModel = try container.decodeIfPresent(Bool.self, forKey: .selectorsOverrideModel) ?? false
     }
 
-    /// `identifies_installed_models` is written only when true and `identified_models` only when
-    /// non-empty, and `selectors_override_model` only when true, so other routing serializes as before.
+    /// `identified_models` is written only when non-empty and `selectors_override_model` only
+    /// when true, so other routing serializes as before.
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(modelFlags, forKey: .modelFlags)
         try container.encode(defaultModels, forKey: .defaultModels)
         try container.encode(families, forKey: .families)
         try container.encode(excludedModels, forKey: .excludedModels)
-        if identifiesInstalledModels { try container.encode(true, forKey: .identifiesInstalledModels) }
         if !identifiedModels.isEmpty { try container.encode(identifiedModels, forKey: .identifiedModels) }
         if selectorsOverrideModel { try container.encode(true, forKey: .selectorsOverrideModel) }
     }

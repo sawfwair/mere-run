@@ -43,6 +43,11 @@ extension MereRunCapabilityCatalog {
 
     private static let aceStepLanguageModels = ["music-acestep-lm-1.7b", "music-acestep-lm-4b"]
 
+    private static let aceStepGenerateModels = [
+        "music-acestep", "music-acestep-xl-turbo", "music-acestep-xl-turbo-lm4b", "music-acestep-xl-sft",
+        "music-acestep-xl-base"
+    ]
+
     static let musicGenerateRouting = MereRunCapabilityRouting(
         // ACE-Step loads the checkpoint under `--checkpoints-root` before the model's own, and the
         // decoder `--decoder-subdirectory` names; the CLI identifies either from the files.
@@ -64,7 +69,7 @@ extension MereRunCapabilityCatalog {
         ),
         // `MERERUN_MUSIC_ACESTEP_ROOT` wins over a managed ACE-Step id's own install, so the CLI
         // identifies the checkpoint it would load before trusting the id.
-        identifiesInstalledModels: true
+        identifiedModels: aceStepGenerateModels
     )
 
     static let musicSeparateRouting = MereRunCapabilityRouting(

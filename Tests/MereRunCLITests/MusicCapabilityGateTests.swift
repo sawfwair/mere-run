@@ -87,7 +87,7 @@ private func report(_ commandLine: String...) throws -> MereRunFamilyResolutionR
     #expect(magenta.warnings
         == ["--quality has no effect with Magenta RealTime 2. It applies to ACE-Step Turbo, ACE-Step SFT and ACE-Step Base."])
     #expect(try report("music", "generate", "song", "--model", "music-magenta-rt2-small", "--task-type", "cover")
-        .violations == ["--task-type cover is not supported by Magenta RealTime 2; it runs text2music. Remove --task-type or pass text2music."])
+        .violations == ["--task-type is not supported by Magenta RealTime 2. It applies to ACE-Step Turbo, ACE-Step SFT and ACE-Step Base."])
 }
 
 @Test func separateOverlapsFollowEachModelsChunkSize() throws {
@@ -153,7 +153,7 @@ final class MusicACEStepRootOverrideGateTests: XCTestCase {
             for extra in [["--task-type", "extract"], ["--task-type", "lego"], ["--task", "complete"], ["--stems", "vocals"]] {
                 let report = try report(model + extra)
                 XCTAssertEqual(report.family, "ace-step-base", "\(model + extra)")
-                XCTAssertEqual(report.source, .identified, "\(model + extra)")
+                XCTAssertEqual(report.source, model.isEmpty ? .defaultModel : .identified, "\(model + extra)")
                 XCTAssertEqual(report.violations, [], "\(model + extra)")
             }
         }

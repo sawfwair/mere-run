@@ -91,13 +91,12 @@ the family: a value such as `--backend qwen`, `["true"]` or `["false"]` for a
 Boolean passed or omitted, or a flag that must be `absent`); the `model_flags`
 whose value names the model, highest precedence first; `default_models` rules
 for a blank model; and `excluded_models`, managed models a picker might offer
-that can't run the command, each with a `reason`. `identifies_installed_models`
-marks a command whose managed ids can load a different checkpoint than their
-own install (an environment override root); the CLI's identifier then answers
-for listed and default models too, and the id's family applies when it can't
-tell. `identified_models` lists managed models whose family depends on which
-checkpoint is installed, which only the CLI's identifier (or `catalog
-resolve`) can answer. A named model normally has to agree with the selectors;
+that can't run the command, each with a `reason`. `identified_models` lists
+managed models whose family depends on the checkpoint the command finds
+installed (an environment override root, or an id that falls back to another
+install). The CLI's identifier answers for them first; without an answer, a
+listed model keeps its family and an unlisted one is unidentified, so shells
+ask `catalog resolve`. A named model normally has to agree with the selectors;
 `selectors_override_model: true` says the selectors win instead, so a model
 whose family's selectors fail runs the default the rules pick and the named
 model draws a warning (speech transcribe swaps a Parakeet id for Qwen3-ASR

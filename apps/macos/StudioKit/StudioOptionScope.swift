@@ -248,14 +248,11 @@ package enum StudioOptionScopes {
             // The family runs its own default when the option is left off, so saying it again
             // adds nothing — and on a folder not identified yet it would be a flag another
             // family refuses.
-            if let familyDefault = rule.defaultValue, values.count == 1, sameValue(values[0], familyDefault) { continue }
+            if let familyDefault = rule.defaultValue, values.count == 1, option.reads(values[0], asOneOf: [familyDefault]) {
+                continue
+            }
             kept += tokens
         }
         return kept
-    }
-
-    private static func sameValue(_ lhs: String, _ rhs: String) -> Bool {
-        if let left = Double(lhs), let right = Double(rhs) { return left == right }
-        return lhs == rhs
     }
 }

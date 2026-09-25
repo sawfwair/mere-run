@@ -312,11 +312,15 @@ extension MereRunCommandCapability {
         if let excluded = routing.excludedModel(id: model) {
             return .excluded(excluded)
         }
+        // What is installed decides first for a model whose family depends on it.
+        if routing.identifiedModels.contains(model), case .family(let id)? = identify(model), let family = routing.family(id: id) {
+            guard selectorsHold(family, invocation) else {
+                return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: [family]))
+            }
+            return .family(id: id, model: model, source: .identified)
+        }
         let candidates = routing.families.filter { $0.models.contains(model) }
         if !candidates.isEmpty {
-            if let installed = installedFamily(of: model, invocation, routing: routing, identify: identify) {
-                return .family(id: installed.id, model: model, source: .identified)
-            }
             let matching = candidates.filter { selectorsHold($0, invocation) }
             guard let family = matching.first else {
                 if routing.selectorsOverrideModel {
@@ -328,15 +332,14 @@ extension MereRunCommandCapability {
             }
             return .family(id: family.id, model: model, source: candidates.count > 1 ? .selector : .model)
         }
-        guard allowIdentify, let identification = identify(model) else {
+        guard allowIdentify, !routing.identifiedModels.contains(model), let identification = identify(model) else {
             return .unidentified(model: model)
         }
         switch identification {
         case .managedModel(let managed):
-            let identifiable = routing.identifiedModels.contains(managed)
             let resolved = resolve(
                 model: managed, invocation, routing: routing, platform: platform, identify: identify,
-                chooseDefault: chooseDefault, allowIdentify: identifiable
+                chooseDefault: chooseDefault, allowIdentify: false
             )
             if case .unidentified = resolved { return .unidentified(model: model) }
             return resolved
@@ -347,21 +350,6 @@ extension MereRunCommandCapability {
             }
             return .family(id: id, model: model, source: .identified)
         }
-    }
-
-    /// The family the identifier finds installed for a listed model, when the routing lets what
-    /// is installed decide and the identifier can tell.
-    private func installedFamily(
-        of model: String,
-        _ invocation: MereRunCommandInvocation,
-        routing: MereRunCapabilityRouting,
-        identify: (String) -> MereRunModelIdentification?
-    ) -> MereRunRuntimeFamily? {
-        guard routing.identifiesInstalledModels, case .family(let id)? = identify(model),
-              let family = routing.family(id: id), selectorsHold(family, invocation) else {
-            return nil
-        }
-        return family
     }
 
     private func resolveDefault(
@@ -402,9 +390,6 @@ extension MereRunCommandCapability {
             model = chosen
         } else {
             return .unidentified(model: rule.models.joined(separator: ", "))
-        }
-        if let model, let installed = installedFamily(of: model, invocation, routing: routing, identify: identify) {
-            return .family(id: installed.id, model: model, source: .identified)
         }
         guard routing.selectorsOverrideModel || selectorsHold(family, invocation) else {
             return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: [family]))
@@ -466,7 +451,7 @@ extension MereRunCommandCapability {
         }
         let familyDefault = option?.familyRules.first { $0.family == family }?.defaultValue
         guard let value = invocation.value(condition.flag) ?? familyDefault ?? option?.defaultValue else { return false }
-        return allowed.contains(option?.choice(for: value) ?? value)
+        return option?.reads(value, asOneOf: allowed) ?? allowed.contains(value)
     }
 
     private func unmatchedDetail(model: String?, candidates: [MereRunRuntimeFamily]) -> String {
@@ -549,7 +534,7 @@ extension MereRunCommandCapability {
         let flag = option.flag
         var found: [MereRunOptionViolation] = []
         let effect = rule.severity == .warning ? "has no effect with \(family.title)" : "is not supported by \(family.title)"
-        if let allowed = rule.values, let value = values.first(where: { !Self.matches(option.choice(for: $0), allowed, kind: option.kind) }) {
+        if let allowed = rule.values, let value = values.first(where: { !option.reads($0, asOneOf: allowed) }) {
             let message = allowed.count == 1
                 ? "\(flag) \(value) \(effect); it runs \(allowed[0]). Remove \(flag) or pass \(allowed[0])."
                 : "\(flag) \(value) \(effect); use \(Self.list(allowed, conjunction: "or"))."
@@ -570,14 +555,6 @@ extension MereRunCommandCapability {
             ))
         }
         return found
-    }
-
-    /// A numeric value matches by number, as the CLI parses it: `--kv-bits 4.0` is `4`.
-    private static func matches(_ value: String, _ allowed: [String], kind: MereRunCapabilityValueKind) -> Bool {
-        guard kind == .integer || kind == .number, let number = Double(value) else {
-            return allowed.contains(value)
-        }
-        return allowed.contains { Double($0) == number }
     }
 
     private static func outside(_ range: MereRunCapabilityRange, _ value: String) -> Bool {
