@@ -203,7 +203,8 @@ private func expect(
             MereRunCapabilityOption(flag: "--mode", label: "Mode", kind: .choice, choices: ["a", "b"], defaultValue: "a"),
             MereRunCapabilityOption(flag: "--steps", label: "Steps", kind: .integer,
                                     familyRules: [.init(family: "fast", values: ["4"])]),
-            MereRunCapabilityOption(flag: "--cfg", label: "CFG", kind: .number, families: ["full"], ignoredBy: ["fast"]),
+            MereRunCapabilityOption(flag: "--cfg", label: "CFG", kind: .number, families: ["full"], ignoredBy: ["fast"],
+                                    familyRules: [.init(family: "fast", values: ["1"])]),
             MereRunCapabilityOption(flag: "--image", label: "Image", kind: .file, repeatable: true, families: ["full", "edit"],
                                     familyRules: [.init(family: "edit", required: true),
                                                   .init(family: "full", maxCount: 1, severity: .warning)]),
@@ -231,7 +232,8 @@ private func expect(
         }
     }
     #expect(kinds.filter { $0 == "warns" }.count == 2, "ignored --cfg on Fast and excess --image on Full")
-    #expect(kinds.filter { $0 == "rejects" }.count == 8, "\(cases)")
+    #expect(kinds.filter { $0 == "rejects" }.count == 9, "\(cases)")
+    #expect(cases.contains { $0.arguments == ["--model", "demo-fast", "--cfg", "2.0"] }, "an ignoring family refuses other values")
     #expect(cases.contains { $0.arguments == ["--model", "demo-fast", "--steps", "5"] })
     #expect(cases.contains { $0.arguments == ["--mode", "b", "--model", "demo-edit"] })
     #expect(cases.contains { $0.arguments == ["--model", "demo-full", "--seed", "100"] })

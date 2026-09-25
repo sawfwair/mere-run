@@ -217,7 +217,9 @@ private let clipOptions: [MereRunCapabilityOption] = [
     MereRunCapabilityOption(flag: "--image", label: "Image", kind: .file, repeatable: true)
         .scoped(ClipFamily.only(.full, .wide), .rule(.wide, required: true), .rule(.full, maxCount: 2, severity: .warning)),
     MereRunCapabilityOption(flag: "--mode", label: "Mode", kind: .choice, choices: ["fast", "slow", "exact"])
-        .scoped(ClipFamily.rule(.full, values: ["slow", "exact"], defaultValue: "slow"))
+        .scoped(ClipFamily.rule(.full, values: ["slow", "exact"], defaultValue: "slow")),
+    MereRunCapabilityOption(flag: "--strength", label: "Strength", kind: .number, defaultValue: "0.5")
+        .scoped(ClipFamily.only(.full, ignoredBy: [.quick]), .rule(.quick, values: ["0.5"]))
 ]
 
 private let clip = MereRunCommandCapability(
@@ -292,6 +294,39 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(plain.resolveFamily(MereRunCommandInvocation(capability: plain, arguments: [])) == .unrouted)
 }
 
+@Test func installedModelsCanOverrideAListedFamilyOnlyWhenTheRoutingSaysSo() throws {
+    // An override root holds a Full checkpoint whatever quick id or default names it.
+    let identify: (String) -> MereRunModelIdentification? = { _ in .family("full") }
+    let listed = invocation("--model", "clip-quick")
+    #expect(clip.resolveFamily(listed, identify: identify) == .family(id: "quick", model: "clip-quick", source: .model))
+
+    let routing = try #require(clip.routing)
+    let installed = MereRunCommandCapability(
+        id: clip.id, command: clip.command, title: clip.title, summary: clip.summary, options: clip.options,
+        output: clip.output,
+        routing: MereRunCapabilityRouting(
+            modelFlags: routing.modelFlags, defaultModels: routing.defaultModels, families: routing.families,
+            excludedModels: routing.excludedModels, identifiesInstalledModels: true
+        )
+    )
+    let read = { (arguments: [String], identify: (String) -> MereRunModelIdentification?) in
+        installed.resolveFamily(MereRunCommandInvocation(capability: installed, arguments: arguments), identify: identify)
+    }
+    #expect(read(["--model", "clip-quick"], identify) == .family(id: "full", model: "clip-quick", source: .identified))
+    #expect(read([], identify) == .family(id: "full", model: "clip-quick", source: .identified))
+    #expect(read(["--model", "clip-quick"], { _ in nil }) == .family(id: "quick", model: "clip-quick", source: .model))
+    #expect(read([], { _ in nil }) == .family(id: "quick", model: "clip-quick", source: .defaultModel))
+    #expect(read(["--model", "clip-lm"], identify)
+        == .excluded(.init(id: "clip-lm", reason: "It is a language model; use `clip caption`.")))
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let json = String(decoding: try encoder.encode(try #require(installed.routing)), as: UTF8.self)
+    #expect(json.contains(#""identifies_installed_models":true"#))
+    #expect(try JSONDecoder().decode(MereRunCapabilityRouting.self, from: Data(json.utf8)) == installed.routing)
+    #expect(!String(decoding: try encoder.encode(routing), as: UTF8.self).contains("identifies_installed_models"))
+}
+
 @Test func selectorRoutedFamiliesCheckTheirOwnModelFlag() {
     enum ReaderFamily: String, MereRunFamilyID { case lighton, infinity }
     let reader = MereRunCommandCapability(
@@ -347,6 +382,12 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(messages("full", ["--mode", "fast"])
         == ["error: --mode fast is not supported by Full; use slow or exact."])
     #expect(messages("quick", ["--mode", "fast", "--steps=4", "--hq"]).isEmpty)
+    #expect(messages("quick", ["--strength", "0.50"])
+        == ["warning: --strength has no effect with Quick. It applies to Full."])
+    #expect(messages("quick", ["--strength", "0.7"])
+        == ["error: --strength is not supported by Quick. It applies to Full."])
+    #expect(messages("wide", ["--strength", "0.5", "--image", "a"])
+        == ["error: --strength is not supported by Wide. It applies to Full."])
 
     let report = clip.resolutionReport(invocation("--model", "clip-quick", "--cfg", "2", "--steps", "9"))
     #expect(report.family == "quick" && report.familyTitle == "Quick" && report.source == .model)

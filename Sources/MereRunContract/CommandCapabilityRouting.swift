@@ -15,24 +15,52 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// Managed models that list this command, or that its pickers would otherwise offer, but
     /// that cannot run it. Resolving to one is an error that names `reason`.
     public let excludedModels: [MereRunExcludedModel]
+    /// True when what is installed can change the family a managed id runs: the command loads a
+    /// root an environment override or a local layout names instead of the id's own install
+    /// (`music generate` and `MERERUN_MUSIC_ACESTEP_ROOT`). The resolver then asks `identify`
+    /// about a listed or default model first, and uses the id's family only when it can't tell.
+    /// Shells without an identifier resolve the id as listed.
+    public let identifiesInstalledModels: Bool
 
     enum CodingKeys: String, CodingKey {
         case modelFlags = "model_flags"
         case defaultModels = "default_models"
         case families
         case excludedModels = "excluded_models"
+        case identifiesInstalledModels = "identifies_installed_models"
     }
 
     public init(
         modelFlags: [String],
         defaultModels: [MereRunDefaultModelRule] = [],
         families: [MereRunRuntimeFamily],
-        excludedModels: [MereRunExcludedModel] = []
+        excludedModels: [MereRunExcludedModel] = [],
+        identifiesInstalledModels: Bool = false
     ) {
         self.modelFlags = modelFlags
         self.defaultModels = defaultModels
         self.families = families
         self.excludedModels = excludedModels
+        self.identifiesInstalledModels = identifiesInstalledModels
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        modelFlags = try container.decode([String].self, forKey: .modelFlags)
+        defaultModels = try container.decode([MereRunDefaultModelRule].self, forKey: .defaultModels)
+        families = try container.decode([MereRunRuntimeFamily].self, forKey: .families)
+        excludedModels = try container.decode([MereRunExcludedModel].self, forKey: .excludedModels)
+        identifiesInstalledModels = try container.decodeIfPresent(Bool.self, forKey: .identifiesInstalledModels) ?? false
+    }
+
+    /// `identifies_installed_models` is written only when true.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(modelFlags, forKey: .modelFlags)
+        try container.encode(defaultModels, forKey: .defaultModels)
+        try container.encode(families, forKey: .families)
+        try container.encode(excludedModels, forKey: .excludedModels)
+        if identifiesInstalledModels { try container.encode(true, forKey: .identifiesInstalledModels) }
     }
 
     public func family(id: String) -> MereRunRuntimeFamily? {
@@ -178,10 +206,11 @@ public struct MereRunExcludedModel: Codable, Equatable, Sendable {
     }
 }
 
-/// How an option is narrowed for one family that uses it. On a family that ignores the option,
-/// a rule's `values` and `range` are the values the family tolerates (warns about); any other
-/// value is refused, as the CLI's value-based checks refuse a non-default (Krea 2 takes
-/// `--sample-steps 8` and refuses `--sample-steps 4`). Such a rule sets nothing else.
+/// How an option is narrowed for one family that uses it. A rule may also name a family in the
+/// option's `ignored_by`, with only `values` or a `range`: that family runs without the option but
+/// refuses any value except these, as the CLI's value-based checks let only the value it runs with
+/// through (`--vocal-language en` on YuE2, `--sample-steps 8` on Krea 2). A tolerated value warns
+/// that the option has no effect; any other fails as if the family rejected the option.
 public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
     public let family: String
     /// Allowed values, rendered as the CLI parses them. One value means the family fixes it. For a

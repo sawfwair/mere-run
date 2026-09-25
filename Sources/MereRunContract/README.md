@@ -90,7 +90,10 @@ it, each with its managed model ids and any `selectors` (flag values that pick
 the family, such as `--backend qwen`); the `model_flags` whose value names the
 model, highest precedence first; `default_models` rules for a blank model; and
 `excluded_models`, managed models a picker might offer that can't run the
-command, each with a `reason`. Single-runtime commands declare one family.
+command, each with a `reason`. `identifies_installed_models` marks a command
+whose managed ids can load a different checkpoint than their own install (an
+environment override root); the CLI's identifier then answers for listed and
+default models too, and the id's family applies when it can't tell. Single-runtime commands declare one family.
 Commands without a model, and the multi-runtime commands still being scoped,
 omit `routing`. Each domain keeps its routing in
 `CommandCapabilityCatalog+<Domain>Routing.swift`.
@@ -99,7 +102,10 @@ Per option, `families` lists the families that use it (absent: every family),
 `ignored_by` the families that accept it without effect, and `family_rules` a
 family's narrowed `values`, `default_value`, `range`, `required`, and
 `max_count`, with a `severity` for values it accepts and replaces. A family in
-neither list rejects the option. Declare families as a per-capability enum that
+neither list rejects the option. A rule on a family in `ignored_by` lists the
+only `values` that family accepts: a runtime that runs without the option but
+refuses anything except its own value (`--vocal-language en` on YuE2) warns for
+those and fails for the rest. Numeric rule values compare as numbers. Declare families as a per-capability enum that
 conforms to `MereRunFamilyID`, and scope options with its builders:
 `.scoped(F.only(.wan, ignoredBy: [.ltx]), .rule(.wan, required: true))`. Keep
 arithmetic, cross-option, and file-content checks in Core.

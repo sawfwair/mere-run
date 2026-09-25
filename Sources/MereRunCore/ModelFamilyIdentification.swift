@@ -9,11 +9,17 @@ public enum ModelFamilyIdentifier {
     /// Inspects `model` for one capability and returns a family id of that capability, or `nil`.
     public typealias Probe = @Sendable (_ model: String, _ invocation: MereRunCommandInvocation) -> String?
 
-    /// Per-capability probes, keyed by capability id. Each domain registers its own table here.
-    static let probes: [String: Probe] = Dictionary(uniqueKeysWithValues: [
+    /// Per-capability probes, keyed by capability id. Each domain declares its table in
+    /// `ModelFamilyIdentification+<Domain>.swift` and lists it here; capability ids are disjoint.
+    static let probes: [String: Probe] = domainProbes.reduce(into: [:]) { table, domain in
+        table.merge(domain) { _, _ in preconditionFailure("Two model-family probes claim one capability.") }
+    }
+
+    private static let domainProbes: [[String: Probe]] = [
         imageProbes,
+        musicProbes,
         textProbes,
-    ].flatMap { $0.map { ($0.key, $0.value) } })
+    ]
 
     public static func identify(
         capabilityID: String,

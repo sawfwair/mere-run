@@ -276,7 +276,7 @@ public final class ACEStepPipeline {
             dcwHighScaler: config.dcwHighScaler,
             velocityNormThreshold: config.velocityNormThreshold,
             velocityEMAFactor: config.velocityEMAFactor,
-            checkCancellation: {}
+            beforeStep: { _, _ in }
         )
 
         if config.useTiledVaeDecode {
@@ -295,7 +295,8 @@ public final class ACEStepPipeline {
         lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata = .init(),
         lmCodeGenerationContext: ACEStepLMCodeGenerationContext? = nil,
         lmSystemInstruction: String = ACEStepLMInstructions.defaultInstruction,
-        audioCoverStrength: Float = 1.0
+        audioCoverStrength: Float = 1.0,
+        progress: ACEStepStageHandler? = nil
     ) throws -> (audio: MLXArray, lmResult: ACEStep5HzLMResult) {
         guard let lm else {
             throw PipelineError.lmNotConfigured
@@ -398,8 +399,12 @@ public final class ACEStepPipeline {
             cleanSourceLatents: conditionInputs.cleanSourceLatents,
             repaintInjectionRatio: conditionInputs.repaintConfiguration?.injectionRatio ?? 0,
             repaintCrossfadeFrames: conditionInputs.repaintConfiguration?.latentCrossfadeFrames ?? 0,
-            checkCancellation: { try Task.checkCancellation() }
+            beforeStep: { step, steps in
+                try Task.checkCancellation()
+                progress?(.denoising(step: step, steps: steps))
+            }
         )
+        progress?(.decoding)
 
         let audio = try decodeAndApplyRepaintSplice(
             latents: latents,
@@ -424,7 +429,8 @@ public final class ACEStepPipeline {
         vocalLanguage: String = "en",
         instruction: String? = nil,
         task: ACEStepTask = .textToMusic,
-        repaintConfiguration: ACEStepRepaintConfiguration? = nil
+        repaintConfiguration: ACEStepRepaintConfiguration? = nil,
+        progress: ACEStepStageHandler? = nil
     ) throws -> MLXArray {
         try checkpointVariant.validate(task)
         if task.requiresSourceAudio,
@@ -521,8 +527,12 @@ public final class ACEStepPipeline {
             cleanSourceLatents: conditionInputs.cleanSourceLatents,
             repaintInjectionRatio: conditionInputs.repaintConfiguration?.injectionRatio ?? 0,
             repaintCrossfadeFrames: conditionInputs.repaintConfiguration?.latentCrossfadeFrames ?? 0,
-            checkCancellation: { try Task.checkCancellation() }
+            beforeStep: { step, steps in
+                try Task.checkCancellation()
+                progress?(.denoising(step: step, steps: steps))
+            }
         )
+        progress?(.decoding)
 
         return try decodeAndApplyRepaintSplice(
             latents: latents,
@@ -547,7 +557,8 @@ public final class ACEStepPipeline {
         instruction: String? = nil,
         lmSystemInstruction: String = ACEStepLMInstructions.defaultInstruction,
         task: ACEStepTask = .textToMusic,
-        repaintConfiguration: ACEStepRepaintConfiguration? = nil
+        repaintConfiguration: ACEStepRepaintConfiguration? = nil,
+        progress: ACEStepStageHandler? = nil
     ) throws -> (audio: MLXArray, lmResult: ACEStep5HzLMResult) {
         try checkpointVariant.validate(task)
         if task.requiresSourceAudio,
@@ -627,7 +638,8 @@ public final class ACEStepPipeline {
             lmUserMetadata: effectiveLMUserMetadata,
             lmCodeGenerationContext: effectiveLMCodeGenerationContext,
             lmSystemInstruction: lmSystemInstruction,
-            audioCoverStrength: audioCoverStrength
+            audioCoverStrength: audioCoverStrength,
+            progress: progress
         )
     }
 

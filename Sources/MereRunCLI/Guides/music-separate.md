@@ -41,7 +41,10 @@ mere.run music separate ./song.mp3 \
 
 The default comes from the selected model: `2` for ViperX, four-stem, and
 dereverb, and `4` for denoise. A higher divisor of the selected model's chunk
-size spends more compute on chunk blending:
+size spends more compute on chunk blending. The chunk is 352,800 samples for
+ViperX, dereverb, and denoise and 485,100 for four-stem, so `--overlap 32`
+suits the first three and `--overlap 11` only four-stem; any other value
+fails before the model loads:
 
 ```bash
 mere.run music separate ./song.wav --overlap 4 --dtype float16
