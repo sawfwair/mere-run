@@ -85,15 +85,23 @@ final class GateWarningsJSONTests: XCTestCase {
         let snakeCase = JSONEncoder()
         snakeCase.keyEncodingStrategy = .convertToSnakeCase
         snakeCase.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        for encoder in [JSONEncoder(), pretty, snakeCase] {
+        // Byte identity needs sorted keys: an unsorted JSONEncoder may order keys differently on
+        // each call, so it is compared as a decoded object instead.
+        XCTAssertEqual(
+            try object(String(decoding: JSONEncoder().encode(GateWarned(Payload(), warnings: [])), as: UTF8.self)),
+            try object(String(decoding: JSONEncoder().encode(Payload()), as: UTF8.self))
+        )
+        for encoder in [pretty, snakeCase] {
             XCTAssertEqual(try encoder.encode(GateWarned(Payload(), warnings: [])), try encoder.encode(Payload()))
+        }
+        for encoder in [JSONEncoder(), pretty, snakeCase] {
             let warned = try encoder.encode(GateWarned(Payload(), warnings: ["--cfg has no effect."]))
             let object = try XCTUnwrap(JSONSerialization.jsonObject(with: warned) as? [String: Any])
             XCTAssertEqual(object["warnings"] as? [String], ["--cfg has no effect."])
             XCTAssertEqual(object.count, 4, "the other keys stay as they were")
         }
         // Outside `MereRunCLI.main` nothing is bound.
-        XCTAssertEqual(try JSONEncoder().encode(GateWarned(Payload())), try JSONEncoder().encode(Payload()))
+        XCTAssertEqual(try pretty.encode(GateWarned(Payload())), try pretty.encode(Payload()))
     }
 
     // MARK: - Run result: the receipt
