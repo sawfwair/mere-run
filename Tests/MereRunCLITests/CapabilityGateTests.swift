@@ -88,7 +88,7 @@ private func minimalArguments(
     in capability: MereRunCommandCapability,
     routing: MereRunCapabilityRouting
 ) -> [String]? {
-    var arguments = family.selectors.flatMap { selector in [selector.flag] + (selector.values.map { [$0[0]] } ?? []) }
+    var arguments = family.selectors.flatMap { selectorTokens($0, in: capability) }
     if let model = family.models.first {
         guard let flag = family.modelFlag ?? routing.modelFlags.last else { return nil }
         arguments += [flag, model]
@@ -100,6 +100,13 @@ private func minimalArguments(
         arguments += tokens(option, value: validValue(option, rule: option.familyRules.first { $0.family == family.id }))
     }
     return arguments
+}
+
+/// The tokens that make `condition` hold: none for an absent flag, the flag for a Boolean, and
+/// the flag with an allowed or sample value otherwise.
+private func selectorTokens(_ condition: MereRunFlagCondition, in capability: MereRunCommandCapability) -> [String] {
+    guard !condition.absent, let option = capability.options.first(where: { $0.flag == condition.flag }) else { return [] }
+    return tokens(option, value: condition.values?.first ?? validValue(option, rule: nil))
 }
 
 private func tokens(_ option: MereRunCapabilityOption, value: String) -> [String] {

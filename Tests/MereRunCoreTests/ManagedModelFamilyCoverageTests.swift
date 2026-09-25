@@ -68,7 +68,12 @@ private func resolve(
     let canonical = ManagedModelCatalog.spec(for: model)?.id ?? model
     let owner = routing.families.first { $0.models.contains(canonical) }
     guard let modelFlag = owner?.modelFlag ?? routing.modelFlags.last else { return nil }
-    let selectors = owner?.selectors.flatMap { selector in [selector.flag] + (selector.values.map { [$0[0]] } ?? []) } ?? []
+    let selectors = owner?.selectors.flatMap { selector -> [String] in
+        guard !selector.absent else { return [] }
+        let option = capability.options.first { $0.flag == selector.flag }
+        let value = selector.values?.first ?? (option?.kind == .boolean ? nil : option?.defaultValue ?? "value")
+        return [selector.flag] + (value.map { [$0] } ?? [])
+    } ?? []
     let invocation = MereRunCommandInvocation(capability: capability, arguments: flags + selectors + [modelFlag, model])
     return capability.resolveFamily(invocation) { identified in
         ModelFamilyIdentifier.identify(capabilityID: capability.id, model: identified, invocation: invocation)

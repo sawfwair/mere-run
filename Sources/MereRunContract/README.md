@@ -87,7 +87,7 @@ continue to read the live command declarations.
 A capability that loads a model declares `routing`
 (`CommandCapabilityRouting.swift`): the `families` of code paths that can run
 it, each with its managed model ids and any `selectors` (flag values that pick
-the family, such as `--backend qwen`); the `model_flags` whose value names the
+the family, such as `--backend qwen`, or a flag that must be `absent`); the `model_flags` whose value names the
 model, highest precedence first; `default_models` rules for a blank model; and
 `excluded_models`, managed models a picker might offer that can't run the
 command, each with a `reason`. Single-runtime commands declare one family.

@@ -47,12 +47,7 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
             for second in routing.families.dropFirst(index + 1) {
                 let shared = Set(first.models).intersection(second.models)
                 guard !shared.isEmpty || routing.routesBySelectors else { continue }
-                let disjoint = first.selectors.contains { left in
-                    second.selectors.contains { right in
-                        left.flag == right.flag && Set(left.values ?? []).isDisjoint(with: right.values ?? [])
-                            && left.values != nil && right.values != nil
-                    }
-                }
+                let disjoint = first.selectors.contains { left in second.selectors.contains(where: left.excludes) }
                 #expect(disjoint, "\(capability.id): \(first.id) and \(second.id) can both match \(shared.sorted())")
             }
         }
@@ -294,6 +289,50 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
         model: "reader-infinity",
         detail: "reader-infinity runs on Infinity, not LightOn; change the model or the selector flags."
     ))
+}
+
+/// One model in two families split by a flag's absence: the embedded-adapter family without the
+/// flag, the adapter family with it.
+@Test func anAbsentSelectorSplitsOneModelBetweenTwoFamilies() throws {
+    enum TurboFamily: String, MereRunFamilyID { case embedded, adapter }
+    let turbo = MereRunCommandCapability(
+        id: "turbo.render", command: ["turbo", "render"], title: "Turbo", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string),
+            MereRunCapabilityOption(flag: "--adapter", label: "Adapter", kind: .string),
+            MereRunCapabilityOption(flag: "--steps", label: "Steps", kind: .integer)
+                .scoped(TurboFamily.rule(.embedded, values: ["5"]))
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            defaultModels: [.always("turbo-fast")],
+            families: [
+                .init(TurboFamily.embedded, title: "Embedded", models: ["turbo-fast"], selectors: [.absent("--adapter")]),
+                .init(TurboFamily.adapter, title: "Adapter", models: ["turbo-fast"], selectors: [.init(flag: "--adapter")])
+            ]
+        )
+    )
+    let report = { (arguments: [String]) in
+        turbo.resolutionReport(MereRunCommandInvocation(capability: turbo, arguments: arguments))
+    }
+    #expect(report([]).family == "embedded")
+    #expect(report(["--model", "turbo-fast"]).family == "embedded")
+    #expect(report(["--model", "turbo-fast", "--steps", "9"]).violations
+        == ["--steps 9 is not supported by Embedded; it runs 5. Remove --steps or pass 5."])
+    let lifted = report(["--model", "turbo-fast", "--adapter", "a.safetensors", "--steps", "9"])
+    #expect(lifted.family == "adapter" && lifted.source == .selector && lifted.violations.isEmpty)
+
+    let conditions = try #require(turbo.routing).families.map { try #require($0.selectors.first) }
+    #expect(conditions[0].excludes(conditions[1]) && conditions[1].excludes(conditions[0]))
+    #expect(!conditions[0].excludes(.init(flag: "--adapter", values: ["a"])), "an omitted value can read as its default")
+    #expect(!conditions[0].excludes(.absent("--adapter")))
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let json = String(decoding: try encoder.encode(conditions), as: UTF8.self)
+    #expect(json == #"[{"absent":true,"flag":"--adapter"},{"flag":"--adapter"}]"#)
+    #expect(try JSONDecoder().decode([MereRunFlagCondition].self, from: Data(json.utf8)) == conditions)
 }
 
 @Test func violationsCoverEveryScopeKindWithOneMessage() {

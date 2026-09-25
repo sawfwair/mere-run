@@ -264,8 +264,12 @@ extension MereRunCommandCapability {
         }) else {
             return .unmatched(model: nil, detail: "\(command.joined(separator: " ")) has no default model on \(platform).")
         }
-        let familyIDs = rule.family.map { [$0] }
+        var familyIDs = rule.family.map { [$0] }
             ?? Array(Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) }))
+        if familyIDs.count > 1 {
+            // A model split between families by a flag (FastH3 with and without an adapter).
+            familyIDs = familyIDs.filter { id in routing.family(id: id).map { selectorsHold($0, invocation) } == true }
+        }
         guard familyIDs.count == 1, let family = routing.family(id: familyIDs[0]) else {
             return .unidentified(model: rule.models.joined(separator: ", "))
         }
@@ -321,6 +325,7 @@ extension MereRunCommandCapability {
 
     /// An omitted flag reads as the family's default for it, else the option's default.
     private func holds(_ condition: MereRunFlagCondition, _ invocation: MereRunCommandInvocation, family: String?) -> Bool {
+        if condition.absent { return !invocation.contains(condition.flag) }
         guard let allowed = condition.values else { return invocation.contains(condition.flag) }
         let option = options.first { $0.flag == condition.flag }
         let familyDefault = option?.familyRules.first { $0.family == family }?.defaultValue
@@ -331,7 +336,8 @@ extension MereRunCommandCapability {
     private func unmatchedDetail(model: String?, candidates: [MereRunRuntimeFamily]) -> String {
         let requirements = candidates.map { family in
             let selectors = family.selectors.map { condition in
-                condition.values.map { "\(condition.flag) \($0.joined(separator: "|"))" } ?? condition.flag
+                condition.absent ? "no \(condition.flag)"
+                    : condition.values.map { "\(condition.flag) \($0.joined(separator: "|"))" } ?? condition.flag
             }
             return "\(family.title) needs \(selectors.joined(separator: " and "))"
         }
