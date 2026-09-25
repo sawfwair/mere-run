@@ -116,7 +116,10 @@ its `violations`, each an error or a warning with the sentence the CLI prints.
 `resolutionReport` combines them into the `MereRunFamilyResolutionReport` that
 the CLI's capability gate enforces and `mere.run catalog resolve --json` prints.
 The resolver answers managed ids, defaults, and selectors itself; the CLI
-passes an `identify` closure for aliases and local folders.
+passes an `identify` closure for aliases and local folders, and a
+`routedFamily` closure for commands whose own router decides by rules the
+contract only approximates (speech transcribe's language routing). A routed
+family wins over the declared rules; shells without one keep the rules.
 `CommandCapabilityRoutingTests` checks every routed capability's structure and
 each resolver branch; `CapabilityGateTests` runs generated cases for every
 family and option through the CLI gate.

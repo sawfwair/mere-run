@@ -111,12 +111,28 @@ public struct MereRunFamilyResolutionReport: Codable, Equatable, Sendable {
 
 extension MereRunCommandCapability {
     /// The one family resolver. `identify` answers models the contract does not list.
+    /// `routedFamily` is the family the command's own router picks for the whole command line,
+    /// where the declared rules only approximate it (speech transcribe routes an unrecognized
+    /// `--language` to Qwen3-ASR). Its answer wins over the rules; `nil` keeps them.
     public func resolveFamily(
         _ invocation: MereRunCommandInvocation,
         platform: String = "macos",
-        identify: (String) -> MereRunModelIdentification? = { _ in nil }
+        identify: (String) -> MereRunModelIdentification? = { _ in nil },
+        routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolution {
         guard let routing else { return .unrouted }
+        let declared = declaredFamily(invocation, routing: routing, platform: platform, identify: identify)
+        guard let routed = routedFamily().flatMap(routing.family(id:)) else { return declared }
+        if case .family(let id, _, _) = declared, id == routed.id { return declared }
+        return routerChoice(routed, invocation, routing: routing, platform: platform, identify: identify)
+    }
+
+    private func declaredFamily(
+        _ invocation: MereRunCommandInvocation,
+        routing: MereRunCapabilityRouting,
+        platform: String,
+        identify: (String) -> MereRunModelIdentification?
+    ) -> MereRunFamilyResolution {
         if routing.routesBySelectors {
             return resolveBySelectors(invocation, routing: routing, platform: platform, identify: identify)
         }
@@ -179,9 +195,10 @@ extension MereRunCommandCapability {
     public func resolutionReport(
         _ invocation: MereRunCommandInvocation,
         platform: String = "macos",
-        identify: (String) -> MereRunModelIdentification? = { _ in nil }
+        identify: (String) -> MereRunModelIdentification? = { _ in nil },
+        routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolutionReport {
-        let resolution = resolveFamily(invocation, platform: platform, identify: identify)
+        let resolution = resolveFamily(invocation, platform: platform, identify: identify, routedFamily: routedFamily)
         let report = { (family: MereRunRuntimeFamily?, model: String?, source: MereRunFamilyResolutionReport.Source,
                         violations: [String], warnings: [String]) in
             MereRunFamilyResolutionReport(
@@ -221,6 +238,33 @@ extension MereRunCommandCapability {
 extension MereRunCommandCapability {
     private func modelValue(_ invocation: MereRunCommandInvocation, flags: [String]) -> String? {
         flags.lazy.compactMap { invocation.value($0) }.first { !$0.isEmpty }
+    }
+
+    /// The model `family` runs when the command's router picked it over the declared rules: the
+    /// named model when the family lists it or no family does (a local path, an unlisted id), and
+    /// otherwise the family's default.
+    private func routerChoice(
+        _ family: MereRunRuntimeFamily,
+        _ invocation: MereRunCommandInvocation,
+        routing: MereRunCapabilityRouting,
+        platform: String,
+        identify: (String) -> MereRunModelIdentification?
+    ) -> MereRunFamilyResolution {
+        if let named = modelValue(invocation, flags: family.modelFlag.map { [$0] } ?? routing.modelFlags) {
+            var canonical = named
+            if case .managedModel(let managed)? = identify(named) { canonical = managed }
+            if family.models.contains(canonical) {
+                return .family(id: family.id, model: canonical, source: .model)
+            }
+            if !routing.families.contains(where: { $0.models.contains(canonical) }) {
+                return .family(id: family.id, model: named, source: .identified)
+            }
+        }
+        let rule = routing.defaultModels.first { rule in
+            rule.applies(on: platform)
+                && (rule.family == family.id || (!rule.models.isEmpty && rule.models.allSatisfy(family.models.contains)))
+        }
+        return .family(id: family.id, model: rule?.models.first, source: .defaultModel)
     }
 
     private func resolve(

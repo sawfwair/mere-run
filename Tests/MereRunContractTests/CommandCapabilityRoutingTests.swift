@@ -353,6 +353,24 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(report(["--model", "ear-deep", "--engine", "fast", "--task", "explain"]).warnings
         == ["--engine fast has no effect with Deep; use auto or deep."])
 
+    // The command's own router outranks the declared rules; the model follows the routed family.
+    let routed = { (arguments: [String], family: String?) in
+        listener.resolutionReport(
+            MereRunCommandInvocation(capability: listener, arguments: arguments), identify: identify, routedFamily: { family }
+        )
+    }
+    let rerouted = routed(["--model", "ear-fast", "--engine", "fast"], "deep")
+    #expect(rerouted.family == "deep" && rerouted.model == "ear-deep" && rerouted.source == .defaultModel)
+    #expect(rerouted.warnings == [
+        "--model ear-fast has no effect: the other options select Deep.",
+        "--engine fast has no effect with Deep; use auto or deep."
+    ])
+    #expect(routed(["--model", "ear-fast"], "fast") == report(["--model", "ear-fast"]))
+    #expect(routed(["--model", "ear-fast"], "unknown") == report(["--model", "ear-fast"]))
+    let local = routed(["--model", "/ears/deep"], "deep")
+    #expect(local.family == "deep" && local.model == "/ears/deep" && local.source == .identified)
+    #expect(routed(["-m", "EAR-FAST"], "deep").warnings == ["--model EAR-FAST has no effect: the other options select Deep."])
+
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     let routing = try encoder.encode(try #require(listener.routing))
