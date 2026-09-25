@@ -217,6 +217,56 @@ private func expect(
     }
 }
 
+/// Nothing that runs today may start failing (design §10). Every (capability, family, option)
+/// cell the CLI accepted before the gate, which the contract records as a family that uses the
+/// option or ignores it, passes with a value the family takes; and an empty text value, which
+/// the commands read as not passed, passes wherever the family does not use the option.
+@Test func everyCellTheCLIAcceptedBeforeStillRuns() {
+    var cells = 0
+    for capability in MereRunCapabilityCatalog.document.commands {
+        guard let routing = capability.routing else { continue }
+        let routingFlags = Set(
+            routing.modelFlags + routing.families.compactMap(\.modelFlag)
+                + routing.families.flatMap(\.selectors).map(\.flag)
+                + routing.defaultModels.flatMap(\.whenAny).map(\.flag)
+        )
+        for family in routing.families {
+            guard let base = minimalArguments(for: family, in: capability, routing: routing) else { continue }
+            for option in capability.options where !routingFlags.contains(option.flag) {
+                let rule = option.familyRules.first { $0.family == family.id }
+                let uses = option.families?.contains(family.id) ?? true
+                var values: [String] = []
+                if uses || option.ignoredBy.contains(family.id) { values.append(validValue(option, rule: rule)) }
+                if option.kind == .string && !uses { values.append("") }
+                for value in values {
+                    cells += 1
+                    let report = gateReport(capability, base + tokens(option, value: value))
+                    #expect(report.family == family.id && report.violations.isEmpty,
+                            "\(capability.id) \(family.id) \(option.flag) \"\(value)\" got \(report)")
+                }
+            }
+        }
+    }
+    #expect(cells > 1000, "the walk covers every routed capability")
+}
+
+/// The empty values the domain reviews named: each ran before the gate, and each only warns.
+@Test func emptyTextValuesTheCommandsIgnoredOnlyWarn() throws {
+    let cases: [[String]] = [
+        ["music", "generate", "song", "--model", "music-minimax-music3", "--source-lyrics", ""],
+        ["music", "generate", "song", "--model", "music-yue2", "--source-lyrics", ""],
+        ["music", "generate", "song", "--model", "music-magenta-rt2-small", "--lyrics", ""],
+        ["image", "generate", "-p", "a mug", "-m", "image-flux1-dev", "--negative-prompt", ""],
+        ["sfx", "generate", "rain", "--model", "sfx-woosh-flow", "--negative-prompt", ""],
+        ["sfx", "generate", "rain", "--model", "sfx-mmaudio-large-44k-v2", "--renoise", ""]
+    ]
+    for commandLine in cases {
+        let report = try #require(CLICapabilityGate.evaluate(commandLine: commandLine)).report
+        #expect(report.violations.isEmpty && report.warnings.count == 1, "\(commandLine) got \(report)")
+        #expect(throws: Never.self, "\(commandLine)") { try CLICapabilityGate.check(arguments: ["mere.run"] + commandLine) }
+    }
+}
+
 /// The generator itself must produce rejecting, warning, and rule cases, and the gate's
 /// decision must match each; this capability has every kind of scope.
 @Test func theCaseGeneratorCoversEveryKindOfScope() {
