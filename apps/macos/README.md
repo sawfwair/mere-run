@@ -538,14 +538,19 @@ composer's fields, chips, and attachment wells, the task inspector, the Command
 view, the Command Console, validation, readiness, and the model pickers offer,
 and what the argv builders send. A value the model doesn't use stays in the
 draft, so switching back brings it back, but the copy a run validates and
-launches resets it, and a note (`StudioUI/StudioScopeNote.swift`) lists it under
-the composer's chips, at the top of the inspectors, and as the Command view's
-"Not sent" line. A local model folder the contract can't place is identified by
-`mere.run catalog resolve --json` (`StudioModelIdentity.swift`), answered once
-per folder and modification date; the surfaces show every option while it runs
-and when it can't tell. Pickers list only the models whose families run the
-command, and a model the command excludes blocks the run with the CLI gate's
-reason. `StudioModelScopeGoldenTests` checks every routed command and family:
+launches resets it, and a note (`StudioUI/StudioScopeNote.swift`) lists it once
+per window: at the top of the open inspector, as the open Command view's "Not
+sent" line, or under the composer's chips when neither column is open. A value
+the family fixes shows locked, and a numeric option whose family takes a set of
+values steps through that set. Where only the CLI can tell the family (a local
+model folder, a managed model that runs whatever checkpoint is installed, a
+machine-chosen default, or transcription's language routing), Studio sends the
+whole command line to `mere.run catalog resolve --json`
+(`StudioModelIdentity.swift`) and remembers the answer until a flag that can
+change the family, or the folder it names, changes; while it waits a family the
+contract names stands in, and an unplaced folder shows every option. Pickers
+list only the models whose families run the command, and a model the command
+excludes blocks the run with the CLI gate's reason. `StudioModelScopeGoldenTests` checks every routed command and family:
 what each surface shows, validates, and sends equals what the contract allows,
 with per-command fixtures under `StudioKitTests/Fixtures/model-scope/`
 (`./scripts/update-studio-model-scope-fixtures.sh` re-records them).

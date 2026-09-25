@@ -12,7 +12,7 @@ need to change.
 | CLI and shell capability schema | `MereRunContract` | `CommandCapabilityContract.swift` and `CommandCapabilityChoices.swift`. |
 | Command capability definitions | `MereRunContract` | `CommandCapabilityCatalog.swift`, then `CommandCapabilityCatalog+<family>.swift`. |
 | Runtime families and option scope | `MereRunContract` | `CommandCapabilityRouting.swift`, `CommandCapabilityScope.swift`, then `CommandCapabilityCatalog+<family>Routing.swift`. |
-| Model scope check and `catalog resolve` | `MereRunCLI` | `Support/CLICapabilityGate.swift`, then Core's `ModelFamilyIdentification.swift` for aliases and local models. |
+| Model scope check and `catalog resolve` | `MereRunCLI` | `Support/CLICapabilityGate.swift`; `Support/CLIFamilyRouters.swift` for commands whose own router decides; Core's `ModelFamilyIdentification.swift` and its per-domain probes and default choosers for aliases, local and install-dependent models, and machine-chosen defaults. |
 | API transport and validation errors | `MereRunCLI` | `APIServerContract.swift`, `APIMultipartFormData.swift`, and `APIServerContract+Fields.swift`. |
 | API discovery | `MereRunCLI` | `APIServerContract+Models.swift`, which projects Core profiles. |
 | API request translation and responses | `MereRunCLI` | The matching `APIServerContract+<modality>.swift` file. InstantMesh uses `Commands/InstantMeshAPIContract.swift`. |

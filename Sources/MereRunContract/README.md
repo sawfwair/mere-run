@@ -130,10 +130,16 @@ its `violations`, each an error or a warning with the sentence the CLI prints.
 `resolutionReport` combines them into the `MereRunFamilyResolutionReport` that
 the CLI's capability gate enforces and `mere.run catalog resolve --json` prints.
 The resolver answers managed ids, defaults, and selectors itself; the CLI
-passes an `identify` closure for aliases and local folders, and a
-`routedFamily` closure for commands whose own router decides by rules the
-contract only approximates (speech transcribe's language routing). A routed
-family wins over the declared rules; shells without one keep the rules.
+passes an `identify` closure for aliases, local folders, and `identified_models`,
+a `chooseDefault` closure for a default whose candidates span families (the
+machine's pick for `geo tessera`), and a `routedFamily` closure for commands
+whose own router decides by rules the contract only approximates (speech
+transcribe's language routing). A routed family wins over the declared rules;
+shells without these hooks keep the rules and ask `catalog resolve`, whose
+report `MereRunFamilyResolutionReport.resolution(in:)` reads back and
+`report(for:_:identify:)` completes for the rest of the command line. Values
+compare through `MereRunCapabilityOption.reads(_:asOneOf:)`: numbers by value
+and choices by any spelling `choice_spellings` declares.
 `CommandCapabilityRoutingTests` checks every routed capability's structure and
 each resolver branch; `CapabilityGateTests` runs generated cases for every
 family and option through the CLI gate.

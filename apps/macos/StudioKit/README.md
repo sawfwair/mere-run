@@ -18,13 +18,17 @@ validation during preparation and final job admission.
 take". Build it through `StudioScopeSource` from the argv a surface would
 launch (`scope(mode:draft:)`, `scope(capability:form:)`), never from a model
 name. It resolves the family with the contract, asks `StudioModelIdentifying`
-only for a model the contract doesn't list, and hands every surface
-`options(forFamily:)`. Drafts keep hidden values; `StudioDraft.scoped(to:mode:)`
-and `StudioConsoleDraft.scoped(to:)` reset them in the copy that validates and
-launches, and `StudioOptionScopes.filtered` drops what a builder emits anyway.
-`StudioModelIdentityStore.shared` caches `catalog resolve` answers per folder;
-`MereRunController` supplies its resolver. Tests pass a `StudioScopeSource` with
-a routed capability and fixed identities.
+about the whole command line when only the CLI can settle it (a model the
+contract doesn't list, an `identified_models` id, a machine-chosen default, or a
+`routed_by_command` capability), and hands every surface `options(forFamily:)`.
+Builders emit everything the draft holds; `CommandTemplate.arguments(from:)`
+scopes it with `StudioOptionScopes.filtered`, which drops what the family does
+not take or runs by default. Drafts keep hidden values;
+`StudioDraft.scoped(to:mode:)` and `StudioConsoleDraft.scoped(to:)` reset them in
+the copy that validates and launches. `StudioModelIdentityStore.shared` caches
+`catalog resolve` answers by the tokens that can change the family, a folder by
+its path and modification date; `MereRunController` supplies its resolver.
+Tests pass a `StudioScopeSource` with fixed identities.
 
 `StudioTaskRunner` is the one submission path for every task run that is not a
 conversation turn: it names the destination
