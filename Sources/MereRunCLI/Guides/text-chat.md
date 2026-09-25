@@ -172,7 +172,7 @@ model and derived adapters.
 - `--min-p`: discard tokens whose probability is below this fraction of the
   most likely token's probability. `0` disables the filter; `0.05` means a
   token must have at least 5% of the leading token's probability.
-- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: KV cache quantization controls. Qwen-family models accept affine `--kv-bits 4` or `8`; the runtime chooses group size and start. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
+- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: KV cache quantization controls. Qwen-family, Inkling-Small, and LFM2.5 models accept affine `--kv-bits 4` or `8`; the runtime chooses group size and start. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
 - `--model-root`, `-m`: explicit local model root. It locates weights; the runtime still comes from `--model` or the default model.
 - `--model`: canonical model id.
 - `--image`: local path or `data:image/...` URL for a vision checkpoint: `vision-chat-gemma4-12b`, Muse Glimmer, Nemotron 3 Nano Omni, LFM2.5-VL, Bonsai 27B, the Ornith 1.5 35B vision ids, and Qwen3.8.

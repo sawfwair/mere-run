@@ -923,8 +923,9 @@ Key options:
 - `--min-p`: relative probability floor from 0 through 1; `0` disables it.
   For example, `0.05` removes tokens below 5% of the leading token's
   probability. It does not change greedy generation.
-- `--kv-bits`: native Qwen-family models accept affine 4-bit or 8-bit resident
-  KV caches. Gemma4 also supports its model-specific cache schemes.
+- `--kv-bits`: native Qwen-family, Inkling-Small, and LFM2.5 models accept
+  affine 4-bit or 8-bit resident KV caches. Gemma4 also supports its
+  model-specific cache schemes.
 - `--response-format text|json_object`: require a complete JSON object from a
   native MLX Gemma or Qwen-family model. JSON mode forces thinking off and
   validates each token before streaming.

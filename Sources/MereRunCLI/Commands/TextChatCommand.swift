@@ -108,7 +108,7 @@ struct TextChat: AsyncParsableCommand {
     )
     var reasoningEffort: Double?
 
-    @Option(name: [.long], help: "Quantize the KV cache to this many bits. Qwen-family supports affine 4 or 8; Gemma4 also supports its model-specific schemes.")
+    @Option(name: [.long], help: "Quantize the KV cache to this many bits. Qwen-family, Inkling-Small, and LFM2.5 models support affine 4 or 8; Gemma4 also supports its model-specific schemes.")
     var kvBits: Double?
 
     @Option(name: [.long], help: "Gemma4 KV cache quantization backend: uniform, polar, or turboquant.")
@@ -805,14 +805,14 @@ struct TextChat: AsyncParsableCommand {
         )
     }
 
-    /// The affine KV cache mode for the Qwen-family runtimes. The capability gate limits their
-    /// `--kv-bits` to 4 or 8 and their scheme to uniform; a scheme without a width is the one
-    /// cross-option mistake left to catch here.
+    /// The affine KV cache mode for the Qwen-family, Inkling, and LFM2.5 runtimes. The capability
+    /// gate limits their `--kv-bits` to 4 or 8 and their scheme to uniform; a scheme without a
+    /// width is the one cross-option mistake left to catch here.
     func resolveKVCacheMode(for family: MereRunCapabilityCatalog.TextChatFamily) throws -> RuntimeKVCacheMode? {
-        guard [.q35, .q35VL, .q38].contains(family) else { return nil }
+        guard [.q35, .q35VL, .q38, .inkling, .lfm2, .lfm2VL].contains(family) else { return nil }
         guard let kvBits else {
             if kvQuantScheme != nil {
-                throw ValidationError("Qwen-family KV cache options require --kv-bits 4 or --kv-bits 8.")
+                throw ValidationError("Affine KV cache quantization requires --kv-bits 4 or --kv-bits 8.")
             }
             return nil
         }

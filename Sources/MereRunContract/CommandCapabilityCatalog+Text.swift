@@ -55,12 +55,13 @@ extension MereRunCapabilityCatalog {
                 flag: "--min-p", label: "Min-p", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
             ).scoped(Chat.except(ignoredBy: [.diffusionGemma])),
-            // Gemma 4 takes fractional TurboQuant widths; Qwen-family runtimes take affine 4 or 8.
+            // Gemma 4 takes fractional TurboQuant widths; the affine runtimes take 4 or 8.
             .init(
                 flag: "--kv-bits", label: "KV bits", kind: .number,
                 group: Group.run, tier: .expert, range: .init(min: 2, max: 8, step: 0.5)
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
+                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
+                .rule(.inkling, values: ["4", "8"]), .rule(.lfm2, values: ["4", "8"]), .rule(.lfm2VL, values: ["4", "8"]),
                 .rule(.q35, values: ["4", "8"]), .rule(.q35VL, values: ["4", "8"]), .rule(.q38, values: ["4", "8"])
             ),
             // Gemma 4 Turbo quantizes its KV cache by default, so the scheme, group size, and start
@@ -72,17 +73,20 @@ extension MereRunCapabilityCatalog {
                 choices: ["uniform", "polar", "turboquant"],
                 group: Group.run, tier: .expert
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
+                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
+                .rule(.inkling, values: ["uniform"]), .rule(.lfm2, values: ["uniform"]), .rule(.lfm2VL, values: ["uniform"]),
                 .rule(.q35, values: ["uniform"]), .rule(.q35VL, values: ["uniform"]), .rule(.q38, values: ["uniform"])
             ),
+            // The affine runtimes choose their own group size and start; Inkling and LFM2.5 never
+            // read them, and the Qwen family refuses them.
             .init(
                 flag: "--kv-group-size", label: "KV group size", kind: .integer,
                 group: Group.run, tier: .expert
-            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring)),
+            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL])),
             .init(
                 flag: "--quantized-kv-start", label: "Quantized KV start", kind: .integer,
                 group: Group.run, tier: .expert, range: .init(min: 0, step: 1)
-            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring)),
+            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL])),
             .init(flag: "--model-root", aliases: ["-m"], label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             // Constrained JSON decoding runs on Gemma 4 and the Qwen-family runtimes only.
@@ -171,7 +175,7 @@ extension MereRunCapabilityCatalog {
 
     /// Families whose runtime keeps its own KV cache whatever the KV options say.
     private static let kvCacheIgnoring: [Chat] = [
-        .diffusionGemma, .laguna, .inkling, .museGlimmer, .nemotronH, .nemotronOmni, .lfm2, .lfm2VL, .gguf, .psi
+        .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronOmni, .gguf, .psi
     ]
 
     public static let textCode = MereRunCommandCapability(

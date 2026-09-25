@@ -3,6 +3,8 @@ import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore
 
+private typealias ChatFamily = MereRunCapabilityCatalog.TextChatFamily
+
 /// The capability gate's decision for `text chat` with these arguments.
 private func gate(_ arguments: String...) throws -> MereRunFamilyResolutionReport {
     try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: ["text", "chat", "--prompt", "hi"] + arguments)).report
@@ -541,12 +543,31 @@ final class TextChatCommandParsingTests: XCTestCase {
         )
     }
 
+    /// Inkling and LFM2.5 build affine caches from the request's KV mode, like the Qwen family.
+    func testInklingAndLFM2ReceiveTheAffineKVCacheMode() throws {
+        for (model, family) in [(InklingResources.modelID, ChatFamily.inkling), (LFM2Resources.denseModelId, .lfm2),
+                                (LFM2Resources.visionModelId, .lfm2VL)] {
+            let cmd = try TextChat.parse(["--prompt", "hello", "--model", model, "--kv-bits", "8"])
+            XCTAssertEqual(try cmd.resolveKVCacheMode(for: family), .affine8, model)
+            let request = try cmd.resolvedChatRequest(modelID: model, messages: [ChatMessage(role: .user, content: "hello")])
+            XCTAssertEqual(request.kvCacheMode, .affine8, model)
+        }
+        let lfm2 = LFM2Resources.denseModelId
+        XCTAssertEqual(try gate("--model", lfm2, "--kv-bits", "3").violations, ["--kv-bits 3 is not supported by LFM2.5; use 4 or 8."])
+        XCTAssertEqual(
+            try gate("--model", lfm2, "--kv-bits", "4", "--kv-group-size", "32").warnings,
+            ["--kv-group-size has no effect with LFM2.5. It applies to Gemma 4 and Gemma 4 12B vision."]
+        )
+        let gemma = try TextChat.parse(["--prompt", "hello", "--model", Gemma4Resources.nanoModelId, "--kv-bits", "4"])
+        XCTAssertNil(try gemma.resolveKVCacheMode(for: .gemma4), "Gemma 4 takes its own quantization settings")
+    }
+
     func testQwenKVSchemeStillNeedsAWidth() throws {
         let cmd = try TextChat.parse([
             "--prompt", "hello", "--model", Q35Resources.q36NanoModelId, "--kv-quant-scheme", "uniform"
         ])
         XCTAssertThrowsError(try cmd.resolveKVCacheMode(for: .q35)) { error in
-            XCTAssertTrue(String(describing: error).contains("require --kv-bits"))
+            XCTAssertTrue(String(describing: error).contains("requires --kv-bits 4 or --kv-bits 8"))
         }
     }
 
