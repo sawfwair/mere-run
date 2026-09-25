@@ -22,7 +22,7 @@ in its job summary, together with the lane it selected:
 | --- | --- | --- |
 | Fast | Only `apps/macos/**`, `apps/ios/**`, `docs/**`, Markdown, ordinary `scripts/**`, or `assets/`, `integrations/`, `skills/` changed | SwiftLint, the agent readiness, evaluation boundary, and documentation example checks, `swift build`, the MLX metallib verification, and the three Studio test targets (`StudioKitTests`, `StudioUITests`, `MereRunAppTests`) |
 | Full | Anything under `Sources/**`, `Tests/**`, `vendor/**`, `Package.swift`, `Package.resolved`, `.github/**`, or the gate scripts themselves changed | `./scripts/check.sh`, which is every package test target |
-| Post-merge cache warm | A push to `main` whose exact SHA passed the merge-queue workflow | `swift build` only, then saves the trusted default-branch build cache |
+| Post-merge cache warm | A push to `main` whose exact SHA passed the required merge-queue checks | `swift build` only, then saves the trusted default-branch build cache |
 
 The fast and full lanes build and verify the ad-hoc `MereRun.app` bundle, and both verify the
 vendored MLX Metal library against the pinned kernel sources. Path classification
@@ -61,8 +61,8 @@ Two rules keep the queue moving:
 Merge-queue runs are never cancelled by concurrency, since a cancelled run
 reports nothing and stalls the queue.
 
-After the merge, the `push` workflow verifies that the exact commit had a
-successful `merge_group` run. It then warms the default-branch build cache
+After the merge, the `push` workflow verifies that the exact commit passed the
+required CI and security jobs on a `merge_group` run. It then warms the default-branch build cache
 without rerunning the full matrix. A direct push without that queue evidence
 fails closed; it does not claim that the required checks ran.
 

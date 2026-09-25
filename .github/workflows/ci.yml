@@ -34,7 +34,18 @@ jobs:
           set -euo pipefail
           # A direct push (including an admin bypass) must not turn a cache
           # warm into a substitute for the required merge-queue matrix.
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml \
+          queue_run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml \
+            --event merge_group --commit "$COMMIT_SHA" --limit 100 \
+            --json databaseId,headSha \
+            | jq -er --arg sha "$COMMIT_SHA" '[.[] | select(.headSha == $sha) | .databaseId] | first')"
+          # GitHub can merge after required jobs pass while a non-required iOS
+          # job is still running. Check the required jobs, not the overall run.
+          gh run view "$queue_run_id" --repo "$GITHUB_REPOSITORY" --json jobs \
+            | jq -e '[.jobs[] | select(
+                .name == "changes" or .name == "swift" or .name == "macos-app-bundle"
+                or .name == "linux-cli" or .name == "linux-cli-compatibility-docs"
+              )] | length == 5 and all(.[]; .status == "completed" and .conclusion == "success")'
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow security.yml \
             --event merge_group --commit "$COMMIT_SHA" --limit 100 \
             --json conclusion,status,headSha \
             | jq -e --arg sha "$COMMIT_SHA" \

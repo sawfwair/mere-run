@@ -48,9 +48,9 @@ change confined to the macOS app runs a shorter package gate than a change to
 the CLI or Core. CLI-only source and test changes still run the full macOS
 package and Linux gates, but skip the iOS build because the iOS project does
 not link the CLI target. Core and shared-package changes still run iOS.
-The merge queue runs the required matrix; after merge, the exact same commit
-is checked against the successful queue run before `main` warms the Swift build
-cache. A direct push without that evidence fails instead of bypassing the
+The merge queue runs the required matrix. After merge, the push workflow checks
+the exact commit against the required queue jobs before `main` warms the Swift
+build cache. A direct push without that evidence fails instead of bypassing the
 matrix. `./scripts/check.sh` remains the local gate for everything. See the
 root `CONTRIBUTING.md` file for the lane rules.
 
