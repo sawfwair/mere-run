@@ -95,52 +95,86 @@ public enum VideoGenerationModelResolver {
         }
     }
 
+    /// Where `resolve` looks, decided without downloading: a folder it uses as is, or a model it
+    /// hands to `ManagedModelResolver`, which uses an installed copy or downloads one.
+    public enum Location: Equatable, Sendable {
+        case root(URL)
+        case managed(String)
+    }
+
     public static func resolve(
         explicitModelRoot: String?,
         requestedModel: String,
         variant: LTXVideoVariant,
         allowAutoDownload: Bool = true
     ) async throws -> URL {
+        switch location(explicitModelRoot: explicitModelRoot, requestedModel: requestedModel, variant: variant) {
+        case .root(let root):
+            return root
+        case .managed(let model):
+            do {
+                let resolved = try await ManagedModelResolver.resolveForRuntime(
+                    requestedModel: model,
+                    defaultModelID: ModelResolver.ModelID.ltxVideoAV.rawValue,
+                    allowAutoDownload: allowAutoDownload
+                )
+                return resolved.url
+            } catch let error as ManagedModelResolver.ResolverError {
+                throw VideoGenerationError.invalidInput(error.localizedDescription)
+            }
+        }
+    }
+
+    /// `--model-root` as given; an installed managed id, through its fallback ids; for
+    /// `video-ltx-av` (or no model) the first valid suggested folder, which for audio-video can be
+    /// an LTX 2.3 Full install; otherwise the model for `ManagedModelResolver`.
+    public static func location(
+        explicitModelRoot: String?,
+        requestedModel: String,
+        variant: LTXVideoVariant,
+        fileManager: FileManager = .default
+    ) -> Location {
         if let explicitModelRoot, !explicitModelRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return URL(fileURLWithPath: explicitModelRoot).standardizedFileURL
+            return .root(URL(fileURLWithPath: explicitModelRoot).standardizedFileURL)
         }
 
         let trimmedModel = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedModel.isEmpty {
             let explicitModelURL = URL(fileURLWithPath: trimmedModel).standardizedFileURL
-            if FileManager.default.fileExists(atPath: explicitModelURL.path)
+            if fileManager.fileExists(atPath: explicitModelURL.path)
                 || trimmedModel.lowercased() != ModelResolver.ModelID.ltxVideoAV.rawValue
             {
                 if let modelID = ModelResolver.ModelID(rawValue: trimmedModel.lowercased()),
-                   let installed = ModelResolver().resolveIfPresent(modelID) {
-                    return installed.rootURL
+                   let installed = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) {
+                    return .root(installed.rootURL)
                 }
-                do {
-                    let resolved = try await ManagedModelResolver.resolveForRuntime(
-                        requestedModel: trimmedModel,
-                        defaultModelID: ModelResolver.ModelID.ltxVideoAV.rawValue,
-                        allowAutoDownload: allowAutoDownload
-                    )
-                    return resolved.url
-                } catch let error as ManagedModelResolver.ResolverError {
-                    throw VideoGenerationError.invalidInput(error.localizedDescription)
-                }
+                return .managed(trimmedModel)
             }
         }
 
         if let suggested = suggestedVideoModelRoot(for: variant) {
-            return URL(fileURLWithPath: suggested).standardizedFileURL
+            return .root(URL(fileURLWithPath: suggested).standardizedFileURL)
         }
+        return .managed(ModelResolver.ModelID.ltxVideoAV.rawValue)
+    }
 
-        do {
-            let resolved = try await ManagedModelResolver.resolveForRuntime(
-                requestedModel: ModelResolver.ModelID.ltxVideoAV.rawValue,
-                defaultModelID: ModelResolver.ModelID.ltxVideoAV.rawValue,
-                allowAutoDownload: allowAutoDownload
-            )
-            return resolved.url
-        } catch let error as ManagedModelResolver.ResolverError {
-            throw VideoGenerationError.invalidInput(error.localizedDescription)
+    /// The folder `resolve` would use without downloading anything, or `nil` when it would have to
+    /// download or fail. `ManagedModelResolver` takes an existing path as is and a managed id's
+    /// installed runtime root.
+    public static func installedRoot(
+        explicitModelRoot: String?,
+        requestedModel: String,
+        variant: LTXVideoVariant,
+        fileManager: FileManager = .default
+    ) -> URL? {
+        switch location(explicitModelRoot: explicitModelRoot, requestedModel: requestedModel, variant: variant,
+                        fileManager: fileManager) {
+        case .root(let root):
+            return root
+        case .managed(let model):
+            let path = URL(fileURLWithPath: model).standardizedFileURL
+            if fileManager.fileExists(atPath: path.path) { return path }
+            return ManagedModelCatalog.spec(for: model)?.managedRuntimeURL(fileManager: fileManager)
         }
     }
 

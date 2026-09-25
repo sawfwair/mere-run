@@ -26,8 +26,10 @@ final class StudioVideoScopeTests: XCTestCase {
             (.videoRetake, MereRunCapabilityCatalog.videoRetake)
         ]
         for (id, capability) in cases {
-            for family in try XCTUnwrap(capability.routing?.families) {
-                let model = try XCTUnwrap(family.models.first)
+            // Families reached only through what is installed, or through a flag Studio doesn't
+            // set (FastH3 with an explicit adapter), have no draft of their own here.
+            for family in try XCTUnwrap(capability.routing?.families) where family.selectors.allSatisfy(\.absent) {
+                guard let model = family.models.first else { continue }
                 let arguments = try XCTUnwrap(CommandCatalog.template(id: id))
                     .arguments(from: try maximalDraft(id, model: model))
                 let result = report(capability, arguments)

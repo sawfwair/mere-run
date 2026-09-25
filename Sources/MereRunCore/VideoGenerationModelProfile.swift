@@ -41,13 +41,25 @@ public enum VideoGenerationModelProfile: String, Sendable {
         return fileManager.fileExists(atPath: root.path) ? .ltxMerged : .unknown
     }
 
-    /// The profile of a managed model id: the checkpoint layout of the contract's `video generate`
-    /// family that lists it, so the CLI gate and this pre-resolve check agree by construction.
+    /// The profile of a managed model id before resolution: the checkpoint layout of the
+    /// contract's `video generate` family that lists it, so the CLI gate and this check agree by
+    /// construction. An id the contract leaves to the identifier keeps its own layout, except
+    /// `video-ltx-av`, which stays unchecked because resolution can pick another folder for it.
     public static func managed(_ selector: String) -> Self {
-        MereRunCapabilityCatalog.videoGenerate.routing?.families
-            .first { $0.models.contains(selector) }
-            .map { Self(videoGenerateFamily: $0.id) } ?? .unknown
+        if let family = MereRunCapabilityCatalog.videoGenerate.routing?.families.first(where: { $0.models.contains(selector) }) {
+            return Self(videoGenerateFamily: family.id)
+        }
+        return selector == ModelResolver.ModelID.ltxVideoAV.rawValue ? .unknown : installDependentLayouts[selector] ?? .unknown
     }
+
+    /// The managed ids whose checkpoint depends on what is installed (the contract's
+    /// `identified_models`), each with the layout it names: `video-ltx-av` can run a suggested
+    /// LTX 2.3 folder, and the LTX 2.3 Full and A2Vid ids fall back to each other's installs.
+    public static let installDependentLayouts: [String: Self] = [
+        ModelResolver.ModelID.ltxVideoAV.rawValue: .ltxMerged,
+        ModelResolver.ModelID.ltxVideo23FullMLX.rawValue: .ltx23Full,
+        ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue: .ltx23AudioToVideo
+    ]
 
     public func ltxRoute(outputMode: LTXVideoOutputMode) -> LTXVideoGenerationRoute? {
         guard !isH3, self != .wan, self != .unknown else { return nil }

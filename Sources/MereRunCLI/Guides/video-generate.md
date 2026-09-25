@@ -107,14 +107,18 @@ command line against the selected family before it loads or resolves the model:
   stderr and the run continues. Examples: `--steps` on every LTX checkpoint,
   `--image-strength` on Wan 2.2 and MiniMax-H3, `--negative-prompt` on the
   distilled LTX checkpoints, and `--fps` other than 24 on MiniMax-H3.
-- FastH3 runs exactly 5 steps with `--h3-acceleration quality`. Ref2VA requires
-  `--reference`; Wan 2.2 requires `--image`.
+- FastH3 runs exactly 5 steps with `--h3-acceleration quality` and no image
+  inputs, unless `--h3-adapter` replaces its embedded adapter; the adapter's
+  recipe then applies. Ref2VA requires `--reference`; Wan 2.2 requires `--image`.
 - `video-cosmos3-edge-mlx`, `video-scail2-14b-mlx`, and
   `video-dreamx-world-5b-ar-mlx` stop at once; use `video cosmos3`,
   `video animate`, or `world serve`.
 
 `--model-root` wins over `--model`, and a local folder's family comes from its
-files. To see which family a command line runs and what the check reports,
+files. `video-ltx-av`, `video-ltx23-full-mlx`, and `video-ltx23-a2vid-mlx` are
+checked as the folder they resolve to: with audio-video output `video-ltx-av`
+runs an installed LTX 2.3 Full folder, and the LTX 2.3 Full and A2Vid ids fall
+back to each other's installs. To see which family a command line runs and what the check reports,
 without running it:
 
 ```bash

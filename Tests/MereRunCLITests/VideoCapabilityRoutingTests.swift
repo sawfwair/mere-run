@@ -77,7 +77,17 @@ import Testing
             == ["--steps 9 is not supported by MiniMax-H3 FastH3; it runs 5. Remove --steps or pass 5."])
         #expect(try report(base + ["--image", "a.png"]).violations
             == ["--image is not supported by MiniMax-H3 FastH3. It applies to LTX (merged), LTX-2.3 Distilled, "
-                + "LTX-2.3 Full, LTX-2.3 A2Vid, LTX-2.5 Distilled, LTX-2.5 Full, Wan 2.2 TI2V and MiniMax-H3 FL2VA."])
+                + "LTX-2.3 Full, LTX-2.3 A2Vid, LTX-2.5 Distilled, LTX-2.5 Full, Wan 2.2 TI2V, MiniMax-H3 FL2VA "
+                + "and MiniMax-H3 FastH3 with an adapter."])
+
+        // An explicit adapter replaces the embedded one, and its recipe replaces FastH3's.
+        let adapter = base + ["--h3-adapter", "turbo.safetensors"]
+        let adapterOptions = try VideoGenerate.parse(["a", "--model", fastH3, "--h3-adapter", "turbo.safetensors"])
+            .makeGenerationOptions(outputURL: URL(fileURLWithPath: "/tmp/a.mp4"))
+        #expect(!adapterOptions.usesEmbeddedFastH3Adapter)
+        let lifted = try report(adapter + ["--steps", "9", "--h3-acceleration", "balanced", "--image", "a.png", "--end-image", "b.png"])
+        #expect(lifted.family == "h3-fast-adapter" && lifted.source == .selector && lifted.violations.isEmpty, "\(lifted)")
+        #expect(try report(adapter + ["--reference", "image:a.png"]).violations.count == 1)
     }
 
     /// The flags that also select a default model get no generated cases; these pin their scope.
@@ -110,10 +120,8 @@ import Testing
         let distilled = try report(["video", "session", "--ltx-teacache"])
         #expect(distilled.family == "ltx23-distilled" && distilled.violations
             == ["--ltx-teacache is not supported by LTX-2.3 Distilled. It applies to LTX-2.5 Full."])
-        #expect(try report(["video", "session", "--model", "video-ltx23-full-mlx", "--ltx-teacache"]).warnings.count == 1)
         #expect(try report(["video", "session", "--model", "video-ltx25-full-bf16", "--ltx-teacache"]).warnings.isEmpty)
         #expect(try report(["video", "session", "--model", "video-wan22-ti2v-5b-mlx"]).source == .excluded)
-        #expect(try report(["video", "session", "--model", "video-ltx-av"]).source == .unidentified)
     }
 
     @Test func retakeWarnsWhenTheDistilledDefaultIgnoresGuidance() throws {

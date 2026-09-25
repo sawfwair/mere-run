@@ -44,7 +44,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(V.readOnly(by: [.ltx25Full])),
             .init(
                 flag: "--ltx-teacache", label: "Enable LTX TeaCache", kind: .boolean, group: Group.run, tier: .expert
-            ).scoped(V.used(by: [.ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.used(by: [.ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--ltx-teacache-threshold", label: "LTX TeaCache threshold", kind: .number, group: Group.run,
                 tier: .expert
@@ -52,31 +52,31 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--ltx-teacache-calibration-output", label: "LTX TeaCache calibration output", kind: .file,
                 group: Group.output, tier: .expert
-            ).scoped(V.used(by: [.ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.used(by: [.ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--h3-render-width", label: "H3 render width", kind: .integer, group: Group.output, tier: .expert
-            ).scoped(V.used(by: [.h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.used(by: [.h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--h3-render-height", label: "H3 render height", kind: .integer, group: Group.output, tier: .expert
-            ).scoped(V.used(by: [.h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.used(by: [.h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--h3-adapter", label: "H3 adapter", kind: .string, group: Group.modelAndAdapters, tier: .expert
-            ).scoped(V.used(by: [.h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.used(by: [.h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--h3-adapter-strength", label: "H3 adapter strength", kind: .number, defaultValue: "1.0",
                 group: Group.modelAndAdapters, tier: .expert
-            ).scoped(V.readOnly(by: [.h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.readOnly(by: [.h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--h3-frame", label: "H3 timed frame", kind: .string, repeatable: true, group: Group.inputs,
                 tier: .expert
-            ).scoped(V.used(by: [.h3FL2VA]), .rule(.h3FL2VA, maxCount: 12)),
+            ).scoped(V.used(by: [.h3FL2VA, .fastH3Adapter]), .rule(.h3FL2VA, maxCount: 12), .rule(.fastH3Adapter, maxCount: 12)),
             .init(
                 flag: "--h3-window-frames", label: "H3 window frames", kind: .integer, group: Group.sampling, tier: .expert
-            ).scoped(V.used(by: [.h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.used(by: [.h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--h3-window-overlap", label: "H3 window overlap", kind: .integer, defaultValue: "18",
                 group: Group.sampling, tier: .expert
-            ).scoped(V.readOnly(by: [.h3FL2VA, .h3Ref2VA])),
+            ).scoped(V.readOnly(by: [.h3FL2VA, .fastH3Adapter, .h3Ref2VA])),
             .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
@@ -137,19 +137,19 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--fps", label: "Frames per second", kind: .integer,
                 group: Group.sampling, tier: .standard, range: .init(min: 1, max: 60, step: 1)
-            ).scoped(V.rule(.h3FL2VA, values: ["24"], severity: .warning), .rule(.fastH3, values: ["24"], severity: .warning), .rule(.h3Ref2VA, values: ["24"], severity: .warning)),
+            ).scoped(V.rule(.h3FL2VA, values: ["24"], severity: .warning), .rule(.fastH3Adapter, values: ["24"], severity: .warning), .rule(.fastH3, values: ["24"], severity: .warning), .rule(.h3Ref2VA, values: ["24"], severity: .warning)),
             .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .essential, range: .init(min: 0, step: 1)),
             .init(
                 flag: "--steps", label: "Denoising steps", kind: .integer,
                 group: Group.sampling, tier: .standard, range: .init(min: 1, max: 100, step: 1)
-            ).scoped(V.used(by: [.wan, .h3FL2VA, .fastH3, .h3Ref2VA], ignoredBy: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full]), .rule(.fastH3, values: ["5"])),
+            ).scoped(V.used(by: [.wan, .h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA], ignoredBy: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full]), .rule(.fastH3, values: ["5"])),
             .init(
                 flag: "--h3-weight-mode",
                 label: "MiniMax-H3 weight mode",
                 kind: .choice,
                 choices: ["auto", "quantized", "resident-bf16"],
                 defaultValue: "auto", group: Group.modelAndAdapters, tier: .expert
-            ).scoped(V.readOnly(by: [.h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.readOnly(by: [.h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--h3-acceleration",
                 label: "MiniMax-H3 acceleration",
@@ -159,7 +159,7 @@ extension MereRunCapabilityCatalog {
                     "layers-45", "layers-40", "velocity-reuse-2", "token-reduction"
                 ],
                 defaultValue: "quality", group: Group.sampling, tier: .expert
-            ).scoped(V.readOnly(by: [.h3FL2VA, .fastH3, .h3Ref2VA]), .rule(.fastH3, values: ["quality"])),
+            ).scoped(V.readOnly(by: [.h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA]), .rule(.fastH3, values: ["quality"])),
             .init(
                 flag: "--guidance-scale", label: "Wan guidance", kind: .number,
                 defaultValue: "5.0", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.1)
@@ -210,11 +210,11 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--ltx-preset", label: "LTX preset", kind: .choice, choices: ["standard", "hq"],
                 defaultValue: "standard", group: Group.sampling, tier: .expert
-            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["standard"]), .rule(.ltx23Distilled, values: ["standard"]), .rule(.ltx23Full, values: ["standard"]), .rule(.ltx23A2Vid, values: ["standard"]), .rule(.ltx25Distilled, values: ["standard"]), .rule(.wan, values: ["standard"]), .rule(.h3FL2VA, values: ["standard"]), .rule(.fastH3, values: ["standard"]), .rule(.h3Ref2VA, values: ["standard"])),
+            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["standard"]), .rule(.ltx23Distilled, values: ["standard"]), .rule(.ltx23Full, values: ["standard"]), .rule(.ltx23A2Vid, values: ["standard"]), .rule(.ltx25Distilled, values: ["standard"]), .rule(.wan, values: ["standard"]), .rule(.h3FL2VA, values: ["standard"]), .rule(.fastH3Adapter, values: ["standard"]), .rule(.fastH3, values: ["standard"]), .rule(.h3Ref2VA, values: ["standard"])),
             .init(
                 flag: "--ltx-pipeline", label: "LTX pipeline", kind: .choice, choices: ["two-stage", "keyframe-interpolation", "dev-one-stage"],
                 defaultValue: "two-stage", group: Group.sampling, tier: .expert
-            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["two-stage"]), .rule(.ltx23Distilled, values: ["two-stage"]), .rule(.ltx23Full, values: ["two-stage"]), .rule(.ltx23A2Vid, values: ["two-stage"]), .rule(.ltx25Distilled, values: ["two-stage"]), .rule(.wan, values: ["two-stage"]), .rule(.h3FL2VA, values: ["two-stage"]), .rule(.fastH3, values: ["two-stage"]), .rule(.h3Ref2VA, values: ["two-stage"])),
+            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["two-stage"]), .rule(.ltx23Distilled, values: ["two-stage"]), .rule(.ltx23Full, values: ["two-stage"]), .rule(.ltx23A2Vid, values: ["two-stage"]), .rule(.ltx25Distilled, values: ["two-stage"]), .rule(.wan, values: ["two-stage"]), .rule(.h3FL2VA, values: ["two-stage"]), .rule(.fastH3Adapter, values: ["two-stage"]), .rule(.fastH3, values: ["two-stage"]), .rule(.h3Ref2VA, values: ["two-stage"])),
             .init(
                 flag: "--ltx-sampler", label: "LTX sampler", kind: .choice,
                 choices: ["euler", "res2s", "euler-ancestral", "cfg-plus-plus", "gradient-estimating-euler"],
@@ -275,12 +275,12 @@ extension MereRunCapabilityCatalog {
                 flag: "--gradient-estimation-gamma", label: "Gradient estimate gamma", kind: .number,
                 defaultValue: "2.0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 10, step: 0.1)
             ).scoped(V.readOnly(by: [.ltx25Full])),
-            .init(flag: "--image", label: "Start image", kind: .file, group: Group.inputs, tier: .essential).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full, .wan, .h3FL2VA]), .rule(.wan, required: true)),
+            .init(flag: "--image", label: "Start image", kind: .file, group: Group.inputs, tier: .essential).scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full, .wan, .h3FL2VA, .fastH3Adapter]), .rule(.wan, required: true)),
             .init(
                 flag: "--image-strength", label: "Start image strength", kind: .number,
                 defaultValue: "1.0", group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05), dependsOn: "--image"
             ).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full])),
-            .init(flag: "--end-image", label: "End image", kind: .file, group: Group.inputs, tier: .standard, dependsOn: "--image").scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full, .h3FL2VA])),
+            .init(flag: "--end-image", label: "End image", kind: .file, group: Group.inputs, tier: .standard, dependsOn: "--image").scoped(V.used(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25Full, .h3FL2VA, .fastH3Adapter])),
             .init(
                 flag: "--end-image-strength", label: "End image strength", kind: .number,
                 defaultValue: "1.0", group: Group.inputs, tier: .standard, range: .init(min: 0, max: 1, step: 0.05), dependsOn: "--end-image"
@@ -292,7 +292,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--num-generated-keyframes", label: "Generated keyframe count", kind: .integer,
                 defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 16, step: 1)
-            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["0"]), .rule(.ltx23Distilled, values: ["0"]), .rule(.ltx23Full, values: ["0"]), .rule(.ltx23A2Vid, values: ["0"]), .rule(.wan, values: ["0"]), .rule(.h3FL2VA, values: ["0"]), .rule(.fastH3, values: ["0"]), .rule(.h3Ref2VA, values: ["0"])),
+            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["0"]), .rule(.ltx23Distilled, values: ["0"]), .rule(.ltx23Full, values: ["0"]), .rule(.ltx23A2Vid, values: ["0"]), .rule(.wan, values: ["0"]), .rule(.h3FL2VA, values: ["0"]), .rule(.fastH3Adapter, values: ["0"]), .rule(.fastH3, values: ["0"]), .rule(.h3Ref2VA, values: ["0"])),
             .init(
                 flag: "--generated-keyframe", label: "Generated keyframe", kind: .integer, repeatable: true,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
@@ -301,7 +301,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--video-conditioning", label: "IC-LoRA reference video", kind: .string, repeatable: true,
                 group: Group.inputs, tier: .expert
-            ).scoped(V.used(by: [.ltx25Distilled, .ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .fastH3, .h3Ref2VA])),
+            ).scoped(V.used(by: [.ltx25Distilled, .ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--conditioning-attention-strength", label: "Reference attention", kind: .number,
                 defaultValue: "1.0", group: Group.inputs, tier: .expert, range: .init(min: 0, max: 1, step: 0.05),
@@ -311,7 +311,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--conditioning-attention-mask", label: "Reference attention mask", kind: .file,
                 group: Group.inputs, tier: .expert, dependsOn: "--video-conditioning"
             ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25Full])),
-            .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert).scoped(V.used(by: [.ltx25Distilled], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .ltx25Full, .wan, .h3FL2VA, .fastH3, .h3Ref2VA])),
+            .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert).scoped(V.used(by: [.ltx25Distilled], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .ltx25Full, .wan, .h3FL2VA, .fastH3Adapter, .fastH3, .h3Ref2VA])),
             .init(
                 flag: "--reference-downscale-factor", label: "Reference spatial scale", kind: .integer,
                 group: Group.inputs, tier: .expert, range: .init(min: 1, max: 8, step: 1), dependsOn: "--video-conditioning"
@@ -324,7 +324,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--temporal-upsample-rounds", label: "Temporal refinement rounds", kind: .integer,
                 defaultValue: "0", group: Group.sampling, tier: .expert, range: .init(min: 0, max: 2, step: 1), dependsOn: "--dfr"
-            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["0"]), .rule(.ltx23Distilled, values: ["0"]), .rule(.ltx23Full, values: ["0"]), .rule(.ltx23A2Vid, values: ["0"]), .rule(.ltx25Distilled, values: ["0"]), .rule(.wan, values: ["0"]), .rule(.h3FL2VA, values: ["0"]), .rule(.fastH3, values: ["0"]), .rule(.h3Ref2VA, values: ["0"])),
+            ).scoped(V.used(by: V.allCases), .rule(.ltxMerged, values: ["0"]), .rule(.ltx23Distilled, values: ["0"]), .rule(.ltx23Full, values: ["0"]), .rule(.ltx23A2Vid, values: ["0"]), .rule(.ltx25Distilled, values: ["0"]), .rule(.wan, values: ["0"]), .rule(.h3FL2VA, values: ["0"]), .rule(.fastH3Adapter, values: ["0"]), .rule(.fastH3, values: ["0"]), .rule(.h3Ref2VA, values: ["0"])),
             .init(
                 flag: "--detailing-lora", label: "Detailing IC-LoRA", kind: .string, repeatable: true,
                 group: Group.modelAndAdapters, tier: .expert, dependsOn: "--dfr"

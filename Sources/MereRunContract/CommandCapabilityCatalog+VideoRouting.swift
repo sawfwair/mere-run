@@ -92,6 +92,9 @@ extension MereRunCapabilityCatalog {
         case wan = "wan22-ti2v"
         case h3FL2VA = "h3-fl2va"
         case fastH3 = "h3-fast"
+        /// The FastH3 id with an explicit `--h3-adapter`, which replaces the embedded adapter and
+        /// its fixed recipe; it runs like FL2VA.
+        case fastH3Adapter = "h3-fast-adapter"
         case h3Ref2VA = "h3-ref2va"
     }
 
@@ -158,10 +161,10 @@ extension MereRunCapabilityCatalog {
             .always("video-ltx23-av-mlx")
         ],
         families: [
-            .init(VideoGenerateFamily.ltxMerged, title: "LTX (merged)", models: ["video-ltx-av"]),
+            .init(VideoGenerateFamily.ltxMerged, title: "LTX (merged)", models: []),
             .init(VideoGenerateFamily.ltx23Distilled, title: "LTX-2.3 Distilled", models: ["video-ltx23-av-mlx"]),
-            .init(VideoGenerateFamily.ltx23Full, title: "LTX-2.3 Full", models: ["video-ltx23-full-mlx"]),
-            .init(VideoGenerateFamily.ltx23A2Vid, title: "LTX-2.3 A2Vid", models: ["video-ltx23-a2vid-mlx"]),
+            .init(VideoGenerateFamily.ltx23Full, title: "LTX-2.3 Full", models: []),
+            .init(VideoGenerateFamily.ltx23A2Vid, title: "LTX-2.3 A2Vid", models: []),
             .init(VideoGenerateFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
             .init(VideoGenerateFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"]),
             .init(VideoGenerateFamily.wan, title: "Wan 2.2 TI2V", models: ["video-wan22-ti2v-5b-mlx"]),
@@ -169,14 +172,32 @@ extension MereRunCapabilityCatalog {
                 VideoGenerateFamily.h3FL2VA, title: "MiniMax-H3 FL2VA",
                 models: ["video-minimax-h3-fl2va-mlx", "video-minimax-h3-fl2va-bf16-mlx", "video-minimax-h3-fl2va-8bit-mlx"]
             ),
-            .init(VideoGenerateFamily.fastH3, title: "MiniMax-H3 FastH3", models: ["video-minimax-h3-fasth3-vsa-datafree-mlx"]),
+            .init(
+                VideoGenerateFamily.fastH3, title: "MiniMax-H3 FastH3", models: [fastH3Model],
+                selectors: [.absent("--h3-adapter")]
+            ),
+            .init(
+                VideoGenerateFamily.fastH3Adapter, title: "MiniMax-H3 FastH3 with an adapter", models: [fastH3Model],
+                selectors: [.init(flag: "--h3-adapter")]
+            ),
             .init(VideoGenerateFamily.h3Ref2VA, title: "MiniMax-H3 Ref2VA", models: ["video-minimax-h3-ref2va-mlx"])
         ],
-        excludedModels: .models(otherVideoModels, reason: otherVideoModelsReason)
+        excludedModels: .models(otherVideoModels, reason: otherVideoModelsReason),
+        identifiedModels: ltx23InstallDependentModels
     )
+
+    private static let fastH3Model = "video-minimax-h3-fasth3-vsa-datafree-mlx"
+
+    /// The ids whose checkpoint depends on what is installed: `video-ltx-av` can run a suggested
+    /// LTX 2.3 folder (`VideoGenerationModelResolver.location`), and the LTX 2.3 Full and A2Vid
+    /// ids fall back to each other's installs. The CLI identifies the folder each will run.
+    private static let ltx23InstallDependentModels = ["video-ltx-av", "video-ltx23-full-mlx", "video-ltx23-a2vid-mlx"]
 
     /// Retake runs any official LTX-2.5 folder, on the full lane when the full checkpoint
     /// validates. Every other checkpoint fails after resolution (`VideoRetakeCommand.run`).
+    /// `video-ltx-av` resolves to a suggested folder, which `MERERUN_VIDEO_LTX_MODEL_ROOT` can
+    /// point at an LTX-2.5 install, so the CLI identifies it; the LTX 2.3 ids only ever land on
+    /// LTX 2.3 folders.
     static let videoRetakeRouting = MereRunCapabilityRouting(
         modelFlags: ["--model-root", "--model"],
         defaultModels: [.always("video-ltx25-distilled-bf16")],
@@ -185,26 +206,28 @@ extension MereRunCapabilityCatalog {
             .init(VideoRetakeFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
         ],
         excludedModels: .models(
-            videoGenerationModels.filter { !$0.hasPrefix("video-ltx25-") },
+            videoGenerationModels.filter { !$0.hasPrefix("video-ltx25-") && $0 != "video-ltx-av" },
             reason: "`video retake` needs an official LTX-2.5 checkpoint."
-        ).and(otherVideoModels, reason: otherVideoModelsReason)
+        ).and(otherVideoModels, reason: otherVideoModelsReason),
+        identifiedModels: ["video-ltx-av"]
     )
 
     /// The session keeps the split or full LTX-2.3 runtime, or either LTX-2.5 runtime, resident
-    /// (`VideoSessionCommand.run`). `video-ltx-av` and the A2Vid id are neither listed nor
-    /// excluded: both can fall back to an installed LTX-2.3 Full folder, which the session runs.
+    /// (`VideoSessionCommand.run`). The install-dependent LTX 2.3 ids are identified by the
+    /// folder they resolve to, which the session may or may not run.
     static let videoSessionRouting = MereRunCapabilityRouting(
         modelFlags: ["--model-root", "--model"],
         defaultModels: [.always("video-ltx23-av-mlx")],
         families: [
             .init(VideoSessionFamily.ltx23Distilled, title: "LTX-2.3 Distilled", models: ["video-ltx23-av-mlx"]),
-            .init(VideoSessionFamily.ltx23Full, title: "LTX-2.3 Full", models: ["video-ltx23-full-mlx"]),
+            .init(VideoSessionFamily.ltx23Full, title: "LTX-2.3 Full", models: []),
             .init(VideoSessionFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
             .init(VideoSessionFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
         ],
         excludedModels: .models(
             videoGenerationModels.filter { $0.hasPrefix("video-wan") || $0.hasPrefix("video-minimax-h3-") },
             reason: "The resident session runs LTX-2.3 and LTX-2.5 checkpoints; use `video generate`."
-        ).and(otherVideoModels, reason: otherVideoModelsReason)
+        ).and(otherVideoModels, reason: otherVideoModelsReason),
+        identifiedModels: ltx23InstallDependentModels
     )
 }

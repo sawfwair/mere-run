@@ -10,17 +10,25 @@ import Testing
     private let fastH3 = ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
 
     @Test func coreProfilesAgreeWithTheContractForEveryManagedVideoModel() throws {
-        let families = try #require(MereRunCapabilityCatalog.videoGenerate.routing?.families)
-        for family in families {
+        let routing = try #require(MereRunCapabilityCatalog.videoGenerate.routing)
+        for family in routing.families {
             for model in family.models {
                 let profile = VideoGenerationModelProfile.managed(model)
                 #expect(profile != .unknown, "\(model)")
-                #expect(profile.videoGenerateFamily(fastH3: model == fastH3) == family.id, "\(model)")
+                // The FastH3 id with an adapter runs FL2VA's layout; only the embedded one is FastH3.
+                let expected = family.id == "h3-fast-adapter" ? "h3-fl2va" : family.id
+                #expect(profile.videoGenerateFamily(fastH3: family.id == "h3-fast") == expected, "\(model)")
             }
         }
-        for excluded in try #require(MereRunCapabilityCatalog.videoGenerate.routing?.excludedModels) {
+        for excluded in routing.excludedModels {
             #expect(VideoGenerationModelProfile.managed(excluded.id) == .unknown, "\(excluded.id)")
         }
+        // The install-dependent ids are the contract's identified models; before resolution the
+        // Full and A2Vid ids check as their own layout and the merged id is left unchecked.
+        #expect(Set(VideoGenerationModelProfile.installDependentLayouts.keys) == Set(routing.identifiedModels))
+        #expect(VideoGenerationModelProfile.managed("video-ltx23-full-mlx") == .ltx23Full)
+        #expect(VideoGenerationModelProfile.managed("video-ltx23-a2vid-mlx") == .ltx23AudioToVideo)
+        #expect(VideoGenerationModelProfile.managed("video-ltx-av") == .unknown)
     }
 
     @Test func theGenerateProbeReportsTheLayoutTheOperationObserves() throws {
@@ -46,11 +54,14 @@ import Testing
     }
 
     /// FastH3 is laid out like FL2VA; its managed id picks the embedded adapter, even when
-    /// `--model-root` names the folder.
+    /// `--model-root` names the folder, unless `--h3-adapter` replaces it.
     @Test func aFastH3FolderRunsAsFastH3OnlyWithTheFastH3Id() throws {
         let root = try makeRoot(MiniMaxH3Resources.requiredFiles, config: Self.h3Config(task: "fl2va"))
         defer { try? FileManager.default.removeItem(at: root) }
         #expect(identify("video.generate", root.path, ["--model-root", root.path, "--model", fastH3]) == "h3-fast")
+        #expect(identify(
+            "video.generate", root.path, ["--model-root", root.path, "--model", fastH3, "--h3-adapter", "turbo.safetensors"]
+        ) == "h3-fl2va")
         #expect(identify("video.generate", root.path, ["--model-root", root.path]) == "h3-fl2va")
         #expect(identify("video.generate", root.path, ["--model", root.path]) == "h3-fl2va")
     }

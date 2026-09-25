@@ -1,41 +1,65 @@
 import Foundation
 import MereRunContract
 
-/// Local video checkpoints, identified by the same layout detectors the video commands run.
+/// Video checkpoints, identified by the same resolution and layout detectors the video commands
+/// run: `VideoGenerationModelResolver` finds the folder a model names without downloading, and
+/// the command's detectors read its files.
 extension ModelFamilyIdentifier {
-    /// `video generate`: `VideoGenerationModelProfile.observe`, the detector the operation uses
-    /// on the resolved root. A FastH3 root is laid out like FL2VA; it runs as FastH3 only when
-    /// `--model-root` names the root and `--model` names the FastH3 id, because the embedded
-    /// adapter is chosen by that id (`VideoGenerationOptions.usesEmbeddedFastH3Adapter`).
+    /// `video generate`: `VideoGenerationModelProfile.observe` on the folder the operation will
+    /// resolve. A managed id with nothing installed keeps the layout it names. A FastH3 folder is
+    /// laid out like FL2VA; it runs as FastH3 only when `--model` names the FastH3 id and no
+    /// `--h3-adapter` replaces the embedded one (`VideoGenerationOptions.usesEmbeddedFastH3Adapter`).
     static let videoGenerate: Probe = { model, invocation in
-        let profile = VideoGenerationModelProfile.observe(root: URL(fileURLWithPath: model).standardizedFileURL)
+        let outputMode = VideoGenerationOptions.effectiveOutputMode(
+            audio: invocation.value("--audio"),
+            outputMode: invocation.value("--output-mode").flatMap(LTXVideoOutputMode.init(rawValue:)),
+            dfr: invocation.contains("--dfr"),
+            legacyVariant: invocation.value("--variant").flatMap(LTXVideoVariant.init(rawValue:))
+        )
+        let root = videoRoot(model, invocation, variant: outputMode.compatibilityVariant)
+        guard let profile = root.map({ VideoGenerationModelProfile.observe(root: $0) })
+            ?? VideoGenerationModelProfile.installDependentLayouts[model] else { return nil }
         let fastH3 = profile == .h3FL2VA
-            && invocation.value("--model-root") == model
             && invocation.value("--model") == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
+            && !invocation.contains("--h3-adapter")
         return profile.videoGenerateFamily(fastH3: fastH3)
     }
 
-    /// `video retake`: the command runs any official LTX 2.5 root, the full lane when the full
-    /// checkpoint validates (`VideoRetakeCommand.run`).
-    static let videoRetake: Probe = { model, _ in
-        let root = URL(fileURLWithPath: model).standardizedFileURL
+    /// `video retake`: the command runs any official LTX 2.5 folder, on the full lane when the
+    /// full checkpoint validates (`VideoRetakeCommand.run`).
+    static let videoRetake: Probe = { model, invocation in
+        guard let root = videoRoot(model, invocation, variant: .unifiedAV) else { return nil }
         if isLTX25FullModelRoot(root) { return "ltx25-full" }
         return isLTX25ModelRoot(root) ? "ltx25-distilled" : nil
     }
 
-    /// `video session`: the standalone split and full LTX 2.3 roots and both LTX 2.5 roots
-    /// (`VideoSessionCommand.run`); every other layout fails there.
-    static let videoSession: Probe = { model, _ in
-        let root = URL(fileURLWithPath: model).standardizedFileURL
+    /// `video session`: the split and full LTX 2.3 folders and both LTX 2.5 folders
+    /// (`VideoSessionCommand.run`); every other layout fails there. The LTX 2.3 Full id with
+    /// nothing installed keeps its own layout.
+    static let videoSession: Probe = { model, invocation in
+        guard let root = videoRoot(model, invocation, variant: .unifiedAV) else {
+            return model == ModelResolver.ModelID.ltxVideo23FullMLX.rawValue ? "ltx23-full" : nil
+        }
         if isLTX25FullModelRoot(root) { return "ltx25-full" }
         if isLTX25ModelRoot(root) { return "ltx25-distilled" }
         if isLTX23FullModelRoot(root) { return "ltx23-full" }
         return isLTX23SplitModelRoot(root) ? "ltx23-distilled" : nil
     }
+
+    /// The folder the video commands' resolver uses for `model` without downloading: the
+    /// `--model-root` folder when `model` came from it, otherwise the folder `--model` resolves to.
+    private static func videoRoot(_ model: String, _ invocation: MereRunCommandInvocation, variant: LTXVideoVariant) -> URL? {
+        let fromModelRoot = invocation.value("--model-root") == model
+        return VideoGenerationModelResolver.installedRoot(
+            explicitModelRoot: fromModelRoot ? model : nil,
+            requestedModel: fromModelRoot ? "" : model,
+            variant: variant
+        )
+    }
 }
 
 extension VideoGenerationModelProfile {
-    /// The layout of a `video generate` family's checkpoints; FastH3 shares FL2VA's layout.
+    /// The layout of a `video generate` family's checkpoints; both FastH3 families share FL2VA's.
     init(videoGenerateFamily family: String) {
         switch family {
         case "ltx-merged": self = .ltxMerged
@@ -45,7 +69,7 @@ extension VideoGenerationModelProfile {
         case "ltx25-distilled": self = .ltx25Distilled
         case "ltx25-full": self = .ltx25Full
         case "wan22-ti2v": self = .wan
-        case "h3-fl2va", "h3-fast": self = .h3FL2VA
+        case "h3-fl2va", "h3-fast", "h3-fast-adapter": self = .h3FL2VA
         case "h3-ref2va": self = .h3Ref2VA
         default: self = .unknown
         }
