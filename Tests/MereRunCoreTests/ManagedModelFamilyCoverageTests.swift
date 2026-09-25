@@ -69,9 +69,10 @@ private func resolve(
     flags: [String] = []
 ) -> MereRunFamilyResolution? {
     guard let routing = capability.routing else { return nil }
-    let owner = routing.families.first { $0.models.contains(model) }
+    let managed = ManagedModelCatalog.spec(for: model)?.id ?? model
+    let owner = routing.families.first { $0.models.contains(managed) }
     guard let modelFlag = owner?.modelFlag ?? routing.modelFlags.last else { return nil }
-    let selectors = owner?.selectors.flatMap { selector in [selector.flag] + (selector.values.map { [$0[0]] } ?? []) } ?? []
+    let selectors = owner?.selectors.flatMap(capability.arguments(satisfying:)) ?? []
     let invocation = MereRunCommandInvocation(capability: capability, arguments: flags + selectors + [modelFlag, model])
     return capability.resolveFamily(invocation) { identified in
         ModelFamilyIdentifier.identify(capabilityID: capability.id, model: identified, invocation: invocation)

@@ -108,7 +108,8 @@ public struct MereRunRuntimeFamily: Codable, Equatable, Sendable {
 public struct MereRunFlagCondition: Codable, Equatable, Sendable {
     public let flag: String
     /// `nil`: the flag is present (a Boolean is on). Otherwise the flag's value, or its default
-    /// when omitted, is one of these, rendered as the CLI parses them.
+    /// when omitted, is one of these, rendered as the CLI parses them. A Boolean's value is
+    /// "true" when passed and "false" when omitted, so `["false"]` holds only without the flag.
     public let values: [String]?
 
     public init(flag: String, values: [String]? = nil) {

@@ -70,8 +70,20 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
     }
 }
 
+/// Capabilities whose macOS default the CLI picks by machine among models of different
+/// families. A blank command line stays unidentified, and the command chooses when it runs.
+private let machineChosenDefaults: [String: String] = [
+    "geo.tessera": "TESSERAResources.defaultModelID runs the teacher on 32 GB Macs and up, a student below."
+]
+
 @Test func everyDefaultRuleResolvesToOneFamilyOnMacOS() {
     for (capability, routing) in routed {
+        if machineChosenDefaults[capability.id] != nil {
+            let blank = MereRunCommandInvocation(capability: capability, arguments: [])
+            if case .unidentified = capability.resolveFamily(blank) { continue }
+            Issue.record("\(capability.id) resolves its default statically now; remove it from machineChosenDefaults")
+            continue
+        }
         for rule in routing.defaultModels where rule.applies(on: "macos") {
             let families = rule.family.map { [$0] }
                 ?? Array(Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) }))
@@ -161,7 +173,7 @@ private func parses(_ value: String, as option: MereRunCapabilityOption) -> Bool
     case .integer: Int(value) != nil
     case .number: Double(value) != nil
     case .choice: option.choices.contains(value)
-    case .boolean: false
+    case .boolean: value == "true" || value == "false"
     case .string, .file, .directory: true
     }
 }
@@ -294,6 +306,34 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
         model: "reader-infinity",
         detail: "reader-infinity runs on Infinity, not LightOn; change the model or the selector flags."
     ))
+}
+
+@Test func aBooleanSelectorHoldsOnItsPresence() {
+    enum ReadFamily: String, MereRunFamilyID { case single, compare }
+    let reader = MereRunCommandCapability(
+        id: "reader.read", command: ["reader", "read"], title: "Read", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--compare", label: "Compare", kind: .boolean),
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string)
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: [],
+            families: [
+                .init(ReadFamily.single, title: "Single", models: [], selectors: [.init(flag: "--compare", values: ["false"])]),
+                .init(ReadFamily.compare, title: "Compare", models: [], selectors: [.init(flag: "--compare", values: ["true"])])
+            ]
+        )
+    )
+    let read = { (arguments: [String]) in
+        reader.resolveFamily(MereRunCommandInvocation(capability: reader, arguments: arguments))
+    }
+    #expect(read([]) == .family(id: "single", model: nil, source: .selector))
+    #expect(read(["--compare"]) == .family(id: "compare", model: nil, source: .selector))
+    let selectors = reader.routing?.families.flatMap(\.selectors) ?? []
+    #expect(selectors.map(reader.arguments(satisfying:)) == [[], ["--compare"]])
+    #expect(reader.arguments(satisfying: .init(flag: "--model", values: ["a", "b"])) == ["--model", "a"])
+    #expect(reader.arguments(satisfying: .init(flag: "--model")) == ["--model"])
 }
 
 @Test func violationsCoverEveryScopeKindWithOneMessage() {

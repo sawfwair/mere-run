@@ -88,13 +88,13 @@ private func minimalArguments(
     in capability: MereRunCommandCapability,
     routing: MereRunCapabilityRouting
 ) -> [String]? {
-    var arguments = family.selectors.flatMap { selector in [selector.flag] + (selector.values.map { [$0[0]] } ?? []) }
+    var arguments = family.selectors.flatMap(capability.arguments(satisfying:))
     if let model = family.models.first {
         guard let flag = family.modelFlag ?? routing.modelFlags.last else { return nil }
         arguments += [flag, model]
     } else if !routing.routesBySelectors {
         guard let rule = routing.defaultModels.first(where: { $0.family == family.id }) else { return nil }
-        arguments += rule.whenAny.first.map { [$0.flag] + ($0.values.map { [$0[0]] } ?? []) } ?? []
+        arguments += rule.whenAny.first.map(capability.arguments(satisfying:)) ?? []
     }
     for option in capability.options where option.familyRules.contains(where: { $0.family == family.id && $0.required }) {
         arguments += tokens(option, value: validValue(option, rule: option.familyRules.first { $0.family == family.id }))

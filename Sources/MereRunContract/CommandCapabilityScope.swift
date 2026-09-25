@@ -210,6 +210,17 @@ extension MereRunCommandCapability {
 // MARK: - Resolution
 
 extension MereRunCommandCapability {
+    /// The shortest arguments that make `condition` hold: the flag and its first allowed value,
+    /// the flag alone for a presence condition or a Boolean that must be on, and nothing for a
+    /// Boolean that must be off.
+    public func arguments(satisfying condition: MereRunFlagCondition) -> [String] {
+        guard let value = condition.values?.first else { return [condition.flag] }
+        guard options.first(where: { $0.flag == condition.flag })?.kind == .boolean else {
+            return [condition.flag, value]
+        }
+        return value == "true" ? [condition.flag] : []
+    }
+
     private func modelValue(_ invocation: MereRunCommandInvocation, flags: [String]) -> String? {
         flags.lazy.compactMap { invocation.value($0) }.first { !$0.isEmpty }
     }
@@ -319,10 +330,14 @@ extension MereRunCommandCapability {
         family.selectors.allSatisfy { holds($0, invocation, family: family.id) }
     }
 
-    /// An omitted flag reads as the family's default for it, else the option's default.
+    /// An omitted flag reads as the family's default for it, else the option's default. A Boolean
+    /// reads as "true" when passed and "false" when omitted.
     private func holds(_ condition: MereRunFlagCondition, _ invocation: MereRunCommandInvocation, family: String?) -> Bool {
         guard let allowed = condition.values else { return invocation.contains(condition.flag) }
         let option = options.first { $0.flag == condition.flag }
+        if option?.kind == .boolean {
+            return allowed.contains(String(invocation.contains(condition.flag)))
+        }
         let familyDefault = option?.familyRules.first { $0.family == family }?.defaultValue
         guard let value = invocation.value(condition.flag) ?? familyDefault ?? option?.defaultValue else { return false }
         return allowed.contains(value)
@@ -331,7 +346,11 @@ extension MereRunCommandCapability {
     private func unmatchedDetail(model: String?, candidates: [MereRunRuntimeFamily]) -> String {
         let requirements = candidates.map { family in
             let selectors = family.selectors.map { condition in
-                condition.values.map { "\(condition.flag) \($0.joined(separator: "|"))" } ?? condition.flag
+                let rendered = arguments(satisfying: condition)
+                guard let values = condition.values, rendered.count == 2 else {
+                    return rendered.isEmpty ? "no \(condition.flag)" : condition.flag
+                }
+                return "\(condition.flag) \(values.joined(separator: "|"))"
             }
             return "\(family.title) needs \(selectors.joined(separator: " and "))"
         }
