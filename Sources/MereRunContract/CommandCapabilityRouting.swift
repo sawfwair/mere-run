@@ -178,7 +178,10 @@ public struct MereRunExcludedModel: Codable, Equatable, Sendable {
     }
 }
 
-/// How an option is narrowed for one family that uses it.
+/// How an option is narrowed for one family that uses it. On a family that ignores the option,
+/// a rule's `values` and `range` are the values the family tolerates (warns about); any other
+/// value is refused, as the CLI's value-based checks refuse a non-default (Krea 2 takes
+/// `--sample-steps 8` and refuses `--sample-steps 4`). Such a rule sets nothing else.
 public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
     public let family: String
     /// Allowed values, rendered as the CLI parses them. One value means the family fixes it. For a
@@ -363,6 +366,7 @@ extension MereRunCapabilityOption {
     private func with(families: [String]?, ignoredBy: [String], rules: [MereRunOptionFamilyRule]) -> Self {
         Self(flag: flag, aliases: aliases, label: label, kind: kind, required: required, repeatable: repeatable,
             choices: choices, defaultValue: defaultValue, group: group, tier: tier, range: range,
-            dependsOn: dependsOn, families: families, ignoredBy: ignoredBy, familyRules: rules)
+            dependsOn: dependsOn, families: families, ignoredBy: ignoredBy, familyRules: rules,
+            choiceSpellings: choiceSpellings)
     }
 }

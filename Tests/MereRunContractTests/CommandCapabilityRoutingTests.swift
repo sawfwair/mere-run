@@ -98,7 +98,13 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
             #expect(Set(option.familyRules.map(\.family)).count == option.familyRules.count, "\(context): one rule per family")
             for rule in option.familyRules {
                 let ruleContext = "\(context) rule \(rule.family)"
-                #expect(used.contains(rule.family), "\(ruleContext): the family must use the option")
+                if option.ignoredBy.contains(rule.family) {
+                    #expect(rule.values != nil || rule.range != nil, "\(ruleContext): name the values the family tolerates")
+                    #expect(rule.defaultValue == nil && !rule.required && rule.maxCount == nil && rule.severity == .error,
+                            "\(ruleContext): a rule on an ignoring family only lists tolerated values")
+                } else {
+                    #expect(used.contains(rule.family), "\(ruleContext): the family must use or ignore the option")
+                }
                 #expect(option.kind != .boolean, "\(ruleContext): Booleans take no rules")
                 for value in (rule.values ?? []) + [rule.defaultValue].compactMap({ $0 }) {
                     #expect(parses(value, as: option), "\(ruleContext): \(value) is not a valid \(option.kind)")
@@ -112,6 +118,23 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
                 }
                 if rule.maxCount != nil {
                     #expect(option.repeatable, "\(ruleContext): max_count needs a repeatable option")
+                }
+            }
+        }
+    }
+}
+
+@Test func choiceSpellingsNameDeclaredChoices() {
+    for capability in MereRunCapabilityCatalog.document.commands {
+        for option in capability.options {
+            guard let spellings = option.choiceSpellings else { continue }
+            let context = "\(capability.id) \(option.flag)"
+            #expect(option.kind == .choice, "\(context): only a choice has other spellings")
+            for (alias, choice) in spellings.aliases {
+                #expect(option.choices.contains(choice), "\(context): \(alias) names \(choice), which is not a choice")
+                #expect(!option.choices.contains(alias), "\(context): \(alias) is already a choice")
+                if spellings.ignoresCase {
+                    #expect(alias == alias.lowercased(), "\(context): case-insensitive aliases are written lowercased")
                 }
             }
         }
@@ -321,6 +344,56 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(report.family == "quick" && report.familyTitle == "Quick" && report.source == .model)
     #expect(report.violations == ["--steps 9 is not supported by Quick; it runs 4. Remove --steps or pass 4."])
     #expect(report.warnings == ["--cfg has no effect with Quick. It applies to Full."])
+}
+
+/// A rule on a family that ignores an option lists the values it lets through with a warning,
+/// and choice spellings the CLI accepts resolve like the choice in rules and default conditions.
+@Test func ignoredValueRulesAndChoiceSpellingsFollowTheCLI() {
+    enum PressFamily: String, MereRunFamilyID { case fine, rough }
+    let press = MereRunCommandCapability(
+        id: "press.run", command: ["press", "run"], title: "Press", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string),
+            MereRunCapabilityOption(
+                flag: "--recipe", label: "Recipe", kind: .choice, choices: ["fine-a", "rough-a"],
+                choiceSpellings: .init(ignoresCase: true, aliases: ["old-fine": "fine-a"])
+            ).scoped(PressFamily.rule(.rough, values: ["rough-a"])),
+            MereRunCapabilityOption(flag: "--passes", label: "Passes", kind: .integer)
+                .scoped(PressFamily.only(.fine, ignoredBy: [.rough]), .rule(.rough, range: .init(min: 8, max: 8))),
+            MereRunCapabilityOption(flag: "--grain", label: "Grain", kind: .number)
+                .scoped(PressFamily.only(.fine, ignoredBy: [.rough]))
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            defaultModels: [
+                .init(whenAny: [.init(flag: "--recipe", values: ["fine-a"])], models: ["press-fine"]),
+                .always("press-rough")
+            ],
+            families: [
+                .init(PressFamily.fine, title: "Fine", models: ["press-fine"]),
+                .init(PressFamily.rough, title: "Rough", models: ["press-rough"])
+            ]
+        )
+    )
+    let report = { (arguments: [String]) in
+        press.resolutionReport(MereRunCommandInvocation(capability: press, arguments: arguments))
+    }
+    for spelling in ["fine-a", "FINE-A", " Old-Fine "] {
+        #expect(report(["--recipe", spelling]).family == "fine", "\(spelling)")
+    }
+    #expect(report(["--recipe", "Rough-A"]).family == "rough")
+    #expect(report(["--recipe", "OLD-FINE", "--model", "press-rough"]).violations
+        == ["--recipe OLD-FINE is not supported by Rough; it runs rough-a. Remove --recipe or pass rough-a."])
+    #expect(report(["--recipe", "ROUGH-A", "--model", "press-rough"]).violations.isEmpty)
+
+    let tolerated = report(["--passes", "8"])
+    #expect(tolerated.violations.isEmpty && tolerated.warnings == ["--passes has no effect with Rough. It applies to Fine."])
+    #expect(report(["--passes", "3"]).violations == ["--passes is not supported by Rough. It applies to Fine."])
+    #expect(report(["--grain", "3"]).warnings == ["--grain has no effect with Rough. It applies to Fine."])
+    #expect(!press.options(forFamily: "rough").map(\.flag).contains("--passes"), "still hidden on the ignoring family")
+    let fine = report(["--model", "press-fine", "--passes", "3"])
+    #expect(fine.violations.isEmpty && fine.warnings.isEmpty)
 }
 
 @Test func optionsForAFamilyApplyItsRules() throws {
