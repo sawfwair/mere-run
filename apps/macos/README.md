@@ -95,7 +95,8 @@ surface for is still reachable the day the contract declares it.
 - `StudioKit/StudioTypes.swift`: user-facing mode, draft, and request types.
 - `StudioKit/CommandCatalog.swift`: `CommandTemplateID`, `CommandDraft`, and the
   `CommandTemplate` record type.
-- `StudioKit/Catalog/`: one file per command category holding that category's
+- `StudioKit/Catalog/`: one file per command category, with Music & Video split
+  into `Audio.swift`, `Video.swift`, and `Music.swift`, holding that category's
   `CommandTemplate` records and the function that builds each template's argv.
   `CommandFlags.swift` is generated from `MereRunCapabilityCatalog` by
   `./scripts/update-studio-command-flags.sh`, so every flag the app emits is a

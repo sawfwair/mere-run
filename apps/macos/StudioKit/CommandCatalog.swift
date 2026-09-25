@@ -459,33 +459,6 @@ package enum StudioCodeDefaults {
     }
 }
 
-package enum StudioVideoModelFamily: Equatable {
-    case ltx
-    case wan
-    case miniMaxH3FL2VA
-    case miniMaxH3Ref2VA
-
-    package init(model: String) {
-        let normalized = model.lowercased()
-        if normalized.contains("minimax-h3") || normalized.contains("minimax_h3") {
-            self = normalized.contains("ref2va") ? .miniMaxH3Ref2VA : .miniMaxH3FL2VA
-        } else if normalized.contains("wan") {
-            self = .wan
-        } else {
-            self = .ltx
-        }
-    }
-
-    package var isMiniMaxH3: Bool {
-        self == .miniMaxH3FL2VA || self == .miniMaxH3Ref2VA
-    }
-
-    package static func alignedMiniMaxH3FrameCount(_ requested: Int) -> Int {
-        let clamped = max(22, requested)
-        return ((clamped - 5 + 16) / 17) * 17 + 5
-    }
-}
-
 package struct CommandDraft: Equatable, Codable {
     /// Every stored property carries a default, so this is the synthesized memberwise
     /// initializer's package-visible stand-in: the app builds drafts with `CommandDraft()`
@@ -1701,7 +1674,9 @@ package enum CommandCatalog {
         + speechTemplates
         + visionTemplates
         + geospatialTemplates
-        + mediaTemplates
+        + audioTemplates
+        + videoTemplates
+        + musicTemplates
         + soundFXTemplates
         + operationsTemplates
         + serverTemplates
