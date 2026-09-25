@@ -118,6 +118,9 @@ that names the trainer that accepts it:
   `--max-resolution`, `--progressive`, `--low-ram`, `--gradient-checkpointing`,
   benchmarks, previews, the LoRA target and rank options, the timestep and loss
   controls, and `--adam-weight-decay`. It also refuses `--recipe klein-fast-style`.
+  The preview and benchmark settings Krea used to let through at their defaults
+  (`--sample-steps 8`, `--sample-cfg 1`, `--sample-lora-scale 1`,
+  `--benchmark-warmup-steps 5`) still run, with a warning.
 - FLUX.2 Klein refuses `--base-quantization-bits` and `--synthetic-samples`, and
   requires `--data`.
 - A Krea recipe on a Klein base runs with a warning: Klein takes the recipe's

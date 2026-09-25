@@ -73,7 +73,7 @@ both lists without running anything.
 
 | Family | Refused | Runs with a warning |
 |---|---|---|
-| FLUX.1-dev | `--input`, `--mask`, `--outpaint`, `--ref-image`, `--sigmas`, `--negative-prompt` | `--sigma-shift`, `--strength`, `--mask-feather`, `--max-sequence-length` above 512 |
+| FLUX.1-dev | `--input`, `--mask`, `--outpaint`, `--ref-image`, `--sigmas`, a non-empty `--negative-prompt` | an empty `--negative-prompt`, `--sigma-shift`, `--strength`, `--mask-feather`, `--max-sequence-length` above 512 |
 | FLUX.2 Klein, Bonsai | more than 4 `--ref-image` values are dropped (warning) | `--max-sequence-length` |
 | FLUX.2-dev | as Klein | `--negative-prompt` (embedded guidance), `--max-sequence-length` |
 | Z-Image | `--ref-image`, `--sigmas`, a second `--lora` | |

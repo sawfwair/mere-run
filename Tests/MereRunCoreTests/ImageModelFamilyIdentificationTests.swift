@@ -72,3 +72,25 @@ private func template(_ model: String) throws -> MereRunModelManifest {
         #expect(resolution == .family(id: "klein", model: model, source: .identified), "\(model)")
     }
 }
+
+/// The contract's recipe spellings are the ones Core's recipe table accepts: each alias, in any
+/// case, trains the same base with the same settings as the recipe it names.
+@Test func recipeSpellingsAgreeWithCoreRecipes() throws {
+    let recipe = try #require(MereRunCapabilityCatalog.imageTrainLoRA.options.first { $0.flag == "--recipe" })
+    let resolved = { (name: String) throws -> ImageLoRATrainingOptions.Resolved in
+        var options = ImageLoRATrainingOptions(output: "/tmp/adapter.safetensors")
+        options.recipe = name
+        return try options.resolve()
+    }
+    for (alias, canonical) in try #require(recipe.choiceSpellings).aliases {
+        let expected = try resolved(canonical)
+        for written in [alias, alias.uppercased(), " \(alias) "] {
+            let aliased = try resolved(written)
+            #expect(
+                aliased.model == expected.model && aliased.width == expected.width && aliased.height == expected.height
+                    && aliased.trainingSteps == expected.trainingSteps && aliased.learningRate == expected.learningRate,
+                "\(written) → \(canonical)"
+            )
+        }
+    }
+}

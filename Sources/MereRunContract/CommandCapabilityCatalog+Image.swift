@@ -21,7 +21,8 @@ extension MereRunCapabilityCatalog {
             ).scoped(ImageF.only(.klein, .flux2Dev)),
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--negative-prompt", aliases: ["-n"], label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard)
-                .scoped(ImageF.except(.flux1, ignoredBy: [.flux2Dev, .krea, .ideogram])),
+                // FLUX.1 refuses a negative prompt with text in it and runs without an empty one.
+                .scoped(ImageF.except(ignoredBy: [.flux1, .flux2Dev, .krea, .ideogram]), .rule(.flux1, values: [""])),
             .init(
                 flag: "--cfg", aliases: ["--cfg-scale"], label: "CFG scale", kind: .number,
                 group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.5)
@@ -65,9 +66,8 @@ extension MereRunCapabilityCatalog {
                 // Klein keeps the first four references, counting --input, and drops the rest.
                 .rule(.klein, maxCount: 4, severity: .warning),
                 .rule(.flux2Dev, maxCount: 4, severity: .warning),
-                .rule(.qwen21, maxCount: 10),
-                .rule(.qwenEdit, maxCount: 3),
-                .rule(.qwenEditLightning, maxCount: 3)
+                // Qwen-Image-Edit's limit of three counts distinct files, so Core checks it.
+                .rule(.qwen21, maxCount: 10)
             ),
             .init(
                 flag: "--keep-original-aspect", label: "Keep original aspect", kind: .boolean,
@@ -153,6 +153,20 @@ extension MereRunCapabilityCatalog {
     private static var kleinTrainingOnly: MereRunOptionScope<TrainF> { TrainF.only(.klein) }
     /// Options only the Krea 2 trainer reads; the Klein trainer refuses each of them.
     private static var kreaTrainingOnly: MereRunOptionScope<TrainF> { TrainF.only(.krea) }
+    /// Klein options the CLI checks on Krea by value: Krea runs without the default (warns) and
+    /// refuses any other value. Each carries a Krea rule naming that default.
+    private static var kleinOnlyUnlessDefault: MereRunOptionScope<TrainF> { TrainF.only(.klein, ignoredBy: [.krea]) }
+    /// `--recipe` is trimmed and lowercased, and older recipe names still resolve
+    /// (`ImageLoRATrainingOptions.resolveLoRATrainingRecipe`).
+    private static let trainingRecipeSpellings = MereRunChoiceSpellings(ignoresCase: true, aliases: [
+        "local-krea-style": "krea-fast-style",
+        "fal-krea-style": "krea-fast-style",
+        "krea2-fast-style": "krea-fast-style",
+        "krea-movie-style": "krea-cinematic-style",
+        "krea-wide-style": "krea-cinematic-style",
+        "local-klein-style": "klein-fast-style",
+        "flux2-klein-fast-style": "klein-fast-style"
+    ])
 
     public static let imageTrainLoRA = MereRunCommandCapability(
         id: "image.train-lora",
@@ -191,16 +205,21 @@ extension MereRunCapabilityCatalog {
                 flag: "--recipe",
                 label: "Recipe",
                 kind: .choice,
-                choices: ["krea-fast-style", "krea-cinematic-style", "klein-fast-style"]
+                choices: ["krea-fast-style", "krea-cinematic-style", "klein-fast-style"],
+                choiceSpellings: trainingRecipeSpellings
             ).scoped(TrainF.rule(.krea, values: ["krea-fast-style", "krea-cinematic-style"])),
             .init(flag: "--benchmark-steps", label: "Benchmark steps", kind: .integer).scoped(kleinTrainingOnly),
-            .init(flag: "--benchmark-warmup-steps", label: "Benchmark warmup", kind: .integer).scoped(kleinTrainingOnly),
+            .init(flag: "--benchmark-warmup-steps", label: "Benchmark warmup", kind: .integer)
+                .scoped(kleinOnlyUnlessDefault, .rule(.krea, range: .init(min: 5, max: 5))),
             .init(flag: "--sample-interval", label: "Sample interval", kind: .integer).scoped(kleinTrainingOnly),
             .init(flag: "--sample-prompt", label: "Sample prompt", kind: .string).scoped(kleinTrainingOnly),
             .init(flag: "--sample-model", label: "Sample model", kind: .string).scoped(kleinTrainingOnly),
-            .init(flag: "--sample-steps", label: "Sample steps", kind: .integer).scoped(kleinTrainingOnly),
-            .init(flag: "--sample-cfg", label: "Sample CFG", kind: .number).scoped(kleinTrainingOnly),
-            .init(flag: "--sample-lora-scale", label: "Sample LoRA scale", kind: .number).scoped(kleinTrainingOnly),
+            .init(flag: "--sample-steps", label: "Sample steps", kind: .integer)
+                .scoped(kleinOnlyUnlessDefault, .rule(.krea, range: .init(min: 8, max: 8))),
+            .init(flag: "--sample-cfg", label: "Sample CFG", kind: .number)
+                .scoped(kleinOnlyUnlessDefault, .rule(.krea, range: .init(min: 1, max: 1))),
+            .init(flag: "--sample-lora-scale", label: "Sample LoRA scale", kind: .number)
+                .scoped(kleinOnlyUnlessDefault, .rule(.krea, range: .init(min: 1, max: 1))),
             .init(flag: "--sample-seed", label: "Sample seed", kind: .integer).scoped(kleinTrainingOnly),
             .init(flag: "--visualize", label: "Visualize", kind: .boolean),
             .init(flag: "--visualize-port", label: "Visualization port", kind: .integer),
