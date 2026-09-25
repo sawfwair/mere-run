@@ -9,6 +9,7 @@ struct StudioGLiNERClassificationView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
     @StudioStoredValue("GLiNER.document") private var document = StudioClassificationDocument()
+    @StudioStoredValue("GLiNER.long") private var processLongText = false
     @StudioStoredValue("requestID") private var requestID: UUID? = nil
     @State private var draftRequestPath = ""
     @State private var message: String?
@@ -21,6 +22,7 @@ struct StudioGLiNERClassificationView: View {
         value.inputPath = draftRequestPath
         value.model = model
         value.force = true
+        value.extraArguments = processLongText ? "--long" : ""
         return value
     }
 
@@ -148,6 +150,8 @@ struct StudioGLiNERClassificationView: View {
 
     private var actions: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Toggle("Process long text in overlapping chunks", isOn: $processLongText)
+                .font(MereRunTheme.captionFont)
             if !document.problems.isEmpty, !(document.text.isEmpty && document.tasks.isEmpty) {
                 ForEach(document.problems, id: \.self) { problem in
                     Label(problem, systemImage: "exclamationmark.circle")
@@ -212,6 +216,7 @@ struct StudioGLiNERClassificationView: View {
         command.outputPath = directory.appendingPathComponent(preflight ? "fit.json" : "classifications.json").path
         command.preflight = preflight
         command.force = true
+        command.extraArguments = processLongText ? "--long" : ""
         guard let template = CommandCatalog.template(id: .textClassify) else { return }
         let request = StudioRunRequest(mode: .chat, templateID: template.id, template: template, draft: command)
         requestID = (try? StudioTaskRunner(controller: controller, library: library)
@@ -454,6 +459,14 @@ private struct StudioClassificationAnswers: View {
                         .foregroundStyle(MereRunTheme.textSecondary)
                     ForEach(plan.taskNames, id: \.self) { name in
                         Label(name, systemImage: "checkmark.circle")
+                            .font(MereRunTheme.bodyFont)
+                    }
+                case .fits(let plans):
+                    Text("\(plans.count) chunks · \(plans.reduce(0) { $0 + $1.inputTokens }) input tokens")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textSecondary)
+                    ForEach(plans.indices, id: \.self) { index in
+                        Text("Chunk \(index + 1): \(plans[index].inputTokens) tokens")
                             .font(MereRunTheme.bodyFont)
                     }
                 case .result(let result):

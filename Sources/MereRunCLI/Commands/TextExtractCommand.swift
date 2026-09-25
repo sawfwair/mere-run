@@ -2,11 +2,10 @@ import ArgumentParser
 import Foundation
 import MereRunCore
 
-struct TextClassify: AsyncParsableCommand {
+struct TextExtract: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "classify", abstract: "Classify text with native GLiNER2.5 Decide.",
-        discussion: "Read a JSON request with text and an ordered tasks array. Each task has a name, labels, "
-            + "and optional prompt, descriptions, multi_label, and threshold fields. Pull the managed model first."
+        commandName: "extract", abstract: "Extract entities, relations, and structures with native GLiNER2.5 Decide.",
+        discussion: "Read a JSON request with text and entities, relations, or structures. Pull the managed model first."
     )
 
     @Option(name: [.customShort("i"), .long], help: "JSON request file; use - or omit to read stdin.")
@@ -38,14 +37,14 @@ struct TextClassify: AsyncParsableCommand {
             guard !CLIStdin.isInteractive() else { throw ValidationError("Pass --input request.json or pipe JSON to stdin.") }
             data = FileHandle.standardInput.readDataToEndOfFile()
         }
-        guard data.count <= 2 * 1_024 * 1_024 else { throw ValidationError("Classification request exceeds 2 MiB.") }
+        guard data.count <= 2 * 1_024 * 1_024 else { throw ValidationError("Extraction request exceeds 2 MiB.") }
         let requests = try batch
-            ? JSONDecoder().decode([GLiNERClassificationRequest].self, from: data)
-            : [JSONDecoder().decode(GLiNERClassificationRequest.self, from: data)]
-        guard !requests.isEmpty else { throw ValidationError("Provide at least one classification request.") }
+            ? JSONDecoder().decode([GLiNERExtractionRequest].self, from: data)
+            : [JSONDecoder().decode(GLiNERExtractionRequest.self, from: data)]
+        guard !requests.isEmpty else { throw ValidationError("Provide at least one extraction request.") }
         try requests.forEach { try $0.validate() }
         if let managed = ManagedModelCatalog.spec(for: model), managed.validationKind != .gliner25Decide {
-            throw ValidationError("text classify requires a GLiNER2.5 Decide model.")
+            throw ValidationError("text extract requires a GLiNER2.5 Decide model.")
         }
         let resolved = try await ManagedModelResolver.resolveForRuntime(
             requestedModel: model, defaultModelID: GLiNERCatalog.modelID, progress: nil)

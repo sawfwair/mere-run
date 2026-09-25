@@ -2220,6 +2220,28 @@ textEmbed	videoOutputMode=video-only	text embed 1 --model 1 --max-tokens 2049 --
 textEmbed	videoQuality=draft	text embed 1 --model 1 --max-tokens 2049 --output 1 --pretty 1
 textEmbed	videoQuality=final	text embed 1 --model 1 --max-tokens 2049 --output 1 --pretty 1
 textEmbed	voiceMode=clone	text embed 1 --model 1 --max-tokens 2049 --output 1 --pretty 1
+textExtract	default	text extract --input '' --model text-classify-gliner25-decide --output ~/Documents/mere.run/Text/extract-<stamp>.json
+textExtract	maximal	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	maximal-booleans-off	text extract --input 1 --model 1 --output 1 1
+textExtract	modelRoot=video-minimax-h3-ref2va	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	modelRoot=video-wan22-ti2v-5b-mlx	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	musicLMMode=disable	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	musicLMMode=use	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	musicMIDINoteOffset=-12	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	musicTask=lego	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	musicTask=repaint	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	musicTrainingKind=lokr	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	renderProfile=quality	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	responseFormat=json_object	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	responseFormat=text	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	thinkingMode=automatic	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	thinkingMode=hide	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	thinkingMode=show	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	videoOutputMode=audio-video	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	videoOutputMode=video-only	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	videoQuality=draft	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	videoQuality=final	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
+textExtract	voiceMode=clone	text extract --input 1 --model 1 --output 1 --pretty --preflight 1
 textTrainLoRA	default	text train-lora --data '' --output ~/Documents/mere.run/Chat/train-text-lora-<stamp>.safetensors --model text-chat-gemma4-12b-4bit --adapter-name local-assistant --training-steps 600 --batch-size 1 --learning-rate 0.0001 --rank 16 --max-sequence-length 4096 --seed 42
 textTrainLoRA	maximal	text train-lora --data 1 --output 1 --model 1 --adapter-name 1 --training-steps 601 --batch-size 2 --learning-rate 0.5001 --rank 17 --max-sequence-length 4097 --seed 1 --model-path 1 --eval 1 --alpha 0.5 --reasoning-effort 0.5 --target-modules 1 --dry-run --visualize --visualize-port 8788 --json 1
 textTrainLoRA	maximal-booleans-off	text train-lora --data 1 --output 1 --model 1 --adapter-name 1 --training-steps 601 --batch-size 2 --learning-rate 0.5001 --rank 17 --max-sequence-length 4097 --seed 1 --model-path 1 --eval 1 --alpha 0.5 --reasoning-effort 0.5 --target-modules 1 1

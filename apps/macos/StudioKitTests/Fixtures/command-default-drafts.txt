@@ -194,6 +194,8 @@ textDecide	outputPath	~/Documents/mere.run/Text/decisions-<stamp>.json
 textEmbed	model	text-embed-qwen3-0.6b
 textEmbed	outputPath	~/Documents/mere.run/Text/embeddings-<stamp>.json
 textEmbed	prompt	semantic search query
+textExtract	model	text-classify-gliner25-decide
+textExtract	outputPath	~/Documents/mere.run/Text/extract-<stamp>.json
 textTrainLoRA	model	text-chat-gemma4-12b-4bit
 textTrainLoRA	outputPath	~/Documents/mere.run/Chat/train-text-lora-<stamp>.safetensors
 textTrainLoRA	seed	42

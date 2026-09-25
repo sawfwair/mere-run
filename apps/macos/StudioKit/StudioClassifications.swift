@@ -182,12 +182,15 @@ package struct StudioClassificationResult: Decodable, Equatable {
 package enum StudioClassificationOutput: Equatable {
     case result(StudioClassificationResult)
     case fit(StudioClassificationPlan)
+    case fits([StudioClassificationPlan])
 
     package init?(data: Data) {
         if let result = try? JSONDecoder().decode(StudioClassificationResult.self, from: data) {
             self = .result(result)
         } else if let plan = try? JSONDecoder().decode(StudioClassificationPlan.self, from: data) {
             self = .fit(plan)
+        } else if let plans = try? JSONDecoder().decode([StudioClassificationPlan].self, from: data) {
+            self = .fits(plans)
         } else {
             return nil
         }

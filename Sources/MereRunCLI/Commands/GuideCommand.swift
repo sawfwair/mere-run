@@ -274,6 +274,10 @@ enum GuideRegistry {
             models: [GLiNERCatalog.modelID], resourceName: "text-classify.md"
         ),
         GuideTopic(
+            topic: "text-extract", title: "Text Extract", commandPaths: [["text", "extract"]],
+            models: [GLiNERCatalog.modelID], resourceName: "text-extract.md"
+        ),
+        GuideTopic(
             topic: "text-anonymize",
             title: "Text Anonymize",
             commandPaths: [["text", "anonymize"]],

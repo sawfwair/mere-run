@@ -1,32 +1,26 @@
-# Classify text with GLiNER2.5 Decide
+# Classify and extract text with GLiNER2.5 Decide
 
-This guide is for developers who need local classification with labels supplied
-at request time. The managed model runs a DeBERTa v3 large encoder and the
-GLiNER2 classification head in Swift/MLX. It returns labels and scores without
-generating text.
+This guide is for developers who need local classification and schema driven
+extraction. The managed English checkpoint runs its DeBERTa encoder and
+classification, count, and span heads in Swift/MLX.
 
-Install the pinned English checkpoint:
+Pull the pinned checkpoint:
 
 ```bash
 mere.run model pull text-classify-gliner25-decide
 ```
 
-Save this request as `request.json`:
+## Classify text
+
+Save a request as `classification.json`:
 
 ```json
 {
   "text": "The package arrived late, and I need a refund.",
   "tasks": [
-    {
-      "name": "intent",
-      "labels": ["order_status", "refund_request", "cancel_order"]
-    },
-    {
-      "name": "topics",
-      "labels": ["shipping", "billing", "account"],
-      "multi_label": true,
-      "threshold": 0.4
-    }
+    {"name": "intent", "labels": ["order_status", "refund_request", "cancel_order"]},
+    {"name": "topics", "labels": ["shipping", "billing", "account"],
+     "multi_label": true, "threshold": 0.4}
   ]
 }
 ```
@@ -34,56 +28,106 @@ Save this request as `request.json`:
 Check the token count, then classify the text:
 
 ```bash
-mere.run text classify --input request.json --preflight --pretty
-mere.run text classify --input request.json --pretty
+mere.run text classify --input classification.json --preflight --pretty
+mere.run text classify --input classification.json --pretty
 ```
 
-Each task returns selected `labels` and a `probabilities` map. Single-label
-tasks use softmax and select one label. Multi-label tasks use sigmoid and select
-each label at or above the task's threshold. If no label reaches the threshold,
-the operation returns the highest-scoring label, matching the upstream
-`classify_text` behavior. These scores depend on the supplied label set and
-are not calibrated decision probabilities.
+Each task returns selected `labels` and a `probabilities` map. Single label
+tasks use softmax; multi label tasks use sigmoid and the task's `threshold`.
+If no multi label score reaches the threshold, the highest scoring label is
+returned. Optional `prompt` and `descriptions` fields add task instructions
+and label definitions.
 
-The `tasks` array preserves task order. Each task can include `prompt` and
-`descriptions`, where `descriptions` maps label names to short definitions.
-The encoder accepts at most 512 subword tokens for the complete schema and
-text. The command rejects longer requests so labels remain intact.
+## Extract entities, relations, and structures
 
-The native request accepts one text, at most 16 tasks, and at most 64 labels
-per task. Its `threshold` field corresponds to `cls_threshold` in the Python
-API. The Python library also has batch and long-document classification
-helpers; this native command does not yet provide either one.
+Save a request as `extraction.json`:
 
-In the macOS Studio app, open **Text → Classify** to enter the text and edit
-label tasks directly. Add labels, optional descriptions and prompts, and a
-threshold for multi-label tasks. **Check fit** reports the token count before
-loading the model. **Classify** shows selected labels and the score for each
-supplied label. The page also imports and exports the same request JSON used
-by the CLI.
+```json
+{
+  "text": "Alice Smith joined Acme in Paris in 2024.",
+  "entities": [{"name": "person"}, {"name": "organization"}, {"name": "location"}],
+  "relations": [{"name": "works_for"}, {"name": "located_in"}],
+  "structures": [{
+    "name": "employment",
+    "fields": [
+      {"name": "person", "multiple": false},
+      {"name": "organization", "multiple": false},
+      {"name": "location", "multiple": false}
+    ]
+  }],
+  "threshold": 0.5
+}
+```
 
-**Decide** is the checkpoint's name. Studio uses **Classify** for this page
-because its output is a set of supplied labels and their scores. Studio's
-**Decisions** page uses Laya for typed choice, ordered score, and yes-or-no
-questions. You can express those tasks with GLiNER labels, but the GLiNER
-result remains a classification over the labels you provided.
+Run extraction:
 
-The model specializes in English operational classification. It does not
-answer open questions or provide explanations. For multilingual classification,
-use a model trained for those languages.
+```bash
+mere.run text extract --input extraction.json --preflight --pretty
+mere.run text extract --input extraction.json --pretty
+```
 
-The native runtime uses this checkpoint's classification head. The broader
-GLiNER2 library also exposes entity, relation, and structured extraction, but
-those methods are outside this integration. The checkpoint's published model
-card describes it as a classification specialist; its extraction quality has
-not been qualified here.
+The result groups entity spans, relation pairs, and structure records.
+Each span includes text, confidence, and character offsets. Entity and
+relation terms can include a `description`. Structure fields can include a
+`description` and `multiple` (`true` by default) to limit a field to one span
+or keep several. Add `classifications` with
+the same task objects used by `text classify` to run a joint schema in one
+encoder pass.
+
+## Process batches and long documents
+
+Pass `--batch` to read a JSON array of independent requests and return an
+array in the same order. Pass `--long` to split each document into overlapping
+word chunks and merge its results. Both flags work with `text classify` and
+`text extract`:
+
+```bash
+mere.run text classify --input classifications.json --batch --long
+mere.run text extract --input extractions.json --batch --long
+```
+
+Long extraction returns offsets into the original document. Overlapping
+chunks can report the same span; the runtime keeps one copy. The default
+chunk size is 384 words with 64 words of overlap. Each encoded chunk still
+must fit the checkpoint's 512 token limit, including the schema. The runtime
+shortens a chunk when the schema needs more tokens.
+
+The loopback API accepts the same single request at
+`POST /v1/text/classifications` or `POST /v1/text/extractions` with a `model`
+field. Set `long: true` for long documents. For a batch, send a `requests`
+array with `model` and optional `long`; the API returns an array.
+
+In macOS Studio, open **Text > Classify** for editable label tasks or
+**Text > Extract** for editable entities, relations, structures, and joint
+classification tasks. Both pages support **Check fit**, structured results,
+and JSON import and export.
+Turn on **Process long text in overlapping chunks** for a long document.
+
+## Check the limits
+
+The checkpoint specializes in English classification. Its retained count
+and span heads produce entity, relation, and structure predictions, but the
+published model card does not qualify their accuracy. The native checkpoint
+tests compare classification scores and representative extraction predictions
+with the Python reference. Evaluate extraction quality on your own data.
+
+The normal request must fit within 512 subword tokens. Classification accepts
+up to 16 tasks and 64 labels per task. Scores depend on the supplied schema
+and are not calibrated decision probabilities. The model does not generate
+text or explanations. The separate 1B and multilingual Decide checkpoints
+are outside this managed model entry.
+
+The upstream Python library also offers schema metadata such as validators,
+choice fields, span attributes, and record formation policies. This native
+request implements the checkpoint's classification, entity, relation, and
+structure heads with basic field controls; it does not expose those advanced
+Python metadata policies.
 
 ## Sources and license
 
-- [GLiNER2.5 Decide model card](https://huggingface.co/fastino/GLiNER2.5-Decide/tree/7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6)
+- [Pinned GLiNER2.5 Decide model snapshot](https://huggingface.co/fastino/GLiNER2.5-Decide/tree/7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6)
 - [GLiNER2 source](https://github.com/fastino-ai/GLiNER2/tree/55656fbfa01d3d4a77485e1a1eeeaf682990ccdf)
-- [DeBERTa v2 implementation used by the checkpoint](https://github.com/huggingface/transformers/blob/v4.48.1/src/transformers/models/deberta_v2/modeling_deberta_v2.py)
+- [DeBERTa implementation](https://github.com/huggingface/transformers/blob/v4.48.1/src/transformers/models/deberta_v2/modeling_deberta_v2.py)
 
-The model card declares Apache 2.0. The model snapshot revision is pinned in
-the managed catalog. The source revision identifies the GLiNER2 classifier and
-schema formatting used for this implementation.
+The model card declares Apache 2.0. The managed catalog pins the model
+snapshot revision.

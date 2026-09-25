@@ -65,6 +65,11 @@ final class StudioClassificationsTests: XCTestCase {
         }
         XCTAssertEqual(plan.inputTokens, 81)
         XCTAssertEqual(plan.taskNames, ["topic"])
+        let longPlan = Data("[\(String(decoding: preflight, as: UTF8.self)),\(String(decoding: preflight, as: UTF8.self))]".utf8)
+        guard case .fits(let chunks) = StudioClassificationOutput(data: longPlan) else {
+            return XCTFail("Expected long-document fit plans")
+        }
+        XCTAssertEqual(chunks.map(\.inputTokens), [81, 81])
     }
 
     func testClassificationTemplateUsesTheFormRequest() {

@@ -9,7 +9,7 @@ final class GLiNERTests: MereRunCoreTestCase {
         XCTAssertEqual(spec.apiProfile?.task, .textClassifications)
         XCTAssertEqual(spec.upstreamRevision, GLiNERCatalog.revision)
         let manifest = MereRunModelManifest.template(for: .gliner25Decide)
-        XCTAssertEqual(manifest.supports, [.textClassification])
+        XCTAssertEqual(manifest.supports, [.textClassification, .textExtraction])
     }
 
     func testPinnedCheckpointTokenizationAndClassification() throws {
@@ -47,5 +47,88 @@ final class GLiNERTests: MereRunCoreTestCase {
                                "\(head).\(label) differs from the pinned Python eval-mode reference")
             }
         }
+    }
+
+    func testPinnedCheckpointEntityExtraction() throws {
+        guard let path = ProcessInfo.processInfo.environment["GLINER_CHECKPOINT"] else {
+            throw XCTSkip("Set GLINER_CHECKPOINT to run pinned checkpoint parity.")
+        }
+        let operation = try GLiNERClassificationOperation(root: URL(fileURLWithPath: path), modelID: GLiNERCatalog.modelID)
+        let request = GLiNERExtractionRequest(text: "Alice Smith joined Acme in Paris in 2024.", entities: [
+            GLiNERExtractionTerm(name: "person"), GLiNERExtractionTerm(name: "organization"),
+            GLiNERExtractionTerm(name: "location")
+        ])
+        let plan = try operation.prepare(request)
+        XCTAssertEqual(plan.inputTokens, 23)
+        XCTAssertEqual(plan.wordCount, 9)
+        let result = try operation.predict(request)
+        XCTAssertEqual(result.entities["person"]?.first?.text, "Alice Smith")
+        XCTAssertEqual(result.entities["organization"]?.first?.text, "Acme")
+        XCTAssertEqual(result.entities["location"]?.first?.text, "Paris")
+        XCTAssertEqual(result.entities["person"]?.first?.confidence ?? -1, 0.999427199, accuracy: 0.00001)
+        XCTAssertEqual(result.entities["organization"]?.first?.confidence ?? -1, 0.999817550, accuracy: 0.00001)
+        XCTAssertEqual(result.entities["location"]?.first?.confidence ?? -1, 0.999998808, accuracy: 0.00001)
+        XCTAssertEqual(result.entities["person"]?.first?.start, 0)
+        XCTAssertEqual(result.entities["person"]?.first?.end, 11)
+    }
+
+    func testPinnedCheckpointRelationsAndStructure() throws {
+        guard let path = ProcessInfo.processInfo.environment["GLINER_CHECKPOINT"] else {
+            throw XCTSkip("Set GLINER_CHECKPOINT to run pinned checkpoint parity.")
+        }
+        let operation = try GLiNERClassificationOperation(root: URL(fileURLWithPath: path), modelID: GLiNERCatalog.modelID)
+        let text = "Alice Smith joined Acme in Paris in 2024."
+        let relations = try operation.predict(GLiNERExtractionRequest(text: text, relations: [
+            GLiNERExtractionTerm(name: "works_for"), GLiNERExtractionTerm(name: "located_in")
+        ]))
+        XCTAssertEqual(relations.relations["works_for"]?.first?.head.text, "Alice Smith")
+        XCTAssertEqual(relations.relations["works_for"]?.first?.tail.text, "Acme")
+        XCTAssertEqual(relations.relations["located_in"]?.first?.head.text, "Acme")
+        XCTAssertEqual(relations.relations["located_in"]?.first?.tail.text, "Paris")
+        let structure = try operation.predict(GLiNERExtractionRequest(text: text, structures: [
+            GLiNERExtractionStructure(name: "employment", fields: [
+                GLiNERExtractionField(name: "person"), GLiNERExtractionField(name: "organization"),
+                GLiNERExtractionField(name: "location")
+            ])
+        ]))
+        XCTAssertEqual(structure.structures["employment"]?.first?["person"]?.first?.text, "Alice Smith")
+        XCTAssertEqual(structure.structures["employment"]?.first?["organization"]?.first?.text, "Acme")
+        XCTAssertEqual(structure.structures["employment"]?.first?["location"]?.first?.text, "Paris")
+    }
+
+    func testLongExtractionRemapsOffsetsAndBatchKeepsRequestOrder() throws {
+        guard let path = ProcessInfo.processInfo.environment["GLINER_CHECKPOINT"] else {
+            throw XCTSkip("Set GLINER_CHECKPOINT to run pinned checkpoint parity.")
+        }
+        let operation = try GLiNERClassificationOperation(root: URL(fileURLWithPath: path), modelID: GLiNERCatalog.modelID)
+        let sentence = "Alice Smith joined Acme in Paris in 2024."
+        let request = GLiNERExtractionRequest(text: sentence + " " + sentence,
+                                              entities: [GLiNERExtractionTerm(name: "person")])
+        let plans = try operation.prepareLong(request, chunkSize: 9, chunkOverlap: 0)
+        XCTAssertEqual(plans.count, 2)
+        let response = try operation.predictLong(request, chunkSize: 9, chunkOverlap: 0)
+        XCTAssertEqual(response.entities["person"]?.map(\.start), [0, 42])
+        let batch = try operation.predictBatch([request, GLiNERExtractionRequest(text: sentence,
+            entities: [GLiNERExtractionTerm(name: "person")])])
+        XCTAssertEqual(batch.count, 2)
+        XCTAssertEqual(batch[1].entities["person"]?.first?.start, 0)
+    }
+
+    func testPinnedCheckpointJointSchemaSharesOneEncoderPass() throws {
+        guard let path = ProcessInfo.processInfo.environment["GLINER_CHECKPOINT"] else {
+            throw XCTSkip("Set GLINER_CHECKPOINT to run pinned checkpoint parity.")
+        }
+        let operation = try GLiNERClassificationOperation(root: URL(fileURLWithPath: path), modelID: GLiNERCatalog.modelID)
+        let response = try operation.predict(GLiNERExtractionRequest(
+            text: "Alice Smith joined Acme in Paris in 2024.",
+            entities: [GLiNERExtractionTerm(name: "person"), GLiNERExtractionTerm(name: "organization")],
+            relations: [GLiNERExtractionTerm(name: "works_for")],
+            classifications: [GLiNERClassificationTask(name: "tone", labels: ["positive", "negative"])]))
+        XCTAssertEqual(response.entities["person"]?.first?.text, "Alice Smith")
+        XCTAssertEqual(response.entities["organization"]?.first?.text, "Acme")
+        XCTAssertEqual(response.relations["works_for"]?.first?.tail.text, "Acme")
+        XCTAssertEqual(response.classifications["tone"]?.labels, ["positive"])
+        XCTAssertEqual(response.classifications["tone"]?.probabilities["positive"] ?? -1,
+                       0.678021550, accuracy: 0.00001)
     }
 }

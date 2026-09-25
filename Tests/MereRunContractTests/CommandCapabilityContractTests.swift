@@ -12,6 +12,7 @@ import Testing
         "text.anonymize",
         "text.decide",
         "text.classify",
+        "text.extract",
         "text.train-lora",
         "image.generate",
         "image.train-lora",
@@ -140,7 +141,7 @@ import Testing
         "geo.tessera",
         "geo.olmoearth"
     ])
-    #expect(document.commands.count == 133)
+    #expect(document.commands.count == 134)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

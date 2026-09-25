@@ -20,6 +20,12 @@ Each task has `name` and `labels` fields. Optional fields include `prompt`,
 `descriptions`, `multi_label`, and `threshold`. The complete schema and text
 must fit within 512 subword tokens.
 
+Use `--batch` for a JSON array of requests. Use `--long` to split long
+documents into overlapping chunks. Both flags can be combined.
+
+For entity, relation, structure, or joint extraction, use
+`mere.run text extract` and see the GLiNER2.5 Decide handbook.
+
 ## Sources
 
 - [Pinned GLiNER2.5 Decide checkpoint](https://huggingface.co/fastino/GLiNER2.5-Decide/tree/7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6)

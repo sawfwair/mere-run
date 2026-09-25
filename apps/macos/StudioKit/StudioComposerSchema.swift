@@ -438,6 +438,7 @@ package struct StudioModelScope: Equatable {
         case .textAnonymize: return ["text-anonymize"]
         case .textDecide: return ["text-decide"]
         case .textClassify: return ["text-classify"]
+        case .textExtract: return ["text-classify"]
         case .geoFlood: return ["vision-flood"]
         case .geoFire: return ["vision-fire"]
         case .geoTessera, .geoOlmoEarth: return ["vision-embed"]

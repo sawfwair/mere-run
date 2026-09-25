@@ -736,6 +736,8 @@ private struct StudioWorkspaceView: View {
             StudioLayaDecisionView()
         case .textClassify:
             StudioGLiNERClassificationView()
+        case .textExtract:
+            StudioGLiNERExtractionView()
         case .modelsInstalled:
             StudioModelsView(
                 modelStore: models,

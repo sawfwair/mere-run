@@ -216,6 +216,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case textAnonymization = "text_anonymization"
         case textDecision = "text_decision"
         case textClassification = "text_classification"
+        case textExtraction = "text_extraction"
         case speechSynthesis = "speech_synthesis"
         case speechRecognition = "speech_recognition"
         case speakerDiarization = "speaker_diarization"

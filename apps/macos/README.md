@@ -924,6 +924,14 @@ all scores in the task's label order. **Check fit** reports the input token
 count. Like Decisions, Classify saves its draft for the Command panel and can
 import or export request JSON.
 
+Text ▸ Extract (`StudioUI/StudioGLiNERExtractionView.swift`,
+`StudioKit/StudioExtractions.swift`) edits GLiNER entity names, relation
+names, structured fields, and joint classification tasks. **Check fit** reports
+the schema and token count. **Extract** shows span offsets and confidence,
+relation pairs, and structured records. The page imports and exports the same
+JSON request used by `mere.run text extract`. Both GLiNER pages offer
+overlapping chunks for long text.
+
 **Earth** is native Earth-observation inference, with Flood, Fire, TESSERA, and
 OlmoEarth tasks — TerraMind flood and fire tile inference and the TESSERA v2
 and OlmoEarth v1.2 encoders — each an Analyze task on the shared task

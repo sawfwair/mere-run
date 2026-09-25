@@ -35,7 +35,8 @@ extension StudioTask {
         case .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth, .visionPose, .visionFaces,
              .visionFlow, .visionGeometry, .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioSeparate,
              .musicAnalyze, .musicTranscribe, .musicSeparate, .soundScore, .soundEncode, .soundDecode,
-             .textEmbeddings, .textAnonymize, .textDecide, .textClassify, .earthFlood, .earthFire, .earthTessera,
+             .textEmbeddings, .textAnonymize, .textDecide, .textClassify, .textExtract,
+             .earthFlood, .earthFire, .earthTessera,
              .earthOlmoEarth, .imageDatasets:
             return .analyze
         case .musicRealtime, .audioLive, .visionLive, .serverServing, .serverMusic, .serverVision:
@@ -393,6 +394,12 @@ extension StudioTask {
                 title: title, systemImage: "tag",
                 emptyTitle: "Classify text.",
                 emptyMessage: "Add text and label tasks to classify with GLiNER2.5 Decide."
+            )
+        case .textExtract:
+            return StudioTaskPresentation(
+                title: title, systemImage: "text.viewfinder",
+                emptyTitle: "Extract from text.",
+                emptyMessage: "Add text and an extraction schema for GLiNER2.5 Decide."
             )
         case .earthFlood:
             return StudioTaskPresentation(

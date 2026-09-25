@@ -216,6 +216,7 @@ actor CodeGenServer {
         print("Chat endpoint: http://\(host):\(port)/v1/chat/completions")
         print("Decisions endpoint: http://\(host):\(port)/v1/text/decisions")
         print("Classification endpoint: http://\(host):\(port)/v1/text/classifications")
+        print("Extraction endpoint: http://\(host):\(port)/v1/text/extractions")
         print("Embeddings endpoint: http://\(host):\(port)/v1/embeddings")
         print("Images endpoint: http://\(host):\(port)/v1/images/generations")
         print("Image edits endpoint: http://\(host):\(port)/v1/images/edits")
@@ -268,6 +269,9 @@ actor CodeGenServer {
         }
         router.post("/v1/text/classifications") { [self] request, _ in
             try await handleTextClassifications(request)
+        }
+        router.post("/v1/text/extractions") { [self] request, _ in
+            try await handleTextExtractions(request)
         }
         router.post("/v1/embeddings") { [self] request, _ in
             return try await self.handleEmbeddings(request)
@@ -638,8 +642,52 @@ actor CodeGenServer {
                 let resolved = try await ManagedModelResolver.resolveForRuntime(
                     requestedModel: classification.model, defaultModelID: GLiNERCatalog.modelID, progress: nil)
                 let operation = try GLiNERClassificationOperation(root: resolved.url, modelID: resolved.spec.id)
-                let response = try operation.predict(classification.request)
-                return try jsonResponse(response)
+                let responses = try classification.long
+                    ? operation.predictBatchLong(classification.requests)
+                    : operation.predictBatch(classification.requests)
+                return try classification.batch ? jsonResponse(responses) : jsonResponse(responses[0])
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleTextExtractions(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(status: .unsupportedMediaType,
+                                     message: "Content-Type must be application/json.", type: "invalid_request_error")
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(status: .tooManyRequests,
+                                     message: "Rate limit exceeded.", type: "rate_limit_error")
+        }
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 2 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest,
+                                     message: "Invalid request body.", type: "invalid_request_error")
+        }
+        let extraction: GLiNERExtractionAPIRequest
+        do {
+            extraction = try JSONDecoder().decode(GLiNERExtractionAPIRequest.self, from: Data(body.readableBytesView))
+        } catch {
+            return makeErrorResponse(status: .badRequest,
+                                     message: "Invalid request payload.", type: "invalid_request_error")
+        }
+        do {
+            return try await withRuntimeRequestAdmission(using: requestAdmission) {
+                try extraction.validate()
+                let resolved = try await ManagedModelResolver.resolveForRuntime(
+                    requestedModel: extraction.model, defaultModelID: GLiNERCatalog.modelID, progress: nil)
+                let operation = try GLiNERClassificationOperation(root: resolved.url, modelID: resolved.spec.id)
+                let responses = try extraction.long
+                    ? operation.predictBatchLong(extraction.requests)
+                    : operation.predictBatch(extraction.requests)
+                return try extraction.batch ? jsonResponse(responses) : jsonResponse(responses[0])
             }
         } catch {
             return runtimeErrorResponse(error)

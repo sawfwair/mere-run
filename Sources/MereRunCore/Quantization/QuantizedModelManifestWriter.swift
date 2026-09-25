@@ -199,7 +199,7 @@ public enum QuantizedModelManifestWriter {
                 case .laya:
                     return [.textDecision]
                 case .gliner25Decide:
-                    return [.textClassification]
+                    return [.textClassification, .textExtraction]
                 case .qwen3Coder, .northMiniCode:
                     return [.chat, .codeGeneration]
                 case .lightOnOCR:

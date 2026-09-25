@@ -42,6 +42,7 @@ Public tree:
   - `mere.run text anonymize` — Detect and redact PII using OpenAI Privacy Filter.
   - `mere.run text decide` — Evaluate typed questions with native Laya decision models.
   - `mere.run text classify` — Classify text with native GLiNER2.5 Decide.
+  - `mere.run text extract` — Extract entities, relations, and structures with native GLiNER2.5 Decide.
   - `mere.run text train-lora` — Train a native text or image-conditioned LoRA adapter from chat-style SFT JSONL.
 - [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, diarize, and manage voice profiles.
   - `mere.run speech synthesize` — Generate speech from text using Qwen3-TTS.

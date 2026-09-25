@@ -153,6 +153,28 @@ extension CommandFlags {
         package static let output = "--output"
         package static let pretty = "--pretty"
         package static let preflight = "--preflight"
+        package static let long = "--long"
+        package static let batch = "--batch"
+    }
+}
+
+// MARK: - text extract
+
+extension CommandFlags {
+    /// `mere.run text extract` — Extract
+    package enum TextExtract: CommandFlagNamespace {
+        package static let command = ["text", "extract"]
+        package static let defaultValues = [
+            "--model": "text-classify-gliner25-decide"
+        ]
+
+        package static let input = "--input"
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let pretty = "--pretty"
+        package static let preflight = "--preflight"
+        package static let long = "--long"
+        package static let batch = "--batch"
     }
 }
 

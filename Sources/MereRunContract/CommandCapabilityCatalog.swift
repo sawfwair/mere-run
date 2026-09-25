@@ -40,6 +40,7 @@ public enum MereRunCapabilityCatalog {
             textAnonymize,
             textDecide,
             textClassify,
+            textExtract,
             textTrainLoRA,
             imageGenerate,
             imageTrainLoRA,

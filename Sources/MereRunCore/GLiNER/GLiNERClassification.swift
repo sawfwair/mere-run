@@ -120,11 +120,11 @@ struct GLiNERSpecialTokenConfig: Decodable {
 
 public final class GLiNERClassificationOperation {
     public let modelID: String
-    private let root: URL
-    private let configuration: GLiNEREncoderConfiguration
-    private let tokenizer: any Tokenizer
-    private let specialTokenIDs: [String: Int]
-    private var network: GLiNERNetwork?
+    let root: URL
+    let configuration: GLiNEREncoderConfiguration
+    let tokenizer: any Tokenizer
+    let specialTokenIDs: [String: Int]
+    var network: GLiNERNetwork?
 
     public init(root: URL, modelID: String) throws {
         self.root = root
@@ -137,7 +137,9 @@ public final class GLiNERClassificationOperation {
         let tokenConfig = try JSONDecoder().decode(GLiNERSpecialTokenConfig.self,
             from: Data(contentsOf: root.appending(path: "tokenizer_config.json")))
         specialTokenIDs = tokenConfig.tokenIDs
-        guard specialTokenIDs["[P]"] == 128_003, specialTokenIDs["[L]"] == 128_007,
+        guard specialTokenIDs["[P]"] == 128_003, specialTokenIDs["[C]"] == 128_004,
+              specialTokenIDs["[E]"] == 128_005, specialTokenIDs["[R]"] == 128_006,
+              specialTokenIDs["[L]"] == 128_007,
               specialTokenIDs["[SEP_STRUCT]"] == 128_001,
               specialTokenIDs["[SEP_TEXT]"] == 128_002 else {
             throw GLiNERClassificationError.invalidRequest("Tokenizer marker IDs do not match the checkpoint.")
@@ -158,11 +160,7 @@ public final class GLiNERClassificationOperation {
 
     public func predict(_ request: GLiNERClassificationRequest) throws -> GLiNERClassificationResponse {
         let prepared = try encode(request)
-        if network == nil {
-            network = try GLiNERNetwork(configuration: configuration,
-                arrays: MLX.loadArrays(url: root.appending(path: "model.safetensors")))
-        }
-        guard let network else { throw GLiNERClassificationError.invalidRequest("Model did not load.") }
+        let network = try loadNetwork()
         let logits = network(inputIDs: MLXArray(prepared.ids).reshaped([1, prepared.ids.count]),
                              markers: MLXArray(prepared.markers).reshaped([1, prepared.markers.count]))
         eval(logits)
@@ -190,6 +188,15 @@ public final class GLiNERClassificationOperation {
         }
         return GLiNERClassificationResponse(model: modelID, runtime: "native-swift-mlx-fp32",
                                             heads: heads, inputTokens: prepared.ids.count)
+    }
+
+    func loadNetwork() throws -> GLiNERNetwork {
+        if network == nil {
+            network = try GLiNERNetwork(configuration: configuration,
+                arrays: MLX.loadArrays(url: root.appending(path: "model.safetensors")))
+        }
+        guard let network else { throw GLiNERClassificationError.invalidRequest("Model did not load.") }
+        return network
     }
 
     func encode(_ request: GLiNERClassificationRequest) throws -> (ids: [Int], markers: [Int]) {

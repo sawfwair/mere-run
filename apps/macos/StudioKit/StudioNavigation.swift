@@ -154,7 +154,7 @@ package enum StudioDomain: String, CaseIterable, Codable, Identifiable {
             self = .vision
         case .speechTranscribe, .speechDiarize, .speechDiarizeLive, .speechListen, .audioEnhance, .audioEdit:
             self = .audio
-        case .textEmbed, .textAnonymize, .textDecide, .textClassify:
+        case .textEmbed, .textAnonymize, .textDecide, .textClassify, .textExtract:
             self = .text
         case .geoFlood, .geoFire, .geoTessera, .geoOlmoEarth:
             self = .earth
@@ -234,6 +234,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
     case textAnonymize = "text.anonymize"
     case textDecide = "text.decide"
     case textClassify = "text.classify"
+    case textExtract = "text.extract"
 
     case earthFlood = "earth.flood"
     case earthFire = "earth.fire"
@@ -271,7 +272,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
              .visionFaces, .visionFlow, .visionGeometry, .visionLive:
             return .vision
         case .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioSeparate, .audioLive: return .audio
-        case .textEmbeddings, .textAnonymize, .textDecide, .textClassify: return .text
+        case .textEmbeddings, .textAnonymize, .textDecide, .textClassify, .textExtract: return .text
         case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth: return .earth
         case .modelsInstalled, .modelsLocations, .modelsHealth, .modelsBenchmarks, .modelsAdapters:
             return .models
@@ -316,6 +317,7 @@ package enum StudioTask: String, CaseIterable, Codable, Identifiable {
         case .audioEnhance: return "Enhance"
         case .textDecide: return "Decisions"
         case .textClassify: return "Classify"
+        case .textExtract: return "Extract"
         case .textEmbeddings: return "Embeddings"
         case .textAnonymize: return "Anonymize"
         case .earthFlood: return "Flood"

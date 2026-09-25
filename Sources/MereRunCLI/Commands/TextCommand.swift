@@ -11,6 +11,7 @@ struct Text: ParsableCommand {
             TextAnonymize.self,
             TextDecide.self,
             TextClassify.self,
+            TextExtract.self,
             TextTrainLoRA.self,
         ]
     )
