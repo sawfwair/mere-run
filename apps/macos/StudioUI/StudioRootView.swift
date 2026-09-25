@@ -77,6 +77,8 @@ private struct StudioWorkspaceView: View {
     /// A run whose user-visible destination could not be created, explained once per launch.
     @State private var outputFallbackNotice: String?
     @State private var outputFallbackAnnounced = false
+    /// What Run again or Vary left out of a Library row's recorded command.
+    @State private var replayNotice: StudioScopeNotice?
     /// The "B" side Library ▸ Compare asked for, handed to the focused result once it opens.
     @State private var pendingComparison: StudioResultSelection?
 
@@ -518,6 +520,17 @@ private struct StudioWorkspaceView: View {
             .padding(.top, MereRunTheme.Spacing.sm)
         }
 
+        if let replayNotice {
+            MereBanner(
+                severity: .info,
+                text: replayNotice.accessibilityLabel,
+                systemImage: "eye.slash",
+                onDismiss: { self.replayNotice = nil }
+            )
+            .padding(.horizontal, MereRunTheme.Spacing.lg)
+            .padding(.top, MereRunTheme.Spacing.sm)
+        }
+
         if !hasCompletedWelcome {
             MereBanner(
                 severity: .info,
@@ -868,7 +881,7 @@ private struct StudioWorkspaceView: View {
         } else if let archetype = destination.task.analyzeArchetype {
             StudioAnalyzeCanvas(
                 archetype: archetype,
-                presentation: StudioTaskPresentation(mode: mode),
+                presentation: StudioTaskPresentation(mode: mode, slots: mode.attachmentSlots(for: draft, source: scopeSource)),
                 cards: feedCards,
                 selectedID: navigation.selectedLibraryID,
                 inputPath: draft.inputPath,
@@ -881,7 +894,7 @@ private struct StudioWorkspaceView: View {
             )
         } else {
             StudioFeedCanvas(
-                presentation: StudioTaskPresentation(mode: mode),
+                presentation: StudioTaskPresentation(mode: mode, slots: mode.attachmentSlots(for: draft, source: scopeSource)),
                 slots: mode.attachmentSlots(for: draft, source: scopeSource),
                 cards: feedCards,
                 readiness: readiness,
@@ -1693,6 +1706,7 @@ private struct StudioWorkspaceView: View {
         do {
             let variationSeed = commandDraft.seed != item.commandDraft?.seed ? commandDraft.seed : nil
             navigation.selectedLibraryID = try prompt.replay(item, variationSeed: variationSeed).id
+            replayNotice = StudioLibraryReplay.notice(for: item, source: scopeSource)
         } catch {
             studioError = error.localizedDescription
         }

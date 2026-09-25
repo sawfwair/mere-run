@@ -125,4 +125,29 @@ final class StudioInspectorSchemaTests: XCTestCase {
         XCTAssertEqual(StudioInspectorTaskMemory.decode(""), [])
         XCTAssertEqual(StudioInspectorTaskMemory.decode("image.generate,not.a.task"), [.imageGenerate])
     }
+
+    /// The scope note shows a folder glyph only for a folder the CLI could not identify; a model
+    /// id or the default gets a plain question mark, and a note about unused values its own glyph.
+    func testTheScopeNoteGlyphFollowsWhatTheNoteIsAbout() throws {
+        let video = try XCTUnwrap(StudioContractSchema.capability(for: .video))
+        let note = { (model: String) in
+            StudioScopeNotice(
+                scope: StudioOptionScope(
+                    capability: video, arguments: ["x", "--model", model],
+                    identities: StudioFixedModelIdentities([model: .unidentified])
+                ),
+                hidden: [], replaced: []
+            )
+        }
+        let folder = try XCTUnwrap(note("/Volumes/Models/my-ltx"))
+        XCTAssertEqual(folder.kind, .unidentified)
+        XCTAssertEqual(StudioScopeNote.systemImage(for: folder), "questionmark.folder")
+        let alias = try XCTUnwrap(note("Lightricks/LTX-2.3"))
+        XCTAssertEqual(StudioScopeNote.systemImage(for: alias), "questionmark.circle", "an upstream id is not a folder")
+        XCTAssertTrue(alias.title.hasSuffix("Lightricks/LTX-2.3"), alias.title)
+        let id = try XCTUnwrap(note("video-ltx-av"))
+        XCTAssertEqual(StudioScopeNote.systemImage(for: id), "questionmark.circle")
+        XCTAssertEqual(StudioScopeNote.systemImage(for: StudioScopeNotice(kind: .unused, title: "Not used", details: [])), "eye.slash")
+        XCTAssertNil(StudioScopeNote.systemImage(for: StudioScopeNotice(kind: .identifying, title: "Identifying", details: [])))
+    }
 }

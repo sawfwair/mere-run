@@ -166,6 +166,18 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// `emptyMessage` for the wells the model the draft runs takes: guidance that offers an
+    /// optional picture says so only while a well takes one (FastH3 has no start frame, Krea 2 no
+    /// reference well).
+    package func emptyMessage(slots: [StudioAttachmentSlot]) -> String {
+        let takesImage = slots.contains { $0.acceptedTypes.contains(.image) }
+        switch self {
+        case .video where !slots.contains(where: { $0.id == "startFrame" }): return "Describe a shot and create a clip."
+        case .createImage where !takesImage: return "Write a prompt, then create."
+        default: return emptyMessage
+        }
+    }
+
     /// One-click starters shown on the empty canvas. They fill the composer, never auto-run.
     /// Attachment-first modes keep prompts short (they name the subject, not the scene).
     package var examplePrompts: [String] {

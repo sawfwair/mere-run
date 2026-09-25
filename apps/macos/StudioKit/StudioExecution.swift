@@ -45,6 +45,24 @@ package struct StudioExecution: Codable, Equatable {
         return StudioExecution(templateID: templateID, arguments: StudioOptionScopes.filtered(arguments, scope: scope))
     }
 
+    /// What `scoped(source:)` leaves out, said the way the scope note says it: the options this
+    /// command carries that the model it runs does not take, or takes with another value. nil
+    /// when it runs the command whole.
+    package func rescopeNotice(source: StudioScopeSource) -> StudioScopeNotice? {
+        guard let capability = source.capability(for: templateID) else { return nil }
+        let scope = source.scope(capability: capability, commandLine: arguments)
+        guard let family = scope.family else { return nil }
+        let carried = Set(scope.invocation.values.keys)
+        let dropped = scope.withheld(capability.options.map(\.flag).filter(carried.contains))
+        let labels = capability.options.filter { dropped.contains($0.flag) }.map(\.label)
+        guard !labels.isEmpty else { return nil }
+        return StudioScopeNotice(
+            kind: .unused,
+            title: "Run again left out \(labels.joined(separator: ", ")): \(family.title) doesn't take \(labels.count == 1 ? "it" : "them").",
+            details: ["The Library keeps the command as it was recorded."]
+        )
+    }
+
     /// Projects fields used by history and artifact discovery. The vector remains authoritative:
     /// options without a simplified control are retained and replayed too.
     package func project(onto seed: CommandDraft) -> CommandDraft {
@@ -119,6 +137,13 @@ extension CommandDraft {
 }
 
 package enum StudioLibraryReplay {
+    /// What running `item` again leaves out of its recorded command (`StudioExecution
+    /// .rescopeNotice`), for the surface that ran it to show; nil when nothing is left out.
+    package static func notice(for item: StudioLibraryItem, source: StudioScopeSource) -> StudioScopeNotice? {
+        guard let templateID = item.templateID, let arguments = item.commandArguments else { return nil }
+        return StudioExecution(templateID: templateID, arguments: arguments).rescopeNotice(source: source)
+    }
+
     package static func request(
         for item: StudioLibraryItem,
         variationSeed: String? = nil,

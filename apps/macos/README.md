@@ -548,17 +548,21 @@ machine-chosen default, or transcription's language routing), Studio sends the
 whole command line, less any key, to `mere.run catalog resolve --json`
 (`StudioModelIdentity.swift`). It asks once typing stops, reads folder dates off
 the main thread, asks again after a failed answer, and keeps each answer until a
-flag that can change the family or the folder it names changes, a model is pulled
-or removed, or the inventory refreshes. While a question is out, the surface
-shows the family the contract names (adding `--task translate` to a Parakeet
-transcription shows Qwen3-ASR's options at once), or, for a model only the CLI
-can place, its last answer for the same model and routing flags. A folder with
-no answer yet shows every option, and a run of it waits until the CLI says what
-it is. Pickers
-list only the models whose families run the command, and a model the command
-excludes blocks the run with the CLI gate's reason. `StudioModelScopeGoldenTests` checks every routed command and family:
-what each surface shows, validates, and sends equals what the contract allows,
-with per-command fixtures under `StudioKitTests/Fixtures/model-scope/`
+flag that can change the family or the folder it names changes, a model is
+pulled or removed, or the inventory refreshes. While a question is out, the
+surface shows the family the contract names (adding `--task translate` to a
+Parakeet transcription shows Qwen3-ASR's options at once), or, for a model only
+the CLI can place, its last answer for the same model and routing flags. A
+folder with no answer yet shows every option, and a run started before the
+answer is refused with "Run it again in a moment". Pickers list the models the
+command runs: its families' models, the ones whose family depends on the
+checkpoint installed (`video-ltx-av`), and its defaults. A model the command
+excludes is never listed, and one named anyway blocks the run with the CLI
+gate's reason. A Library row replayed with Run again or Vary is scoped the same
+way, and a note says what it left out. `StudioModelScopeGoldenTests` checks
+every routed command and family: what each surface shows, validates, and sends
+equals what the contract allows, with per-command fixtures under
+`StudioKitTests/Fixtures/model-scope/`
 (`./scripts/update-studio-model-scope-fixtures.sh` re-records them).
 
 The **Command** panel (⌥⌘C or the header toggle) exposes the current task's

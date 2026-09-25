@@ -128,6 +128,9 @@ package struct StudioScopeNotice: Equatable {
     package let kind: Kind
     package let title: String
     package let details: [String]
+    /// Whether the model the note is about is a folder on disk, rather than a model id or the
+    /// default, so the note's glyph can say so.
+    package let isFolder: Bool
 
     package var accessibilityLabel: String {
         ([title] + details).joined(separator: " ")
@@ -139,11 +142,11 @@ package struct StudioScopeNotice: Equatable {
         switch scope.identity {
         case .pending(let model):
             self.init(kind: .identifying, title: "Identifying \(Self.name(model))…",
-                      details: ["Every option shows until mere.run knows which model this is."])
+                      details: ["Every option shows until mere.run knows which model this is."], isFolder: Self.isFolder(model))
             return
         case .failed(let model):
             self.init(kind: .unidentified, title: "mere.run couldn't identify \(Self.name(model))",
-                      details: ["Every option is shown, and the CLI checks them when it runs."])
+                      details: ["Every option is shown, and the CLI checks them when it runs."], isFolder: Self.isFolder(model))
             return
         case .notNeeded:
             break
@@ -168,15 +171,21 @@ package struct StudioScopeNotice: Equatable {
         }
     }
 
-    package init(kind: Kind, title: String, details: [String]) {
+    package init(kind: Kind, title: String, details: [String], isFolder: Bool = false) {
         self.kind = kind
         self.title = title
         self.details = details
+        self.isFolder = isFolder
     }
 
-    /// A folder by its name; anything else as typed.
+    /// A folder by its name; anything else (a model id, an upstream `org/name`) as typed.
     private static func name(_ model: String) -> String {
-        model.contains("/") ? URL(fileURLWithPath: model).lastPathComponent : model
+        isFolder(model) ? URL(fileURLWithPath: model).lastPathComponent : model
+    }
+
+    /// A model value that is a path: from the root, the home folder, or the working directory.
+    private static func isFolder(_ model: String) -> Bool {
+        model.hasPrefix("/") || model.hasPrefix("~") || model.hasPrefix(".")
     }
 }
 

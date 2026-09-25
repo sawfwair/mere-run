@@ -37,6 +37,8 @@ struct StudioTaskWorkspace: View {
     @StateObject private var jobMonitor = StudioJobMonitor()
     @FocusState private var promptFocused: Bool
     @State private var error: String?
+    /// What Run again or Vary left out of a Library row's recorded command.
+    @State private var replayNotice: StudioScopeNotice?
     @State private var highlightedCardID: UUID?
     @State private var newResultID: UUID?
     @State private var isDropTargeted = false
@@ -113,6 +115,15 @@ struct StudioTaskWorkspace: View {
                     .padding(.bottom, 16)
                     .padding(.top, -8)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
+            } else if let replayNotice {
+                MereBanner(
+                    severity: .info, text: replayNotice.accessibilityLabel, systemImage: "eye.slash",
+                    onDismiss: { self.replayNotice = nil }
+                )
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+                .padding(.top, -8)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .animation(reduceMotion ? nil : MereRunTheme.Motion.standard, value: error)
@@ -346,6 +357,7 @@ struct StudioTaskWorkspace: View {
         }
         do {
             navigation.selectedLibraryID = try runner.run(request: request, task: task).id
+            replayNotice = StudioLibraryReplay.notice(for: item, source: scopeSource)
         } catch {
             self.error = error.localizedDescription
         }

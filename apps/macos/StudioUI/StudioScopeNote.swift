@@ -49,21 +49,26 @@ struct StudioScopeNote: View {
 
     @ViewBuilder
     private var glyph: some View {
-        switch notice.kind {
-        case .identifying:
+        if let systemImage = Self.systemImage(for: notice) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MereRunTheme.textMuted)
+                .frame(width: 14)
+        } else {
             ProgressView()
                 .controlSize(.mini)
                 .frame(width: 14)
-        case .unidentified:
-            Image(systemName: "questionmark.folder")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(MereRunTheme.textMuted)
-                .frame(width: 14)
-        case .unused:
-            Image(systemName: "eye.slash")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(MereRunTheme.textMuted)
-                .frame(width: 14)
+        }
+    }
+
+    /// The note's glyph; nil while the CLI identifies the model, which shows a spinner. Only a
+    /// folder the CLI could not identify gets the folder glyph: a model id or the default gets
+    /// a plain question mark.
+    static func systemImage(for notice: StudioScopeNotice) -> String? {
+        switch notice.kind {
+        case .identifying: return nil
+        case .unidentified: return notice.isFolder ? "questionmark.folder" : "questionmark.circle"
+        case .unused: return "eye.slash"
         }
     }
 }

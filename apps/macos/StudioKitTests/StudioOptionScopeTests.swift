@@ -290,6 +290,19 @@ final class StudioOptionScopeTests: XCTestCase {
         }
     }
 
+    /// The empty canvas offers a starting image only while the model takes one: FastH3 has no
+    /// start-frame well.
+    func testTheEmptyCanvasOffersOnlyTheAttachmentsTheModelTakes() {
+        var draft = StudioDraft.baseline(for: .video)
+        draft.model = "video-minimax-h3-fasth3-vsa-datafree-mlx"
+        let fastH3 = StudioTaskPresentation(mode: .video, slots: StudioMode.video.attachmentSlots(for: draft, source: .contract))
+        XCTAssertFalse(fastH3.emptyMessage.contains("image"), fastH3.emptyMessage)
+        draft.model = "video-ltx25-full-bf16"
+        let ltx = StudioTaskPresentation(mode: .video, slots: StudioMode.video.attachmentSlots(for: draft, source: .contract))
+        XCTAssertEqual(ltx.emptyMessage, StudioMode.video.emptyMessage)
+        XCTAssertTrue(ltx.emptyMessage.contains("starting image"))
+    }
+
     // MARK: Argv
 
     func testTheBuildersDropWhatTheFamilyDoesNotTakeAndItsOwnDefault() throws {
@@ -467,15 +480,24 @@ final class StudioOptionScopeTests: XCTestCase {
         XCTAssertNil(StudioInspectorSchema.notice(for: .video, draft: draft, source: source))
     }
 
-    /// L4: each attachment slot's flag is the binding that stores the slot's field.
+    /// L4: each attachment slot's flag is the binding that stores the slot's field: exactly one
+    /// binding per path slot, or none for a slot that fills the command's positional input.
     func testAttachmentSlotsFillTheFlagsTheirFieldsBind() {
         var flags: [String: String] = [:]
         for mode in StudioMode.allCases {
             for slot in mode.attachmentSlots {
                 if let flag = mode.attachmentFlag(for: slot) { flags["\(mode.rawValue).\(slot.id)"] = flag }
-                guard case .path(let keyPath) = slot.storage else { continue }
+                let keyPath: PartialKeyPath<StudioDraft>
+                switch slot.storage {
+                case .path(let path), .pathList(let path): keyPath = path
+                case .flag, .flagList, .argument, .argumentList: continue
+                }
                 let bound = StudioContractBindings.bindings(for: mode).values.filter { $0.storage == keyPath }
-                XCTAssertLessThanOrEqual(bound.count, 1, "\(mode) \(slot.id) is stored by several flags")
+                if slot.storage == .path(\StudioDraft.inputPath), StudioContractSchema.capability(for: mode)?.arguments
+                    .contains(where: { [.file, .directory].contains($0.kind) }) == true, bound.isEmpty {
+                    continue
+                }
+                XCTAssertEqual(bound.count, 1, "\(mode) \(slot.id) must be stored by exactly one flag")
             }
         }
         XCTAssertEqual(flags["video.startFrame"], "--image")
@@ -492,7 +514,7 @@ final class StudioOptionScopeTests: XCTestCase {
 
     // MARK: Replay
 
-    func testAReplayedLibraryCommandIsRescoped() {
+    func testAReplayedLibraryCommandIsRescopedAndSaysSo() throws {
         let recorded = StudioExecution(templateID: .musicGenerate, arguments: [
             "music", "generate", "song", "--model", "music-yue2", "--source-audio", "/tmp/a.wav", "--task-type", "cover",
         ])
@@ -500,6 +522,12 @@ final class StudioOptionScopeTests: XCTestCase {
             recorded.scoped(source: source).arguments,
             ["music", "generate", "song", "--model", "music-yue2"]
         )
+        // Design risk 6: the replay says what it left out.
+        let notice = try XCTUnwrap(recorded.rescopeNotice(source: source))
+        XCTAssertEqual(notice.kind, .unused)
+        XCTAssertEqual(notice.title, "Run again left out Task, Source audio: YuE2 doesn't take them.")
+        let current = StudioExecution(templateID: .musicGenerate, arguments: ["music", "generate", "song", "--model", "music-yue2"])
+        XCTAssertNil(current.rescopeNotice(source: source), "a command the model runs whole says nothing")
     }
 }
 
