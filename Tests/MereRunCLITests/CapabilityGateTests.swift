@@ -324,6 +324,11 @@ private func expect(
         guard let routing = capability.routing, let flag = routing.modelFlags.last else { continue }
         for excluded in routing.excludedModels {
             let argv = ["mere.run"] + capability.command + [flag, excluded.id]
+            guard excluded.severity == .error else {
+                let warnings = try? CLICapabilityGate.check(arguments: argv)
+                #expect(warnings?.count == 1 && warnings?.first?.contains(excluded.reason) == true, "\(argv): \(String(describing: warnings))")
+                continue
+            }
             let expected = "\(excluded.id) can't run \(capability.command.joined(separator: " ")): \(excluded.reason)"
             #expect(throws: CLICapabilityGate.Rejection(messages: [expected])) {
                 try CLICapabilityGate.check(arguments: argv)

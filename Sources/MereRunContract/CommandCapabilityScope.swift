@@ -153,6 +153,8 @@ extension MereRunCommandCapability {
         routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolution {
         guard let routing else { return .unrouted }
+        // A listing flag answers before the command reads anything else; no model runs.
+        guard !routing.listingFlags.contains(where: invocation.contains) else { return .unrouted }
         let declared = declaredFamily(
             invocation, routing: routing, platform: platform, identify: identify, chooseDefault: chooseDefault
         )
@@ -201,7 +203,9 @@ extension MereRunCommandCapability {
                 choices: option.kind == .choice ? rule?.values ?? option.choices : option.choices,
                 defaultValue: rule?.defaultValue ?? fixed ?? option.defaultValue, group: option.group,
                 tier: option.tier, range: rule?.range ?? option.range, dependsOn: option.dependsOn,
-                familyRules: rule.map { [$0] } ?? [], choiceSpellings: option.choiceSpellings
+                familyRules: rule.map { [$0] } ?? [], choiceSpellings: option.choiceSpellings,
+                blankReadsAsOmitted: option.blankReadsAsOmitted, listSeparator: option.listSeparator,
+                overriddenBy: option.overriddenBy
             )
         }
     }
@@ -224,8 +228,20 @@ extension MereRunCommandCapability {
                     message: "\(runtime.title) requires \(option.flag)."
                 )]
             }
+            if let ignored = ignoredModel(option.flag, invocation, routing: routing, identify: identify) {
+                return [MereRunOptionViolation(
+                    flag: option.flag, kind: .valueNotAllowed(allowed: runtime.models), severity: .warning,
+                    message: "\(option.flag) \(invocation.value(option.flag) ?? ignored.id) has no effect: "
+                        + "\(command.joined(separator: " ")) runs \(runtime.title). \(ignored.reason)"
+                )]
+            }
             if routing.selectorsOverrideModel, routing.modelFlags.contains(option.flag) {
                 return overriddenModel(option.flag, invocation, routing: routing, family: runtime, identify: identify)
+            }
+            let takes = option.families?.contains(family) ?? true
+            if takes || option.ignoredBy.contains(family),
+               let overriding = option.overriddenBy.first(where: { holds($0, invocation, family: family) }) {
+                return overridden(option, values: values, by: overriding)
             }
             if let families = option.families, !families.contains(family) {
                 let titles = families.compactMap { routing.family(id: $0)?.title }
@@ -302,15 +318,16 @@ extension MereRunCommandCapability {
 // MARK: - Resolution
 
 extension MereRunCommandCapability {
-    /// The shortest arguments that make `condition` hold: the flag and its first allowed value;
-    /// for a presence condition, the flag alone on a Boolean and the flag with the option's
+    /// The shortest arguments that make `condition` hold: the flag and its first allowed value
+    /// or its minimum; for a presence condition, the flag alone on a Boolean and the flag with the option's
     /// default, first choice, or a placeholder otherwise; and nothing for a Boolean that must be
     /// off or a flag that must be absent. Generators and coverage tests build argv from it.
     public func arguments(satisfying condition: MereRunFlagCondition) -> [String] {
         if condition.absent { return [] }
         let option = options.first { $0.flag == condition.flag }
         guard option?.kind == .boolean else {
-            let value = condition.values?.first ?? option?.defaultValue ?? option?.choices.first ?? "value"
+            let minimum = condition.minimum.map(Self.format)
+            let value = condition.values?.first ?? minimum ?? option?.defaultValue ?? option?.choices.first ?? "value"
             return [condition.flag, value]
         }
         return condition.values?.first == "false" ? [] : [condition.flag]
@@ -356,15 +373,19 @@ extension MereRunCommandCapability {
         chooseDefault: ([String]) -> String?,
         allowIdentify: Bool
     ) -> MereRunFamilyResolution {
-        if let excluded = routing.excludedModel(id: model) {
-            return .excluded(excluded)
-        }
-        // What is installed decides first for a model whose family depends on it.
+        // What is installed decides first for a model whose family depends on it, and for an
+        // excluded model the command only reaches behind a root it loads first.
         if routing.identifiedModels.contains(model), case .family(let id)? = identify(model), let family = routing.family(id: id) {
             guard selectorsHold(family, invocation) else {
                 return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: [family]))
             }
             return .family(id: id, model: model, source: .identified)
+        }
+        if let excluded = routing.excludedModel(id: model) {
+            guard excluded.severity == .warning else { return .excluded(excluded) }
+            return resolveDefault(
+                invocation, routing: routing, platform: platform, identify: identify, chooseDefault: chooseDefault
+            )
         }
         let candidates = routing.families.filter { $0.models.contains(model) }
         if !candidates.isEmpty {
@@ -472,7 +493,9 @@ extension MereRunCommandCapability {
             canonical = model
         }
         if let excluded = routing.excludedModel(id: canonical) {
-            return .excluded(excluded)
+            guard excluded.severity == .warning else { return .excluded(excluded) }
+            let defaultRule = routing.defaultModels.first { $0.applies(on: platform) && $0.family == family.id }
+            return .family(id: family.id, model: defaultRule?.models.first, source: .selector)
         }
         if !family.models.contains(canonical), let owner = routing.families.first(where: { $0.models.contains(canonical) }) {
             return .unmatched(
@@ -490,14 +513,24 @@ extension MereRunCommandCapability {
     /// An omitted flag reads as the family's default for it, else the option's default. A Boolean
     /// reads as "true" when passed and "false" when omitted.
     private func holds(_ condition: MereRunFlagCondition, _ invocation: MereRunCommandInvocation, family: String?) -> Bool {
-        if condition.absent { return !invocation.contains(condition.flag) }
-        guard let allowed = condition.values else { return invocation.contains(condition.flag) }
         let option = options.first { $0.flag == condition.flag }
+        // A blank value the CLI reads as omitted is not passed (`--audio ""` routes as no audio).
+        let passed = invocation.values[condition.flag].map { values in
+            option.map { !($0.blankReadsAsOmitted && $0.isBlank(values)) } ?? true
+        } ?? false
+        if condition.absent { return !passed }
+        guard condition.testsValue else { return passed }
         if option?.kind == .boolean {
-            return allowed.contains(String(invocation.contains(condition.flag)))
+            return condition.values?.contains(String(passed)) == true
         }
         let familyDefault = option?.familyRules.first { $0.family == family }?.defaultValue
-        guard let value = invocation.value(condition.flag) ?? familyDefault ?? option?.defaultValue else { return false }
+        guard let value = (passed ? invocation.value(condition.flag) : nil) ?? familyDefault ?? option?.defaultValue else {
+            return false
+        }
+        if let minimum = condition.minimum {
+            return Double(value).map { $0 >= minimum } == true
+        }
+        let allowed = condition.values ?? []
         return option?.reads(value, asOneOf: allowed) ?? allowed.contains(value)
     }
 
@@ -505,6 +538,7 @@ extension MereRunCommandCapability {
         let requirements = candidates.map { family in
             let selectors = family.selectors.map { condition in
                 let rendered = arguments(satisfying: condition)
+                if let minimum = condition.minimum { return "\(condition.flag) \(Self.format(minimum)) or more" }
                 guard let values = condition.values, rendered.count == 2 else {
                     return rendered.isEmpty ? "no \(condition.flag)" : condition.flag
                 }
@@ -520,11 +554,22 @@ extension MereRunCommandCapability {
 // MARK: - Violations
 
 extension MereRunCapabilityOption {
-    /// An empty string value reads as omitted: commands treat an empty text option as not passed
-    /// (`sfx generate --negative-prompt ""`), so a family that refuses the option only warns.
-    /// Files, directories, numbers, and choices keep refusing an empty value.
+    /// A value the command treats as not passed, so a family that refuses the option only warns:
+    /// an empty text value (`sfx generate --negative-prompt ""`) or text list (`--stems ","`), and
+    /// a blank value of an option the CLI trims to nothing (`blankReadsAsOmitted`: text chat
+    /// `--image " "`). Other files, directories, numbers, and choices keep refusing an empty value.
     func readsAsOmitted(_ values: [String]) -> Bool {
-        kind == .string && values.allSatisfy(\.isEmpty)
+        let empty = { (value: String) in
+            guard let listSeparator else { return value.isEmpty }
+            return value.components(separatedBy: listSeparator)
+                .allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
+        return (kind == .string && values.allSatisfy(empty)) || (blankReadsAsOmitted && isBlank(values))
+    }
+
+    /// Every value is empty once surrounding whitespace is trimmed.
+    func isBlank(_ values: [String]) -> Bool {
+        values.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 }
 
@@ -553,6 +598,38 @@ extension MereRunCommandCapability {
             flag: flag, kind: .valueNotAllowed(allowed: family.models), severity: .warning,
             message: "\(flag) \(named) has no effect: the other options select \(family.title)."
         )]
+    }
+
+    /// A value the command replaces with the option's default because `condition` holds; the
+    /// default itself adds nothing and draws no warning.
+    private func overridden(
+        _ option: MereRunCapabilityOption,
+        values: [String],
+        by condition: MereRunFlagCondition
+    ) -> [MereRunOptionViolation] {
+        let runs = option.defaultValue
+        guard let value = values.first(where: { value in runs.map { !option.reads(value, asOneOf: [$0]) } ?? true }) else {
+            return []
+        }
+        let instead = runs.map { "; it runs \($0)" } ?? ""
+        return [MereRunOptionViolation(
+            flag: option.flag, kind: .unsupported(supportedBy: []), severity: .warning,
+            message: "\(option.flag) \(value) has no effect with \(condition.flag)\(instead)."
+        )]
+    }
+
+    /// The model `flag` names when it is one the command accepts and replaces with its default.
+    private func ignoredModel(
+        _ flag: String,
+        _ invocation: MereRunCommandInvocation,
+        routing: MereRunCapabilityRouting,
+        identify: (String) -> MereRunModelIdentification?
+    ) -> MereRunExcludedModel? {
+        let flags = routing.modelFlags + routing.families.compactMap(\.modelFlag)
+        guard flags.contains(flag), let named = modelValue(invocation, flags: [flag]) else { return nil }
+        var canonical = named
+        if case .managedModel(let managed)? = identify(named) { canonical = managed }
+        return routing.excludedModel(id: canonical).flatMap { $0.severity == .warning ? $0 : nil }
     }
 
     private func unsupported(
@@ -609,8 +686,12 @@ extension MereRunCommandCapability {
         return range.min.map { number < $0 } == true || range.max.map { number > $0 } == true
     }
 
+    /// A number as the CLI prints it: `4`, not `4.0`.
+    static func format(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(value)
+    }
+
     private static func describe(_ range: MereRunCapabilityRange) -> String {
-        let format = { (value: Double) in value.rounded() == value ? String(Int(value)) : String(value) }
         switch (range.min, range.max) {
         case let (min?, max?) where min == max: return format(min)
         case let (min?, max?): return "a value from \(format(min)) to \(format(max))"

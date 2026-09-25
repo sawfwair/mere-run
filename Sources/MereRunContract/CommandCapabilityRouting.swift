@@ -21,6 +21,9 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// asks `identify` about them first, as an explicit model, through an alias, and as a default.
     /// Without an answer, a model a family lists resolves to that family, and one no family lists
     /// is unidentified. Shells without an identifier ask `catalog resolve` for these models.
+    /// An id that is also excluded is refused unless the identifier finds a checkpoint the command
+    /// loads before it ever reads the id (`--checkpoints-root` in place of an ACE-Step language
+    /// model).
     public let identifiedModels: [String]
     /// `true` when the selector flags outrank a named model, as they do for speech transcribe: a
     /// listed model whose family's selectors do not hold runs as if no model were named. The
@@ -33,6 +36,9 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// recognize to Qwen3-ASR. The CLI's gate asks that router; a shell without it asks
     /// `catalog resolve` about the command line.
     public let routedByCommand: Bool
+    /// Boolean flags that make the command list something and exit before it reads another option
+    /// or resolves a model (`speech listen --list-devices`). With one passed, no family runs.
+    public let listingFlags: [String]
 
     enum CodingKeys: String, CodingKey {
         case modelFlags = "model_flags"
@@ -42,6 +48,7 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         case identifiedModels = "identified_models"
         case selectorsOverrideModel = "selectors_override_model"
         case routedByCommand = "routed_by_command"
+        case listingFlags = "listing_flags"
     }
 
     public init(
@@ -51,7 +58,8 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         excludedModels: [MereRunExcludedModel] = [],
         identifiedModels: [String] = [],
         selectorsOverrideModel: Bool = false,
-        routedByCommand: Bool = false
+        routedByCommand: Bool = false,
+        listingFlags: [String] = []
     ) {
         self.modelFlags = modelFlags
         self.defaultModels = defaultModels
@@ -60,6 +68,7 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         self.identifiedModels = identifiedModels
         self.selectorsOverrideModel = selectorsOverrideModel
         self.routedByCommand = routedByCommand
+        self.listingFlags = listingFlags
     }
 
     public init(from decoder: Decoder) throws {
@@ -71,10 +80,12 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         identifiedModels = try container.decodeIfPresent([String].self, forKey: .identifiedModels) ?? []
         selectorsOverrideModel = try container.decodeIfPresent(Bool.self, forKey: .selectorsOverrideModel) ?? false
         routedByCommand = try container.decodeIfPresent(Bool.self, forKey: .routedByCommand) ?? false
+        listingFlags = try container.decodeIfPresent([String].self, forKey: .listingFlags) ?? []
     }
 
-    /// `identified_models` is written only when non-empty, and `selectors_override_model` and
-    /// `routed_by_command` only when true, so other routing serializes as before.
+    /// `identified_models` and `listing_flags` are written only when non-empty, and
+    /// `selectors_override_model` and `routed_by_command` only when true, so other routing
+    /// serializes as before.
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(modelFlags, forKey: .modelFlags)
@@ -84,6 +95,7 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         if !identifiedModels.isEmpty { try container.encode(identifiedModels, forKey: .identifiedModels) }
         if selectorsOverrideModel { try container.encode(true, forKey: .selectorsOverrideModel) }
         if routedByCommand { try container.encode(true, forKey: .routedByCommand) }
+        if !listingFlags.isEmpty { try container.encode(listingFlags, forKey: .listingFlags) }
     }
 
     public func family(id: String) -> MereRunRuntimeFamily? {
@@ -100,12 +112,13 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         modelFlags.isEmpty || families.contains { $0.modelFlag != nil }
     }
 
-    /// Every flag the resolver reads to pick the family: the model flags, the selectors, and the
-    /// flags default rules test. No other option changes which family runs.
+    /// Every flag the resolver reads to pick the family: the model flags, the selectors, the
+    /// flags default rules test, and the listing flags that stop any family from running. No
+    /// other option changes which family runs.
     public var routingFlags: Set<String> {
         Set(
             modelFlags + families.compactMap(\.modelFlag) + families.flatMap(\.selectors).map(\.flag)
-                + defaultModels.flatMap(\.whenAny).map(\.flag)
+                + defaultModels.flatMap(\.whenAny).map(\.flag) + listingFlags
         )
     }
 }
@@ -171,28 +184,35 @@ public struct MereRunFlagCondition: Codable, Equatable, Sendable {
     /// when omitted, is one of these, rendered as the CLI parses them. A Boolean's value is
     /// "true" when passed and "false" when omitted, so `["false"]` holds only without the flag.
     public let values: [String]?
-    /// The flag is not passed at all; `values` is then `nil`. FastH3 runs its embedded adapter
-    /// only without `--h3-adapter`.
+    /// The flag's numeric value, or its default when omitted, is at least this: video generate
+    /// routes on `--num-generated-keyframes` above zero, whatever the count. `values` is then `nil`.
+    public let minimum: Double?
+    /// The flag is not passed at all; `values` and `minimum` are then `nil`. FastH3 runs its
+    /// embedded adapter only without `--h3-adapter`.
     public let absent: Bool
 
     enum CodingKeys: String, CodingKey {
-        case flag, values, absent
+        case flag, values, minimum, absent
     }
 
     public init(flag: String, values: [String]? = nil) {
-        self.flag = flag
-        self.values = values
-        absent = false
+        self.init(flag: flag, values: values, minimum: nil, absent: false)
     }
 
     /// Holds when `flag` is not passed.
     public static func absent(_ flag: String) -> Self {
-        Self(flag: flag, values: nil, absent: true)
+        Self(flag: flag, values: nil, minimum: nil, absent: true)
     }
 
-    private init(flag: String, values: [String]?, absent: Bool) {
+    /// Holds when `flag`'s number, or its default when omitted, is at least `minimum`.
+    public static func atLeast(_ flag: String, _ minimum: Double) -> Self {
+        Self(flag: flag, values: nil, minimum: minimum, absent: false)
+    }
+
+    private init(flag: String, values: [String]?, minimum: Double?, absent: Bool) {
         self.flag = flag
         self.values = values
+        self.minimum = minimum
         self.absent = absent
     }
 
@@ -200,27 +220,40 @@ public struct MereRunFlagCondition: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         flag = try container.decode(String.self, forKey: .flag)
         values = try container.decodeIfPresent([String].self, forKey: .values)
+        minimum = try container.decodeIfPresent(Double.self, forKey: .minimum)
         absent = try container.decodeIfPresent(Bool.self, forKey: .absent) ?? false
     }
 
-    /// `absent` is written only when set, so existing conditions serialize as before.
+    /// `minimum` and `absent` are written only when set, so existing conditions serialize as
+    /// before.
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(flag, forKey: .flag)
         try container.encodeIfPresent(values, forKey: .values)
+        try container.encodeIfPresent(minimum, forKey: .minimum)
         if absent { try container.encode(true, forKey: .absent) }
     }
 
+    /// True when the condition names a value, not only the flag's presence.
+    public var testsValue: Bool {
+        values != nil || minimum != nil
+    }
+
     /// True when no command line satisfies both conditions: one needs the flag absent and the
-    /// other needs it passed, or both allow only disjoint values.
+    /// other needs it passed, both allow only disjoint values, or every value one allows is
+    /// below the other's minimum.
     public func excludes(_ other: Self) -> Bool {
         guard flag == other.flag else { return false }
         if absent || other.absent {
             let present = absent ? other : self
-            return !present.absent && present.values == nil
+            return !present.absent && !present.testsValue
         }
-        guard let values, let otherValues = other.values else { return false }
-        return Set(values).isDisjoint(with: otherValues)
+        if let values, let otherValues = other.values {
+            return Set(values).isDisjoint(with: otherValues)
+        }
+        let (bounded, listed) = minimum != nil ? (self, other) : (other, self)
+        guard let minimum = bounded.minimum, let values = listed.values else { return false }
+        return values.allSatisfy { Double($0).map { $0 < minimum } ?? true }
     }
 }
 
@@ -278,10 +311,34 @@ public struct MereRunExcludedModel: Codable, Equatable, Sendable {
     public let id: String
     /// One sentence naming the command it does run: "Woosh CLAP scores audio; use `sfx clap score`."
     public let reason: String
+    /// `.error`: the CLI refuses the model. `.warning`: the CLI accepts it and runs its default
+    /// instead (`speech listen --model speech-asr-parakeet` runs Qwen3-ASR), so the named model
+    /// has no effect. Pickers offer neither.
+    public let severity: MereRunOptionViolation.Severity
 
-    public init(id: String, reason: String) {
+    enum CodingKeys: String, CodingKey {
+        case id, reason, severity
+    }
+
+    public init(id: String, reason: String, severity: MereRunOptionViolation.Severity = .error) {
         self.id = id
         self.reason = reason
+        self.severity = severity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        reason = try container.decode(String.self, forKey: .reason)
+        severity = try container.decodeIfPresent(MereRunOptionViolation.Severity.self, forKey: .severity) ?? .error
+    }
+
+    /// An `.error` severity is the common case and stays absent.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(reason, forKey: .reason)
+        if severity != .error { try container.encode(severity, forKey: .severity) }
     }
 }
 
@@ -415,13 +472,16 @@ extension MereRunDefaultModelRule {
 }
 
 extension Array where Element == MereRunExcludedModel {
-    /// Several models excluded for the same reason: `.models([...], reason: ...).and([...], reason: ...)`.
-    static func models(_ ids: [String], reason: String) -> Self {
-        ids.map { MereRunExcludedModel(id: $0, reason: reason) }
+    /// Several models excluded for the same reason: `.models([...], reason: ...).and([...], reason: ...)`;
+    /// `severity: .warning` for models the command accepts and replaces with its default.
+    static func models(
+        _ ids: [String], reason: String, severity: MereRunOptionViolation.Severity = .error
+    ) -> Self {
+        ids.map { MereRunExcludedModel(id: $0, reason: reason, severity: severity) }
     }
 
-    func and(_ ids: [String], reason: String) -> Self {
-        self + .models(ids, reason: reason)
+    func and(_ ids: [String], reason: String, severity: MereRunOptionViolation.Severity = .error) -> Self {
+        self + .models(ids, reason: reason, severity: severity)
     }
 }
 
@@ -471,10 +531,12 @@ extension MereRunCapabilityOption {
         with(families: families, ignoredBy: ignoredBy, rules: rules.map(\.rule))
     }
 
-    private func with(families: [String]?, ignoredBy: [String], rules: [MereRunOptionFamilyRule]) -> Self {
+    /// This option with another scope and rules, every other field kept.
+    func with(families: [String]?, ignoredBy: [String], rules: [MereRunOptionFamilyRule]) -> Self {
         Self(flag: flag, aliases: aliases, label: label, kind: kind, required: required, repeatable: repeatable,
             choices: choices, defaultValue: defaultValue, group: group, tier: tier, range: range,
             dependsOn: dependsOn, families: families, ignoredBy: ignoredBy, familyRules: rules,
-            choiceSpellings: choiceSpellings)
+            choiceSpellings: choiceSpellings, blankReadsAsOmitted: blankReadsAsOmitted, listSeparator: listSeparator,
+            overriddenBy: overriddenBy)
     }
 }

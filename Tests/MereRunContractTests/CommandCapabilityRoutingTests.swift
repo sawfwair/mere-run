@@ -40,7 +40,13 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
         #expect(listed.isDisjoint(with: excluded), "\(id): \(listed.intersection(excluded)) are both listed and excluded")
         let identified = Set(routing.identifiedModels)
         #expect(identified.count == routing.identifiedModels.count, "\(id): duplicate identified ids")
-        #expect(identified.isDisjoint(with: excluded), "\(id): \(identified.intersection(excluded)) are identified and excluded")
+        // An id both identified and excluded stays refused until the identifier finds a root the
+        // command loads first.
+        for model in identified.intersection(excluded) {
+            guard let flag = routing.modelFlags.last else { continue }
+            let resolution = capability.resolveFamily(MereRunCommandInvocation(capability: capability, arguments: [flag, model]))
+            #expect(routing.excludedModel(id: model).map { resolution == .excluded($0) } == true, "\(id) \(model)")
+        }
         #expect(identified.isEmpty || !routing.modelFlags.isEmpty, "\(id): identified models need a model flag")
     }
 }
@@ -197,11 +203,38 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
         for excluded in routing.excludedModels {
             guard let flag = routing.modelFlags.last else { continue }
             let invocation = MereRunCommandInvocation(capability: capability, arguments: [flag, excluded.id])
-            #expect(capability.resolveFamily(invocation) == .excluded(excluded), "\(capability.id) \(excluded.id)")
             let report = capability.resolutionReport(invocation)
+            let context = "\(capability.id) \(excluded.id)"
+            guard excluded.severity == .error else {
+                // A model the command accepts and replaces runs the default, with a warning.
+                let plain = capability.resolutionReport(MereRunCommandInvocation(capability: capability, arguments: []))
+                #expect(report.family == plain.family && report.model == plain.model && report.violations.isEmpty, "\(context)")
+                #expect(report.warnings.count == 1 && report.warnings[0].contains(excluded.reason), "\(context): \(report.warnings)")
+                continue
+            }
+            #expect(capability.resolveFamily(invocation) == .excluded(excluded), "\(context)")
             #expect(report.violations == ["\(excluded.id) can't run \(capability.command.joined(separator: " ")): \(excluded.reason)"])
         }
     }
+}
+
+/// A listing flag answers before the command reads anything else, so no family runs and no
+/// option, excluded model, or rule is checked.
+@Test func listingFlagsAreBooleansThatStopTheResolver() throws {
+    for (capability, routing) in routed {
+        for flag in routing.listingFlags {
+            let option = try #require(capability.options.first { $0.flag == flag }, "\(capability.id) \(flag)")
+            #expect(option.kind == .boolean, "\(capability.id) \(flag) must be a Boolean")
+            for excluded in routing.excludedModels {
+                guard let modelFlag = routing.modelFlags.last else { continue }
+                let invocation = MereRunCommandInvocation(capability: capability, arguments: [flag, modelFlag, excluded.id])
+                #expect(capability.resolveFamily(invocation) == .unrouted, "\(capability.id) \(flag) \(excluded.id)")
+                #expect(capability.resolutionReport(invocation).violations.isEmpty)
+            }
+        }
+    }
+    let listed = routed.filter { !$0.1.listingFlags.isEmpty }.map(\.0.id).sorted()
+    #expect(listed == ["music.realtime", "music.transcribe", "speech.diarize-live", "speech.listen"])
 }
 
 private func expectValid(_ condition: MereRunFlagCondition, in capability: MereRunCommandCapability, context: String) {
@@ -791,6 +824,56 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(read.undeclared == ["--unknown"])
     #expect(read.contains("--hq") && !read.contains("--mode"))
     #expect(read.value("--image") == "b")
+}
+
+/// A minimum holds on the number passed or, when omitted, the default; a blank value of an option
+/// the CLI trims to nothing is not passed, for routing and for a family's refusal.
+@Test func minimumConditionsAndBlankValuesReadTheWayTheCLIDoes() throws {
+    enum ReelFamily: String, MereRunFamilyID { case short, long }
+    let reel = MereRunCommandCapability(
+        id: "reel.cut", command: ["reel", "cut"], title: "Cut", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string),
+            MereRunCapabilityOption(flag: "--keyframes", label: "Keyframes", kind: .integer, defaultValue: "0"),
+            MereRunCapabilityOption(flag: "--track", label: "Track", kind: .file, blankReadsAsOmitted: true)
+                .scoped(ReelFamily.only(.long)),
+            MereRunCapabilityOption(flag: "--cover", label: "Cover", kind: .file).scoped(ReelFamily.only(.long))
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            defaultModels: [
+                .init(whenAny: [.atLeast("--keyframes", 1), .init(flag: "--track")], models: ["reel-long"]),
+                .always("reel-short")
+            ],
+            families: [
+                .init(ReelFamily.short, title: "Short", models: ["reel-short"]),
+                .init(ReelFamily.long, title: "Long", models: ["reel-long"])
+            ]
+        )
+    )
+    let family = { (arguments: [String]) in
+        reel.resolutionReport(MereRunCommandInvocation(capability: reel, arguments: arguments))
+    }
+    #expect(family([]).family == "short")
+    #expect(family(["--keyframes", "0"]).family == "short")
+    for count in ["1", "16", "17", "40", "01"] {
+        #expect(family(["--keyframes", count]).family == "long", "\(count)")
+    }
+    #expect(family(["--track", "a.wav"]).family == "long")
+    for blank in ["", "  "] {
+        #expect(family(["--track", blank]).family == "short", "\"\(blank)\" routes as no track")
+        let onShort = family(["--model", "reel-short", "--track", blank])
+        #expect(onShort.violations.isEmpty && onShort.warnings == ["--track has no effect with Short. It applies to Long."])
+    }
+    #expect(family(["--model", "reel-short", "--cover", ""]).violations == ["--cover is not supported by Short. It applies to Long."])
+    let condition = MereRunFlagCondition.atLeast("--keyframes", 1)
+    #expect(condition.excludes(.init(flag: "--keyframes", values: ["0"])))
+    #expect(!condition.excludes(.init(flag: "--keyframes", values: ["0", "2"])))
+    #expect(!condition.excludes(.absent("--keyframes")) && reel.arguments(satisfying: condition) == ["--keyframes", "1"])
+    let encoded = try JSONEncoder().encode(condition)
+    #expect(try JSONDecoder().decode(MereRunFlagCondition.self, from: encoded) == condition)
+    #expect(String(decoding: try JSONEncoder().encode(reel.options[2]), as: UTF8.self).contains(#""blank_reads_as_omitted":true"#))
 }
 
 /// ArgumentParser takes a value only from a token that is not option-shaped, keeps the last
