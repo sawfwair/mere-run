@@ -66,8 +66,8 @@ Inputs use raw values and the exact upstream band orders. Required tensors are
 two bands. Day of year is an unnormalized integer from 1 through 365.
 
 Students support `--dimensions 16`, `32`, `64`, or `128`. Teacher requires
-`1024`. With a named model, the CLI refuses a mismatched `--dimensions` before
-it verifies or loads the checkpoint. Teacher uses the upstream pooled normalization after merging ascending
+`1024`. The CLI refuses a mismatched `--dimensions` before it verifies or loads
+the checkpoint, including for the default it picks when `--model` is omitted. Teacher uses the upstream pooled normalization after merging ascending
 and descending Sentinel-1 observations; students use separate source-specific
 statistics. The runtime selects the correct contract from the immutable model
 variant.

@@ -12,12 +12,14 @@ private func resolve(
     _ arguments: [String]
 ) -> MereRunFamilyResolution {
     let invocation = MereRunCommandInvocation(capability: capability, arguments: arguments)
-    return capability.resolveFamily(invocation) { model in
-        ModelFamilyIdentifier.identify(capabilityID: capability.id, model: model, invocation: invocation)
-    }
+    return capability.resolveFamily(
+        invocation,
+        identify: { ModelFamilyIdentifier.identify(capabilityID: capability.id, model: $0, invocation: invocation) },
+        chooseDefault: { ModelFamilyIdentifier.machineDefault(capabilityID: capability.id, candidates: $0) }
+    )
 }
 
-private func probe(_ capability: MereRunCommandCapability, _ model: String) -> String? {
+private func probe(_ capability: MereRunCommandCapability, _ model: String) -> MereRunModelIdentification? {
     let invocation = MereRunCommandInvocation(capability: capability, arguments: [])
     return ModelFamilyIdentifier.probes[capability.id]?(model, invocation)
 }
@@ -39,12 +41,14 @@ func soundEffectDetectorsAgreeWithTheContractForEveryManagedModel(capability: Me
     let routing = try #require(capability.routing)
     for family in routing.families {
         for model in family.models {
-            #expect(probe(capability, model) == family.id, "\(capability.id) \(model)")
+            #expect(probe(capability, model) == .family(family.id), "\(capability.id) \(model)")
         }
     }
-    // The Woosh variants a command refuses are excluded, and its detector finds no family.
+    // A Woosh variant the command refuses names its own managed model, which is excluded; the
+    // CLAP and Synchformer companions aren't generator layouts at all.
     for excluded in routing.excludedModels {
-        #expect(probe(capability, excluded.id) == nil, "\(capability.id) \(excluded.id)")
+        let found = probe(capability, excluded.id)
+        #expect(found == nil || found == .managedModel(excluded.id), "\(capability.id) \(excluded.id): \(String(describing: found))")
     }
 }
 
@@ -58,9 +62,12 @@ func soundEffectDetectorsAgreeWithTheContractForEveryManagedModel(capability: Me
     #expect(resolve(text, ["--model", mmaudio]) == .family(id: "mmaudio", model: mmaudio, source: .identified))
     #expect(resolve(video, ["-m", mmaudio]) == .family(id: "mmaudio", model: mmaudio, source: .identified))
     #expect(resolve(text, ["--model", flow]) == .family(id: "woosh-flow", model: flow, source: .identified))
-    #expect(resolve(video, ["--model", flow]) == .unidentified(model: flow))
     #expect(resolve(video, ["--model", dvflow]) == .family(id: "woosh-dvflow", model: dvflow, source: .identified))
-    #expect(resolve(text, ["--model", dvflow]) == .unidentified(model: dvflow))
+    // A folder of a variant the command can't run stops at that model's exclusion, before load.
+    let textExclusion = try #require(text.routing?.excludedModel(id: "sfx-woosh-dvflow-8s"))
+    #expect(resolve(text, ["--model", dvflow]) == .excluded(textExclusion))
+    let videoExclusion = try #require(video.routing?.excludedModel(id: "sfx-woosh-flow"))
+    #expect(resolve(video, ["--model", flow]) == .excluded(videoExclusion))
 
     let renoise = MereRunCommandInvocation(capability: text, arguments: ["--model", mmaudio, "--renoise", "0.5"])
     let report = text.resolutionReport(renoise) {
@@ -97,7 +104,18 @@ func soundEffectDetectorsAgreeWithTheContractForEveryManagedModel(capability: Me
         let expected = source.variant == .teacher ? "tessera-teacher" : "tessera-student"
         #expect(resolve(capability, ["--model", root.path]) == .family(id: expected, model: root.path, source: .identified))
         let weights = root.appendingPathComponent(TESSERAResources.weightsFilename).path
-        #expect(probe(capability, weights) == expected, "a weights file reads its folder's config")
+        #expect(probe(capability, weights) == .family(expected), "a weights file reads its folder's config")
     }
     #expect(probe(capability, try folder(["README.md"]).path) == nil)
+}
+
+/// A blank `geo tessera` resolves to the model `TESSERAResources.defaultModelID` picks on this
+/// machine, the one the command runs.
+@Test func aBlankTESSERAModelResolvesToThisMachinesDefault() throws {
+    let capability = MereRunCapabilityCatalog.geoTessera
+    let expected = TESSERAResources.defaultModelID()
+    let variant = try #require(TESSERAResources.spec(for: expected)?.variant)
+    #expect(resolve(capability, []) == .family(
+        id: ModelFamilyIdentifier.tesseraFamily(variant), model: expected, source: .defaultModel
+    ))
 }

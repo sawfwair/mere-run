@@ -47,7 +47,8 @@ mere.run guide sfx generate --model sfx-woosh-dflow
   The default 4-step DFlow schedule is `0,0.5,0.5,0.3`. Only the distilled
   DFlow and DVFlow models renoise: Flow and VFlow check the schedule and print a
   warning that it has no effect, and MMAudio refuses it.
-- `--negative-prompt`: MMAudio only; the CLI refuses it for Woosh.
+- `--negative-prompt`: MMAudio only; the CLI refuses it for Woosh, and warns
+  about an empty one.
 - `--clip-batch-size` applies to MMAudio and `--synchformer-model` to Woosh; the
   other runtime prints a warning that it has no effect.
 - `--seed`: deterministic MLX random seed.
@@ -128,7 +129,8 @@ mere.run sfx video generate \
 
 Each Woosh model runs one command. `sfx generate` takes DFlow, Flow, or MMAudio;
 `sfx video generate` takes DVFlow, VFlow, or MMAudio; `sfx clap score` takes
-Woosh CLAP. Naming another model stops at once and names the command it runs.
+Woosh CLAP. Naming another model, or a local folder of one, stops at once and
+names the command it runs.
 The CLI refuses an option the selected model doesn't support before it loads
 anything.
 

@@ -136,9 +136,30 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     }
 }
 
-@Test func tesseraLeavesItsMachineChosenDefaultToTheCommand() throws {
+/// A blank `geo tessera` resolves to the variant the command picks on this machine, so a
+/// dimension that variant can't produce stops at the gate, as it does in the command.
+@Test func tesseraResolvesItsMachineChosenDefault() throws {
+    let model = TESSERAResources.defaultModelID()
+    let teacher = TESSERAResources.spec(for: model)?.variant == .teacher
     let blank = try report("geo", "tessera", "in.safetensors", "-o", "out.safetensors", "--dimensions", "1024")
-    #expect(blank.source == .unidentified && blank.violations.isEmpty)
+    #expect(blank.model == model && blank.source == .defaultModel)
+    #expect(blank.family == (teacher ? "tessera-teacher" : "tessera-student"))
+    #expect(blank.violations.isEmpty == teacher, "\(blank.violations)")
     let student = try report("geo", "tessera", "in.safetensors", "-o", "out.safetensors", "--model", "vision-embed-tessera-v2-nano")
     #expect(student.family == "tessera-student" && student.violations.isEmpty)
+}
+
+// MARK: - Empty values
+
+/// The SFX commands read an empty negative prompt or renoise schedule as none, so a model that
+/// refuses the option warns about an empty one instead.
+@Test func anEmptyTextValueIsANoOp() throws {
+    for commandLine in [["sfx", "generate", "door"], ["sfx", "video", "generate", "steps", "v.mp4"]] {
+        let empty = try report(commandLine + ["--negative-prompt", ""])
+        #expect(empty.violations.isEmpty, "\(commandLine)")
+        #expect(empty.warnings.count == 1 && empty.warnings[0].hasPrefix("--negative-prompt has no effect with Woosh"))
+        #expect(try !report(commandLine + ["--negative-prompt", "music"]).violations.isEmpty)
+    }
+    let renoise = try report("sfx", "generate", "door", "-m", "sfx-mmaudio-large-44k-v2", "--renoise", "")
+    #expect(renoise.violations.isEmpty && renoise.warnings == ["--renoise has no effect with MMAudio. It applies to Woosh DFlow."])
 }

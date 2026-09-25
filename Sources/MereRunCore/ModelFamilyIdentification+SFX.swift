@@ -1,12 +1,14 @@
 import Foundation
+import MereRunContract
 
 extension ModelFamilyIdentifier {
     /// `sfx generate` and `sfx video generate` run MMAudio for a folder holding its network
     /// weights, and otherwise the Woosh variant `WooshVariant.resolve` finds in the folder. A
-    /// variant the command can't run leaves the folder unidentified; the command refuses it.
+    /// variant the command can't run names its managed model, so the folder stops at that
+    /// model's exclusion instead of loading its weights.
     static let soundEffectProbes: [String: Probe] = [
         "sfx.generate": { model, _ in
-            soundEffectFamily(model) { variant in
+            soundEffectIdentification(model) { variant in
                 switch variant {
                 case .dflow: "woosh-dflow"
                 case .flow: "woosh-flow"
@@ -15,7 +17,7 @@ extension ModelFamilyIdentifier {
             }
         },
         "sfx.video.generate": { model, _ in
-            soundEffectFamily(model) { variant in
+            soundEffectIdentification(model) { variant in
                 switch variant {
                 case .dvflow8s: "woosh-dvflow"
                 case .vflow8s: "woosh-vflow"
@@ -25,10 +27,16 @@ extension ModelFamilyIdentifier {
         }
     ]
 
-    private static func soundEffectFamily(_ model: String, woosh: (WooshVariant) -> String?) -> String? {
+    /// `family` maps a Woosh variant to the capability's family, or nil for one it excludes.
+    private static func soundEffectIdentification(
+        _ model: String,
+        family: (WooshVariant) -> String?
+    ) -> MereRunModelIdentification? {
         if MMAudioResources.isMMAudio(model: model) {
-            return "mmaudio"
+            return .family("mmaudio")
         }
-        return WooshVariant.resolve(model: model).flatMap(woosh)
+        return WooshVariant.resolve(model: model).map { variant in
+            family(variant).map(MereRunModelIdentification.family) ?? .managedModel(variant.managedModelId)
+        }
     }
 }
