@@ -52,7 +52,7 @@ Models ▸ Installed's Pull… catalog, and the Guide. Everything else that
 interrupts is an alert or a confirmation dialog — third-party model terms,
 removals, thread rename, Library delete, and a bad `mererun://` link.
 
-Fifty-five tasks use six surface archetypes:
+Fifty-six tasks use six surface archetypes:
 
 - Twelve **prompt tasks** back a `StudioMode` and render the composer, a canvas,
   and the Library column: Image ▸ Generate, Video ▸ Generate, Music ▸ Compose,
@@ -62,14 +62,14 @@ Fifty-five tasks use six surface archetypes:
   Audio ▸ Transcribe — are input-first, so their canvas is the **Analyze**
   surface rather than the generation feed. Chat and Code get the **Converse**
   surface and a thread list in place of the Library.
-- Twenty-four contract-backed Generate and Analyze tasks use the shared task
+- Contract-backed Generate and Analyze tasks use the shared task
   workspace (`StudioUI/StudioTaskWorkspace.swift`). They cover Sound's Foley,
   Condition, Encode, Decode, and Score; Music's Analyze, Transcribe, and Separate;
   Vision's Depth, Pose, Faces, Flow, and Geometry; Audio's Who Spoke, Enhance,
   and Separate; Text's Embeddings and Anonymize; Image's Datasets; 3D's From
   image; and all four Earth tasks.
-- Nineteen tasks use their own Session, Project, or Manage surface, except Text ▸
-  Decisions, which keeps its question editor and answer pane. These include the
+- The remaining tasks use their own Session, Project, or Manage surface, except Text ▸
+  Decisions and Text ▸ Classify, which keep their editors and result panes. These include the
   three Train projects, Video ▸ Subjects, Music ▸ Realtime, Audio ▸ Live,
   Vision ▸ Live, Voice ▸ Voices, Models, Server, Runs, and Plugins.
 
@@ -915,6 +915,22 @@ folder, and reads the result back as each question's answer, probabilities, and
 confidence, with what was cut to fit; **Check fit** runs `--preflight` and shows
 each question's token fit. The handbook example loads with one click, and request
 JSON imports and exports.
+
+Text ▸ Classify (`StudioUI/StudioGLiNERClassificationView.swift`,
+`StudioKit/StudioClassifications.swift`) builds the GLiNER2.5 Decide request
+from text and ordered label tasks. Each task can carry descriptions, an optional
+prompt, and a multi-label threshold. The result pane shows selected labels and
+all scores in the task's label order. **Check fit** reports the input token
+count. Like Decisions, Classify saves its draft for the Command panel and can
+import or export request JSON.
+
+Text ▸ Extract (`StudioUI/StudioGLiNERExtractionView.swift`,
+`StudioKit/StudioExtractions.swift`) edits GLiNER entity names, relation
+names, structured fields, and joint classification tasks. **Check fit** reports
+the schema and token count. **Extract** shows span offsets and confidence,
+relation pairs, and structured records. The page imports and exports the same
+JSON request used by `mere.run text extract`. Both GLiNER pages offer
+overlapping chunks for long text.
 
 **Earth** is native Earth-observation inference, with Flood, Fire, TESSERA, and
 OlmoEarth tasks — TerraMind flood and fire tile inference and the TESSERA v2

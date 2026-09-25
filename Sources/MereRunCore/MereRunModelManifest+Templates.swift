@@ -1742,6 +1742,13 @@ extension MereRunModelManifest {
                                        textEncoder: .local(path: path), transformer: .local(path: path)),
                 upstreamRepoId: LayaCatalog.repository, createdAt: createdAt
             )
+        case .gliner25Decide:
+            return MereRunModelManifest(
+                id: modelID.rawValue, engine: .gliner25Decide, family: .gliner, tier: .base,
+                variant: .standard, precision: .fp32, defaults: nil,
+                supports: [.textClassification, .textExtraction], components: genericTextComponents,
+                upstreamRepoId: GLiNERCatalog.repository, createdAt: createdAt
+            )
         case .privacyFilter:
             return MereRunModelManifest(
                 id: modelID.rawValue,

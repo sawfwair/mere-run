@@ -268,6 +268,8 @@ public extension ManagedModelSpec {
             return Qwen3VLEmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .laya:
             return LayaCatalog.validate(root: rootURL, modelID: id, fileManager: fileManager)
+        case .gliner25Decide:
+            return GLiNERCatalog.validate(root: rootURL, fileManager: fileManager)
         case .privacyFilter:
             return OpenAIPrivacyFilterResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .codegenGGUF:

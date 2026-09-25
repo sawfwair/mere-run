@@ -194,6 +194,10 @@ enum InstalledModelSmokePlans {
             return direct(spec, route: "text decide") { runner in
                 try await runner.installedLayaCheck(model: spec.id)
             }
+        case .gliner25Decide:
+            return direct(spec, route: "text classify and extract") { runner in
+                try await runner.installedGLiNERCheck(model: spec.id)
+            }
         case .flux1, .flux2Klein, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ, .qwenImage21:
             return direct(spec, route: "image generate") { runner in
                 try await runner.installedImageCheck(model: spec.id)
@@ -997,6 +1001,27 @@ extension GateRunner {
         try JSONEncoder().encode(request).write(to: input, options: .atomic)
         let run = try await exec(["text", "decide", "--model", model, "--input", input.path], timeout: 900)
         return jsonStdoutObservation(run, label: "Laya decision JSON")
+    }
+
+    func installedGLiNERCheck(model: String) async throws -> GateObservation {
+        let input = workDirectory.appending(path: "gliner25-request.json")
+        let request = GLiNERClassificationRequest(text: "Please refund my order.", tasks: [
+            GLiNERClassificationTask(name: "intent", labels: ["refund", "other"])
+        ])
+        try JSONEncoder().encode(request).write(to: input, options: .atomic)
+        let run = try await exec(["text", "classify", "--model", model, "--input", input.path], timeout: 900)
+        let classification = jsonStdoutObservation(run, label: "GLiNER classification JSON")
+        guard classification.semanticFailure == nil else { return classification }
+        let extractionInput = workDirectory.appending(path: "gliner25-extraction-request.json")
+        let extraction = GLiNERExtractionRequest(text: "Alice Smith joined Acme.",
+            entities: [GLiNERExtractionTerm(name: "person"), GLiNERExtractionTerm(name: "organization")])
+        try JSONEncoder().encode(extraction).write(to: extractionInput, options: .atomic)
+        let extractionRun = try await exec(["text", "extract", "--model", model, "--input", extractionInput.path],
+                                           timeout: 900)
+        let extractionResult = jsonStdoutObservation(extractionRun, label: "GLiNER extraction JSON")
+        return GateObservation(hash: Self.sha256(Data((run.stdout + extractionRun.stdout).utf8)),
+                               secondRunHash: nil, wallSeconds: run.wallSeconds + extractionRun.wallSeconds,
+                               decodeTps: nil, semanticFailure: extractionResult.semanticFailure)
     }
 
     func installedPrivacyCheck(model: String) async throws -> GateObservation {

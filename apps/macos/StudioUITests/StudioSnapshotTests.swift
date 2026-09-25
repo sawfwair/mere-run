@@ -1354,6 +1354,57 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Text ▸ Classify with editable label tasks and a completed GLiNER run.
+    func testGLiNERClassificationAnswersSnapshots() throws {
+        let run = fixture.root.appendingPathComponent("classification-run", isDirectory: true)
+        try FileManager.default.createDirectory(at: run, withIntermediateDirectories: true)
+        let requestURL = run.appendingPathComponent("request.json")
+        let outputURL = run.appendingPathComponent("classifications.json")
+        try StudioClassificationDocument.example.requestJSON().write(to: requestURL)
+        try Data(Self.glinerResult.utf8).write(to: outputURL)
+
+        var draft = CommandDraft()
+        draft.inputPath = requestURL.path
+        draft.outputPath = outputURL.path
+        draft.model = "text-classify-gliner25-decide"
+        var item = StudioLibraryItem(
+            id: UUID(), mode: .chat, prompt: "Classify", inputURL: requestURL,
+            outputURL: outputURL, createdAt: StudioSnapshotRenderer.referenceDate,
+            updatedAt: StudioSnapshotRenderer.referenceDate, status: .completed, exitCode: 0,
+            commandPreview: "mere.run text classify --input request.json",
+            outputText: nil, artifactURLs: [outputURL]
+        )
+        item.templateID = .textClassify
+        item.commandDraft = draft
+        fixture.library.upsert(item)
+        let sessions = fixture.controller.taskSessions
+        sessions.set(StudioClassificationDocument.example, for: StudioTask.textClassify.rawValue + ".GLiNER.document")
+        sessions.set(Optional(item.id), for: StudioTask.textClassify.rawValue + ".requestID")
+
+        for width in [768.0, 1_440.0] {
+            for appearance in StudioSnapshotAppearance.allCases {
+                let navigation = NavigationModel()
+                let view = StudioRootView()
+                    .environmentObject(fixture.controller)
+                    .environmentObject(fixture.library)
+                    .environmentObject(navigation)
+                try fixture.write(view, size: CGSize(width: width, height: 900), appearance: appearance,
+                                  name: "gliner-answers-\(Int(width))-\(appearance.rawValue)", settle: 1.5,
+                                  afterAppear: { navigation.open(task: .textClassify) })
+            }
+        }
+    }
+
+    private static let glinerResult = """
+    {"model":"text-classify-gliner25-decide","runtime":"mlx","inputTokens":85,
+     "heads":{
+       "department":{"labels":["billing"],"probabilities":{
+         "billing":0.91,"technical support":0.06,"sales":0.03}},
+       "intent":{"labels":["refund","complaint"],"probabilities":{
+         "refund":0.94,"complaint":0.71,"question":0.08}}
+     }}
+    """
+
     private static let layaResult = """
     {"model": "text-decide-laya", "runtime": "mlx", "inputTokens": 131, "outputTokens": 0,
      "plan": {"model": "text-decide-laya", "maxTokens": 512, "headMaxTokens": 192, "questions": [

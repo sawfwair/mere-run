@@ -734,6 +734,10 @@ private struct StudioWorkspaceView: View {
             StudioLiveListenSession(models: models)
         case .textDecide:
             StudioLayaDecisionView()
+        case .textClassify:
+            StudioGLiNERClassificationView()
+        case .textExtract:
+            StudioGLiNERExtractionView()
         case .modelsInstalled:
             StudioModelsView(
                 modelStore: models,

@@ -140,6 +140,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-embed` | `text-embed-qwen3-0.6b` |
 | `vision-embed` | `vision-embed-qwen3-vl-2b` |
 | `text-anonymize` | `text-anonymize-privacy-filter` |
+| `text-classify` | `text-classify-gliner25-decide` |
 | `text-decide` | `text-decide-laya` |
 | `text-decide` | `text-decide-laya-multilingual` |
 | `text-decide` | `text-decide-laya-typed-decisions` |

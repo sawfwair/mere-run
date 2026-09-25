@@ -39,6 +39,8 @@ public enum MereRunCapabilityCatalog {
             textEmbed,
             textAnonymize,
             textDecide,
+            textClassify,
+            textExtract,
             textTrainLoRA,
             imageGenerate,
             imageTrainLoRA,
