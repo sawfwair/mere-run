@@ -39,10 +39,14 @@ final class MainBehaviourRegressionTests: XCTestCase {
         /// Managed ids installed for this row, each as a copy of the named store.
         let installed: [String: String]?
         let acceptedDifference: String?
+        /// The model this machine's default must be for main's outcome to hold here: `geo
+        /// tessera` runs the teacher on 32 GB and up and a student below, which refuses more.
+        let machineDefault: String?
 
         enum CodingKeys: String, CodingKey {
             case argv, main, source, evidence, env, installed
             case acceptedDifference = "accepted_difference"
+            case machineDefault = "machine_default"
         }
     }
 
@@ -110,7 +114,8 @@ final class MainBehaviourRegressionTests: XCTestCase {
         let table = try table()
         let stores = try stores(table).path
         var checked = 0
-        for row in table.rows where row.main == .passes && row.acceptedDifference == nil {
+        for row in table.rows where row.main == .passes && row.acceptedDifference == nil
+            && row.machineDefault.map({ $0 == TESSERAResources.defaultModelID() }) ?? true {
             let environment = (row.env ?? [:]).mapValues { $0.replacingOccurrences(of: "$FIXTURE", with: stores) }
             for (key, value) in environment {
                 setenv(key, value, 1)
