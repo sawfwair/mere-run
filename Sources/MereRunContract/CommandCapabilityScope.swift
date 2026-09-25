@@ -158,8 +158,14 @@ extension MereRunCommandCapability {
                 )]
             }
             if let families = option.families, !families.contains(family) {
+                let ignored = option.ignoredBy.contains(family)
+                // A family that ignores an option can still refuse every value but its own.
+                if ignored, let rule {
+                    let refused = ruleViolations(option, values: values, rule: rule, family: runtime)
+                    if !refused.isEmpty { return refused }
+                }
                 let titles = families.compactMap { routing.family(id: $0)?.title }
-                return [unsupported(option.flag, family: runtime, ignored: option.ignoredBy.contains(family), usedBy: titles)]
+                return [unsupported(option.flag, family: runtime, ignored: ignored, usedBy: titles)]
             }
             guard let rule else { return [] }
             return ruleViolations(option, values: values, rule: rule, family: runtime)
@@ -369,7 +375,7 @@ extension MereRunCommandCapability {
         let flag = option.flag
         var found: [MereRunOptionViolation] = []
         let effect = rule.severity == .warning ? "has no effect with \(family.title)" : "is not supported by \(family.title)"
-        if let allowed = rule.values, let value = values.first(where: { !allowed.contains($0) }) {
+        if let allowed = rule.values, let value = values.first(where: { !Self.allows(allowed, $0, kind: option.kind) }) {
             let message = allowed.count == 1
                 ? "\(flag) \(value) \(effect); it runs \(allowed[0]). Remove \(flag) or pass \(allowed[0])."
                 : "\(flag) \(value) \(effect); use \(Self.list(allowed, conjunction: "or"))."
@@ -390,6 +396,14 @@ extension MereRunCommandCapability {
             ))
         }
         return found
+    }
+
+    /// A numeric option compares as the CLI parses it, so `1`, `1.0`, and `1.00` are one value.
+    private static func allows(_ allowed: [String], _ value: String, kind: MereRunCapabilityValueKind) -> Bool {
+        guard kind == .integer || kind == .number, let number = Double(value) else {
+            return allowed.contains(value)
+        }
+        return allowed.contains { Double($0) == number }
     }
 
     private static func outside(_ range: MereRunCapabilityRange, _ value: String) -> Bool {

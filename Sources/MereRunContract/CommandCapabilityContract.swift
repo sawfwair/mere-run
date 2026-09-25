@@ -101,7 +101,8 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     /// Families that accept this option today but run without it. Passing it to one of them
     /// warns; a family in neither `families` nor `ignoredBy` rejects it.
     public let ignoredBy: [String]
-    /// Per-family narrowing of an option the family uses.
+    /// Per-family narrowing of an option the family uses, or the only values an ignoring family
+    /// accepts (see `MereRunOptionFamilyRule`).
     public let familyRules: [MereRunOptionFamilyRule]
 
     enum CodingKeys: String, CodingKey {

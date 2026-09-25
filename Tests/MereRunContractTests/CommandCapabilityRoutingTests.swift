@@ -98,7 +98,13 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
             #expect(Set(option.familyRules.map(\.family)).count == option.familyRules.count, "\(context): one rule per family")
             for rule in option.familyRules {
                 let ruleContext = "\(context) rule \(rule.family)"
-                #expect(used.contains(rule.family), "\(ruleContext): the family must use the option")
+                if option.ignoredBy.contains(rule.family) {
+                    #expect(rule.values?.isEmpty == false && rule.defaultValue == nil && rule.range == nil
+                                && !rule.required && rule.maxCount == nil && rule.severity == .error,
+                            "\(ruleContext): an ignoring family's rule lists only the values it refuses all others for")
+                } else {
+                    #expect(used.contains(rule.family), "\(ruleContext): the family must use or ignore the option")
+                }
                 #expect(option.kind != .boolean, "\(ruleContext): Booleans take no rules")
                 for value in (rule.values ?? []) + [rule.defaultValue].compactMap({ $0 }) {
                     #expect(parses(value, as: option), "\(ruleContext): \(value) is not a valid \(option.kind)")
@@ -194,7 +200,9 @@ private let clipOptions: [MereRunCapabilityOption] = [
     MereRunCapabilityOption(flag: "--image", label: "Image", kind: .file, repeatable: true)
         .scoped(ClipFamily.only(.full, .wide), .rule(.wide, required: true), .rule(.full, maxCount: 2, severity: .warning)),
     MereRunCapabilityOption(flag: "--mode", label: "Mode", kind: .choice, choices: ["fast", "slow", "exact"])
-        .scoped(ClipFamily.rule(.full, values: ["slow", "exact"], defaultValue: "slow"))
+        .scoped(ClipFamily.rule(.full, values: ["slow", "exact"], defaultValue: "slow")),
+    MereRunCapabilityOption(flag: "--strength", label: "Strength", kind: .number, defaultValue: "0.5")
+        .scoped(ClipFamily.only(.full, ignoredBy: [.quick]), .rule(.quick, values: ["0.5"]))
 ]
 
 private let clip = MereRunCommandCapability(
@@ -316,6 +324,12 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(messages("full", ["--mode", "fast"])
         == ["error: --mode fast is not supported by Full; use slow or exact."])
     #expect(messages("quick", ["--mode", "fast", "--steps=4", "--hq"]).isEmpty)
+    #expect(messages("quick", ["--strength", "0.50"])
+        == ["warning: --strength has no effect with Quick. It applies to Full."])
+    #expect(messages("quick", ["--strength", "0.7"])
+        == ["error: --strength 0.7 is not supported by Quick; it runs 0.5. Remove --strength or pass 0.5."])
+    #expect(messages("wide", ["--strength", "0.5", "--image", "a"])
+        == ["error: --strength is not supported by Wide. It applies to Full."])
 
     let report = clip.resolutionReport(invocation("--model", "clip-quick", "--cfg", "2", "--steps", "9"))
     #expect(report.family == "quick" && report.familyTitle == "Quick" && report.source == .model)

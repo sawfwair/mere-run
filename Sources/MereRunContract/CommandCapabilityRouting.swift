@@ -178,7 +178,10 @@ public struct MereRunExcludedModel: Codable, Equatable, Sendable {
     }
 }
 
-/// How an option is narrowed for one family that uses it.
+/// How an option is narrowed for one family that uses it. A rule may also name a family in the
+/// option's `ignored_by` with only `values`: that family runs without the option but refuses any
+/// value except these (a runtime that accepts only the value it runs with), so a listed value
+/// warns and any other fails with the rule's severity.
 public struct MereRunOptionFamilyRule: Codable, Equatable, Sendable {
     public let family: String
     /// Allowed values, rendered as the CLI parses them. One value means the family fixes it. For a

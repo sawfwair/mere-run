@@ -99,7 +99,10 @@ Per option, `families` lists the families that use it (absent: every family),
 `ignored_by` the families that accept it without effect, and `family_rules` a
 family's narrowed `values`, `default_value`, `range`, `required`, and
 `max_count`, with a `severity` for values it accepts and replaces. A family in
-neither list rejects the option. Declare families as a per-capability enum that
+neither list rejects the option. A rule on a family in `ignored_by` lists the
+only `values` that family accepts: a runtime that runs without the option but
+refuses anything except its own value (`--vocal-language en` on YuE2) warns for
+those and fails for the rest. Numeric rule values compare as numbers. Declare families as a per-capability enum that
 conforms to `MereRunFamilyID`, and scope options with its builders:
 `.scoped(F.only(.wan, ignoredBy: [.ltx]), .rule(.wan, required: true))`. Keep
 arithmetic, cross-option, and file-content checks in Core.
