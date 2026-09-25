@@ -45,8 +45,14 @@ for every tiny edit.
 
 Continuous integration narrows itself to the paths a pull request changes, so a
 change confined to the macOS app runs a shorter package gate than a change to
-the CLI or Core. `./scripts/check.sh` remains the local gate for everything. See
-the root `CONTRIBUTING.md` file for the lane rules.
+the CLI or Core. CLI-only source and test changes still run the full macOS
+package and Linux gates, but skip the iOS build because the iOS project does
+not link the CLI target. Core and shared-package changes still run iOS.
+The merge queue runs the required matrix; after merge, the exact same commit
+is checked against the successful queue run before `main` warms the Swift build
+cache. A direct push without that evidence fails instead of bypassing the
+matrix. `./scripts/check.sh` remains the local gate for everything. See the
+root `CONTRIBUTING.md` file for the lane rules.
 
 ## Which command to run
 
