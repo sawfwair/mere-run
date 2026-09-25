@@ -487,6 +487,13 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.model, LFM2Resources.defaultModelId)
     }
 
+    func testLFM2APIUsesNativeToolHistory() {
+        let capabilities = APIEngineCapabilities.catalog(.lfm2(inputModalities: [.text, .image]))
+        XCTAssertTrue(capabilities.supportsTools)
+        XCTAssertTrue(capabilities.usesNativeToolHistory)
+        XCTAssertTrue(capabilities.supportsVisionContentParts)
+    }
+
     func testAPIServePreservesExplicitDenseLFM2ManagedID() throws {
         let cmd = try APIServe.parse([
             "--engine", "text-chat-lfm2",
