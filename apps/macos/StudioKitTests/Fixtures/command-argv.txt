@@ -2132,6 +2132,28 @@ textChat	videoOutputMode=video-only	text chat --prompt 1 --system 1 --image 1 --
 textChat	videoQuality=draft	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
 textChat	videoQuality=final	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
 textChat	voiceMode=clone	text chat --prompt 1 --system 1 --image 1 --max-tokens 2049 --temperature 1.2 --top-p 1.4 --context-size 1 --top-k 1 --min-p 0.5 --kv-bits 1 --kv-quant-scheme 1 --kv-group-size 1 --quantized-kv-start 1 --model-root 1 --model 1 --response-format json_object --lora 1 --lora-scale 1.5 --thinking --reasoning-effort 0.5 --tools 1 --tool-loop --allow-shell-exec --allow-absolute-tool-paths --auto-approve-tools --sandbox-dir 1 --stream --stats --quiet --preflight --json --require-installed 1
+textClassify	default	text classify --input '' --model text-classify-gliner25-decide --output ~/Documents/mere.run/Text/classify-<stamp>.json
+textClassify	maximal	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	maximal-booleans-off	text classify --input 1 --model 1 --output 1 1
+textClassify	modelRoot=video-minimax-h3-ref2va	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	modelRoot=video-wan22-ti2v-5b-mlx	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	musicLMMode=disable	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	musicLMMode=use	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	musicMIDINoteOffset=-12	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	musicTask=lego	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	musicTask=repaint	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	musicTrainingKind=lokr	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	renderProfile=quality	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	responseFormat=json_object	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	responseFormat=text	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	thinkingMode=automatic	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	thinkingMode=hide	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	thinkingMode=show	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	videoOutputMode=audio-video	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	videoOutputMode=video-only	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	videoQuality=draft	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	videoQuality=final	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
+textClassify	voiceMode=clone	text classify --input 1 --model 1 --output 1 --pretty --preflight 1
 textCode	default	text code --prompt 'Write a tiny Swift function that formats byte counts.' --max-tokens 2048 --temperature 1 --top-p 0.95 --model text-code-north-mini --stream
 textCode	maximal	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 --stream --stats --quiet 1
 textCode	maximal-booleans-off	text code --prompt 1 --system 1 --max-tokens 2049 --temperature 1.5 --top-p 1.45 --min-p 0.5 --model 1 1

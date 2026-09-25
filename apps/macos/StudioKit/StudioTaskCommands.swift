@@ -45,6 +45,7 @@ extension CommandTemplateID {
         case .textEmbed: return .textEmbeddings
         case .textAnonymize: return .textAnonymize
         case .textDecide: return .textDecide
+        case .textClassify: return .textClassify
         case .geoFlood: return .earthFlood
         case .geoFire: return .earthFire
         case .geoTessera: return .earthTessera

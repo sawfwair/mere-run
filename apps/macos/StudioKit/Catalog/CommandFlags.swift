@@ -138,6 +138,24 @@ extension CommandFlags {
     }
 }
 
+// MARK: - text classify
+
+extension CommandFlags {
+    /// `mere.run text classify` — Classify
+    package enum TextClassify: CommandFlagNamespace {
+        package static let command = ["text", "classify"]
+        package static let defaultValues = [
+            "--model": "text-classify-gliner25-decide"
+        ]
+
+        package static let input = "--input"
+        package static let model = "--model"
+        package static let output = "--output"
+        package static let pretty = "--pretty"
+        package static let preflight = "--preflight"
+    }
+}
+
 // MARK: - text train-lora
 
 extension CommandFlags {

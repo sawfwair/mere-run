@@ -14,6 +14,7 @@ redaction.
 | `mere.run text code` | Run local code generation with GGUF models via llama.cpp. |
 | `mere.run text embed` | Generate text embeddings using native Qwen3-Embedding-0.6B. |
 | `mere.run text decide` | Evaluate ordered choice, score, and boolean questions with [native Laya](./laya.md). |
+| `mere.run text classify` | Classify text using caller supplied labels with [native GLiNER2.5 Decide](./gliner25-decide.md). |
 | `mere.run text anonymize` | Detect and redact PII using OpenAI Privacy Filter. |
 | `mere.run text train-lora` | Train a text or Gemma 4 image-conditioned LoRA adapter from chat-style SFT JSONL. |
 

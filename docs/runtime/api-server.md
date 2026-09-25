@@ -1349,6 +1349,25 @@ swift run mere.run status
 - A wrong loaded model usually means another server is already bound to that
   host and port.
 
+## Classify text with GLiNER2.5 Decide
+
+After installing `text-classify-gliner25-decide`, send an authenticated JSON
+request to `POST /v1/text/classifications`. The body contains the same `text`
+and ordered `tasks` array as [`text classify`](./gliner25-decide.md), plus the
+managed model ID:
+
+```json
+{
+  "model": "text-classify-gliner25-decide",
+  "text": "Please refund my order.",
+  "tasks": [{"name": "intent", "labels": ["refund", "other"]}]
+}
+```
+
+The endpoint uses the server's bearer authentication, JSON content-type
+check, request limit, and runtime admission. The response contains the same
+classification heads as the CLI.
+
 ## Evaluate Laya decisions
 
 After installing a Laya model, send an authenticated JSON request to

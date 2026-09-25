@@ -270,6 +270,10 @@ enum GuideRegistry {
             models: LayaCatalog.modelIDs, resourceName: "text-decide.md"
         ),
         GuideTopic(
+            topic: "text-classify", title: "Text Classify", commandPaths: [["text", "classify"]],
+            models: [GLiNERCatalog.modelID], resourceName: "text-classify.md"
+        ),
+        GuideTopic(
             topic: "text-anonymize",
             title: "Text Anonymize",
             commandPaths: [["text", "anonymize"]],

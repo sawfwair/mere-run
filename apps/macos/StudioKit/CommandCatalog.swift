@@ -50,6 +50,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
     case textEmbed
     case textAnonymize
     case textDecide
+    case textClassify
     case textTrainLoRA
     case speechSynthesize
     case speechTranscribe
@@ -182,6 +183,7 @@ package enum CommandTemplateID: String, CaseIterable, Codable {
         case .textEmbed: return "text.embed"
         case .textAnonymize: return "text.anonymize"
         case .textDecide: return "text.decide"
+        case .textClassify: return "text.classify"
         case .textTrainLoRA: return "text.train-lora"
         case .speechSynthesize: return "speech.synthesize"
         case .speechTranscribe: return "speech.transcribe"
@@ -1508,7 +1510,7 @@ extension CommandTemplate {
              .imageReconstruct3DMultiview:
             return .createImage
 
-        case .textChat, .textEmbed, .textAnonymize, .textDecide, .textTrainLoRA:
+        case .textChat, .textEmbed, .textAnonymize, .textDecide, .textClassify, .textTrainLoRA:
             return .chat
         case .textCode:
             return .code

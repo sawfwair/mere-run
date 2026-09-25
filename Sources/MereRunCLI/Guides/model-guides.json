@@ -661,5 +661,14 @@
       "text-decide-laya-typed-decisions"
     ],
     "resourceName": "handbook-laya.md"
+  },
+  {
+    "topic": "handbook-gliner25-decide",
+    "title": "GLiNER2.5 Decide",
+    "category": "Text",
+    "models": [
+      "text-classify-gliner25-decide"
+    ],
+    "resourceName": "handbook-gliner25-decide.md"
   }
 ]

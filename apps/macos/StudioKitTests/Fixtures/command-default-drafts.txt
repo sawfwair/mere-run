@@ -182,6 +182,8 @@ textAnonymize	prompt	My name is Alice Smith and my email is alice@example.com
 textChat	model	text-chat-gemma4-12b-4bit
 textChat	prompt	Summarize diffusion models in one paragraph.
 textChat	stream	true
+textClassify	model	text-classify-gliner25-decide
+textClassify	outputPath	~/Documents/mere.run/Text/classify-<stamp>.json
 textCode	model	text-code-north-mini
 textCode	prompt	Write a tiny Swift function that formats byte counts.
 textCode	stream	true

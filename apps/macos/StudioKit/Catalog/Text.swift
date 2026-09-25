@@ -54,6 +54,12 @@ extension CommandCatalog {
             inputKind: .file([.json]), outputKind: .file("json"), defaultModel: "text-decide-laya"
         ),
         CommandTemplate(
+            id: .textClassify, category: .text, title: "Classify",
+            subtitle: "Score labels with GLiNER2.5 Decide", systemImage: "tag",
+            inputKind: .file([.json]), outputKind: .file("json"),
+            defaultModel: "text-classify-gliner25-decide"
+        ),
+        CommandTemplate(
             id: .textTrainLoRA,
             category: .text,
             title: "Train text LoRA",
@@ -162,6 +168,17 @@ extension CommandArguments {
 
     package static func textDecide(_ draft: CommandDraft) -> [String] {
         typealias F = CommandFlags.TextDecide
+        var args = ArgumentBuilder(F.self)
+        args.option(F.input, draft.inputPath)
+        if !draft.model.isBlank { args.option(F.model, draft.model) }
+        if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
+        if draft.force { args.flag(F.pretty) }
+        if draft.preflight { args.flag(F.preflight) }
+        return args.arguments
+    }
+
+    package static func textClassify(_ draft: CommandDraft) -> [String] {
+        typealias F = CommandFlags.TextClassify
         var args = ArgumentBuilder(F.self)
         args.option(F.input, draft.inputPath)
         if !draft.model.isBlank { args.option(F.model, draft.model) }

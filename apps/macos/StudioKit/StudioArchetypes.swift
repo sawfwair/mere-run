@@ -35,7 +35,7 @@ extension StudioTask {
         case .visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth, .visionPose, .visionFaces,
              .visionFlow, .visionGeometry, .audioTranscribe, .audioWhoSpoke, .audioEnhance, .audioSeparate,
              .musicAnalyze, .musicTranscribe, .musicSeparate, .soundScore, .soundEncode, .soundDecode,
-             .textEmbeddings, .textAnonymize, .textDecide, .earthFlood, .earthFire, .earthTessera,
+             .textEmbeddings, .textAnonymize, .textDecide, .textClassify, .earthFlood, .earthFire, .earthTessera,
              .earthOlmoEarth, .imageDatasets:
             return .analyze
         case .musicRealtime, .audioLive, .visionLive, .serverServing, .serverMusic, .serverVision:
@@ -387,6 +387,13 @@ extension StudioTask {
                 title: title, systemImage: "checklist",
                 emptyTitle: "Decide with evidence.",
                 emptyMessage: "Frame the question, add the options and facts, and ask for a ranked answer."
+            )
+        case .textClassify:
+            return StudioTaskPresentation(
+                title: title, systemImage: "tag",
+                emptyTitle: "Classify text.",
+                emptyMessage: "Attach a JSON request with text and ordered label tasks.",
+                requiresAttachment: true
             )
         case .earthFlood:
             return StudioTaskPresentation(

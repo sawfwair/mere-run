@@ -37,7 +37,7 @@ final class TextAnonymizeCommandParsingTests: XCTestCase {
 
     func testTextSubcommandsIncludeAnonymize() {
         let textNames = Set(Text.configuration.subcommands.map { $0.configuration.commandName })
-        XCTAssertEqual(textNames, Set(["chat", "code", "embed", "anonymize", "decide", "train-lora"]))
+        XCTAssertEqual(textNames, Set(["chat", "code", "embed", "anonymize", "decide", "classify", "train-lora"]))
     }
 
     func testPrivacyFilterManagedModelSpec() {

@@ -319,3 +319,7 @@ Start at the [mere.run documentation home](/) to navigate by audience.
 `MereRunLayaModel` owns native ModernBERT and Laya decision-head computation.
 `Sources/MereRunCore/Laya` owns checkpoint loading, tokenization, batching, and
 calibrated results. See [Laya decisions](./runtime/laya.md).
+
+`MereRunGLiNERModel` owns native DeBERTa and GLiNER2.5 classification.
+`Sources/MereRunCore/GLiNER` owns schema formatting and result decoding. See
+[Classify text with GLiNER2.5 Decide](./runtime/gliner25-decide.md).

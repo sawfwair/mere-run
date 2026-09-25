@@ -215,6 +215,7 @@ actor CodeGenServer {
         print("OpenAI-compatible base URL: http://\(host):\(port)/v1")
         print("Chat endpoint: http://\(host):\(port)/v1/chat/completions")
         print("Decisions endpoint: http://\(host):\(port)/v1/text/decisions")
+        print("Classification endpoint: http://\(host):\(port)/v1/text/classifications")
         print("Embeddings endpoint: http://\(host):\(port)/v1/embeddings")
         print("Images endpoint: http://\(host):\(port)/v1/images/generations")
         print("Image edits endpoint: http://\(host):\(port)/v1/images/edits")
@@ -264,6 +265,9 @@ actor CodeGenServer {
         // Typed decisions and embeddings
         router.post("/v1/text/decisions") { [self] request, _ in
             try await handleTextDecisions(request)
+        }
+        router.post("/v1/text/classifications") { [self] request, _ in
+            try await handleTextClassifications(request)
         }
         router.post("/v1/embeddings") { [self] request, _ in
             return try await self.handleEmbeddings(request)
@@ -596,6 +600,46 @@ actor CodeGenServer {
                     modelID: resolved.spec.id, modelPath: root.path, request: openaiRequest.request)
                 let encoded = try jsonResponse(response)
                 return encoded
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleTextClassifications(_ request: Request) async throws -> Response {
+        if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
+            return unauthorized
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(status: .unsupportedMediaType,
+                                     message: "Content-Type must be application/json.", type: "invalid_request_error")
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(status: .tooManyRequests,
+                                     message: "Rate limit exceeded.", type: "rate_limit_error")
+        }
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 2 * 1024 * 1024)
+        } catch {
+            return makeErrorResponse(status: .badRequest,
+                                     message: "Invalid request body.", type: "invalid_request_error")
+        }
+        let classification: GLiNERAPIRequest
+        do {
+            classification = try JSONDecoder().decode(GLiNERAPIRequest.self, from: Data(body.readableBytesView))
+        } catch {
+            return makeErrorResponse(status: .badRequest,
+                                     message: "Invalid request payload.", type: "invalid_request_error")
+        }
+        do {
+            return try await withRuntimeRequestAdmission(using: requestAdmission) {
+                try classification.validate()
+                let resolved = try await ManagedModelResolver.resolveForRuntime(
+                    requestedModel: classification.model, defaultModelID: GLiNERCatalog.modelID, progress: nil)
+                let operation = try GLiNERClassificationOperation(root: resolved.url, modelID: resolved.spec.id)
+                let response = try operation.predict(classification.request)
+                return try jsonResponse(response)
             }
         } catch {
             return runtimeErrorResponse(error)

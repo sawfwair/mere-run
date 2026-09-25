@@ -166,7 +166,8 @@ extension APIServerContract {
         includeLoopbackArtifactModels: Bool = true
     ) -> [String] {
         let categories: Set<ManagedModelCategory> = [
-            .image, .image3D, .speechTTS, .speechASR, .textEmbed, .textDecide, .visionGeometry, .visionDepth,
+            .image, .image3D, .speechTTS, .speechASR, .textEmbed, .textDecide, .textClassify,
+            .visionGeometry, .visionDepth,
         ]
         let ids = ManagedModelCatalog.allSpecs
             .filter { categories.contains($0.category) }

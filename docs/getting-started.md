@@ -149,7 +149,7 @@ itself, so it matches the binary you built:
 | [`mere.run guide`](/cookbooks) | Read offline mere.run command cookbooks. |
 | [`mere.run catalog`](/cli) | Inspect the machine-readable command capability contract. |
 | [`mere.run image`](/runtime/image) | Generate and validate image models. |
-| [`mere.run text`](/runtime/text) | Run local chat, code, embedding, anonymization, and decision workflows. |
+| [`mere.run text`](/runtime/text) | Run local chat, code, embedding, anonymization, classification, and decision workflows. |
 | [`mere.run speech`](/runtime/speech) | Synthesize, transcribe, diarize, and manage voice profiles. |
 | [`mere.run vision`](/runtime/vision) | Embed, caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media. |
 | [`mere.run geo`](/runtime/geo) | Run native geospatial inference models on local Earth-observation data. |

@@ -188,6 +188,12 @@ Shared text encoder stack used by image models:
   - `Sources/MereRunTextEncoder/TextEncoder+RoPE.swift`
   - `Sources/MereRunTextEncoder/TextEncoder+Blocks.swift`
 
+GLiNER2.5 Decide classification:
+
+- Native DeBERTa encoder and classifier: `Sources/MereRunGLiNERModel/`
+- Schema formatting, tokenization, and result decoding: `Sources/MereRunCore/GLiNER/`
+- User guide: [Classify text with GLiNER2.5 Decide](./runtime/gliner25-decide.md)
+
 Laya typed decisions:
 
 - Command: `Sources/MereRunCLI/Commands/TextDecideCommand.swift`
