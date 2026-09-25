@@ -166,11 +166,13 @@ final class ManagedModelFamilyResolutionTests: XCTestCase {
     }
 
     /// An upstream repository id or other spelling the managed catalog knows resolves exactly like
-    /// the managed id itself.
+    /// the managed id itself, except for an id whose runtime keys on its exact spelling (FastH3's
+    /// embedded adapter), which the command's own identifier answers.
     func testAliasesResolveLikeTheManagedIdTheyName() throws {
         for capability in MereRunCapabilityCatalog.document.commands {
             guard let routing = capability.routing else { continue }
-            for model in routing.families.flatMap(\.models) + routing.excludedModels.map(\.id) {
+            let exact = ModelFamilyIdentifier.exactSpellingModels[capability.id] ?? []
+            for model in routing.families.flatMap(\.models) + routing.excludedModels.map(\.id) where !exact.contains(model) {
                 let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: model))
                 for alias in [spec.upstreamRepoId, model.uppercased()].compactMap({ $0 }) {
                     let canonical = try XCTUnwrap(ManagedModelCatalog.spec(for: alias)).id
@@ -181,12 +183,15 @@ final class ManagedModelFamilyResolutionTests: XCTestCase {
     }
 
     /// Every identified model resolves, with nothing installed, to the family of its own layout,
-    /// or stays unidentified for a shell to ask `catalog resolve`; never to an error.
+    /// or stays unidentified for a shell to ask `catalog resolve`; never to an error, unless the
+    /// contract also excludes it, which then holds with no root to stand in for it.
     func testIdentifiedModelsWithNothingInstalledNeverFail() {
         for capability in MereRunCapabilityCatalog.document.commands {
             for model in capability.routing?.identifiedModels ?? [] {
                 switch resolve(model, in: capability) {
                 case .family?, .unidentified?:
+                    break
+                case .excluded? where capability.routing?.excludedModel(id: model) != nil:
                     break
                 case let other:
                     XCTFail("\(capability.id) \(model) resolves to \(String(describing: other))")
