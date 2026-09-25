@@ -139,6 +139,44 @@ final class CLIGenerationProgressPrinterTests: XCTestCase {
         ])
     }
 
+    func testACEStepCandidatesDenoiseInOneStageAndDecodeAsMilestones() throws {
+        // Two candidates of two steps each, then one stem: planning closes when denoising starts,
+        // the second candidate continues denoising rather than reopening it, and decoding closes
+        // at finish.
+        let (stream, lines) = makeStream()
+        stream.report(stage: "planning", step: 0, totalSteps: 1)
+        for candidate in 0..<2 {
+            for step in 0..<2 {
+                MusicGenerate.reportACEStepProgress(
+                    .init(candidate: candidate, candidateCount: 2, stage: .denoising(step: step, steps: 2)), to: stream
+                )
+            }
+            MusicGenerate.reportACEStepProgress(.init(candidate: candidate, candidateCount: 2, stage: .decoding), to: stream)
+        }
+        for stage: ACEStepGenerationStage in [.denoising(step: 0, steps: 2), .denoising(step: 1, steps: 2), .decoding] {
+            MusicGenerate.reportACEStepStemProgress(
+                .init(candidate: 0, candidateCount: 1, stage: stage), stem: 0, stemCount: 1, to: stream
+            )
+        }
+        stream.finish()
+
+        XCTAssertEqual(try events(lines()), [
+            Event(stage: "planning", step: 0, total: 1),
+            Event(stage: "planning", step: 1, total: 1),
+            Event(stage: "denoising", step: 0, total: 4),
+            Event(stage: "denoising", step: 1, total: 4),
+            Event(stage: "decoding", step: 0, total: 2),
+            Event(stage: "denoising", step: 2, total: 4),
+            Event(stage: "denoising", step: 3, total: 4),
+            Event(stage: "decoding", step: 1, total: 2),
+            Event(stage: "denoising", step: 4, total: 4),
+            Event(stage: "stems", step: 0, total: 2),
+            Event(stage: "stems", step: 1, total: 2),
+            Event(stage: "stems", step: 2, total: 2),
+            Event(stage: "decoding", step: 2, total: 2),
+        ])
+    }
+
     func testMiniMaxMusicOverlapAverageStaysMonotonicAcrossWindows() throws {
         // `denoiseOverlapAverage` runs one flow step across every window before
         // advancing, the opposite order from `sequential`. Flattening chunk-major

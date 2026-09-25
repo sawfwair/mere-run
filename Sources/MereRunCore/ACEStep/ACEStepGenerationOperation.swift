@@ -26,9 +26,12 @@ public final class ACEStepGenerationOperation {
         self.languageModelAvailable = resources.lmResources != nil
     }
 
-    public func generate(_ plan: ACEStepGenerationPlan) throws -> ACEStepRankedGeneration {
+    public func generate(
+        _ plan: ACEStepGenerationPlan,
+        progress: ((ACEStepGenerationProgress) -> Void)? = nil
+    ) throws -> ACEStepRankedGeneration {
         try Task.checkCancellation()
-        return try session.generateBest(plan.request, candidateCount: plan.candidateCount)
+        return try session.generateBest(plan.request, candidateCount: plan.candidateCount, progress: progress)
     }
 
     public func prepare(_ options: ACEStepGenerationOptions) throws -> ACEStepGenerationPlan {

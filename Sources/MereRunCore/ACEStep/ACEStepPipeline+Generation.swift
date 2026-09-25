@@ -238,7 +238,7 @@ extension ACEStepPipeline {
         cleanSourceLatents: MLXArray? = nil,
         repaintInjectionRatio: Float = 0.5,
         repaintCrossfadeFrames: Int = 10,
-        checkCancellation: () throws -> Void
+        beforeStep: (_ step: Int, _ steps: Int) throws -> Void
     ) rethrows -> MLXArray {
         precondition(!timesteps.isEmpty, "ACE-Step timesteps must not be empty.")
 
@@ -344,7 +344,7 @@ extension ACEStepPipeline {
         }
 
         for i in 0..<activeTimesteps.count {
-            try checkCancellation()
+            try beforeStep(i, activeTimesteps.count)
             let t = activeTimesteps[i]
             let useNonCoverCondition = hasNonCoverCondition && i >= coverSteps
             let currentEncoderHiddenStates = useNonCoverCondition ? nonCoverEncoderHiddenStates! : encoderHiddenStates

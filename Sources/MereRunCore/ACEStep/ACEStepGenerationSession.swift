@@ -59,6 +59,31 @@ public struct ACEStepSessionRequest {
     }
 }
 
+/// Where one ACE-Step candidate's generation is.
+public enum ACEStepGenerationStage: Sendable, Equatable {
+    /// Diffusion step `step` (0-based) of `steps` is about to run.
+    case denoising(step: Int, steps: Int)
+    /// The VAE is decoding the finished latents.
+    case decoding
+}
+
+/// The pipeline reports each stage on the generating thread.
+public typealias ACEStepStageHandler = (ACEStepGenerationStage) -> Void
+
+/// A stage of one candidate in a best-of-N generation.
+public struct ACEStepGenerationProgress: Sendable, Equatable {
+    /// 0-based.
+    public let candidate: Int
+    public let candidateCount: Int
+    public let stage: ACEStepGenerationStage
+
+    public init(candidate: Int, candidateCount: Int, stage: ACEStepGenerationStage) {
+        self.candidate = candidate
+        self.candidateCount = candidateCount
+        self.stage = stage
+    }
+}
+
 public struct ACEStepCandidateMetrics: Codable, Hashable, Sendable {
     public var peak: Float
     public var rms: Float
@@ -176,7 +201,8 @@ public final class ACEStepGenerationSession: @unchecked Sendable {
 
     public func generateBest(
         _ request: ACEStepSessionRequest,
-        candidateCount: Int
+        candidateCount: Int,
+        progress: ((ACEStepGenerationProgress) -> Void)? = nil
     ) throws -> ACEStepRankedGeneration {
         guard candidateCount > 0 else {
             throw SessionError.invalidCandidateCount(candidateCount)
@@ -192,7 +218,9 @@ public final class ACEStepGenerationSession: @unchecked Sendable {
             let seed = baseSeed &+ UInt64(index)
             var candidateRequest = request
             candidateRequest.config.seed = seed
-            let generated = try generate(candidateRequest)
+            let generated = try generate(candidateRequest, progress: progress.map { report -> ACEStepStageHandler in
+                { stage in report(ACEStepGenerationProgress(candidate: index, candidateCount: candidateCount, stage: stage)) }
+            })
             let evaluation = ACEStepCandidateScorer.evaluate(generated.audio)
             candidates.append(
                 ACEStepGeneratedCandidate(
@@ -261,7 +289,8 @@ public final class ACEStepGenerationSession: @unchecked Sendable {
     }
 
     private func generate(
-        _ request: ACEStepSessionRequest
+        _ request: ACEStepSessionRequest,
+        progress: ACEStepStageHandler?
     ) throws -> (audio: MLXArray, lmAudioCodeCount: Int?) {
         if let flowEdit = request.flowEditConfiguration {
             return (
@@ -277,7 +306,8 @@ public final class ACEStepGenerationSession: @unchecked Sendable {
                         request.referenceTimbreLatents25Hz,
                     referenceTimbreAudio48kHz:
                         request.referenceTimbreAudio48kHz,
-                    vocalLanguage: request.vocalLanguage
+                    vocalLanguage: request.vocalLanguage,
+                    progress: progress
                 ),
                 nil
             )
@@ -298,7 +328,8 @@ public final class ACEStepGenerationSession: @unchecked Sendable {
                 vocalLanguage: request.vocalLanguage,
                 instruction: request.instruction,
                 task: request.task,
-                repaintConfiguration: request.repaintConfiguration
+                repaintConfiguration: request.repaintConfiguration,
+                progress: progress
             )
             return (result.audio, result.lmResult.audioCodeValues.count)
         }
@@ -317,7 +348,8 @@ public final class ACEStepGenerationSession: @unchecked Sendable {
                 vocalLanguage: request.vocalLanguage,
                 instruction: request.instruction,
                 task: request.task,
-                repaintConfiguration: request.repaintConfiguration
+                repaintConfiguration: request.repaintConfiguration,
+                progress: progress
             ),
             nil
         )

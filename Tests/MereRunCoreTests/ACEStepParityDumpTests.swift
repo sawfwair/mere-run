@@ -166,7 +166,7 @@ final class ACEStepParityDumpTests: MereRunCoreTestCase {
             dcwMode: .double,
             dcwScaler: 0.05,
             dcwHighScaler: 0.02,
-            checkCancellation: {}
+            beforeStep: { _, _ in }
         )
         try dumpTensor(fullLatents, name: "swift_full_final_latents_ntc_f32", to: outputURL)
         let decodedAudio = pipeline.vae.decode(fullLatents).asType(.float32)

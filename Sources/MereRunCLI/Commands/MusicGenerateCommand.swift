@@ -705,6 +705,7 @@ struct MusicGenerate: AsyncParsableCommand {
         )
         let resources = try await container.resources()
         let runtime = ACEStepMusicRuntime(resources: resources, variant: checkpointVariant)
+        let progressStream = progressJson ? JSONProgressStream() : nil
         try await runtime.perform { operation in
             let loadedAdapters = try loadAdapters(into: operation.session.pipeline)
             var options = ACEStepGenerationOptions(prompt: caption)
@@ -764,6 +765,7 @@ struct MusicGenerate: AsyncParsableCommand {
             options.planningSeed = seed
             options.analyzeSourceAudio = analyzeSourceAudio
             options.roundMetadataDuration = false
+            progressStream?.report(stage: "planning", step: 0, totalSteps: 1)
             let plan = try operation.prepare(options)
             let inference = plan.request.config
             let effectiveCaption = plan.request.caption
@@ -778,7 +780,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 CLIStderr.write("ACE-Step effective plan: \(ACEStepPlanningPolicy.summary(userMetadata))\n")
                 CLIStderr.write("Running ACE-Step in one warm session; candidates=\(plan.candidateCount)\n")
             }
-            let ranked = try operation.generate(plan)
+            let ranked = try operation.generate(plan, progress: progressStream.map { stream in
+                { Self.reportACEStepProgress($0, to: stream) }
+            })
 
             let exportOptions = exportPlan.options
             let primaryExport = try AudioExportService.write(
@@ -800,7 +804,7 @@ struct MusicGenerate: AsyncParsableCommand {
             }
 
             var stemTracks: [ACEStepDAWBundleWriter.Track] = []
-            for stemName in stemNames {
+            for (stemIndex, stemName) in stemNames.enumerated() {
                 if !quiet {
                     CLIStderr.write("Extracting ACE-Step stem: \(stemName)\n")
                 }
@@ -820,7 +824,10 @@ struct MusicGenerate: AsyncParsableCommand {
                         task: .extract,
                         useLanguageModel: false
                     ),
-                    candidateCount: 1
+                    candidateCount: 1,
+                    progress: progressStream.map { stream in
+                        { Self.reportACEStepStemProgress($0, stem: stemIndex, stemCount: stemNames.count, to: stream) }
+                    }
                 ).best
                 let stemURL = stemOutputURL(
                     selectedOutputURL: outputURL,
@@ -993,6 +1000,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 }
                 CLIStderr.write("Saved audio: \(outputURL.path)\n")
             }
+            progressStream?.finish()
             print(outputURL.path)
             if let synchronizedLyricsURL {
                 receiptSidecars.append(.init(url: synchronizedLyricsURL, kind: .text, role: "lyrics"))
@@ -1356,6 +1364,32 @@ struct MusicGenerate: AsyncParsableCommand {
         case .decode(let chunk, let chunkCount):
             return ("decoding", chunk - 1, chunkCount)
         }
+    }
+
+    /// ACE-Step runs candidates one after another, each denoising then decoding. Denoising steps
+    /// flatten across candidates into one monotonic stage, and each candidate's decode is a
+    /// milestone beside it, so a second candidate never reopens a closed stage.
+    static func reportACEStepProgress(_ progress: ACEStepGenerationProgress, to stream: JSONProgressStream) {
+        switch progress.stage {
+        case let .denoising(step, steps):
+            stream.report(
+                stage: "denoising", step: progress.candidate * steps + step,
+                totalSteps: progress.candidateCount * steps
+            )
+        case .decoding:
+            stream.mark(stage: "decoding", step: progress.candidate, totalSteps: progress.candidateCount)
+        }
+    }
+
+    /// Stem extraction re-runs the decoder once per stem; its steps flatten across stems.
+    static func reportACEStepStemProgress(
+        _ progress: ACEStepGenerationProgress,
+        stem: Int,
+        stemCount: Int,
+        to stream: JSONProgressStream
+    ) {
+        guard case let .denoising(step, steps) = progress.stage else { return }
+        stream.report(stage: "stems", step: stem * steps + step, totalSteps: stemCount * steps)
     }
 
     var resolvedMiniMaxInferenceSteps: Int {
