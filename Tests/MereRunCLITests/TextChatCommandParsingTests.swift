@@ -553,7 +553,7 @@ final class TextChatCommandParsingTests: XCTestCase {
             XCTAssertEqual(request.kvCacheMode, .affine8, model)
         }
         let lfm2 = LFM2Resources.denseModelId
-        XCTAssertEqual(try gate("--model", lfm2, "--kv-bits", "3").violations, ["--kv-bits 3 is not supported by LFM2.5; use 4 or 8."])
+        XCTAssertEqual(try gate("--model", lfm2, "--kv-bits", "4").warnings, [])
         XCTAssertEqual(
             try gate("--model", lfm2, "--kv-bits", "4", "--kv-group-size", "32").warnings,
             ["--kv-group-size has no effect with LFM2.5. It applies to Gemma 4 and Gemma 4 12B vision."]
@@ -562,12 +562,37 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertNil(try gemma.resolveKVCacheMode(for: .gemma4), "Gemma 4 takes its own quantization settings")
     }
 
+    /// Before the KV plumbing, Inkling and LFM2.5 accepted any width and a scheme alone as no-ops.
+    /// They still run, with a warning and a full-precision cache.
+    func testInklingAndLFM2KeepRunningOtherKVOptionsWithoutEffect() throws {
+        for (model, family, title) in [(InklingResources.modelID, ChatFamily.inkling, "Inkling-Small"),
+                                        (LFM2Resources.denseModelId, .lfm2, "LFM2.5"),
+                                        (LFM2Resources.visionModelId, .lfm2VL, "LFM2.5-VL")] {
+            let width = try gate("--model", model, "--kv-bits", "3")
+            XCTAssertEqual(width.violations, [], model)
+            XCTAssertEqual(width.warnings, ["--kv-bits 3 has no effect with \(title); use 4 or 8."])
+            let threeBit = try TextChat.parse(["--prompt", "hello", "--model", model, "--kv-bits", "3"])
+            XCTAssertNil(try threeBit.resolveKVCacheMode(for: family), model)
+            let request = try threeBit.resolvedChatRequest(modelID: model, messages: [ChatMessage(role: .user, content: "hello")])
+            XCTAssertNil(request.kvCacheMode, model)
+
+            let scheme = try gate("--model", model, "--kv-quant-scheme", "polar")
+            XCTAssertEqual(scheme.violations, [], model)
+            XCTAssertEqual(scheme.warnings, [
+                "--kv-quant-scheme has no effect with \(title). It applies to Gemma 4, Gemma 4 12B vision, "
+                    + "Qwen3.6 text, Qwen3.6 vision and Qwen3.8."
+            ])
+            let schemeOnly = try TextChat.parse(["--prompt", "hello", "--model", model, "--kv-quant-scheme", "uniform"])
+            XCTAssertNil(try schemeOnly.resolveKVCacheMode(for: family), model)
+        }
+    }
+
     func testQwenKVSchemeStillNeedsAWidth() throws {
         let cmd = try TextChat.parse([
             "--prompt", "hello", "--model", Q35Resources.q36NanoModelId, "--kv-quant-scheme", "uniform"
         ])
         XCTAssertThrowsError(try cmd.resolveKVCacheMode(for: .q35)) { error in
-            XCTAssertTrue(String(describing: error).contains("requires --kv-bits 4 or --kv-bits 8"))
+            XCTAssertTrue(String(describing: error).contains("require --kv-bits 4 or --kv-bits 8"))
         }
     }
 

@@ -55,17 +55,20 @@ extension MereRunCapabilityCatalog {
                 flag: "--min-p", label: "Min-p", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
             ).scoped(Chat.except(ignoredBy: [.diffusionGemma])),
-            // Gemma 4 takes fractional TurboQuant widths; the affine runtimes take 4 or 8.
+            // Gemma 4 takes fractional TurboQuant widths; the affine runtimes take 4 or 8. The Qwen
+            // family refuses other widths, while Inkling and LFM2.5 run with a full-precision cache.
             .init(
                 flag: "--kv-bits", label: "KV bits", kind: .number,
                 group: Group.run, tier: .expert, range: .init(min: 2, max: 8, step: 0.5)
             ).scoped(
                 Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
-                .rule(.inkling, values: ["4", "8"]), .rule(.lfm2, values: ["4", "8"]), .rule(.lfm2VL, values: ["4", "8"]),
+                .rule(.inkling, values: ["4", "8"], severity: .warning),
+                .rule(.lfm2, values: ["4", "8"], severity: .warning),
+                .rule(.lfm2VL, values: ["4", "8"], severity: .warning),
                 .rule(.q35, values: ["4", "8"]), .rule(.q35VL, values: ["4", "8"]), .rule(.q38, values: ["4", "8"])
             ),
             // Gemma 4 Turbo quantizes its KV cache by default, so the scheme, group size, and start
-            // apply there without --kv-bits.
+            // apply there without --kv-bits. Inkling and LFM2.5 only ever use the affine scheme.
             .init(
                 flag: "--kv-quant-scheme",
                 label: "KV quantization",
@@ -73,8 +76,7 @@ extension MereRunCapabilityCatalog {
                 choices: ["uniform", "polar", "turboquant"],
                 group: Group.run, tier: .expert
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
-                .rule(.inkling, values: ["uniform"]), .rule(.lfm2, values: ["uniform"]), .rule(.lfm2VL, values: ["uniform"]),
+                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL]),
                 .rule(.q35, values: ["uniform"]), .rule(.q35VL, values: ["uniform"]), .rule(.q38, values: ["uniform"])
             ),
             // The affine runtimes choose their own group size and start; Inkling and LFM2.5 never

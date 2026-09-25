@@ -806,17 +806,28 @@ struct TextChat: AsyncParsableCommand {
     }
 
     /// The affine KV cache mode for the Qwen-family, Inkling, and LFM2.5 runtimes. The capability
-    /// gate limits their `--kv-bits` to 4 or 8 and their scheme to uniform; a scheme without a
-    /// width is the one cross-option mistake left to catch here.
+    /// gate refuses other widths and schemes on the Qwen family, and warns that they have no
+    /// effect on Inkling and LFM2.5, which then keep a full-precision cache. A Qwen-family scheme
+    /// without a width is the one cross-option mistake left to catch here.
     func resolveKVCacheMode(for family: MereRunCapabilityCatalog.TextChatFamily) throws -> RuntimeKVCacheMode? {
-        guard [.q35, .q35VL, .q38, .inkling, .lfm2, .lfm2VL].contains(family) else { return nil }
-        guard let kvBits else {
-            if kvQuantScheme != nil {
-                throw ValidationError("Affine KV cache quantization requires --kv-bits 4 or --kv-bits 8.")
+        switch family {
+        case .q35, .q35VL, .q38:
+            guard let kvBits else {
+                if kvQuantScheme != nil {
+                    throw ValidationError("Qwen-family KV cache options require --kv-bits 4 or --kv-bits 8.")
+                }
+                return nil
             }
+            return kvBits == 4 ? .affine4 : .affine8
+        case .inkling, .lfm2, .lfm2VL:
+            switch kvBits {
+            case 4: return .affine4
+            case 8: return .affine8
+            default: return nil
+            }
+        default:
             return nil
         }
-        return kvBits == 4 ? .affine4 : .affine8
     }
 
     private func parseGemma4KVQuantizationScheme(_ raw: String) throws -> Gemma4KVQuantizationScheme {
