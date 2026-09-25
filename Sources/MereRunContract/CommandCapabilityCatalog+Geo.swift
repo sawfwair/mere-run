@@ -48,11 +48,15 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(flag: "--output", aliases: ["-o"], label: "Embedding output", kind: .file, required: true),
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--dimensions", label: "Dimensions", kind: .integer),
+            .init(flag: "--dimensions", label: "Dimensions", kind: .integer).scoped(
+                TESSERAFamily.rule(.student, values: ["16", "32", "64", "128"], defaultValue: "128"),
+                .rule(.teacher, values: ["1024"])
+            ),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output"),
+        routing: geoTESSERARouting
     )
 
     public static let geoOlmoEarth = MereRunCommandCapability(

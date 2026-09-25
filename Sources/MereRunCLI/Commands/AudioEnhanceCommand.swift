@@ -178,12 +178,15 @@ struct AudioEnhance: ParsableCommand {
     @Flag(name: [.short, .long], help: "Suppress progress diagnostics on stderr.")
     var quiet: Bool = false
 
+    /// The model ids the command runs, each by exact id. The capability gate refuses `--overlap`
+    /// on UniverSR and any `--input-rate` but 16000 on AP-BWE before this runs.
+    static let supportedModels = [
+        ModelResolver.ModelID.apBWE16kTo48k.rawValue,
+        ModelResolver.ModelID.univerSRAudio.rawValue,
+    ]
+
     func validate() throws {
-        let supported = [
-            ModelResolver.ModelID.apBWE16kTo48k.rawValue,
-            ModelResolver.ModelID.univerSRAudio.rawValue,
-        ]
-        guard supported.contains(model) else {
+        guard Self.supportedModels.contains(model) else {
             throw ValidationError("Unsupported audio enhancement model id: \(model)")
         }
         if model == ModelResolver.ModelID.apBWE16kTo48k.rawValue {
@@ -194,13 +197,7 @@ struct AudioEnhance: ParsableCommand {
                     "--overlap must be a positive divisor of \(configuration.chunkSize)"
                 )
             }
-            if let inputRate, inputRate != configuration.lowSampleRate {
-                throw ValidationError("AP-BWE requires --input-rate 16000 when the option is supplied")
-            }
         } else {
-            guard overlap == nil else {
-                throw ValidationError("--overlap applies only to AP-BWE")
-            }
             if let inputRate, ![8_000, 12_000, 16_000, 24_000].contains(inputRate) {
                 throw ValidationError("--input-rate must be 8000, 12000, 16000, or 24000")
             }

@@ -319,6 +319,35 @@ public enum TESSERAResources {
     }
 
     public static func inspect(_ url: URL) throws -> TESSERACheckpoint {
+        let (root, weightsURL, configurationURL, configuration) = try readConfiguration(url)
+        guard let source = spec(for: configuration.modelID) else {
+            throw TESSERAResourceError.unsupportedModel(configuration.modelID)
+        }
+        _ = try source.weightsArtifact.verify(in: root)
+        _ = try source.configurationArtifact.verify(in: root)
+        try validateConfiguration(configuration, source: source)
+        return TESSERACheckpoint(
+            rootURL: root,
+            weightsURL: weightsURL,
+            configurationURL: configurationURL,
+            configuration: configuration,
+            source: source
+        )
+    }
+
+    /// The variant a local checkpoint declares, read the way `inspect` reads it but without
+    /// verifying its artifacts. `url` is the checkpoint folder or its weights file.
+    public static func declaredVariant(_ url: URL) throws -> TESSERAVariant {
+        let configuration = try readConfiguration(url).configuration
+        guard let source = spec(for: configuration.modelID) else {
+            throw TESSERAResourceError.unsupportedModel(configuration.modelID)
+        }
+        return source.variant
+    }
+
+    private static func readConfiguration(
+        _ url: URL
+    ) throws -> (root: URL, weightsURL: URL, configurationURL: URL, configuration: TESSERAConversionConfiguration) {
         let standardized = url.standardizedFileURL
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: standardized.path, isDirectory: &isDirectory) else {
@@ -333,28 +362,15 @@ public enum TESSERAResources {
         guard FileManager.default.fileExists(atPath: configurationURL.path) else {
             throw TESSERAResourceError.missingArtifact(configurationURL.path)
         }
-        let configuration: TESSERAConversionConfiguration
         do {
-            configuration = try JSONDecoder().decode(
+            let configuration = try JSONDecoder().decode(
                 TESSERAConversionConfiguration.self,
                 from: Data(contentsOf: configurationURL)
             )
+            return (root, weightsURL, configurationURL, configuration)
         } catch {
             throw TESSERAResourceError.invalidConfiguration(error.localizedDescription)
         }
-        guard let source = spec(for: configuration.modelID) else {
-            throw TESSERAResourceError.unsupportedModel(configuration.modelID)
-        }
-        _ = try source.weightsArtifact.verify(in: root)
-        _ = try source.configurationArtifact.verify(in: root)
-        try validateConfiguration(configuration, source: source)
-        return TESSERACheckpoint(
-            rootURL: root,
-            weightsURL: weightsURL,
-            configurationURL: configurationURL,
-            configuration: configuration,
-            source: source
-        )
     }
 
     public static func validateConfiguration(

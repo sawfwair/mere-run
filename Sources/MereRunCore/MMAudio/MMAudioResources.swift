@@ -43,6 +43,16 @@ public enum MMAudioResources {
     public static let clipModelLicense = "Apple Machine Learning Research Model License Agreement"
     public static let bigVGANLicense = "MIT"
 
+    /// True when `model` names MMAudio: its managed id, or a local root that holds its network
+    /// weights. The SFX commands route on this before they try Woosh.
+    public static func isMMAudio(model: String, fileManager: FileManager = .default) -> Bool {
+        if model == modelID {
+            return true
+        }
+        let root = URL(fileURLWithPath: model).standardizedFileURL
+        return fileManager.fileExists(atPath: root.appendingPathComponent(networkFilename).path)
+    }
+
     public static func latentSequenceLength(durationSeconds: Float) -> Int {
         let spectrogramFrames = ceil(
             durationSeconds * Float(sampleRate) / Float(spectrogramFrameRate)

@@ -144,3 +144,67 @@ extension MereRunCapabilityCatalog {
         )
     )
 }
+
+// MARK: - OCR
+
+extension MereRunCapabilityCatalog {
+    /// `vision ocr` runs by `--backend`, `--infinity-runtime`, and `--compare`, not by model.
+    /// `--compare` runs LightOnOCR and then GLM-OCR (for `--backend lighton` or `glm`) or
+    /// Infinity-Parser2, so each comparison is its own family and reads both runtimes' options.
+    enum OCRFamily: String, MereRunFamilyID {
+        case lightOn = "lighton"
+        case glm
+        case infinityNative = "infinity-native"
+        case infinityExternal = "infinity-external"
+        case compareGLM = "compare-glm"
+        case compareInfinityNative = "compare-infinity-native"
+        case compareInfinityExternal = "compare-infinity-external"
+
+        /// `vision ocr` refuses no option another runtime reads: the families that don't read it
+        /// accept it and ignore it.
+        static func usedBy(_ used: [Self]) -> MereRunOptionScope<Self> {
+            MereRunOptionScope(families: used, ignoredBy: allCases.filter { !used.contains($0) })
+        }
+
+        static let lightOnRuns: [Self] = [.lightOn, .compareGLM, .compareInfinityNative, .compareInfinityExternal]
+        static let infinityRuns: [Self] = [
+            .infinityNative, .infinityExternal, .compareInfinityNative, .compareInfinityExternal
+        ]
+        static let glmRuns: [Self] = [.glm, .compareGLM]
+        static let externalInfinityRuns: [Self] = [.infinityExternal, .compareInfinityExternal]
+    }
+
+    private static let lightOnOCRModel = "vision-ocr-lighton"
+    private static let infinityOCRModels = ["vision-ocr-infinity-pro-int8", "vision-ocr-infinity-pro"]
+
+    /// LightOnOCR reads its model from `--model` and native Infinity-Parser2 from
+    /// `--infinity-model`; GLM-OCR and external Infinity-Parser2 run external tools.
+    static let visionOCRRouting: MereRunCapabilityRouting = {
+        typealias F = OCRFamily
+        let single = MereRunFlagCondition(flag: "--compare", values: ["false"])
+        let compare = MereRunFlagCondition(flag: "--compare", values: ["true"])
+        let infinity = MereRunFlagCondition(flag: "--backend", values: ["infinity"])
+        let native = MereRunFlagCondition(flag: "--infinity-runtime", values: ["native"])
+        let external = MereRunFlagCondition(flag: "--infinity-runtime", values: ["external"])
+        return MereRunCapabilityRouting(
+            modelFlags: [],
+            defaultModels: F.lightOnRuns.map { MereRunDefaultModelRule(models: [lightOnOCRModel], family: $0.rawValue) }
+                + [MereRunDefaultModelRule(models: [infinityOCRModels[0]], family: F.infinityNative.rawValue)],
+            families: [
+                .init(F.lightOn, title: "LightOnOCR", models: [lightOnOCRModel],
+                      selectors: [single, .init(flag: "--backend", values: ["lighton"])], modelFlag: "--model"),
+                .init(F.glm, title: "GLM-OCR", models: [], selectors: [single, .init(flag: "--backend", values: ["glm"])]),
+                .init(F.infinityNative, title: "Infinity-Parser2 native", models: infinityOCRModels,
+                      selectors: [single, infinity, native], modelFlag: "--infinity-model"),
+                .init(F.infinityExternal, title: "Infinity-Parser2 external", models: [],
+                      selectors: [single, infinity, external]),
+                .init(F.compareGLM, title: "LightOnOCR vs GLM-OCR", models: [lightOnOCRModel],
+                      selectors: [compare, .init(flag: "--backend", values: ["lighton", "glm"])], modelFlag: "--model"),
+                .init(F.compareInfinityNative, title: "LightOnOCR vs Infinity-Parser2 native", models: [lightOnOCRModel],
+                      selectors: [compare, infinity, native], modelFlag: "--model"),
+                .init(F.compareInfinityExternal, title: "LightOnOCR vs Infinity-Parser2 external",
+                      models: [lightOnOCRModel], selectors: [compare, infinity, external], modelFlag: "--model")
+            ]
+        )
+    }()
+}

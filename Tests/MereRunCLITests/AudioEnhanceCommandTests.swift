@@ -48,6 +48,8 @@ final class AudioEnhanceCommandTests: XCTestCase {
         XCTAssertNoThrow(try command.validate())
     }
 
+    /// `--overlap` on UniverSR and `--input-rate` other than 16000 on AP-BWE are refused by the
+    /// capability gate before the command parses (`AudioSFXOCRCapabilityGateTests`).
     func testRejectsUnsupportedModelOverlapAndComputeType() {
         XCTAssertThrowsError(try AudioEnhance.parse([
             "speech.wav", "--model", "music-separate-bs-roformer-viperx-1297",
@@ -58,11 +60,6 @@ final class AudioEnhanceCommandTests: XCTestCase {
             "speech.wav",
             "--model", ModelResolver.ModelID.univerSRAudio.rawValue,
             "--input-rate", "44100",
-        ]))
-        XCTAssertThrowsError(try AudioEnhance.parse([
-            "speech.wav",
-            "--model", ModelResolver.ModelID.univerSRAudio.rawValue,
-            "--overlap", "2",
         ]))
     }
 

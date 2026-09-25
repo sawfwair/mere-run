@@ -80,92 +80,103 @@ extension MereRunCapabilityCatalog {
         routing: qwenVLRouting
     )
 
-    public static let visionOCR = MereRunCommandCapability(
-        id: "vision.ocr",
-        command: ["vision", "ocr"],
-        title: "OCR",
-        summary: "Extract text with native LightOn/Infinity or external GLM/Infinity runtimes.",
-        arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
-        options: [
-            .init(
-                flag: "--backend", aliases: ["-b"], label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity"],
-                defaultValue: "lighton", group: Group.modelAndAdapters, tier: .essential
-            ),
-            .init(flag: "--compare", label: "Compare", kind: .boolean, group: Group.run, tier: .expert),
-            .init(
-                flag: "--model", aliases: ["-m"], label: "LightOn model", kind: .string,
-                defaultValue: "vision-ocr-lighton", group: Group.modelAndAdapters, tier: .standard
-            ),
-            .init(
-                flag: "--glmocr-cli", label: "GLM executable", kind: .file,
-                defaultValue: "glmocr", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(flag: "--glm-config", label: "GLM config", kind: .file, group: Group.modelAndAdapters, tier: .expert),
-            .init(
-                flag: "--infinity-runtime", label: "Infinity runtime", kind: .choice, choices: ["native", "external"],
-                defaultValue: "native", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-parser-cli", label: "Parser executable", kind: .file,
-                defaultValue: "parser", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-model", label: "Infinity model", kind: .string,
-                defaultValue: "vision-ocr-infinity-pro-int8", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-backend",
-                label: "Infinity backend",
-                kind: .choice,
-                choices: ["transformers", "vllm-engine", "vllm-server"],
-                defaultValue: "vllm-server", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-api-url", label: "Infinity API URL", kind: .string,
-                defaultValue: "http://localhost:8000/v1/chat/completions", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-api-key", label: "Infinity API key", kind: .string,
-                defaultValue: "EMPTY", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-task", label: "Infinity task", kind: .choice, choices: ["doc2json", "doc2md", "custom"],
-                defaultValue: "doc2json", group: Group.prompt, tier: .expert
-            ),
-            .init(flag: "--infinity-prompt", label: "Infinity prompt", kind: .string, group: Group.prompt, tier: .expert),
-            .init(
-                flag: "--infinity-output-format", label: "Infinity format", kind: .choice, choices: ["md", "json"],
-                defaultValue: "md", group: Group.output, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-batch-size", label: "Batch size", kind: .integer,
-                defaultValue: "1", group: Group.run, tier: .expert, range: .init(min: 1, max: 64, step: 1)
-            ),
-            .init(
-                flag: "--infinity-model-cache-dir", label: "Model cache", kind: .directory,
-                group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-min-pixels", label: "Minimum pixels", kind: .integer,
-                defaultValue: "2048", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
-            ),
-            .init(
-                flag: "--infinity-max-pixels", label: "Maximum pixels", kind: .integer,
-                defaultValue: "16777216", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
-            ),
-            .init(flag: "--output-dir", aliases: ["-o"], label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
-            .init(
-                flag: "--max-tokens", label: "Max tokens", kind: .integer,
-                defaultValue: "4096", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 16_384, step: 1)
-            ),
-            .init(
-                flag: "--temperature", label: "Temperature", kind: .number,
-                defaultValue: "0.2", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
-            ),
-            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
-        ],
-        output: .init(kind: .text, flag: "--output-dir", optional: true)
-    )
+    public static let visionOCR: MereRunCommandCapability = {
+        typealias F = OCRFamily
+        let lightOn = F.usedBy(F.lightOnRuns)
+        let glm = F.usedBy(F.glmRuns)
+        let infinity = F.usedBy(F.infinityRuns)
+        let externalInfinity = F.usedBy(F.externalInfinityRuns)
+        return MereRunCommandCapability(
+            id: "vision.ocr",
+            command: ["vision", "ocr"],
+            title: "OCR",
+            summary: "Extract text with native LightOn/Infinity or external GLM/Infinity runtimes.",
+            arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
+            options: [
+                .init(
+                    flag: "--backend", aliases: ["-b"], label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity"],
+                    defaultValue: "lighton", group: Group.modelAndAdapters, tier: .essential
+                ),
+                .init(flag: "--compare", label: "Compare", kind: .boolean, group: Group.run, tier: .expert),
+                .init(
+                    flag: "--model", aliases: ["-m"], label: "LightOn model", kind: .string,
+                    defaultValue: "vision-ocr-lighton", group: Group.modelAndAdapters, tier: .standard
+                ).scoped(lightOn),
+                .init(
+                    flag: "--glmocr-cli", label: "GLM executable", kind: .file,
+                    defaultValue: "glmocr", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(glm),
+                .init(flag: "--glm-config", label: "GLM config", kind: .file, group: Group.modelAndAdapters, tier: .expert)
+                    .scoped(glm),
+                .init(
+                    flag: "--infinity-runtime", label: "Infinity runtime", kind: .choice, choices: ["native", "external"],
+                    defaultValue: "native", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(infinity),
+                .init(
+                    flag: "--infinity-parser-cli", label: "Parser executable", kind: .file,
+                    defaultValue: "parser", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-model", label: "Infinity model", kind: .string,
+                    defaultValue: "vision-ocr-infinity-pro-int8", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(infinity),
+                .init(
+                    flag: "--infinity-backend",
+                    label: "Infinity backend",
+                    kind: .choice,
+                    choices: ["transformers", "vllm-engine", "vllm-server"],
+                    defaultValue: "vllm-server", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-api-url", label: "Infinity API URL", kind: .string,
+                    defaultValue: "http://localhost:8000/v1/chat/completions", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-api-key", label: "Infinity API key", kind: .string,
+                    defaultValue: "EMPTY", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-task", label: "Infinity task", kind: .choice, choices: ["doc2json", "doc2md", "custom"],
+                    defaultValue: "doc2json", group: Group.prompt, tier: .expert
+                ).scoped(infinity),
+                .init(flag: "--infinity-prompt", label: "Infinity prompt", kind: .string, group: Group.prompt, tier: .expert)
+                    .scoped(infinity),
+                .init(
+                    flag: "--infinity-output-format", label: "Infinity format", kind: .choice, choices: ["md", "json"],
+                    defaultValue: "md", group: Group.output, tier: .expert
+                ).scoped(infinity),
+                .init(
+                    flag: "--infinity-batch-size", label: "Batch size", kind: .integer,
+                    defaultValue: "1", group: Group.run, tier: .expert, range: .init(min: 1, max: 64, step: 1)
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-model-cache-dir", label: "Model cache", kind: .directory,
+                    group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-min-pixels", label: "Minimum pixels", kind: .integer,
+                    defaultValue: "2048", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
+                ).scoped(infinity),
+                .init(
+                    flag: "--infinity-max-pixels", label: "Maximum pixels", kind: .integer,
+                    defaultValue: "16777216", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
+                ).scoped(infinity),
+                .init(flag: "--output-dir", aliases: ["-o"], label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
+                // The native runtimes sample; GLM-OCR and the external parser never read these.
+                .init(
+                    flag: "--max-tokens", label: "Max tokens", kind: .integer,
+                    defaultValue: "4096", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 16_384, step: 1)
+                ).scoped(F.usedBy(F.lightOnRuns + [.infinityNative])),
+                .init(
+                    flag: "--temperature", label: "Temperature", kind: .number,
+                    defaultValue: "0.2", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
+                ).scoped(F.usedBy(F.lightOnRuns + [.infinityNative])),
+                .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
+            ],
+            output: .init(kind: .text, flag: "--output-dir", optional: true),
+            routing: visionOCRRouting
+        )
+    }()
 
     public static let visionGround = MereRunCommandCapability(
         id: "vision.ground",

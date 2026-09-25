@@ -824,6 +824,11 @@ extension CommandFlags {
     /// `mere.run audio edit` — Edit or generate AuK speech
     package enum AudioEdit: CommandFlagNamespace {
         package static let command = ["audio", "edit"]
+        package static let defaultValues = [
+            "--steps": "32",
+            "--guidance": "2.0",
+            "--seed": "42"
+        ]
 
         package static let audio = "--audio"
         package static let model = "--model"
@@ -2600,6 +2605,9 @@ extension CommandFlags {
     /// `mere.run sfx video generate` — Video foley
     package enum SFXVideoGenerate: CommandFlagNamespace {
         package static let command = ["sfx", "video", "generate"]
+        package static let defaultValues = [
+            "--duration": "8.0"
+        ]
 
         package static let negativePrompt = "--negative-prompt"
         package static let output = "--output"
