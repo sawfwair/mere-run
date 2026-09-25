@@ -53,7 +53,7 @@ extension MereRunCapabilityCatalog {
                 // AP-BWE always reads 16 kHz and refuses any other rate.
                 .init(
                     flag: "--input-rate", label: "UniverSR input bandwidth", kind: .choice,
-                    choices: ["8000", "12000", "16000", "24000"], tier: .standard
+                    choices: ["8000", "12000", "16000", "24000"], tier: .standard, choiceSpellings: .number
                 ).scoped(F.rule(.apBWE, values: ["16000"])),
                 .init(
                     flag: "--ode-method",

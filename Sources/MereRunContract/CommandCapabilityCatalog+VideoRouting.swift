@@ -11,6 +11,7 @@ extension MereRunCapabilityCatalog {
 
     enum DubItFamily: String, MereRunFamilyID {
         case ltx25Distilled = "ltx25-distilled"
+        case ltx25Full = "ltx25-full"
     }
 
     enum PrepareMasksFamily: String, MereRunFamilyID {
@@ -55,7 +56,8 @@ extension MereRunCapabilityCatalog {
         modelFlags: ["--model-root", "--model"],
         defaultModels: [.always("video-ltx25-distilled-bf16")],
         families: [
-            .init(DubItFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"])
+            .init(DubItFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(DubItFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
         ]
     )
 
@@ -91,6 +93,8 @@ extension MereRunCapabilityCatalog {
         case ltx25Full = "ltx25-full"
         case wan = "wan22-ti2v"
         case h3FL2VA = "h3-fl2va"
+        /// The legacy 4-bit FL2VA checkpoint: FL2VA without Turbo adapters, which need BF16 or Q8.
+        case h3FL2VAQ4 = "h3-fl2va-q4"
         case fastH3 = "h3-fast"
         /// The FastH3 id with an explicit `--h3-adapter`, which replaces the embedded adapter and
         /// its fixed recipe; it runs like FL2VA.
@@ -144,7 +148,7 @@ extension MereRunCapabilityCatalog {
                     .init(flag: "--auto-duration"),
                     .init(flag: "--video-decoder"),
                     .init(flag: "--image-conditioning"),
-                    .init(flag: "--num-generated-keyframes", values: (1...16).map(String.init)),
+                    .atLeast("--num-generated-keyframes", 1),
                     .init(flag: "--generated-keyframe"),
                     .init(flag: "--video-conditioning")
                 ],
@@ -170,8 +174,9 @@ extension MereRunCapabilityCatalog {
             .init(VideoGenerateFamily.wan, title: "Wan 2.2 TI2V", models: ["video-wan22-ti2v-5b-mlx"]),
             .init(
                 VideoGenerateFamily.h3FL2VA, title: "MiniMax-H3 FL2VA",
-                models: ["video-minimax-h3-fl2va-mlx", "video-minimax-h3-fl2va-bf16-mlx", "video-minimax-h3-fl2va-8bit-mlx"]
+                models: ["video-minimax-h3-fl2va-bf16-mlx", "video-minimax-h3-fl2va-8bit-mlx"]
             ),
+            .init(VideoGenerateFamily.h3FL2VAQ4, title: "MiniMax-H3 FL2VA 4-bit", models: ["video-minimax-h3-fl2va-mlx"]),
             .init(
                 VideoGenerateFamily.fastH3, title: "MiniMax-H3 FastH3", models: [fastH3Model],
                 selectors: [.absent("--h3-adapter")]

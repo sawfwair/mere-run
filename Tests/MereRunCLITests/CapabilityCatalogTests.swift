@@ -114,6 +114,29 @@ private func parserCommands() throws -> [String: ParserHelp.Command] {
     }
 }
 
+/// ArgumentParser enumerates a `CaseIterable` enum's values and takes them as written. A `String`
+/// or a raw-value enum it does not enumerate reads the value its own way (`--kv-quant-scheme`
+/// trims and lowercases, `--input-rate` parses an integer). Wherever the contract compares such a
+/// choice (a family rule's values, a selector, a default-model condition), the option declares how
+/// the CLI reads it, so the gate never refuses a spelling the CLI takes.
+@Test func everyComparedChoiceArgumentParserDoesNotEnumerateDeclaresItsSpellings() throws {
+    let commands = try parserCommands()
+    var compared = 0
+    for capability in MereRunCapabilityCatalog.document.commands {
+        guard let routing = capability.routing, let command = commands[capability.id] else { continue }
+        let conditions = routing.families.flatMap(\.selectors) + routing.defaultModels.flatMap(\.whenAny)
+        for option in capability.options where option.kind == .choice {
+            let comparesValues = option.familyRules.contains { $0.values != nil }
+                || conditions.contains { $0.flag == option.flag && $0.values != nil }
+            let parsed = command.arguments?.first { $0.flags.contains(option.flag) }
+            guard comparesValues, parsed?.allValues == nil else { continue }
+            compared += 1
+            #expect(option.choiceSpellings != nil, "\(capability.id) \(option.flag): say how the CLI reads it")
+        }
+    }
+    #expect(compared >= 7, "the String-typed choices the gate compares")
+}
+
 /// An alias command takes exactly its capability's options, so the gate reads it as that
 /// capability.
 @Test func aliasCommandsTakeTheirCapabilitysOptions() throws {

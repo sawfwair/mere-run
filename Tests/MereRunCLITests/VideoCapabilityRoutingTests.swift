@@ -77,8 +77,8 @@ import Testing
             == ["--steps 9 is not supported by MiniMax-H3 FastH3; it runs 5. Remove --steps or pass 5."])
         #expect(try report(base + ["--image", "a.png"]).violations
             == ["--image is not supported by MiniMax-H3 FastH3. It applies to LTX (merged), LTX-2.3 Distilled, "
-                + "LTX-2.3 Full, LTX-2.3 A2Vid, LTX-2.5 Distilled, LTX-2.5 Full, Wan 2.2 TI2V, MiniMax-H3 FL2VA "
-                + "and MiniMax-H3 FastH3 with an adapter."])
+                + "LTX-2.3 Full, LTX-2.3 A2Vid, LTX-2.5 Distilled, LTX-2.5 Full, Wan 2.2 TI2V, MiniMax-H3 FL2VA, "
+                + "MiniMax-H3 FL2VA 4-bit and MiniMax-H3 FastH3 with an adapter."])
 
         // An explicit adapter replaces the embedded one, and its recipe replaces FastH3's.
         let adapter = base + ["--h3-adapter", "turbo.safetensors"]

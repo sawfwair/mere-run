@@ -22,7 +22,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
             .init(flag: "--negative-prompt", aliases: ["-n"], label: "Negative prompt", kind: .string, group: Group.prompt, tier: .standard)
                 // FLUX.1 refuses a negative prompt with text in it; an empty one reads as omitted.
-                .scoped(ImageF.except(.flux1, ignoredBy: [.flux2Dev, .krea, .ideogram])),
+                // Qwen-Image-Edit Lightning runs without guidance, so it never reads one.
+                .scoped(ImageF.except(.flux1, ignoredBy: [.flux2Dev, .krea, .qwenEditLightning, .ideogram])),
             .init(
                 flag: "--cfg", aliases: ["--cfg-scale"], label: "CFG scale", kind: .number,
                 group: Group.sampling, tier: .standard, range: .init(min: 0, max: 20, step: 0.5)

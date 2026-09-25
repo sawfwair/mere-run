@@ -37,7 +37,8 @@ public enum ModelFamilyIdentifier {
         model: String,
         invocation: MereRunCommandInvocation
     ) -> MereRunModelIdentification? {
-        if let spec = ManagedModelCatalog.spec(for: model), spec.id != model {
+        if let spec = ManagedModelCatalog.spec(for: model), spec.id != model,
+           exactSpellingModels[capabilityID]?.contains(spec.id) != true {
             return .managedModel(spec.id)
         }
         return probes[capabilityID]?(model, invocation)

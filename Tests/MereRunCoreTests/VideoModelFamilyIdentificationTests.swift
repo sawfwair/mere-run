@@ -15,8 +15,9 @@ import Testing
             for model in family.models {
                 let profile = VideoGenerationModelProfile.managed(model)
                 #expect(profile != .unknown, "\(model)")
-                // The FastH3 id with an adapter runs FL2VA's layout; only the embedded one is FastH3.
-                let expected = family.id == "h3-fast-adapter" ? "h3-fl2va" : family.id
+                // The FastH3 id with an adapter, and legacy Q4, run FL2VA's layout; only the
+                // embedded adapter is FastH3.
+                let expected = ["h3-fast-adapter", "h3-fl2va-q4"].contains(family.id) ? "h3-fl2va" : family.id
                 #expect(profile.videoGenerateFamily(fastH3: family.id == "h3-fast") == expected, "\(model)")
             }
         }
@@ -64,6 +65,41 @@ import Testing
         ) == "h3-fl2va")
         #expect(identify("video.generate", root.path, ["--model-root", root.path]) == "h3-fl2va")
         #expect(identify("video.generate", root.path, ["--model", root.path]) == "h3-fl2va")
+    }
+
+    /// A local FL2VA folder stored as legacy Q4 is the family that refuses Turbo adapters; the
+    /// command reads the precision from the transformer's safetensors metadata.
+    @Test func aLegacyQ4FL2VAFolderIsItsOwnFamily() throws {
+        let root = try makeRoot(MiniMaxH3Resources.requiredFiles, config: Self.h3Config(task: "fl2va"))
+        defer { try? FileManager.default.removeItem(at: root) }
+        let header = Data(#"{"__metadata__":{"precision":"q4"}}"#.utf8)
+        var length = UInt64(header.count).littleEndian
+        try (Data(bytes: &length, count: MemoryLayout<UInt64>.size) + header)
+            .write(to: MiniMaxH3Resources(rootURL: root).transformerWeightsURL)
+        #expect(try MiniMaxH3Resources(rootURL: root).transformerStorage() == .affineQ4)
+        #expect(identify("video.generate", root.path, ["--model", root.path]) == "h3-fl2va-q4")
+        #expect(identify("video.generate", root.path, ["--model-root", root.path]) == "h3-fl2va-q4")
+    }
+
+    /// FastH3's embedded adapter runs only for its exact id; the command runs any other spelling
+    /// of it (the upstream repository, another case) as FL2VA, installed or not.
+    @Test func anotherSpellingOfFastH3RunsAsFL2VA() throws {
+        let spec = try #require(ManagedModelCatalog.spec(for: fastH3))
+        let spellings = [fastH3.uppercased(), spec.upstreamRepoId].compactMap { $0 }
+        #expect(!spellings.isEmpty)
+        for spelling in spellings {
+            #expect(identify("video.generate", spelling, ["--model", spelling]) == "h3-fl2va", "\(spelling)")
+            let report = MereRunCapabilityCatalog.videoGenerate.resolutionReport(
+                MereRunCommandInvocation(capability: MereRunCapabilityCatalog.videoGenerate, arguments: ["--model", spelling, "--image", "a.png"])
+            ) { model in
+                ModelFamilyIdentifier.identify(
+                    capabilityID: "video.generate", model: model,
+                    invocation: MereRunCommandInvocation(capability: MereRunCapabilityCatalog.videoGenerate, arguments: ["--model", spelling])
+                )
+            }
+            #expect(report.family == "h3-fl2va" && report.violations.isEmpty, "\(spelling): \(report)")
+        }
+        #expect(identify("video.generate", fastH3, ["--model", fastH3]) == "h3-fast")
     }
 
     @Test func retakeAndSessionProbesFollowTheirCommandsLayoutChecks() throws {

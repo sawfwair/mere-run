@@ -137,7 +137,7 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo25,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LTX25Resources.fullEstimatedDownloadBytes,
-            defaultCLICommands: ["video generate", "video retake", "video session"]
+            defaultCLICommands: ["video generate", "video retake", "video session", "video dub-it"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,

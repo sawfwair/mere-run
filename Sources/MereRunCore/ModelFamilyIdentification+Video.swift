@@ -11,10 +11,20 @@ extension ModelFamilyIdentifier {
         "video.session": videoSession,
     ]
 
+    /// Managed ids whose runtime keys on their exact spelling. The identifier sends any other
+    /// spelling of them (an upstream repository, another case) to the capability's probe instead
+    /// of reading it as the id: FastH3's embedded adapter and fixed recipe run only for its exact
+    /// id, and every other spelling runs the FL2VA layout without them.
+    static let exactSpellingModels: [String: Set<String>] = [
+        "video.generate": [ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue]
+    ]
+
     /// `video generate`: `VideoGenerationModelProfile.observe` on the folder the operation will
-    /// resolve. A managed id with nothing installed keeps the layout it names. A FastH3 folder is
-    /// laid out like FL2VA; it runs as FastH3 only when `--model` names the FastH3 id and no
-    /// `--h3-adapter` replaces the embedded one (`VideoGenerationOptions.usesEmbeddedFastH3Adapter`).
+    /// resolve. A managed id with nothing installed keeps the layout it names, however it is
+    /// spelled. A FastH3 folder is laid out like FL2VA; it runs as FastH3 only when `--model`
+    /// names the FastH3 id exactly and no `--h3-adapter` replaces the embedded one
+    /// (`VideoGenerationOptions.usesEmbeddedFastH3Adapter`). An FL2VA folder stored as legacy
+    /// Q4 is its own family: it refuses Turbo adapters.
     static let videoGenerate: Probe = { model, invocation in
         let outputMode = VideoGenerationOptions.effectiveOutputMode(
             audio: invocation.value("--audio"),
@@ -23,11 +33,18 @@ extension ModelFamilyIdentifier {
             legacyVariant: invocation.value("--variant").flatMap(LTXVideoVariant.init(rawValue:))
         )
         let root = videoRoot(model, invocation, variant: outputMode.compatibilityVariant)
+        let managed = ManagedModelCatalog.spec(for: model).map { VideoGenerationModelProfile.managed($0.id) }
         guard let profile = root.map({ VideoGenerationModelProfile.observe(root: $0) })
-            ?? VideoGenerationModelProfile.installDependentLayouts[model] else { return nil }
+            ?? VideoGenerationModelProfile.installDependentLayouts[model]
+            ?? managed.flatMap({ $0 == .unknown ? nil : $0 }) else { return nil }
         let fastH3 = profile == .h3FL2VA
-            && invocation.value("--model") == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
+            && invocation.value("--model")?.trimmingCharacters(in: .whitespacesAndNewlines)
+                == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
             && !invocation.contains("--h3-adapter")
+        if profile == .h3FL2VA, !fastH3, let root,
+           (try? MiniMaxH3Resources(rootURL: root).transformerStorage())?.supportsFL2VATurboAdapters == false {
+            return .family("h3-fl2va-q4")
+        }
         return profile.videoGenerateFamily(fastH3: fastH3).map { .family($0) }
     }
 
@@ -65,7 +82,8 @@ extension ModelFamilyIdentifier {
 }
 
 extension VideoGenerationModelProfile {
-    /// The layout of a `video generate` family's checkpoints; both FastH3 families share FL2VA's.
+    /// The layout of a `video generate` family's checkpoints; both FastH3 families and legacy Q4
+    /// share FL2VA's.
     init(videoGenerateFamily family: String) {
         switch family {
         case "ltx-merged": self = .ltxMerged
@@ -75,7 +93,7 @@ extension VideoGenerationModelProfile {
         case "ltx25-distilled": self = .ltx25Distilled
         case "ltx25-full": self = .ltx25Full
         case "wan22-ti2v": self = .wan
-        case "h3-fl2va", "h3-fast", "h3-fast-adapter": self = .h3FL2VA
+        case "h3-fl2va", "h3-fl2va-q4", "h3-fast", "h3-fast-adapter": self = .h3FL2VA
         case "h3-ref2va": self = .h3Ref2VA
         default: self = .unknown
         }

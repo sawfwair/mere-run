@@ -45,6 +45,9 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     #expect(try report(lightning + ["--cfg", "1.0", "--steps", "4"]).violations.isEmpty)
     #expect(try report(lightning + ["--cfg-scale", "1"]).violations.isEmpty)
     #expect(try report(lightning + ["--cfg", "4"]).violations == ["--cfg 4 is not supported by Qwen-Image-Edit Lightning; use 1."])
+    // Lightning runs without guidance, so a negative prompt runs and has no effect.
+    let negative = try report(lightning + ["--negative-prompt", "blurry"])
+    #expect(negative.violations.isEmpty && negative.warnings.count == 1 && negative.warnings[0].hasPrefix("--negative-prompt has no effect"))
     #expect(try report(lightning + ["-s", "8"]).violations == [
         "--steps 8 is not supported by Qwen-Image-Edit Lightning; it runs 4. Remove --steps or pass 4."
     ])
@@ -55,7 +58,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     #expect(krea.violations.isEmpty)
     #expect(krea.warnings == [
         "--negative-prompt has no effect with Krea 2. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, "
-            + "Qwen-Image 2.1, Qwen-Image-Edit and Qwen-Image-Edit Lightning.",
+            + "Qwen-Image 2.1 and Qwen-Image-Edit.",
         "--cfg has no effect with Krea 2. It applies to FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, "
             + "SenseNova U1.5, Qwen-Image 2.1, Qwen-Image-Edit, Qwen-Image-Edit Lightning and Ideogram 4."
     ])
@@ -100,7 +103,7 @@ private func report(_ commandLine: [String]) throws -> MereRunFamilyResolutionRe
     let flux1 = ["image", "generate", "-p", "a mug", "-m", "image-flux1-dev"]
     #expect(try report(flux1 + ["-n", ""]).warnings == [
         "--negative-prompt has no effect with FLUX.1-dev. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, "
-            + "Qwen-Image 2.1, Qwen-Image-Edit and Qwen-Image-Edit Lightning."
+            + "Qwen-Image 2.1 and Qwen-Image-Edit."
     ])
     #expect(try report(flux1 + ["-n", "blurry"]).violations.count == 1)
 }
