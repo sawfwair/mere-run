@@ -671,7 +671,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .krea2)
         XCTAssertEqual(spec.estimatedDownloadBytes, Krea2RawResources.estimatedDownloadBytes)
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
-        XCTAssertEqual(spec.defaultCLICommands, ["image train-lora"])
+        XCTAssertEqual(spec.defaultCLICommands, ["image generate", "image train-lora"])
         XCTAssertTrue(patterns.contains("transformer/diffusion_pytorch_model.safetensors.index.json"))
         XCTAssertTrue(patterns.contains("transformer/diffusion_pytorch_model-*.safetensors"))
         XCTAssertTrue(patterns.contains("text_encoder/model.safetensors"))
