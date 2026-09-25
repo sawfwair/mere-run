@@ -41,19 +41,12 @@ public enum VideoGenerationModelProfile: String, Sendable {
         return fileManager.fileExists(atPath: root.path) ? .ltxMerged : .unknown
     }
 
+    /// The profile of a managed model id: the checkpoint layout of the contract's `video generate`
+    /// family that lists it, so the CLI gate and this pre-resolve check agree by construction.
     public static func managed(_ selector: String) -> Self {
-        guard let id = ModelResolver.ModelID(rawValue: selector) else { return .unknown }
-        switch id {
-        case .ltxVideo23FullMLX: return .ltx23Full
-        case .ltxVideo23A2VMLX: return .ltx23AudioToVideo
-        case .ltxVideo23AVMLX: return .ltx23Distilled
-        case .ltxVideo25FullBF16: return .ltx25Full
-        case .ltxVideo25DistilledBF16: return .ltx25Distilled
-        case .miniMaxH3Ref2VAMLX: return .h3Ref2VA
-        case .miniMaxH3FL2VAMLX, .miniMaxH3FL2VABF16MLX, .miniMaxH3FL2VAQ8MLX,
-             .miniMaxH3FastH3VSADataFreeMLX: return .h3FL2VA
-        default: return selector == Wan2Resources.modelID ? .wan : .unknown
-        }
+        MereRunCapabilityCatalog.videoGenerate.routing?.families
+            .first { $0.models.contains(selector) }
+            .map { Self(videoGenerateFamily: $0.id) } ?? .unknown
     }
 
     public func ltxRoute(outputMode: LTXVideoOutputMode) -> LTXVideoGenerationRoute? {
