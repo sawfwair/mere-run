@@ -44,7 +44,10 @@ public enum ModelFamilyIdentifier {
     }
 
     /// Per-capability machine defaults, keyed by capability id.
-    static let defaultChoosers: [String: DefaultChooser] = geoDefaultChoosers
+    static let defaultChoosers: [String: DefaultChooser] = [geoDefaultChoosers, textDefaultChoosers]
+        .reduce(into: [:]) { table, domain in
+            table.merge(domain) { _, _ in preconditionFailure("Two default choosers claim one capability.") }
+        }
 
     /// The candidate a capability's machine-chosen default runs on this machine, or `nil` when
     /// the capability registers no chooser.

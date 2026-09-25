@@ -130,29 +130,11 @@ struct TextChat: AsyncParsableCommand {
     /// otherwise, then Gemma 4 12B 4-bit. Nano is the final fallback everywhere. The
     /// capability contract's text chat default rules list the same candidates.
     static var defaultChatModelId: String {
-        let machine = MereRunMachineProfile.current
-        let isCUDA: Bool
-        #if os(Linux)
-        isCUDA = ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"]?.lowercased() == "cuda"
-        #else
-        isCUDA = false
-        #endif
-
-        return defaultChatModelId(on: machine, linuxCUDA: isCUDA)
+        TextChatDefaultModel.current
     }
 
     static func defaultChatModelId(on machine: MereRunMachineProfile, linuxCUDA: Bool = false) -> String {
-        func fits(_ id: String) -> Bool {
-            guard let descriptor = ManagedModelCapabilityCatalog.descriptor(for: id) else { return false }
-            return machine.unifiedMemoryGB >= descriptor.minimumUnifiedMemoryGB
-        }
-
-        let a3b = machine.isLinux
-            ? (linuxCUDA ? "text-chat-q36-nano-gguf" : Q35Resources.q36NanoModelId)
-            : Gemma4Resources.twelveB4BitModelId
-        if fits(a3b) { return a3b }
-        if fits(Gemma4Resources.twelveB4BitModelId) { return Gemma4Resources.twelveB4BitModelId }
-        return Gemma4Resources.nanoModelId
+        TextChatDefaultModel.id(on: machine, linuxCUDA: linuxCUDA)
     }
 
     static func backendDescription(for modelID: String) -> String {
@@ -819,7 +801,7 @@ struct TextChat: AsyncParsableCommand {
                 return nil
             }
             return kvBits == 4 ? .affine4 : .affine8
-        case .inkling, .lfm2, .lfm2VL:
+        case .inkling, .lfm2, .lfm2A1B, .lfm2VL:
             switch kvBits {
             case 4: return .affine4
             case 8: return .affine8

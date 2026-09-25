@@ -9,7 +9,7 @@ private struct LFM2PrefillOutput {
     let hidden: MLXArray
 }
 
-private struct LFM2ModelTypeEnvelope: Decodable {
+struct LFM2ModelTypeEnvelope: Decodable {
     let modelType: String
 
     private enum CodingKeys: String, CodingKey {

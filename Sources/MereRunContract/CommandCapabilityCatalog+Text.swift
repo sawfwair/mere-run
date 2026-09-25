@@ -8,10 +8,12 @@ extension MereRunCapabilityCatalog {
         summary: "Run local chat, vision, JSON, LoRA, reasoning, and tool workflows.",
         options: [
             .init(
-                flag: "--audio", label: "Audio", kind: .file, group: Group.inputs, tier: .expert
+                flag: "--audio", label: "Audio", kind: .file, group: Group.inputs, tier: .expert,
+                blankReadsAsOmitted: true
             ).scoped(Chat.only(.nemotronOmni, ignoredBy: Chat.allCases.filter { ![.nemotronOmni, .diffusionGemma].contains($0) })),
             .init(
-                flag: "--video", label: "Video", kind: .file, group: Group.inputs, tier: .expert
+                flag: "--video", label: "Video", kind: .file, group: Group.inputs, tier: .expert,
+                blankReadsAsOmitted: true
             ).scoped(Chat.only(.nemotronOmni, ignoredBy: Chat.allCases.filter { ![.nemotronOmni, .diffusionGemma].contains($0) })),
             .init(
                 flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert
@@ -20,7 +22,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--show-unmasking", label: "Show canvas drafts", kind: .boolean, group: Group.run, tier: .expert
             ).scoped(Chat.only(.diffusionGemma)),
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
-            .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard)
+            .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard, blankReadsAsOmitted: true)
                 .scoped(Chat.only(
                     .gemma4Unified, .museGlimmer, .nemotronOmni, .lfm2VL, .q35VL, .q38,
                     ignoredBy: [.laguna, .nemotronH, .gguf, .psi]
@@ -31,13 +33,14 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "2048", group: Group.sampling, tier: .standard,
                 range: .init(min: 1, max: 131_072, step: 1)
             ),
-            // LFM2.5 caps the context at 32768 tokens whatever is asked for.
+            // LFM2.5 caps the context at 32768 tokens whatever is asked for, and takes any smaller one.
             .init(
                 flag: "--context-size", label: "Context size", kind: .integer,
                 group: Group.sampling, tier: .expert, range: .init(min: 512, max: 1_048_576, step: 1)
             ).scoped(
-                Chat.rule(.lfm2, range: .init(min: 512, max: 32_768, step: 1), severity: .warning),
-                .rule(.lfm2VL, range: .init(min: 512, max: 32_768, step: 1), severity: .warning)
+                Chat.rule(.lfm2, range: .init(min: 1, max: 32_768, step: 1), severity: .warning),
+                .rule(.lfm2A1B, range: .init(min: 1, max: 32_768, step: 1), severity: .warning),
+                .rule(.lfm2VL, range: .init(min: 1, max: 32_768, step: 1), severity: .warning)
             ),
             .init(
                 flag: "--temperature", label: "Temperature", kind: .number,
@@ -61,9 +64,10 @@ extension MereRunCapabilityCatalog {
                 flag: "--kv-bits", label: "KV bits", kind: .number,
                 group: Group.run, tier: .expert, range: .init(min: 2, max: 8, step: 0.5)
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
+                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2A1B, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
                 .rule(.inkling, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2, values: ["4", "8"], severity: .warning),
+                .rule(.lfm2A1B, values: ["4", "8"], severity: .warning),
                 .rule(.lfm2VL, values: ["4", "8"], severity: .warning),
                 .rule(.q35, values: ["4", "8"]), .rule(.q35VL, values: ["4", "8"]), .rule(.q38, values: ["4", "8"])
             ),
@@ -74,9 +78,9 @@ extension MereRunCapabilityCatalog {
                 label: "KV quantization",
                 kind: .choice,
                 choices: ["uniform", "polar", "turboquant"],
-                group: Group.run, tier: .expert
+                group: Group.run, tier: .expert, choiceSpellings: .caseInsensitive
             ).scoped(
-                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL]),
+                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A1B, .lfm2VL]),
                 .rule(.q35, values: ["uniform"]), .rule(.q35VL, values: ["uniform"]), .rule(.q38, values: ["uniform"])
             ),
             // The affine runtimes choose their own group size and start; Inkling and LFM2.5 never
@@ -84,11 +88,11 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--kv-group-size", label: "KV group size", kind: .integer,
                 group: Group.run, tier: .expert
-            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL])),
+            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A1B, .lfm2VL])),
             .init(
                 flag: "--quantized-kv-start", label: "Quantized KV start", kind: .integer,
                 group: Group.run, tier: .expert, range: .init(min: 0, step: 1)
-            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL])),
+            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2A1B, .lfm2VL])),
             .init(flag: "--model-root", aliases: ["-m"], label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             // Constrained JSON decoding runs on Gemma 4 and the Qwen-family runtimes only.
@@ -102,12 +106,16 @@ extension MereRunCapabilityCatalog {
                 Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
                 .rule(.inkling, values: ["text"]), .rule(.museGlimmer, values: ["text"]),
                 .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
-                .rule(.lfm2, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
+                .rule(.lfm2, values: ["text"]), .rule(.lfm2A1B, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
                 .rule(.gguf, values: ["text"]), .rule(.psi, values: ["text"])
             ),
-            .init(flag: "--lora", label: "LoRA", kind: .file, group: Group.modelAndAdapters, tier: .standard)
-                .scoped(Chat.only(
-                    .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2, .lfm2VL,
+            .init(
+                flag: "--lora", label: "LoRA", kind: .file, group: Group.modelAndAdapters, tier: .standard,
+                blankReadsAsOmitted: true
+            ).scoped(Chat.only(
+                    // LFM2.5 loads a text adapter only on the 8-bit A1B runtime and fails after
+                    // loading any other checkpoint.
+                    .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B,
                     ignoredBy: [.q35, .q35VL, .q38, .gguf, .psi]
                 )),
             // Without --lora the scale does nothing anywhere, so it never fails on its own.
@@ -116,8 +124,10 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
                 range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--lora"
             ).scoped(Chat.only(
-                .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2, .lfm2VL,
-                ignoredBy: [.diffusionGemma, .museGlimmer, .nemotronH, .nemotronOmni, .q35, .q35VL, .q38, .gguf, .psi]
+                .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2A1B,
+                ignoredBy: [
+                    .diffusionGemma, .museGlimmer, .nemotronH, .nemotronOmni, .lfm2, .lfm2VL, .q35, .q35VL, .q38, .gguf, .psi
+                ]
             )),
             .init(flag: "--thinking", aliases: ["--show-thinking"], label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
             .init(flag: "--no-thinking", aliases: ["--no-show-thinking"], label: "Disable thinking", kind: .boolean, group: Group.sampling, tier: .standard),

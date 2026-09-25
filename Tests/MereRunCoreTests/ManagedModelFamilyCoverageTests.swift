@@ -77,12 +77,12 @@ private func resolve(
     }
 }
 
-/// A macOS default whose candidates span families has a machine chooser in Core that picks one
+/// A default whose candidates span families, on any platform, has a machine chooser in Core that picks one
 /// of them, so `catalog resolve` answers a blank model the way the command runs it.
 @Test func everyMachineChosenDefaultHasAChooser() {
     for capability in MereRunCapabilityCatalog.document.commands {
         guard let routing = capability.routing else { continue }
-        for rule in routing.defaultModels where rule.applies(on: "macos") && rule.family == nil {
+        for rule in routing.defaultModels where rule.family == nil {
             let families = Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) })
             guard families.count > 1 else { continue }
             let chosen = ModelFamilyIdentifier.machineDefault(capabilityID: capability.id, candidates: rule.models)

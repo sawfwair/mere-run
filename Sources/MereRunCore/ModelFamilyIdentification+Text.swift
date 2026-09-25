@@ -46,6 +46,11 @@ extension ModelFamilyIdentifier {
         "text.train-lora": textTrainLoRAProbe,
     ]
 
+    static let textDefaultChoosers: [String: DefaultChooser] = [
+        // Linux picks among Qwen3.6 A3B (GGUF or MLX) and Gemma 4 by memory and accelerator.
+        "text.chat": { _ in TextChatDefaultModel.current }
+    ]
+
     /// The identifier's `text chat` probe. The Qwen fallthrough runs only a model with a Qwen
     /// profile, so any other id is unidentified and the command reports it.
     static func textChatProbe(model: String, invocation: MereRunCommandInvocation) -> MereRunModelIdentification? {
@@ -55,9 +60,25 @@ extension ModelFamilyIdentifier {
         switch family {
         case .q35, .q35VL, .q38:
             return Q35Resources.profile(for: model) == nil ? nil : .family(family.rawValue)
+        case .lfm2, .lfm2A1B, .lfm2VL:
+            return lfm2Family(folder: model).map { .family($0.rawValue) }
         default:
             return .family(family.rawValue)
         }
+    }
+
+    /// The LFM2.5 family of a local checkpoint, read from its config the way the runtime reads it:
+    /// a vision tower, the 8-bit A1B mixture of experts (the one text LoRA adapters load on), or
+    /// the rest. An id that is not a folder can't say, so the command decides when it runs.
+    static func lfm2Family(folder model: String) -> MereRunCapabilityCatalog.TextChatFamily? {
+        let root = LFM2Resources.normalizedRootURL(URL(fileURLWithPath: model).standardizedFileURL)
+        guard let data = try? Data(contentsOf: root.appendingPathComponent("config.json")),
+              let modelType = try? JSONDecoder().decode(LFM2ModelTypeEnvelope.self, from: data).modelType else {
+            return nil
+        }
+        if modelType == "lfm2_vl" { return .lfm2VL }
+        guard let config = try? JSONDecoder().decode(LFM2Config.self, from: data) else { return nil }
+        return config.modelType == "lfm2_moe" && config.quantization?.bits == 8 ? .lfm2A1B : .lfm2
     }
 
     /// The identifier's `text train-lora` probe: the trainer the command itself selects.

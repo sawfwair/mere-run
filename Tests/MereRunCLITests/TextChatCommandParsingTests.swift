@@ -252,7 +252,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertFalse(try gate("--model", command.model, "--response-format", "json_object").violations.isEmpty)
         XCTAssertEqual(
             try gate("--model", command.model, "--lora", "adapter.safetensors").violations,
-            ["--lora is not supported by Muse Glimmer. It applies to Gemma 4, Gemma 4 12B vision, Laguna, Inkling-Small, LFM2.5 and LFM2.5-VL."]
+            ["--lora is not supported by Muse Glimmer. It applies to Gemma 4, Gemma 4 12B vision, Laguna, Inkling-Small and LFM2.5 A1B 8-bit."]
         )
     }
 
