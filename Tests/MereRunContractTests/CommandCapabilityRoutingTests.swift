@@ -348,6 +348,7 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(messages("quick", ["-s", "8"])
         == ["error: --steps 8 is not supported by Quick; it runs 4. Remove --steps or pass 4."])
     #expect(messages("quick", ["--steps", "4"]).isEmpty)
+    #expect(messages("quick", ["--steps", "04"]).isEmpty, "numbers match by value")
     #expect(messages("full", ["--steps", "70"])
         == ["error: --steps 70 is not supported by Full; use a value from 10 to 60."])
     #expect(messages("wide", []) == ["error: Wide requires --image."])

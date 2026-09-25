@@ -388,7 +388,7 @@ extension MereRunCommandCapability {
         let flag = option.flag
         var found: [MereRunOptionViolation] = []
         let effect = rule.severity == .warning ? "has no effect with \(family.title)" : "is not supported by \(family.title)"
-        if let allowed = rule.values, let value = values.first(where: { !allowed.contains($0) }) {
+        if let allowed = rule.values, let value = values.first(where: { !Self.allows(allowed, $0, kind: option.kind) }) {
             let message = allowed.count == 1
                 ? "\(flag) \(value) \(effect); it runs \(allowed[0]). Remove \(flag) or pass \(allowed[0])."
                 : "\(flag) \(value) \(effect); use \(Self.list(allowed, conjunction: "or"))."
@@ -409,6 +409,14 @@ extension MereRunCommandCapability {
             ))
         }
         return found
+    }
+
+    /// A number matches an allowed value numerically, so `--guidance 0.0` meets a rule of `0`.
+    private static func allows(_ allowed: [String], _ value: String, kind: MereRunCapabilityValueKind) -> Bool {
+        guard kind == .integer || kind == .number, let number = Double(value) else {
+            return allowed.contains(value)
+        }
+        return allowed.contains { Double($0) == number }
     }
 
     private static func outside(_ range: MereRunCapabilityRange, _ value: String) -> Bool {
