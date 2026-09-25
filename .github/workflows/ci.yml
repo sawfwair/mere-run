@@ -7,6 +7,7 @@ on:
   merge_group:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -24,6 +25,20 @@ jobs:
       linux: ${{ steps.filter.outputs.linux }}
       ios: ${{ steps.filter.outputs.ios }}
     steps:
+      - name: Verify main commit passed the merge queue
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # A direct push (including an admin bypass) must not turn a cache
+          # warm into a substitute for the required merge-queue matrix.
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml \
+            --event merge_group --commit "$COMMIT_SHA" --limit 100 \
+            --json conclusion,status,headSha \
+            | jq -e --arg sha "$COMMIT_SHA" \
+              'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")'
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -35,6 +50,7 @@ jobs:
           # against the main tip the group was formed on.
           BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
 
@@ -46,7 +62,9 @@ jobs:
           #          `full` is ./scripts/check.sh (every test target), `fast` is
           #          the same non-test checks plus the macOS Studio targets
           #          (StudioKit, StudioUI, MereRunApp) and their tests. Both
-          #          lanes build and verify the app bundle.
+          #          lanes build and verify the app bundle. `warm` is a
+          #          post-merge cache build after the exact SHA passed the
+          #          merge-queue matrix.
           #   linux  the Linux CLI compatibility gate has something to prove
           #   ios    the iOS app build and tests have something to prove
           #
@@ -106,6 +124,13 @@ jobs:
                     lane=full
                     linux_required=true
                     ;;
+                  # The iOS project links Core and RelayKit, not MereRunCLI.
+                  # CLI implementation and its tests still need macOS and Linux.
+                  Sources/MereRunCLI/*|Tests/MereRunCLITests/*)
+                    record_category cli-only
+                    lane=full
+                    linux_required=true
+                    ;;
                   Sources/*|Tests/*|Package.swift|Package.resolved|vendor/*)
                     record_category cli-core
                     lane=full
@@ -150,7 +175,19 @@ jobs:
 
           [[ -n "$categories" ]] || categories='(none detected)'
 
-          if [[ "$lane" == "fast" ]]; then
+          if [[ "$EVENT_NAME" == 'push' ]]; then
+            # The exact commit has already passed the merge-queue matrix.
+            # Keep main's trusted cache writer without repeating that matrix.
+            code_required=true
+            lane=warm
+            linux_required=false
+            ios_required=false
+            categories='validated merge-queue commit'
+          fi
+
+          if [[ "$lane" == "warm" ]]; then
+            lane_note='**post-merge cache warm** (exact-SHA merge-queue success verified, Swift build only)'
+          elif [[ "$lane" == "fast" ]]; then
             lane_note='**fast lane: app-only change** (SwiftLint, repository checks, swift build, the Studio test targets, app bundle)'
           else
             lane_note='**full gate** (scripts/check.sh, every package test target, plus the app bundle)'
@@ -208,6 +245,9 @@ jobs:
           elif [[ "$LANE" == "fast" ]]; then
             note='fast lane: app-only change'
             detail='SwiftLint, agent readiness, evaluation boundary, docs examples, swift build, metallib verification, the Studio test targets, and the app bundle build.'
+          elif [[ "$LANE" == "warm" ]]; then
+            note='post-merge cache warm'
+            detail='The exact commit passed the merge-queue matrix; rebuild Swift products for the default-branch cache.'
           else
             note='full gate'
             detail='./scripts/check.sh (every package test target) plus the app bundle build.'
@@ -280,15 +320,18 @@ jobs:
             \) -print -delete
           fi
       - name: Install check dependencies
-        if: env.RUN_GATE == 'true'
+        if: env.RUN_GATE == 'true' && env.LANE != 'warm'
         run: |
           # macos-26 currently carries an untrusted aws/tap that causes every
           # Homebrew command to fail before resolving Homebrew/core formulae.
           brew untap --force aws/tap
           brew install swiftlint ripgrep
       - name: Run package checks
-        if: env.RUN_GATE == 'true' && env.LANE != 'fast'
+        if: env.RUN_GATE == 'true' && env.LANE == 'full'
         run: ./scripts/check.sh
+      - name: Warm default-branch Swift build cache
+        if: env.RUN_GATE == 'true' && env.LANE == 'warm'
+        run: swift build --disable-index-store
       - name: Run app-scoped package checks
         if: env.RUN_GATE == 'true' && env.LANE == 'fast'
         run: |
@@ -305,10 +348,10 @@ jobs:
           swift test --disable-index-store \
             --filter StudioKitTests --filter StudioUITests --filter MereRunAppTests
       - name: Build app bundle (ad-hoc)
-        if: env.RUN_GATE == 'true'
+        if: env.RUN_GATE == 'true' && env.LANE != 'warm'
         run: ./scripts/build_mere_run_app.sh debug
       - name: Verify bundle structure
-        if: env.RUN_GATE == 'true'
+        if: env.RUN_GATE == 'true' && env.LANE != 'warm'
         run: |
           set -euo pipefail
           bundle="$(swift build --disable-index-store --show-bin-path)/MereRun.app"
@@ -366,7 +409,7 @@ jobs:
   # project compiles has changed (apps/macos/** is not part of it).
   ios:
     needs: changes
-    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.ios == 'true'
+    if: github.event_name != 'push' && needs.changes.outputs.code == 'true' && needs.changes.outputs.ios == 'true'
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
