@@ -49,7 +49,9 @@ mere.run audio edit "Say 'Welcome back' with the same voice." \
 Omit `--duration` to follow the encoded reference length. Audio is decoded to
 mono at 24 kHz for the VAE and 16 kHz for the Qwen encoder. Reference clips must
 be between 25 ms and 300 seconds. Base defaults to 32 Euler steps with guidance
-2. Flash always uses its trained four-step grid and disables guidance.
+2. Flash always uses its trained four-step grid and disables guidance, so a
+`--steps` other than 4 or a `--guidance` other than 0 prints a warning that it
+has no effect with Flash.
 
 For existing downloads, pass `--model-path /path/to/AuK` and
 `--thinker-path /path/to/Qwen2.5-Omni-3B`. The runtime reads original safetensors

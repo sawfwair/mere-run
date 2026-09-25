@@ -52,7 +52,13 @@ progress is diagnostic stderr output.
 - UniverSR infers the effective input rate from native 8/12/16/24 kHz files.
   For bandwidth-limited audio already stored at 48 kHz, pass `--input-rate`.
 - `--ode-method`, `--ode-steps`, `--guidance-scale`, `--seed`, and
-  `--chunk-seconds` apply only to UniverSR; `--overlap` applies only to AP-BWE.
+  `--chunk-seconds` apply only to UniverSR. AP-BWE accepts them and prints a
+  warning that they have no effect.
+- `--overlap` applies only to AP-BWE, and AP-BWE reads 16 kHz only: the CLI
+  refuses `--overlap` with UniverSR, and any `--input-rate` except 16000 with
+  AP-BWE, before it loads a model.
+- `audio enhance` runs the two enhancement ids only. An AuK id stops at once
+  and points to `audio edit`.
 - `--model-path` accepts an explicit root only when every pinned artifact matches.
 - `--dtype float32` is the default; `float16` reduces model memory use.
 - Quality depends on the source. A valid output artifact proves runtime

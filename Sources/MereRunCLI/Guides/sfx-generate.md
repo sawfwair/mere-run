@@ -39,11 +39,17 @@ mere.run guide sfx generate --model sfx-woosh-dflow
 - `--model`, `-m`: managed model id or local Woosh checkpoints root.
 - `--duration`: output duration in seconds. The native path maps this to Woosh
   latent frames at 100 frames per second plus the terminal frame.
-- `--steps`, `-s`: denoise steps. The upstream distilled DFlow example uses 4;
-  the original Flow model generally uses more steps.
+- `--steps`, `-s`: denoise steps. `sfx generate` runs 4 on both Woosh models
+  unless told otherwise; the original Flow model generally needs more, so pass
+  `--steps` for it. `sfx video generate` runs 4 on DVFlow and 32 on VFlow.
 - `--cfg`: Woosh guidance scale. The upstream DFlow example uses 4.5.
 - `--renoise`: one value repeated for all steps, or a comma-separated schedule.
-  The default 4-step DFlow schedule is `0,0.5,0.5,0.3`.
+  The default 4-step DFlow schedule is `0,0.5,0.5,0.3`. Only the distilled
+  DFlow and DVFlow models renoise: Flow and VFlow check the schedule and print a
+  warning that it has no effect, and MMAudio refuses it.
+- `--negative-prompt`: MMAudio only; the CLI refuses it for Woosh.
+- `--clip-batch-size` applies to MMAudio and `--synchformer-model` to Woosh; the
+  other runtime prints a warning that it has no effect.
 - `--seed`: deterministic MLX random seed.
 - `--output`, `-o`: output WAV path.
 - `--preflight`: for `sfx video generate`, inspect inputs, model requirements,
@@ -119,6 +125,12 @@ mere.run sfx video generate \
 ```
 
 ## Notes
+
+Each Woosh model runs one command. `sfx generate` takes DFlow, Flow, or MMAudio;
+`sfx video generate` takes DVFlow, VFlow, or MMAudio; `sfx clap score` takes
+Woosh CLAP. Naming another model stops at once and names the command it runs.
+The CLI refuses an option the selected model doesn't support before it loads
+anything.
 
 Woosh is a sound-effect and Foley model, not a song-generation model, so it
 lives under `sfx generate` instead of `music generate`. The managed weights are
