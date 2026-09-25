@@ -86,7 +86,14 @@ extension ModelFamilyIdentifier {
     /// `--checkpoints-root` or `--decoder-subdirectory`; whichever the gate passed, the probe reads
     /// the whole command line the way the command does. A managed id is also probed, because
     /// `MERERUN_MUSIC_ACESTEP_ROOT` can hold a different checkpoint than the id's own install; an
-    /// alias reads as its managed id, whose install the command falls back to.
+    /// alias reads as its managed id, whose install the command falls back to. With nothing on
+    /// disk, a managed id under the default decoder runs its own layout, so it answers as itself;
+    /// a named decoder may pick another variant of the download, which only the run can tell.
+    ///
+    /// The ACE-Step commands never load a language model id themselves. They run one only when a
+    /// checkpoints root loads first: `--checkpoints-root`, which they load or refuse on its own,
+    /// or a usable root already on disk such as `MERERUN_MUSIC_ACESTEP_ROOT`. The probes answer
+    /// for those ids only then, and the contract's exclusion stands otherwise.
     static let musicProbes: [String: Probe] = [
         "music.generate": { _, invocation in
             let requested = invocation.value("--model") ?? ModelResolver.ModelID.aceStep.rawValue
@@ -97,10 +104,50 @@ extension ModelFamilyIdentifier {
             case .magentaRT2: "magenta-rt2"
             case .aceStep: ACEStepCheckpointVariant.local(invocation, model: model)?.musicGenerateFamily
             }
-            return family.map { .family($0) }
+            if let family { return .family(family) }
+            // An explicit root the command can't use fails the run on its own; only the id's own
+            // download stands behind a managed id.
+            let decoder = invocation.value("--decoder-subdirectory")?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard ManagedModelCatalog.spec(for: model) != nil, invocation.value("--checkpoints-root") == nil,
+                  decoder == nil || decoder == ACEStepRuntimePreparation.defaultDecoderSubdirectory else { return nil }
+            return .managedModel(model)
         },
-        "music.serve": { model, _ in
-            .family(MusicModelRuntime.serving(model: model) == .miniMaxMusic3 ? "minimax-music3" : "ace-step")
-        }
+        "music.serve": { model, invocation in
+            if isACEStepLanguageModel(model) {
+                return aceStepRootLoadsFirst(model: model, invocation) ? .family("ace-step") : nil
+            }
+            return .family(MusicModelRuntime.serving(model: model) == .miniMaxMusic3 ? "minimax-music3" : "ace-step")
+        },
+        "music.analyze": aceStepOnlyProbe,
+        "music.train-adapter": aceStepOnlyProbe
     ]
+
+    /// `music analyze` and `music train-adapter` run ACE-Step alone: a language model id runs
+    /// only behind a root that loads first; anything else is the command's to judge.
+    private static let aceStepOnlyProbe: Probe = { model, invocation in
+        guard isACEStepLanguageModel(model), aceStepRootLoadsFirst(model: model, invocation) else { return nil }
+        return .family("ace-step")
+    }
+
+    private static func isACEStepLanguageModel(_ model: String) -> Bool {
+        [ModelResolver.ModelID.aceStepLM17B.rawValue, ModelResolver.ModelID.aceStepLM4B.rawValue]
+            .contains(ManagedModelCatalog.spec(for: model)?.id ?? model)
+    }
+
+    /// True when the command would load a checkpoints root before it ever resolved `model`: an
+    /// explicit `--checkpoints-root` (loaded, or refused as incomplete), or a usable root on disk.
+    private static func aceStepRootLoadsFirst(model: String, _ invocation: MereRunCommandInvocation) -> Bool {
+        if let explicit = invocation.value("--checkpoints-root"),
+           !explicit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return true
+        }
+        return ACEStepRuntimePreparation.localCheckpointsRoot(
+            model: model,
+            checkpointsRoot: nil,
+            turboSubdirectory: invocation.value("--decoder-subdirectory") ?? ACEStepRuntimePreparation.defaultDecoderSubdirectory,
+            vaeSubdirectory: invocation.value("--vae-subdirectory") ?? ACEStepRuntimePreparation.defaultVAESubdirectory,
+            lmSubdirectory: nil,
+            textSubdirectory: invocation.value("--text-subdirectory")
+        ) != nil
+    }
 }

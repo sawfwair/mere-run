@@ -178,7 +178,7 @@ extension MereRunCapabilityCatalog {
                 .scoped(G.except(ignoredBy: [.magentaRT2])),
             .init(flag: "--daw-bundle", label: "DAW bundle", kind: .directory, group: Group.output, tier: .expert)
                 .scoped(G.except(.miniMaxMusic3, .yue2, ignoredBy: [.magentaRT2])),
-            .init(flag: "--stems", label: "Stems", kind: .string, group: Group.output, tier: .expert)
+            .init(flag: "--stems", label: "Stems", kind: .string, group: Group.output, tier: .expert, listSeparator: ",")
                 .scoped(G.only(.aceStepBase, ignoredBy: [.magentaRT2])),
             .init(flag: "--adapter", label: "Adapter", kind: .file, repeatable: true, group: Group.modelAndAdapters, tier: .standard)
                 .scoped(G.except(.miniMaxMusic3, .yue2, ignoredBy: [.magentaRT2])),
@@ -379,7 +379,9 @@ extension MereRunCapabilityCatalog {
                 label: "Task",
                 kind: .choice,
                 choices: ["text2music", "repaint", "cover", "cover-nofsq", "extract", "lego", "complete"],
-                defaultValue: "text2music", group: Group.inputs, tier: .standard
+                defaultValue: "text2music", group: Group.inputs, tier: .standard,
+                // `--flow-edit` runs text-to-music whatever the task says (`resolvedACEStepTask`).
+                overriddenBy: [.init(flag: "--flow-edit")]
             )
                 .scoped(
                     G.except(ignoredBy: [.miniMaxMusic3, .yue2, .magentaRT2]),

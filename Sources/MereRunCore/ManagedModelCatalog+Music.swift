@@ -98,7 +98,7 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 23 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLSFT.rawValue,
@@ -135,7 +135,7 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 23 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLTurbo.rawValue,
@@ -171,7 +171,7 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 23 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
@@ -221,7 +221,7 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 32 * 1_073_741_824,
-            defaultCLICommands: ["music generate", "music analyze", "music serve"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter", "music serve"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepLM17B.rawValue,

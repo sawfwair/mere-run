@@ -68,8 +68,9 @@ extension MereRunCapabilityCatalog {
             reason: "It is an ACE-Step language model; pass it as `--lm-model`."
         ),
         // `MERERUN_MUSIC_ACESTEP_ROOT` wins over a managed ACE-Step id's own install, so the CLI
-        // identifies the checkpoint it would load before trusting the id.
-        identifiedModels: aceStepGenerateModels
+        // identifies the checkpoint it would load before trusting the id. The same root runs in
+        // place of a language model id, which is excluded only when no root loads first.
+        identifiedModels: aceStepGenerateModels + aceStepLanguageModels
     )
 
     static let musicSeparateRouting = MereRunCapabilityRouting(
@@ -91,15 +92,14 @@ extension MereRunCapabilityCatalog {
         modelFlags: ["--model"],
         defaultModels: [.always("music-acestep")],
         families: [
-            .init(MusicServeFamily.aceStep, title: "ACE-Step",
-                  models: ["music-acestep", "music-acestep-xl-turbo", "music-acestep-xl-turbo-lm4b",
-                           "music-acestep-xl-sft", "music-acestep-xl-base"]),
+            .init(MusicServeFamily.aceStep, title: "ACE-Step", models: aceStepGenerateModels),
             .init(MusicServeFamily.miniMaxMusic3, title: "MiniMax Music 3", models: ["music-minimax-music3"])
         ],
         excludedModels: .models(
             aceStepLanguageModels,
             reason: "It is an ACE-Step language model; pass it as `--lm-model`."
-        )
+        ),
+        identifiedModels: aceStepLanguageModels
     )
 
     /// Every chunk overlap a RoFormer model accepts: the positive divisors of its chunk size in
@@ -108,16 +108,17 @@ extension MereRunCapabilityCatalog {
         (1...chunkSize).filter { chunkSize.isMultiple(of: $0) }.map(String.init)
     }
 
+    /// Analysis runs any ACE-Step checkpoint, and adds the 1.7B planner when the checkpoint has
+    /// no language model of its own.
     static let musicAnalyzeRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [.always("music-acestep")],
-        families: [
-            .init(ACEStepFamily.aceStep, title: "ACE-Step", models: ["music-acestep", "music-acestep-xl-turbo-lm4b"])
-        ],
+        families: [.init(ACEStepFamily.aceStep, title: "ACE-Step", models: aceStepGenerateModels)],
         excludedModels: .models(
             aceStepLanguageModels,
             reason: "It is an ACE-Step language model; pass it as `--lm-model`."
-        )
+        ),
+        identifiedModels: aceStepLanguageModels
     )
 
     static let musicTranscribeRouting = MereRunCapabilityRouting(
@@ -129,7 +130,8 @@ extension MereRunCapabilityCatalog {
                 title: "MuScriptor",
                 models: ["music-muscriptor-small", "music-muscriptor-medium", "music-muscriptor-large"]
             )
-        ]
+        ],
+        listingFlags: ["--list-instruments"]
     )
 
     static let musicRealtimeRouting = MereRunCapabilityRouting(
@@ -149,17 +151,20 @@ extension MereRunCapabilityCatalog {
         ).and(
             aceStepLanguageModels,
             reason: "It is an ACE-Step language model; `music realtime` streams Magenta RealTime 2 only."
-        )
+        ),
+        listingFlags: ["--list-midi-inputs"]
     )
 
+    /// Adapters train on any ACE-Step DiT checkpoint.
     static let musicTrainAdapterRouting = MereRunCapabilityRouting(
         modelFlags: ["--model"],
         defaultModels: [.always("music-acestep")],
-        families: [.init(ACEStepFamily.aceStep, title: "ACE-Step", models: ["music-acestep"])],
+        families: [.init(ACEStepFamily.aceStep, title: "ACE-Step", models: aceStepGenerateModels)],
         excludedModels: .models(
             aceStepLanguageModels,
             reason: "It is an ACE-Step language model; adapters train on the ACE-Step DiT (`music-acestep`)."
-        )
+        ),
+        identifiedModels: aceStepLanguageModels
     )
 }
 
@@ -176,11 +181,6 @@ extension MereRunCapabilityOption {
         let defaults = defaultOnly.map { family in
             MereRunOptionFamilyRule(family: family.rawValue, values: defaultValue.map { [$0] })
         }
-        return MereRunCapabilityOption(
-            flag: flag, aliases: aliases, label: label, kind: kind, required: required, repeatable: repeatable,
-            choices: choices, defaultValue: defaultValue, group: group, tier: tier, range: range,
-            dependsOn: dependsOn, families: scoped.families, ignoredBy: scoped.ignoredBy,
-            familyRules: rules.map(\.rule) + defaults
-        )
+        return scoped.with(families: scoped.families, ignoredBy: scoped.ignoredBy, rules: rules.map(\.rule) + defaults)
     }
 }
