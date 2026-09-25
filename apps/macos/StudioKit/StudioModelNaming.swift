@@ -65,7 +65,7 @@ package enum StudioModelNaming {
     /// The category prefixes `model list` ids carry, longest first so "speech-tts-" wins over
     /// "speech-".
     private static let categoryPrefixes = [
-        "text-chat-", "text-agent-", "text-embed-", "text-code-", "text-decide-",
+        "text-chat-", "text-agent-", "text-embed-", "text-code-", "text-decide-", "text-classify-",
         "image-3d-", "image-", "video-", "music-", "sfx-", "speech-tts-", "speech-asr-", "speech-",
         "embed-", "vision-ground-", "vision-segment-", "vision-chat-", "vision-ocr-", "vision-", "text-"
     ]

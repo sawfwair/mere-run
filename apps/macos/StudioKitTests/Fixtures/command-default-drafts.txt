@@ -182,6 +182,8 @@ textAnonymize	prompt	My name is Alice Smith and my email is alice@example.com
 textChat	model	text-chat-gemma4-12b-4bit
 textChat	prompt	Summarize diffusion models in one paragraph.
 textChat	stream	true
+textClassify	model	text-classify-gliner25-decide
+textClassify	outputPath	~/Documents/mere.run/Text/classify-<stamp>.json
 textCode	model	text-code-north-mini
 textCode	prompt	Write a tiny Swift function that formats byte counts.
 textCode	stream	true
@@ -192,6 +194,8 @@ textDecide	outputPath	~/Documents/mere.run/Text/decisions-<stamp>.json
 textEmbed	model	text-embed-qwen3-0.6b
 textEmbed	outputPath	~/Documents/mere.run/Text/embeddings-<stamp>.json
 textEmbed	prompt	semantic search query
+textExtract	model	text-classify-gliner25-decide
+textExtract	outputPath	~/Documents/mere.run/Text/extract-<stamp>.json
 textTrainLoRA	model	text-chat-gemma4-12b-4bit
 textTrainLoRA	outputPath	~/Documents/mere.run/Chat/train-text-lora-<stamp>.safetensors
 textTrainLoRA	seed	42

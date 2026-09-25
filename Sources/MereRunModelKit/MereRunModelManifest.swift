@@ -15,6 +15,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
 
     public enum Engine: String, Codable, CaseIterable, Hashable, Sendable {
         case laya
+        case gliner25Decide = "gliner25-decide"
         /// FLUX.1 Diffusers family.
         case flux1 = "flux1"
         /// MereRun family (FLUX.2 Klein based).
@@ -131,6 +132,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
         case laya
+        case gliner
         case flux1
         case klein
         case zimage
@@ -213,6 +215,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case multimodalEmbedding = "multimodal_embedding"
         case textAnonymization = "text_anonymization"
         case textDecision = "text_decision"
+        case textClassification = "text_classification"
+        case textExtraction = "text_extraction"
         case speechSynthesis = "speech_synthesis"
         case speechRecognition = "speech_recognition"
         case speakerDiarization = "speaker_diarization"

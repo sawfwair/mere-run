@@ -27,7 +27,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
         APIEngineCapabilities(
             supportsRawProxy: profile.supportsRawProxy,
             supportsTools: profile.toolCall,
-            usesNativeToolHistory: [.textChatQ36, .textChatLaguna, .textChatGemma4, .textChatMuseGlimmer]
+            usesNativeToolHistory: [.textChatQ36, .textChatLaguna, .textChatGemma4,
+                                    .textChatLFM2, .textChatMuseGlimmer]
                 .contains(profile.servingEngine),
             supportsToolChoice: profile.supportsToolChoice,
             supportsDeveloperRole: profile.compatibility.supportsDeveloperRole,
@@ -166,7 +167,8 @@ extension APIServerContract {
         includeLoopbackArtifactModels: Bool = true
     ) -> [String] {
         let categories: Set<ManagedModelCategory> = [
-            .image, .image3D, .speechTTS, .speechASR, .textEmbed, .textDecide, .visionGeometry, .visionDepth,
+            .image, .image3D, .speechTTS, .speechASR, .textEmbed, .textDecide, .textClassify,
+            .visionGeometry, .visionDepth,
         ]
         let ids = ManagedModelCatalog.allSpecs
             .filter { categories.contains($0.category) }

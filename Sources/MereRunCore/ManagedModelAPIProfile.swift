@@ -8,6 +8,7 @@ public enum ManagedModelAPITask: String, Hashable, Sendable {
     case audioTranscriptions = "audio.transcriptions"
     case embeddings
     case textDecisions = "text.decisions"
+    case textClassifications = "text.classifications"
     case visionGeometry = "vision.geometry"
     case visionDepth = "vision.depth"
     case visionImageTo3D = "vision.image_to_3d"
@@ -414,6 +415,11 @@ public extension ManagedModelAPIProfile {
                 task: .textDecisions, inputModalities: [.text], outputModalities: [.text],
                 contextWindow: modelID == LayaCatalog.modelID ? 512 : 1_024,
                 maximumOutputTokens: 0, structuredOutput: true
+            )
+        case .textClassify:
+            return ManagedModelAPIProfile(
+                task: .textClassifications, inputModalities: [.text], outputModalities: [.text],
+                contextWindow: 512, maximumOutputTokens: 0, structuredOutput: true
             )
         case .textEmbed:
             return ManagedModelAPIProfile(

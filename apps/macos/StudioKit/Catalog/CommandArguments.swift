@@ -36,6 +36,8 @@ package enum CommandArguments {
         case .textEmbed: return textEmbed(draft)
         case .textAnonymize: return textAnonymize(draft)
         case .textDecide: return textDecide(draft)
+        case .textClassify: return textClassify(draft)
+        case .textExtract: return textExtract(draft)
         case .textTrainLoRA: return textTrainLoRA(draft)
         case .speechSynthesize: return speechSynthesize(draft)
         case .speechTranscribe: return speechTranscribe(draft)

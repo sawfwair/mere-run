@@ -30,6 +30,8 @@ struct APIServe: AsyncParsableCommand {
           GET  /v1/models           - List available models
           POST /v1/chat/completions - Chat completions (streaming supported)
           POST /v1/text/decisions   - Native Laya typed decisions
+          POST /v1/text/classifications - Native GLiNER2.5 Decide label classification
+          POST /v1/text/extractions     - Native GLiNER2.5 Decide schema extraction
           POST /v1/embeddings       - Native Qwen3 text embeddings
           POST /v1/images/generations - Native image generation
           POST /v1/images/edits       - Native image editing

@@ -308,6 +308,8 @@ extension StudioAnalyzeArchetype {
 
         // Text: Embeddings and Anonymize take typed text, not a file.
         add(.textDecide, .file, [.json], [.save("Save JSON", .json)])
+        add(.textClassify, .file, [.json], [.save("Save JSON", .json)])
+        add(.textExtract, .file, [.json], [.save("Save JSON", .json)])
         add(.textEmbeddings, .text, [.vectors, .json], [
             .save("Save JSON", .json)
         ])

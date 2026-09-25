@@ -38,7 +38,7 @@ enum CLIInferenceAdmissionClassifier {
         let label = [topLevel, subcommand].compactMap { $0 }.joined(separator: " ")
         // These preflights report resource blockers without reserving inference
         // permits. Other preflight implementations retain their existing gate.
-        if tokens.contains("--preflight"), ["image generate", "text chat", "text decide"].contains(label) {
+        if tokens.contains("--preflight"), ["image generate", "text chat", "text decide", "text classify"].contains(label) {
             return nil
         }
 

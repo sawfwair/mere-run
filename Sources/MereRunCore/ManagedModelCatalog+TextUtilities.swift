@@ -63,6 +63,15 @@ extension ManagedModelCatalog {
             estimatedDownloadBytes: 2_826_861_317,
             defaultCLICommands: ["text anonymize"]
         ),
+    ] + [
+        ManagedModelSpec(
+            id: GLiNERCatalog.modelID, category: .textClassify, installShape: .directoryRoot,
+            hubFallback: GLiNERCatalog.hubFallback,
+            upstreamRepoId: GLiNERCatalog.repository, upstreamRevision: GLiNERCatalog.revision,
+            validationKind: .gliner25Decide, runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 1_945_828_140,
+            defaultCLICommands: ["text classify"]
+        )
     ] + LayaCatalog.modelIDs.map { modelID in
         ManagedModelSpec(
             id: modelID, category: .textDecide, installShape: .structuredRoot,

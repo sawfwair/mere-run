@@ -180,6 +180,7 @@ mereRunCoreDependencies.append("MereRunContract")
 mereRunCoreDependencies.append("MereRunTensor")
 mereRunCoreDependencies.append("MereRunTextEncoder")
 mereRunCoreDependencies.append("MereRunLayaModel")
+mereRunCoreDependencies.append("MereRunGLiNERModel")
 mereRunCoreDependencies.append("MereRunImageModels")
 mereRunCoreDependencies.append("MereRunKVCache")
 mereRunCoreDependencies.append("MereRunDecode")
@@ -317,6 +318,7 @@ var mereRunCoreTestDependencies: [Target.Dependency] = [
   "MereRunTensor",
   "MereRunTextEncoder",
   "MereRunLayaModel",
+  "MereRunGLiNERModel",
   "MereRunImageModels",
   "MereRunCore",
   "AudioCore",
@@ -477,6 +479,16 @@ targets.append(
     name: "MereRunLayaModel",
     dependencies: mlxDependency("MLX") + mlxDependency("MLXNN"),
     path: "Sources/MereRunLayaModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
+    name: "MereRunGLiNERModel",
+    dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/MereRunGLiNERModel",
     exclude: ["README.md"],
     swiftSettings: commonSwiftSettings
   )
@@ -651,6 +663,7 @@ targets.append(
       "Flux1/README.md",
       "Flux2Klein/README.md",
       "Gemma4/README.md",
+      "GLiNER/README.md",
       "Geometry/README.md",
       "HiDreamO1/README.md",
       "Ideogram4/README.md",
