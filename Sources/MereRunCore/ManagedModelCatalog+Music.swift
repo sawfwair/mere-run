@@ -61,7 +61,7 @@ extension ManagedModelCatalog {
             validationKind: .aceStep,
             normalizationKind: .musicACEStep,
             estimatedDownloadBytes: 10_092_095_357,
-            defaultCLICommands: ["music generate", "music analyze"]
+            defaultCLICommands: ["music generate", "music analyze", "music train-adapter"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.aceStepXLBase.rawValue,

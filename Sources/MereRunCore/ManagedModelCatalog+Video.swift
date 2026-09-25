@@ -27,7 +27,7 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 93_069_609_104,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate", "video export-latents"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue,
@@ -116,7 +116,7 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo25,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LTX25Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate", "video dub-it"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
