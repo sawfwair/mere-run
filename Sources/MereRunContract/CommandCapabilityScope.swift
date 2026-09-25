@@ -612,9 +612,11 @@ extension MereRunCommandCapability {
             return []
         }
         let instead = runs.map { "; it runs \($0)" } ?? ""
+        // A condition on a value names it: `--task translate`, not `--task`.
+        let when = condition.values.map { "\(condition.flag) \($0.joined(separator: "|"))" } ?? condition.flag
         return [MereRunOptionViolation(
             flag: option.flag, kind: .unsupported(supportedBy: []), severity: .warning,
-            message: "\(option.flag) \(value) has no effect with \(condition.flag)\(instead)."
+            message: "\(option.flag) \(value) has no effect with \(when)\(instead)."
         )]
     }
 

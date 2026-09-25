@@ -44,6 +44,15 @@ private func temporaryFolder() throws -> URL {
     #expect(translated.warnings == ["--backend parakeet has no effect with Qwen3-ASR; use auto or qwen."])
 }
 
+/// Translation always targets English, so a language hint still routes but changes nothing else.
+@Test func translationSaysALanguageHintHasNoEffect() throws {
+    let translated = try report("speech", "transcribe", "a.wav", "--task", "translate", "--language", "German")
+    #expect(translated.family == "qwen3-asr" && translated.violations.isEmpty)
+    #expect(translated.warnings == ["--language German has no effect with --task translate."])
+    let transcribed = try report("speech", "transcribe", "a.wav", "--backend", "qwen", "--language", "German")
+    #expect(transcribed.family == "qwen3-asr" && transcribed.warnings.isEmpty)
+}
+
 /// A named managed model the other flags overrule is swapped for the chosen backend's default,
 /// as `SpeechTranscriptionResolver` does, with a warning instead of a silent swap.
 @Test func aManagedModelTheFlagsOverruleIsReplacedWithAWarning() throws {

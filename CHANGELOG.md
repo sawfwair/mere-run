@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- `speech transcribe --task translate` now translates. It always ran
+  Qwen3-ASR, but the task never reached the prompt, so it returned a
+  transcript in the spoken language. The prompt now asks Qwen3-ASR for an
+  English translation after the audio, and the answer opens in English, for
+  files, streams, and the API's `task=translate`. `--language` has no effect
+  with `--task translate`, and the CLI warns about it. Transcription prompts
+  are unchanged.
 - Add `speech synthesize --speaker` for the Qwen3-TTS CustomVoice checkpoint's
   named speakers (`aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`,
   `sohee`, `uncle_fu`, `vivian`), in style mode. The name is checked against

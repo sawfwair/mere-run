@@ -94,7 +94,11 @@ extension MereRunCapabilityCatalog {
                 flag: "--task", label: "Task", kind: .choice, choices: ["transcribe", "translate"],
                 defaultValue: "transcribe", group: Group.prompt, tier: .essential, choiceSpellings: .exact
             ),
-            .init(flag: "--language", label: "Language", kind: .string, group: Group.prompt, tier: .standard),
+            // Translation always targets English, whatever language the audio is in.
+            .init(
+                flag: "--language", label: "Language", kind: .string, group: Group.prompt, tier: .standard,
+                overriddenBy: [.init(flag: "--task", values: ["translate"])]
+            ),
             .init(
                 flag: "--max-tokens", label: "Max tokens", kind: .integer,
                 defaultValue: "448", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8_192, step: 1)

@@ -161,6 +161,16 @@ Each backend also ignores the other's options, with a warning: Qwen returns no
 timestamps, so `--timestamps` and `--no-timestamps` apply to Parakeet, and
 Parakeet has no token budget, so `--max-tokens` applies to Qwen.
 
+Translation always produces English, whatever language the audio is in, so
+`--language` has no effect with `--task translate` and the CLI says so.
+Qwen3-ASR's model card documents recognition only; mere.run asks the model for
+an English translation in the prompt, after the audio, and the answer's
+language tag is English. Review translations before relying on them.
+
+```bash
+swift run mere.run speech transcribe ./interview-de.wav --task translate
+```
+
 Streaming transcription chooses the backend and model the same way, except
 that a local model folder runs its own backend whatever the `--language` hint
 says, and accepts raw `pcm-s16le/16000/mono` on stdin. Its transcript carries no timestamps. Use

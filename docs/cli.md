@@ -1218,7 +1218,8 @@ Key options:
 
 - positional audio path
 - `--backend`: `auto`, `qwen`, or `parakeet`
-- `--task`: `transcribe` or `translate`
+- `--task`: `transcribe` or `translate` (Qwen3-ASR, into English; `--language`
+  has no effect with it)
 - `--model`
 - `--language`
 - `--max-tokens`
