@@ -6,8 +6,15 @@ import MereRunContract
 /// probe, which wraps the detector the command itself uses and maps its answer to a contract
 /// family id. The probes own "what is this folder"; the contract owns "what may this family take".
 public enum ModelFamilyIdentifier {
-    /// Inspects `model` for one capability and returns a family id of that capability, or `nil`.
-    public typealias Probe = @Sendable (_ model: String, _ invocation: MereRunCommandInvocation) -> String?
+    /// Inspects `model` for one capability: a family of that capability, the managed model the
+    /// folder holds (an excluded one resolves to its reason), or `nil`.
+    public typealias Probe = @Sendable (
+        _ model: String, _ invocation: MereRunCommandInvocation
+    ) -> MereRunModelIdentification?
+
+    /// Picks the default model this machine runs among candidates that span families, the way
+    /// the command itself picks it.
+    public typealias DefaultChooser = @Sendable (_ candidates: [String]) -> String?
 
     /// Per-capability probes, keyed by capability id. Each domain declares its table in
     /// `ModelFamilyIdentification+<Domain>.swift` and lists it here; capability ids are disjoint.
@@ -16,8 +23,10 @@ public enum ModelFamilyIdentifier {
     }
 
     private static let domainProbes: [[String: Probe]] = [
+        geoProbes,
         imageProbes,
         musicProbes,
+        soundEffectProbes,
         speechProbes,
         textProbes,
         videoProbes,
@@ -31,6 +40,15 @@ public enum ModelFamilyIdentifier {
         if let spec = ManagedModelCatalog.spec(for: model), spec.id != model {
             return .managedModel(spec.id)
         }
-        return probes[capabilityID]?(model, invocation).map(MereRunModelIdentification.family)
+        return probes[capabilityID]?(model, invocation)
+    }
+
+    /// Per-capability machine defaults, keyed by capability id.
+    static let defaultChoosers: [String: DefaultChooser] = geoDefaultChoosers
+
+    /// The candidate a capability's machine-chosen default runs on this machine, or `nil` when
+    /// the capability registers no chooser.
+    public static func machineDefault(capabilityID: String, candidates: [String]) -> String? {
+        defaultChoosers[capabilityID]?(candidates)
     }
 }

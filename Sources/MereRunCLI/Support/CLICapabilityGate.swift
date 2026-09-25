@@ -47,9 +47,8 @@ enum CLICapabilityGate {
         let report = capability.resolutionReport(
             invocation,
             platform: platform,
-            identify: { model in
-                ModelFamilyIdentifier.identify(capabilityID: capability.id, model: model, invocation: invocation)
-            },
+            identify: { ModelFamilyIdentifier.identify(capabilityID: capability.id, model: $0, invocation: invocation) },
+            chooseDefault: { ModelFamilyIdentifier.machineDefault(capabilityID: capability.id, candidates: $0) },
             routedFamily: { CLIFamilyRouters.family(capabilityID: capability.id, invocation: invocation) }
         )
         return (capability, report)

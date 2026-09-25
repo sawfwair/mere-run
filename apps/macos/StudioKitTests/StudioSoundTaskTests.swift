@@ -68,13 +68,14 @@ final class StudioSoundTaskTests: XCTestCase {
     // MARK: Argv parity
 
     /// The page's Video Foley form and a task draft holding the same settings send one argv,
-    /// and the seeded draft is exactly that form read back.
+    /// and the seeded draft is exactly that form read back. The settings are the ones Woosh
+    /// DVFlow reads: it refuses a negative prompt and ignores the MMAudio CLIP batch size, so the
+    /// page leaves both off.
     func testAFoleyTaskDraftSendsWhatThePageSent() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .sfxVideo))
         var page = template.defaultDraft()
         page.prompt = "footsteps on wet gravel"
         page.inputPath = "/tmp/walk.mp4"
-        page.secondaryText = "music, speech"
         page.model = "sfx-woosh-dvflow-8s"
         page.durationSeconds = 6
         page.steps = 8
@@ -83,13 +84,11 @@ final class StudioSoundTaskTests: XCTestCase {
         page.sfxRenoise = "0.3,0.3,0.3,0.3,0.2,0.2,0.1,0.1"
         page.sfxSynchformerModel = "sfx-woosh-synchformer"
         page.sfxSyncBatchSize = 2
-        page.sfxClipBatchSize = 8
         page.outputPath = "/tmp/out/walk.wav"
 
         var draft = StudioTaskDraft(templateID: .sfxVideo)
         draft.prompt = "footsteps on wet gravel"
         draft.setArgument(1, "/tmp/walk.mp4")
-        draft.form["--negative-prompt"] = .text("music, speech")
         draft.model = "sfx-woosh-dvflow-8s"
         draft.form["--duration"] = .number(6)
         draft.form["--steps"] = .integer(8)
@@ -98,7 +97,6 @@ final class StudioSoundTaskTests: XCTestCase {
         draft.form["--renoise"] = .text("0.3,0.3,0.3,0.3,0.2,0.2,0.1,0.1")
         draft.form["--synchformer-model"] = .text("sfx-woosh-synchformer")
         draft.form["--sync-batch-size"] = .integer(2)
-        draft.form["--clip-batch-size"] = .integer(8)
         draft.form["--output"] = .text("/tmp/out/walk.wav")
 
         // The console emits options in the contract's order; the page's builder had its own.

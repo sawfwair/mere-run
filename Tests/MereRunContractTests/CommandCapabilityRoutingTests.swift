@@ -73,6 +73,9 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
     }
 }
 
+/// A macOS default rule names one family, or lists candidates the CLI picks between by machine.
+/// Candidates that span families resolve through the caller's `chooseDefault`; Core's
+/// `ModelFamilyIdentifier` must register a chooser for them (`ManagedModelFamilyCoverageTests`).
 @Test func everyDefaultRuleResolvesToOneFamilyOnMacOS() {
     for (capability, routing) in routed {
         for rule in routing.defaultModels where rule.applies(on: "macos") {
@@ -81,15 +84,42 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
             }
             let families = rule.family.map { [$0] }
                 ?? Array(Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) }))
-            #expect(families.count == 1, "\(capability.id): default \(rule.models) resolves to \(families)")
+            let machineChosen = rule.family == nil && rule.models.count > 1
+                && rule.models.allSatisfy { model in routing.families.contains { $0.models.contains(model) } }
+            #expect(families.count == 1 || machineChosen && families.count > 1,
+                    "\(capability.id): default \(rule.models) resolves to \(families)")
             #expect(families.allSatisfy { routing.family(id: $0) != nil }, "\(capability.id): default names an unknown family")
         }
         let blank = MereRunCommandInvocation(capability: capability, arguments: [])
-        guard case .family = capability.resolveFamily(blank) else {
-            Issue.record("\(capability.id): a blank command line must resolve to a family on macOS")
+        let chosen = capability.resolveFamily(blank, chooseDefault: { $0.last })
+        guard case .family = chosen else {
+            Issue.record("\(capability.id): a blank command line must resolve to a family on macOS, got \(chosen)")
             continue
         }
     }
+}
+
+@Test func aDefaultThatSpansFamiliesResolvesThroughTheMachineChooser() {
+    enum TierFamily: String, MereRunFamilyID { case small, large }
+    let tiers = MereRunCommandCapability(
+        id: "tier.run", command: ["tier", "run"], title: "Run", summary: "A test capability.",
+        options: [MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string)],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            defaultModels: [.always("tier-small", "tier-large")],
+            families: [
+                .init(TierFamily.small, title: "Small", models: ["tier-small"]),
+                .init(TierFamily.large, title: "Large", models: ["tier-large"])
+            ]
+        )
+    )
+    let blank = MereRunCommandInvocation(capability: tiers, arguments: [])
+    #expect(tiers.resolveFamily(blank) == .unidentified(model: "tier-small, tier-large"))
+    #expect(tiers.resolveFamily(blank, chooseDefault: { _ in "tier-large" }) == .family(id: "large", model: "tier-large", source: .defaultModel))
+    #expect(tiers.resolveFamily(blank, chooseDefault: { _ in "tier-other" }) == .unidentified(model: "tier-small, tier-large"),
+            "a choice outside the candidates is not trusted")
+    #expect(tiers.resolutionReport(blank, chooseDefault: { _ in "tier-small" }).family == "small")
 }
 
 @Test func optionScopesNameDeclaredFamiliesAndValidValues() {
@@ -190,7 +220,7 @@ private func parses(_ value: String, as option: MereRunCapabilityOption) -> Bool
     case .integer: Int(value) != nil
     case .number: Double(value) != nil
     case .choice: option.choices.contains(value)
-    case .boolean: false
+    case .boolean: value == "true" || value == "false"
     case .string, .file, .directory: true
     }
 }
@@ -553,6 +583,7 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
         == ["error: --steps 8 is not supported by Quick; it runs 4. Remove --steps or pass 4."])
     #expect(messages("quick", ["--steps", "4"]).isEmpty)
     #expect(messages("quick", ["--steps", "4.0"]).isEmpty, "a numeric value matches by number, as the CLI parses it")
+    #expect(messages("quick", ["--steps", "04"]).isEmpty, "numbers match by value")
     #expect(messages("full", ["--steps", "70"])
         == ["error: --steps 70 is not supported by Full; use a value from 10 to 60."])
     #expect(messages("wide", []) == ["error: Wide requires --image."])
@@ -622,6 +653,63 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(!press.options(forFamily: "rough").map(\.flag).contains("--passes"), "still hidden on the ignoring family")
     let fine = report(["--model", "press-fine", "--passes", "3"])
     #expect(fine.violations.isEmpty && fine.warnings.isEmpty)
+}
+
+@Test func aBooleanSelectorHoldsOnItsPresence() {
+    enum ReadFamily: String, MereRunFamilyID { case single, compare }
+    let reader = MereRunCommandCapability(
+        id: "reader.read", command: ["reader", "read"], title: "Read", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--compare", label: "Compare", kind: .boolean),
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string)
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: [],
+            families: [
+                .init(ReadFamily.single, title: "Single", models: [], selectors: [.init(flag: "--compare", values: ["false"])]),
+                .init(ReadFamily.compare, title: "Compare", models: [], selectors: [.init(flag: "--compare", values: ["true"])])
+            ]
+        )
+    )
+    let read = { (arguments: [String]) in
+        reader.resolveFamily(MereRunCommandInvocation(capability: reader, arguments: arguments))
+    }
+    #expect(read([]) == .family(id: "single", model: nil, source: .selector))
+    #expect(read(["--compare"]) == .family(id: "compare", model: nil, source: .selector))
+    let selectors = reader.routing?.families.flatMap(\.selectors) ?? []
+    #expect(selectors.map(reader.arguments(satisfying:)) == [[], ["--compare"]])
+    #expect(reader.arguments(satisfying: .init(flag: "--model", values: ["a", "b"])) == ["--model", "a"])
+    #expect(reader.arguments(satisfying: .init(flag: "--model")) == ["--model", "value"])
+    #expect(reader.arguments(satisfying: .absent("--model")).isEmpty)
+}
+
+@Test func anEmptyTextValueOnlyWarns() {
+    enum NoteFamily: String, MereRunFamilyID { case plain, noted }
+    let note = MereRunCommandCapability(
+        id: "note.write", command: ["note", "write"], title: "Write", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string),
+            MereRunCapabilityOption(flag: "--note", label: "Note", kind: .string).scoped(NoteFamily.only(.noted)),
+            MereRunCapabilityOption(flag: "--attachment", label: "Attachment", kind: .file).scoped(NoteFamily.only(.noted))
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            families: [
+                .init(NoteFamily.plain, title: "Plain", models: ["note-plain"]),
+                .init(NoteFamily.noted, title: "Noted", models: ["note-noted"])
+            ]
+        )
+    )
+    let messages = { (arguments: [String]) in
+        note.violations(MereRunCommandInvocation(capability: note, arguments: arguments), family: "plain")
+            .map { "\($0.severity.rawValue): \($0.message)" }
+    }
+    #expect(messages(["--note", ""]) == ["warning: --note has no effect with Plain. It applies to Noted."])
+    #expect(messages(["--note", "x"]) == ["error: --note is not supported by Plain. It applies to Noted."])
+    #expect(messages(["--attachment", ""]) == ["error: --attachment is not supported by Plain. It applies to Noted."],
+            "an empty file still counts as passed")
 }
 
 @Test func optionsForAFamilyApplyItsRules() throws {

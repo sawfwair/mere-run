@@ -52,13 +52,13 @@ struct SFXGenerate: AsyncParsableCommand {
     var receipt: Bool = false
 
     var durationSeconds: Float {
-        durationOverride ?? (SFXMMAudioRuntime.isMMAudio(model: model)
+        durationOverride ?? (MMAudioResources.isMMAudio(model: model)
             ? MMAudioResources.defaultDurationSeconds
             : 5)
     }
 
     var steps: Int {
-        stepsOverride ?? (SFXMMAudioRuntime.isMMAudio(model: model)
+        stepsOverride ?? (MMAudioResources.isMMAudio(model: model)
             ? MMAudioResources.defaultSteps
             : 4)
     }
@@ -74,12 +74,9 @@ struct SFXGenerate: AsyncParsableCommand {
         guard guidanceScale >= 0 else {
             throw ValidationError("--cfg must be >= 0")
         }
-        if SFXMMAudioRuntime.isMMAudio(model: model) {
+        if MMAudioResources.isMMAudio(model: model) {
             try await runMMAudio()
             return
-        }
-        guard negativePrompt.isEmpty else {
-            throw ValidationError("--negative-prompt is only supported by MMAudio models.")
         }
         let renoiseSchedule = try parseRenoiseSchedule()
 
@@ -122,9 +119,6 @@ struct SFXGenerate: AsyncParsableCommand {
     }
 
     private func runMMAudio() async throws {
-        guard renoise == nil else {
-            throw ValidationError("--renoise is only supported by Woosh models.")
-        }
         let outputURL = CLIOutput.resolveOutputURL(
             output,
             defaultPrefix: "mererun-mmaudio",
@@ -233,19 +227,9 @@ struct SFXGenerate: AsyncParsableCommand {
 }
 
 enum SFXMMAudioRuntime {
-    static func isMMAudio(model: String, fileManager: FileManager = .default) -> Bool {
-        if model == MMAudioResources.modelID {
-            return true
-        }
-        let root = URL(fileURLWithPath: model).standardizedFileURL
-        return fileManager.fileExists(
-            atPath: root.appendingPathComponent(MMAudioResources.networkFilename).path
-        )
-    }
-
     static func resolve(model: String, quiet: Bool) async throws -> MMAudioModelResources {
         let explicit = URL(fileURLWithPath: model).standardizedFileURL
-        if FileManager.default.fileExists(atPath: explicit.path), isMMAudio(model: model) {
+        if FileManager.default.fileExists(atPath: explicit.path), MMAudioResources.isMMAudio(model: model) {
             let resources = MMAudioModelResources(rootURL: explicit)
             let missing = resources.validate()
             guard missing.isEmpty else {

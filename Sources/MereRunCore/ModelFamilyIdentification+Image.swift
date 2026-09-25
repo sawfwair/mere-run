@@ -7,8 +7,8 @@ import MereRunContract
 /// and name the contract family that runtime is.
 extension ModelFamilyIdentifier {
     static let imageProbes: [String: Probe] = [
-        "image.generate": { model, _ in imageManifest(for: model).flatMap(imageGenerateFamily) },
-        "image.train-lora": { model, _ in imageManifest(for: model).flatMap(imageTrainLoRAFamily) },
+        "image.generate": { model, _ in imageManifest(for: model).flatMap(imageGenerateFamily).map { .family($0) } },
+        "image.train-lora": { model, _ in imageManifest(for: model).flatMap(imageTrainLoRAFamily).map { .family($0) } },
     ]
 
     /// The manifest both image commands load for `model`: an existing path first, then a

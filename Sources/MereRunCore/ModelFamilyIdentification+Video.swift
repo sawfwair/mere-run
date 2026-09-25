@@ -28,15 +28,15 @@ extension ModelFamilyIdentifier {
         let fastH3 = profile == .h3FL2VA
             && invocation.value("--model") == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
             && !invocation.contains("--h3-adapter")
-        return profile.videoGenerateFamily(fastH3: fastH3)
+        return profile.videoGenerateFamily(fastH3: fastH3).map { .family($0) }
     }
 
     /// `video retake`: the command runs any official LTX 2.5 folder, on the full lane when the
     /// full checkpoint validates (`VideoRetakeCommand.run`).
     static let videoRetake: Probe = { model, invocation in
         guard let root = videoRoot(model, invocation, variant: .unifiedAV) else { return nil }
-        if isLTX25FullModelRoot(root) { return "ltx25-full" }
-        return isLTX25ModelRoot(root) ? "ltx25-distilled" : nil
+        if isLTX25FullModelRoot(root) { return .family("ltx25-full") }
+        return isLTX25ModelRoot(root) ? .family("ltx25-distilled") : nil
     }
 
     /// `video session`: the split and full LTX 2.3 folders and both LTX 2.5 folders
@@ -44,12 +44,12 @@ extension ModelFamilyIdentifier {
     /// nothing installed keeps its own layout.
     static let videoSession: Probe = { model, invocation in
         guard let root = videoRoot(model, invocation, variant: .unifiedAV) else {
-            return model == ModelResolver.ModelID.ltxVideo23FullMLX.rawValue ? "ltx23-full" : nil
+            return model == ModelResolver.ModelID.ltxVideo23FullMLX.rawValue ? .family("ltx23-full") : nil
         }
-        if isLTX25FullModelRoot(root) { return "ltx25-full" }
-        if isLTX25ModelRoot(root) { return "ltx25-distilled" }
-        if isLTX23FullModelRoot(root) { return "ltx23-full" }
-        return isLTX23SplitModelRoot(root) ? "ltx23-distilled" : nil
+        if isLTX25FullModelRoot(root) { return .family("ltx25-full") }
+        if isLTX25ModelRoot(root) { return .family("ltx25-distilled") }
+        if isLTX23FullModelRoot(root) { return .family("ltx23-full") }
+        return isLTX23SplitModelRoot(root) ? .family("ltx23-distilled") : nil
     }
 
     /// The folder the video commands' resolver uses for `model` without downloading: the

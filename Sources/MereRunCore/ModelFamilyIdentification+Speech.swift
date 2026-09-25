@@ -18,6 +18,6 @@ extension ModelFamilyIdentifier {
         guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             return nil
         }
-        return Nemotron3DiarizationResources.isNemotron3(model: model, root: root) ? "nemotron3" : "sortformer"
+        return .family(Nemotron3DiarizationResources.isNemotron3(model: model, root: root) ? "nemotron3" : "sortformer")
     }
 }

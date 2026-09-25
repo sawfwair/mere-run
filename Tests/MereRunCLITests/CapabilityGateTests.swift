@@ -98,13 +98,13 @@ private func minimalArguments(
     in capability: MereRunCommandCapability,
     routing: MereRunCapabilityRouting
 ) -> [String]? {
-    var arguments = family.selectors.flatMap { selectorTokens($0, in: capability) }
+    var arguments = family.selectors.flatMap(capability.arguments(satisfying:))
     if let model = family.models.first {
         guard let flag = family.modelFlag ?? routing.modelFlags.last else { return nil }
         arguments += [flag, model]
     } else if !routing.routesBySelectors {
         if let rule = routing.defaultModels.first(where: { $0.family == family.id }) {
-            arguments += rule.whenAny.first.map { [$0.flag] + ($0.values.map { [$0[0]] } ?? []) } ?? []
+            arguments += rule.whenAny.first.map(capability.arguments(satisfying:)) ?? []
         } else if !routing.identifiedModels.isEmpty, let flag = routing.modelFlags.last {
             arguments += [flag, identifiedPlaceholder + family.id]
         } else {
@@ -138,11 +138,6 @@ private func gateReport(_ capability: MereRunCommandCapability, _ arguments: [St
 
 /// The tokens that make `condition` hold: none for an absent flag, the flag for a Boolean, and
 /// the flag with an allowed or sample value otherwise.
-private func selectorTokens(_ condition: MereRunFlagCondition, in capability: MereRunCommandCapability) -> [String] {
-    guard !condition.absent, let option = capability.options.first(where: { $0.flag == condition.flag }) else { return [] }
-    return tokens(option, value: condition.values?.first ?? validValue(option, rule: nil))
-}
-
 private func tokens(_ option: MereRunCapabilityOption, value: String) -> [String] {
     option.kind == .boolean ? [option.flag] : [option.flag, value]
 }

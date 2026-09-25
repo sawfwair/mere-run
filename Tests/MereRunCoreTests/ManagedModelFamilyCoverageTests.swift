@@ -4,17 +4,6 @@ import Testing
 
 @testable import MereRunCore
 
-/// Multi-family capabilities whose routing a model-scope domain change declares. Each domain
-/// removes its entries; the integration requires this to be empty.
-private let pendingCapabilities: [String: String] = [
-    "audio.enhance": "audio, SFX, OCR, and TESSERA domain",
-    "audio.edit": "audio, SFX, OCR, and TESSERA domain",
-    "sfx.generate": "audio, SFX, OCR, and TESSERA domain",
-    "sfx.video.generate": "audio, SFX, OCR, and TESSERA domain",
-    "vision.ocr": "audio, SFX, OCR, and TESSERA domain",
-    "geo.tessera": "audio, SFX, OCR, and TESSERA domain"
-]
-
 /// Capabilities that load managed models but do not pick one runtime family from their argv.
 private let unroutedCapabilities: [String: String] = [
     "api.serve": "Serves several engines and routes per request, not per command line.",
@@ -29,7 +18,6 @@ private let nonCapabilityCommands: [String: String] = [
     "vision image-to-3d": "CLI alias of `image reconstruct-3d`, exempt from the contract.",
     "vision image-to-3d-trellis2": "CLI alias of `image reconstruct-3d-trellis2`, exempt from the contract.",
     "vision image-to-3d-multiview": "CLI alias of `image reconstruct-3d-multiview`, exempt from the contract.",
-    "sfx clap": "Mislabel of `sfx clap score`; the SFX domain fixes the catalog data."
 ]
 
 /// A `defaultCLICommands` entry split into its command path and the flags it pins, so
@@ -57,12 +45,7 @@ private func resolve(
     let managed = ManagedModelCatalog.spec(for: model)?.id ?? model
     let owner = routing.families.first { $0.models.contains(managed) }
     guard let modelFlag = owner?.modelFlag ?? routing.modelFlags.last else { return nil }
-    let selectors = owner?.selectors.flatMap { selector -> [String] in
-        guard !selector.absent else { return [] }
-        let option = capability.options.first { $0.flag == selector.flag }
-        let value = selector.values?.first ?? (option?.kind == .boolean ? nil : option?.defaultValue ?? "value")
-        return [selector.flag] + (value.map { [$0] } ?? [])
-    } ?? []
+    let selectors = owner?.selectors.flatMap(capability.arguments(satisfying:)) ?? []
     let invocation = MereRunCommandInvocation(capability: capability, arguments: flags + selectors + [modelFlag, model])
     return capability.resolveFamily(invocation) { identified in
         ModelFamilyIdentifier.identify(capabilityID: capability.id, model: identified, invocation: invocation)
@@ -80,7 +63,6 @@ private func resolve(
                 )
                 continue
             }
-            guard pendingCapabilities[capability.id] == nil else { continue }
             guard capability.routing != nil else {
                 #expect(unroutedCapabilities[capability.id] != nil, "\(capability.id) loads \(spec.id) but declares no routing")
                 continue
@@ -136,13 +118,22 @@ private func resolve(
     }
 }
 
+/// A macOS default whose candidates span families has a machine chooser in Core that picks one
+/// of them, so `catalog resolve` answers a blank model the way the command runs it.
+@Test func everyMachineChosenDefaultHasAChooser() {
+    for capability in MereRunCapabilityCatalog.document.commands {
+        guard let routing = capability.routing else { continue }
+        for rule in routing.defaultModels where rule.applies(on: "macos") && rule.family == nil {
+            let families = Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) })
+            guard families.count > 1 else { continue }
+            let chosen = ModelFamilyIdentifier.machineDefault(capabilityID: capability.id, candidates: rule.models)
+            #expect(chosen.map(rule.models.contains) == true, "\(capability.id) chose \(String(describing: chosen)) from \(rule.models)")
+        }
+    }
+}
+
 @Test func coverageExceptionsStayCurrent() {
     let catalog = MereRunCapabilityCatalog.document.commands
-    for id in pendingCapabilities.keys.sorted() {
-        let capability = catalog.first { $0.id == id }
-        #expect(capability != nil, "\(id) is not a cataloged capability")
-        #expect(capability?.routing == nil, "\(id) declares routing now; remove it from pendingCapabilities")
-    }
     for id in unroutedCapabilities.keys.sorted() {
         let capability = catalog.first { $0.id == id }
         #expect(capability != nil && capability?.routing == nil, "\(id) is routed or gone; remove it from unroutedCapabilities")

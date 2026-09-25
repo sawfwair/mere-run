@@ -91,15 +91,16 @@ extension ModelFamilyIdentifier {
         "music.generate": { _, invocation in
             let requested = invocation.value("--model") ?? ModelResolver.ModelID.aceStep.rawValue
             let model = ManagedModelCatalog.spec(for: requested)?.id ?? requested
-            switch MusicModelRuntime.generation(model: model) {
-            case .yue2: return "yue2"
-            case .miniMaxMusic3: return "minimax-music3"
-            case .magentaRT2: return "magenta-rt2"
-            case .aceStep: return ACEStepCheckpointVariant.local(invocation, model: model)?.musicGenerateFamily
+            let family: String? = switch MusicModelRuntime.generation(model: model) {
+            case .yue2: "yue2"
+            case .miniMaxMusic3: "minimax-music3"
+            case .magentaRT2: "magenta-rt2"
+            case .aceStep: ACEStepCheckpointVariant.local(invocation, model: model)?.musicGenerateFamily
             }
+            return family.map { .family($0) }
         },
         "music.serve": { model, _ in
-            MusicModelRuntime.serving(model: model) == .miniMaxMusic3 ? "minimax-music3" : "ace-step"
+            .family(MusicModelRuntime.serving(model: model) == .miniMaxMusic3 ? "minimax-music3" : "ace-step")
         }
     ]
 }

@@ -111,17 +111,22 @@ public struct MereRunFamilyResolutionReport: Codable, Equatable, Sendable {
 
 extension MereRunCommandCapability {
     /// The one family resolver. `identify` answers models the contract does not list.
-    /// `routedFamily` is the family the command's own router picks for the whole command line,
-    /// where the declared rules only approximate it (speech transcribe routes an unrecognized
-    /// `--language` to Qwen3-ASR). Its answer wins over the rules; `nil` keeps them.
+    /// `chooseDefault` picks among a default rule's candidates when they span families and the
+    /// CLI chooses by machine, returning the candidate this machine runs. `routedFamily` is the
+    /// family the command's own router picks for the whole command line, where the declared rules
+    /// only approximate it (speech transcribe routes an unrecognized `--language` to Qwen3-ASR).
+    /// Its answer wins over the rules; `nil` keeps them.
     public func resolveFamily(
         _ invocation: MereRunCommandInvocation,
         platform: String = "macos",
         identify: (String) -> MereRunModelIdentification? = { _ in nil },
+        chooseDefault: ([String]) -> String? = { _ in nil },
         routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolution {
         guard let routing else { return .unrouted }
-        let declared = declaredFamily(invocation, routing: routing, platform: platform, identify: identify)
+        let declared = declaredFamily(
+            invocation, routing: routing, platform: platform, identify: identify, chooseDefault: chooseDefault
+        )
         guard let routed = routedFamily().flatMap(routing.family(id:)) else { return declared }
         if case .family(let id, _, _) = declared, id == routed.id { return declared }
         return routerChoice(routed, invocation, routing: routing, platform: platform, identify: identify)
@@ -131,15 +136,21 @@ extension MereRunCommandCapability {
         _ invocation: MereRunCommandInvocation,
         routing: MereRunCapabilityRouting,
         platform: String,
-        identify: (String) -> MereRunModelIdentification?
+        identify: (String) -> MereRunModelIdentification?,
+        chooseDefault: ([String]) -> String?
     ) -> MereRunFamilyResolution {
         if routing.routesBySelectors {
             return resolveBySelectors(invocation, routing: routing, platform: platform, identify: identify)
         }
         guard let model = modelValue(invocation, flags: routing.modelFlags) else {
-            return resolveDefault(invocation, routing: routing, platform: platform, identify: identify)
+            return resolveDefault(
+                invocation, routing: routing, platform: platform, identify: identify, chooseDefault: chooseDefault
+            )
         }
-        return resolve(model: model, invocation, routing: routing, platform: platform, identify: identify, allowIdentify: true)
+        return resolve(
+            model: model, invocation, routing: routing, platform: platform, identify: identify,
+            chooseDefault: chooseDefault, allowIdentify: true
+        )
     }
 
     /// The options `family` uses, each with its rule applied: narrowed `choices`, the family's
@@ -188,7 +199,7 @@ extension MereRunCommandCapability {
                 // value-based check in the CLI lets only the value it runs with through; any other
                 // value is refused with the same message as an option the family rejects.
                 let refused = rule.map { !ruleViolations(option, values: values, rule: $0, family: runtime).isEmpty } ?? false
-                let ignored = option.ignoredBy.contains(family) && !refused
+                let ignored = option.ignoredBy.contains(family) && !refused || option.readsAsOmitted(values)
                 return [unsupported(option.flag, family: runtime, ignored: ignored, usedBy: titles)]
             }
             guard let rule else { return [] }
@@ -201,9 +212,12 @@ extension MereRunCommandCapability {
         _ invocation: MereRunCommandInvocation,
         platform: String = "macos",
         identify: (String) -> MereRunModelIdentification? = { _ in nil },
+        chooseDefault: ([String]) -> String? = { _ in nil },
         routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolutionReport {
-        let resolution = resolveFamily(invocation, platform: platform, identify: identify, routedFamily: routedFamily)
+        let resolution = resolveFamily(
+            invocation, platform: platform, identify: identify, chooseDefault: chooseDefault, routedFamily: routedFamily
+        )
         let report = { (family: MereRunRuntimeFamily?, model: String?, source: MereRunFamilyResolutionReport.Source,
                         violations: [String], warnings: [String]) in
             MereRunFamilyResolutionReport(
@@ -241,6 +255,20 @@ extension MereRunCommandCapability {
 // MARK: - Resolution
 
 extension MereRunCommandCapability {
+    /// The shortest arguments that make `condition` hold: the flag and its first allowed value;
+    /// for a presence condition, the flag alone on a Boolean and the flag with the option's
+    /// default, first choice, or a placeholder otherwise; and nothing for a Boolean that must be
+    /// off or a flag that must be absent. Generators and coverage tests build argv from it.
+    public func arguments(satisfying condition: MereRunFlagCondition) -> [String] {
+        if condition.absent { return [] }
+        let option = options.first { $0.flag == condition.flag }
+        guard option?.kind == .boolean else {
+            let value = condition.values?.first ?? option?.defaultValue ?? option?.choices.first ?? "value"
+            return [condition.flag, value]
+        }
+        return condition.values?.first == "false" ? [] : [condition.flag]
+    }
+
     private func modelValue(_ invocation: MereRunCommandInvocation, flags: [String]) -> String? {
         flags.lazy.compactMap { invocation.value($0) }.first { !$0.isEmpty }
     }
@@ -278,6 +306,7 @@ extension MereRunCommandCapability {
         routing: MereRunCapabilityRouting,
         platform: String,
         identify: (String) -> MereRunModelIdentification?,
+        chooseDefault: ([String]) -> String?,
         allowIdentify: Bool
     ) -> MereRunFamilyResolution {
         if let excluded = routing.excludedModel(id: model) {
@@ -291,7 +320,9 @@ extension MereRunCommandCapability {
             let matching = candidates.filter { selectorsHold($0, invocation) }
             guard let family = matching.first else {
                 if routing.selectorsOverrideModel {
-                    return resolveDefault(invocation, routing: routing, platform: platform, identify: identify)
+                    return resolveDefault(
+                        invocation, routing: routing, platform: platform, identify: identify, chooseDefault: chooseDefault
+                    )
                 }
                 return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: candidates))
             }
@@ -305,7 +336,7 @@ extension MereRunCommandCapability {
             let identifiable = routing.identifiedModels.contains(managed)
             let resolved = resolve(
                 model: managed, invocation, routing: routing, platform: platform, identify: identify,
-                allowIdentify: identifiable
+                chooseDefault: chooseDefault, allowIdentify: identifiable
             )
             if case .unidentified = resolved { return .unidentified(model: model) }
             return resolved
@@ -337,7 +368,8 @@ extension MereRunCommandCapability {
         _ invocation: MereRunCommandInvocation,
         routing: MereRunCapabilityRouting,
         platform: String,
-        identify: (String) -> MereRunModelIdentification?
+        identify: (String) -> MereRunModelIdentification?,
+        chooseDefault: ([String]) -> String?
     ) -> MereRunFamilyResolution {
         guard let rule = routing.defaultModels.first(where: { rule in
             rule.applies(on: platform) && (rule.whenAny.isEmpty || rule.whenAny.contains { holds($0, invocation, family: nil) })
@@ -345,7 +377,10 @@ extension MereRunCommandCapability {
             return .unmatched(model: nil, detail: "\(command.joined(separator: " ")) has no default model on \(platform).")
         }
         if rule.family == nil, rule.models.count == 1, let model = rule.models.first, routing.identifiedModels.contains(model) {
-            switch resolve(model: model, invocation, routing: routing, platform: platform, identify: identify, allowIdentify: true) {
+            switch resolve(
+                model: model, invocation, routing: routing, platform: platform, identify: identify,
+                chooseDefault: chooseDefault, allowIdentify: true
+            ) {
             case let .family(id, model, _): return .family(id: id, model: model, source: .defaultModel)
             case let other: return other
             }
@@ -356,10 +391,18 @@ extension MereRunCommandCapability {
             // A model split between families by a flag (FastH3 with and without an adapter).
             familyIDs = familyIDs.filter { id in routing.family(id: id).map { selectorsHold($0, invocation) } == true }
         }
-        guard familyIDs.count == 1, let family = routing.family(id: familyIDs[0]) else {
+        let family: MereRunRuntimeFamily
+        let model: String?
+        if familyIDs.count == 1, let only = routing.family(id: familyIDs[0]) {
+            family = only
+            model = rule.models.count == 1 ? rule.models.first : nil
+        } else if let chosen = chooseDefault(rule.models), rule.models.contains(chosen),
+                  let owner = routing.families.first(where: { $0.models.contains(chosen) }) {
+            family = owner
+            model = chosen
+        } else {
             return .unidentified(model: rule.models.joined(separator: ", "))
         }
-        let model = rule.models.count == 1 ? rule.models.first : nil
         if let model, let installed = installedFamily(of: model, invocation, routing: routing, identify: identify) {
             return .family(id: installed.id, model: model, source: .identified)
         }
@@ -412,11 +455,15 @@ extension MereRunCommandCapability {
         family.selectors.allSatisfy { holds($0, invocation, family: family.id) }
     }
 
-    /// An omitted flag reads as the family's default for it, else the option's default.
+    /// An omitted flag reads as the family's default for it, else the option's default. A Boolean
+    /// reads as "true" when passed and "false" when omitted.
     private func holds(_ condition: MereRunFlagCondition, _ invocation: MereRunCommandInvocation, family: String?) -> Bool {
         if condition.absent { return !invocation.contains(condition.flag) }
         guard let allowed = condition.values else { return invocation.contains(condition.flag) }
         let option = options.first { $0.flag == condition.flag }
+        if option?.kind == .boolean {
+            return allowed.contains(String(invocation.contains(condition.flag)))
+        }
         let familyDefault = option?.familyRules.first { $0.family == family }?.defaultValue
         guard let value = invocation.value(condition.flag) ?? familyDefault ?? option?.defaultValue else { return false }
         return allowed.contains(option?.choice(for: value) ?? value)
@@ -425,8 +472,11 @@ extension MereRunCommandCapability {
     private func unmatchedDetail(model: String?, candidates: [MereRunRuntimeFamily]) -> String {
         let requirements = candidates.map { family in
             let selectors = family.selectors.map { condition in
-                condition.absent ? "no \(condition.flag)"
-                    : condition.values.map { "\(condition.flag) \($0.joined(separator: "|"))" } ?? condition.flag
+                let rendered = arguments(satisfying: condition)
+                guard let values = condition.values, rendered.count == 2 else {
+                    return rendered.isEmpty ? "no \(condition.flag)" : condition.flag
+                }
+                return "\(condition.flag) \(values.joined(separator: "|"))"
             }
             return "\(family.title) needs \(selectors.joined(separator: " and "))"
         }
@@ -436,6 +486,15 @@ extension MereRunCommandCapability {
 }
 
 // MARK: - Violations
+
+extension MereRunCapabilityOption {
+    /// An empty string value reads as omitted: commands treat an empty text option as not passed
+    /// (`sfx generate --negative-prompt ""`), so a family that refuses the option only warns.
+    /// Files, directories, numbers, and choices keep refusing an empty value.
+    func readsAsOmitted(_ values: [String]) -> Bool {
+        kind == .string && values.allSatisfy(\.isEmpty)
+    }
+}
 
 extension MereRunCommandCapability {
     /// A named model that another family lists, when the selectors chose `family` over it: the

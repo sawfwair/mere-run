@@ -51,3 +51,29 @@ extension MereRunCapabilityCatalog {
         ]
     )
 }
+
+// MARK: - TESSERA
+
+extension MereRunCapabilityCatalog {
+    enum TESSERAFamily: String, MereRunFamilyID {
+        case student = "tessera-student"
+        case teacher = "tessera-teacher"
+    }
+
+    private static let tesseraStudentModels = [
+        "vision-embed-tessera-v2-nano", "vision-embed-tessera-v2-small", "vision-embed-tessera-v2-medium",
+        "vision-embed-tessera-v2-large"
+    ]
+
+    /// The students share one surface; the teacher projects to 1024 dimensions only. Without
+    /// `--model` the CLI picks by machine memory and what is installed, the teacher on 32 GB Macs
+    /// and up, so a blank command line resolves when the command runs.
+    static let geoTESSERARouting = MereRunCapabilityRouting(
+        modelFlags: ["--model"],
+        defaultModels: [.init(models: tesseraStudentModels + ["vision-embed-tessera-v2-teacher"])],
+        families: [
+            .init(TESSERAFamily.student, title: "TESSERA v2 students", models: tesseraStudentModels),
+            .init(TESSERAFamily.teacher, title: "TESSERA v2 Teacher", models: ["vision-embed-tessera-v2-teacher"])
+        ]
+    )
+}

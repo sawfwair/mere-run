@@ -48,21 +48,21 @@ extension ModelFamilyIdentifier {
 
     /// The identifier's `text chat` probe. The Qwen fallthrough runs only a model with a Qwen
     /// profile, so any other id is unidentified and the command reports it.
-    static func textChatProbe(model: String, invocation: MereRunCommandInvocation) -> String? {
+    static func textChatProbe(model: String, invocation: MereRunCommandInvocation) -> MereRunModelIdentification? {
         // The command reads its model id trimmed and lowercased.
         let model = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let family = textChatFamily(matching: model)
         switch family {
         case .q35, .q35VL, .q38:
-            return Q35Resources.profile(for: model) == nil ? nil : family.rawValue
+            return Q35Resources.profile(for: model) == nil ? nil : .family(family.rawValue)
         default:
-            return family.rawValue
+            return .family(family.rawValue)
         }
     }
 
     /// The identifier's `text train-lora` probe: the trainer the command itself selects.
-    static func textTrainLoRAProbe(model: String, invocation: MereRunCommandInvocation) -> String? {
+    static func textTrainLoRAProbe(model: String, invocation: MereRunCommandInvocation) -> MereRunModelIdentification? {
         let options = TextLoRATrainingOptions(data: "", output: "", model: model)
-        return (try? options.resolvedTrainingFamily())?.contractFamily.rawValue
+        return (try? options.resolvedTrainingFamily()).map { .family($0.contractFamily.rawValue) }
     }
 }

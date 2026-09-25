@@ -390,7 +390,7 @@ struct SFXVideoPreflightAnalyzer {
     }
 
     private var isMMAudioRequest: Bool {
-        SFXMMAudioRuntime.isMMAudio(model: input.model, fileManager: fileManager)
+        MMAudioResources.isMMAudio(model: input.model, fileManager: fileManager)
     }
 
     private func mmaudioModelSummary(
@@ -793,9 +793,6 @@ struct SFXVideoPreflightAnalyzer {
         diagnostics: inout [PreflightDiagnostic]
     ) -> SFXVideoPlanPreflightSummary {
         if isMMAudioRequest {
-            if input.renoise != nil {
-                diagnostics.append(renoiseDiagnostic("--renoise is only supported by Woosh models."))
-            }
             return SFXVideoPlanPreflightSummary(
                 inputKind: input.inputURL.pathExtension.lowercased() == "npy" ? "features" : "video",
                 durationSeconds: input.durationSeconds,
