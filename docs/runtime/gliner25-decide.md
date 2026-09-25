@@ -50,6 +50,11 @@ The `tasks` array preserves task order. Each task can include `prompt` and
 The encoder accepts at most 512 subword tokens for the complete schema and
 text. The command rejects longer requests so labels remain intact.
 
+The native request accepts one text, at most 16 tasks, and at most 64 labels
+per task. Its `threshold` field corresponds to `cls_threshold` in the Python
+API. The Python library also has batch and long-document classification
+helpers; this native command does not yet provide either one.
+
 In the macOS Studio app, open **Text → Classify** to enter the text and edit
 label tasks directly. Add labels, optional descriptions and prompts, and a
 threshold for multi-label tasks. **Check fit** reports the token count before
@@ -66,6 +71,12 @@ result remains a classification over the labels you provided.
 The model specializes in English operational classification. It does not
 answer open questions or provide explanations. For multilingual classification,
 use a model trained for those languages.
+
+The native runtime uses this checkpoint's classification head. The broader
+GLiNER2 library also exposes entity, relation, and structured extraction, but
+those methods are outside this integration. The checkpoint's published model
+card describes it as a classification specialist; its extraction quality has
+not been qualified here.
 
 ## Sources and license
 

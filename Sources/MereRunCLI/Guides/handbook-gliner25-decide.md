@@ -30,7 +30,8 @@ mere.run text classify --input request.json --output classifications.json --pret
 
 The command accepts `-` or omitted `--input` for piped JSON. It writes a JSON
 result to stdout; `--output` also saves that result to a file. In macOS Studio,
-open **Text > Classify** and attach the JSON request.
+open **Text > Classify** to edit the text and label tasks directly. The page
+can also import or export the same JSON request.
 
 ## Controls and variants
 
@@ -43,9 +44,17 @@ If none meets the threshold, the result includes the highest-scoring label.
 
 The complete schema and text must fit within 512 subword tokens. Longer
 requests fail validation so every requested label remains in the model input.
+
+This native command accepts one text per request, at most 16 tasks, and at most
+64 labels per task. It does not yet provide the Python library's batch or
+long-document classification helpers. `threshold` in this request corresponds
+to `cls_threshold` in the Python API.
+
 Scores change with the supplied label set and are not calibrated decision
 probabilities. The checkpoint is intended for English classification and does
-not generate text or explanations.
+not generate text or explanations. The native runtime uses the checkpoint's
+classification head; entity, relation, and structured extraction are outside
+this command's scope.
 
 ## Sources and validation
 
