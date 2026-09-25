@@ -39,14 +39,21 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: legacy, source: .contract))
     }
 
+    /// Sortformer, the default, always runs offline, so its page offers no input buffer; Nemotron 3
+    /// streams, and its page offers the buffer as a chip beside the format.
     func testWhoSpokeOffersTheModelFormatAndInputBufferAsChips() throws {
-        let draft = StudioTaskDraft(templateID: .speechDiarize)
+        var draft = StudioTaskDraft(templateID: .speechDiarize)
         let chips = StudioTaskSchema.essentials(for: .audioWhoSpoke, draft: draft, source: .contract).map(\.flag)
-        XCTAssertEqual(chips, ["--format", "--latency"], "the model chip is drawn separately")
+        XCTAssertEqual(chips, ["--format"], "the model chip is drawn separately")
         let sections = StudioTaskSchema.sections(for: .audioWhoSpoke, draft: draft, source: .contract)
         XCTAssertEqual(Set(sections.flatMap(\.fields).map(\.flag)),
-                       ["--model", "--format", "--threshold", "--min-duration", "--merge-gap", "--latency"])
+                       ["--model", "--format", "--threshold", "--min-duration", "--merge-gap"])
         XCTAssertEqual(StudioTaskSchema.advanced(for: .audioWhoSpoke, draft: draft, source: .contract).map(\.flag), ["--quiet"])
+        draft.model = "speech-diarization-nemotron3"
+        XCTAssertEqual(
+            StudioTaskSchema.essentials(for: .audioWhoSpoke, draft: draft, source: .contract).map(\.flag),
+            ["--format", "--latency"]
+        )
         let slot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .speechDiarize))
         XCTAssertEqual(slot.storage, .argument(0))
         XCTAssertTrue(slot.acceptedTypes.contains(.audio))

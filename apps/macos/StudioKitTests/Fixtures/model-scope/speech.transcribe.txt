@@ -9,6 +9,6 @@ parakeet	console.speechTranscribe	validated	--backend --coreml-encoder --input-f
 qwen3-asr	composer.listen	emitted	--backend --language --model --output --task
 qwen3-asr	composer.listen	shown	--backend --language --model
 qwen3-asr	composer.listen	validated	--backend --language --model
-qwen3-asr	console.speechTranscribe	emitted	--backend --input-format --jsonl --language --max-tokens --model --output --provider --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms
-qwen3-asr	console.speechTranscribe	shown	--backend --input-format --jsonl --language --max-tokens --model --output --provider --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms --task
-qwen3-asr	console.speechTranscribe	validated	--backend --input-format --jsonl --language --max-tokens --model --output --provider --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms
+qwen3-asr	console.speechTranscribe	emitted	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms
+qwen3-asr	console.speechTranscribe	shown	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms --task
+qwen3-asr	console.speechTranscribe	validated	--backend --input-format --jsonl --language --max-tokens --model --output --quiet --receipt --run-dir --sample-rate --stream --stream-chunk-ms --stream-decode-ms

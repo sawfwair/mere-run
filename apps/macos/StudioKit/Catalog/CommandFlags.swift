@@ -1357,6 +1357,9 @@ extension CommandFlags {
     /// `mere.run video retake` — Retake video region
     package enum VideoRetake: CommandFlagNamespace {
         package static let command = ["video", "retake"]
+        package static let defaultValues = [
+            "--video-decoder": "diffusion"
+        ]
 
         package static let source = "--source"
         package static let frameRate = "--frame-rate"

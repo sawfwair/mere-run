@@ -6,9 +6,9 @@ nemotron3	console.speechDiarize	validated	--format --latency --merge-gap --min-d
 nemotron3	task.speechDiarize	emitted	--format --latency --merge-gap --min-duration --model --output --quiet --threshold
 nemotron3	task.speechDiarize	shown	--format --latency --merge-gap --min-duration --model --quiet --threshold
 nemotron3	task.speechDiarize	validated	--format --latency --merge-gap --min-duration --model --output --quiet --threshold
-sortformer	console.speechDiarize	emitted	--format --latency --merge-gap --min-duration --model --output --quiet --threshold
-sortformer	console.speechDiarize	shown	--format --latency --merge-gap --min-duration --model --output --quiet --threshold
-sortformer	console.speechDiarize	validated	--format --latency --merge-gap --min-duration --model --output --quiet --threshold
-sortformer	task.speechDiarize	emitted	--format --latency --merge-gap --min-duration --model --output --quiet --threshold
-sortformer	task.speechDiarize	shown	--format --latency --merge-gap --min-duration --model --quiet --threshold
-sortformer	task.speechDiarize	validated	--format --latency --merge-gap --min-duration --model --output --quiet --threshold
+sortformer	console.speechDiarize	emitted	--format --merge-gap --min-duration --model --output --quiet --threshold
+sortformer	console.speechDiarize	shown	--format --merge-gap --min-duration --model --output --quiet --threshold
+sortformer	console.speechDiarize	validated	--format --merge-gap --min-duration --model --output --quiet --threshold
+sortformer	task.speechDiarize	emitted	--format --merge-gap --min-duration --model --output --quiet --threshold
+sortformer	task.speechDiarize	shown	--format --merge-gap --min-duration --model --quiet --threshold
+sortformer	task.speechDiarize	validated	--format --merge-gap --min-duration --model --output --quiet --threshold
