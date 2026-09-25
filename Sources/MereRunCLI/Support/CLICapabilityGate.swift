@@ -44,9 +44,14 @@ enum CLICapabilityGate {
             return nil
         }
         let invocation = MereRunCommandInvocation(capability: capability, arguments: arguments)
-        let report = capability.resolutionReport(invocation, platform: platform) { model in
-            ModelFamilyIdentifier.identify(capabilityID: capability.id, model: model, invocation: invocation)
-        }
+        let report = capability.resolutionReport(
+            invocation,
+            platform: platform,
+            identify: { model in
+                ModelFamilyIdentifier.identify(capabilityID: capability.id, model: model, invocation: invocation)
+            },
+            routedFamily: { CLIFamilyRouters.family(capabilityID: capability.id, invocation: invocation) }
+        )
         return (capability, report)
     }
 

@@ -52,21 +52,23 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertTrue(slot.acceptedTypes.contains(.audio))
     }
 
-    func testDiarizeInputBufferIsValidatedAgainstTheModel() throws {
-        let capability = try XCTUnwrap(CommandTemplateID.speechDiarize.capability)
-        var draft = StudioTaskDraft(templateID: .speechDiarize)
-        draft.setArgument(0, "/tmp/standup.wav")
-        XCTAssertNil(StudioConsoleCommand.validationMessage(for: capability, draft: draft.form))
-        draft.form["--latency"] = .text("1.04")
-        XCTAssertEqual(
-            StudioConsoleCommand.validationMessage(for: capability, draft: draft.form),
-            "Input buffer latency applies to Nemotron 3 only; choose Offline for speech-diarization-sortformer."
-        )
-        draft.model = "speech-diarization-nemotron3"
-        XCTAssertNil(StudioConsoleCommand.validationMessage(for: capability, draft: draft.form))
+    /// The input buffer is checked against the runtime family the contract resolves, the same
+    /// check the CLI's capability gate makes, so a blank model reads as the Sortformer default.
+    func testDiarizeInputBufferIsValidatedAgainstTheModelFamily() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .speechDiarize))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/standup.wav"
+        XCTAssertNil(template.validationMessage(for: draft))
+        draft.speechDiarizationLatency = "1.04"
+        let refusal = "--latency 1.04 is not supported by Sortformer; it runs offline. Remove --latency or pass offline."
+        XCTAssertEqual(template.validationMessage(for: draft), refusal)
         draft.model = ""
-        draft.form["--latency"] = .text("offline")
-        XCTAssertNil(StudioConsoleCommand.validationMessage(for: capability, draft: draft.form))
+        XCTAssertEqual(template.validationMessage(for: draft), refusal)
+        draft.model = "speech-diarization-nemotron3"
+        XCTAssertNil(template.validationMessage(for: draft))
+        draft.model = ""
+        draft.speechDiarizationLatency = "offline"
+        XCTAssertNil(template.validationMessage(for: draft))
     }
 
     func testEnhanceTaskDraftBuildsTheAudioToolsPagesArgv() throws {

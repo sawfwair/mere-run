@@ -79,7 +79,9 @@ window. `--latency offline` uses a 30.4-second input buffer. For the released
 model's smaller buffer settings, choose `--latency 1.04`, `0.64`, or `0.32`.
 These values describe buffered audio, not total processing time. The existing
 four-speaker Sortformer remains the command default; `--latency` applies only
-to Nemotron 3.
+to Nemotron 3. A local model folder runs Nemotron 3 when it holds
+`Nemotron-3-Diarization.nemo`, and Sortformer otherwise. A buffer other than
+`offline` for Sortformer stops before any model is loaded.
 
 ### Diarize live audio
 
@@ -125,10 +127,26 @@ swift run mere.run speech synthesize \
 swift run mere.run speech transcribe ./hello.wav --backend auto
 ```
 
-In automatic mode, transcription prefers Parakeet while translation routes to
-Qwen. Streaming transcription uses the selected backend and accepts raw
-`pcm-s16le/16000/mono` on stdin. Use `--backend parakeet` or `--backend qwen`
-to pin it explicitly:
+The backend is chosen in this order:
+
+1. `--task translate` always runs Qwen, because Parakeet does not translate.
+2. A `--language` that Parakeet's router does not recognize runs Qwen, which
+   supports more languages.
+3. `--backend parakeet` or `--backend qwen` runs that backend.
+4. A `--model` runs its own backend.
+5. Otherwise Parakeet runs.
+
+A managed model of the other backend is replaced by the chosen backend's
+default, and a flag the choice overrules has no effect. The CLI prints a
+`Warning:` line for either, for example for `--model speech-asr-parakeet --task
+translate`. A local model folder of the other backend stops the run instead.
+Each backend also ignores the other's options, with a warning: Qwen returns no
+timestamps, so `--timestamps` and `--no-timestamps` apply to Parakeet, and
+Parakeet has no token budget, so `--max-tokens` applies to Qwen.
+
+Streaming transcription chooses the backend and model the same way and accepts
+raw `pcm-s16le/16000/mono` on stdin. Its transcript carries no timestamps. Use
+`--backend parakeet` or `--backend qwen` to pin it explicitly:
 
 ```bash
 audio-source | swift run mere.run speech transcribe - \
@@ -194,9 +212,10 @@ mere.run speech transcribe ./short.wav \
   --coreml-encoder /path/to/parakeet-coreml
 ```
 
-An explicit Core ML request fails if its language hint would route to Qwen.
-To use Qwen, select `--backend qwen` and omit `--provider coreml` and
-`--coreml-encoder`.
+Core ML needs `--backend parakeet` and a transcription task, and an explicit
+Core ML request fails if its language hint would route to Qwen. Qwen rejects
+`--provider coreml` and `--coreml-encoder` before loading, including for
+`--task translate`. To use Qwen, select `--backend qwen` and omit both.
 
 The converter downloads NVIDIA's exact
 `nvidia/parakeet-tdt-0.6b-v3` revision
@@ -330,6 +349,11 @@ If `--ref-text` is omitted, the speech transcriber automatically transcribes the
 reference audio. `--language` hints the language (default `auto`). Add
 `--stream` to emit audio incrementally while generating; `--stream-chunk-tokens`
 sets the chunk interval (default 25).
+
+Each mode reads its own options. Clone mode ignores `--voice`, and style mode
+ignores `--profile`, `--ref-audio`, `--ref-text`, and `--save-profile`; the CLI
+prints a `Warning:` line for any it ignores. With `--profile`, clone mode also
+ignores `--ref-audio` and `--save-profile`.
 
 ## Runtime entry points
 

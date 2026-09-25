@@ -149,11 +149,9 @@ struct SpeechDiarize: AsyncParsableCommand {
             throw ValidationError("Audio file not found: \(audioURL.path)")
         }
 
+        // The capability gate refused a Sortformer run with a streaming `--latency` before this.
         let modelRoot = try Self.resolveModelRoot(model)
-        let useNemotron = Self.isNemotron3(model: model, root: modelRoot)
-        guard useNemotron || latency == .offline else {
-            throw ValidationError("--latency is supported only with speech-diarization-nemotron3.")
-        }
+        let useNemotron = Nemotron3DiarizationResources.isNemotron3(model: model, root: modelRoot)
         if !quiet {
             CLIStderr.write("Loading \(useNemotron ? "Nemotron 3 Diarization" : "Sortformer") from \(modelRoot.path)\n")
             CLIStderr.write("[runtime] diarization backend: \(NativeMLXRuntime.backendDescription)\n")
@@ -231,13 +229,6 @@ struct SpeechDiarize: AsyncParsableCommand {
             )
         }
         return try ModelResolver(fileManager: fileManager).resolve(modelID).rootURL
-    }
-
-    static func isNemotron3(model: String, root: URL) -> Bool {
-        model == ModelResolver.ModelID.nemotron3Diarization.rawValue
-            || FileManager.default.fileExists(
-                atPath: root.appendingPathComponent(Nemotron3DiarizationResources.archivePin.filename).path
-            )
     }
 
     private func render(

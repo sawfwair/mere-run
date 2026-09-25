@@ -111,19 +111,35 @@ public struct MereRunFamilyResolutionReport: Codable, Equatable, Sendable {
 
 extension MereRunCommandCapability {
     /// The one family resolver. `identify` answers models the contract does not list.
+    /// `routedFamily` is the family the command's own router picks for the whole command line,
+    /// where the declared rules only approximate it (speech transcribe routes an unrecognized
+    /// `--language` to Qwen3-ASR). Its answer wins over the rules; `nil` keeps them.
     public func resolveFamily(
         _ invocation: MereRunCommandInvocation,
         platform: String = "macos",
-        identify: (String) -> MereRunModelIdentification? = { _ in nil }
+        identify: (String) -> MereRunModelIdentification? = { _ in nil },
+        routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolution {
         guard let routing else { return .unrouted }
+        let declared = declaredFamily(invocation, routing: routing, platform: platform, identify: identify)
+        guard let routed = routedFamily().flatMap(routing.family(id:)) else { return declared }
+        if case .family(let id, _, _) = declared, id == routed.id { return declared }
+        return routerChoice(routed, invocation, routing: routing, platform: platform, identify: identify)
+    }
+
+    private func declaredFamily(
+        _ invocation: MereRunCommandInvocation,
+        routing: MereRunCapabilityRouting,
+        platform: String,
+        identify: (String) -> MereRunModelIdentification?
+    ) -> MereRunFamilyResolution {
         if routing.routesBySelectors {
             return resolveBySelectors(invocation, routing: routing, platform: platform, identify: identify)
         }
         guard let model = modelValue(invocation, flags: routing.modelFlags) else {
             return resolveDefault(invocation, routing: routing, platform: platform, identify: identify)
         }
-        return resolve(model: model, invocation, routing: routing, identify: identify, allowIdentify: true)
+        return resolve(model: model, invocation, routing: routing, platform: platform, identify: identify, allowIdentify: true)
     }
 
     /// The options `family` uses, each with its rule applied: narrowed `choices`, the family's
@@ -146,7 +162,13 @@ extension MereRunCommandCapability {
     }
 
     /// Every way `invocation` leaves `family`'s scope, errors and warnings, in option order.
-    public func violations(_ invocation: MereRunCommandInvocation, family: String) -> [MereRunOptionViolation] {
+    /// `identify` names the managed model an alias stands for, so a named model the selectors
+    /// override is reported however it is spelled.
+    public func violations(
+        _ invocation: MereRunCommandInvocation,
+        family: String,
+        identify: (String) -> MereRunModelIdentification? = { _ in nil }
+    ) -> [MereRunOptionViolation] {
         guard let routing, let runtime = routing.family(id: family) else { return [] }
         return options.flatMap { option -> [MereRunOptionViolation] in
             let rule = option.familyRules.first { $0.family == family }
@@ -156,6 +178,9 @@ extension MereRunCommandCapability {
                     flag: option.flag, kind: .missingRequired, severity: .error,
                     message: "\(runtime.title) requires \(option.flag)."
                 )]
+            }
+            if routing.selectorsOverrideModel, routing.modelFlags.contains(option.flag) {
+                return overriddenModel(option.flag, invocation, routing: routing, family: runtime, identify: identify)
             }
             if let families = option.families, !families.contains(family) {
                 let titles = families.compactMap { routing.family(id: $0)?.title }
@@ -175,9 +200,10 @@ extension MereRunCommandCapability {
     public func resolutionReport(
         _ invocation: MereRunCommandInvocation,
         platform: String = "macos",
-        identify: (String) -> MereRunModelIdentification? = { _ in nil }
+        identify: (String) -> MereRunModelIdentification? = { _ in nil },
+        routedFamily: () -> String? = { nil }
     ) -> MereRunFamilyResolutionReport {
-        let resolution = resolveFamily(invocation, platform: platform, identify: identify)
+        let resolution = resolveFamily(invocation, platform: platform, identify: identify, routedFamily: routedFamily)
         let report = { (family: MereRunRuntimeFamily?, model: String?, source: MereRunFamilyResolutionReport.Source,
                         violations: [String], warnings: [String]) in
             MereRunFamilyResolutionReport(
@@ -196,7 +222,7 @@ extension MereRunCommandCapability {
         case let .unmatched(model, detail):
             return report(nil, model, .unmatched, [detail], [])
         case let .family(familyID, model, source):
-            let found = violations(invocation, family: familyID)
+            let found = violations(invocation, family: familyID, identify: identify)
             let source: MereRunFamilyResolutionReport.Source = switch source {
             case .model: .model
             case .defaultModel: .defaultModel
@@ -219,10 +245,38 @@ extension MereRunCommandCapability {
         flags.lazy.compactMap { invocation.value($0) }.first { !$0.isEmpty }
     }
 
+    /// The model `family` runs when the command's router picked it over the declared rules: the
+    /// named model when the family lists it or no family does (a local path, an unlisted id), and
+    /// otherwise the family's default.
+    private func routerChoice(
+        _ family: MereRunRuntimeFamily,
+        _ invocation: MereRunCommandInvocation,
+        routing: MereRunCapabilityRouting,
+        platform: String,
+        identify: (String) -> MereRunModelIdentification?
+    ) -> MereRunFamilyResolution {
+        if let named = modelValue(invocation, flags: family.modelFlag.map { [$0] } ?? routing.modelFlags) {
+            var canonical = named
+            if case .managedModel(let managed)? = identify(named) { canonical = managed }
+            if family.models.contains(canonical) {
+                return .family(id: family.id, model: canonical, source: .model)
+            }
+            if !routing.families.contains(where: { $0.models.contains(canonical) }) {
+                return .family(id: family.id, model: named, source: .identified)
+            }
+        }
+        let rule = routing.defaultModels.first { rule in
+            rule.applies(on: platform)
+                && (rule.family == family.id || (!rule.models.isEmpty && rule.models.allSatisfy(family.models.contains)))
+        }
+        return .family(id: family.id, model: rule?.models.first, source: .defaultModel)
+    }
+
     private func resolve(
         model: String,
         _ invocation: MereRunCommandInvocation,
         routing: MereRunCapabilityRouting,
+        platform: String,
         identify: (String) -> MereRunModelIdentification?,
         allowIdentify: Bool
     ) -> MereRunFamilyResolution {
@@ -236,6 +290,9 @@ extension MereRunCommandCapability {
             }
             let matching = candidates.filter { selectorsHold($0, invocation) }
             guard let family = matching.first else {
+                if routing.selectorsOverrideModel {
+                    return resolveDefault(invocation, routing: routing, platform: platform, identify: identify)
+                }
                 return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: candidates))
             }
             return .family(id: family.id, model: model, source: candidates.count > 1 ? .selector : .model)
@@ -246,14 +303,12 @@ extension MereRunCommandCapability {
         switch identification {
         case .managedModel(let managed):
             let identifiable = routing.identifiedModels.contains(managed)
-            switch resolve(model: managed, invocation, routing: routing, identify: identify, allowIdentify: identifiable) {
-            case .family(let id, _, let source):
-                return .family(id: id, model: managed, source: source)
-            case .unidentified:
-                return .unidentified(model: model)
-            case let other:
-                return other
-            }
+            let resolved = resolve(
+                model: managed, invocation, routing: routing, platform: platform, identify: identify,
+                allowIdentify: identifiable
+            )
+            if case .unidentified = resolved { return .unidentified(model: model) }
+            return resolved
         case .family(let id):
             guard let family = routing.family(id: id) else { return .unidentified(model: model) }
             guard selectorsHold(family, invocation) else {
@@ -290,7 +345,7 @@ extension MereRunCommandCapability {
             return .unmatched(model: nil, detail: "\(command.joined(separator: " ")) has no default model on \(platform).")
         }
         if rule.family == nil, rule.models.count == 1, let model = rule.models.first, routing.identifiedModels.contains(model) {
-            switch resolve(model: model, invocation, routing: routing, identify: identify, allowIdentify: true) {
+            switch resolve(model: model, invocation, routing: routing, platform: platform, identify: identify, allowIdentify: true) {
             case let .family(id, model, _): return .family(id: id, model: model, source: .defaultModel)
             case let other: return other
             }
@@ -308,7 +363,7 @@ extension MereRunCommandCapability {
         if let model, let installed = installedFamily(of: model, invocation, routing: routing, identify: identify) {
             return .family(id: installed.id, model: model, source: .identified)
         }
-        guard selectorsHold(family, invocation) else {
+        guard routing.selectorsOverrideModel || selectorsHold(family, invocation) else {
             return .unmatched(model: model, detail: unmatchedDetail(model: model, candidates: [family]))
         }
         return .family(id: family.id, model: model, source: .defaultModel)
@@ -383,6 +438,32 @@ extension MereRunCommandCapability {
 // MARK: - Violations
 
 extension MereRunCommandCapability {
+    /// A named model that another family lists, when the selectors chose `family` over it: the
+    /// command runs `family`'s default and the named model has no effect.
+    private func overriddenModel(
+        _ flag: String,
+        _ invocation: MereRunCommandInvocation,
+        routing: MereRunCapabilityRouting,
+        family: MereRunRuntimeFamily,
+        identify: (String) -> MereRunModelIdentification?
+    ) -> [MereRunOptionViolation] {
+        guard modelValue(invocation, flags: routing.modelFlags) == invocation.value(flag),
+              let named = invocation.value(flag) else { return [] }
+        let canonical: String
+        if case .managedModel(let managed)? = identify(named) {
+            canonical = managed
+        } else {
+            canonical = named
+        }
+        guard !family.models.contains(canonical), routing.families.contains(where: { $0.models.contains(canonical) }) else {
+            return []
+        }
+        return [MereRunOptionViolation(
+            flag: flag, kind: .valueNotAllowed(allowed: family.models), severity: .warning,
+            message: "\(flag) \(named) has no effect: the other options select \(family.title)."
+        )]
+    }
+
     private func unsupported(
         _ flag: String,
         family: MereRunRuntimeFamily,

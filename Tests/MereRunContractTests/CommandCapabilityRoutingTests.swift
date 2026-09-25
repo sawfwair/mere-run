@@ -458,6 +458,88 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(try JSONDecoder().decode([MereRunFlagCondition].self, from: Data(json.utf8)) == conditions)
 }
 
+/// When the selectors outrank the model, a listed model whose family's selectors fail runs as if
+/// no model were named, and the report warns about it however the model is spelled.
+@Test func selectorsThatOverrideTheModelReplaceItWithAWarning() throws {
+    enum ListenFamily: String, MereRunFamilyID { case fast, deep }
+    let listener = MereRunCommandCapability(
+        id: "ear.listen", command: ["ear", "listen"], title: "Listen", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
+            MereRunCapabilityOption(flag: "--engine", label: "Engine", kind: .choice,
+                                    choices: ["auto", "fast", "deep"], defaultValue: "auto")
+                .scoped(ListenFamily.rule(.deep, values: ["auto", "deep"], severity: .warning)),
+            MereRunCapabilityOption(flag: "--task", label: "Task", kind: .choice,
+                                    choices: ["hear", "explain"], defaultValue: "hear")
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            defaultModels: [
+                .init(whenAny: [.init(flag: "--task", values: ["explain"]), .init(flag: "--engine", values: ["deep"])],
+                      models: ["ear-deep"]),
+                .always("ear-fast")
+            ],
+            families: [
+                .init(ListenFamily.fast, title: "Fast", models: ["ear-fast"],
+                      selectors: [.init(flag: "--task", values: ["hear"]), .init(flag: "--engine", values: ["auto", "fast"])]),
+                .init(ListenFamily.deep, title: "Deep", models: ["ear-deep"],
+                      selectors: [.init(flag: "--engine", values: ["auto", "deep"])])
+            ],
+            selectorsOverrideModel: true
+        )
+    )
+    let identify: (String) -> MereRunModelIdentification? = { $0 == "EAR-FAST" ? .managedModel("ear-fast") : nil }
+    let report = { (arguments: [String]) in
+        listener.resolutionReport(MereRunCommandInvocation(capability: listener, arguments: arguments), identify: identify)
+    }
+    let honored = report(["--model", "ear-deep"])
+    #expect(honored.family == "deep" && honored.source == .model && honored.warnings.isEmpty)
+
+    let replaced = report(["--model", "ear-fast", "--task", "explain"])
+    #expect(replaced.family == "deep" && replaced.model == "ear-deep" && replaced.source == .defaultModel)
+    #expect(replaced.violations.isEmpty)
+    #expect(replaced.warnings == ["--model ear-fast has no effect: the other options select Deep."])
+    #expect(report(["-m", "EAR-FAST", "--task", "explain"]).warnings
+        == ["--model EAR-FAST has no effect: the other options select Deep."])
+
+    let named = report(["--model", "ear-deep", "--engine", "fast"])
+    #expect(named.family == "fast" && named.model == "ear-fast")
+    #expect(named.warnings == ["--model ear-deep has no effect: the other options select Fast."])
+
+    // The default rules decide without rechecking the chosen family's selectors: the task
+    // outranks an explicit engine, which then draws the rule's warning.
+    let outranked = report(["--engine", "fast", "--task", "explain"])
+    #expect(outranked.family == "deep" && outranked.violations.isEmpty)
+    #expect(outranked.warnings == ["--engine fast has no effect with Deep; use auto or deep."])
+    #expect(report(["--model", "ear-deep", "--engine", "fast", "--task", "explain"]).warnings
+        == ["--engine fast has no effect with Deep; use auto or deep."])
+
+    // The command's own router outranks the declared rules; the model follows the routed family.
+    let routed = { (arguments: [String], family: String?) in
+        listener.resolutionReport(
+            MereRunCommandInvocation(capability: listener, arguments: arguments), identify: identify, routedFamily: { family }
+        )
+    }
+    let rerouted = routed(["--model", "ear-fast", "--engine", "fast"], "deep")
+    #expect(rerouted.family == "deep" && rerouted.model == "ear-deep" && rerouted.source == .defaultModel)
+    #expect(rerouted.warnings == [
+        "--model ear-fast has no effect: the other options select Deep.",
+        "--engine fast has no effect with Deep; use auto or deep."
+    ])
+    #expect(routed(["--model", "ear-fast"], "fast") == report(["--model", "ear-fast"]))
+    #expect(routed(["--model", "ear-fast"], "unknown") == report(["--model", "ear-fast"]))
+    let local = routed(["--model", "/ears/deep"], "deep")
+    #expect(local.family == "deep" && local.model == "/ears/deep" && local.source == .identified)
+    #expect(routed(["-m", "EAR-FAST"], "deep").warnings == ["--model EAR-FAST has no effect: the other options select Deep."])
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let routing = try encoder.encode(try #require(listener.routing))
+    #expect(String(decoding: routing, as: UTF8.self).contains(#""selectors_override_model":true"#))
+    #expect(try JSONDecoder().decode(MereRunCapabilityRouting.self, from: routing) == listener.routing)
+}
+
 @Test func violationsCoverEveryScopeKindWithOneMessage() {
     let messages = { (family: String, arguments: [String]) in
         clip.violations(MereRunCommandInvocation(capability: clip, arguments: arguments), family: family)
@@ -585,6 +667,7 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
     #expect(routing.contains(#""default_models":[{"models":["clip-full"],"when_any":[{"flag":"--hq"}]},{"models":["clip-quick"]}]"#))
     #expect(routing.contains(#""excluded_models":[{"id":"clip-lm""#))
     #expect(routing.contains(#"{"id":"full","models":["clip-full"],"title":"Full"}"#))
+    #expect(!routing.contains("selectors_override_model"))
     #expect(try JSONDecoder().decode(MereRunCapabilityRouting.self, from: Data(routing.utf8)) == clip.routing)
 
     let document = try encoder.encode(MereRunCapabilityCatalog.document)

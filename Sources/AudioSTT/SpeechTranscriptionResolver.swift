@@ -3,6 +3,13 @@ import AudioCore
 import MereRunCore
 import MereRunExecution
 
+/// The backend a transcription runs on and the model override it keeps: a managed model of the
+/// other backend is dropped so the backend's own default runs.
+public struct SpeechTranscriptionRoute: Sendable, Hashable {
+    public let decision: ASRBackendDecision
+    public let modelOverride: String?
+}
+
 /// Resolves model locations and backend policy without loading a generator.
 public enum SpeechTranscriptionResolver {
     public static func resolve(
@@ -12,6 +19,49 @@ public enum SpeechTranscriptionResolver {
         parakeetExecutionProvider: ParakeetExecutionProvider = .mlx,
         captureModelMetadata: Bool = false
     ) throws -> SpeechTranscriptionPlan {
+        let route = try route(
+            task: request.task, language: request.language, preferredBackend: preferredBackend,
+            modelOverride: modelOverride, parakeetExecutionProvider: parakeetExecutionProvider
+        )
+        let decision = route.decision
+        let effectiveOverride = route.modelOverride
+        var plan: SpeechTranscriptionPlan
+        switch decision.backend {
+        case .qwen:
+            let qwenRoot = localQwenModelRoot()
+            plan = SpeechTranscriptionPlan(
+                request: request, decision: decision,
+                modelID: qwenModelId(modelOverride: effectiveOverride),
+                modelPath: qwenModelPath(modelOverride: effectiveOverride, localRoot: qwenRoot, localAvailable: hasConfig(qwenRoot)),
+                provider: parakeetExecutionProvider
+            )
+        case .parakeet:
+            let parakeetRoot = localParakeetModelRoot()
+            plan = SpeechTranscriptionPlan(
+                request: request, decision: decision,
+                modelID: parakeetModelId(modelOverride: effectiveOverride),
+                modelPath: parakeetModelPath(
+                    modelOverride: effectiveOverride, localRoot: parakeetRoot, localAvailable: hasConfig(parakeetRoot)
+                ),
+                provider: parakeetExecutionProvider
+            )
+        }
+        try plan.validate()
+        if captureModelMetadata { plan = try recordingPlan(plan) }
+        return plan
+    }
+
+    /// The routing half of `resolve`, without an audio file: file transcription, streaming, and
+    /// the CLI's capability gate share it. Translation and a language hint Parakeet does not list
+    /// route to Qwen; otherwise an explicit backend wins, then the named model's backend
+    /// (`ASRBackendRouting.select`).
+    public static func route(
+        task: ASRTask,
+        language: String?,
+        preferredBackend: ASRBackend,
+        modelOverride: String? = nil,
+        parakeetExecutionProvider: ParakeetExecutionProvider = .mlx
+    ) throws -> SpeechTranscriptionRoute {
         let normalizedOverride = normalized(
             modelOverride ?? parakeetExecutionProvider.bundledModelURL?.path
         )
@@ -21,34 +71,18 @@ public enum SpeechTranscriptionResolver {
             return inferredBackend
         }()
 
-        let qwenRoot = localQwenModelRoot()
-        let qwenLocalAvailable = FileManager.default.fileExists(
-            atPath: qwenRoot.appendingPathComponent("config.json").path
-        )
-
         let parakeetRoot = localParakeetModelRoot()
-        let parakeetLocalAvailable = FileManager.default.fileExists(
-            atPath: parakeetRoot.appendingPathComponent("config.json").path
-        )
-
-        let qwenAvailable = true
-        let parakeetAvailable = true
-        let availability = ASRBackendAvailability(
-            parakeetAvailable: parakeetAvailable,
-            qwenAvailable: qwenAvailable
-        )
-
         let parakeetCodes = loadParakeetLanguageCodesIfAvailable(
             modelOverride: normalizedOverride,
             localRoot: parakeetRoot,
-            localAvailable: parakeetLocalAvailable
+            localAvailable: hasConfig(parakeetRoot)
         )
 
         let decision = ASRBackendRouting.select(
-            task: request.task,
-            languageHint: request.language,
+            task: task,
+            languageHint: language,
             preferredBackend: effectivePreferredBackend,
-            availableBackends: availability,
+            availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true),
             parakeetSupportedLanguageCodes: parakeetCodes
         )
 
@@ -60,29 +94,16 @@ public enum SpeechTranscriptionResolver {
             )
         }
 
-        let effectiveOverride = try compatibleModelOverride(
-            normalizedOverride, inferredBackend: inferredBackend, selectedBackend: decision.backend
+        return SpeechTranscriptionRoute(
+            decision: decision,
+            modelOverride: try compatibleModelOverride(
+                normalizedOverride, inferredBackend: inferredBackend, selectedBackend: decision.backend
+            )
         )
-        var plan: SpeechTranscriptionPlan
-        switch decision.backend {
-        case .qwen:
-            plan = SpeechTranscriptionPlan(
-                request: request, decision: decision,
-                modelID: qwenModelId(modelOverride: effectiveOverride),
-                modelPath: qwenModelPath(modelOverride: effectiveOverride, localRoot: qwenRoot, localAvailable: qwenLocalAvailable),
-                provider: parakeetExecutionProvider
-            )
-        case .parakeet:
-            plan = SpeechTranscriptionPlan(
-                request: request, decision: decision,
-                modelID: parakeetModelId(modelOverride: effectiveOverride),
-                modelPath: parakeetModelPath(modelOverride: effectiveOverride, localRoot: parakeetRoot, localAvailable: parakeetLocalAvailable),
-                provider: parakeetExecutionProvider
-            )
-        }
-        try plan.validate()
-        if captureModelMetadata { plan = try recordingPlan(plan) }
-        return plan
+    }
+
+    private static func hasConfig(_ root: URL) -> Bool {
+        FileManager.default.fileExists(atPath: root.appendingPathComponent("config.json").path)
     }
 
     /// Fingerprints local configuration and installation metadata, not tensor

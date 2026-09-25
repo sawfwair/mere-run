@@ -93,10 +93,14 @@ model, highest precedence first; `default_models` rules for a blank model; and
 command, each with a `reason`. `identifies_installed_models` marks a command
 whose managed ids can load a different checkpoint than their own install (an
 environment override root); the CLI's identifier then answers for listed and
-default models too, and the id's family applies when it can't tell. Single-runtime commands declare one family.
+default models too, and the id's family applies when it can't tell. 
 command, each with a `reason`; and `identified_models`, managed models whose
 family depends on which checkpoint is installed, which only the CLI's
-identifier (or `catalog resolve`) can answer. Single-runtime commands declare one family.
+identifier (or `catalog resolve`) can answer. A named model normally has to agree with the
+selectors; `selectors_override_model: true` says the selectors win instead, so
+a model whose family's selectors fail runs the default the rules pick and the
+named model draws a warning (speech transcribe swaps a Parakeet id for
+Qwen3-ASR under `--task translate`). Single-runtime commands declare one family.
 Commands without a model, and the multi-runtime commands still being scoped,
 omit `routing`. Each domain keeps its routing in
 `CommandCapabilityCatalog+<Domain>Routing.swift`.
@@ -121,7 +125,10 @@ its `violations`, each an error or a warning with the sentence the CLI prints.
 `resolutionReport` combines them into the `MereRunFamilyResolutionReport` that
 the CLI's capability gate enforces and `mere.run catalog resolve --json` prints.
 The resolver answers managed ids, defaults, and selectors itself; the CLI
-passes an `identify` closure for aliases and local folders.
+passes an `identify` closure for aliases and local folders, and a
+`routedFamily` closure for commands whose own router decides by rules the
+contract only approximates (speech transcribe's language routing). A routed
+family wins over the declared rules; shells without one keep the rules.
 `CommandCapabilityRoutingTests` checks every routed capability's structure and
 each resolver branch; `CapabilityGateTests` runs generated cases for every
 family and option through the CLI gate.

@@ -18,4 +18,10 @@ public enum Nemotron3DiarizationResources {
     public static func verify(at rootURL: URL) throws -> URL {
         try archivePin.verify(in: rootURL)
     }
+
+    /// Whether the speech diarization commands run Nemotron 3 for `model`, resolved to `root`:
+    /// the managed id, or a folder that holds the NeMo archive. Anything else runs Sortformer.
+    public static func isNemotron3(model: String, root: URL) -> Bool {
+        model == modelID || FileManager.default.fileExists(atPath: root.appendingPathComponent(archivePin.filename).path)
+    }
 }

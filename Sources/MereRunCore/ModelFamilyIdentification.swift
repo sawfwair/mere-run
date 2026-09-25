@@ -18,6 +18,7 @@ public enum ModelFamilyIdentifier {
     private static let domainProbes: [[String: Probe]] = [
         imageProbes,
         musicProbes,
+        speechProbes,
         textProbes,
         videoProbes,
     ]

@@ -21,13 +21,14 @@ mere.run speech synthesize --help
 - positional text: text to speak.
 - `--output`, `-o`: required WAV path.
 - `--model`, `-m`: model id or local path.
-- `--voice`, `-v`: natural-language voice description.
-- `--mode`: `style` or `clone`.
+- `--voice`, `-v`: natural-language voice description, style mode only.
+- `--mode`: `style` or `clone`. It picks which of the other options apply; the
+  CLI warns about one the mode ignores.
 - `--profile`: saved clone profile id or name.
-- `--ref-audio`: reference audio path for clone mode.
+- `--ref-audio`: reference audio path for clone mode. Ignored with `--profile`.
 - `--ref-text`: transcript override for reference audio.
 - `--language`: language hint, default `auto`.
-- `--save-profile`: save clone reference for reuse.
+- `--save-profile`: save clone reference for reuse. Ignored with `--profile`.
 - `--temperature`: sampling temperature, default `0.6`.
 - `--stream`: stream audio chunks to the WAV writer.
 - `--stream-chunk-tokens`: token interval for streaming chunks.

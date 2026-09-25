@@ -156,9 +156,6 @@ struct SpeechTranscribe: AsyncParsableCommand {
             guard streamDecodeMs > 0 else {
                 throw ValidationError("--stream-decode-ms must be > 0.")
             }
-            if task == .translate, backend == .parakeet {
-                throw ValidationError("Parakeet does not support translation; use --backend qwen or --backend auto.")
-            }
         }
 
         if readsStandardInput {
@@ -183,12 +180,11 @@ struct SpeechTranscribe: AsyncParsableCommand {
         if jsonl && !readsStandardInput {
             throw ValidationError("--jsonl is only valid with raw streaming stdin ('-').")
         }
+        // The capability gate refuses Core ML wherever the options select Qwen3-ASR, translation
+        // included; Core ML also needs Parakeet named outright and an artifact.
         if provider == .coreml {
             guard !stream else {
                 throw ValidationError("--provider coreml is currently limited to non-streaming transcription.")
-            }
-            guard task == .transcribe else {
-                throw ValidationError("--provider coreml supports transcription only.")
             }
             guard backend == .parakeet else {
                 throw ValidationError("--provider coreml requires --backend parakeet.")
@@ -454,7 +450,15 @@ struct SpeechTranscribe: AsyncParsableCommand {
     private func makeLiveSession(
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws -> CLILiveASRSession {
-        let selected = try resolvedStreamingBackend()
+        // Streaming routes exactly like a file: the same backend, and the same model override.
+        let route: SpeechTranscriptionRoute
+        do {
+            route = try SpeechTranscriptionResolver.route(
+                task: task.task, language: language, preferredBackend: backend.backend, modelOverride: model
+            )
+        } catch let issue as SpeechTranscriptionIssue {
+            throw ValidationError(issue.message)
+        }
         let request = ASRStreamingRequest(
             language: language,
             task: task.task,
@@ -465,12 +469,12 @@ struct SpeechTranscribe: AsyncParsableCommand {
         )
         let configuration = Qwen3ASRLiveConfiguration(decodeIntervalMs: streamDecodeMs)
 
-        switch selected {
+        switch route.decision.backend {
         case .parakeet:
             var parakeetConfiguration = configuration
             parakeetConfiguration.silenceMs = min(configuration.silenceMs, 600)
             let generator = try await CLIParakeetASRLoader.prepare(
-                model: model,
+                model: route.modelOverride,
                 progressHandler: progressHandler
             )
             let live = ParakeetASRLiveSession(
@@ -487,7 +491,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
             )
         case .qwen:
             let generator = try await CLIQwenASRLoader.prepare(
-                model: model,
+                model: route.modelOverride,
                 progressHandler: progressHandler
             )
             let live = Qwen3ASRLiveSession(
@@ -502,19 +506,7 @@ struct SpeechTranscribe: AsyncParsableCommand {
                 finish: { try await live.finish(reason: $0) },
                 cancel: { await live.cancel() }
             )
-        case .auto:
-            preconditionFailure("Streaming backend must resolve before session creation.")
         }
-    }
-
-    private func resolvedStreamingBackend() throws -> SpeechBackendOption {
-        if task == .translate {
-            guard backend != .parakeet else {
-                throw ValidationError("Parakeet does not support translation; use --backend qwen or --backend auto.")
-            }
-            return .qwen
-        }
-        return backend == .auto ? .parakeet : backend
     }
 
     private func renderOutput(result: ASRResult, includeTimestamps: Bool) -> String {

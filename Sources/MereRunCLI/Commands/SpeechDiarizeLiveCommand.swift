@@ -2,6 +2,7 @@ import ArgumentParser
 import AudioSTT
 import Foundation
 import MereRunContract
+import MereRunCore
 
 enum Nemotron3LiveLatency: String, CaseIterable, ExpressibleByArgument {
     case standard = "1.04"
@@ -70,7 +71,7 @@ struct SpeechDiarizeLive: AsyncParsableCommand {
         }
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
         let modelRoot = try SpeechDiarize.resolveModelRoot(model)
-        guard SpeechDiarize.isNemotron3(model: model, root: modelRoot) else {
+        guard Nemotron3DiarizationResources.isNemotron3(model: model, root: modelRoot) else {
             throw ValidationError("Live diarization requires speech-diarization-nemotron3.")
         }
         let diarizer = try Nemotron3Diarizer(modelDirectory: modelRoot)

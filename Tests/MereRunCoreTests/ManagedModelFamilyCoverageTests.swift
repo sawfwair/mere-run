@@ -7,9 +7,6 @@ import Testing
 /// Multi-family capabilities whose routing a model-scope domain change declares. Each domain
 /// removes its entries; the integration requires this to be empty.
 private let pendingCapabilities: [String: String] = [
-    "speech.transcribe": "speech domain",
-    "speech.diarize": "speech domain",
-    "speech.synthesize": "speech domain",
     "audio.enhance": "audio, SFX, OCR, and TESSERA domain",
     "audio.edit": "audio, SFX, OCR, and TESSERA domain",
     "sfx.generate": "audio, SFX, OCR, and TESSERA domain",
@@ -56,8 +53,9 @@ private func resolve(
     flags: [String] = []
 ) -> MereRunFamilyResolution? {
     guard let routing = capability.routing else { return nil }
-    let canonical = ManagedModelCatalog.spec(for: model)?.id ?? model
-    let owner = routing.families.first { $0.models.contains(canonical) }
+    // An alias names its managed model's family, flag, and selectors, as the id itself would.
+    let managed = ManagedModelCatalog.spec(for: model)?.id ?? model
+    let owner = routing.families.first { $0.models.contains(managed) }
     guard let modelFlag = owner?.modelFlag ?? routing.modelFlags.last else { return nil }
     let selectors = owner?.selectors.flatMap { selector -> [String] in
         guard !selector.absent else { return [] }

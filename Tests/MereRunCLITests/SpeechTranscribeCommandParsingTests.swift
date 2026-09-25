@@ -1,3 +1,4 @@
+import AudioSTT
 import XCTest
 @testable import MereRunCLI
 
@@ -105,11 +106,19 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertNoThrow(try cmd.validate())
     }
 
-    func testSpeechTranscribeRejectsParakeetStreamingTranslation() {
-        XCTAssertThrowsError(try SpeechTranscribe.parse([
+    /// Streaming routes like a file: translation runs on Qwen3-ASR even with `--backend parakeet`,
+    /// which the capability gate reports as having no effect.
+    func testSpeechTranscribeStreamsParakeetTranslationOnQwen() throws {
+        let arguments = [
             "-", "--stream", "--input-format", "pcm-s16le", "--sample-rate", "16000",
             "--backend", "parakeet", "--task", "translate", "--jsonl",
-        ]))
+        ]
+        XCTAssertNoThrow(try SpeechTranscribe.parse(arguments))
+        let route = try SpeechTranscriptionResolver.route(task: .translate, language: nil, preferredBackend: .parakeet)
+        XCTAssertEqual(route.decision.backend, .qwen)
+        let report = try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: ["speech", "transcribe"] + arguments)).report
+        XCTAssertEqual(report.family, "qwen3-asr")
+        XCTAssertEqual(report.warnings, ["--backend parakeet has no effect with Qwen3-ASR; use auto or qwen."])
     }
 
     func testSpeechTranscribeRejectsInvalidRawPCMContracts() throws {
