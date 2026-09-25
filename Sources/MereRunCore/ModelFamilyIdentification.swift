@@ -15,7 +15,9 @@ public enum ModelFamilyIdentifier {
         table.merge(domain) { _, _ in preconditionFailure("Two model-family probes claim one capability.") }
     }
 
-    private static let domainProbes: [[String: Probe]] = []
+    private static let domainProbes: [[String: Probe]] = [
+        musicProbes
+    ]
 
     public static func identify(
         capabilityID: String,

@@ -64,6 +64,21 @@ public enum ACEStepRuntimePreparation {
         return Float(frames) / 48_000.0
     }
 
+    /// The decoder subdirectory the CLI looks for when none is named; it also accepts the other
+    /// published ACE-Step decoders in `defaultDecoderSubdirectories` order.
+    public static let defaultDecoderSubdirectory = "acestep-v15-turbo"
+    public static let defaultVAESubdirectory = "vae"
+
+    private static let defaultDecoderSubdirectories = [
+        defaultDecoderSubdirectory,
+        "music-acestep-v15-turbo",
+        "acestep-v15-xl-turbo",
+        "acestep-v15-xl-sft",
+        "acestep-v15-xl-base",
+        "acestep-v15-sft",
+        "acestep-v15-base",
+    ]
+
     public static func resolveCheckpointsRoot(
         model: String,
         checkpointsRoot: String?,
@@ -72,31 +87,15 @@ public enum ACEStepRuntimePreparation {
         lmSubdirectory: String?,
         textSubdirectory: String?
     ) async throws -> URL {
-        let candidates = buildCheckpointCandidates(
+        if let local = localCheckpointsRoot(
             model: model,
-            checkpointsRoot: checkpointsRoot
-        )
-
-        for candidate in candidates {
-            if isUsableCheckpointsRoot(
-                candidate,
-                turboSubdirectory: turboSubdirectory,
-                vaeSubdirectory: vaeSubdirectory,
-                lmSubdirectory: lmSubdirectory,
-                textSubdirectory: textSubdirectory
-            ) {
-                return candidate
-            }
-            let nested = candidate.appendingPathComponent("checkpoints", isDirectory: true)
-            if isUsableCheckpointsRoot(
-                nested,
-                turboSubdirectory: turboSubdirectory,
-                vaeSubdirectory: vaeSubdirectory,
-                lmSubdirectory: lmSubdirectory,
-                textSubdirectory: textSubdirectory
-            ) {
-                return nested
-            }
+            checkpointsRoot: checkpointsRoot,
+            turboSubdirectory: turboSubdirectory,
+            vaeSubdirectory: vaeSubdirectory,
+            lmSubdirectory: lmSubdirectory,
+            textSubdirectory: textSubdirectory
+        ) {
+            return local
         }
 
         if let explicit = checkpointsRoot?.trimmingCharacters(in: .whitespacesAndNewlines), !explicit.isEmpty {
@@ -135,32 +134,46 @@ public enum ACEStepRuntimePreparation {
         throw ACEStepPreparationIssue("Music Acestep checkpoints not found. Add --checkpoints-root or set MERERUN_MUSIC_ACESTEP_ROOT.")
     }
 
+    /// The checkpoints root `resolveCheckpointsRoot` picks among roots already on disk: the
+    /// explicit root, an existing model path, `MERERUN_MUSIC_ACESTEP_ROOT`, then the managed
+    /// install, each also under `checkpoints/`. `nil` when it would have to download.
+    public static func localCheckpointsRoot(
+        model: String,
+        checkpointsRoot: String?,
+        turboSubdirectory: String,
+        vaeSubdirectory: String,
+        lmSubdirectory: String?,
+        textSubdirectory: String?
+    ) -> URL? {
+        buildCheckpointCandidates(model: model, checkpointsRoot: checkpointsRoot)
+            .flatMap { [$0, $0.appendingPathComponent("checkpoints", isDirectory: true)] }
+            .first { candidate in
+                isUsableCheckpointsRoot(
+                    candidate,
+                    turboSubdirectory: turboSubdirectory,
+                    vaeSubdirectory: vaeSubdirectory,
+                    lmSubdirectory: lmSubdirectory,
+                    textSubdirectory: textSubdirectory
+                )
+            }
+    }
+
     public static func resolveTurboSubdirectory(at root: URL, explicit: String) throws -> String {
-        let fm = FileManager.default
-
-        let trimmed = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
-        let upstreamDefault = "acestep-v15-turbo"
-        let compatibilityDefault = "music-acestep-v15-turbo"
-        let decoderDefaults = [
-            upstreamDefault,
-            compatibilityDefault,
-            "acestep-v15-xl-turbo",
-            "acestep-v15-xl-sft",
-            "acestep-v15-xl-base",
-            "acestep-v15-sft",
-            "acestep-v15-base",
-        ]
-        let candidates = trimmed == upstreamDefault
-            ? decoderDefaults
-            : [trimmed]
-
-        for candidate in candidates where isUsableDecoderDirectory(
-            root.appendingPathComponent(candidate, isDirectory: true),
-            fileManager: fm
-        ) {
-            return candidate
+        guard let decoder = usableDecoderSubdirectory(at: root, explicit: explicit) else {
+            throw ACEStepPreparationIssue(
+                "--decoder-subdirectory not found: \(explicit.trimmingCharacters(in: .whitespacesAndNewlines))"
+            )
         }
-        throw ACEStepPreparationIssue("--decoder-subdirectory not found: \(trimmed)")
+        return decoder
+    }
+
+    /// The decoder subdirectory of `root` that `resolveTurboSubdirectory` loads, or `nil`.
+    public static func usableDecoderSubdirectory(at root: URL, explicit: String) -> String? {
+        let trimmed = explicit.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidates = trimmed == defaultDecoderSubdirectory ? defaultDecoderSubdirectories : [trimmed]
+        return candidates.first { candidate in
+            isUsableDecoderDirectory(root.appendingPathComponent(candidate, isDirectory: true), fileManager: .default)
+        }
     }
 
     public static func resolveLMSubdirectory(at root: URL, explicit: String?) throws -> String? {
@@ -411,16 +424,8 @@ public enum ACEStepRuntimePreparation {
         guard isDirectory(root, fileManager: fm) else {
             return false
         }
-        let turboCandidates = turboSubdirectory == "acestep-v15-turbo"
-            ? [
-                "acestep-v15-turbo",
-                "music-acestep-v15-turbo",
-                "acestep-v15-xl-turbo",
-                "acestep-v15-xl-sft",
-                "acestep-v15-xl-base",
-                "acestep-v15-sft",
-                "acestep-v15-base",
-            ]
+        let turboCandidates = turboSubdirectory == defaultDecoderSubdirectory
+            ? defaultDecoderSubdirectories
             : [turboSubdirectory]
         guard turboCandidates.contains(where: {
             isUsableDecoderDirectory(root.appendingPathComponent($0, isDirectory: true), fileManager: fm)
