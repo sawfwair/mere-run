@@ -345,3 +345,26 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Image validation
+
+extension CommandCatalog {
+    /// The reason an image template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func imageValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .imageTrainLoRA:
+            if draft.inputPath.isBlank && draft.syntheticSamples <= 0 {
+                return "A dataset directory is required unless synthetic samples are enabled."
+            }
+        case .imageReconstruct3DMultiview:
+            let views = CommandArguments.pathList(draft.referenceImagePaths)
+            if views.count != 4 && views.count != 6 {
+                return StudioCommandChecks.instantMeshViewCountMessage
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

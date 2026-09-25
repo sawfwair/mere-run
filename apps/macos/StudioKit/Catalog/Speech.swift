@@ -206,3 +206,57 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Speech validation
+
+extension CommandCatalog {
+    /// The reason a speech template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func speechValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .speechSynthesize:
+            if draft.stream && draft.speechStreamChunkTokens < 1 {
+                return "Streaming chunk tokens must be greater than zero."
+            }
+        case .speechTranscribe:
+            if draft.stream && (draft.speechStreamChunkMS < 1 || draft.speechStreamDecodeMS < 1) {
+                return "Streaming feed and decode intervals must be greater than zero."
+            }
+        case .speechDiarize:
+            let format = draft.speechDiarizationFormat ?? "json"
+            if !["json", "rttm"].contains(format) {
+                return "Diarization format must be JSON or RTTM."
+            }
+            let latency = draft.speechDiarizationLatency ?? "offline"
+            if !["offline", "1.04", "0.64", "0.32"].contains(latency) {
+                return "Nemotron 3 latency must be offline, 1.04, 0.64, or 0.32 seconds."
+            }
+            if latency != "offline" && draft.model == "speech-diarization-sortformer" {
+                return "Custom diarization latency requires Nemotron 3."
+            }
+            if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
+                return "Diarization threshold must be between zero and one."
+            }
+            if (draft.speechDiarizationMinDuration ?? 0.25) < 0 {
+                return "Minimum speaker duration must be zero or greater."
+            }
+            if (draft.speechDiarizationMergeGap ?? 0.25) < 0 {
+                return "Speaker merge gap must be zero or greater."
+            }
+        case .speechDiarizeLive:
+            let latency = draft.speechDiarizationLatency ?? "1.04"
+            if !["1.04", "0.64", "0.32"].contains(latency) {
+                return "Live diarization latency must be 1.04, 0.64, or 0.32 seconds."
+            }
+            if !draft.model.isBlank && draft.model != "speech-diarization-nemotron3" {
+                return "Live diarization requires speech-diarization-nemotron3."
+            }
+            if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
+                return "Diarization threshold must be between zero and one."
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

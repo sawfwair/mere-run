@@ -459,33 +459,6 @@ package enum StudioCodeDefaults {
     }
 }
 
-package enum StudioVideoModelFamily: Equatable {
-    case ltx
-    case wan
-    case miniMaxH3FL2VA
-    case miniMaxH3Ref2VA
-
-    package init(model: String) {
-        let normalized = model.lowercased()
-        if normalized.contains("minimax-h3") || normalized.contains("minimax_h3") {
-            self = normalized.contains("ref2va") ? .miniMaxH3Ref2VA : .miniMaxH3FL2VA
-        } else if normalized.contains("wan") {
-            self = .wan
-        } else {
-            self = .ltx
-        }
-    }
-
-    package var isMiniMaxH3: Bool {
-        self == .miniMaxH3FL2VA || self == .miniMaxH3Ref2VA
-    }
-
-    package static func alignedMiniMaxH3FrameCount(_ requested: Int) -> Int {
-        let clamped = max(22, requested)
-        return ((clamped - 5 + 16) / 17) * 17 + 5
-    }
-}
-
 package struct CommandDraft: Equatable, Codable {
     /// Every stored property carries a default, so this is the synthesized memberwise
     /// initializer's package-visible stand-in: the app builds drafts with `CommandDraft()`
@@ -1116,344 +1089,8 @@ package struct CommandTemplate: Identifiable, Equatable {
             return "\(inputKind.title) path is required."
         }
 
-        switch id {
-        case .visionEmbed:
-            if draft.prompt.isBlank && draft.inputPath.isBlank {
-                return "Text or image input is required."
-            }
-        case .visionSegment, .visionTrack:
-            if draft.prompt.isBlank && draft.visionBoxPrompts.isBlank
-                && draft.visionPointPrompts.isBlank {
-                return "Add a text, box, or point prompt."
-            }
-        case .visionFaceCompare, .visionFlow:
-            if draft.visionSecondInputPath.isBlank {
-                return "A second image is required."
-            }
-        case .visionFaceBatch:
-            if draft.inputPath.isBlank && draft.visionAdditionalInputs.isBlank
-                && draft.visionInputList.isBlank {
-                return "Choose images or an input-list file."
-            }
-        case .visionGeometryMultiview:
-            let images = ([draft.inputPath] + CommandArguments.pathList(draft.visionAdditionalInputs))
-                .filter { !$0.isBlank }
-            if images.count < 2 {
-                return "Add at least two ordered views."
-            }
-        case .musicGenerate:
-            if draft.musicInstrumental,
-               !draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank
-                    || !draft.musicLRCFile.isBlank
-            {
-                return "Instrumental cannot be combined with lyrics."
-            }
-            if !draft.musicLRCFile.isBlank
-                && (!draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank) {
-                return "Use synchronized LRC or plain lyrics, not both."
-            }
-            let sourceTasks = ["repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]
-            if (sourceTasks.contains(draft.musicTask) || draft.musicFlowEdit)
-                && draft.musicSourceAudio.isBlank {
-                return "Source audio is required for \(draft.musicTask) and flow-edit workflows."
-            }
-        case .musicTranscribe:
-            if draft.inputPath.isBlank && !draft.musicListInstruments {
-                return "Audio path is required unless listing instruments."
-            }
-        case .musicRealtime:
-            if draft.prompt.isBlank && !draft.musicListMIDIInputs && !draft.musicMIDIMonitor {
-                return "A prompt is required unless listing or monitoring MIDI inputs."
-            }
-            if !draft.musicPlay && draft.outputPath.isBlank && !draft.musicListMIDIInputs
-                && !draft.musicMIDIMonitor {
-                return "Enable playback or choose an output file."
-            }
-        case .musicTrainAdapter:
-            if draft.inputPath.isBlank {
-                return "Dataset manifest is required."
-            }
-            if draft.outputPath.isBlank {
-                return "Adapter output is required."
-            }
-        case .musicServe:
-            if draft.host != "127.0.0.1" && draft.host != "localhost"
-                && draft.host != "::1" && draft.apiKey.isBlank {
-                return "An API key is required for non-loopback music servers."
-            }
-        case .adapterPull:
-            if draft.prompt.isBlank {
-                return "Adapter id is required."
-            }
-        case .runList:
-            if draft.operationsRoot.isBlank == draft.operationsExecutor.isBlank {
-                return "Choose exactly one local root or remote executor."
-            }
-            if !draft.operationsExecutor.isBlank && !(1...500).contains(draft.operationsLimit) {
-                return "Remote result limit must be between 1 and 500."
-            }
-            if draft.operationsExecutor.isBlank && draft.maxDepth < 0 {
-                return "Scan depth must be zero or greater."
-            }
-        case .runInspect, .runWatch, .runCancel, .runRetry:
-            if draft.operationsReference.isBlank {
-                return "Run path or remote reference is required."
-            }
-            if id == .runWatch && draft.operationsPollInterval < 0.25 {
-                return "Polling interval must be at least 0.25 seconds."
-            }
-            if id == .runWatch && draft.operationsJSONStream && draft.json {
-                return "Choose streaming events or one final JSON object, not both."
-            }
-        case .runFetch:
-            if draft.operationsReference.isBlank {
-                return "Remote run reference is required."
-            }
-            if draft.outputPath.isBlank {
-                return "Destination run directory is required."
-            }
-            if draft.operationsAllArtifacts && !CommandArguments.lineList(draft.operationsArtifacts).isEmpty {
-                return "Choose all artifacts or named artifacts, not both."
-            }
-        case .evaluationPackValidate:
-            if draft.inputPath.isBlank {
-                return "Evaluation pack directory is required."
-            }
-        case .evaluationRun:
-            if draft.inputPath.isBlank {
-                return "Evaluation pack directory is required."
-            }
-            if CommandArguments.lineList(draft.prompt).isEmpty {
-                return "At least one model binding is required."
-            }
-        case .evaluationPromote:
-            if draft.inputPath.isBlank {
-                return "Evaluation report is required."
-            }
-        case .worldServe:
-            if draft.model.isBlank || draft.operationsBaseModel.isBlank {
-                return "Base and world model ids are required."
-            }
-            if !(1...65_535).contains(draft.port) {
-                return "Port must be between 1 and 65535."
-            }
-            if draft.host != "127.0.0.1" && draft.host != "localhost"
-                && draft.host != "::1" && draft.apiKey.isBlank {
-                return "An API key is required for non-loopback world servers."
-            }
-        case .statusSnapshot:
-            if !(1...65_535).contains(draft.port) {
-                return "Port must be between 1 and 65535."
-            }
-            if draft.operationsTimeoutSeconds <= 0 {
-                return "Probe timeout must be greater than zero."
-            }
-        case .qualityGate:
-            let validSuites = Set(["text", "speech", "vision", "image", "embed"])
-            let selectedSuites = Set(
-                draft.operationsGateSuite
-                    .split(separator: ",")
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            )
-            if draft.operationsGateSuite.lowercased() != "all"
-                && (selectedSuites.isEmpty || !selectedSuites.isSubset(of: validSuites)) {
-                return "Suites must be all or a comma-separated set of text, speech, vision, image, and embed."
-            }
-        case .modelRuntimeGet, .modelRuntimeSet:
-            if draft.model.isBlank {
-                return "Managed model id or alias is required."
-            }
-            if draft.operationsPinned && draft.operationsUnpinned {
-                return "Choose pinned or unpinned, not both."
-            }
-            let conflictingRuntimeValues = [
-                (!draft.operationsRuntimeAlias.isBlank, draft.operationsClearAlias, "alias"),
-                (!draft.operationsRuntimeTTL.isBlank, draft.operationsClearTTL, "TTL"),
-                (!draft.operationsRuntimeContext.isBlank, draft.operationsClearContext, "context"),
-                (!draft.operationsRuntimeMaxTokens.isBlank, draft.operationsClearMaxTokens, "max tokens"),
-                (!draft.operationsRuntimeTemperature.isBlank, draft.operationsClearTemperature, "temperature"),
-                (!draft.operationsRuntimeTopP.isBlank, draft.operationsClearTopP, "top-p"),
-                (!draft.operationsRuntimeMinP.isBlank, draft.operationsClearMinP, "min-p"),
-                (!draft.operationsRuntimeEngine.isBlank, draft.operationsClearEngine, "engine"),
-                (!draft.operationsRuntimeKVCacheMode.isBlank, draft.operationsClearKVCacheMode, "KV cache")
-            ]
-            if let conflict = conflictingRuntimeValues.first(where: { $0.0 && $0.1 }) {
-                return "Set or clear \(conflict.2), not both."
-            }
-        case .modelBenchmarkLagunaDFlash:
-            if draft.modelRoot.isBlank {
-                return "Laguna model path is required."
-            }
-            if draft.secondaryText.isBlank {
-                return "Laguna DFlash model path is required."
-            }
-        case .modelBenchmarkParakeetCoreML:
-            if draft.inputPath.isBlank {
-                return "An audio file is required."
-            }
-            if draft.modelRoot.isBlank {
-                return "A Parakeet Core ML artifact directory is required."
-            }
-        case .imageTrainLoRA:
-            if draft.inputPath.isBlank && draft.syntheticSamples <= 0 {
-                return "A dataset directory is required unless synthetic samples are enabled."
-            }
-        case .modelPull:
-            if !draft.all && draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Choose a model id, or enable All."
-            }
-        case .setup, .agentOnboard, .agentStart, .apiServe, .openWebui:
-            if !(1...65_535).contains(draft.port) {
-                return "Port must be between 1 and 65535."
-            }
-            if id == .openWebui && !(1...65_535).contains(draft.openWebUIPort) {
-                return "Open WebUI port must be between 1 and 65535."
-            }
-            if id == .apiServe && draft.apiMemoryGuard == "custom"
-                && draft.apiMemoryGuardCustomCeilingGB.isBlank {
-                return "A custom memory ceiling is required for the custom guard."
-            }
-        case .speechSynthesize:
-            if draft.stream && draft.speechStreamChunkTokens < 1 {
-                return "Streaming chunk tokens must be greater than zero."
-            }
-        case .speechTranscribe:
-            if draft.stream && (draft.speechStreamChunkMS < 1 || draft.speechStreamDecodeMS < 1) {
-                return "Streaming feed and decode intervals must be greater than zero."
-            }
-        case .speechDiarize:
-            let format = draft.speechDiarizationFormat ?? "json"
-            if !["json", "rttm"].contains(format) {
-                return "Diarization format must be JSON or RTTM."
-            }
-            let latency = draft.speechDiarizationLatency ?? "offline"
-            if !["offline", "1.04", "0.64", "0.32"].contains(latency) {
-                return "Nemotron 3 latency must be offline, 1.04, 0.64, or 0.32 seconds."
-            }
-            if latency != "offline" && draft.model == "speech-diarization-sortformer" {
-                return "Custom diarization latency requires Nemotron 3."
-            }
-            if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
-                return "Diarization threshold must be between zero and one."
-            }
-            if (draft.speechDiarizationMinDuration ?? 0.25) < 0 {
-                return "Minimum speaker duration must be zero or greater."
-            }
-            if (draft.speechDiarizationMergeGap ?? 0.25) < 0 {
-                return "Speaker merge gap must be zero or greater."
-            }
-        case .speechDiarizeLive:
-            let latency = draft.speechDiarizationLatency ?? "1.04"
-            if !["1.04", "0.64", "0.32"].contains(latency) {
-                return "Live diarization latency must be 1.04, 0.64, or 0.32 seconds."
-            }
-            if !draft.model.isBlank && draft.model != "speech-diarization-nemotron3" {
-                return "Live diarization requires speech-diarization-nemotron3."
-            }
-            if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
-                return "Diarization threshold must be between zero and one."
-            }
-        case .modelRemove:
-            if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Model id is required."
-            }
-        case .modelInfo:
-            if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Model id or local model path is required."
-            }
-        case .modelOptimize:
-            if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "MiniMax-H3 model id or local model path is required."
-            }
-        case .audioEdit:
-            if draft.inputPath.isBlank && !draft.useDuration { return "Choose a duration or reference audio." }
-            if draft.useDuration && (!draft.durationSeconds.isFinite || draft.durationSeconds <= 0 || draft.durationSeconds > 300) {
-                return "Duration must be in (0, 300] seconds."
-            }
-            if !["audio-auk-base", "audio-auk-flash"].contains(draft.model) { return "Choose an AuK base or Flash model." }
-            if !(1...1000).contains(draft.steps) { return "Steps must be in 1...1000." }
-            if let guidance = draft.audioGuidanceScale, !guidance.isFinite || guidance < 0 {
-                return "Guidance must be finite and non-negative."
-            }
-        case .audioEnhance:
-            if let overlap = draft.audioOverlap, overlap <= 0 {
-                return "Overlap must be positive."
-            }
-            if draft.model.localizedCaseInsensitiveContains("universr") {
-                if let inputRate = draft.audioInputRate,
-                   ![8_000, 12_000, 16_000, 24_000].contains(inputRate) {
-                    return "UniverSR input bandwidth must be 8000, 12000, 16000, or 24000 Hz."
-                }
-                if (draft.audioODESteps ?? 4) <= 0 {
-                    return "UniverSR ODE steps must be positive."
-                }
-                if (draft.audioChunkSeconds ?? 10) < 3 {
-                    return "UniverSR chunks must be at least 3 seconds."
-                }
-            }
-        case .musicSeparate:
-            if let overlap = draft.audioOverlap, overlap <= 0 {
-                return "Overlap must be positive."
-            }
-        case .videoGenerate:
-            let family = StudioVideoModelFamily(model: draft.modelRoot.isBlank ? draft.model : draft.modelRoot)
-            if family == .miniMaxH3Ref2VA {
-                if !(draft.inputPath.isBlank && draft.endImagePath.isBlank) {
-                    return "MiniMax-H3 Ref2VA uses ordered image, video, or audio references instead of keyframes."
-                }
-                if (draft.h3ReferenceInputs ?? []).isEmpty {
-                    return "MiniMax-H3 Ref2VA requires at least one ordered reference."
-                }
-            } else if !draft.endImagePath.isBlank && draft.inputPath.isBlank {
-                return "A start image is required when an end keyframe is selected."
-            }
-            if family == .miniMaxH3FL2VA && !(draft.h3ReferenceInputs ?? []).isEmpty {
-                return "MiniMax-H3 FL2VA does not accept ordered references."
-            }
-        case .videoRetake:
-            if draft.retakeStartTime < 0 || draft.retakeStartTime >= draft.retakeEndTime {
-                return "Retake requires a nonnegative start before the end time."
-            }
-            if draft.retakePreserveVideo && draft.retakePreserveAudio {
-                return "Retake must regenerate video, audio, or both."
-            }
-        case .videoDubIt:
-            if draft.loraPath.isBlank {
-                return "Dub-It requires an IC-LoRA file."
-            }
-        case .imageReconstruct3DMultiview:
-            let views = CommandArguments.pathList(draft.referenceImagePaths)
-            if views.count != 4 && views.count != 6 {
-                return StudioCommandChecks.instantMeshViewCountMessage
-            }
-        case .videoAnimate:
-            if draft.referenceMaskPath.isBlank {
-                return "Reference mask path is required."
-            }
-            if draft.drivingVideoPath.isBlank {
-                return "Driving video path is required."
-            }
-            if draft.drivingMaskPath.isBlank {
-                return "Driving mask path is required."
-            }
-            let additionalReferences = CommandArguments.pathList(draft.referenceImagePaths)
-            let additionalMasks = CommandArguments.pathList(draft.scailAdditionalReferenceMaskPaths ?? "")
-            if additionalReferences.count != additionalMasks.count {
-                return "Each additional SCAIL reference needs one matching reference mask."
-            }
-            if additionalReferences.count > 5 {
-                return "SCAIL supports at most six subjects total."
-            }
-        case .videoPrepareMasks:
-            if draft.outputPath.isBlank {
-                return "Output directory is required."
-            }
-        case .custom:
-            if ShellWords.split(draft.extraArguments).isEmpty {
-                return "Enter mere.run arguments."
-            }
-        default:
-            break
+        if let message = categoryValidationMessage(for: draft) {
+            return message
         }
 
         // Commands with a reply budget (Chat, Code, the vision prompts) validate the form's argv
@@ -1464,6 +1101,27 @@ package struct CommandTemplate: Identifiable, Equatable {
             )
         }
         return nil
+    }
+
+    /// The template's own checks, which live beside its argv in `Catalog/<Category>.swift`.
+    private func categoryValidationMessage(for draft: CommandDraft) -> String? {
+        switch category {
+        case .setup: return CommandCatalog.setupValidationMessage(for: id, draft: draft)
+        case .models: return CommandCatalog.modelsValidationMessage(for: id, draft: draft)
+        case .image: return CommandCatalog.imageValidationMessage(for: id, draft: draft)
+        case .text: return CommandCatalog.textValidationMessage(for: id, draft: draft)
+        case .speech: return CommandCatalog.speechValidationMessage(for: id, draft: draft)
+        case .vision: return CommandCatalog.visionValidationMessage(for: id, draft: draft)
+        case .geospatial: return CommandCatalog.geospatialValidationMessage(for: id, draft: draft)
+        case .media:
+            return CommandCatalog.audioValidationMessage(for: id, draft: draft)
+                ?? CommandCatalog.videoValidationMessage(for: id, draft: draft)
+                ?? CommandCatalog.musicValidationMessage(for: id, draft: draft)
+        case .sfx: return CommandCatalog.soundFXValidationMessage(for: id, draft: draft)
+        case .operations: return CommandCatalog.operationsValidationMessage(for: id, draft: draft)
+        case .server: return CommandCatalog.serverValidationMessage(for: id, draft: draft)
+        case .custom: return CommandCatalog.customValidationMessage(for: id, draft: draft)
+        }
     }
 
     package func arguments(from draft: CommandDraft) -> [String] {
@@ -1701,7 +1359,9 @@ package enum CommandCatalog {
         + speechTemplates
         + visionTemplates
         + geospatialTemplates
-        + mediaTemplates
+        + audioTemplates
+        + videoTemplates
+        + musicTemplates
         + soundFXTemplates
         + operationsTemplates
         + serverTemplates

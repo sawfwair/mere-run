@@ -22,3 +22,21 @@ extension CommandArguments {
         ShellWords.split(draft.extraArguments)
     }
 }
+
+// MARK: - Custom validation
+
+extension CommandCatalog {
+    /// The reason the custom template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func customValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .custom:
+            if ShellWords.split(draft.extraArguments).isEmpty {
+                return "Enter mere.run arguments."
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

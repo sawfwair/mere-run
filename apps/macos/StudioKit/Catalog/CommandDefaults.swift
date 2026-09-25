@@ -47,7 +47,7 @@ package enum CommandDefaults {
 
     /// Split by command family so the type checker never sees one enormous literal.
     package static let byTemplate = Dictionary(
-        uniqueKeysWithValues: setup + image + text + speech + vision + media + soundFX + operations
+        uniqueKeysWithValues: setup + image + text + speech + vision + audio + video + music + soundFX + operations
     )
 
     private static let setup: [(CommandTemplateID, [DraftDefault])] = [
@@ -127,7 +127,7 @@ package enum CommandDefaults {
         (.geoOlmoEarth, [.value(\.json, true)])
     ]
 
-    private static let media: [(CommandTemplateID, [DraftDefault])] = [
+    private static let audio: [(CommandTemplateID, [DraftDefault])] = [
         (.audioEdit, [
             .value(\.useDuration, true), .value(\.durationSeconds, 4),
             .value(\.steps, 32), .value(\.audioGuidanceScale, 2), .value(\.seed, "42")
@@ -145,7 +145,10 @@ package enum CommandDefaults {
             .value(\.durationSeconds, 10),
             .value(\.steps, 30),
             .value(\.seed, "42")
-        ]),
+        ])
+    ]
+
+    private static let music: [(CommandTemplateID, [DraftDefault])] = [
         (.musicGenerate, [
             .value(\.steps, 8),
             .value(\.durationSeconds, 10),
@@ -163,7 +166,10 @@ package enum CommandDefaults {
             .value(\.learningRate, 0.0001),
             .value(\.seed, "42")
         ]),
-        (.musicServe, [.value(\.port, 8081)]),
+        (.musicServe, [.value(\.port, 8081)])
+    ]
+
+    private static let video: [(CommandTemplateID, [DraftDefault])] = [
         (.videoGenerate, [
             .value(\.width, 768),
             .value(\.height, 512),
@@ -203,8 +209,7 @@ package enum CommandDefaults {
             .value(\.height, 512),
             .value(\.numFrames, 65),
             .value(\.seed, "42")
-        ]),
-        (.worldServe, [.value(\.port, 8791), .value(\.model, "video-dreamx-world-5b-ar-mlx")])
+        ])
     ]
 
     private static let soundFX: [(CommandTemplateID, [DraftDefault])] = [
@@ -269,6 +274,7 @@ package enum CommandDefaults {
         (.runCancel, [.value(\.json, true)]),
         (.runRetry, [.value(\.json, true)]),
         (.statusSnapshot, [.value(\.json, true)]),
-        (.qualityGate, [.value(\.operationsGateSuite, "all")])
+        (.qualityGate, [.value(\.operationsGateSuite, "all")]),
+        (.worldServe, [.value(\.port, 8791), .value(\.model, "video-dreamx-world-5b-ar-mlx")])
     ]
 }

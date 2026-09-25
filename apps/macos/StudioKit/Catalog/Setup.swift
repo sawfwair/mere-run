@@ -107,3 +107,21 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Setup validation
+
+extension CommandCatalog {
+    /// The reason a setup template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func setupValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .setup, .agentOnboard, .agentStart:
+            if !(1...65_535).contains(draft.port) {
+                return "Port must be between 1 and 65535."
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

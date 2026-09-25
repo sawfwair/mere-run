@@ -95,8 +95,10 @@ surface for is still reachable the day the contract declares it.
 - `StudioKit/StudioTypes.swift`: user-facing mode, draft, and request types.
 - `StudioKit/CommandCatalog.swift`: `CommandTemplateID`, `CommandDraft`, and the
   `CommandTemplate` record type.
-- `StudioKit/Catalog/`: one file per command category holding that category's
-  `CommandTemplate` records and the function that builds each template's argv.
+- `StudioKit/Catalog/`: one file per command category, with Music & Video split
+  into `Audio.swift`, `Video.swift`, and `Music.swift`, holding that category's
+  `CommandTemplate` records, the function that builds each template's argv, and
+  the checks a template's draft must pass before it runs.
   `CommandFlags.swift` is generated from `MereRunCapabilityCatalog` by
   `./scripts/update-studio-command-flags.sh`, so every flag the app emits is a
   constant the shared contract declares and a renamed flag is a compile error;
@@ -116,7 +118,8 @@ The declarative schemas live in StudioKit beside the model, and the views that
 draw them in StudioUI, one file each side:
 `StudioComposerSchema.swift` and `StudioComposer.swift`,
 `StudioContractSchema.swift` and `StudioContractForm.swift`,
-`StudioInspectorSchema.swift` and `StudioInspector.swift`,
+`StudioInspectorSchema.swift` and `StudioInspector.swift` (its MiniMax-H3
+controls in `StudioInspector+Video.swift`),
 `StudioAnalyzeSchema.swift` / `StudioAnalyzeResults.swift` and
 `StudioAnalyzeCanvas.swift` / `StudioAnalyzeViews.swift`,
 `StudioCommandRows.swift` and `StudioCommandView.swift`,
