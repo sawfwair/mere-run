@@ -18,6 +18,65 @@ final class GateSupportTests: XCTestCase {
         XCTAssertEqual(gate.skipModel, "vision-ocr-lighton")
     }
 
+    func testGateParsesTargetedInstalledModelRerun() throws {
+        let gate = try Gate.parse([
+            "--all-installed", "--require-all", "--only-model", "text-agent-deepseek-v4-flash",
+        ])
+
+        XCTAssertEqual(gate.onlyModel, DeepseekV4FlashResources.defaultModelId)
+    }
+
+    func testInstalledGateOrdersDeepSeekLastAndSelectsExactRerun() throws {
+        let ids = Set(ManagedModelCatalog.allSpecs.map(\.id))
+        let checks = ManagedModelCatalog.allSpecs.compactMap {
+            InstalledModelSmokePlans.plan(for: $0, installedIDs: ids)?.check
+        }
+        let ordered = try Gate.selectInstalledChecks(
+            checks, installedModelIDs: ids, onlyModel: "", suite: "all"
+        )
+        XCTAssertEqual(ordered.last?.id, "installed-\(DeepseekV4FlashResources.defaultModelId)")
+        XCTAssertEqual(ordered.count, checks.count)
+
+        let targeted = try Gate.selectInstalledChecks(
+            checks,
+            installedModelIDs: ids,
+            onlyModel: DeepseekV4FlashResources.defaultModelId,
+            suite: "all"
+        )
+        XCTAssertEqual(targeted.map(\.id), ["installed-\(DeepseekV4FlashResources.defaultModelId)"])
+        XCTAssertThrowsError(try Gate.selectInstalledChecks(
+            checks, installedModelIDs: ids, onlyModel: "missing-model", suite: "all"
+        ))
+        XCTAssertThrowsError(try Gate.selectInstalledChecks(
+            checks, installedModelIDs: ids, onlyModel: ",", suite: "all"
+        ))
+        XCTAssertThrowsError(try Gate.selectInstalledChecks(
+            checks,
+            installedModelIDs: ids,
+            onlyModel: DeepseekV4FlashResources.defaultModelId,
+            suite: "image"
+        ))
+    }
+
+    func testDeepSeekGateRequiresBenchmarkCaseToPass() throws {
+        let model = DeepseekV4FlashResources.defaultModelId
+        let arguments = GateRunner.deepseekBenchmarkArguments(model: model)
+        let tokenLimitIndex = try XCTUnwrap(arguments.firstIndex(of: "--max-tokens"))
+        XCTAssertEqual(arguments[tokenLimitIndex + 1], "128")
+        func report(passed: Bool, response: String) throws -> InstalledDeepSeekBenchmarkReport {
+            let json = """
+            {"models":[{"model":"\(model)","engine":"deepseek-v4-flash-gguf",
+            "status":"completed","cases":[{"passed":\(passed),"tokensGenerated":55,
+            "response":"\(response)"}]}]}
+            """
+            return try JSONDecoder().decode(InstalledDeepSeekBenchmarkReport.self, from: Data(json.utf8))
+        }
+
+        XCTAssertTrue(try report(passed: true, response: "NOT_IN_EVIDENCE").hasPassingResponse(for: model))
+        XCTAssertFalse(try report(passed: false, response: "wrong answer").hasPassingResponse(for: model))
+        XCTAssertFalse(try report(passed: true, response: " ").hasPassingResponse(for: model))
+    }
+
     func testGateRunnerDrainsChattyChildPipesWithoutDeadlocking() async throws {
         let runner = GateRunner(
             executableURL: URL(fileURLWithPath: "/bin/sh"),

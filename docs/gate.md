@@ -91,6 +91,11 @@ mere.run gate --all-installed --list
 # Complete packaged release matrix: every installed model must run
 mere.run gate --all-installed --require-all \
   --json-output /tmp/release-gate.json
+
+# Retry only an installed model that failed the full release matrix
+mere.run gate --all-installed --require-all \
+  --only-model text-agent-deepseek-v4-flash \
+  --json-output /tmp/deepseek-rerun.json
 ```
 
 For release acceptance, run the strict video command from the exact extracted
@@ -105,6 +110,12 @@ extracted CLI. The JSON report has one result per installed model ID. Compare
 `gate --all-installed --list` with `model list` before starting a long run if
 you need an inventory audit. The gate performs that mapping itself and
 fails closed if it cannot account for an installed entry.
+The exhaustive gate runs DeepSeek V4 Flash last so its high-memory sidecar
+cannot leave less memory for later checks. For a failed model, rerun the
+exact packaged CLI with `--only-model <id>[,<id>...]` and retain both reports.
+The option accepts only installed IDs, cannot be combined with `--skip-model`,
+and rejects selections excluded by `--suite`. A targeted pass supplements the
+original full-matrix report; it does not replace release-wide coverage.
 
 A documented exceptional release quarantine can add
 `--skip-model <id>[,<id>...]`. The model remains in the JSON report as an

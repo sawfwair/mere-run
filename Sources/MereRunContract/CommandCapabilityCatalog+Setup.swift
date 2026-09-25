@@ -32,6 +32,9 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--skip-model", label: "Quarantined models", kind: .string, group: Group.run, tier: .expert
             ),
+            .init(
+                flag: "--only-model", label: "Models to rerun", kind: .string, group: Group.run, tier: .expert
+            ),
             .init(flag: "--suite", label: "Suites", kind: .string),
             .init(flag: "--update-baselines", label: "Update baselines", kind: .boolean),
             .init(flag: "--strict-perf", label: "Strict performance", kind: .boolean),
