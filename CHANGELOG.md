@@ -6,6 +6,9 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Parse LFM2.5 tool calls in the checkpoint's native format and preserve that
+  format in API conversation history. This fixes tool-call continuation for
+  LFM2.5 text and vision models.
 - Accept base64 image data URLs in Qwen-family vision chat requests, including
   Ornith screenshots sent through the local OpenAI-compatible API.
 

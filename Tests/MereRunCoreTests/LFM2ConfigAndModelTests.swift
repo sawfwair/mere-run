@@ -512,6 +512,23 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertTrue(nextPrompt.hasPrefix(historyPrompt))
     }
 
+    func testRendersLFMToolContinuationInNativeFormat() throws {
+        let prompt = try LFM2TokenizerAndTemplate.renderPrompt(
+            messages: [
+                ChatMessage(role: .user, content: "Observe the window"),
+                ChatMessage(role: .assistant, content: "", toolCalls: [
+                    ChatMessageToolCall(name: "desktop_observe", arguments: [:]),
+                ]),
+                ChatMessage(role: .tool, content: "Window snapshot", toolCallID: "call_0"),
+            ],
+            addGenerationPrompt: true,
+            includeThinking: false
+        )
+        XCTAssertTrue(prompt.contains("<|im_start|>assistant\n<|tool_call_start|>[desktop_observe()]<|tool_call_end|><|im_end|>"))
+        XCTAssertTrue(prompt.contains("<|im_start|>tool\nWindow snapshot<|im_end|>"))
+        XCTAssertFalse(prompt.contains("<|tool_call>call:"))
+    }
+
     func testTinyLFM2ForwardProducesLogits() throws {
         MLXRandom.seed(42)
         let config = try makeTinyConfig()

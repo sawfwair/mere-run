@@ -721,7 +721,7 @@ public actor LFM2Generator: ChatGenerator {
         let decoded = tokenizerAndTemplate.decode(tokens: decodeResult.generatedTokens)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let toolCalls: [ToolCall]? = request.tools?.isEmpty == false ? {
-            let parsed = Gemma4ToolParser.parseToolCalls(decoded)
+            let parsed = LFM2ToolParser.parseToolCalls(decoded)
             return parsed.isEmpty ? nil : parsed
         }() : nil
 

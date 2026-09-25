@@ -27,7 +27,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
         APIEngineCapabilities(
             supportsRawProxy: profile.supportsRawProxy,
             supportsTools: profile.toolCall,
-            usesNativeToolHistory: [.textChatQ36, .textChatLaguna, .textChatGemma4, .textChatMuseGlimmer]
+            usesNativeToolHistory: [.textChatQ36, .textChatLaguna, .textChatGemma4,
+                                    .textChatLFM2, .textChatMuseGlimmer]
                 .contains(profile.servingEngine),
             supportsToolChoice: profile.supportsToolChoice,
             supportsDeveloperRole: profile.compatibility.supportsDeveloperRole,

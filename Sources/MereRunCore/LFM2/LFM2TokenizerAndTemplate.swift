@@ -150,6 +150,9 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
                     content = String(content[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
                 }
                 prompt += content
+                if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
+                    prompt += try LFM2ToolParser.renderToolCalls(toolCalls)
+                }
             } else {
                 prompt += renderContent(for: message)
             }
