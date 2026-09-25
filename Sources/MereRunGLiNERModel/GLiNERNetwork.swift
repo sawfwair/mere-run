@@ -1,4 +1,8 @@
+#if canImport(Darwin)
 import Darwin
+#else
+import Glibc
+#endif
 import MLX
 import MLXFast
 import MLXNN
@@ -258,7 +262,7 @@ public final class GLiNERNetwork {
 
     private static func relativePositions(length: Int) -> MLXArray {
         let middle = 128.0
-        let denominator = Darwin.log(511.0 / middle)
+        let denominator = log(511.0 / middle)
         let values = (0..<length).flatMap { query in
             (0..<length).map { key -> Int in
                 let distance = query - key
@@ -267,7 +271,7 @@ public final class GLiNERNetwork {
                 if magnitude <= 128 {
                     bucket = distance
                 } else {
-                    let logarithmic = Darwin.ceil(Darwin.log(Double(magnitude) / middle) / denominator * 127.0) + middle
+                    let logarithmic = ceil(log(Double(magnitude) / middle) / denominator * 127.0) + middle
                     bucket = Int(logarithmic) * (distance < 0 ? -1 : 1)
                 }
                 return min(511, max(0, bucket + 256))
