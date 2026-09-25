@@ -247,7 +247,16 @@ import Testing
         #expect(throws: CLICapabilityGate.Rejection.self) {
             try CLICapabilityGate.check(arguments: ["mere.run"] + generate + ["--output-mode", "audio-video"] + reference)
         }
-        for videoOnly in [[], ["--output-mode", "video-only"]] {
+        // The compatibility `--variant unified-av` spelling loads the same generator.
+        let legacy = try report(generate + ["--variant", "unified-av", "--skip-stage-2"] + reference)
+        #expect(legacy.family == "ltx-merged", "\(legacy)")
+        #expect(legacy.violations == [conditioning, preview].map {
+            $0.replacingOccurrences(of: "--output-mode audio-video", with: "--variant unified-av")
+        }, "\(legacy)")
+        #expect(throws: CLICapabilityGate.Rejection.self) {
+            try CLICapabilityGate.check(arguments: ["mere.run"] + generate + ["--variant", "unified-av"] + reference)
+        }
+        for videoOnly in [[], ["--output-mode", "video-only"], ["--variant", "distilled"]] {
             let dropped = try report(generate + videoOnly + ["--skip-stage-2"] + reference)
             #expect(dropped.family == "ltx-merged" && dropped.violations.isEmpty, "\(videoOnly): \(dropped)")
             let ignored = ["--video-conditioning", "--skip-stage-2"].map { "\($0) has no effect with LTX (merged)." }

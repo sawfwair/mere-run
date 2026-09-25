@@ -11,6 +11,9 @@ private let withoutSourceAudio: [MereRunFlagCondition] = [.absent("--audio")]
 /// A merged LTX run that loads the unified audio-video generator rather than the distilled
 /// video-only one (`VideoGenerationModelProfile.ltxRoute`).
 private let audioVideoOutput: [MereRunFlagCondition] = [.init(flag: "--output-mode", values: ["audio-video"])]
+/// The compatibility spelling of the same output (`--variant unified-av`); the CLI refuses it
+/// together with `--output-mode`, so the two conditions never hold at once.
+private let legacyAudioVideoVariant: [MereRunFlagCondition] = [.init(flag: "--variant", values: ["unified-av"])]
 
 private extension MereRunCapabilityCatalog.VideoGenerateFamily {
     /// `families` use the option, `ignoredBy` accept it without effect, and the rest reject it.
@@ -321,6 +324,7 @@ extension MereRunCapabilityCatalog {
             ).scoped(
                 V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA]),
                 .rule(.ltxMerged, values: [""], when: audioVideoOutput),
+                .rule(.ltxMerged, values: [""], when: legacyAudioVideoVariant),
                 .rule(.ltx23Full, values: [""], when: withoutSourceAudio), .rule(.ltx23A2Vid, values: [""], when: withoutSourceAudio)
             ),
             .init(
@@ -338,6 +342,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert).scoped(
                 V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .ltx25Full, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA]),
                 .rule(.ltxMerged, values: ["false"], when: audioVideoOutput),
+                .rule(.ltxMerged, values: ["false"], when: legacyAudioVideoVariant),
                 .rule(.ltx23Full, values: ["false"], when: withoutSourceAudio), .rule(.ltx23A2Vid, values: ["false"], when: withoutSourceAudio),
                 .rule(.ltx25Full, values: ["false"], when: withoutSourceAudio)
             ),

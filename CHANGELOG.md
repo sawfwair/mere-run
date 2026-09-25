@@ -43,8 +43,8 @@ The format is based on Keep a Changelog.
     checkpoint without source `--audio` (with it, the audio-to-video run
     drops the flag, which only warns), or `--skip-stage-2` and
     `--video-conditioning` on the merged `video-ltx-av` checkpoint with
-    `--output-mode audio-video` (its video-only run drops them, which only
-    warns).
+    `--output-mode audio-video` or its compatibility spelling `--variant
+    unified-av` (its video-only run drops them, which only warns).
   - An option a model accepts but never reads now prints a warning that it
     has no effect, and the run continues: `--cfg` on Krea 2, `--top-k` on
     Gemma 4, `--voice` in clone mode, `--max-tokens` on Parakeet, or

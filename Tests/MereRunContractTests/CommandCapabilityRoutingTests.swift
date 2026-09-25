@@ -136,7 +136,14 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
             #expect(used.isSubset(of: familyIDs), "\(context): families \(used.subtracting(familyIDs))")
             #expect(Set(option.ignoredBy).isSubset(of: familyIDs), "\(context): ignored_by names an unknown family")
             #expect(used.isDisjoint(with: option.ignoredBy), "\(context): a family both uses and ignores it")
-            #expect(Set(option.familyRules.map(\.family)).count == option.familyRules.count, "\(context): one rule per family")
+            // One unconditional rule per family; a family may carry several conditional rules, each
+            // for a different way the command reaches the same behaviour.
+            let unconditional = option.familyRules.filter(\.when.isEmpty).map(\.family)
+            #expect(Set(unconditional).count == unconditional.count, "\(context): one unconditional rule per family")
+            for family in Set(option.familyRules.map(\.family)) {
+                let rules = option.familyRules.filter { $0.family == family }
+                #expect(rules.count == 1 || rules.allSatisfy { !$0.when.isEmpty }, "\(context): \(family) mixes a plain rule with conditional ones")
+            }
             for rule in option.familyRules {
                 let ruleContext = "\(context) rule \(rule.family)"
                 if option.ignoredBy.contains(rule.family) {
