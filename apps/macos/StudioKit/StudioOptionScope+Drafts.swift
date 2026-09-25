@@ -15,7 +15,7 @@ extension StudioScopeSource {
             return nil
         }
         let command = StudioCommandAdapter.commandDraft(mode: mode, draft: draft, template: template)
-        return scope(capability: capability, commandLine: template.unscopedArguments(from: command))
+        return scope(capability: capability, commandLine: template.unscopedArguments(from: command, source: self))
     }
 
     /// A contract form's scope (a task draft, the console, the Command view), read from the argv

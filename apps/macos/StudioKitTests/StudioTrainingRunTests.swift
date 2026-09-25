@@ -43,15 +43,15 @@ final class StudioTrainingRunTests: XCTestCase {
         image[0].attach([photos], to: &draft)
         image[1].attach([checkpoint], to: &draft)
         XCTAssertEqual(draft.primaryInputPath, photos.path)
-        XCTAssertEqual(draft.arguments.firstIndex(of: "--data").map { draft.arguments[$0 + 1] }, photos.path)
-        XCTAssertEqual(draft.arguments.firstIndex(of: "--resume-from").map { draft.arguments[$0 + 1] }, checkpoint.path)
-        XCTAssertEqual(draft.run?.commandDraft.inputPath, photos.path, "the Library row's input")
+        XCTAssertEqual(draft.arguments(source: .contract).firstIndex(of: "--data").map { draft.arguments(source: .contract)[$0 + 1] }, photos.path)
+        XCTAssertEqual(draft.arguments(source: .contract).firstIndex(of: "--resume-from").map { draft.arguments(source: .contract)[$0 + 1] }, checkpoint.path)
+        XCTAssertEqual(draft.run(source: .contract)?.commandDraft.inputPath, photos.path, "the Library row's input")
     }
 
     func testThePagesEditorsAreTheContractsOverrides() throws {
         var klein = StudioTaskDraft(templateID: .imageTrainLoRA)
         klein.model = "image-klein-base-9b"
-        let image = StudioTaskSchema.fields(for: .imageTrain, draft: klein)
+        let image = StudioTaskSchema.fields(for: .imageTrain, draft: klein, source: .contract)
         let ranks = try XCTUnwrap(image.first { $0.flag == "--lora-target-ranks" })
         XCTAssertEqual(ranks.overrideID, .targetRanks)
         XCTAssertEqual(image.first { $0.flag == "--model" }?.overrideID, .model)
@@ -60,7 +60,7 @@ final class StudioTrainingRunTests: XCTestCase {
         XCTAssertNil(image.first { $0.flag == "--json" }, "the launcher owns the report switch")
         XCTAssertNotNil(image.first { $0.flag == "--preflight" }, "preflight stays reachable")
 
-        let music = StudioTaskSchema.fields(for: .musicTrain, draft: StudioTaskDraft(templateID: .musicTrainAdapter))
+        let music = StudioTaskSchema.fields(for: .musicTrain, draft: StudioTaskDraft(templateID: .musicTrainAdapter), source: .contract)
         XCTAssertEqual(music.first { $0.flag == "--dataset" }?.overrideID, .musicManifest)
         let checkpoints = try XCTUnwrap(music.first { $0.flag == "--checkpoints-root" })
         XCTAssertEqual(checkpoints.group, .model, "ACE-Step's checkpoint layout sits with the model")
@@ -70,7 +70,7 @@ final class StudioTrainingRunTests: XCTestCase {
             XCTAssertNotNil(music.first { $0.flag == flag }, "\(flag) stays reachable")
         }
 
-        let text = StudioTaskSchema.fields(for: .chatTrain, draft: StudioTaskDraft(templateID: .textTrainLoRA))
+        let text = StudioTaskSchema.fields(for: .chatTrain, draft: StudioTaskDraft(templateID: .textTrainLoRA), source: .contract)
         XCTAssertEqual(text.first { $0.flag == "--model-path" }?.group, .model)
         XCTAssertNil(text.first { $0.flag == "--eval" }, "the well owns the evaluation prompts")
     }
@@ -152,16 +152,16 @@ final class StudioTrainingRunTests: XCTestCase {
         page.loraTargetMode = "suffix"
         page.preflight = true
         page.json = true
-        let expected = template.arguments(from: page)
+        let expected = template.arguments(from: page, source: .contract)
 
-        let draft = StudioTaskDraft(templateID: .imageTrainLoRA, form: StudioConsoleCommand.seed(template: template, draft: page))
+        let draft = StudioTaskDraft(templateID: .imageTrainLoRA, form: StudioConsoleCommand.seed(template: template, draft: page, source: .contract))
         // Compared as sets: the page's builder and the contract emit options in different
         // orders, and the CLI reads them in any order; the count check keeps a pair from
         // appearing twice.
-        XCTAssertEqual(Set(draft.arguments), Set(expected), "the same option/value pairs")
-        XCTAssertEqual(draft.arguments.count, expected.count)
-        let run = try XCTUnwrap(draft.run)
-        XCTAssertEqual(run.arguments, draft.arguments, "what the Command view shows is what runs")
+        XCTAssertEqual(Set(draft.arguments(source: .contract)), Set(expected), "the same option/value pairs")
+        XCTAssertEqual(draft.arguments(source: .contract).count, expected.count)
+        let run = try XCTUnwrap(draft.run(source: .contract))
+        XCTAssertEqual(run.arguments, draft.arguments(source: .contract), "what the Command view shows is what runs")
         XCTAssertEqual(run.commandDraft.outputPath, "/tmp/out/style.safetensors", "the job lifecycle reads the adapter path")
         XCTAssertEqual(run.commandDraft.inputPath, "/tmp/my-style-photos", "and the Library row's input")
     }
@@ -177,17 +177,17 @@ final class StudioTrainingRunTests: XCTestCase {
             page.trainingRecipe = recipe
             page.overrideTrainingRecipe = false
             // The page stamped its adapter path; a task draft leaves the destination to routing.
-            var expected = template.arguments(from: page)
+            var expected = template.arguments(from: page, source: .contract)
             let output = try XCTUnwrap(expected.firstIndex(of: "--output"))
             expected.removeSubrange(output...output + 1)
 
             var draft = StudioTrainingRun.baseline(for: .imageTrainLoRA)
             draft.form["--recipe"] = .text(recipe)
             let applied = StudioTrainingRun.applyingRecipe(draft)
-            XCTAssertEqual(Set(applied.arguments), Set(expected), "\(recipe): the page's command with the recipe")
-            XCTAssertEqual(applied.arguments.count, expected.count, "\(recipe)")
-            XCTAssertFalse(applied.arguments.contains("--model"), "\(recipe) decides the base model")
-            XCTAssertFalse(applied.arguments.contains("--width"))
+            XCTAssertEqual(Set(applied.arguments(source: .contract)), Set(expected), "\(recipe): the page's command with the recipe")
+            XCTAssertEqual(applied.arguments(source: .contract).count, expected.count, "\(recipe)")
+            XCTAssertFalse(applied.arguments(source: .contract).contains("--model"), "\(recipe) decides the base model")
+            XCTAssertFalse(applied.arguments(source: .contract).contains("--width"))
             XCTAssertEqual(applied.text("--seed"), "42", "the seed is not the recipe's")
             XCTAssertEqual(StudioTrainingRun.applyingRecipe(applied), applied)
             XCTAssertTrue(StudioTrainingRun.isRecipeGoverned("--rank", in: applied))
@@ -209,23 +209,23 @@ final class StudioTrainingRunTests: XCTestCase {
         var klein = StudioTrainingRun.baseline(for: .imageTrainLoRA)
         klein.form["--recipe"] = .text("klein-fast-style")
         klein = StudioTrainingRun.choosingRecipe(klein, previous: "")
-        let launched = StudioTrainingRun.launchDraft(klein)
-        XCTAssertTrue(StudioTrainingRun.trainsKlein(klein))
+        let launched = StudioTrainingRun.launchDraft(klein, source: .contract)
+        XCTAssertTrue(StudioTrainingRun.trainsKlein(klein, source: .contract))
         XCTAssertEqual(launched.text("--checkpoint-interval"), "250")
         XCTAssertEqual(launched.text("--sample-interval"), "250")
-        XCTAssertFalse(launched.arguments.contains("--model"), "the recipe still decides the model")
+        XCTAssertFalse(launched.arguments(source: .contract).contains("--model"), "the recipe still decides the model")
 
         var chosen = klein
         chosen.form["--checkpoint-interval"] = .integer(100)
-        XCTAssertEqual(StudioTrainingRun.launchDraft(chosen).text("--checkpoint-interval"), "100", "a chosen cadence is kept")
+        XCTAssertEqual(StudioTrainingRun.launchDraft(chosen, source: .contract).text("--checkpoint-interval"), "100", "a chosen cadence is kept")
 
         var base = StudioTrainingRun.baseline(for: .imageTrainLoRA)
         base.model = "image-klein-base-9b"
-        XCTAssertTrue(StudioTrainingRun.trainsKlein(base))
-        XCTAssertEqual(StudioTrainingRun.launchDraft(base).text("--sample-interval"), "250")
+        XCTAssertTrue(StudioTrainingRun.trainsKlein(base, source: .contract))
+        XCTAssertEqual(StudioTrainingRun.launchDraft(base, source: .contract).text("--sample-interval"), "250")
 
-        let krea = StudioTrainingRun.launchDraft(StudioTrainingRun.baseline(for: .imageTrainLoRA))
-        XCTAssertFalse(StudioTrainingRun.trainsKlein(krea))
+        let krea = StudioTrainingRun.launchDraft(StudioTrainingRun.baseline(for: .imageTrainLoRA), source: .contract)
+        XCTAssertFalse(StudioTrainingRun.trainsKlein(krea, source: .contract))
         XCTAssertEqual(krea.text("--checkpoint-interval"), "", "Klein-only; it would block a Krea 2 preflight")
         XCTAssertEqual(krea, StudioTrainingRun.baseline(for: .imageTrainLoRA))
     }
@@ -242,11 +242,11 @@ final class StudioTrainingRunTests: XCTestCase {
         XCTAssertEqual(draft.text("--model"), "", "and the base")
 
         draft.form["--width"] = .integer(1024)
-        XCTAssertEqual(StudioTrainingRun.launchDraft(draft).text("--width"), "1024", "an override survives the launch")
+        XCTAssertEqual(StudioTrainingRun.launchDraft(draft, source: .contract).text("--width"), "1024", "an override survives the launch")
         draft.form["--recipe"] = .text("krea-cinematic-style")
         let changed = StudioTrainingRun.choosingRecipe(draft, previous: "krea-fast-style")
         XCTAssertEqual(changed, draft, "changing recipes takes nothing away")
-        XCTAssertTrue(StudioTrainingRun.launchDraft(changed).arguments.contains("1024"))
+        XCTAssertTrue(StudioTrainingRun.launchDraft(changed, source: .contract).arguments(source: .contract).contains("1024"))
     }
 
     /// A recipe leaves steps, rank, and learning rate blank for itself to decide; only a value
@@ -281,10 +281,10 @@ final class StudioTrainingRunTests: XCTestCase {
             draft.setAttachmentText("/tmp/dataset", for: slot.storage)
             draft.form["--seed"] = .integer(7)
             let check = try XCTUnwrap(StudioTrainingRun.preflightDraft(draft))
-            let row = library.start(request: try XCTUnwrap(check.request()), commandPreview: "fixture")
-            let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: row))
+            let row = library.start(request: try XCTUnwrap(check.request(source: .contract)), commandPreview: "fixture", source: .contract)
+            let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: row, source: .contract))
             for flag in ["--preflight", "--dry-run", "--json"] {
-                XCTAssertFalse(restored.arguments.contains(flag), "\(templateID) restores \(flag)")
+                XCTAssertFalse(restored.arguments(source: .contract).contains(flag), "\(templateID) restores \(flag)")
             }
             XCTAssertEqual(restored.text("--seed"), "7", "the rest of the settings come back")
         }
@@ -351,15 +351,15 @@ final class StudioTrainingRunTests: XCTestCase {
         var image = StudioTaskDraft(templateID: .imageTrainLoRA)
         image.form["--data"] = .text("/tmp/my-style-photos")
         let imageCheck = try XCTUnwrap(StudioTrainingRun.preflightDraft(image))
-        XCTAssertTrue(imageCheck.arguments.contains("--preflight"))
-        XCTAssertTrue(imageCheck.arguments.contains("--json"))
+        XCTAssertTrue(imageCheck.arguments(source: .contract).contains("--preflight"))
+        XCTAssertTrue(imageCheck.arguments(source: .contract).contains("--json"))
         XCTAssertEqual(imageCheck.text("--data"), "/tmp/my-style-photos", "the rest of the request is unchanged")
-        XCTAssertFalse(image.arguments.contains("--preflight"), "the draft itself is untouched")
+        XCTAssertFalse(image.arguments(source: .contract).contains("--preflight"), "the draft itself is untouched")
 
         let textCheck = try XCTUnwrap(StudioTrainingRun.preflightDraft(StudioTaskDraft(templateID: .textTrainLoRA)))
-        XCTAssertTrue(textCheck.arguments.contains("--dry-run"))
-        XCTAssertTrue(textCheck.arguments.contains("--json"))
-        XCTAssertFalse(textCheck.arguments.contains("--preflight"), "the text trainer has no preflight switch")
+        XCTAssertTrue(textCheck.arguments(source: .contract).contains("--dry-run"))
+        XCTAssertTrue(textCheck.arguments(source: .contract).contains("--json"))
+        XCTAssertFalse(textCheck.arguments(source: .contract).contains("--preflight"), "the text trainer has no preflight switch")
 
         XCTAssertNil(StudioTrainingRun.preflightDraft(StudioTaskDraft(templateID: .musicTrainAdapter)), "the clip list's checks are the page's own")
     }
@@ -402,14 +402,14 @@ final class StudioTrainingRunTests: XCTestCase {
         try withConfiguredRoot { root in
             var image = StudioTaskDraft(templateID: .imageTrainLoRA)
             image.form["--data"] = .text("/tmp/my-style-photos")
-            let imageOutput = StudioOutputLocation.destination(for: image).text("--output")
+            let imageOutput = StudioOutputLocation.destination(for: image, source: .contract).text("--output")
             XCTAssertTrue(imageOutput.hasPrefix(root.appendingPathComponent("Image").path), imageOutput)
             XCTAssertTrue(URL(fileURLWithPath: imageOutput).lastPathComponent.hasPrefix("my-style-photos-"), imageOutput)
             XCTAssertEqual(URL(fileURLWithPath: imageOutput).pathExtension, "safetensors")
 
             var text = StudioTaskDraft(templateID: .textTrainLoRA)
             text.form["--data"] = .text("/tmp/support-replies.jsonl")
-            let textOutput = StudioOutputLocation.destination(for: text).text("--output")
+            let textOutput = StudioOutputLocation.destination(for: text, source: .contract).text("--output")
             XCTAssertTrue(textOutput.hasPrefix(root.appendingPathComponent("Chat").path), textOutput)
             XCTAssertTrue(URL(fileURLWithPath: textOutput).lastPathComponent.hasPrefix("support-replies-"), textOutput)
 
@@ -422,9 +422,9 @@ final class StudioTrainingRunTests: XCTestCase {
             ])
             var music = StudioTaskDraft(templateID: .musicTrainAdapter)
             music.form["--dataset"] = .text(root.appendingPathComponent("drafts/dataset-abc123.jsonl").path)
-            let previewed = StudioOutputLocation.destination(for: music).text("--output")
+            let previewed = StudioOutputLocation.destination(for: music, source: .contract).text("--output")
 
-            let launch = try StudioTrainingRun.musicLaunch(music, manifest: manifest)
+            let launch = try StudioTrainingRun.musicLaunch(music, manifest: manifest, source: .contract)
             let output = launch.text("--output")
             XCTAssertEqual(output, previewed, "the adapter the Command view previews is the adapter the run writes")
             XCTAssertTrue(output.hasPrefix(root.appendingPathComponent("Music").path), output)
@@ -435,8 +435,8 @@ final class StudioTrainingRunTests: XCTestCase {
             XCTAssertEqual(written.clips.map(\.caption), ["short synth loop, steady kick"])
             XCTAssertEqual(written.clips.first?.lyrics, "la la\nla")
 
-            let request = try XCTUnwrap(launch.request())
-            let prepared = try StudioTaskRunner.prepare(request, sessions: StudioTaskSessions())
+            let request = try XCTUnwrap(launch.request(source: .contract))
+            let prepared = try StudioTaskRunner.prepare(request, sessions: StudioTaskSessions(), source: .contract)
             XCTAssertNil(prepared.fallbackReason)
             XCTAssertEqual(prepared.request.draft.outputPath, output, "preparing does not name the adapter again")
             XCTAssertEqual(prepared.request.draft.inputPath, manifestURL.path)

@@ -33,31 +33,31 @@ final class StudioTaskSchemaTests: XCTestCase {
                 let destinations = StudioTaskSchema.outputFlags(for: capability)
                 let pageValues = Set(StudioTaskDraft.pageValues(for: template.id).keys.map { "\($0)=\(draft.text($0))" })
                 XCTAssertEqual(
-                    Self.pairs(of: draft.arguments, capability: capability).subtracting(launcher).subtracting(pageValues),
-                    Self.pairs(of: template.arguments(from: template.defaultDraft()), capability: capability)
+                    Self.pairs(of: draft.arguments(source: .contract), capability: capability).subtracting(launcher).subtracting(pageValues),
+                    Self.pairs(of: template.arguments(from: template.defaultDraft(), source: .contract), capability: capability)
                         .subtracting(launcher).subtracting(consoleOnly)
                         .filter { pair in !destinations.contains { pair.hasPrefix($0 + "=") } },
                     "\(template.id) fresh draft is the template's own command"
                 )
                 for flag in launcher {
-                    XCTAssertTrue(draft.arguments.contains(flag), "\(template.id) launcher default \(flag)")
+                    XCTAssertTrue(draft.arguments(source: .contract).contains(flag), "\(template.id) launcher default \(flag)")
                     XCTAssertTrue(capability.options.contains { $0.flag == flag }, "\(template.id) declares \(flag)")
                 }
                 for flag in consoleOnly {
-                    XCTAssertFalse(draft.arguments.contains(flag), "\(template.id) fresh draft runs for real, without \(flag)")
+                    XCTAssertFalse(draft.arguments(source: .contract).contains(flag), "\(template.id) fresh draft runs for real, without \(flag)")
                     XCTAssertTrue(capability.options.contains { $0.flag == flag }, "\(template.id) declares \(flag)")
                 }
 
                 var populated = draft
-                for slot in populated.slots {
+                for slot in populated.slots(source: .contract) {
                     slot.attach([URL(fileURLWithPath: "/tmp/input-\(slot.id).png")], to: &populated)
                 }
                 if capability.options.contains(where: { $0.flag == "--model" }) { populated.model = "some-model" }
                 populated.prompt = "a prompt"
-                let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: populated.form, seed: populated.seed))
-                XCTAssertEqual(populated.arguments, launch.arguments, "\(template.id) Command view argv")
-                XCTAssertEqual(populated.run?.arguments, launch.arguments)
-                let request = try XCTUnwrap(populated.request(), "\(template.id) request")
+                let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: populated.form, seed: populated.seed, source: .contract))
+                XCTAssertEqual(populated.arguments(source: .contract), launch.arguments, "\(template.id) Command view argv")
+                XCTAssertEqual(populated.run(source: .contract)?.arguments, launch.arguments)
+                let request = try XCTUnwrap(populated.request(source: .contract), "\(template.id) request")
                 XCTAssertEqual(request.mode, template.libraryMode, "attribution comes from the template")
                 XCTAssertEqual(request.execution?.arguments, launch.arguments)
             }
@@ -88,9 +88,9 @@ final class StudioTaskSchemaTests: XCTestCase {
                 let capability = try XCTUnwrap(template.id.capability)
                 let draft = StudioTaskDraft(templateID: template.id)
                 let hidden = StudioTaskSchema.hiddenFlags(for: capability)
-                let shown = StudioTaskSchema.sections(for: task, draft: draft).flatMap(\.fields)
-                    + StudioTaskSchema.advanced(for: task, draft: draft)
-                    + StudioTaskSchema.essentials(for: task, draft: draft)
+                let shown = StudioTaskSchema.sections(for: task, draft: draft, source: .contract).flatMap(\.fields)
+                    + StudioTaskSchema.advanced(for: task, draft: draft, source: .contract)
+                    + StudioTaskSchema.essentials(for: task, draft: draft, source: .contract)
                 for field in shown {
                     XCTAssertFalse(hidden.contains(field.flag), "\(template.id) shows hidden \(field.flag)")
                     for binding in field.bindings where binding.fieldID.hasPrefix("--") {
@@ -175,14 +175,14 @@ final class StudioTaskSchemaTests: XCTestCase {
         images.attach([URL(fileURLWithPath: "/tmp/2.png"), URL(fileURLWithPath: "/tmp/3.png")], to: &batch)
         XCTAssertEqual(batch.form.arguments, ["/tmp/1.png", "/tmp/2.png", "/tmp/3.png"], "a list appends without repeats")
         XCTAssertEqual(images.caption(in: batch), "1.png +2")
-        XCTAssertTrue(batch.attach(dropped: [URL(fileURLWithPath: "/tmp/list.txt")], slots: batch.slots))
+        XCTAssertTrue(batch.attach(dropped: [URL(fileURLWithPath: "/tmp/list.txt")], slots: batch.slots(source: .contract)))
         XCTAssertEqual(batch.text("--input-list"), "/tmp/list.txt")
-        XCTAssertFalse(batch.attach(dropped: [URL(fileURLWithPath: "/tmp/clip.mp4")], slots: batch.slots))
+        XCTAssertFalse(batch.attach(dropped: [URL(fileURLWithPath: "/tmp/clip.mp4")], slots: batch.slots(source: .contract)))
         // The argv carries every image, and reading that argv back (Use these settings, the
         // Command view) keeps them all as positionals rather than spilling them into extras.
         let batchCapability = try XCTUnwrap(CommandTemplateID.visionFaceBatch.capability)
-        XCTAssertEqual(Array(batch.arguments.prefix(6)), ["vision", "face", "batch", "/tmp/1.png", "/tmp/2.png", "/tmp/3.png"])
-        let reread = StudioConsoleCommand.seed(capability: batchCapability, arguments: batch.arguments)
+        XCTAssertEqual(Array(batch.arguments(source: .contract).prefix(6)), ["vision", "face", "batch", "/tmp/1.png", "/tmp/2.png", "/tmp/3.png"])
+        let reread = StudioConsoleCommand.seed(capability: batchCapability, arguments: batch.arguments(source: .contract))
         XCTAssertEqual(reread.arguments, ["/tmp/1.png", "/tmp/2.png", "/tmp/3.png"])
         XCTAssertEqual(reread.extraArguments, "")
         XCTAssertEqual(reread.text("--input-list"), "/tmp/list.txt")
@@ -191,7 +191,7 @@ final class StudioTaskSchemaTests: XCTestCase {
         StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0]
             .attach([URL(fileURLWithPath: "/tmp/f.png"), URL(fileURLWithPath: "/tmp/b.png")], to: &views)
         XCTAssertEqual(views.text("--view"), "/tmp/f.png\n/tmp/b.png")
-        XCTAssertEqual(views.arguments.filter { $0 == "--view" }.count, 2, "a repeatable option emits once per line")
+        XCTAssertEqual(views.arguments(source: .contract).filter { $0 == "--view" }.count, 2, "a repeatable option emits once per line")
     }
 
     // MARK: Prompt and variant
@@ -209,7 +209,7 @@ final class StudioTaskSchemaTests: XCTestCase {
         var score = StudioTaskDraft(templateID: .sfxClapScore)
         score.prompt = "a dog barking"
         StudioTaskSchema.slots(for: .sfxClapScore)[0].attach([URL(fileURLWithPath: "/tmp/bark.wav")], to: &score)
-        XCTAssertEqual(Array(score.arguments.prefix(5)), ["sfx", "clap", "score", "a dog barking", "/tmp/bark.wav"])
+        XCTAssertEqual(Array(score.arguments(source: .contract).prefix(5)), ["sfx", "clap", "score", "a dog barking", "/tmp/bark.wav"])
 
         let foley = try XCTUnwrap(CommandTemplateID.sfxVideo.capability)
         XCTAssertEqual(StudioTaskSchema.promptField(for: foley), .argument(0, repeatable: false), "a positional prompt wins over --prompt")
@@ -239,7 +239,7 @@ final class StudioTaskSchemaTests: XCTestCase {
         depth.form["--model"] = .text("vision-depth-marigold-v2")
         depth.switchTemplate(to: .visionDepthVideo)
         XCTAssertEqual(depth.text("--model"), "", "a different default model is not carried")
-        XCTAssertEqual(StudioTaskSchema.fields(for: .visionDepth, draft: depth).first?.overrideID, .variant, "the variant leads")
+        XCTAssertEqual(StudioTaskSchema.fields(for: .visionDepth, draft: depth, source: .contract).first?.overrideID, .variant, "the variant leads")
 
         // Batch holds one repeatable positional with three values; Compare declares two single
         // ones. Only the first image carries, into Compare's first argument.
@@ -317,7 +317,7 @@ final class StudioTaskSchemaTests: XCTestCase {
     func testFacesAndInstantMeshStartWhereTheirPagesDid() {
         let embed = StudioTaskDraft(templateID: .visionFaceEmbed)
         XCTAssertEqual(embed.text("--face-index"), "0")
-        XCTAssertEqual(embed.arguments.firstIndex(of: "--face-index").map { embed.arguments[$0 + 1] }, "0", "and the argv says so")
+        XCTAssertEqual(embed.arguments(source: .contract).firstIndex(of: "--face-index").map { embed.arguments(source: .contract)[$0 + 1] }, "0", "and the argv says so")
         let compare = StudioTaskDraft(templateID: .visionFaceCompare)
         XCTAssertEqual(compare.text("--reference-face-index"), "0")
         XCTAssertEqual(compare.text("--candidate-face-index"), "0")
@@ -328,25 +328,25 @@ final class StudioTaskSchemaTests: XCTestCase {
     /// The pages turned `--json` on for every run whose surface reads the printed result; a fresh
     /// task draft does the same so a renderer gets JSON, and a parked draft keeps what it ran with.
     func testLauncherDefaultsTurnOnMachineOutputWherePagesDid() {
-        XCTAssertTrue(StudioTaskDraft(templateID: .imageRunPlan).arguments.contains("--json"))
-        XCTAssertTrue(StudioTaskDraft(templateID: .imageDatasetDiscover).arguments.contains("--json"))
-        XCTAssertTrue(StudioTaskDraft(templateID: .visionPose).arguments.contains("--json"))
-        XCTAssertFalse(StudioTaskDraft(templateID: .audioEnhance).arguments.contains("--json"), "enhance writes a file")
+        XCTAssertTrue(StudioTaskDraft(templateID: .imageRunPlan).arguments(source: .contract).contains("--json"))
+        XCTAssertTrue(StudioTaskDraft(templateID: .imageDatasetDiscover).arguments(source: .contract).contains("--json"))
+        XCTAssertTrue(StudioTaskDraft(templateID: .visionPose).arguments(source: .contract).contains("--json"))
+        XCTAssertFalse(StudioTaskDraft(templateID: .audioEnhance).arguments(source: .contract).contains("--json"), "enhance writes a file")
         let restored = StudioTaskDraft(templateID: .imageRunPlan, form: StudioConsoleDraft(arguments: ["/tmp/plan.json"]))
-        XCTAssertFalse(restored.arguments.contains("--json"), "a restored draft is not changed")
+        XCTAssertFalse(restored.arguments(source: .contract).contains("--json"), "a restored draft is not changed")
         // Preflight, materialize, and the discover output root stay reachable in the inspector.
         let plan = StudioTaskDraft(templateID: .imageRunPlan)
-        let planFlags = StudioTaskSchema.fields(for: .imageDatasets, draft: plan).flatMap(\.draftFieldIDs)
+        let planFlags = StudioTaskSchema.fields(for: .imageDatasets, draft: plan, source: .contract).flatMap(\.draftFieldIDs)
         XCTAssertTrue(planFlags.contains("--preflight"))
         XCTAssertTrue(planFlags.contains("--materialize"))
         XCTAssertFalse(planFlags.contains("--json"), "the launcher switch is not a control")
-        XCTAssertEqual(StudioTaskSchema.sections(for: .imageDatasets, draft: plan).first { $0.group == .output }?.fields.map(\.flag),
+        XCTAssertEqual(StudioTaskSchema.sections(for: .imageDatasets, draft: plan, source: .contract).first { $0.group == .output }?.fields.map(\.flag),
                        ["--materialize"])
         let discover = StudioTaskDraft(templateID: .imageDatasetDiscover)
-        XCTAssertTrue(StudioTaskSchema.fields(for: .imageDatasets, draft: discover).contains { $0.flag == "--training-output-root" })
+        XCTAssertTrue(StudioTaskSchema.fields(for: .imageDatasets, draft: discover, source: .contract).contains { $0.flag == "--training-output-root" })
         XCTAssertFalse(StudioTaskSchema.slots(for: .imageDatasetDiscover).contains { $0.id == "--training-output-root" })
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageValidate), [], "validate takes no input; its folders are options")
-        XCTAssertTrue(StudioTaskSchema.fields(for: .imageDatasets, draft: StudioTaskDraft(templateID: .imageValidate))
+        XCTAssertTrue(StudioTaskSchema.fields(for: .imageDatasets, draft: StudioTaskDraft(templateID: .imageValidate), source: .contract)
             .contains { $0.flag == "--reference-dir" })
     }
 
@@ -354,7 +354,7 @@ final class StudioTaskSchemaTests: XCTestCase {
 
     func testSectionsFollowTheContractsGroupsAndTiers() {
         let draft = StudioTaskDraft(templateID: .audioEnhance)
-        let sections = StudioTaskSchema.sections(for: .audioEnhance, draft: draft)
+        let sections = StudioTaskSchema.sections(for: .audioEnhance, draft: draft, source: .contract)
         XCTAssertEqual(sections.map(\.group), sections.map(\.group).sorted { lhs, rhs in
             StudioContractGroup.allCases.firstIndex(of: lhs)! < StudioContractGroup.allCases.firstIndex(of: rhs)!
         })
@@ -362,15 +362,15 @@ final class StudioTaskSchemaTests: XCTestCase {
             XCTAssertFalse(section.fields.contains { $0.tier == .expert }, "\(section.group) holds an expert field")
         }
         XCTAssertTrue(sections.contains { $0.fields.contains { $0.overrideID == .model } }, "the model picker is a section row")
-        XCTAssertEqual(StudioTaskSchema.changedCount(for: .audioEnhance, draft: draft), 0)
+        XCTAssertEqual(StudioTaskSchema.changedCount(for: .audioEnhance, draft: draft, source: .contract), 0)
         var edited = draft
         edited.form["--overlap"] = .integer(4)
-        XCTAssertEqual(StudioTaskSchema.changedCount(for: .audioEnhance, draft: edited), 1)
-        XCTAssertEqual(StudioTaskSchema.modelScope(for: draft).categories, ["audio"])
-        XCTAssertEqual(StudioTaskSchema.modelID(for: draft), "audio-enhance-ap-bwe-16kto48k")
-        XCTAssertEqual(StudioModelScope(templateID: .visionDepth).categories, ["vision-depth"])
-        XCTAssertEqual(StudioModelScope(templateID: .imageGenerate).categories, StudioMode.createImage.modelCategories)
-        XCTAssertTrue(StudioModelScope(templateID: .musicRealtime).categories.isEmpty, "no filter when the inventory has no category")
+        XCTAssertEqual(StudioTaskSchema.changedCount(for: .audioEnhance, draft: edited, source: .contract), 1)
+        XCTAssertEqual(StudioTaskSchema.modelScope(for: draft, source: .contract).categories, ["audio"])
+        XCTAssertEqual(StudioTaskSchema.modelID(for: draft, source: .contract), "audio-enhance-ap-bwe-16kto48k")
+        XCTAssertEqual(StudioModelScope(templateID: .visionDepth, source: .contract).categories, ["vision-depth"])
+        XCTAssertEqual(StudioModelScope(templateID: .imageGenerate, source: .contract).categories, StudioMode.createImage.modelCategories)
+        XCTAssertTrue(StudioModelScope(templateID: .musicRealtime, source: .contract).categories.isEmpty, "no filter when the inventory has no category")
     }
 
     /// Readiness asks `model list` about a managed id only. A local checkpoints root the CLI
@@ -379,23 +379,23 @@ final class StudioTaskSchemaTests: XCTestCase {
     /// run is never refused as "isn't in the model list".
     func testALocalModelLocationNeedsNoManagedModel() {
         var foley = StudioTaskDraft(templateID: .sfxVideo)
-        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley), StudioTaskSchema.modelID(for: foley))
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley, source: .contract), StudioTaskSchema.modelID(for: foley, source: .contract))
         for path in ["/Volumes/Models/woosh", "~/woosh", "./woosh", "checkpoints/woosh"] {
             foley.model = path
-            XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley), "", path)
+            XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley, source: .contract), "", path)
         }
         foley.model = "sfx-woosh-dvflow-8s"
-        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley), "sfx-woosh-dvflow-8s")
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: foley, source: .contract), "sfx-woosh-dvflow-8s")
 
         var chat = StudioTaskDraft(templateID: .textTrainLoRA)
-        XCTAssertFalse(StudioTaskSchema.requiredModelID(for: chat).isEmpty)
+        XCTAssertFalse(StudioTaskSchema.requiredModelID(for: chat, source: .contract).isEmpty)
         chat.form["--model-path"] = .text("/Volumes/Models/inkling")
-        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: chat), "")
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: chat, source: .contract), "")
 
         var music = StudioTaskDraft(templateID: .musicTrainAdapter)
-        XCTAssertFalse(StudioTaskSchema.requiredModelID(for: music).isEmpty)
+        XCTAssertFalse(StudioTaskSchema.requiredModelID(for: music, source: .contract).isEmpty)
         music.form["--checkpoints-root"] = .text("/Volumes/Models/acestep")
-        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: music), "")
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: music, source: .contract), "")
     }
 
     /// A recipe decides Image ▸ Train's base when `--model` is left to it, so readiness, the
@@ -404,12 +404,12 @@ final class StudioTaskSchemaTests: XCTestCase {
         var draft = StudioTaskDraft(templateID: .imageTrainLoRA)
         draft.model = ""
         draft.form["--recipe"] = .text("klein-fast-style")
-        XCTAssertEqual(StudioTaskSchema.modelID(for: draft), "image-klein-base-9b")
-        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: draft), "image-klein-base-9b")
+        XCTAssertEqual(StudioTaskSchema.modelID(for: draft, source: .contract), "image-klein-base-9b")
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: draft, source: .contract), "image-klein-base-9b")
         draft.form["--recipe"] = .text("krea-cinematic-style")
-        XCTAssertEqual(StudioTaskSchema.modelID(for: draft), "image-krea2-raw")
+        XCTAssertEqual(StudioTaskSchema.modelID(for: draft, source: .contract), "image-krea2-raw")
         draft.model = "image-klein-base-9b-8bit"
-        XCTAssertEqual(StudioTaskSchema.modelID(for: draft), "image-klein-base-9b-8bit", "an explicit model wins, as on the command line")
+        XCTAssertEqual(StudioTaskSchema.modelID(for: draft, source: .contract), "image-klein-base-9b-8bit", "an explicit model wins, as on the command line")
     }
 
     func testTaskDraftPersistsWithoutSecrets() throws {
@@ -618,7 +618,7 @@ final class StudioTaskSchemaTests: XCTestCase {
         XCTAssertEqual(imported.text("--instruments"), "piano")
         XCTAssertEqual(imported.text("--output"), "", "the page's per-run file is not a setting")
         XCTAssertEqual(imported.text("--context-output"), "")
-        XCTAssertFalse(imported.arguments.contains(where: { $0.contains("20260903-101500") }))
+        XCTAssertFalse(imported.arguments(source: .contract).contains(where: { $0.contains("20260903-101500") }))
 
         var encode = try XCTUnwrap(CommandCatalog.template(id: .sfxAEEncode)).defaultDraft()
         encode.inputPath = "/tmp/hit.wav"

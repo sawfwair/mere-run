@@ -30,14 +30,14 @@ final class StudioMusicTasksTests: XCTestCase {
         page.musicLMSubdirectory = "lm"
         page.musicTextSubdirectory = "text"
 
-        let draft = StudioTaskDraft(templateID: .musicAnalyze, form: StudioConsoleCommand.seed(template: template, draft: page))
-        XCTAssertEqual(draft.arguments, template.arguments(from: page))
+        let draft = StudioTaskDraft(templateID: .musicAnalyze, form: StudioConsoleCommand.seed(template: template, draft: page, source: .contract))
+        XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: page, source: .contract))
         XCTAssertEqual(draft.primaryInputPath, "/tmp/harbor-lights.wav")
         XCTAssertEqual(draft.model, "music-acestep-xl-turbo-lm4b")
         XCTAssertEqual(draft.text("--duration"), "30")
-        XCTAssertEqual(Array(draft.arguments.prefix(3)), ["music", "analyze", "/tmp/harbor-lights.wav"])
-        XCTAssertTrue(draft.arguments.contains("--include-raw-lm"))
-        XCTAssertEqual(draft.request()?.mode, .music, "attribution is the template's own")
+        XCTAssertEqual(Array(draft.arguments(source: .contract).prefix(3)), ["music", "analyze", "/tmp/harbor-lights.wav"])
+        XCTAssertTrue(draft.arguments(source: .contract).contains("--include-raw-lm"))
+        XCTAssertEqual(draft.request(source: .contract)?.mode, .music, "attribution is the template's own")
     }
 
     func testTranscribeTaskDraftBuildsThePagesArgv() throws {
@@ -70,23 +70,23 @@ final class StudioMusicTasksTests: XCTestCase {
                 line: line
             )
         }
-        let draft = StudioTaskDraft(templateID: .musicTranscribe, form: StudioConsoleCommand.seed(template: template, draft: page))
-        sameCommand(draft.arguments, template.arguments(from: page))
+        let draft = StudioTaskDraft(templateID: .musicTranscribe, form: StudioConsoleCommand.seed(template: template, draft: page, source: .contract))
+        sameCommand(draft.arguments(source: .contract), template.arguments(from: page, source: .contract))
         XCTAssertEqual(draft.text("--instruments"), "voice,drums,electric_bass")
         XCTAssertEqual(StudioInstrumentList.decode(draft.text("--instruments")), ["voice", "drums", "electric_bass"])
-        XCTAssertEqual(draft.arguments.firstIndex(of: "--instruments").map { draft.arguments[$0 + 1] }, "voice,drums,electric_bass")
-        XCTAssertEqual(draft.arguments.firstIndex(of: "--format").map { draft.arguments[$0 + 1] }, "json")
-        XCTAssertTrue(draft.arguments.contains("--sampling"))
-        XCTAssertTrue(draft.arguments.contains("--strict-eos"))
-        XCTAssertFalse(draft.arguments.contains("--no-musical-context"), "the page's context toggle stays on by default")
+        XCTAssertEqual(draft.arguments(source: .contract).firstIndex(of: "--instruments").map { draft.arguments(source: .contract)[$0 + 1] }, "voice,drums,electric_bass")
+        XCTAssertEqual(draft.arguments(source: .contract).firstIndex(of: "--format").map { draft.arguments(source: .contract)[$0 + 1] }, "json")
+        XCTAssertTrue(draft.arguments(source: .contract).contains("--sampling"))
+        XCTAssertTrue(draft.arguments(source: .contract).contains("--strict-eos"))
+        XCTAssertFalse(draft.arguments(source: .contract).contains("--no-musical-context"), "the page's context toggle stays on by default")
 
         var quiet = page
         quiet.musicNoMusicalContext = true
         quiet.musicContextOutput = ""
-        let noContext = StudioTaskDraft(templateID: .musicTranscribe, form: StudioConsoleCommand.seed(template: template, draft: quiet))
-        sameCommand(noContext.arguments, template.arguments(from: quiet))
-        XCTAssertTrue(noContext.arguments.contains("--no-musical-context"))
-        XCTAssertFalse(noContext.arguments.contains("--context-output"))
+        let noContext = StudioTaskDraft(templateID: .musicTranscribe, form: StudioConsoleCommand.seed(template: template, draft: quiet, source: .contract))
+        sameCommand(noContext.arguments(source: .contract), template.arguments(from: quiet, source: .contract))
+        XCTAssertTrue(noContext.arguments(source: .contract).contains("--no-musical-context"))
+        XCTAssertFalse(noContext.arguments(source: .contract).contains("--context-output"))
     }
 
     // MARK: The surface
@@ -113,7 +113,7 @@ final class StudioMusicTasksTests: XCTestCase {
 
     func testTheInstrumentsEditorOwnsBothInstrumentFlags() throws {
         let draft = StudioTaskDraft(templateID: .musicTranscribe)
-        let fields = StudioTaskSchema.fields(for: .musicTranscribe, draft: draft)
+        let fields = StudioTaskSchema.fields(for: .musicTranscribe, draft: draft, source: .contract)
         let instruments = try XCTUnwrap(fields.first { $0.overrideID == .instruments })
         XCTAssertEqual(Set(instruments.bindings.map(\.fieldID)), ["--instruments", "--list-instruments"])
         XCTAssertEqual(fields.filter { $0.overrideID == .instruments }.count, 1, "one editor, drawn where --instruments is declared")
@@ -127,20 +127,20 @@ final class StudioMusicTasksTests: XCTestCase {
         XCTAssertTrue(fields.contains { $0.flag == "--no-musical-context" })
         XCTAssertTrue(fields.contains { $0.overrideID == .model })
 
-        let analyze = StudioTaskSchema.fields(for: .musicAnalyze, draft: StudioTaskDraft(templateID: .musicAnalyze))
+        let analyze = StudioTaskSchema.fields(for: .musicAnalyze, draft: StudioTaskDraft(templateID: .musicAnalyze), source: .contract)
         XCTAssertTrue(analyze.contains { $0.flag == "--duration" })
         XCTAssertTrue(analyze.contains { $0.flag == "--checkpoints-root" }, "the checkpoint layout stays reachable")
         XCTAssertEqual(analyze.first { $0.flag == "--checkpoints-root" }?.group, .model, "a model location files with the model")
     }
 
     func testModelScopeIsTheMusicCategory() {
-        XCTAssertEqual(StudioTaskSchema.modelScope(for: StudioTaskDraft(templateID: .musicAnalyze)).categories, ["music"])
+        XCTAssertEqual(StudioTaskSchema.modelScope(for: StudioTaskDraft(templateID: .musicAnalyze), source: .contract).categories, ["music"])
         // The page forced these models only when the template's default was blank; it never is,
         // so a fresh task draft carries the same `--model` the page sent.
         XCTAssertEqual(StudioTaskDraft(templateID: .musicAnalyze).text("--model"), "music-acestep")
         XCTAssertEqual(StudioTaskDraft(templateID: .musicTranscribe).text("--model"), "music-muscriptor-medium")
-        XCTAssertEqual(StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .musicAnalyze)), "music-acestep")
-        XCTAssertEqual(StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .musicTranscribe)), "music-muscriptor-medium")
+        XCTAssertEqual(StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .musicAnalyze), source: .contract), "music-acestep")
+        XCTAssertEqual(StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .musicTranscribe), source: .contract), "music-muscriptor-medium")
     }
 
     // MARK: Destinations
@@ -149,13 +149,13 @@ final class StudioMusicTasksTests: XCTestCase {
         try withConfiguredRoot { root in
             var draft = StudioTaskDraft(templateID: .musicTranscribe)
             draft.setArgument(0, "/tmp/harbor-lights.wav")
-            let named = StudioOutputLocation.destination(for: draft)
+            let named = StudioOutputLocation.destination(for: draft, source: .contract)
             let output = URL(fileURLWithPath: named.text("--output"))
             XCTAssertEqual(output.deletingLastPathComponent().path, root.appendingPathComponent("Music").path)
             XCTAssertTrue(output.lastPathComponent.hasPrefix("harbor-lights-"), output.path)
             XCTAssertEqual(output.pathExtension, "mid")
             XCTAssertEqual(named.text("--context-output"), output.deletingPathExtension().path + "-context.json")
-            let request = try XCTUnwrap(named.request())
+            let request = try XCTUnwrap(named.request(source: .contract))
             XCTAssertEqual(request.draft.outputPath, output.path, "the job lifecycle reads the same file")
             XCTAssertEqual(request.execution?.arguments.firstIndex(of: "--context-output").map { request.execution!.arguments[$0 + 1] },
                            named.text("--context-output"))
@@ -179,7 +179,7 @@ final class StudioMusicTasksTests: XCTestCase {
     func testAnalyzeHasNoDestinationToRoute() {
         let draft = StudioTaskDraft(templateID: .musicAnalyze)
         XCTAssertNil(CommandTemplateID.musicAnalyze.capability?.output.flag, "music analyze prints its result")
-        XCTAssertEqual(StudioOutputLocation.destination(for: draft), draft)
+        XCTAssertEqual(StudioOutputLocation.destination(for: draft, source: .contract), draft)
     }
 
     // MARK: The page's drafts
@@ -213,7 +213,7 @@ final class StudioMusicTasksTests: XCTestCase {
             XCTAssertEqual(importedTranscribe.text("--format"), "jsonl")
             XCTAssertEqual(importedTranscribe.text("--output"), "", "the page's stamped transcription path is not a setting")
             XCTAssertEqual(importedTranscribe.text("--context-output"), "", "nor is its context path")
-            let named = StudioOutputLocation.destination(for: importedTranscribe)
+            let named = StudioOutputLocation.destination(for: importedTranscribe, source: .contract)
             let output = URL(fileURLWithPath: named.text("--output"))
             XCTAssertEqual(output.deletingLastPathComponent().path, root.appendingPathComponent("Music").path)
             XCTAssertTrue(output.lastPathComponent.hasPrefix("harbor-lights-"), output.path)

@@ -9,7 +9,7 @@ final class StudioRuntimeFamilyArgumentsTests: XCTestCase {
         let template = try XCTUnwrap(CommandCatalog.template(id: id))
         var draft = template.defaultDraft()
         edit(&draft)
-        let arguments = template.arguments(from: draft)
+        let arguments = template.arguments(from: draft, source: .contract)
         let capability = try XCTUnwrap(id.capability)
         let invocation = MereRunCommandInvocation(capability: capability, arguments: Array(arguments.dropFirst(capability.command.count)))
         let report = capability.resolutionReport(invocation)

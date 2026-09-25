@@ -164,21 +164,21 @@ package final class StudioTaskSessions {
     /// The Command view's form for a request. A task on the shared task workspace edits its
     /// task draft's form directly — the composer, the inspector, and the Command view are one
     /// value — so there is never a separate override to merge for it.
-    package func commandForm(for request: StudioRunRequest) -> StudioConsoleDraft {
+    package func commandForm(for request: StudioRunRequest, source: StudioScopeSource) -> StudioConsoleDraft {
         let task = request.templateID.studioTask
         if task.usesTaskDraft, let draft = taskDraft(for: task), draft.templateID == request.templateID {
             return draft.form
         }
-        return commandState(for: request.templateID)?.resolved(source: request.template.arguments(from: request.draft))
-            ?? StudioConsoleCommand.seed(template: request.template, draft: request.draft)
+        return commandState(for: request.templateID)?.resolved(source: request.template.arguments(from: request.draft, source: source))
+            ?? StudioConsoleCommand.seed(template: request.template, draft: request.draft, source: source)
     }
 
-    package func resolving(_ base: StudioRunRequest) -> StudioRunRequest {
+    package func resolving(_ base: StudioRunRequest, source: StudioScopeSource) -> StudioRunRequest {
         // A task draft's request already carries its form as its execution.
         guard !base.templateID.studioTask.usesTaskDraft,
               commandState(for: base.templateID) != nil,
               let launch = StudioConsoleRun(template: base.template,
-                  draft: commandForm(for: base), seed: base.draft) else { return base }
+                  draft: commandForm(for: base, source: source), seed: base.draft, source: source) else { return base }
         return StudioRunRequest(id: base.id, mode: base.mode, templateID: base.templateID,
             template: base.template, draft: launch.commandDraft, createdAt: base.createdAt,
             conversationID: base.conversationID,

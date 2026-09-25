@@ -91,31 +91,33 @@ package enum StudioTrainingRun {
     /// The base model a chosen recipe trains when `--model` is left to it: the contract's default
     /// for the recipe, so the Klein recipe trains the FLUX.2 Klein 9B base and the Krea recipes
     /// Krea 2 raw. Nil without a recipe, and for the other trainers.
-    package static func recipeBaseModel(for draft: StudioTaskDraft) -> String? {
+    package static func recipeBaseModel(for draft: StudioTaskDraft, source: StudioScopeSource) -> String? {
         let recipe = draft.text("--recipe")
         guard draft.templateID == .imageTrainLoRA, !recipe.isBlank,
-              case .family(_, let model?, .defaultModel) = imageTrainingFamily(["--recipe", recipe]) else { return nil }
+              case .family(_, let model?, .defaultModel) = imageTrainingFamily(["--recipe", recipe], source: source)
+        else { return nil }
         return model
     }
 
     /// Whether the image draft trains on the contract's FLUX.2 Klein family: the model it names,
     /// or the Klein recipe's base when it names none. A local folder is not guessed from its name.
-    package static func trainsKlein(_ draft: StudioTaskDraft) -> Bool {
+    package static func trainsKlein(_ draft: StudioTaskDraft, source: StudioScopeSource) -> Bool {
         guard draft.templateID == .imageTrainLoRA,
-              case .family(let family, _, _) = imageTrainingFamily(draft.arguments) else { return false }
+              case .family(let family, _, _) = imageTrainingFamily(draft.arguments(source: source), source: source)
+        else { return false }
         return family == "klein"
     }
 
     /// The family the image trainer runs for `arguments`; the CLI answers for a local folder.
-    private static func imageTrainingFamily(_ arguments: [String]) -> MereRunFamilyResolution {
-        StudioScopeSource.live.scope(capability: MereRunCapabilityCatalog.imageTrainLoRA, commandLine: arguments).resolution
+    private static func imageTrainingFamily(_ arguments: [String], source: StudioScopeSource) -> MereRunFamilyResolution {
+        source.scope(capability: MereRunCapabilityCatalog.imageTrainLoRA, commandLine: arguments).resolution
     }
 
     /// Klein checkpoints and previews are opt-in on the command line; without them a run has
     /// nothing to resume from and nothing to watch. A launch against a Klein base sets both to
     /// every 250 steps when they were left unset. Krea 2 takes neither.
-    package static func applyingKleinDefaults(_ draft: StudioTaskDraft) -> StudioTaskDraft {
-        guard draft.templateID == .imageTrainLoRA, trainsKlein(draft) else { return draft }
+    package static func applyingKleinDefaults(_ draft: StudioTaskDraft, source: StudioScopeSource) -> StudioTaskDraft {
+        guard draft.templateID == .imageTrainLoRA, trainsKlein(draft, source: source) else { return draft }
         var draft = draft
         for flag in ["--checkpoint-interval", "--sample-interval"] where draft.form.values[flag] == nil {
             draft.form[flag] = .integer(250)
@@ -126,8 +128,8 @@ package enum StudioTrainingRun {
     /// What the page launches for a draft: Klein's cadence where the draft trains Klein. The
     /// recipe's options were cleared when it was chosen (`choosingRecipe`); what is set now is
     /// set on purpose.
-    package static func launchDraft(_ draft: StudioTaskDraft) -> StudioTaskDraft {
-        applyingKleinDefaults(draft)
+    package static func launchDraft(_ draft: StudioTaskDraft, source: StudioScopeSource) -> StudioTaskDraft {
+        applyingKleinDefaults(draft, source: source)
     }
 
     /// Whether a managed model is a base the trainer can train: a model of the image trainer's
@@ -210,9 +212,10 @@ package enum StudioTrainingRun {
     package static func musicLaunch(
         _ draft: StudioTaskDraft,
         manifest: StudioMusicTrainingManifest,
+        source: StudioScopeSource,
         fileManager: FileManager = .default
     ) throws -> StudioTaskDraft {
-        let named = StudioOutputLocation.destination(for: draft, fileManager: fileManager)
+        let named = StudioOutputLocation.destination(for: draft, source: source, fileManager: fileManager)
         let manifestURL = StudioMusicTrainingManifest.manifestURL(besideOutput: named.text("--output"), fileManager: fileManager)
         try fileManager.createDirectory(at: manifestURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try manifest.jsonl().write(to: manifestURL, options: .atomic)

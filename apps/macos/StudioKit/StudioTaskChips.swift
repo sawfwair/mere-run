@@ -31,10 +31,10 @@ package enum StudioTaskChips {
     /// The chips a Library row of a task-draft task shows on its card: the template's essential
     /// options (the composer's chips, minus the variant the card is headed by) valued from the
     /// recorded command, then the model. Empty for a row whose command was not recorded.
-    package static func chips(for item: StudioLibraryItem, titles: StudioModelTitles) -> [String] {
+    package static func chips(for item: StudioLibraryItem, titles: StudioModelTitles, source: StudioScopeSource) -> [String] {
         guard let task = item.templateID?.studioTask,
-              let recorded = StudioLibraryDraftRestoration.taskDraft(from: item) else { return [] }
-        var chips = StudioTaskSchema.essentials(for: task, draft: recorded)
+              let recorded = StudioLibraryDraftRestoration.taskDraft(from: item, source: source) else { return [] }
+        var chips = StudioTaskSchema.essentials(for: task, draft: recorded, source: source)
             .filter { $0.overrideID != .variant }
             .map { $0.chipTitle(in: recorded) }
         if !recorded.model.isEmpty {

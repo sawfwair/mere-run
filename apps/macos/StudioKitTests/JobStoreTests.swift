@@ -616,7 +616,7 @@ private extension JobStoreTests {
         var draft = template.defaultDraft()
         draft.extraArguments = extra
         configure(&draft)
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         return JobRequest(
             lane: lane,
             template: template,
@@ -631,7 +631,7 @@ private extension JobStoreTests {
                 keepsStandardInputOpen: templateID == .musicRealtime || templateID == .videoSession
             ),
             displayCommand: (["mere.run"] + args).shellQuoted(),
-            dedupeKey: dedupeKey
+            dedupeKey: dedupeKey, scopeSource: .contract
         )
     }
 

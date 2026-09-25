@@ -181,7 +181,7 @@ enum CommandDraftProbes {
     static let emissions: Result<[Emission], Error> = Result {
         try CommandCatalog.templates.filter(\.buildsLocalArguments).flatMap { template in
             try probes(for: template).map { probe in
-                Emission(template: template, probe: probe.name, arguments: template.arguments(from: probe.draft))
+                Emission(template: template, probe: probe.name, arguments: template.arguments(from: probe.draft, source: .contract))
             }
         }
     }

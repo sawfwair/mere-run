@@ -948,7 +948,7 @@ struct StudioServingConsoleView: View {
             preflight.json = true
             guard let template = CommandCatalog.template(id: .apiServe) else { return }
             let result = await controller.utilityCommandResult(
-                args: template.arguments(from: preflight),
+                args: template.arguments(from: preflight, source: controller.scopeSource),
                 environmentOverrides: CommandLaunchEnvironment.overrides(templateID: .apiServe, draft: preflight)
             )
             operationMessage = result.exitCode == 0

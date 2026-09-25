@@ -69,14 +69,15 @@ struct StudioScopeNote: View {
 }
 
 private struct StudioScopeSourceKey: EnvironmentKey {
-    static let defaultValue = StudioScopeSource.live
+    static let defaultValue = StudioScopeSource.contract
 }
 
 extension EnvironmentValues {
     /// Where the surfaces below read their `StudioOptionScope`s: the shipped contract and the
-    /// app's `catalog resolve` answers. Offscreen renders set a fixed source, so a routed
-    /// command's scoping renders without a CLI.
-    var studioScopeSource: StudioScopeSource {
+    /// controller's `catalog resolve` answers (`MereRunController.scopeSource`), which the app
+    /// sets at each window's root. Unset, it is the contract alone. Offscreen renders set a
+    /// fixed source, so a routed command's scoping renders without a CLI.
+    package var studioScopeSource: StudioScopeSource {
         get { self[StudioScopeSourceKey.self] }
         set { self[StudioScopeSourceKey.self] = newValue }
     }

@@ -257,13 +257,13 @@ extension StudioMode {
 
     /// The wells the model the draft runs takes. A file in a well the model does not take stays in
     /// the draft, so switching back shows it again, but the run leaves it out.
-    package func attachmentSlots(for draft: StudioDraft, source: StudioScopeSource = .live) -> [StudioAttachmentSlot] {
+    package func attachmentSlots(for draft: StudioDraft, source: StudioScopeSource) -> [StudioAttachmentSlot] {
         guard let scope = source.scope(mode: self, draft: draft) else { return attachmentSlots }
         return attachmentSlots.filter { slot in attachmentFlag(for: slot).map(scope.allows) ?? true }
     }
 
     /// Whether the composer shows the well: any non-transient slot, or a transient one that is filled.
-    package func showsAttachmentWell(for draft: StudioDraft, source: StudioScopeSource = .live) -> Bool {
+    package func showsAttachmentWell(for draft: StudioDraft, source: StudioScopeSource) -> Bool {
         attachmentSlots(for: draft, source: source).contains { !$0.isTransient || $0.isFilled(in: draft) }
     }
 
@@ -272,13 +272,13 @@ extension StudioMode {
     package func attachmentSlot(
         for url: URL,
         in draft: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> StudioAttachmentSlot? {
         attachmentSlots(for: draft, source: source).slot(for: url, in: draft)
     }
 
     /// The slot a pasted bitmap (no file on the pasteboard) lands in.
-    package func pastedImageSlot(in draft: StudioDraft, source: StudioScopeSource = .live) -> StudioAttachmentSlot? {
+    package func pastedImageSlot(in draft: StudioDraft, source: StudioScopeSource) -> StudioAttachmentSlot? {
         attachmentSlots(for: draft, source: source).pastedImageSlot(in: draft)
     }
 }
@@ -286,7 +286,7 @@ extension StudioMode {
 extension StudioDraft {
     /// Routes each dropped file to the slot it belongs in. Returns whether anything was attached.
     @discardableResult
-    package mutating func attach(dropped urls: [URL], for mode: StudioMode, source: StudioScopeSource = .live) -> Bool {
+    package mutating func attach(dropped urls: [URL], for mode: StudioMode, source: StudioScopeSource) -> Bool {
         attach(dropped: urls, slots: mode.attachmentSlots(for: self, source: source))
     }
 
@@ -400,7 +400,7 @@ extension StudioMode {
     /// The chips the model the draft runs takes, in strip order: a chip whose flags the model
     /// uses none of is left out (a model without steps or a seed shows neither chip), and one
     /// whose value the model fixes is shown read-only.
-    package func composerChips(for draft: StudioDraft, source: StudioScopeSource = .live) -> [StudioComposerChip] {
+    package func composerChips(for draft: StudioDraft, source: StudioScopeSource) -> [StudioComposerChip] {
         let scope = source.scope(mode: self, draft: draft)
         return composerChips.compactMap { kind in
             guard let scope else { return StudioComposerChip(kind: kind, fixedValue: nil, fixedBy: nil) }
@@ -446,9 +446,10 @@ extension StudioMode {
     /// Inventory rows the model chip lists: this mode's categories, installed first.
     package func modelChoices(
         from inventory: [StudioModelInventoryRow],
-        readImageAction: StudioReadImageAction = .inspect
+        readImageAction: StudioReadImageAction = .inspect,
+        source: StudioScopeSource
     ) -> [StudioModelInventoryRow] {
-        StudioModelScope(mode: self, readImageAction: readImageAction).choices(from: inventory)
+        StudioModelScope(mode: self, readImageAction: readImageAction, source: source).choices(from: inventory)
     }
 }
 
@@ -474,7 +475,7 @@ package struct StudioModelScope: Equatable {
 
     /// A prompt mode's picker. Its default is the template's model, which the composer sends
     /// when the draft names none.
-    package init(mode: StudioMode, readImageAction: StudioReadImageAction = .inspect, source: StudioScopeSource = .live) {
+    package init(mode: StudioMode, readImageAction: StudioReadImageAction = .inspect, source: StudioScopeSource) {
         let templateID = mode == .readImage ? readImageAction.templateID : mode.defaultTemplateID
         self.init(
             noun: mode.title.lowercased(),
@@ -486,7 +487,7 @@ package struct StudioModelScope: Equatable {
 
     /// A task template's picker. Its default is what the command runs with no `--model`: the
     /// contract's default model where the command is routed, else the template's.
-    package init(templateID: CommandTemplateID, source: StudioScopeSource = .live) {
+    package init(templateID: CommandTemplateID, source: StudioScopeSource) {
         let template = CommandCatalog.template(id: templateID)
         let capability = source.capability(for: templateID)
         let contractDefault = capability.flatMap { capability in

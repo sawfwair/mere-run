@@ -272,6 +272,7 @@ struct StudioTrainingSnapshot: Equatable {
 /// Library row, and the remembered request are the shared ones, and the root's Command view
 /// edits the same draft this column does.
 struct StudioTrainingView: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     let kind: StudioTrainingKind
 
     @EnvironmentObject private var controller: MereRunController
@@ -320,14 +321,14 @@ struct StudioTrainingView: View {
     }
 
     private var baseline: StudioTaskDraft { StudioTrainingRun.baseline(for: kind.templateID) }
-    private var slots: [StudioAttachmentSlot] { draft.slots }
+    private var slots: [StudioAttachmentSlot] { draft.slots(source: scopeSource) }
     private var readiness: ModelReadinessState { controller.readiness(for: task) }
     private var dependencies: [String: (carries: Bool, dependsOn: String?)] { StudioTaskSchema.dependencies(for: draft) }
 
     /// Every option the contract lets the page edit, in contract order; the page's sections pick
     /// from it by flag and Advanced takes the rest.
     private var allFields: [StudioContractField<StudioTaskDraft>] {
-        StudioTaskSchema.sections(for: task, draft: draft).flatMap(\.fields) + StudioTaskSchema.advanced(for: task, draft: draft)
+        StudioTaskSchema.sections(for: task, draft: draft, source: scopeSource).flatMap(\.fields) + StudioTaskSchema.advanced(for: task, draft: draft, source: scopeSource)
     }
 
     private func fields(for flags: [String]) -> [StudioContractField<StudioTaskDraft>] {
@@ -370,7 +371,7 @@ struct StudioTrainingView: View {
             seedComparisons()
             refreshReadiness()
         }
-        .onChange(of: StudioTaskSchema.requirement(for: draft)) { _, _ in
+        .onChange(of: StudioTaskSchema.requirement(for: draft, source: scopeSource)) { _, _ in
             error = nil
             refreshReadiness()
         }
@@ -528,7 +529,7 @@ struct StudioTrainingView: View {
     }
 
     private var modelPicker: some View {
-        let scope = StudioTaskSchema.modelScope(for: draft)
+        let scope = StudioTaskSchema.modelScope(for: draft, source: scopeSource)
         let bases = models.rows.filter { StudioTrainingRun.isTrainableBase($0.id, for: kind.templateID) }
         return StudioModelPicker(scope: scope, model: draftBinding.model, modelInventory: bases,
                                  onShowModels: { navigation.open(task: .modelsInstalled) }) {
@@ -539,7 +540,7 @@ struct StudioTrainingView: View {
                         .foregroundStyle(MereRunTheme.accent)
                 }
                 // Blank means the recipe's base or the template's default: name what will train.
-                Text(scope.displayLabel(model: StudioTaskSchema.modelID(for: draft), titles: titles))
+                Text(scope.displayLabel(model: StudioTaskSchema.modelID(for: draft, source: scopeSource), titles: titles))
                     .font(.callout)
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)
@@ -556,7 +557,7 @@ struct StudioTrainingView: View {
         }
         .help(readiness.blocksRun ? readiness.message(titles: titles) : "Base model")
         .accessibilityLabel("Base model")
-        .accessibilityValue(StudioTaskSchema.modelID(for: draft))
+        .accessibilityValue(StudioTaskSchema.modelID(for: draft, source: scopeSource))
     }
 
     private var modelStatusGlyph: String? {
@@ -576,9 +577,9 @@ struct StudioTrainingView: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 if case .missingModel = readiness {
-                    Button("Get the model") { pull(modelID: StudioTaskSchema.modelID(for: draft)) }
+                    Button("Get the model") { pull(modelID: StudioTaskSchema.modelID(for: draft, source: scopeSource)) }
                         .buttonStyle(.mereSecondary)
-                        .disabled(jobMonitor.pullJob(for: StudioTaskSchema.modelID(for: draft)) != nil)
+                        .disabled(jobMonitor.pullJob(for: StudioTaskSchema.modelID(for: draft, source: scopeSource)) != nil)
                 }
                 Button("Check again", action: refreshReadiness)
                     .buttonStyle(.plain)
@@ -725,7 +726,8 @@ struct StudioTrainingView: View {
     /// Where the adapter lands, without a path field: routing names it inside the domain's folder
     /// when the run starts, after the dataset (or the clip list, for music).
     private var outputSection: some View {
-        let folder = URL(fileURLWithPath: StudioOutputLocation.destination(for: draft).text("--output")).deletingLastPathComponent()
+        let folder = URL(fileURLWithPath: StudioOutputLocation.destination(for: draft, source: scopeSource).text("--output"))
+            .deletingLastPathComponent()
         return StudioInspectorSectionView(title: "Output", canReset: false, onReset: {}) {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -1192,7 +1194,7 @@ struct StudioTrainingView: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: task, requirement: StudioTaskSchema.requirement(for: draft))
+        controller.checkReadiness(for: task, requirement: StudioTaskSchema.requirement(for: draft, source: scopeSource))
     }
 
     /// Gets a managed model through the same `model pull` job the readiness row reports.
@@ -1229,7 +1231,7 @@ struct StudioTrainingView: View {
         error = nil
         inspectDataset()
         guard validateDraft() else { return }
-        guard let checked = StudioTrainingRun.preflightDraft(StudioTrainingRun.launchDraft(draft)) else {
+        guard let checked = StudioTrainingRun.preflightDraft(StudioTrainingRun.launchDraft(draft, source: scopeSource)) else {
             statusMessage = "The clips are ready. ACE-Step checks its model files when training starts."
             return
         }
@@ -1250,8 +1252,8 @@ struct StudioTrainingView: View {
             let request: StudioRunRequest
             if kind == .music {
                 if readiness.blocksRun { throw StudioValidationError(message: readiness.message(titles: titles)) }
-                let launch = try StudioTrainingRun.musicLaunch(draft, manifest: musicManifest)
-                guard let built = launch.request() else { throw StudioValidationError(message: "This command can't run from Studio.") }
+                let launch = try StudioTrainingRun.musicLaunch(draft, manifest: musicManifest, source: scopeSource)
+                guard let built = launch.request(source: scopeSource) else { throw StudioValidationError(message: "This command can't run from Studio.") }
                 request = try runner.run(request: built, task: task)
             } else {
                 // The runner applies the recipe and Klein's cadence (`StudioTaskRunner.launching`).

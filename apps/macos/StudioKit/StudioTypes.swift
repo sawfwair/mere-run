@@ -609,7 +609,7 @@ package enum StudioCommandAdapter {
         draft studioDraft: StudioDraft,
         conversationID: UUID? = nil,
         validating: Bool = true,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) throws -> StudioRunRequest {
         let templateID = templateID(for: mode, draft: studioDraft)
         guard let template = CommandCatalog.template(id: templateID) else {
@@ -871,8 +871,8 @@ package enum StudioCommandAdapter {
         return draft
     }
 
-    package static func pullRequest(for mode: StudioMode, draft: StudioDraft) throws -> StudioRunRequest? {
-        guard let requirement = capabilityRequirement(for: mode, draft: draft),
+    package static func pullRequest(for mode: StudioMode, draft: StudioDraft, source: StudioScopeSource) throws -> StudioRunRequest? {
+        guard let requirement = capabilityRequirement(for: mode, draft: draft, source: source),
               case .managedModel(let model) = requirement else {
             return nil
         }
@@ -887,7 +887,7 @@ package enum StudioCommandAdapter {
     }
 
     /// The managed model the composer's run needs, for its pull progress; empty when none.
-    package static func requiredModel(for mode: StudioMode, draft: StudioDraft, source: StudioScopeSource = .live) -> String {
+    package static func requiredModel(for mode: StudioMode, draft: StudioDraft, source: StudioScopeSource) -> String {
         guard case .managedModel(let model)? = capabilityRequirement(for: mode, draft: draft, source: source) else {
             if !draft.model.isBlank { return draft.model }
             return CommandCatalog.template(id: templateID(for: mode, draft: draft))?.defaultModel ?? ""
@@ -904,7 +904,7 @@ package enum StudioCommandAdapter {
     package static func capabilityRequirement(
         for mode: StudioMode,
         draft: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> StudioCapabilityRequirement? {
         if let scope = source.scope(mode: mode, draft: draft), scope.capability.routing != nil {
             if let reason = scope.blockingReason { return .unavailable(reason) }

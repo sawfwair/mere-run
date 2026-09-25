@@ -49,10 +49,10 @@ final class StudioPromptTaskControllerTests: XCTestCase {
     }
 
     private func override(_ request: StudioRunRequest, flag: String, value: String) {
-        var form = StudioConsoleCommand.seed(template: request.template, draft: request.draft)
+        var form = StudioConsoleCommand.seed(template: request.template, draft: request.draft, source: .contract)
         form[flag] = .text(value)
         controller.taskSessions.set(StudioTaskCommandState(templateID: request.templateID,
-            sourceArguments: request.template.arguments(from: request.draft), form: form),
+            sourceArguments: request.template.arguments(from: request.draft, source: .contract), form: form),
             for: request.templateID.studioTask.rawValue + ".commandOverride")
     }
 
@@ -113,7 +113,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         recorded.cfgScale = 3.5
         recorded.outputPath = root.appendingPathComponent("bowl.png").path
         let request = StudioRunRequest(mode: .createImage, templateID: .imageGenerate, template: template, draft: recorded)
-        let item = library.start(request: request, commandPreview: "fixture")
+        let item = library.start(request: request, commandPreview: "fixture", source: .contract)
 
         XCTAssertTrue(prompt.useSettings(from: item))
         let parked = controller.taskSessions.value(for: StudioTask.imageGenerate.rawValue + ".draft", default: StudioDraft())
@@ -129,7 +129,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
 
         activate(.createImage)
         XCTAssertEqual(prompt.draft, parked, "opening the task lands on the restored draft")
-        let replayed = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: prompt.draft)
+        let replayed = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: prompt.draft, source: .contract)
         XCTAssertEqual(replayed.draft.width, 768)
         XCTAssertEqual(replayed.draft.seed, "4242")
         XCTAssertEqual(replayed.draft.model, "image-zimage-turbo")
@@ -206,8 +206,8 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         segment.reset(for: .segment)
         segment.inputPath = root.appendingPathComponent("mug.png").path
         segment.visionRegionPrompts = [box, point, negative]
-        let segmentRequest = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)
-        let segmentItem = library.start(request: segmentRequest, commandPreview: "fixture")
+        let segmentRequest = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment, source: .contract)
+        let segmentItem = library.start(request: segmentRequest, commandPreview: "fixture", source: .contract)
 
         var track = StudioDraft()
         track.reset(for: .track)
@@ -215,8 +215,8 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         track.visionRegionPrompts = [box, point]
         track.visionInitFrame = 12
         track.visionEndFrame = 40
-        let trackRequest = try StudioCommandAdapter.makeRequest(mode: .track, draft: track)
-        let trackItem = library.start(request: trackRequest, commandPreview: "fixture")
+        let trackRequest = try StudioCommandAdapter.makeRequest(mode: .track, draft: track, source: .contract)
+        let trackItem = library.start(request: trackRequest, commandPreview: "fixture", source: .contract)
 
         // Restored from another task, then opened: the route through `activate`.
         activate(.chat)
@@ -254,19 +254,19 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         recorded.model = "audio-enhance-universr"
         recorded.outputPath = root.appendingPathComponent("voice-memo-enhanced.wav").path
         let request = StudioRunRequest(mode: .listen, templateID: .audioEnhance, template: template, draft: recorded)
-        let item = library.start(request: request, commandPreview: "fixture")
+        let item = library.start(request: request, commandPreview: "fixture", source: .contract)
         controller.taskSessions.set(
             StudioTaskCommandState(templateID: .audioEnhance, sourceArguments: [], form: StudioConsoleDraft()),
             for: StudioTask.audioEnhance.rawValue + ".commandOverride"
         )
 
-        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: item))
+        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: item, source: .contract))
         XCTAssertEqual(restored.templateID, .audioEnhance)
         XCTAssertEqual(restored.primaryInputPath, recorded.inputPath)
         XCTAssertEqual(restored.model, "audio-enhance-universr")
         XCTAssertEqual(restored.text("--output"), "", "a restored run gets a fresh destination, never the row's file")
         XCTAssertEqual(
-            restored.arguments,
+            restored.arguments(source: .contract),
             try XCTUnwrap(item.commandArguments).filter { $0 != "--output" && $0 != recorded.outputPath },
             "everything but the destination is the row's exact argv, read back"
         )
@@ -279,9 +279,9 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         transcribe.musicContextOutput = root.appendingPathComponent("harbor-lights-context.json").path
         let transcribeRow = library.start(
             request: StudioRunRequest(mode: .music, templateID: .musicTranscribe, template: transcribeTemplate, draft: transcribe),
-            commandPreview: "fixture"
+            commandPreview: "fixture", source: .contract
         )
-        let restoredTranscribe = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: transcribeRow))
+        let restoredTranscribe = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: transcribeRow, source: .contract))
         XCTAssertEqual(restoredTranscribe.primaryInputPath, transcribe.inputPath)
         XCTAssertEqual(restoredTranscribe.text("--output"), "")
         XCTAssertEqual(restoredTranscribe.text("--context-output"), "")
@@ -304,7 +304,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         let generate = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
         let generated = library.start(
             request: StudioRunRequest(mode: .createImage, templateID: .imageGenerate, template: generate, draft: generate.defaultDraft()),
-            commandPreview: "fixture"
+            commandPreview: "fixture", source: .contract
         )
         XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(generated))
 
@@ -317,10 +317,10 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         })
         let other = library.start(
             request: StudioRunRequest(mode: otherTemplate.libraryMode, templateID: otherTemplate.id, template: otherTemplate, draft: otherTemplate.defaultDraft()),
-            commandPreview: "fixture"
+            commandPreview: "fixture", source: .contract
         )
         XCTAssertFalse(StudioLibraryDraftRestoration.canRestore(other), otherTemplate.id.rawValue)
-        XCTAssertNil(StudioLibraryDraftRestoration.draft(from: other, baseline: StudioDraft()))
+        XCTAssertNil(StudioLibraryDraftRestoration.draft(from: other, baseline: StudioDraft(), source: .contract))
         XCTAssertFalse(prompt.useSettings(from: other))
         XCTAssertTrue(runner.starts.isEmpty)
     }
@@ -429,7 +429,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
     func testGenerationUsesCommandOverridesAndRecordsTheLaunchedCommand() throws {
         activate(.createImage)
         prompt.draft.prompt = "A green ceramic bowl"
-        let base = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: prompt.draft)
+        let base = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: prompt.draft, source: .contract)
         override(base, flag: "--width", value: "768")
         let submission = try XCTUnwrap(prompt.runPrompt(inventory: [], prepareOutput: temporaryOutput))
         let request = submission.request
@@ -446,7 +446,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         activate(.createImage)
         prompt.draft.prompt = "Keep my work"
         let original = prompt.draft
-        let base = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: original)
+        let base = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: original, source: .contract)
         override(base, flag: "--width", value: "not-an-integer")
         var preparedOutput = false
         XCTAssertThrowsError(try prompt.runPrompt(inventory: [], prepareOutput: { draft in
@@ -474,7 +474,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         activate(.chat)
         prompt.draft.prompt = "Explain the image"
         prompt.draft.inputPath = "/tmp/turn.png"
-        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft)
+        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft, source: .contract)
         override(base, flag: "--max-tokens", value: "128")
         let sent = try XCTUnwrap(prompt.runPrompt(inventory: []))
         let id = try XCTUnwrap(sent.request.conversationID)
@@ -495,7 +495,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         let id = thread(reply: "Keep this answer")
         activate(.chat, selected: id)
         prompt.draft.prompt = "Unsent follow-up"
-        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft)
+        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft, source: .contract)
         let original = try XCTUnwrap(library.items.first { $0.id == id })
         let stored = try Data(contentsOf: library.libraryURL)
         let draft = prompt.draft
@@ -515,7 +515,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         let id = thread(mode: .code, reply: "Keep this function")
         activate(.code, selected: id)
         prompt.draft.prompt = "Unsent follow-up"
-        let base = try StudioCommandAdapter.makeRequest(mode: .code, draft: prompt.draft)
+        let base = try StudioCommandAdapter.makeRequest(mode: .code, draft: prompt.draft, source: .contract)
         XCTAssertEqual(base.templateID, .textCode)
         let original = try XCTUnwrap(library.items.first { $0.id == id })
         let stored = try Data(contentsOf: library.libraryURL)
@@ -536,7 +536,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         let id = thread(mode: .code, reply: "Replace this function")
         activate(.code, selected: id)
         prompt.draft.prompt = "Do not send this follow-up yet"
-        let base = try StudioCommandAdapter.makeRequest(mode: .code, draft: prompt.draft)
+        let base = try StudioCommandAdapter.makeRequest(mode: .code, draft: prompt.draft, source: .contract)
         override(base, flag: "--max-tokens", value: "128")
         let originalDraft = prompt.draft
         let request = try XCTUnwrap(prompt.retryLastTurn(inventory: []))
@@ -589,7 +589,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         let id = thread(reply: "Replace this answer")
         activate(.chat, selected: id)
         prompt.draft.prompt = "Do not send this follow-up yet"
-        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft)
+        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft, source: .contract)
         override(base, flag: "--max-tokens", value: "128")
         let originalDraft = prompt.draft
         let request = try XCTUnwrap(prompt.retryLastTurn(inventory: []))
@@ -659,7 +659,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
         prompt.draft.prompt = "A new question"
         prompt.draft.inputPath = "/tmp/unsent-image.png"
         let original = prompt.draft
-        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: original)
+        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: original, source: .contract)
         override(base, flag: "--max-tokens", value: "invalid")
         XCTAssertThrowsError(try prompt.runPrompt(inventory: []))
         XCTAssertEqual(prompt.draft, original)
@@ -672,10 +672,10 @@ final class StudioPromptTaskControllerTests: XCTestCase {
     func testReplayKeepsRecordedArgumentsWhenTheCurrentCommandPanelHasDifferentValues() throws {
         activate(.chat)
         prompt.draft.prompt = "Original request"
-        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft)
+        let base = try StudioCommandAdapter.makeRequest(mode: .chat, draft: prompt.draft, source: .contract)
         override(base, flag: "--max-tokens", value: "128")
-        let original = controller.taskSessions.resolving(base)
-        let row = library.start(request: original, commandPreview: "fixture")
+        let original = controller.taskSessions.resolving(base, source: .contract)
+        let row = library.start(request: original, commandPreview: "fixture", source: .contract)
         override(base, flag: "--max-tokens", value: "256")
         let replay = try prompt.replay(row)
         XCTAssertEqual(replay.parentID, row.id)
@@ -722,7 +722,7 @@ final class StudioPromptTaskControllerTests: XCTestCase {
     func testOutputFallbackMovesTheLaunchedAndRecordedDestinationTogether() throws {
         activate(.createImage)
         prompt.draft.prompt = "Fallback output"
-        let base = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: prompt.draft)
+        let base = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: prompt.draft, source: .contract)
         override(base, flag: "--width", value: "768")
         let fallbackFolder = root.appendingPathComponent("fallback", isDirectory: true)
         var fallback = ""

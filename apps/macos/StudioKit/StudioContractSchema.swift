@@ -557,7 +557,7 @@ package enum StudioContractSchema {
     package static func fields(
         for mode: StudioMode,
         draft: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioContractField<StudioDraft>] {
         guard let scope = source.scope(mode: mode, draft: draft) else { return [] }
         return fields(for: mode, options: scope.options, family: scope.family?.id)
@@ -604,7 +604,7 @@ package enum StudioContractSchema {
     package static func inspectorFields(
         for mode: StudioMode,
         draft: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioContractField<StudioDraft>] {
         fields(for: mode, draft: draft, source: source).filter { field in
             StudioContractOverrides.override(forFlag: field.flag, mode: mode)?.isExternal != true
@@ -642,7 +642,7 @@ package enum StudioContractSchema {
     package static func sections(
         for mode: StudioMode,
         draft: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioContractSection] {
         let fields = inspectorFields(for: mode, draft: draft, source: source).filter { $0.tier != .expert }
         return StudioContractGroup.allCases.compactMap { group in
@@ -656,7 +656,7 @@ package enum StudioContractSchema {
     package static func expertFields(
         for mode: StudioMode,
         draft: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioContractField<StudioDraft>] {
         inspectorFields(for: mode, draft: draft, source: source).filter { $0.tier == .expert }
     }
@@ -668,7 +668,7 @@ package enum StudioContractSchema {
         _ field: StudioContractField<StudioDraft>,
         for mode: StudioMode,
         in draft: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> Bool {
         isVisible(field, in: draft, dependencies: dependencies(for: mode, draft: draft, source: source))
     }
@@ -680,7 +680,7 @@ package enum StudioContractSchema {
     package static func dependencies(
         for mode: StudioMode,
         draft: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [String: (carries: Bool, dependsOn: String?)] {
         var entries: [String: (carries: Bool, dependsOn: String?)] = [:]
         for field in boundFields(for: mode, draft: draft, source: source) {
@@ -695,7 +695,7 @@ package enum StudioContractSchema {
     package static func boundFields(
         for mode: StudioMode,
         draft: StudioDraft = StudioDraft(),
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioContractField<StudioDraft>] {
         guard let scope = source.scope(mode: mode, draft: draft) else { return [] }
         let bindings = StudioContractBindings.bindings(for: mode)
@@ -724,15 +724,15 @@ package enum StudioContractSchema {
     /// Reads every bound field out of `draft` and writes it straight back. The identity this
     /// establishes is what lets the contract-driven form share the argv builder: a control that
     /// round-trips its own value cannot change the command.
-    package static func roundTrip(_ draft: inout StudioDraft, for mode: StudioMode) {
-        for binding in fields(for: mode, draft: draft).flatMap(\.bindings) {
+    package static func roundTrip(_ draft: inout StudioDraft, for mode: StudioMode, source: StudioScopeSource) {
+        for binding in fields(for: mode, draft: draft, source: source).flatMap(\.bindings) {
             binding.write(&draft, binding.read(draft))
         }
     }
 
     /// Every draft field the mode's inspector binds, by draft property name.
-    package static func draftFieldIDs(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> Set<String> {
-        Set(inspectorFields(for: mode, draft: draft).flatMap(\.draftFieldIDs))
+    package static func draftFieldIDs(for mode: StudioMode, draft: StudioDraft = StudioDraft(), source: StudioScopeSource) -> Set<String> {
+        Set(inspectorFields(for: mode, draft: draft, source: source).flatMap(\.draftFieldIDs))
     }
 
     /// How many of the mode's inspector fields differ from its defaults; the header badge.
@@ -740,7 +740,7 @@ package enum StudioContractSchema {
         mode: StudioMode,
         draft: StudioDraft,
         baseline: StudioDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> Int {
         inspectorFields(for: mode, draft: draft, source: source)
             .reduce(0) { $0 + $1.changedCount(draft: draft, baseline: baseline) }

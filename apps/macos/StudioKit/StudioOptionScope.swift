@@ -22,7 +22,9 @@ package enum StudioIdentityState: Equatable, Sendable {
 }
 
 /// Where scopes come from: the contract the app ships, and what the CLI has said about local
-/// models. Tests and offscreen renders substitute either.
+/// models. There is no process-wide one: `MereRunController.scopeSource` answers from that
+/// controller's own `catalog resolve` store, and every surface, validation, and argv builder is
+/// handed the source it reads. Tests and offscreen renders substitute either part.
 package struct StudioScopeSource: Sendable {
     package var identities: any StudioModelIdentifying
     /// The capability for a capability id.
@@ -36,8 +38,10 @@ package struct StudioScopeSource: Sendable {
         self.capability = capability
     }
 
-    /// The shipped contract and the app's `catalog resolve` answers.
-    package static let live = StudioScopeSource(identities: StudioModelIdentityStore.shared)
+    /// The shipped contract with no CLI to ask: a model the contract cannot place stays
+    /// unidentified and shows every option. What a view reads before the app hands it a
+    /// controller's source.
+    package static let contract = StudioScopeSource(identities: StudioFixedModelIdentities())
 
     package func capability(for templateID: CommandTemplateID) -> MereRunCommandCapability? {
         templateID.capabilityID.flatMap(capability)

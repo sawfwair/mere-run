@@ -6,7 +6,9 @@ import Foundation
 /// Each starts an `ArgumentBuilder` from the flag constants generated for its capability, so a
 /// flag the CLI renames or drops stops compiling here instead of failing a contract test.
 package enum CommandArguments {
-    package static func build(for id: CommandTemplateID, draft: CommandDraft) -> [String] {
+    /// `source` answers the few builders that ask which family runs before the command line
+    /// exists (video generate's MiniMax-H3 steps, world serve's base model).
+    package static func build(for id: CommandTemplateID, draft: CommandDraft, source: StudioScopeSource) -> [String] {
         switch id {
         case .setup: return setup(draft)
         case .agentOnboard: return agentOnboard(draft)
@@ -61,7 +63,7 @@ package enum CommandArguments {
         case .visionGeometry: return visionGeometry(draft)
         case .visionGeometryMultiview: return visionGeometryMultiview(draft)
         case .musicGenerate: return musicGenerate(draft)
-        case .videoGenerate: return videoGenerate(draft)
+        case .videoGenerate: return videoGenerate(draft, scope: StudioOptionScope.videoGenerate(draft, source: source))
         case .videoRetake: return videoRetake(draft)
         case .videoDubIt: return videoDubIt(draft)
         case .videoAnimate: return videoAnimate(draft)
@@ -91,7 +93,7 @@ package enum CommandArguments {
         case .evaluationPackValidate: return evaluationPackValidate(draft)
         case .evaluationRun: return evaluationRun(draft)
         case .evaluationPromote: return evaluationPromote(draft)
-        case .worldServe: return worldServe(draft)
+        case .worldServe: return worldServe(draft, source: source)
         case .statusSnapshot: return statusSnapshot(draft)
         case .qualityGate: return qualityGate(draft)
         case .modelStorage: return modelStorage(draft)

@@ -120,7 +120,7 @@ package final class StudioPromptTaskController {
             }
         }
         if let handoff = pendingAnalyzeHandoff, handoff.task.mode == newMode {
-            handoff.apply(to: &nextDraft)
+            handoff.apply(to: &nextDraft, source: controller.scopeSource)
             selectedID = nil
         }
         pendingAnalyzeHandoff = nil
@@ -186,7 +186,9 @@ package final class StudioPromptTaskController {
             return useTaskSettings(from: item, task: task)
         }
         let mode = item.mode
-        guard let next = StudioLibraryDraftRestoration.draft(from: item, baseline: freshDraft(for: mode)) else { return false }
+        guard let next = StudioLibraryDraftRestoration.draft(
+            from: item, baseline: freshDraft(for: mode), source: controller.scopeSource
+        ) else { return false }
         sessions.set(next, for: mode.task.rawValue + ".draft")
         sessions.set(Optional<StudioTaskCommandState>.none, for: mode.task.rawValue + ".commandOverride")
         sessions.setFocus(nil, for: mode.task)
@@ -199,7 +201,7 @@ package final class StudioPromptTaskController {
     /// so its composer and inspector show exactly what ran. The workspace reads the parked draft
     /// when it appears, so nothing here depends on which task is open.
     package func useTaskSettings(from item: StudioLibraryItem, task: StudioTask) -> Bool {
-        guard let restored = StudioLibraryDraftRestoration.taskDraft(from: item),
+        guard let restored = StudioLibraryDraftRestoration.taskDraft(from: item, source: controller.scopeSource),
               var next = sessions.taskDraft(for: task) else { return false }
         next.adopt(restored)
         sessions.setTaskDraft(next, for: task)

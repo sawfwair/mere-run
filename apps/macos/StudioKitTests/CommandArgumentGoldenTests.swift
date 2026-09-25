@@ -51,7 +51,7 @@ enum CommandArgumentFixture {
         var lines: [String] = []
         for template in CommandCatalog.templates {
             for draft in try drafts(for: template) {
-                let argv = template.arguments(from: draft.draft)
+                let argv = template.arguments(from: draft.draft, source: .contract)
                     .map(normalized)
                     .map { $0.contains(where: \.isWhitespace) || $0.isEmpty ? "'\($0)'" : $0 }
                     .joined(separator: " ")

@@ -240,11 +240,11 @@ package enum StudioConsoleCommand {
     /// The draft the console starts from: the argv `template` already builds for `draft`, read
     /// back into contract values. Opening a template, or a Library row's saved command, therefore
     /// starts at exactly the command the app would have run.
-    package static func seed(template: CommandTemplate, draft: CommandDraft) -> StudioConsoleDraft {
+    package static func seed(template: CommandTemplate, draft: CommandDraft, source: StudioScopeSource) -> StudioConsoleDraft {
         guard let capability = template.id.capability else {
             return StudioConsoleDraft(extraArguments: draft.extraArguments)
         }
-        return seed(capability: capability, arguments: template.arguments(from: draft))
+        return seed(capability: capability, arguments: template.arguments(from: draft, source: source))
     }
 
     /// The same reading, from argv the caller already has: a Library row records the exact
@@ -406,14 +406,14 @@ package struct StudioConsoleRun {
 
     /// The form's scope decides what launches: a value the model does not use stays in `draft`
     /// but not in `arguments`, and the validation reads what launches.
-    package init?(template: CommandTemplate, draft: StudioConsoleDraft, seed: CommandDraft, source: StudioScopeSource = .live) {
+    package init?(template: CommandTemplate, draft: StudioConsoleDraft, seed: CommandDraft, source: StudioScopeSource) {
         guard template.externalURL == nil else { return nil }
         guard let capability = source.capability(for: template.id) else {
             var command = seed
             command.extraArguments = draft.extraArguments
-            arguments = template.arguments(from: command)
+            arguments = template.arguments(from: command, source: source)
             commandDraft = command
-            validationMessage = template.validationMessage(for: command)
+            validationMessage = template.validationMessage(for: command, source: source)
             return
         }
         let secretFields = CommandLaunchEnvironment.secretFlags(for: template.id)

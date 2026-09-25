@@ -88,6 +88,10 @@ package struct JobRequest {
     /// For `.probe` jobs: a resubmission with the same key and the same configuration returns the
     /// in-flight job instead of starting another; a different configuration supersedes it.
     package let dedupeKey: String?
+    /// Where admission reads the scope it validates a catalog command with: the submitting
+    /// controller's (`MereRunController.scopeSource`), so a queued job is checked against the
+    /// same `catalog resolve` answers it was built from. A raw command has nothing to scope.
+    package let scopeSource: StudioScopeSource
 
     /// A catalog command.
     package init(
@@ -99,9 +103,11 @@ package struct JobRequest {
         configuration: MereRunProcessConfiguration,
         displayCommand: String,
         dedupeKey: String? = nil,
-        execution: StudioExecution? = nil
+        execution: StudioExecution? = nil,
+        scopeSource: StudioScopeSource
     ) {
         self.lane = lane
+        self.scopeSource = scopeSource
         command = .templated(template, draft)
         self.execution = execution
         self.requestID = requestID
@@ -119,6 +125,7 @@ package struct JobRequest {
         dedupeKey: String?
     ) {
         self.lane = lane
+        scopeSource = .contract
         command = .raw(arguments: arguments)
         execution = nil
         requestID = nil

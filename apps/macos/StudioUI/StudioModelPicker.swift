@@ -28,17 +28,6 @@ struct StudioModelPicker<Label: View>: View {
         self.label = label
     }
 
-    init(
-        mode: StudioMode,
-        model: Binding<String>,
-        modelInventory: [StudioModelInventoryRow],
-        onShowModels: @escaping () -> Void,
-        @ViewBuilder label: @escaping () -> Label
-    ) {
-        self.init(scope: StudioModelScope(mode: mode), model: model, modelInventory: modelInventory,
-                  onShowModels: onShowModels, label: label)
-    }
-
     var body: some View {
         Menu {
             let defaultID = scope.defaultModelID
@@ -106,17 +95,6 @@ struct StudioModelChip: View {
         self.modelInventory = modelInventory
         self.readiness = readiness
         self.onShowModels = onShowModels
-    }
-
-    init(
-        mode: StudioMode,
-        model: Binding<String>,
-        modelInventory: [StudioModelInventoryRow],
-        readiness: ModelReadinessState,
-        onShowModels: @escaping () -> Void
-    ) {
-        self.init(scope: StudioModelScope(mode: mode), model: model, modelInventory: modelInventory,
-                  readiness: readiness, onShowModels: onShowModels)
     }
 
     var body: some View {

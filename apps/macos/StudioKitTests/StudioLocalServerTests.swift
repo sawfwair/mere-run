@@ -143,7 +143,7 @@ final class StudioLocalServerTests: XCTestCase {
         var draft = template.defaultDraft()
         draft.port = 9
 
-        controller.runConsole(template: template, draft: draft, arguments: template.arguments(from: draft), requestID: nil)
+        controller.runConsole(template: template, draft: draft, arguments: template.arguments(from: draft, source: .contract), requestID: nil)
 
         XCTAssertEqual(server.phase, .starting)
         XCTAssertTrue(server.stop())
@@ -181,8 +181,8 @@ final class StudioLocalServerTests: XCTestCase {
         controller.taskSessions.set(
             Optional(StudioTaskCommandState(
                 templateID: .apiServe,
-                sourceArguments: template.arguments(from: source),
-                form: StudioConsoleCommand.seed(template: template, draft: edited)
+                sourceArguments: template.arguments(from: source, source: .contract),
+                form: StudioConsoleCommand.seed(template: template, draft: edited, source: .contract)
             )),
             for: StudioTask.serverServing.rawValue + ".commandOverride"
         )
@@ -213,7 +213,7 @@ final class StudioLocalServerTests: XCTestCase {
         preflight.port = 9
         preflight.preflight = true
 
-        controller.runConsole(template: template, draft: preflight, arguments: template.arguments(from: preflight), requestID: nil)
+        controller.runConsole(template: template, draft: preflight, arguments: template.arguments(from: preflight, source: .contract), requestID: nil)
 
         XCTAssertEqual(controller.localServer.phase, .stopped)
     }
@@ -239,7 +239,7 @@ final class StudioLocalServerTests: XCTestCase {
                 environment: [:],
                 keepsStandardInputOpen: false
             ),
-            displayCommand: "mere.run image generate"
+            displayCommand: "mere.run image generate", scopeSource: .contract
         ))
         XCTAssertTrue(controller.isRunning)
 

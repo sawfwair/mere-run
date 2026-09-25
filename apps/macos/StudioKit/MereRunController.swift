@@ -387,8 +387,16 @@ package final class MereRunController: ObservableObject {
     /// What the CLI says about models the contract does not list (`catalog resolve`), for every
     /// surface's `StudioOptionScope`. The controller asks through its utility lane and
     /// republishes each answer, so a surface showing every option while a folder is identified
-    /// re-renders scoped when the answer lands.
-    package let modelIdentities = StudioModelIdentityStore.shared
+    /// re-renders scoped when the answer lands. Each controller owns its own: answers from one CLI
+    /// and model location never reach another controller's surfaces.
+    package let modelIdentities = StudioModelIdentityStore()
+
+    /// Where this controller's surfaces, validation, and argv builders read their scopes: the
+    /// shipped contract and this controller's `catalog resolve` answers. The app injects it into
+    /// the view environment (`studioScopeSource`); nothing reads a process-wide one.
+    package var scopeSource: StudioScopeSource {
+        StudioScopeSource(identities: modelIdentities)
+    }
 
     /// Conservative cap on simultaneous inference runs. ML inference is memory-heavy, so this
     /// stays small; `JobLane.inference.capacity` is the single knob.
@@ -902,7 +910,7 @@ package final class MereRunController: ObservableObject {
     }
 
     package func commandArguments(template: CommandTemplate, draft: CommandDraft) -> [String] {
-        cliArguments(template.arguments(from: draft))
+        cliArguments(template.arguments(from: draft, source: scopeSource))
     }
 
     /// The complete `mere.run` arguments for a command: the configured models root, then `args`.
@@ -1111,7 +1119,10 @@ package final class MereRunController: ObservableObject {
     /// lane under the mode's dedupe key, so at most one readiness process runs per mode and a
     /// probe launched with stale Settings is superseded rather than raced.
     package func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
-        checkReadiness(task: mode.task, requirement: StudioCommandAdapter.capabilityRequirement(for: mode, draft: studioDraft))
+        checkReadiness(
+            task: mode.task,
+            requirement: StudioCommandAdapter.capabilityRequirement(for: mode, draft: studioDraft, source: scopeSource)
+        )
     }
 
     /// The same check for a task on the shared task workspace, whose draft names its model
@@ -1200,7 +1211,7 @@ package final class MereRunController: ObservableObject {
         var draft = template.defaultDraft()
         draft.all = true
         draft.json = true
-        submitReadinessProbe(for: task, args: template.arguments(from: draft)) { [weak self] result in
+        submitReadinessProbe(for: task, args: template.arguments(from: draft, source: scopeSource)) { [weak self] result in
             self?.finishCapabilitiesProbe(for: task, result: result)
         }
     }
@@ -1238,7 +1249,7 @@ package final class MereRunController: ObservableObject {
 
     private func probeModelList(for task: StudioTask) {
         guard let template = CommandCatalog.template(id: .modelList) else { return }
-        let args = template.arguments(from: template.defaultDraft())
+        let args = template.arguments(from: template.defaultDraft(), source: scopeSource)
         submitReadinessProbe(for: task, args: args) { [weak self] result in
             guard let self else { return }
             readinessProbes[task] = nil
@@ -1361,7 +1372,8 @@ package final class MereRunController: ObservableObject {
             requestID: requestID,
             configuration: processConfiguration(launch: launch, args: args, template: template, draft: draft),
             displayCommand: launch.displayCommand(for: args),
-            execution: execution
+            execution: execution,
+            scopeSource: scopeSource
         ))
     }
 
@@ -1394,7 +1406,8 @@ package final class MereRunController: ObservableObject {
                 draft: draft
             ),
             displayCommand: launch.displayCommand(for: args),
-            execution: execution
+            execution: execution,
+            scopeSource: scopeSource
         )
         let id = jobs.submit(request)
         refreshQueuedRunCount()

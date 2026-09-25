@@ -31,7 +31,7 @@ final class StudioVideoBuilderTests: XCTestCase {
             for family in try XCTUnwrap(capability.routing?.families) where family.selectors.allSatisfy(\.absent) {
                 guard let model = family.models.first else { continue }
                 let arguments = try XCTUnwrap(CommandCatalog.template(id: id))
-                    .arguments(from: try maximalDraft(id, model: model))
+                    .arguments(from: try maximalDraft(id, model: model), source: .contract)
                 let result = report(capability, arguments)
                 XCTAssertEqual(result.family, family.id, "\(model)")
                 XCTAssertEqual(result.violations, [], "\(model): \(arguments)")
@@ -47,7 +47,7 @@ final class StudioVideoBuilderTests: XCTestCase {
             draft.inputPath = "start.png"
             draft.endImagePath = "end.png"
             edit(&draft)
-            return try XCTUnwrap(CommandCatalog.template(id: .videoGenerate)).arguments(from: draft)
+            return try XCTUnwrap(CommandCatalog.template(id: .videoGenerate)).arguments(from: draft, source: .contract)
         }
         // The draft checkpoint no longer receives Studio's final-quality default.
         XCTAssertFalse(try arguments("video-ltx23-av-mlx").contains("--quality"))
@@ -74,7 +74,7 @@ final class StudioVideoBuilderTests: XCTestCase {
         draft.model = "video-cosmos3-edge-mlx"
         let reason = try XCTUnwrap(MereRunCapabilityCatalog.videoGenerate.routing?.excludedModel(id: draft.model)).reason
         XCTAssertEqual(
-            CommandCatalog.videoValidationMessage(for: .videoGenerate, draft: draft),
+            CommandCatalog.videoValidationMessage(for: .videoGenerate, draft: draft, source: .contract),
             "video-cosmos3-edge-mlx can't run video generate: \(reason)"
         )
     }

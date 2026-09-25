@@ -1063,7 +1063,7 @@ package struct CommandTemplate: Identifiable, Equatable {
         return draft
     }
 
-    package func validationMessage(for draft: CommandDraft) -> String? {
+    package func validationMessage(for draft: CommandDraft, source: StudioScopeSource) -> String? {
         if promptLabel != nil
             && id != .custom
             && id != .musicRealtime
@@ -1089,13 +1089,13 @@ package struct CommandTemplate: Identifiable, Equatable {
             return "\(inputKind.title) path is required."
         }
 
-        if let message = categoryValidationMessage(for: draft) {
+        if let message = categoryValidationMessage(for: draft, source: source) {
             return message
         }
 
         guard let capability = id.capability else { return nil }
-        let arguments = arguments(from: draft)
-        let launching = StudioScopeSource.live.scope(capability: capability, commandLine: arguments)
+        let arguments = arguments(from: draft, source: source)
+        let launching = source.scope(capability: capability, commandLine: arguments)
         // Commands with a reply budget (Chat, Code, the vision prompts) validate the form's argv
         // against the contract, so a budget the runtime would reject never replaces a reply.
         if capability.options.contains(where: { $0.flag == "--max-tokens" }) {
@@ -1109,7 +1109,7 @@ package struct CommandTemplate: Identifiable, Equatable {
     }
 
     /// The template's own checks, which live beside its argv in `Catalog/<Category>.swift`.
-    private func categoryValidationMessage(for draft: CommandDraft) -> String? {
+    private func categoryValidationMessage(for draft: CommandDraft, source: StudioScopeSource) -> String? {
         switch category {
         case .setup: return CommandCatalog.setupValidationMessage(for: id, draft: draft)
         case .models: return CommandCatalog.modelsValidationMessage(for: id, draft: draft)
@@ -1119,8 +1119,8 @@ package struct CommandTemplate: Identifiable, Equatable {
         case .vision: return CommandCatalog.visionValidationMessage(for: id, draft: draft)
         case .geospatial: return CommandCatalog.geospatialValidationMessage(for: id, draft: draft)
         case .media:
-            return CommandCatalog.audioValidationMessage(for: id, draft: draft)
-                ?? CommandCatalog.videoValidationMessage(for: id, draft: draft)
+            return CommandCatalog.audioValidationMessage(for: id, draft: draft, source: source)
+                ?? CommandCatalog.videoValidationMessage(for: id, draft: draft, source: source)
                 ?? CommandCatalog.musicValidationMessage(for: id, draft: draft)
         case .sfx: return CommandCatalog.soundFXValidationMessage(for: id, draft: draft)
         case .operations: return CommandCatalog.operationsValidationMessage(for: id, draft: draft)
@@ -1133,12 +1133,8 @@ package struct CommandTemplate: Identifiable, Equatable {
     /// arguments verbatim. A builder may emit a flag the selected model does not use (a default
     /// it always states, a value the model hides); the scope drops it here, while Extra
     /// arguments stay a raw escape hatch that the CLI's gate answers.
-    package func arguments(from draft: CommandDraft) -> [String] {
-        arguments(from: draft, source: .live)
-    }
-
     package func arguments(from draft: CommandDraft, source: StudioScopeSource) -> [String] {
-        let generated = CommandArguments.build(for: id, draft: draft)
+        let generated = CommandArguments.build(for: id, draft: draft, source: source)
         guard let capability = source.capability(for: id) else { return withExtraArguments(generated, draft) }
         let scope = source.scope(capability: capability, commandLine: withExtraArguments(generated, draft))
         return withExtraArguments(StudioOptionScopes.filtered(generated, scope: scope), draft)
@@ -1147,8 +1143,8 @@ package struct CommandTemplate: Identifiable, Equatable {
     /// The argv the template builds for `draft` before any scope: what a surface reads its scope
     /// from, and what a task draft is first seeded with, so a value only another model uses is
     /// there when the user switches to it.
-    package func unscopedArguments(from draft: CommandDraft) -> [String] {
-        withExtraArguments(CommandArguments.build(for: id, draft: draft), draft)
+    package func unscopedArguments(from draft: CommandDraft, source: StudioScopeSource) -> [String] {
+        withExtraArguments(CommandArguments.build(for: id, draft: draft, source: source), draft)
     }
 
     private func withExtraArguments(_ generated: [String], _ draft: CommandDraft) -> [String] {

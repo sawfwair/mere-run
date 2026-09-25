@@ -105,14 +105,13 @@ extension CommandCatalog {
 extension CommandArguments {
     /// `video generate` for `draft`: every value the draft holds, which `CommandTemplate.arguments`
     /// then scopes to the family the run gets. The family decides one thing here: MiniMax-H3's
-    /// step count lives in its schedule override, not the step slider. `scope` defaults to the
-    /// app's scope for the draft, which asks the CLI about a local folder or an install-dependent id.
-    package static func videoGenerate(_ draft: CommandDraft, scope: StudioOptionScope? = nil) -> [String] {
+    /// step count lives in its schedule override, not the step slider. `scope` is the draft's
+    /// (`StudioOptionScope.videoGenerate(_:source:)`).
+    package static func videoGenerate(_ draft: CommandDraft, scope: StudioOptionScope) -> [String] {
         typealias F = CommandFlags.VideoGenerate
         let hasAudio = !draft.audioPath.isBlank
         let quality = hasAudio ? LTXVideoQuality.final : draft.videoQuality
         let outputMode = hasAudio ? LTXVideoOutputMode.audioVideo : draft.videoOutputMode
-        let scope = scope ?? StudioOptionScope.videoGenerate(draft)
         var args = ArgumentBuilder(F.self)
         args.value(draft.prompt)
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
@@ -326,11 +325,15 @@ extension CommandArguments {
 extension CommandCatalog {
     /// The reason a video template's draft cannot run, beyond the prompt and input checks
     /// every template shares; nil for a draft that can, and for every other template.
-    package static func videoValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+    package static func videoValidationMessage(
+        for id: CommandTemplateID,
+        draft: CommandDraft,
+        source: StudioScopeSource
+    ) -> String? {
         switch id {
         case .videoGenerate:
             typealias F = CommandFlags.VideoGenerate
-            let scope = StudioOptionScope.videoGenerate(draft)
+            let scope = StudioOptionScope.videoGenerate(draft, source: source)
             if let refusal = scope.blockingReason { return refusal }
             let model = scope.family?.title ?? "This model"
             if scope.requires(F.reference), (draft.h3ReferenceInputs ?? []).allSatisfy(\.isBlank) {
@@ -343,7 +346,7 @@ extension CommandCatalog {
                 return "A start image is required when an end keyframe is selected."
             }
         case .videoRetake:
-            if let refusal = StudioOptionScope.videoRetake(draft).blockingReason { return refusal }
+            if let refusal = StudioOptionScope.videoRetake(draft, source: source).blockingReason { return refusal }
             if draft.retakeStartTime < 0 || draft.retakeStartTime >= draft.retakeEndTime {
                 return "Retake requires a nonnegative start before the end time."
             }
@@ -391,7 +394,7 @@ extension StudioOptionScope {
     /// model the source audio and quality that select the default checkpoint, and the output
     /// mode, which decides the folder `video-ltx-av` runs. The CLI answers for a local folder or
     /// an install-dependent id through `source`; until it does, every option is offered.
-    package static func videoGenerate(_ draft: CommandDraft, source: StudioScopeSource = .live) -> StudioOptionScope {
+    package static func videoGenerate(_ draft: CommandDraft, source: StudioScopeSource) -> StudioOptionScope {
         typealias F = CommandFlags.VideoGenerate
         let hasAudio = !draft.audioPath.isBlank
         var arguments = modelArguments(draft, flags: (F.model, F.modelRoot))
@@ -401,7 +404,7 @@ extension StudioOptionScope {
         return source.scope(capability: MereRunCapabilityCatalog.videoGenerate, commandLine: arguments)
     }
 
-    package static func videoRetake(_ draft: CommandDraft, source: StudioScopeSource = .live) -> StudioOptionScope {
+    package static func videoRetake(_ draft: CommandDraft, source: StudioScopeSource) -> StudioOptionScope {
         typealias F = CommandFlags.VideoRetake
         return source.scope(
             capability: MereRunCapabilityCatalog.videoRetake, commandLine: modelArguments(draft, flags: (F.model, F.modelRoot))

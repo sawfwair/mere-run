@@ -25,10 +25,13 @@ Builders emit everything the draft holds; `CommandTemplate.arguments(from:)`
 scopes it with `StudioOptionScopes.filtered`, which drops what the family does
 not take or runs by default. Drafts keep hidden values;
 `StudioDraft.scoped(to:mode:)` and `StudioConsoleDraft.scoped(to:)` reset them in
-the copy that validates and launches. `StudioModelIdentityStore.shared` caches
-`catalog resolve` answers by the tokens that can change the family, a folder by
-its path and modification date; `MereRunController` supplies its resolver.
-Tests pass a `StudioScopeSource` with fixed identities.
+the copy that validates and launches. Each `MereRunController` owns a
+`StudioModelIdentityStore` that caches its `catalog resolve` answers by the
+tokens that can change the family, a folder by its path and modification date,
+and hands out `scopeSource`; there is no process-wide store. Every surface,
+validation, and argv builder takes the source it reads as a parameter (views
+read `studioScopeSource`, which the app sets from the controller). Tests pass
+`StudioScopeSource.contract` or a source with fixed identities.
 
 `StudioTaskRunner` is the one submission path for every task run that is not a
 conversation turn: it names the destination

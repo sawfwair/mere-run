@@ -3,11 +3,12 @@ import MereRunContract
 
 extension CommandTemplate {
     /// Both preparation and final job admission validate the same effective command.
-    package func validationMessage(for draft: CommandDraft, execution: StudioExecution?) -> String? {
+    package func validationMessage(for draft: CommandDraft, execution: StudioExecution?, source: StudioScopeSource) -> String? {
         if let execution {
-            return execution.validationMessage ?? StudioConsoleCommand.connectionValidationMessage(for: id, draft: draft)
+            return execution.validationMessage(source: source)
+                ?? StudioConsoleCommand.connectionValidationMessage(for: id, draft: draft)
         }
-        return validationMessage(for: draft)
+        return validationMessage(for: draft, source: source)
     }
 }
 
@@ -27,18 +28,18 @@ package struct StudioExecution: Codable, Equatable {
     }
 
     /// The form's checks, then the CLI gate's own sentence for exactly these arguments.
-    package var validationMessage: String? {
+    package func validationMessage(source: StudioScopeSource) -> String? {
         guard let capability = templateID.capability, let form else { return nil }
         return StudioConsoleCommand.validationMessage(
             for: capability, draft: form,
-            launching: StudioScopeSource.live.scope(capability: capability, commandLine: arguments)
+            launching: source.scope(capability: capability, commandLine: arguments)
         )
     }
 
     /// The same command without the options the model it runs does not take (`StudioOptionScopes
     /// .filtered`): a Library row recorded before its model's options were scoped replays as the
     /// model runs today, rather than as a command the CLI refuses.
-    package func scoped(source: StudioScopeSource = .live) -> StudioExecution {
+    package func scoped(source: StudioScopeSource) -> StudioExecution {
         guard let capability = source.capability(for: templateID) else { return self }
         let scope = source.scope(capability: capability, commandLine: arguments)
         return StudioExecution(templateID: templateID, arguments: StudioOptionScopes.filtered(arguments, scope: scope))
@@ -118,11 +119,15 @@ extension CommandDraft {
 }
 
 package enum StudioLibraryReplay {
-    package static func request(for item: StudioLibraryItem, variationSeed: String? = nil) -> StudioRunRequest? {
+    package static func request(
+        for item: StudioLibraryItem,
+        variationSeed: String? = nil,
+        source: StudioScopeSource
+    ) -> StudioRunRequest? {
         guard let templateID = item.templateID, let template = CommandCatalog.template(id: templateID),
               let stored = item.commandDraft else { return nil }
         let original = StudioExecution(templateID: templateID,
-                                       arguments: item.commandArguments ?? template.arguments(from: stored))
+                                       arguments: item.commandArguments ?? template.arguments(from: stored, source: source))
         let draft = original.project(onto: stored)
         // A command whose file follows its `--format` (a JSON transcription, an RTTM diarization)
         // wrote the recorded file's extension, not the template's default one.
@@ -142,7 +147,7 @@ package enum StudioLibraryReplay {
         let namedURL = URL(fileURLWithPath: namedOutput)
         let output = namedOutput.isEmpty ? "" : namedURL.deletingPathExtension().path + "-"
             + UUID().uuidString.prefix(8) + (namedURL.pathExtension.isEmpty ? "" : "." + namedURL.pathExtension)
-        let execution = original.replay(outputPath: output, seed: variationSeed).scoped()
+        let execution = original.replay(outputPath: output, seed: variationSeed).scoped(source: source)
         return StudioRunRequest(mode: item.mode, templateID: templateID, template: template,
                                 draft: stored.withoutSecrets, execution: execution, parentID: item.id)
     }
@@ -172,22 +177,22 @@ package enum StudioLibraryDraftRestoration {
     /// afresh rather than written over this one's files — and, for a trainer's preflight or dry
     /// run, minus the check-only switches. nil for a thread or a row with no recorded command.
     /// The workspace reads the same form the Command view edits.
-    package static func taskDraft(from item: StudioLibraryItem) -> StudioTaskDraft? {
+    package static func taskDraft(from item: StudioLibraryItem, source: StudioScopeSource) -> StudioTaskDraft? {
         guard !item.isConversation, let templateID = item.templateID,
               let recorded = item.commandDraft, let template = CommandCatalog.template(id: templateID),
               let capability = templateID.capability else { return nil }
-        let arguments = item.commandArguments ?? template.arguments(from: recorded)
+        let arguments = item.commandArguments ?? template.arguments(from: recorded, source: source)
         let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
         // A trainer's preflight row restores as the training run it checked.
         return StudioTrainingRun.withoutCheckSwitches(draft).withoutDestinations()
     }
 
     /// nil exactly when `canRestore` is false.
-    package static func draft(from item: StudioLibraryItem, baseline: StudioDraft) -> StudioDraft? {
+    package static func draft(from item: StudioLibraryItem, baseline: StudioDraft, source: StudioScopeSource) -> StudioDraft? {
         guard canRestore(item), let templateID = item.templateID, let recorded = item.commandDraft,
               let template = CommandCatalog.template(id: templateID), let capability = templateID.capability
         else { return nil }
-        let arguments = item.commandArguments ?? template.arguments(from: recorded)
+        let arguments = item.commandArguments ?? template.arguments(from: recorded, source: source)
         let form = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
         var draft = baseline
         form.applyingChanges(from: StudioConsoleDraft(), to: &draft, mode: item.mode, templateID: templateID)

@@ -109,6 +109,7 @@ struct StudioConverseView: View {
 /// The thread header: title, the model chip (the same filtered picker as the composer), and the
 /// system prompt chip. Both chips edit what the next turn runs with.
 struct StudioThreadHeader: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     let title: String
     let mode: StudioMode
     @Binding var model: String
@@ -135,7 +136,7 @@ struct StudioThreadHeader: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
             StudioModelChip(
-                mode: mode,
+                scope: StudioModelScope(mode: mode, source: scopeSource),
                 model: $model,
                 modelInventory: modelInventory,
                 readiness: readiness,

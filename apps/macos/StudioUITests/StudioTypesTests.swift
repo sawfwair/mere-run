@@ -18,7 +18,7 @@ final class StudioTypesTests: XCTestCase {
                 MereRunCapabilityCatalog.command(id: capabilityID),
                 "\(template.id) references missing capability \(capabilityID)"
             )
-            let arguments = template.arguments(from: template.defaultDraft())
+            let arguments = template.arguments(from: template.defaultDraft(), source: .contract)
             XCTAssertEqual(
                 Array(arguments.prefix(capability.command.count)),
                 capability.command,
@@ -132,7 +132,7 @@ final class StudioTypesTests: XCTestCase {
         var draft = StudioDraft()
         draft.reset(for: .code)
         XCTAssertEqual(draft.model, StudioCodeDefaults.fallbackModelID)
-        XCTAssertEqual(StudioCommandAdapter.requiredModel(for: .code, draft: draft), StudioCodeDefaults.fallbackModelID)
+        XCTAssertEqual(StudioCommandAdapter.requiredModel(for: .code, draft: draft, source: .contract), StudioCodeDefaults.fallbackModelID)
     }
 
     func testChatStudioDefaultsToStreamingOutput() throws {
@@ -140,21 +140,21 @@ final class StudioTypesTests: XCTestCase {
         let draft = chatTemplate.defaultDraft()
 
         XCTAssertTrue(draft.stream)
-        XCTAssertTrue(chatTemplate.arguments(from: draft).contains("--stream"))
+        XCTAssertTrue(chatTemplate.arguments(from: draft, source: .contract).contains("--stream"))
     }
 
     func testChatBuildsVisionAndToolLoopFlags() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
         var draft = template.defaultDraft()
         // The text-only Gemma default takes no image; its vision sibling does.
-        XCTAssertFalse(template.arguments(from: { var text = draft; text.imagePath = "/tmp/in.png"; return text }()).contains("--image"))
+        XCTAssertFalse(template.arguments(from: { var text = draft; text.imagePath = "/tmp/in.png"; return text }(), source: .contract).contains("--image"))
         draft.model = "vision-chat-gemma4-12b"
         draft.imagePath = "/tmp/in.png"
         draft.tools = "write_file,shell_exec"
         draft.toolLoop = true
         draft.allowShellExec = true
         draft.sandboxDir = "/tmp/box"
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         assertPair(args, "--image", "/tmp/in.png")
         assertPair(args, "--tools", "write_file,shell_exec")
         assertPair(args, "--sandbox-dir", "/tmp/box")
@@ -164,7 +164,7 @@ final class StudioTypesTests: XCTestCase {
 
     func testChatOmitsVisionAndToolFlagsByDefault() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
-        let args = template.arguments(from: template.defaultDraft())
+        let args = template.arguments(from: template.defaultDraft(), source: .contract)
         XCTAssertFalse(args.contains("--image"))
         XCTAssertFalse(args.contains("--tools"))
         XCTAssertFalse(args.contains("--tool-loop"))
@@ -177,7 +177,7 @@ final class StudioTypesTests: XCTestCase {
         var chatDraft = chat.defaultDraft()
         chatDraft.model = "text-chat-inkling-small"
         chatDraft.reasoningEffort = 0.2
-        assertPair(chat.arguments(from: chatDraft), "--reasoning-effort", "0.2")
+        assertPair(chat.arguments(from: chatDraft, source: .contract), "--reasoning-effort", "0.2")
 
         let training = try XCTUnwrap(CommandCatalog.template(id: .textTrainLoRA))
         var trainingDraft = training.defaultDraft()
@@ -185,7 +185,7 @@ final class StudioTypesTests: XCTestCase {
         trainingDraft.inputPath = "/tmp/train.jsonl"
         trainingDraft.outputPath = "/tmp/inkling.safetensors"
         trainingDraft.reasoningEffort = 0.35
-        let trainingArgs = training.arguments(from: trainingDraft)
+        let trainingArgs = training.arguments(from: trainingDraft, source: .contract)
         assertPair(trainingArgs, "--reasoning-effort", "0.35")
         XCTAssertFalse(
             trainingArgs.contains("--target-modules"),
@@ -193,7 +193,7 @@ final class StudioTypesTests: XCTestCase {
         )
 
         trainingDraft.targetModules = "q_proj,v_proj"
-        assertPair(training.arguments(from: trainingDraft), "--target-modules", "q_proj,v_proj")
+        assertPair(training.arguments(from: trainingDraft, source: .contract), "--target-modules", "q_proj,v_proj")
     }
 
     func testChatBuildsJSONLoRAKVPreflightAndToolPermissionFlags() throws {
@@ -216,7 +216,7 @@ final class StudioTypesTests: XCTestCase {
         draft.json = true
         draft.requireInstalled = true
 
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         assertPair(args, "--response-format", "json_object")
         assertPair(args, "--context-size", "262144")
         XCTAssertFalse(args.contains("--top-k"), "Gemma 4 samples without top-k, so Studio leaves it off")
@@ -265,8 +265,8 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var draft = template.defaultDraft()
             mutate(&draft)
-            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
-            let arguments = template.arguments(from: draft)
+            XCTAssertNil(template.validationMessage(for: draft, source: .contract), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft, source: .contract)
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
@@ -281,7 +281,7 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: id))
             var draft = template.defaultDraft()
             mutate(&draft)
-            return template.arguments(from: draft)
+            return template.arguments(from: draft, source: .contract)
         }
         XCTAssertEqual(try args(.musicAnalyze) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "analyze", "/a.wav"])
         XCTAssertEqual(try args(.musicTranscribe) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "transcribe", "/a.wav"])
@@ -357,17 +357,17 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: id))
             var draft = template.defaultDraft()
             draft.engine = "text-chat-laguna"
-            assertPair(template.arguments(from: draft), "--engine", "text-chat-laguna")
+            assertPair(template.arguments(from: draft, source: .contract), "--engine", "text-chat-laguna")
         }
 
         let benchmark = try XCTUnwrap(CommandCatalog.template(id: .modelBenchmarkLagunaDFlash))
         var draft = benchmark.defaultDraft()
-        XCTAssertNotNil(benchmark.validationMessage(for: draft))
+        XCTAssertNotNil(benchmark.validationMessage(for: draft, source: .contract))
         draft.modelRoot = "/tmp/laguna"
-        XCTAssertNotNil(benchmark.validationMessage(for: draft))
+        XCTAssertNotNil(benchmark.validationMessage(for: draft, source: .contract))
         draft.secondaryText = "/tmp/laguna-dflash"
-        XCTAssertNil(benchmark.validationMessage(for: draft))
-        let arguments = benchmark.arguments(from: draft)
+        XCTAssertNil(benchmark.validationMessage(for: draft, source: .contract))
+        let arguments = benchmark.arguments(from: draft, source: .contract)
         assertPair(arguments, "--laguna-path", "/tmp/laguna")
         assertPair(arguments, "--laguna-dflash-path", "/tmp/laguna-dflash")
         assertPair(arguments, "--min-p", "0.02")
@@ -535,8 +535,8 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var draft = template.defaultDraft()
             mutate(&draft)
-            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
-            let arguments = template.arguments(from: draft)
+            XCTAssertNil(template.validationMessage(for: draft, source: .contract), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft, source: .contract)
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
@@ -613,7 +613,7 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var draft = template.defaultDraft()
             mutate(&draft)
-            let arguments = template.arguments(from: draft)
+            let arguments = template.arguments(from: draft, source: .contract)
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
@@ -648,13 +648,13 @@ final class StudioTypesTests: XCTestCase {
         draft.musicDAWBundle = "/tmp/session"
         // Stem export runs on the ACE-Step Base checkpoint; Turbo leaves it off.
         draft.model = "music-acestep"
-        XCTAssertFalse(template.arguments(from: draft).contains("--stems"))
+        XCTAssertFalse(template.arguments(from: draft, source: .contract).contains("--stems"))
         draft.model = "music-acestep-xl-base"
         draft.musicFlowEdit = true
         draft.musicSourceCaption = "rough acoustic demo"
         draft.musicSourceLyrics = "old lyric"
 
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         assertPair(args, "--quality", "final")
         assertPair(args, "--task-type", "repaint")
         assertPair(args, "--source-audio", "/tmp/demo.wav")
@@ -697,8 +697,8 @@ final class StudioTypesTests: XCTestCase {
         draft.musicDAWBundle = "/tmp/daw"
         draft.model = "music-acestep-xl-base"
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         assertPair(args, "--quality", "final")
         assertPair(args, "--task-type", "cover")
         assertPair(args, "--source-audio", "/tmp/source.wav")
@@ -719,14 +719,14 @@ final class StudioTypesTests: XCTestCase {
         studio.reset(for: .music)
         studio.prompt = "new arrangement"
         studio.musicTask = "repaint"
-        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .music, draft: studio))
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .music, draft: studio, source: .contract))
 
         let template = try XCTUnwrap(CommandCatalog.template(id: .musicGenerate))
         var advanced = template.defaultDraft()
         advanced.musicTask = "cover"
-        XCTAssertNotNil(template.validationMessage(for: advanced))
+        XCTAssertNotNil(template.validationMessage(for: advanced, source: .contract))
         advanced.musicSourceAudio = "/tmp/source.wav"
-        XCTAssertNil(template.validationMessage(for: advanced))
+        XCTAssertNil(template.validationMessage(for: advanced, source: .contract))
     }
 
     func testMusicServerInjectsAPIKeyOutsideProcessArguments() throws {
@@ -735,14 +735,14 @@ final class StudioTypesTests: XCTestCase {
         draft.host = "0.0.0.0"
         draft.apiKey = "music-secret"
 
-        let arguments = template.arguments(from: draft)
+        let arguments = template.arguments(from: draft, source: .contract)
         XCTAssertFalse(arguments.contains("--api-key"))
         XCTAssertFalse(arguments.contains("music-secret"))
         XCTAssertEqual(
             CommandLaunchEnvironment.overrides(templateID: .musicServe, draft: draft),
             ["MERERUN_API_KEY": "music-secret"]
         )
-        XCTAssertNil(template.validationMessage(for: draft))
+        XCTAssertNil(template.validationMessage(for: draft, source: .contract))
     }
 
     func testVisionAndVFXArgumentsAreDeclaredBySharedCapabilityContract() throws {
@@ -815,8 +815,8 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var draft = template.defaultDraft()
             mutate(&draft)
-            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
-            let arguments = template.arguments(from: draft)
+            XCTAssertNil(template.validationMessage(for: draft, source: .contract), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft, source: .contract)
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
@@ -833,7 +833,7 @@ final class StudioTypesTests: XCTestCase {
         segmentDraft.prompt = ""
         segmentDraft.visionBoxPrompts = "1,2,30,40,person"
         segmentDraft.visionPointPrompts = "10,20,positive,face"
-        let segmentArgs = segment.arguments(from: segmentDraft)
+        let segmentArgs = segment.arguments(from: segmentDraft, source: .contract)
         assertPair(segmentArgs, "--box", "1,2,30,40,person")
         assertPair(segmentArgs, "--point", "10,20,positive,face")
 
@@ -841,7 +841,7 @@ final class StudioTypesTests: XCTestCase {
         var geometryDraft = geometry.defaultDraft()
         geometryDraft.inputPath = "/tmp/front.png"
         geometryDraft.visionAdditionalInputs = "/tmp/left.png\n/tmp/right.png"
-        let geometryArgs = geometry.arguments(from: geometryDraft)
+        let geometryArgs = geometry.arguments(from: geometryDraft, source: .contract)
         XCTAssertEqual(
             Array(geometryArgs.prefix(5)),
             ["vision", "geometry-multiview", "/tmp/front.png", "/tmp/left.png", "/tmp/right.png"]
@@ -853,7 +853,7 @@ final class StudioTypesTests: XCTestCase {
         var draft = template.defaultDraft()
         draft.inputPath = "/tmp/page.png"
         XCTAssertEqual(draft.backend, "lighton")
-        assertPair(template.arguments(from: draft), "--backend", "lighton")
+        assertPair(template.arguments(from: draft, source: .contract), "--backend", "lighton")
     }
 
     func testOperationsArgumentsAreDeclaredBySharedCapabilityContract() throws {
@@ -914,8 +914,8 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var draft = template.defaultDraft()
             mutate(&draft)
-            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
-            let arguments = template.arguments(from: draft)
+            XCTAssertNil(template.validationMessage(for: draft, source: .contract), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft, source: .contract)
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
@@ -932,7 +932,7 @@ final class StudioTypesTests: XCTestCase {
         draft.operationsAllArtifacts = true
         draft.operationsArtifacts = "preview"
 
-        XCTAssertNotNil(template.validationMessage(for: draft))
+        XCTAssertNotNil(template.validationMessage(for: draft, source: .contract))
     }
 
     func testWorldAndStatusAPIKeysUseEnvironmentNotProcessArguments() throws {
@@ -942,12 +942,12 @@ final class StudioTypesTests: XCTestCase {
             draft.host = "0.0.0.0"
             draft.apiKey = " operator-secret "
 
-            XCTAssertFalse(template.arguments(from: draft).contains("operator-secret"))
+            XCTAssertFalse(template.arguments(from: draft, source: .contract).contains("operator-secret"))
             XCTAssertEqual(
                 CommandLaunchEnvironment.overrides(templateID: id, draft: draft),
                 ["MERERUN_API_KEY": "operator-secret"]
             )
-            XCTAssertNil(template.validationMessage(for: draft))
+            XCTAssertNil(template.validationMessage(for: draft, source: .contract))
         }
     }
 
@@ -957,13 +957,13 @@ final class StudioTypesTests: XCTestCase {
 
         XCTAssertEqual(graph.externalURL?.absoluteString, "https://studio.mere.run/app")
         XCTAssertEqual(node.externalURL?.absoluteString, "https://relay.mere.run")
-        XCTAssertTrue(graph.arguments(from: graph.defaultDraft()).isEmpty)
-        XCTAssertTrue(node.arguments(from: node.defaultDraft()).isEmpty)
+        XCTAssertTrue(graph.arguments(from: graph.defaultDraft(), source: .contract).isEmpty)
+        XCTAssertTrue(node.arguments(from: node.defaultDraft(), source: .contract).isEmpty)
         XCTAssertEqual(StudioProductBoundary.dioramaURL.absoluteString, "https://diorama.mere.run")
 
         let worldRuntime = try XCTUnwrap(CommandCatalog.template(id: .worldServe))
         XCTAssertEqual(
-            Array(worldRuntime.arguments(from: worldRuntime.defaultDraft()).prefix(2)),
+            Array(worldRuntime.arguments(from: worldRuntime.defaultDraft(), source: .contract).prefix(2)),
             ["world", "serve"]
         )
     }
@@ -1026,7 +1026,7 @@ final class StudioTypesTests: XCTestCase {
         draft.height = 512
         draft.steps = 8
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft, source: .contract)
 
         XCTAssertEqual(request.templateID, .imageGenerate)
         XCTAssertEqual(request.draft.model, "image-zimage-nano")
@@ -1052,7 +1052,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(template.inputKind, .directory)
         XCTAssertEqual(template.defaultModel, "image-krea2-raw")
         XCTAssertEqual(
-            template.arguments(from: draft),
+            template.arguments(from: draft, source: .contract),
             [
                 "image", "train-lora",
                 "--output", "/tmp/krea-style.safetensors",
@@ -1071,7 +1071,7 @@ final class StudioTypesTests: XCTestCase {
         )
         // Only the Klein trainer resumes; the draft keeps the checkpoint for it.
         draft.model = "image-klein-base-9b"
-        assertPair(template.arguments(from: draft), "--resume-from", "/tmp/checkpoint-step750.safetensors")
+        assertPair(template.arguments(from: draft, source: .contract), "--resume-from", "/tmp/checkpoint-step750.safetensors")
     }
 
     func testImageTrainingRecipeIsNotSilentlyOverriddenByFormDefaults() throws {
@@ -1080,7 +1080,7 @@ final class StudioTypesTests: XCTestCase {
         draft.inputPath = "/tmp/style"
         draft.trainingRecipe = "krea-fast-style"
 
-        let recipeArgs = template.arguments(from: draft)
+        let recipeArgs = template.arguments(from: draft, source: .contract)
         assertPair(recipeArgs, "--recipe", "krea-fast-style")
         XCTAssertFalse(recipeArgs.contains("--model"))
         XCTAssertFalse(recipeArgs.contains("--width"))
@@ -1090,7 +1090,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(recipeArgs.contains("--rank"))
 
         draft.overrideTrainingRecipe = true
-        let overrideArgs = template.arguments(from: draft)
+        let overrideArgs = template.arguments(from: draft, source: .contract)
         XCTAssertTrue(overrideArgs.contains("--model"))
         XCTAssertTrue(overrideArgs.contains("--width"))
         XCTAssertTrue(overrideArgs.contains("--training-steps"))
@@ -1120,7 +1120,7 @@ final class StudioTypesTests: XCTestCase {
         draft.json = true
         draft.progressJSON = true
 
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         // Krea 2 takes no reference images, and only HiDream-O1 keeps the original aspect.
         XCTAssertFalse(args.contains("--ref-image"))
         XCTAssertFalse(args.contains("--keep-original-aspect"))
@@ -1161,8 +1161,8 @@ final class StudioTypesTests: XCTestCase {
         draft.preflightJSON = true
         draft.progressJSON = true
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         // Krea 2 takes no reference images or text-encoder budget, and only HiDream-O1 keeps the
         // original aspect; the draft keeps them for the models that do.
         XCTAssertFalse(args.contains("--ref-image"))
@@ -1194,8 +1194,8 @@ final class StudioTypesTests: XCTestCase {
         draft.imageOutpaintBottom = 64
         draft.imageMaskFeather = 24
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         assertPair(args, "--mask", "/tmp/mask.png")
         assertPair(args, "--outpaint", "64,128,64,0")
         assertPair(args, "--mask-feather", "24")
@@ -1256,8 +1256,8 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var draft = template.defaultDraft()
             mutate(&draft)
-            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
-            let arguments = template.arguments(from: draft)
+            XCTAssertNil(template.validationMessage(for: draft, source: .contract), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft, source: .contract)
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
@@ -1274,20 +1274,20 @@ final class StudioTypesTests: XCTestCase {
         draft.prompt = "What text is visible?"
 
         draft.readImageAction = .inspect
-        XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft).templateID, .visionInspect)
+        XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionInspect)
 
         draft.readImageAction = .ocr
-        XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft).templateID, .visionOCR)
+        XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionOCR)
 
         draft.readImageAction = .caption
-        XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft).templateID, .visionCaption)
+        XCTAssertEqual(try StudioCommandAdapter.makeRequest(mode: .readImage, draft: draft, source: .contract).templateID, .visionCaption)
     }
 
     func testMissingInputValidationIsFriendly() {
         var draft = StudioDraft()
         draft.reset(for: .listen)
 
-        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .listen, draft: draft)) { error in
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .listen, draft: draft, source: .contract)) { error in
             XCTAssertEqual(error as? StudioCommandError, .missingInput("audio"))
         }
     }
@@ -1297,11 +1297,11 @@ final class StudioTypesTests: XCTestCase {
         draft.reset(for: .listen)
 
         XCTAssertEqual(
-            StudioCommandAdapter.capabilityRequirement(for: .listen, draft: draft),
+            StudioCommandAdapter.capabilityRequirement(for: .listen, draft: draft, source: .contract),
             .managedModel("speech-asr-parakeet")
         )
 
-        let request = try XCTUnwrap(StudioCommandAdapter.pullRequest(for: .listen, draft: draft))
+        let request = try XCTUnwrap(StudioCommandAdapter.pullRequest(for: .listen, draft: draft, source: .contract))
         XCTAssertEqual(request.draft.model, "speech-asr-parakeet")
     }
 
@@ -1313,15 +1313,15 @@ final class StudioTypesTests: XCTestCase {
         // they are not gated by the managed capability catalog (the run proceeds and the
         // CLI fetches the model itself).
         draft.readImageAction = .inspect
-        XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft))
+        XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft, source: .contract))
 
         draft.readImageAction = .caption
-        XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft))
+        XCTAssertNil(StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft, source: .contract))
 
         // OCR has a managed default model, so it remains readiness-gated.
         draft.readImageAction = .ocr
         XCTAssertEqual(
-            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft),
+            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft, source: .contract),
             .managedModel("vision-ocr-lighton")
         )
     }
@@ -1334,10 +1334,10 @@ final class StudioTypesTests: XCTestCase {
 
         // Naming an explicit managed model gates the run on that model and makes it pullable.
         XCTAssertEqual(
-            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft),
+            StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: draft, source: .contract),
             .managedModel("vision-ocr-lighton")
         )
-        let request = try XCTUnwrap(StudioCommandAdapter.pullRequest(for: .readImage, draft: draft))
+        let request = try XCTUnwrap(StudioCommandAdapter.pullRequest(for: .readImage, draft: draft, source: .contract))
         XCTAssertEqual(request.draft.model, "vision-ocr-lighton")
     }
 
@@ -1497,7 +1497,7 @@ final class StudioTypesTests: XCTestCase {
         draft.secondaryText = "Be terse."
         let conversationID = UUID()
         let request = try StudioCommandAdapter.makeRequest(
-            mode: .chat, draft: draft, conversationID: conversationID
+            mode: .chat, draft: draft, conversationID: conversationID, source: .contract
         )
         XCTAssertEqual(request.conversationID, conversationID)
         XCTAssertTrue(request.draft.stream)
@@ -1509,7 +1509,7 @@ final class StudioTypesTests: XCTestCase {
         var draft = StudioDraft()
         draft.reset(for: .chat)
         draft.prompt = "hello"
-        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, source: .contract)
         XCTAssertNil(request.conversationID)
     }
 
@@ -1519,9 +1519,9 @@ final class StudioTypesTests: XCTestCase {
         draft.prompt = "what is this?"
         draft.model = "vision-chat-gemma4-12b"
         draft.inputPath = "/tmp/pic.png"
-        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID())
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID(), source: .contract)
         XCTAssertEqual(request.draft.imagePath, "/tmp/pic.png")
-        assertPair(request.template.arguments(from: request.draft), "--image", "/tmp/pic.png")
+        assertPair(request.template.arguments(from: request.draft, source: .contract), "--image", "/tmp/pic.png")
     }
 
     func testCodeConversationRequestIgnoresImage() throws {
@@ -1529,7 +1529,7 @@ final class StudioTypesTests: XCTestCase {
         draft.reset(for: .code)
         draft.prompt = "hi"
         draft.inputPath = "/tmp/pic.png"
-        let request = try StudioCommandAdapter.makeRequest(mode: .code, draft: draft, conversationID: UUID())
+        let request = try StudioCommandAdapter.makeRequest(mode: .code, draft: draft, conversationID: UUID(), source: .contract)
         XCTAssertTrue(request.draft.imagePath.isEmpty)
     }
 
@@ -1541,8 +1541,8 @@ final class StudioTypesTests: XCTestCase {
         draft.voiceProfile = "narrator-id"
         draft.refAudioPath = "/tmp/ref.wav"
         draft.saveProfileName = "Narrator"
-        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         assertPair(args, "--mode", "clone")
         assertPair(args, "--profile", "narrator-id")
         assertPair(args, "--ref-audio", "/tmp/ref.wav")
@@ -1553,8 +1553,8 @@ final class StudioTypesTests: XCTestCase {
         var draft = StudioDraft()
         draft.reset(for: .speak)
         draft.prompt = "hello world"
-        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         XCTAssertFalse(args.contains("--profile"))
         XCTAssertFalse(args.contains("--ref-audio"))
     }
@@ -1564,7 +1564,7 @@ final class StudioTypesTests: XCTestCase {
         draft.reset(for: .speak)
         draft.prompt = "hello world"
         draft.voiceMode = "clone"
-        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft))
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft, source: .contract))
     }
 
     func testSpeakCloneWithProfilePassesValidation() throws {
@@ -1573,7 +1573,7 @@ final class StudioTypesTests: XCTestCase {
         draft.prompt = "hello world"
         draft.voiceMode = "clone"
         draft.voiceProfile = "narrator-id"
-        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft))
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft, source: .contract))
     }
 
     func testChatSchemaExposesTemperatureAndMaxTokens() throws {
@@ -1583,8 +1583,8 @@ final class StudioTypesTests: XCTestCase {
         draft.temperature = 0.3
         draft.minP = 0.02
         draft.maxTokens = 1234
-        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         assertPair(args, "--temperature", "0.3")
         assertPair(args, "--min-p", "0.02")
         assertPair(args, "--max-tokens", "1234")
@@ -1616,8 +1616,8 @@ final class StudioTypesTests: XCTestCase {
         draft.preflightJSON = true
         draft.requireInstalled = true
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
 
         assertPair(args, "--response-format", "json_object")
         assertPair(args, "--context-size", "32768")
@@ -1646,8 +1646,8 @@ final class StudioTypesTests: XCTestCase {
         draft.inputPath = "/tmp/base.png"
         draft.cfgScale = 6.5
         draft.strength = 0.4
-        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         assertPair(args, "--cfg", "6.5")
         assertPair(args, "--strength", "0.4")
     }
@@ -1659,8 +1659,8 @@ final class StudioTypesTests: XCTestCase {
         draft.language = "es"
         draft.backend = "mlx"
         draft.timestamps = false
-        let request = try StudioCommandAdapter.makeRequest(mode: .listen, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .listen, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         assertPair(args, "--language", "es")
         assertPair(args, "--backend", "mlx")
         XCTAssertTrue(args.contains("--no-timestamps"))
@@ -1674,8 +1674,8 @@ final class StudioTypesTests: XCTestCase {
         draft.videoOutputMode = .videoOnly
         draft.fps = 30
         draft.numFrames = 120
-        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         assertPair(args, "--quality", "final")
         assertPair(args, "--output-mode", "video-only")
         assertPair(args, "--fps", "30")
@@ -1695,8 +1695,8 @@ final class StudioTypesTests: XCTestCase {
         draft.useDuration = true
         draft.durationSeconds = 5
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
 
         assertPair(args, "--quality", "final")
         assertPair(args, "--output-mode", "audio-video")
@@ -1719,8 +1719,8 @@ final class StudioTypesTests: XCTestCase {
         draft.cfgScale = 5
         draft.scheduleShift = 5
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
 
         XCTAssertFalse(args.contains("--quality"))
         XCTAssertFalse(args.contains("--output-mode"))
@@ -1742,8 +1742,8 @@ final class StudioTypesTests: XCTestCase {
         draft.audioPath = "/tmp/should-not-be-used.wav"
         draft.timings = true
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
 
         XCTAssertFalse(args.contains("--quality"))
         XCTAssertFalse(args.contains("--output-mode"))
@@ -1768,8 +1768,8 @@ final class StudioTypesTests: XCTestCase {
             "audio:/tmp/voice.wav",
         ]
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         let values = args.enumerated().compactMap { index, value in
             value == "--reference" && index + 1 < args.count ? args[index + 1] : nil
         }
@@ -1789,7 +1789,7 @@ final class StudioTypesTests: XCTestCase {
         enhanceDraft.audioODESteps = 8
         enhanceDraft.audioGuidanceScale = 1.75
         enhanceDraft.audioChunkSeconds = 12
-        let enhanceArgs = enhance.arguments(from: enhanceDraft)
+        let enhanceArgs = enhance.arguments(from: enhanceDraft, source: .contract)
         XCTAssertEqual(Array(enhanceArgs.prefix(3)), ["audio", "enhance", "/tmp/limited.wav"])
         assertPair(enhanceArgs, "--input-rate", "12000")
         assertPair(enhanceArgs, "--ode-method", "rk4")
@@ -1805,7 +1805,7 @@ final class StudioTypesTests: XCTestCase {
         separateDraft.inputPath = "/tmp/song.wav"
         separateDraft.model = "music-separate-bs-roformer-4stem"
         separateDraft.audioOverlap = 4
-        let separateArgs = separate.arguments(from: separateDraft)
+        let separateArgs = separate.arguments(from: separateDraft, source: .contract)
         XCTAssertEqual(Array(separateArgs.prefix(3)), ["music", "separate", "/tmp/song.wav"])
         assertPair(separateArgs, "--overlap", "4")
         let separateFlags = Set(try XCTUnwrap(
@@ -1833,8 +1833,8 @@ final class StudioTypesTests: XCTestCase {
         draft.speechDiarizationMinDuration = 0.3
         draft.speechDiarizationMergeGap = 0.4
 
-        XCTAssertNil(template.validationMessage(for: draft))
-        let arguments = template.arguments(from: draft)
+        XCTAssertNil(template.validationMessage(for: draft, source: .contract))
+        let arguments = template.arguments(from: draft, source: .contract)
         assertPair(arguments, "--format", "rttm")
         assertPair(arguments, "--threshold", "0.42")
         assertPair(arguments, "--min-duration", "0.3")
@@ -1842,7 +1842,7 @@ final class StudioTypesTests: XCTestCase {
 
         draft.speechDiarizationThreshold = 1.01
         XCTAssertEqual(
-            template.validationMessage(for: draft),
+            template.validationMessage(for: draft, source: .contract),
             "Diarization threshold must be between zero and one."
         )
     }
@@ -1858,8 +1858,8 @@ final class StudioTypesTests: XCTestCase {
         draft.timings = true
         draft.timingsOutputPath = "/tmp/timings.json"
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
-        let args = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: .contract)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         let declared = Set(MereRunCapabilityCatalog.videoGenerate.options.map(\.flag))
 
         for flag in args where flag.hasPrefix("--") {
@@ -1894,8 +1894,8 @@ final class StudioTypesTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var draft = template.defaultDraft()
             mutate(&draft)
-            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
-            let arguments = template.arguments(from: draft)
+            XCTAssertNil(template.validationMessage(for: draft, source: .contract), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft, source: .contract)
             let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
             XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
             let declared = Set(capability.options.map(\.flag))
@@ -1921,8 +1921,8 @@ final class StudioTypesTests: XCTestCase {
         draft.loraPath = "/tmp/scail-lightx2v.safetensors"
         draft.loraScale = 0.8
 
-        XCTAssertNil(template.validationMessage(for: draft))
-        let arguments = template.arguments(from: draft)
+        XCTAssertNil(template.validationMessage(for: draft, source: .contract))
+        let arguments = template.arguments(from: draft, source: .contract)
         XCTAssertEqual(arguments.filter { $0 == "--additional-reference" }.count, 2)
         XCTAssertEqual(arguments.filter { $0 == "--additional-reference-mask" }.count, 2)
         assertPair(arguments, "--distilled-adapter", "/tmp/scail-lightx2v.safetensors")
@@ -1930,7 +1930,7 @@ final class StudioTypesTests: XCTestCase {
 
         draft.scailAdditionalReferenceMaskPaths = "/tmp/second-mask.png"
         XCTAssertEqual(
-            template.validationMessage(for: draft),
+            template.validationMessage(for: draft, source: .contract),
             "Each additional SCAIL reference needs one matching reference mask."
         )
     }
@@ -1944,7 +1944,7 @@ final class StudioTypesTests: XCTestCase {
         draft.trellisRemeshBand = 1.5
         draft.trellisSealRadius = 16
 
-        let arguments = template.arguments(from: draft)
+        let arguments = template.arguments(from: draft, source: .contract)
         assertPair(arguments, "--texture-seed", "99")
         assertPair(arguments, "--remesh-band", "1.5")
         assertPair(arguments, "--seal-radius", "16")
@@ -2051,9 +2051,9 @@ final class StudioTypesTests: XCTestCase {
         draft.reset(for: .sfx)
         draft.prompt = "thunder clap"
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .sfx, draft: draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .sfx, draft: draft, source: .contract)
         XCTAssertEqual(request.templateID, .sfxGenerate)
-        let args = request.template.arguments(from: request.draft)
+        let args = request.template.arguments(from: request.draft, source: .contract)
         XCTAssertEqual(Array(args.prefix(2)), ["sfx", "generate"])
         XCTAssertTrue(args.contains("thunder clap"))
         XCTAssertTrue(args.contains("--duration"))
@@ -2069,7 +2069,7 @@ final class StudioTypesTests: XCTestCase {
         draft.refAudioPath = "/tmp/voice.wav"
         draft.saveProfileName = "narrator"
 
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         XCTAssertTrue(args.contains("--mode"))
         XCTAssertTrue(args.contains("clone"))
         XCTAssertTrue(args.contains("--ref-audio"))
@@ -2103,7 +2103,7 @@ final class StudioTypesTests: XCTestCase {
         draft.model = "vision-face-buffalo-l"
         draft.acceptModelLicense = true
 
-        XCTAssertTrue(template.arguments(from: draft).contains("--accept-model-license"))
+        XCTAssertTrue(template.arguments(from: draft, source: .contract).contains("--accept-model-license"))
     }
 
     func testStudioModelMaintenanceOutputNormalizesProgressAndStaysBounded() {
@@ -2153,7 +2153,7 @@ final class StudioTypesTests: XCTestCase {
         draft.force = true
         draft.acceptModelLicense = true
 
-        let arguments = template.arguments(from: draft)
+        let arguments = template.arguments(from: draft, source: .contract)
         XCTAssertTrue(arguments.contains("--pull-recommended"))
         XCTAssertTrue(arguments.contains("--accept-model-license"))
     }
@@ -2384,7 +2384,7 @@ final class StudioTypesTests: XCTestCase {
         var draft = template.defaultDraft()
         draft.apiKey = " secret-token "
 
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         let env = CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
 
         XCTAssertFalse(args.contains("--api-key"))
@@ -2398,7 +2398,7 @@ final class StudioTypesTests: XCTestCase {
         draft.apiKey = " vision-secret "
         draft.visionServeMaxBatchSize = 12
 
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         let env = CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
 
         XCTAssertFalse(args.contains("--api-key"))
@@ -2415,7 +2415,7 @@ final class StudioTypesTests: XCTestCase {
         draft.acceptModelLicense = true
 
         XCTAssertEqual(
-            template.arguments(from: draft),
+            template.arguments(from: draft, source: .contract),
             [
                 "model", "location", "bind", "vision-ground-falcon-perception",
                 "/Volumes/Models/falcon", "--accept-model-license"
@@ -2430,7 +2430,7 @@ final class StudioTypesTests: XCTestCase {
         draft.benchmarkFixtureCheck = true
 
         XCTAssertEqual(
-            template.arguments(from: draft),
+            template.arguments(from: draft, source: .contract),
             ["model", "benchmark", "fused-fixture", "/tmp/fused-results.jsonl", "--check"]
         )
     }
@@ -2467,7 +2467,7 @@ final class StudioTypesTests: XCTestCase {
         draft.speechDiarizationLatency = "0.64"
         draft.speechDiarizationThreshold = 0.55
         XCTAssertEqual(
-            template.arguments(from: draft),
+            template.arguments(from: draft, source: .contract),
             [
                 "speech", "diarize-live", "--model", "speech-diarization-nemotron3",
                 "--latency", "0.64", "--threshold", "0.55"
@@ -2492,7 +2492,7 @@ final class StudioTypesTests: XCTestCase {
         draft.apiKey = " secret-token "
         draft.openWebUIAdminPassword = " admin-secret "
 
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         let env = CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
 
         XCTAssertFalse(args.contains("--api-key"))

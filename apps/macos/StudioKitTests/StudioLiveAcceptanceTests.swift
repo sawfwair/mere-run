@@ -96,7 +96,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         // Decide.
         let decide = command(preflight: false)
-        let decided = try runCLI(flow, template.arguments(from: decide), timeout: 900)
+        let decided = try runCLI(flow, template.arguments(from: decide, source: .contract), timeout: 900)
         XCTAssertEqual(decided.exitCode, 0, decided.failureDescription)
         let fromFile = (try? Data(contentsOf: URL(fileURLWithPath: decide.outputPath))).flatMap(StudioDecisionOutput.init(data:))
         let fromText = StudioDecisionOutput(outputText: decided.libraryOutputText)
@@ -121,7 +121,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         // Check fit.
         let fit = command(preflight: true)
-        let checked = try runCLI(flow, template.arguments(from: fit), timeout: 300)
+        let checked = try runCLI(flow, template.arguments(from: fit, source: .contract), timeout: 300)
         XCTAssertEqual(checked.exitCode, 0, checked.failureDescription)
         let fitOutput = try XCTUnwrap(
             (try? Data(contentsOf: URL(fileURLWithPath: fit.outputPath))).flatMap(StudioDecisionOutput.init(data:))
@@ -374,7 +374,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         var segment = StudioDraft()
         segment.reset(for: .segment)
         segment.visionRegionPrompts = [.point(CGPoint(x: 1, y: 1), isPositive: true, label: "stale")]
-        handoff.apply(to: &segment)
+        handoff.apply(to: &segment, source: .contract)
         XCTAssertEqual(segment.inputPath, found.image.path)
         XCTAssertEqual(segment.prompt, found.prompt)
         XCTAssertEqual(segment.visionRegionPrompts?.count, found.detections.count, "The previous picture's prompts must be replaced by the found boxes")
@@ -784,7 +784,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let music = try Self.toneMusic(in: fixtures())
 
         var draft = StudioTaskDraft(templateID: .musicAnalyze)
-        try XCTUnwrap(draft.slots.first).attach([music], to: &draft)
+        try XCTUnwrap(draft.slots(source: .contract).first).attach([music], to: &draft)
         draft.form["--duration"] = .number(10)
         XCTAssertEqual(draft.primaryInputPath, music.path)
         let (_, argv) = try taskRequest(draft, task: .musicAnalyze)
@@ -792,7 +792,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(argv.firstIndex(of: "--duration").map { argv[$0 + 1] }, "10")
 
         var run = try runCLI(flow, argv, timeout: 2_400)
-        var modelUsed = StudioTaskSchema.modelID(for: draft)
+        var modelUsed = StudioTaskSchema.modelID(for: draft, source: .contract)
         if run.exitCode != 0, try Self.installedModels.get().contains("music-acestep-xl-turbo-lm4b") {
             // The default checkpoint may lack a language model; the LM-bearing checkpoint is the fallback.
             var retry = draft
@@ -835,8 +835,8 @@ final class StudioLiveAcceptanceTests: XCTestCase {
 
         var draft = StudioTaskDraft(templateID: .musicTranscribe)
         draft.form["--instruments"] = .text(StudioInstrumentList.encode(picked))
-        XCTAssertEqual(draft.arguments.firstIndex(of: "--instruments").map { draft.arguments[$0 + 1] }, picked.joined(separator: ","))
-        XCTAssertFalse(draft.arguments.contains("--list-instruments"), "the editor's list flag never rides along on a run")
+        XCTAssertEqual(draft.arguments(source: .contract).firstIndex(of: "--instruments").map { draft.arguments(source: .contract)[$0 + 1] }, picked.joined(separator: ","))
+        XCTAssertFalse(draft.arguments(source: .contract).contains("--list-instruments"), "the editor's list flag never rides along on a run")
         conclude(flow, "instruments=\(names.count) \(names)")
     }
 
@@ -870,7 +870,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(draft.text("--seed"), "42", "the template's seed")
 
         // Start training: the adapter is named, the clips are written beside it as the dataset.
-        let launch = try StudioTrainingRun.musicLaunch(draft, manifest: manifest)
+        let launch = try StudioTrainingRun.musicLaunch(draft, manifest: manifest, source: .contract)
         let output = URL(fileURLWithPath: launch.text("--output"))
         let manifestURL = URL(fileURLWithPath: launch.text("--dataset"))
         XCTAssertTrue(output.path.hasPrefix(live.appendingPathComponent("Music").path), output.path)
@@ -880,7 +880,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         XCTAssertEqual(imported.clips.map { $0.audioURL.path }, manifest.clips.map { $0.audioURL.path }, "Import round-trips the (standardized) clip paths")
         XCTAssertEqual(imported.clips.first?.lyrics, "la la la\nla la")
 
-        let (request, argv) = try preparedRequest(try XCTUnwrap(launch.request()))
+        let (request, argv) = try preparedRequest(try XCTUnwrap(launch.request(source: .contract)))
         XCTAssertEqual(request.draft.outputPath, output.path, "preparing does not name the adapter again")
         XCTAssertEqual(request.draft.inputPath, manifestURL.path, "the Library row's input is the clip list")
         XCTAssertEqual(request.mode, .music, "attributed by the template")
@@ -1022,7 +1022,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             var draft = template.defaultDraft()
             draft.operationsReference = reference
             draft.json = true
-            let argv = template.arguments(from: draft)
+            let argv = template.arguments(from: draft, source: .contract)
             XCTAssertEqual(argv, ["run", "inspect", reference, "--json"])
             let run = try runCLI(flow, argv, timeout: 300)
             return (run, StudioRunInspection.decode(run.stdout))
@@ -1136,7 +1136,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         foley.setArgument(1, live.appendingPathComponent("clip.mp4").path)
         foley.form["--steps"] = .integer(2)
         foley.form["--renoise"] = .text(schedule.argument)
-        XCTAssertEqual(foley.arguments.firstIndex(of: "--renoise").map { foley.arguments[$0 + 1] }, schedule.argument)
+        XCTAssertEqual(foley.arguments(source: .contract).firstIndex(of: "--renoise").map { foley.arguments(source: .contract)[$0 + 1] }, schedule.argument)
         XCTAssertNil(StudioConsoleCommand.validationMessage(for: try XCTUnwrap(foley.capability), draft: foley.form))
 
         // The runner refuses a schedule that does not match the step count before anything is
@@ -1272,8 +1272,8 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             draft.maxTokens = 3_072
             draft.temperature = 0.2
             // A conversation turn: the canvas streams, so the request carries a conversation id.
-            let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID())
-            let argv = request.template.arguments(from: request.draft)
+            let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID(), source: .contract)
+            let argv = request.template.arguments(from: request.draft, source: .contract)
             XCTAssertTrue(argv.contains("--stream"), "Conversation turns stream: \(argv)")
             XCTAssertTrue(argv.contains("--thinking"), "Thinking shown passes --thinking: \(argv)")
             XCTAssertFalse(argv.contains("--no-thinking"))
@@ -1314,8 +1314,8 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         draft.model = "text-chat-does-not-exist-xyz"
         draft.requireInstalled = true
         draft.maxTokens = 16
-        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID())
-        let argv = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID(), source: .contract)
+        let argv = request.template.arguments(from: request.draft, source: .contract)
         let run = try runCLI(flow, argv, timeout: 300)
         XCTAssertNotEqual(run.exitCode, 0, "A nonexistent model must fail")
         // The Library summarizes a failed conversation turn from the job's stderr log and exit code.
@@ -1380,7 +1380,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         let music = try Self.toneMusic(in: fixtures())
 
         var draft = StudioTaskDraft(templateID: .musicTranscribe)
-        try XCTUnwrap(draft.slots.first).attach([music], to: &draft)
+        try XCTUnwrap(draft.slots(source: .contract).first).attach([music], to: &draft)
         draft.model = model
         let (request, argv) = try taskRequest(draft, task: .musicTranscribe)
         let midiURL = URL(fileURLWithPath: request.draft.outputPath)
@@ -1499,7 +1499,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
         }
 
         var discover = StudioTaskDraft(templateID: .imageDatasetDiscover)
-        XCTAssertTrue(discover.attach(dropped: [root], slots: discover.slots), "the folder lands in the --root slot")
+        XCTAssertTrue(discover.attach(dropped: [root], slots: discover.slots(source: .contract)), "the folder lands in the --root slot")
         let (_, argv) = try taskRequest(discover, task: .imageDatasets)
         XCTAssertEqual(argv, ["image", "dataset", "discover", "--root", root.path, "--max-depth", "4", "--min-usable-pairs", "1", "--json"])
         let run = try runCLI(flow, argv, timeout: 120)
@@ -1695,10 +1695,10 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// A composer task's request, prepared the way `StudioPromptTaskController` prepares it: the
     /// destination folder is created (under the configured root) before the CLI launches.
     private func composerRequest(mode: StudioMode, draft: StudioDraft) throws -> (request: StudioRunRequest, argv: [String]) {
-        let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, source: .contract)
         let prepared = StudioOutputLocation.preparing(request)
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        let argv = prepared.request.template.arguments(from: prepared.request.draft)
+        let argv = prepared.request.template.arguments(from: prepared.request.draft, source: .contract)
         try requireDestinationsUnderLive(in: argv, draft: prepared.request.draft, capability: request.templateID.capability)
         return (prepared.request, argv)
     }
@@ -1719,7 +1719,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// the user's own folders.
     private func taskRequest(_ draft: StudioTaskDraft, task: StudioTask) throws -> (request: StudioRunRequest, argv: [String]) {
         // XCTest runs these on the main thread; the runner and the session store are main-actor.
-        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions()) }
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions(), source: .contract) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
         XCTAssertEqual(prepared.request.templateID, draft.templateID, "\(task)")
         XCTAssertEqual(prepared.request.mode, draft.template?.libraryMode, "\(task) files under its command's mode")
@@ -1732,9 +1732,9 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// routing named), prepared as `StudioTaskRunner.run(request:task:)` prepares it: never named
     /// again, so what was put beside the adapter stays beside it.
     private func preparedRequest(_ base: StudioRunRequest) throws -> (request: StudioRunRequest, argv: [String]) {
-        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions()) }
+        let prepared = try MainActor.assumeIsolated { try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions(), source: .contract) }
         XCTAssertNil(prepared.fallbackReason, "The run fell back to App Outputs: \(prepared.fallbackReason ?? "")")
-        let argv = prepared.request.execution?.arguments ?? prepared.request.template.arguments(from: prepared.request.draft)
+        let argv = prepared.request.execution?.arguments ?? prepared.request.template.arguments(from: prepared.request.draft, source: .contract)
         try requireDestinationsUnderLive(in: argv, draft: prepared.request.draft, capability: base.templateID.capability)
         return (prepared.request, argv)
     }
@@ -1742,11 +1742,11 @@ final class StudioLiveAcceptanceTests: XCTestCase {
     /// A task draft's argv with its destination named but not prepared, for a command the
     /// runner refuses (the CLI's own objection is what the test wants to see).
     private func namedArguments(_ draft: StudioTaskDraft) -> [String] {
-        let named = StudioOutputLocation.destination(for: draft)
+        let named = StudioOutputLocation.destination(for: draft, source: .contract)
         if let flag = named.capability?.output.flag, !named.text(flag).isBlank {
             XCTAssertTrue(named.text(flag).hasPrefix(live.path), "Output escaped the configured root: \(named.text(flag))")
         }
-        return named.arguments
+        return named.arguments(source: .contract)
     }
 
     private struct DestinationEscaped: LocalizedError {
@@ -1836,7 +1836,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             let (request, _) = try composerRequest(mode: .createImage, draft: draft)
             var command = request.draft
             command.outputPath = url.path
-            let run = try runCLI(flow, request.template.arguments(from: command), timeout: 900)
+            let run = try runCLI(flow, request.template.arguments(from: command, source: .contract), timeout: 900)
             guard run.exitCode == 0, FileManager.default.fileExists(atPath: url.path) else {
                 Self.faceImageFailed = true
                 throw Unavailable()
@@ -1864,7 +1864,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
             let (request, _) = try composerRequest(mode: .createImage, draft: draft)
             var command = request.draft
             command.outputPath = url.path
-            let run = try runCLI(flow, request.template.arguments(from: command), timeout: 900)
+            let run = try runCLI(flow, request.template.arguments(from: command, source: .contract), timeout: 900)
             XCTAssertEqual(run.exitCode, 0, run.failureDescription)
         }
         Self.applePhotoURL = url
@@ -1917,7 +1917,7 @@ final class StudioLiveAcceptanceTests: XCTestCase {
                     let (request, _) = try composerRequest(mode: .speak, draft: draft)
                     var command = request.draft
                     command.outputPath = clip.path
-                    let argv = request.template.arguments(from: command)
+                    let argv = request.template.arguments(from: command, source: .contract)
                     XCTAssertEqual(argv.firstIndex(of: "--voice").map { argv[$0 + 1] } ?? argv.firstIndex(of: "-v").map { argv[$0 + 1] }, turn.voice)
                     let run = try runCLI(flow, argv, timeout: 900)
                     XCTAssertEqual(run.exitCode, 0, run.failureDescription)

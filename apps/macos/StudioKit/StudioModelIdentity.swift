@@ -63,8 +63,6 @@ package final class StudioModelIdentityStore: ObservableObject, StudioModelIdent
     /// the command failed or printed something else.
     package typealias Resolver = @MainActor @Sendable (_ commandLine: [String]) async -> MereRunFamilyResolutionReport?
 
-    package static let shared = StudioModelIdentityStore()
-
     private struct Key: Hashable {
         /// The capability and its model flags' tokens: one model, whatever else the line says.
         let model: [String]

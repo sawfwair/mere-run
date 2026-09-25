@@ -241,7 +241,7 @@ package enum StudioTaskSchema {
     package static func fields(
         for task: StudioTask,
         draft: StudioTaskDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioContractField<StudioTaskDraft>] {
         guard let scope = source.scope(for: draft) else { return [] }
         let capability = scope.capability
@@ -314,7 +314,7 @@ package enum StudioTaskSchema {
     package static func essentials(
         for task: StudioTask,
         draft: StudioTaskDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioContractField<StudioTaskDraft>] {
         fields(for: task, draft: draft, source: source).filter { $0.tier == .essential && $0.overrideID != .model }
     }
@@ -323,7 +323,7 @@ package enum StudioTaskSchema {
     package static func sections(
         for task: StudioTask,
         draft: StudioTaskDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioTaskSection] {
         let fields = fields(for: task, draft: draft, source: source).filter { $0.tier != .expert }
         return StudioContractGroup.allCases.compactMap { group in
@@ -337,7 +337,7 @@ package enum StudioTaskSchema {
     package static func advanced(
         for task: StudioTask,
         draft: StudioTaskDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioContractField<StudioTaskDraft>] {
         fields(for: task, draft: draft, source: source).filter { $0.tier == .expert }
     }
@@ -349,14 +349,14 @@ package enum StudioTaskSchema {
     }
 
     /// How many fields differ from the template's fresh draft; the inspector's badge.
-    package static func changedCount(for task: StudioTask, draft: StudioTaskDraft, source: StudioScopeSource = .live) -> Int {
+    package static func changedCount(for task: StudioTask, draft: StudioTaskDraft, source: StudioScopeSource) -> Int {
         let baseline = StudioTaskDraft(templateID: draft.templateID)
         return fields(for: task, draft: draft, source: source).reduce(0) { $0 + $1.changedCount(draft: draft, baseline: baseline) }
     }
 
     /// The note under the task inspector's header and the composer's chips: the values the draft
     /// holds, away from the template's fresh draft, that the model it runs leaves out or replaces.
-    package static func notice(for draft: StudioTaskDraft, source: StudioScopeSource = .live) -> StudioScopeNotice? {
+    package static func notice(for draft: StudioTaskDraft, source: StudioScopeSource) -> StudioScopeNotice? {
         source.scope(for: draft)?.notice(form: draft.form, baseline: StudioTaskDraft(templateID: draft.templateID).form)
     }
 
@@ -378,7 +378,7 @@ package enum StudioTaskSchema {
     /// The model scope the chip, the inspector row, and the readiness card share for a draft.
     /// For a routed command its default is what the form runs with its model cleared, so
     /// "Auto" names the model the contract picks for the options the form holds.
-    package static func modelScope(for draft: StudioTaskDraft, source: StudioScopeSource = .live) -> StudioModelScope {
+    package static func modelScope(for draft: StudioTaskDraft, source: StudioScopeSource) -> StudioModelScope {
         var scope = StudioModelScope(templateID: draft.templateID, source: source)
         if let capability = source.capability(for: draft.templateID), let routing = capability.routing {
             var unset = draft.form
@@ -392,12 +392,12 @@ package enum StudioTaskSchema {
     /// managed model it names or defaults to, else what the form names. Otherwise its
     /// `--model`, else the base its training recipe trains (`StudioTrainingRun.recipeBaseModel`),
     /// else the template's default; empty when the template runs no managed model.
-    package static func modelID(for draft: StudioTaskDraft, source: StudioScopeSource = .live) -> String {
+    package static func modelID(for draft: StudioTaskDraft, source: StudioScopeSource) -> String {
         let model = draft.text("--model")
         if let scope = source.scope(for: draft), scope.capability.routing != nil {
             return scope.managedModel ?? model
         }
-        if model.isBlank, let base = StudioTrainingRun.recipeBaseModel(for: draft) { return base }
+        if model.isBlank, let base = StudioTrainingRun.recipeBaseModel(for: draft, source: source) { return base }
         return modelScope(for: draft, source: source).resolvedModelID(model: model)
     }
 
@@ -407,7 +407,7 @@ package enum StudioTaskSchema {
     /// trainers take beside the id (`--model-path`, `--checkpoints-root`); the CLI resolves those
     /// itself and `model list` has no row for them. A model the command excludes, or whose
     /// selectors match no family, blocks the run with the CLI gate's reason.
-    package static func requirement(for draft: StudioTaskDraft, source: StudioScopeSource = .live) -> StudioCapabilityRequirement? {
+    package static func requirement(for draft: StudioTaskDraft, source: StudioScopeSource) -> StudioCapabilityRequirement? {
         if let reason = source.scope(for: draft)?.blockingReason { return .unavailable(reason) }
         if isLocalPath(draft.text("--model").trimmingCharacters(in: .whitespacesAndNewlines)) { return nil }
         if ["--model-path", "--checkpoints-root"].contains(where: { !draft.text($0).isBlank }) { return nil }
@@ -416,7 +416,7 @@ package enum StudioTaskSchema {
     }
 
     /// The managed model `requirement(for:)` asks for; empty when it asks for none.
-    package static func requiredModelID(for draft: StudioTaskDraft, source: StudioScopeSource = .live) -> String {
+    package static func requiredModelID(for draft: StudioTaskDraft, source: StudioScopeSource) -> String {
         guard case .managedModel(let model)? = requirement(for: draft, source: source) else { return "" }
         return model
     }
@@ -478,10 +478,6 @@ extension StudioTaskDraft {
     }
 
     /// The well's slots for the model the draft runs.
-    package var slots: [StudioAttachmentSlot] {
-        slots(source: .live)
-    }
-
     package func slots(source: StudioScopeSource) -> [StudioAttachmentSlot] {
         StudioTaskSchema.slots(for: templateID, scope: source.scope(for: self))
     }

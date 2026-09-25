@@ -75,7 +75,7 @@ final class StudioOptionScopeTests: XCTestCase {
         let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: source)
         XCTAssertEqual(request.draft.inputPath, "")
         XCTAssertEqual(request.draft.endImagePath, "")
-        XCTAssertNil(request.template.validationMessage(for: request.draft))
+        XCTAssertNil(request.template.validationMessage(for: request.draft, source: .contract))
         XCTAssertEqual(StudioMode.video.attachmentSlots(for: draft, source: source).map(\.id), ["audio"])
     }
 
@@ -106,7 +106,7 @@ final class StudioOptionScopeTests: XCTestCase {
         command.modelRoot = "/tmp/checkpoints/h3-ref2va"
         let scope = source.scope(
             capability: Video.capability,
-            commandLine: try XCTUnwrap(CommandCatalog.template(id: .videoGenerate)).unscopedArguments(from: command)
+            commandLine: try XCTUnwrap(CommandCatalog.template(id: .videoGenerate)).unscopedArguments(from: command, source: .contract)
         )
         XCTAssertEqual(scope.family?.id, Video.ref2va)
         XCTAssertFalse(scope.allows("--image"))
@@ -218,7 +218,7 @@ final class StudioOptionScopeTests: XCTestCase {
     func testAChunkOverlapStepsThroughTheValuesItsModelTakes() throws {
         var draft = StudioTaskDraft(templateID: .musicSeparate)
         draft.model = "music-separate-bs-roformer-4stem"
-        let field = try XCTUnwrap(StudioTaskSchema.fields(for: .musicSeparate, draft: draft).first { $0.flag == "--overlap" })
+        let field = try XCTUnwrap(StudioTaskSchema.fields(for: .musicSeparate, draft: draft, source: .contract).first { $0.flag == "--overlap" })
         XCTAssertEqual(field.control, .stepper)
         let divisors = (1...485_100).filter { 485_100.isMultiple(of: $0) }.map(Double.init)
         XCTAssertEqual(field.allowedValues, divisors)
@@ -235,15 +235,15 @@ final class StudioOptionScopeTests: XCTestCase {
         let rows = ["vision-depth-marigold-v2", "vision-depth-vda-small"].map {
             StudioModelInventoryRow(id: $0, category: "vision-depth", status: "installed", size: "1 GB", usageTerms: nil)
         }
-        XCTAssertEqual(StudioModelScope(templateID: .visionDepth).choices(from: rows).map(\.id), ["vision-depth-marigold-v2"])
+        XCTAssertEqual(StudioModelScope(templateID: .visionDepth, source: .contract).choices(from: rows).map(\.id), ["vision-depth-marigold-v2"])
 
         var draft = StudioTaskDraft(templateID: .visionDepth)
         draft.model = "vision-depth-vda-small"
-        guard case .unavailable(let reason)? = StudioTaskSchema.requirement(for: draft) else {
+        guard case .unavailable(let reason)? = StudioTaskSchema.requirement(for: draft, source: .contract) else {
             return XCTFail("an excluded model must block the run")
         }
         XCTAssertTrue(reason.contains("depth-video"), reason)
-        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: draft), "")
+        XCTAssertEqual(StudioTaskSchema.requiredModelID(for: draft, source: .contract), "")
     }
 
     /// H-b: a picker offers every model the contract runs the command with: the families'
@@ -404,7 +404,7 @@ final class StudioOptionScopeTests: XCTestCase {
 
     func testTheConsoleShowsTheFamilysOptionsAndNotesTheRest() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .musicGenerate))
-        var form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
+        var form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft(), source: .contract)
         form["--model"] = .text("music-yue2")
         form["--source-audio"] = .text("/tmp/source.wav")
         form["--task-type"] = .text("cover")

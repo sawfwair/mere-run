@@ -772,7 +772,7 @@ final class MereRunControllerTests: XCTestCase {
         draft.reset(for: .chat)
         draft.model = "text-chat-q36-nano"
         draft.prompt = prompt
-        return try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: conversationID, validating: false)
+        return try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: conversationID, validating: false, source: .contract)
     }
 
     func testFailedTurnRecordsWhyFromStderrAndTheThreadNeverReplaysIt() async throws {
@@ -1370,12 +1370,12 @@ final class MereRunControllerTests: XCTestCase {
             draft: draft,
             configuration: MereRunProcessConfiguration(
                 executableURL: URL(fileURLWithPath: "/usr/bin/true"),
-                arguments: template.arguments(from: draft),
+                arguments: template.arguments(from: draft, source: .contract),
                 currentDirectoryURL: FileManager.default.temporaryDirectory,
                 environment: [:],
                 keepsStandardInputOpen: false
             ),
-            displayCommand: "mere.run model list"
+            displayCommand: "mere.run model list", scopeSource: .contract
         )
 
         let id = controller.jobs.submit(request)

@@ -30,7 +30,7 @@ package struct StudioTaskCommandState: Codable, Equatable {
     /// builds now. Both sides are compared as they launch, scoped to the model each runs, so an
     /// edit to an option the current model does not use (kept for another model) is not an
     /// override of this run.
-    package func overrides(source: [String], scopeSource: StudioScopeSource = .live) -> Bool {
+    package func overrides(source: [String], scopeSource: StudioScopeSource) -> Bool {
         guard let capability = scopeSource.capability(for: templateID) else { return false }
         let launched = { (form: StudioConsoleDraft) in
             StudioConsoleCommand.arguments(for: capability, draft: form.scoped(to: scopeSource.scope(capability: capability, form: form)))

@@ -104,7 +104,7 @@ package enum StudioCommandRows {
     package static func groups(
         template: CommandTemplate,
         draft: CommandDraft,
-        source: StudioScopeSource = .live
+        source: StudioScopeSource
     ) -> [StudioCommandRowGroupRows] {
         let arguments = template.arguments(from: draft, source: source)
         let capability = source.capability(for: template.id)

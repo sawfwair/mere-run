@@ -465,7 +465,7 @@ final class StudioAnalyzeTests: XCTestCase {
         draft.reset(for: .segment)
         StudioAnalyzeHandoff
             .make(to: .visionSegment, inputPath: "/tmp/mug.png", prompt: "the saucer")
-            .apply(to: &draft)
+            .apply(to: &draft, source: .contract)
         XCTAssertEqual(draft.inputPath, "/tmp/mug.png")
         XCTAssertEqual(draft.prompt, "the saucer")
 
@@ -473,7 +473,7 @@ final class StudioAnalyzeTests: XCTestCase {
         trackDraft.reset(for: .track)
         StudioAnalyzeHandoff
             .make(to: .visionTrack, inputPath: "/tmp/mug.png", prompt: "the saucer")
-            .apply(to: &trackDraft)
+            .apply(to: &trackDraft, source: .contract)
         XCTAssertEqual(trackDraft.inputPath, "")
         XCTAssertEqual(trackDraft.prompt, "the saucer")
     }
@@ -528,7 +528,7 @@ final class StudioAnalyzeTests: XCTestCase {
         draft.reset(for: .findObjects)
         draft.inputPath = "/tmp/mug.png"
         draft.prompt = "every coffee cup"
-        let request = try StudioCommandAdapter.makeRequest(mode: .findObjects, draft: draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .findObjects, draft: draft, source: .contract)
         XCTAssertTrue(request.draft.visionJSONOutputPath.hasSuffix(".json"))
         XCTAssertEqual(
             URL(fileURLWithPath: request.draft.visionJSONOutputPath).deletingPathExtension(),
@@ -540,7 +540,7 @@ final class StudioAnalyzeTests: XCTestCase {
         trackDraft.reset(for: .track)
         trackDraft.inputPath = "/tmp/clip.mp4"
         trackDraft.prompt = "the red car"
-        let trackRequest = try StudioCommandAdapter.makeRequest(mode: .track, draft: trackDraft)
+        let trackRequest = try StudioCommandAdapter.makeRequest(mode: .track, draft: trackDraft, source: .contract)
         XCTAssertTrue(trackRequest.draft.visionJSONOutputPath.hasSuffix(".json"))
         // A tracked clip writes one mask set per frame; Studio does not ask for thousands of PNGs.
         XCTAssertTrue(trackRequest.draft.visionMaskOutputDirectory.isEmpty)

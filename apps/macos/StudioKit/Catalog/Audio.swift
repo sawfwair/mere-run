@@ -125,7 +125,11 @@ extension CommandArguments {
 extension CommandCatalog {
     /// The reason an audio template's draft cannot run, beyond the prompt and input checks
     /// every template shares; nil for a draft that can, and for every other template.
-    package static func audioValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+    package static func audioValidationMessage(
+        for id: CommandTemplateID,
+        draft: CommandDraft,
+        source: StudioScopeSource
+    ) -> String? {
         switch id {
         case .audioEdit:
             if draft.inputPath.isBlank && !draft.useDuration { return "Choose a duration or reference audio." }
@@ -133,7 +137,7 @@ extension CommandCatalog {
                 return "Duration must be in (0, 300] seconds."
             }
             if !["audio-auk-base", "audio-auk-flash"].contains(draft.model) { return "Choose an AuK base or Flash model." }
-            let scope = StudioScopeSource.live.scope(capability: MereRunCapabilityCatalog.audioEdit, commandLine: [CommandFlags.AudioEdit.model, draft.model]
+            let scope = source.scope(capability: MereRunCapabilityCatalog.audioEdit, commandLine: [CommandFlags.AudioEdit.model, draft.model]
             )
             if scope.fixedValue(CommandFlags.AudioEdit.steps) == nil, !(1...1000).contains(draft.steps) {
                 return "Steps must be in 1...1000."
@@ -145,7 +149,7 @@ extension CommandCatalog {
             if let overlap = draft.audioOverlap, overlap <= 0 {
                 return "Overlap must be positive."
             }
-            let scope = StudioScopeSource.live.scope(capability: MereRunCapabilityCatalog.audioEnhance, commandLine: CommandArguments.modelArguments(CommandFlags.AudioEnhance.model, draft)
+            let scope = source.scope(capability: MereRunCapabilityCatalog.audioEnhance, commandLine: CommandArguments.modelArguments(CommandFlags.AudioEnhance.model, draft)
             )
             // UniverSR's controls, checked when the selected model's family reads them.
             if scope.allows(CommandFlags.AudioEnhance.odeSteps) {

@@ -11,21 +11,25 @@ extension StudioPromptTaskController {
     /// Resolves Command edits and validates before a request can change history or create output
     /// directories. The existing adapter, contract, and sessions own those decisions.
     func preparedRequest(mode: StudioMode, draft: StudioDraft, conversationID: UUID? = nil) throws -> StudioRunRequest {
-        let base = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, conversationID: conversationID)
-        let request = sessions.resolving(base)
+        let base = try StudioCommandAdapter.makeRequest(
+            mode: mode, draft: draft, conversationID: conversationID, source: controller.scopeSource
+        )
+        let request = sessions.resolving(base, source: controller.scopeSource)
         try validate(request)
         return request
     }
 
     private func validate(_ request: StudioRunRequest) throws {
-        let message = request.template.validationMessage(for: request.draft, execution: request.execution)
+        let message = request.template.validationMessage(
+            for: request.draft, execution: request.execution, source: controller.scopeSource
+        )
         if let message { throw ValidationError(message: message) }
     }
 
     /// The model and readiness gates every submission clears before it may change history:
     /// send and retry share them so a retry on a missing or unsupported model keeps its reply.
     func ensureRunnable(mode: StudioMode, draft: StudioDraft) throws {
-        switch StudioCommandAdapter.capabilityRequirement(for: mode, draft: draft) {
+        switch StudioCommandAdapter.capabilityRequirement(for: mode, draft: draft, source: controller.scopeSource) {
         case .unavailable(let message): throw ValidationError(message: message)
         case .managedModel(let modelID):
             if let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage(titles: controller.modelStore.titles) {
@@ -61,7 +65,7 @@ extension StudioPromptTaskController {
 
     /// Historical replay uses its recorded command, never the current task's Command edits.
     package func replay(_ item: StudioLibraryItem, variationSeed: String? = nil) throws -> StudioRunRequest {
-        guard let request = StudioLibraryReplay.request(for: item, variationSeed: variationSeed) else {
+        guard let request = StudioLibraryReplay.request(for: item, variationSeed: variationSeed, source: controller.scopeSource) else {
             throw ValidationError(message: "This older Library item does not include a replayable command.")
         }
         try validate(request)
@@ -70,9 +74,10 @@ extension StudioPromptTaskController {
     }
 
     private func submitLibraryRequest(_ request: StudioRunRequest) {
-        let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft)
+        let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft, source: controller.scopeSource)
         library.start(request: request, commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true),
-                      status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued)
+                      status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued,
+                      source: controller.scopeSource)
         controller.run(studio: request)
     }
 

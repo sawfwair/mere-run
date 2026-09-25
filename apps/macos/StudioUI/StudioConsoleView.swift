@@ -23,6 +23,7 @@ package enum StudioConsoleWindow {
 /// While this window is key the menu bar acts on the console's own Run/Stop and on the Studio
 /// window's navigation.
 package struct StudioConsoleView: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     package init() {}
 
     @EnvironmentObject private var controller: MereRunController
@@ -86,12 +87,12 @@ package struct StudioConsoleView: View {
         if let arguments = controller.consoleSeedArguments, let capability {
             draft = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
         } else {
-            draft = StudioConsoleCommand.seed(template: controller.selectedTemplate, draft: controller.draft)
+            draft = StudioConsoleCommand.seed(template: controller.selectedTemplate, draft: controller.draft, source: scopeSource)
         }
     }
 
     private var canRun: Bool {
-        StudioConsoleRun(template: controller.selectedTemplate, draft: draft, seed: controller.draft)?
+        StudioConsoleRun(template: controller.selectedTemplate, draft: draft, seed: controller.draft, source: scopeSource)?
             .validationMessage == nil
     }
 
@@ -99,7 +100,7 @@ package struct StudioConsoleView: View {
     /// command and not the draft it was seeded from — and hands it to the inference lane.
     private func run() {
         let template = controller.selectedTemplate
-        guard let launch = StudioConsoleRun(template: template, draft: draft, seed: controller.draft),
+        guard let launch = StudioConsoleRun(template: template, draft: draft, seed: controller.draft, source: scopeSource),
               launch.validationMessage == nil else {
             return
         }
@@ -127,7 +128,8 @@ package struct StudioConsoleView: View {
             request: request,
             commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true),
             status: status,
-            arguments: arguments
+            arguments: arguments,
+            source: scopeSource
         )
         requestID = request.id
         controller.runConsole(

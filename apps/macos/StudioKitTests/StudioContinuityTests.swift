@@ -19,12 +19,12 @@ final class StudioContinuityTests: XCTestCase {
         var seed = template.defaultDraft()
         seed.prompt = ""
         seed.outputPath = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).png").path
-        var form = StudioConsoleCommand.seed(template: template, draft: seed)
+        var form = StudioConsoleCommand.seed(template: template, draft: seed, source: .contract)
         form["--prompt"] = .text("a green ceramic bowl")
         form["--width"] = .text("768")
         form["--ref-image"] = .text("/tmp/first reference.png\n/tmp/second.png")
         form.extraArguments = "--future-option 'two words'"
-        let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: form, seed: seed))
+        let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: form, seed: seed, source: .contract))
         XCTAssertNil(launch.validationMessage)
         XCTAssertTrue(controller.runConsole(template: template, draft: launch.commandDraft,
                                             arguments: launch.arguments, requestID: UUID()))
@@ -32,10 +32,10 @@ final class StudioContinuityTests: XCTestCase {
         let library = temporaryLibrary()
         let item = library.start(
             request: StudioRunRequest(mode: .createImage, templateID: template.id, template: template, draft: launch.commandDraft),
-            commandPreview: "fixture", arguments: launch.arguments
+            commandPreview: "fixture", arguments: launch.arguments, source: .contract
         )
         XCTAssertEqual(item.prompt, "a green ceramic bowl")
-        let replay = try XCTUnwrap(StudioLibraryReplay.request(for: item))
+        let replay = try XCTUnwrap(StudioLibraryReplay.request(for: item, source: .contract))
         XCTAssertEqual(replay.draft.width, 768)
         let execution = try XCTUnwrap(replay.execution)
         XCTAssertEqual(execution.replacing("--output", with: seed.outputPath).arguments, launch.arguments)
@@ -69,9 +69,9 @@ final class StudioContinuityTests: XCTestCase {
 
     func testConsolePreservesServerAuthenticationChecksAfterEditingTheHost() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .apiServe))
-        var form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
+        var form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft(), source: .contract)
         form["--host"] = .text("0.0.0.0")
-        var launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: form, seed: template.defaultDraft()))
+        var launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: form, seed: template.defaultDraft(), source: .contract))
         XCTAssertNotNil(launch.validationMessage)
         let runner = RecordingProcessRunner()
         let controller = MereRunController(secretStore: InMemorySecretStore(), processRunner: runner, resolvesCLIOnInit: false)
@@ -80,7 +80,7 @@ final class StudioContinuityTests: XCTestCase {
             arguments: launch.arguments, requestID: UUID()))
         XCTAssertTrue(runner.starts.isEmpty)
         form["--api-key"] = .text("fixture-key")
-        launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: form, seed: template.defaultDraft()))
+        launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: form, seed: template.defaultDraft(), source: .contract))
         XCTAssertNil(launch.validationMessage)
         XCTAssertFalse(launch.arguments.contains("fixture-key"))
         XCTAssertTrue(controller.runConsole(template: template, draft: launch.commandDraft,
@@ -117,7 +117,7 @@ final class StudioContinuityTests: XCTestCase {
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
         let request = StudioRunRequest(mode: .createImage, templateID: template.id,
                                        template: template, draft: template.defaultDraft())
-        library.start(request: request, commandPreview: "fixture", status: .running)
+        library.start(request: request, commandPreview: "fixture", status: .running, source: .contract)
         let partial = URL(fileURLWithPath: "/tmp/partial.png")
         library.updateOutput(id: request.id, outputURL: partial)
         let restored = StudioLibraryStore(libraryURL: library.libraryURL)

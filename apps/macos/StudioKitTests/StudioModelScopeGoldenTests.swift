@@ -164,7 +164,7 @@ enum ModelScopeFixtures {
             return (source.scope(for: draft), fields.map { ($0.flag, $0.fixedValue, $0.allowedValues) })
         case .console(let templateID):
             guard let template = CommandCatalog.template(id: templateID) else { return nil }
-            var form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
+            var form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft(), source: .contract)
             form["--model"] = .text(folder)
             let scope = source.scope(capability: capability, form: form)
             let fields = StudioConsoleCommand.groups(for: capability, scope: scope).flatMap(\.fields)
@@ -376,7 +376,7 @@ enum ModelScopeFixtures {
 
         private func console(_ templateID: CommandTemplateID, surface: String) -> (Set<String>, Set<String>, Set<String>)? {
             guard let template = CommandCatalog.template(id: templateID) else { return nil }
-            let form = filledForm(StudioConsoleCommand.seed(template: template, draft: template.defaultDraft()))
+            let form = filledForm(StudioConsoleCommand.seed(template: template, draft: template.defaultDraft(), source: .contract))
             let scope = source.scope(capability: capability, form: form)
             guard scope.family?.id == family.id else { return nil }
             let shown = Set(StudioConsoleCommand.groups(for: capability, scope: scope).flatMap(\.fields).map(\.flag))

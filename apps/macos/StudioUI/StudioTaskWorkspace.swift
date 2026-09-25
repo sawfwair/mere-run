@@ -24,6 +24,7 @@ extension EnvironmentValues {
 ///
 /// The root routes every contract-backed Generate or Analyze task here.
 struct StudioTaskWorkspace: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     let task: StudioTask
 
     @EnvironmentObject private var controller: MereRunController
@@ -79,7 +80,7 @@ struct StudioTaskWorkspace: View {
 
     private var activePullJob: Job? {
         _ = jobMonitor.generation
-        return jobMonitor.pullJob(for: StudioTaskSchema.modelID(for: draft))
+        return jobMonitor.pullJob(for: StudioTaskSchema.modelID(for: draft, source: scopeSource))
     }
 
     private var focusedResult: StudioResultSelection? {
@@ -133,13 +134,13 @@ struct StudioTaskWorkspace: View {
         .dropDestination(for: URL.self) { urls, _ in
             // A file dropped anywhere on the canvas lands in the first well slot that takes it.
             var next = draft
-            guard next.attach(dropped: urls, slots: next.slots) else { return false }
+            guard next.attach(dropped: urls, slots: next.slots(source: scopeSource)) else { return false }
             draft = next
             error = nil
             return true
         } isTargeted: { targeted in
             withAnimation(MereRunTheme.Motion.quick) {
-                isDropTargeted = targeted && !draft.slots.isEmpty
+                isDropTargeted = targeted && !draft.slots(source: scopeSource).isEmpty
             }
         }
         .overlay {
@@ -155,7 +156,7 @@ struct StudioTaskWorkspace: View {
             jobMonitor.attach(controller.jobs)
             refreshReadiness()
         }
-        .onChange(of: StudioTaskSchema.requirement(for: draft)) { _, _ in
+        .onChange(of: StudioTaskSchema.requirement(for: draft, source: scopeSource)) { _, _ in
             error = nil
             refreshReadiness()
         }
@@ -203,7 +204,7 @@ struct StudioTaskWorkspace: View {
         } else {
             StudioFeedCanvas(
                 presentation: presentation,
-                slots: draft.slots,
+                slots: draft.slots(source: scopeSource),
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,
@@ -261,10 +262,10 @@ struct StudioTaskWorkspace: View {
 
     private var readinessActions: StudioReadinessActions {
         StudioReadinessActions(
-            scope: StudioTaskSchema.modelScope(for: draft),
+            scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
             model: draftBinding.model,
             modelInventory: models.rows,
-            pullModel: { pull(modelID: StudioTaskSchema.modelID(for: draft)) },
+            pullModel: { pull(modelID: StudioTaskSchema.modelID(for: draft, source: scopeSource)) },
             openModels: { navigation.open(task: .modelsInstalled) },
             recheck: refreshReadiness
         )
@@ -290,7 +291,7 @@ struct StudioTaskWorkspace: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: task, requirement: StudioTaskSchema.requirement(for: draft))
+        controller.checkReadiness(for: task, requirement: StudioTaskSchema.requirement(for: draft, source: scopeSource))
     }
 
     private func chooseInput() {
@@ -303,7 +304,7 @@ struct StudioTaskWorkspace: View {
 
     private func useAsInput(_ url: URL) {
         var next = draft
-        guard next.attach(dropped: [url], slots: next.slots) else {
+        guard next.attach(dropped: [url], slots: next.slots(source: scopeSource)) else {
             error = "\(task.title) does not take \(url.lastPathComponent) as an input."
             return
         }
@@ -315,7 +316,7 @@ struct StudioTaskWorkspace: View {
     /// Library ▸ "Use these settings" on one of this task's rows: the recorded command becomes
     /// the draft.
     private func useSettings(_ item: StudioLibraryItem) {
-        guard let restored = StudioLibraryDraftRestoration.taskDraft(from: item) else {
+        guard let restored = StudioLibraryDraftRestoration.taskDraft(from: item, source: scopeSource) else {
             error = "This run's command can't be loaded into the composer. Use Edit command… to change it."
             return
         }
@@ -338,7 +339,8 @@ struct StudioTaskWorkspace: View {
 
     /// Runs a row's recorded command again as a new row, never the current draft's edits.
     private func replay(_ item: StudioLibraryItem, variationSeed: String?) {
-        guard let runner, let request = StudioLibraryReplay.request(for: item, variationSeed: variationSeed) else {
+        guard let runner,
+              let request = StudioLibraryReplay.request(for: item, variationSeed: variationSeed, source: scopeSource) else {
             error = "This older Library item does not include a replayable command."
             return
         }

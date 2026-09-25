@@ -1628,7 +1628,7 @@ final class StudioSnapshotTests: XCTestCase {
                     useExample: { _ in }, attach: {}
                 ),
                 readinessActions: StudioReadinessActions(
-                    scope: StudioModelScope(mode: .createImage), model: .constant("image-zimage-turbo"), modelInventory: inventory,
+                    scope: StudioModelScope(mode: .createImage, source: .contract), model: .constant("image-zimage-turbo"), modelInventory: inventory,
                     pullModel: {}, openModels: {}, recheck: {}
                 )
             )
@@ -2668,7 +2668,7 @@ private final class SnapshotFixture {
         library.start(
             request: running,
             commandPreview: controller.commandPreview(template: running.template, draft: running.draft, masksSecrets: true),
-            status: .running
+            status: .running, source: .contract
         )
         guard controller.run(studio: running), let live = runner.liveStarts.last,
               let job = controller.jobs.job(requestID: running.id) else {
@@ -2693,13 +2693,13 @@ private final class SnapshotFixture {
         library.start(
             request: queued,
             commandPreview: controller.commandPreview(template: queued.template, draft: queued.draft, masksSecrets: true),
-            status: .queued
+            status: .queued, source: .contract
         )
         guard controller.run(studio: queued) else { throw StudioSnapshotError.noContentView }
     }
 
     private static func mockupRequest(mode: StudioMode, draft: StudioDraft, hour: Int, minute: Int) throws -> StudioRunRequest {
-        let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, source: .contract)
         return StudioRunRequest(
             id: request.id,
             mode: request.mode,
@@ -2796,7 +2796,7 @@ private final class SnapshotFixture {
             updatedAt: Self.mockupTime(hour: 8, minute: 41),
             status: .failed,
             exitCode: 1,
-            commandPreview: "mere.run " + template.arguments(from: draft).joined(separator: " "),
+            commandPreview: "mere.run " + template.arguments(from: draft, source: .contract).joined(separator: " "),
             outputText: "error: image-zimage-turbo is not installed; run `mere.run model pull image-zimage-turbo`",
             templateID: .imageGenerate,
             commandDraft: draft
@@ -3024,7 +3024,7 @@ private final class SnapshotFixture {
         draft.model = Self.converseChatModelID
         draft.thinkingMode = .hide
         draft.prompt = ConversationTranscript.render(messages: thread.messages ?? []).prompt
-        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: thread.id)
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: thread.id, source: .contract)
         runner.liveSessionMarkers = ["chat"]
         guard controller.run(studio: request), let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
@@ -3065,7 +3065,7 @@ private final class SnapshotFixture {
             createdAt: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-249)
         )
         let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
-        library.start(request: request, commandPreview: preview, status: .running)
+        library.start(request: request, commandPreview: preview, status: .running, source: .contract)
 
         guard let runner = liveSessionRunner else {
             throw StudioSnapshotError.noContentView
@@ -3252,7 +3252,7 @@ private final class SnapshotFixture {
             createdAt: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-95)
         )
         let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
-        library.start(request: request, commandPreview: preview, status: .running)
+        library.start(request: request, commandPreview: preview, status: .running, source: .contract)
         guard let runner = liveSessionRunner else { throw StudioSnapshotError.noContentView }
         runner.liveSessionMarkers = ["prepare-masks"]
         guard controller.run(studio: request), let live = runner.liveStarts.last else {
@@ -3554,7 +3554,7 @@ private final class SnapshotFixture {
             outputText: nil,
             templateID: .audioEnhance,
             commandDraft: draft,
-            commandArguments: template.arguments(from: request.draft),
+            commandArguments: template.arguments(from: request.draft, source: .contract),
             artifactURLs: [enhanced]
         )
         row.inputIdentity = StudioInputIdentity.read(memo)
@@ -3626,7 +3626,7 @@ private final class SnapshotFixture {
             draft.inputPath = run.input?.path ?? ""
             draft.outputPath = run.output?.path ?? ""
             run.edit(&draft)
-            let arguments = template.arguments(from: draft)
+            let arguments = template.arguments(from: draft, source: .contract)
             var row = StudioLibraryItem(
                 id: UUID(),
                 mode: .sfx,
@@ -3649,7 +3649,7 @@ private final class SnapshotFixture {
             // The parked draft is the run's settings with the destination left to routing.
             var parked = draft
             parked.outputPath = ""
-            let taskDraft = StudioTaskDraft(templateID: run.templateID, form: StudioConsoleCommand.seed(template: template, draft: parked))
+            let taskDraft = StudioTaskDraft(templateID: run.templateID, form: StudioConsoleCommand.seed(template: template, draft: parked, source: .contract))
             controller.taskSessions.setTaskDraft(taskDraft, for: run.task)
             controller.taskSessions.set(Optional(row.id), for: run.task.rawValue + ".requestID")
         }
@@ -3706,11 +3706,11 @@ private final class SnapshotFixture {
                 updatedAt: startedAt.addingTimeInterval(2.6),
                 status: .completed,
                 exitCode: 0,
-                commandPreview: "mere.run " + draft.arguments.joined(separator: " "),
+                commandPreview: "mere.run " + draft.arguments(source: .contract).joined(separator: " "),
                 outputText: nil,
                 templateID: templateID,
-                commandDraft: draft.run?.commandDraft,
-                commandArguments: draft.arguments,
+                commandDraft: draft.run(source: .contract)?.commandDraft,
+                commandArguments: draft.arguments(source: .contract),
                 artifactURLs: artifacts
             )
             if let input = inputs.first { row.inputIdentity = StudioInputIdentity.read(input) }
@@ -3920,7 +3920,7 @@ private final class SnapshotFixture {
             outputText: manifest,
             templateID: .musicSeparate,
             commandDraft: draft,
-            commandArguments: template.arguments(from: draft),
+            commandArguments: template.arguments(from: draft, source: .contract),
             artifactURLs: [stems] + stemURLs + [manifestURL]
         )
         row.inputIdentity = StudioInputIdentity.read(track)
@@ -3964,7 +3964,7 @@ private final class SnapshotFixture {
         var draft = StudioTaskDraft(templateID: .speechListen)
         draft.form["--language"] = .text("en")
         controller.taskSessions.setTaskDraft(draft, for: .audioLive)
-        controller.checkReadiness(for: .audioLive, modelID: StudioTaskSchema.modelID(for: draft))
+        controller.checkReadiness(for: .audioLive, modelID: StudioTaskSchema.modelID(for: draft, source: .contract))
         let request = try StudioTaskRunner(controller: controller, library: library).run(draft.liveListenLaunch(), task: .audioLive)
         guard let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
@@ -4027,7 +4027,7 @@ private final class SnapshotFixture {
             outputText: nil,
             templateID: .imageReconstruct3D,
             commandDraft: draft,
-            commandArguments: template.arguments(from: request.draft),
+            commandArguments: template.arguments(from: request.draft, source: .contract),
             artifactURLs: [mesh, manifest, runManifest],
             artifactRoles: [
                 manifest.standardizedFileURL.path: "mesh-manifest-json",
@@ -4147,7 +4147,7 @@ private final class SnapshotFixture {
             """,
             templateID: .geoTessera,
             commandDraft: draft,
-            commandArguments: template.arguments(from: request.draft),
+            commandArguments: template.arguments(from: request.draft, source: .contract),
             artifactURLs: [embedding]
         )
         row.inputIdentity = StudioInputIdentity.read(bundle)
@@ -4239,7 +4239,7 @@ private final class SnapshotFixture {
                 outputText: nil,
                 templateID: .imageTrainLoRA,
                 commandDraft: draft,
-                commandArguments: template.arguments(from: draft),
+                commandArguments: template.arguments(from: draft, source: .contract),
                 artifactURLs: [adapter]
             )
             row.inputIdentity = StudioInputIdentity.read(dataset)
@@ -4291,7 +4291,7 @@ private final class SnapshotFixture {
             outputText: Self.musicAnalysisOutput(audio: song),
             templateID: .musicAnalyze,
             commandDraft: draft,
-            commandArguments: template.arguments(from: draft)
+            commandArguments: template.arguments(from: draft, source: .contract)
         )
         row.inputIdentity = StudioInputIdentity.read(song)
         library.upsert(row)
@@ -4321,7 +4321,7 @@ private final class SnapshotFixture {
         var ran = taskDraft
         ran.form["--output"] = .text(midi.path)
         ran.form["--context-output"] = .text(context.path)
-        guard let request = ran.request() else { throw StudioSnapshotError.noContentView }
+        guard let request = ran.request(source: .contract) else { throw StudioSnapshotError.noContentView }
         let startedAt = Self.mockupTime(hour: 11, minute: 52)
         var row = StudioLibraryItem(
             id: UUID(),

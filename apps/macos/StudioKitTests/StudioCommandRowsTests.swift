@@ -48,13 +48,13 @@ final class StudioCommandRowsTests: XCTestCase {
     /// and no undeclared `--target-peak-db=-1` toggle row appears beside it.
     func testJoinedNegativeValuesRenderOnTheirDeclaredRow() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .musicGenerate))
-        let rows = StudioCommandRows.groups(template: template, draft: template.defaultDraft()).flatMap(\.rows)
+        let rows = StudioCommandRows.groups(template: template, draft: template.defaultDraft(), source: .contract).flatMap(\.rows)
         XCTAssertEqual(rows.first { $0.flag == "--target-peak-db" }?.value, .text("-1"))
         XCTAssertFalse(rows.contains { $0.flag.contains("=") }, "no row is keyed by a joined token: \(rows.map(\.flag).filter { $0.contains("=") })")
 
         var realtime = try XCTUnwrap(CommandCatalog.template(id: .musicRealtime)).defaultDraft()
         realtime.musicMIDINoteOffset = -12
-        let realtimeRows = StudioCommandRows.groups(template: CommandCatalog.template(id: .musicRealtime)!, draft: realtime).flatMap(\.rows)
+        let realtimeRows = StudioCommandRows.groups(template: CommandCatalog.template(id: .musicRealtime)!, draft: realtime, source: .contract).flatMap(\.rows)
         XCTAssertEqual(realtimeRows.first { $0.flag == "--midi-note-offset" }?.value, .text("-12"))
         XCTAssertFalse(realtimeRows.contains { $0.flag.contains("=") })
     }
@@ -71,7 +71,7 @@ final class StudioCommandRowsTests: XCTestCase {
         draft.sigmaShift = 3.0
         draft.progressJSON = true
 
-        let groups = StudioCommandRows.groups(template: template, draft: draft)
+        let groups = StudioCommandRows.groups(template: template, draft: draft, source: .contract)
         XCTAssertEqual(
             groups.map(\.group.title),
             ["Prompt", "Inputs", "Output", "Model & adapters", "Sampling", "Run"]
@@ -100,7 +100,7 @@ final class StudioCommandRowsTests: XCTestCase {
         let template = try XCTUnwrap(CommandCatalog.template(id: .textEmbed))
         var draft = template.defaultDraft()
         draft.prompt = "query one\nquery two"
-        let groups = StudioCommandRows.groups(template: template, draft: draft)
+        let groups = StudioCommandRows.groups(template: template, draft: draft, source: .contract)
         let arguments = try XCTUnwrap(groups.first { $0.group == .arguments })
         XCTAssertEqual(arguments.rows.map(\.value), [.positional("query one"), .positional("query two")])
     }

@@ -145,13 +145,13 @@ final class StudioFeedCardTests: XCTestCase {
         draft.model = "image-zimage-nano"
         var item = row(id: UUID(), prompt: "p", status: .completed, createdAt: Date())
         item.commandDraft = draft
-        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none), ["1024×1024", "4 steps", "seed 8812", "Zimage Nano"])
+        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none, source: .contract), ["1024×1024", "4 steps", "seed 8812", "Zimage Nano"])
 
         draft.seed = ""
         item.commandDraft = draft
-        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none)[2], "seed random")
+        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none, source: .contract)[2], "seed random")
         item.commandDraft = nil
-        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none), [])
+        XCTAssertEqual(StudioFeedChips.chips(for: item, titles: .none, source: .contract), [])
     }
 
     /// A failed card offers Get the model only when that is what went wrong: the run's model
@@ -215,7 +215,7 @@ final class StudioFeedCardTests: XCTestCase {
         var draft = template.defaultDraft()
         draft.prompt = prompt
         draft.outputPath = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).png").path
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         return JobRequest(
             lane: .inference,
             template: template,
@@ -228,7 +228,7 @@ final class StudioFeedCardTests: XCTestCase {
                 environment: [:],
                 keepsStandardInputOpen: false
             ),
-            displayCommand: (["mere.run"] + args).shellQuoted()
+            displayCommand: (["mere.run"] + args).shellQuoted(), scopeSource: .contract
         )
     }
 }

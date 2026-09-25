@@ -271,13 +271,13 @@ extension CommandArguments {
         return args.arguments
     }
 
-    package static func worldServe(_ draft: CommandDraft) -> [String] {
+    package static func worldServe(_ draft: CommandDraft, source: StudioScopeSource) -> [String] {
         typealias F = CommandFlags.WorldServe
         var args = ArgumentBuilder(F.self)
         args.option(F.host, draft.host)
         args.option(F.port, String(draft.port))
         args.option(F.backend, draft.operationsWorldBackend)
-        let scope = StudioScopeSource.live.scope(
+        let scope = source.scope(
             capability: MereRunCapabilityCatalog.worldServe,
             commandLine: [F.backend, draft.operationsWorldBackend, F.model, draft.model]
         )

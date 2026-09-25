@@ -441,7 +441,7 @@ struct StudioAdaptersView: View {
             ? .queued
             : .running
         pullingID = row.id
-        library.start(request: request, commandPreview: preview, status: status)
+        library.start(request: request, commandPreview: preview, status: status, source: controller.scopeSource)
         _ = controller.run(studio: request)
     }
 

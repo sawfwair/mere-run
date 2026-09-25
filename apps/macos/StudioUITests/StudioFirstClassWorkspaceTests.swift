@@ -10,7 +10,7 @@ final class StudioFirstClassWorkspaceTests: XCTestCase {
         draft.prompt = "query one\nquery two"
         draft.outputPath = "/tmp/vectors.json"
 
-        let arguments = template.arguments(from: draft)
+        let arguments = template.arguments(from: draft, source: .contract)
         XCTAssertEqual(Array(arguments.prefix(4)), ["text", "embed", "query one", "query two"])
         XCTAssertTrue(arguments.contains("/tmp/vectors.json"))
     }

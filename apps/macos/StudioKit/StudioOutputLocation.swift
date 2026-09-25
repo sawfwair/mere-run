@@ -506,6 +506,7 @@ package enum StudioOutputLocation {
     /// second step apart.
     package static func destination(
         for draft: StudioTaskDraft,
+        source: StudioScopeSource,
         fileManager: FileManager = .default
     ) -> StudioTaskDraft {
         guard let capability = draft.capability, let template = draft.template,
@@ -537,7 +538,7 @@ package enum StudioOutputLocation {
                 outputKind: outputKind,
                 prompt: draft.prompt,
                 seed: draft.text("--seed"),
-                fingerprint: ([templateID.rawValue] + bare.arguments).joined(separator: "\u{1}"),
+                fingerprint: ([templateID.rawValue] + bare.arguments(source: source)).joined(separator: "\u{1}"),
                 fallbackStem: primaryInput.isBlank
                     ? (promptlessStems[templateID] ?? template.title)
                     : URL(fileURLWithPath: primaryInput).deletingPathExtension().lastPathComponent,

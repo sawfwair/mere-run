@@ -345,7 +345,7 @@ final class StudioRegionPromptsTests: XCTestCase {
     /// them as text fields: the picture is their editor.
     func testRegionPromptFlagsAreBoundButHiddenFromTheInspector() throws {
         for mode in [StudioMode.segment, .track] {
-            let inspector = StudioInspectorSchema.fieldIDs(for: mode)
+            let inspector = StudioInspectorSchema.fieldIDs(for: mode, source: .contract)
             for field in ["visionBoxPrompts", "visionPointPrompts", "visionInitFrame", "visionEndFrame"] {
                 XCTAssertFalse(inspector.contains(field), "\(mode) inspector shows \(field)")
             }
@@ -384,7 +384,7 @@ final class StudioRegionPromptsTests: XCTestCase {
         var draft = StudioDraft()
         draft.reset(for: .segment)
         draft.visionRegionPrompts = [handle]
-        toSegment.apply(to: &draft)
+        toSegment.apply(to: &draft, source: .contract)
         XCTAssertEqual(draft.inputPath, "/tmp/mug.png")
         XCTAssertEqual(StudioRegionPromptText.boxText(draft.visionRegionPrompts ?? []), "246,307,717,758,coffee cup\n82,757,266,921,saucer")
 
@@ -397,7 +397,7 @@ final class StudioRegionPromptsTests: XCTestCase {
         var track = StudioDraft()
         track.reset(for: .track)
         track.visionRegionPrompts = [handle]
-        toTrack.apply(to: &track)
+        toTrack.apply(to: &track, source: .contract)
         XCTAssertEqual(track.visionRegionPrompts, [handle], "prompts on Track's own clip are left alone")
 
         // Read takes the picture but draws nothing on it.
@@ -436,7 +436,7 @@ final class StudioRegionPromptsTests: XCTestCase {
         segment.visionRegionPrompts = [cup]
         slot.attach([URL(fileURLWithPath: "/tmp/mug.png")], to: &segment)
         XCTAssertEqual(segment.visionRegionPrompts, [cup], "re-attaching the same picture keeps the drawing")
-        XCTAssertTrue(segment.attach(dropped: [URL(fileURLWithPath: "/tmp/other.png")], for: .segment))
+        XCTAssertTrue(segment.attach(dropped: [URL(fileURLWithPath: "/tmp/other.png")], for: .segment, source: .contract))
         XCTAssertEqual(segment.inputPath, "/tmp/other.png")
         XCTAssertNil(segment.visionRegionPrompts)
         segment.visionRegionPrompts = [handle]
@@ -476,11 +476,11 @@ final class StudioRegionPromptsTests: XCTestCase {
         XCTAssertNil(draft.visionEndFrame)
 
         // A prompt typed in the Command view satisfies the run's validation like a drawn one.
-        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .track, draft: draft))
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .track, draft: draft, source: .contract))
         try XCTUnwrap(bindings["--box"]).write(&draft, .text(""))
         try XCTUnwrap(bindings["--point"]).write(&draft, .text(""))
         XCTAssertNil(draft.visionRegionPrompts)
-        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .track, draft: draft))
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .track, draft: draft, source: .contract))
     }
 
     func testHandoffWithoutDetectionsClearsPromptsDrawnOnThePreviousPicture() {
@@ -488,7 +488,7 @@ final class StudioRegionPromptsTests: XCTestCase {
         draft.reset(for: .segment)
         draft.visionRegionPrompts = [cup]
         StudioAnalyzeHandoff.make(to: .visionSegment, inputPath: "/tmp/other.png", prompt: "the saucer")
-            .apply(to: &draft)
+            .apply(to: &draft, source: .contract)
         XCTAssertNil(draft.visionRegionPrompts)
     }
 
@@ -505,18 +505,18 @@ final class StudioRegionPromptsTests: XCTestCase {
             XCTAssertEqual(CommandCatalog.template(id: mode.defaultTemplateID)?.defaultPrompt, "", "\(mode)")
 
             draft.inputPath = mode == .track ? "/tmp/clip.mp4" : "/tmp/mug.png"
-            XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)) { error in
+            XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, source: .contract)) { error in
                 XCTAssertEqual(error as? StudioCommandError, .missingPrompt("A prompt or a drawn box or point"))
             }
             draft.visionRegionPrompts = [cup]
-            let drawn = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
-            let arguments = drawn.template.arguments(from: drawn.draft)
+            let drawn = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, source: .contract)
+            let arguments = drawn.template.arguments(from: drawn.draft, source: .contract)
             XCTAssertFalse(arguments.contains("--prompt"), "\(mode): \(arguments)")
             XCTAssertTrue(arguments.contains("--box"), "\(mode)")
 
             draft.visionRegionPrompts = nil
             draft.prompt = "the mug"
-            let typed = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+            let typed = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, source: .contract)
             XCTAssertEqual(typed.draft.prompt, "the mug", "\(mode)")
         }
     }
@@ -527,30 +527,30 @@ final class StudioRegionPromptsTests: XCTestCase {
         segment.prompt = ""
         segment.inputPath = "/tmp/mug.png"
         segment.visionRegionPrompts = [cup, handle, shadow]
-        let request = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)
+        let request = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment, source: .contract)
         XCTAssertEqual(request.draft.visionBoxPrompts, "40,30,160,110,coffee cup")
         XCTAssertEqual(request.draft.visionPointPrompts, "400,260,positive,coffee cup\n12,18,negative,shadow")
-        let arguments = request.template.arguments(from: request.draft)
+        let arguments = request.template.arguments(from: request.draft, source: .contract)
         XCTAssertTrue(arguments.contains("--box"))
         XCTAssertTrue(arguments.contains("40,30,160,110,coffee cup"))
         XCTAssertEqual(arguments.filter { $0 == "--point" }.count, 2)
 
         segment.visionRegionPrompts = nil
-        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)) { error in
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment, source: .contract)) { error in
             XCTAssertEqual(error as? StudioCommandError, .missingPrompt("A prompt or a drawn box or point"))
         }
 
         // Negative points alone refine nothing, with or without a text prompt.
         let negative = StudioRegionPrompt.point(CGPoint(x: 12, y: 18), isPositive: false)
         segment.visionRegionPrompts = [negative, shadow]
-        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)) { error in
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment, source: .contract)) { error in
             XCTAssertEqual(error as? StudioCommandError, .negativePointsOnly)
             XCTAssertEqual(error.localizedDescription, "Add a box or a positive point for the negative points to refine.")
         }
         segment.prompt = "the mug"
-        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment))
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment, source: .contract))
         segment.visionRegionPrompts = [negative, handle]
-        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment))
+        XCTAssertNoThrow(try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment, source: .contract))
 
         var track = StudioDraft()
         track.reset(for: .track)
@@ -559,23 +559,23 @@ final class StudioRegionPromptsTests: XCTestCase {
         track.visionRegionPrompts = [cup]
         track.visionInitFrame = 12
         track.visionEndFrame = 200
-        let tracked = try StudioCommandAdapter.makeRequest(mode: .track, draft: track)
+        let tracked = try StudioCommandAdapter.makeRequest(mode: .track, draft: track, source: .contract)
         XCTAssertEqual(tracked.draft.visionInitFrame, 12)
         XCTAssertEqual(tracked.draft.visionEndFrame, "200")
         XCTAssertEqual(tracked.draft.visionBoxPrompts, "40,30,160,110,coffee cup")
-        let trackArguments = tracked.template.arguments(from: tracked.draft)
+        let trackArguments = tracked.template.arguments(from: tracked.draft, source: .contract)
         XCTAssertEqual(trackArguments.firstIndex(of: "--init-frame").map { trackArguments[$0 + 1] }, "12")
         XCTAssertEqual(trackArguments.firstIndex(of: "--end-frame").map { trackArguments[$0 + 1] }, "200")
 
         track.visionEndFrame = 3
-        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .track, draft: track))
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .track, draft: track, source: .contract))
 
         var find = StudioDraft()
         find.reset(for: .findObjects)
         find.prompt = "cups"
         find.inputPath = "/tmp/mug.png"
         find.visionRegionPrompts = [cup]
-        let found = try StudioCommandAdapter.makeRequest(mode: .findObjects, draft: find)
+        let found = try StudioCommandAdapter.makeRequest(mode: .findObjects, draft: find, source: .contract)
         XCTAssertEqual(found.draft.visionBoxPrompts, "", "Find takes no box prompts")
     }
 

@@ -164,11 +164,12 @@ package final class StudioLibraryStore: ObservableObject {
         request: StudioRunRequest,
         commandPreview: String,
         status: StudioLibraryStatus = .running,
-        arguments: [String]? = nil
+        arguments: [String]? = nil,
+        source: StudioScopeSource
     ) -> StudioLibraryItem {
         let execution = request.execution ?? StudioExecution(
             templateID: request.templateID,
-            arguments: arguments ?? request.template.arguments(from: request.draft)
+            arguments: arguments ?? request.template.arguments(from: request.draft, source: source)
         )
         let recordedDraft = (request.execution == nil && arguments == nil
             ? request.draft : execution.project(onto: request.draft)).withoutSecrets
