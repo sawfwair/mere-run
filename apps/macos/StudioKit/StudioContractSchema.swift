@@ -312,6 +312,9 @@ package enum StudioContractChoiceTitles {
         "--export-format float32": "Float 32",
         "--task-type text2music": "Create",
         "--task-type cover-nofsq": "No-FSQ",
+        "--backend lighton": "LightOnOCR",
+        "--backend glm": "GLM-OCR",
+        "--backend infinity": "Infinity-Parser2",
     ]
 }
 
@@ -393,6 +396,13 @@ package struct StudioContractField<Draft>: Identifiable {
                   maximum > minimum else { return .stepper }
             return .slider
         }
+    }
+
+    /// The one value the family runs the option with, when its rule fixes it (FastH3's 5 steps,
+    /// MiniMax-H3's 24 fps): the inspector shows it rather than a control that cannot change it.
+    package var fixedValue: String? {
+        guard option.kind != .boolean, let values = option.familyRules.first?.values, values.count == 1 else { return nil }
+        return values[0]
     }
 
     /// The only numbers the family takes, ascending, when its rule lists more than one: a

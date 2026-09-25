@@ -113,8 +113,8 @@ extension StudioConsoleDraft {
 // MARK: - The note
 
 /// What a surface says about options its model does not take, or about a model the CLI is still
-/// identifying. `StudioScopeNote` draws it under the composer's chips, at the top of the
-/// inspectors, and as the Command view's "Not sent" line.
+/// identifying. `StudioScopeNote` draws it once per window: at the top of the open inspector, as
+/// the open Command view's "Not sent" line, or under the composer's chips when neither is open.
 package struct StudioScopeNotice: Equatable {
     package enum Kind: Equatable {
         /// `catalog resolve` is running for a model the contract does not list.

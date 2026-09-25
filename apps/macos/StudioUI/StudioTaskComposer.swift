@@ -22,6 +22,10 @@ struct StudioTaskComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// Whether the composer carries the scope note: only while no side column is open. The
+    /// inspector shows it at its top, beside the controls it explains, and the Command view as
+    /// its "Not sent" line.
+    var showsScopeNote = true
     @Environment(\.studioModelTitles) private var titles
     @Environment(\.studioScopeSource) private var scopeSource
 
@@ -51,7 +55,7 @@ struct StudioTaskComposer: View {
                 promptEntry
             }
             chipStrip
-            if let notice = StudioTaskSchema.notice(for: draft, source: scopeSource) {
+            if showsScopeNote, let notice = StudioTaskSchema.notice(for: draft, source: scopeSource) {
                 StudioScopeNote(notice: notice)
             }
         }

@@ -14,9 +14,16 @@ extension StudioInspector {
         return scope.allows(CommandFlags.VideoGenerate.h3Acceleration)
     }
 
+    /// The step count the selected family fixes, when it does (FastH3 runs 5).
+    private var fixedSteps: String? {
+        scopeSource.scope(mode: .video, draft: draft)?.fixedValue(CommandFlags.VideoGenerate.steps)
+    }
+
     @ViewBuilder
     var videoStepsControl: some View {
-        if usesMiniMaxH3Schedule {
+        if let fixedSteps {
+            StudioFixedValueRow(label: "Denoising steps", value: fixedSteps)
+        } else if usesMiniMaxH3Schedule {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle(
                     "Override adaptive schedule",

@@ -84,9 +84,19 @@ struct ContractFormControl<Draft>: View {
         }
     }
 
-    /// The inspector's shape: the option's label, then its control.
+    /// The inspector's shape: the option's label, then its control, or the value the model fixes.
     @ViewBuilder
     private var labelled: some View {
+        if let fixed = field.fixedValue {
+            StudioFixedValueRow(label: field.label, value: fixed)
+                .help(field.flag)
+        } else {
+            control
+        }
+    }
+
+    @ViewBuilder
+    private var control: some View {
         switch field.control {
         case .toggle:
             Toggle(field.label, isOn: flagBinding)
@@ -465,5 +475,26 @@ struct ContractFormPathRow: View {
         if panel.runModal() == .OK {
             path = panel.urls.map(\.path).joined(separator: "\n")
         }
+    }
+}
+
+/// A value the selected model always runs, in an inspector row: the label, the value, and a lock,
+/// with no control, since nothing the draft holds would change what runs.
+struct StudioFixedValueRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        StudioInspectorLabeledRow(label) {
+            HStack(spacing: 5) {
+                Image(systemName: "lock.fill")
+                    .font(.caption2)
+                Text(value)
+                    .font(.system(size: 12, design: .monospaced))
+            }
+            .foregroundStyle(MereRunTheme.textMuted)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value), set by the model")
     }
 }

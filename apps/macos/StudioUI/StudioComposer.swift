@@ -24,6 +24,10 @@ struct StudioComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// Whether the composer carries the scope note: only while no side column is open. The
+    /// inspector shows it at its top, beside the controls it explains, and the Command view as
+    /// its "Not sent" line.
+    var showsScopeNote = true
 
     @EnvironmentObject private var controller: MereRunController
     @Environment(\.studioScopeSource) private var scopeSource
@@ -45,7 +49,7 @@ struct StudioComposer: View {
             }
             promptEntry
             chipStrip
-            if let notice = StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) {
+            if showsScopeNote, let notice = StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) {
                 StudioScopeNote(notice: notice)
             }
         }
@@ -258,12 +262,27 @@ struct StudioComposer: View {
         if mode != .sfx { draft.useDuration = true }
     }
 
+    /// MiniMax-H3 picks its steps from an adaptive schedule; the chip then edits the schedule's
+    /// override, which is what the command line carries, not the step slider other models use.
+    private var usesAdaptiveSchedule: Bool {
+        guard mode == .video, let scope = scopeSource.scope(mode: mode, draft: draft), scope.family != nil else { return false }
+        return scope.allows(CommandFlags.VideoGenerate.h3Acceleration)
+    }
+
     private var stepsChip: some View {
         chipMenu(
-            title: StudioComposerPresets.stepsTitle(draft, mode: mode),
+            title: usesAdaptiveSchedule
+                ? draft.h3Steps.map { $0 == 1 ? "1 step" : "\($0) steps" } ?? "Adaptive steps"
+                : StudioComposerPresets.stepsTitle(draft, mode: mode),
             accessibilityLabel: "Steps",
             kind: .steps
         ) {
+            if usesAdaptiveSchedule {
+                Toggle(isOn: Binding(get: { draft.h3Steps == nil }, set: { _ in draft.h3Steps = nil })) {
+                    Text("Adaptive schedule")
+                }
+                Divider()
+            }
             if mode == .music {
                 Toggle(isOn: Binding(get: { !draft.musicOverrideSteps }, set: { _ in draft.musicOverrideSteps = false })) {
                     Text("Preset steps")
@@ -272,7 +291,7 @@ struct StudioComposer: View {
             }
             ForEach(StudioComposerPresets.steps(for: mode), id: \.self) { steps in
                 Toggle(isOn: Binding(
-                    get: { stepsAreExplicit && draft.steps == steps },
+                    get: { usesAdaptiveSchedule ? draft.h3Steps == steps : stepsAreExplicit && draft.steps == steps },
                     set: { _ in setSteps(steps) }
                 )) {
                     Text(steps == 1 ? "1 step" : "\(steps) steps")
@@ -281,7 +300,11 @@ struct StudioComposer: View {
             Divider()
             Button("Custom steps…") { editingChip = .steps }
         } editor: {
-            numberField("Steps", value: Binding(get: { draft.steps }, set: { setSteps($0) }), range: 1...200)
+            numberField(
+                "Steps",
+                value: Binding(get: { usesAdaptiveSchedule ? draft.h3Steps ?? 21 : draft.steps }, set: { setSteps($0) }),
+                range: usesAdaptiveSchedule ? 1...64 : 1...200
+            )
         }
     }
 
@@ -290,6 +313,10 @@ struct StudioComposer: View {
     }
 
     private func setSteps(_ steps: Int) {
+        if usesAdaptiveSchedule {
+            draft.h3Steps = steps
+            return
+        }
         draft.steps = steps
         if mode == .music { draft.musicOverrideSteps = true }
     }

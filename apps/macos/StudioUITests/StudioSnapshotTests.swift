@@ -95,51 +95,139 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
-    /// Model scope on Video ▸ Generate, over a contract that routes it to LTX-2.5 Full and FastH3
-    /// (`StudioScopeSnapshotContract`): FastH3 selected, with an end image, timings, and 30 steps
-    /// set — values only LTX uses, or that FastH3 replaces. The inspector opens on the
-    /// "Not used by FastH3" note over FastH3's own options and the composer's steps chip reads a
-    /// locked "5 steps", light and dark; the Command view lists the kept values under "Not sent".
-    /// Then the note's three states on their own, light and dark.
+    /// Model scope across the prompt modes, over the shipped contract with no CLI to ask: each
+    /// draft holds values its model does not use or runs its own way, so the inspector opens on
+    /// the model's own options with the note at its top, light and dark. FastH3 with an end
+    /// image, timings, and 30 steps (and the Command view listing them under "Not sent"); FL2VA
+    /// with source audio and timings; YuE2 set to cover a source song; Magenta with ACE-Step's
+    /// steps and seed; Krea 2 with references and CFG; Qwen-Image-Edit with an input image;
+    /// text-only Gemma 4 with an image and top-k; Qwen3-ASR on French; and, in the Command
+    /// Console, GLM-OCR with LightOnOCR's model and budget. Then the note's states on their own, light and dark.
     func testModelScopeSnapshots() throws {
+        let installed: [(id: String, category: String, title: String)] = [
+            ("video-minimax-h3-fasth3-vsa-datafree-mlx", "video", "FastH3"),
+            ("video-minimax-h3-fl2va-mlx", "video", "MiniMax-H3 FL2VA"),
+            ("music-yue2", "music", "YuE2"),
+            ("music-magenta-rt2-small", "music", "Magenta RealTime 2 Small"),
+            ("image-krea2-raw", "image", "Krea 2 Raw"),
+            ("image-qwen-edit-2511", "image", "Qwen-Image-Edit"),
+            ("text-chat-gemma4-12b-4bit", "text-chat", "Gemma 4 12B"),
+            ("vision-ocr-lighton", "vision-ocr", "LightOnOCR"),
+            ("speech-asr-qwen3", "speech-asr", "Qwen3-ASR"),
+        ]
+        // The mockup Library holds Image rows only, so Chat opens on a new thread with the draft's model.
         let scoped = try SnapshotFixture(
             outputDirectory: fixture.outputDirectory,
-            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses(installing: [
-                (id: StudioScopeSnapshotContract.fastH3Model, category: "video", title: "FastH3"),
-            ]))
+            seed: .mockup,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses(installing: installed))
         )
         defer { scoped.tearDown() }
+        let source = StudioScopeSource(identities: StudioFixedModelIdentities())
 
-        var draft = StudioDraft()
-        draft.reset(for: .video)
-        draft.prompt = "A lighthouse at dusk, waves breaking on the rocks"
-        draft.model = StudioScopeSnapshotContract.fastH3Model
-        draft.endImagePath = "/tmp/lighthouse-end.png"
-        draft.timings = true
-        draft.h3Steps = 30
-
-        let renders: [(name: String, appearance: StudioSnapshotAppearance, command: Bool)] = [
-            ("scope-inspector-light", .light, false),
-            ("scope-inspector-dark", .dark, false),
-            ("scope-command-light", .light, true),
+        func draft(_ mode: StudioMode, _ edit: (inout StudioDraft) -> Void) -> StudioDraft {
+            var draft = StudioDraft()
+            draft.reset(for: mode)
+            edit(&draft)
+            return draft
+        }
+        let cases: [(name: String, mode: StudioMode, task: StudioTask, draft: StudioDraft)] = [
+            ("scope-video-fasth3", .video, .videoGenerate, draft(.video) {
+                $0.prompt = "A lighthouse at dusk, waves breaking on the rocks"
+                $0.model = "video-minimax-h3-fasth3-vsa-datafree-mlx"
+                $0.endImagePath = "/tmp/lighthouse-end.png"
+                $0.timings = true
+                $0.h3Steps = 30
+            }),
+            ("scope-video-fl2va", .video, .videoGenerate, draft(.video) {
+                $0.prompt = "A brass robot walking through fog"
+                $0.model = "video-minimax-h3-fl2va-mlx"
+                $0.inputPath = "/tmp/robot-start.png"
+                $0.audioPath = "/tmp/footsteps.wav"
+                $0.timings = true
+            }),
+            ("scope-music-yue2", .music, .musicCompose, draft(.music) {
+                $0.prompt = "warm indie folk with a whistled hook"
+                $0.model = "music-yue2"
+                $0.musicTask = "cover"
+                $0.musicSourceAudio = "/tmp/demo.wav"
+            }),
+            ("scope-music-magenta", .music, .musicCompose, draft(.music) {
+                $0.prompt = "slow ambient pads"
+                $0.model = "music-magenta-rt2-small"
+                $0.musicOverrideSteps = true
+                $0.steps = 50
+                $0.seed = "7"
+            }),
+            ("scope-image-krea", .createImage, .imageGenerate, draft(.createImage) {
+                $0.prompt = "editorial portrait, window light"
+                $0.model = "image-krea2-raw"
+                $0.referenceImagePaths = "/tmp/person.png"
+                $0.cfgScale = 4
+            }),
+            ("scope-image-qwen-edit", .createImage, .imageGenerate, draft(.createImage) {
+                $0.prompt = "replace the sky with a storm front"
+                $0.model = "image-qwen-edit-2511"
+                $0.inputPath = "/tmp/field.png"
+            }),
+            ("scope-chat-gemma", .chat, .chatChat, draft(.chat) {
+                $0.model = "text-chat-gemma4-12b-4bit"
+                $0.inputPath = "/tmp/receipt.png"
+                $0.topK = 20
+            }),
+            ("scope-transcribe-qwen", .listen, .audioTranscribe, draft(.listen) {
+                $0.model = "speech-asr-qwen3"
+                $0.inputPath = "/tmp/interview.wav"
+                $0.language = "fr"
+            }),
         ]
-        for render in renders {
+        for item in cases {
+            for appearance in StudioSnapshotAppearance.allCases {
+                try render(item.draft, mode: item.mode, task: item.task, command: false,
+                           name: "\(item.name)-\(appearance.rawValue)", appearance: appearance)
+            }
+        }
+        try render(cases[0].draft, mode: .video, task: .videoGenerate, command: true,
+                   name: "scope-video-fasth3-command-light", appearance: .light)
+
+        // OCR picks its backend in the Command Console: GLM-OCR reads neither LightOnOCR's model
+        // nor its token budget, which the console lists under the note.
+        if let ocr = CommandCatalog.template(id: .visionOCR) {
+            scoped.controller.select(ocr)
+            scoped.controller.consoleSeedArguments = [
+                "vision", "ocr", "/tmp/receipt.png", "--backend", "glm", "--model", "vision-ocr-lighton", "--max-tokens", "4096",
+            ]
+        }
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioConsoleView()
+                .environment(\.studioScopeSource, source)
+                .environmentObject(scoped.controller)
+                .environmentObject(scoped.library)
+                .environmentObject(NavigationModel())
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try scoped.write(view, size: Self.fidelitySize, appearance: appearance,
+                             name: "scope-ocr-glm-\(appearance.rawValue)", settle: 2.0)
+        }
+
+        func render(
+            _ draft: StudioDraft, mode: StudioMode, task: StudioTask, command: Bool,
+            name: String, appearance: StudioSnapshotAppearance
+        ) throws {
             let navigation = NavigationModel()
-            let view = StudioRootView(seededDrafts: [.video: draft])
-                .environment(\.studioScopeSource, StudioScopeSnapshotContract.source)
+            let view = StudioRootView(seededDrafts: [mode: draft])
+                .environment(\.studioScopeSource, source)
                 .environmentObject(scoped.controller)
                 .environmentObject(scoped.library)
                 .environmentObject(navigation)
                 .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
             try scoped.write(
-                view, size: Self.fidelitySize, appearance: render.appearance, name: render.name, settle: 2.5,
+                view, size: Self.fidelitySize, appearance: appearance, name: name, settle: 2.5,
                 afterAppear: {
-                    navigation.open(task: .videoGenerate)
-                    if render.command {
+                    navigation.open(task: task)
+                    if command {
                         navigation.showLibrary = false
                         navigation.toggleCommandColumn()
                     } else {
-                        navigation.toggleInspector(for: .videoGenerate)
+                        navigation.toggleInspector(for: task)
                     }
                 }
             )

@@ -4,8 +4,9 @@ import SwiftUI
 /// The note a surface shows about its model's options (`StudioScopeNotice`): the values the
 /// model does not use, kept for when the user switches back, and the values its family runs in
 /// place of the draft's; or, while the CLI identifies a local folder, that every option shows
-/// until it knows. It sits under the composer's chips, at the top of the inspectors, and as the
-/// Command view's "Not sent" line, in one quiet style so it reads as information, not an error.
+/// until it knows. One copy shows at a time: at the top of the inspector, beside the controls it
+/// explains; as the Command view's "Not sent" line, beside the argv; and under the composer's
+/// chips only while neither column is open. One quiet style reads as information, not an error.
 struct StudioScopeNote: View {
     let notice: StudioScopeNotice
     /// The eyebrow above the note: the Command view says "Not sent".

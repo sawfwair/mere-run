@@ -1051,7 +1051,8 @@ private struct StudioWorkspaceView: View {
             promptFocus: $promptFocused,
             onRun: runStudioCommand,
             onStop: stopModeRun,
-            onShowModels: { navigation.open(task: .modelsInstalled) }
+            onShowModels: { navigation.open(task: .modelsInstalled) },
+            showsScopeNote: !showsInspectorColumn && !showsCommandColumn
         )
     }
 

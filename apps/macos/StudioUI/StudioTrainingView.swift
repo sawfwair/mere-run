@@ -433,8 +433,11 @@ struct StudioTrainingView: View {
                 onReset: clearAttachments
             ) {
                 attachmentWell
+                // The well offers a checkpoint only to a trainer that resumes (Klein, not Krea 2).
                 Text(kind == .image
-                    ? "A folder of images with matching .txt captions; a checkpoint to resume from is optional."
+                    ? slots.count > 1
+                        ? "A folder of images with matching .txt captions; a checkpoint to resume from is optional."
+                        : "A folder of images with matching .txt captions."
                     : "Chat SFT examples as JSONL, one per line; evaluation prompts and a resume checkpoint are optional.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
