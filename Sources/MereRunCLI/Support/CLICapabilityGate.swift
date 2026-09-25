@@ -108,16 +108,35 @@ enum CLICapabilityGate {
         }
     }
 
+    /// The family the CLI runs `invocation` with, from what only the CLI can answer: what a
+    /// local folder or install-dependent model is, the default this machine picks, and a
+    /// command's own router. `api serve` resolves its requests the same way.
+    static func resolution(
+        _ capability: MereRunCommandCapability,
+        _ invocation: MereRunCommandInvocation
+    ) -> MereRunFamilyResolution {
+        capability.resolveFamily(
+            invocation,
+            platform: platform,
+            identify: identify(capability, invocation),
+            chooseDefault: { ModelFamilyIdentifier.machineDefault(capabilityID: capability.id, candidates: $0) },
+            routedFamily: { CLIFamilyRouters.family(capabilityID: capability.id, invocation: invocation) }
+        )
+    }
+
+    static func identify(
+        _ capability: MereRunCommandCapability,
+        _ invocation: MereRunCommandInvocation
+    ) -> (String) -> MereRunModelIdentification? {
+        { ModelFamilyIdentifier.identify(capabilityID: capability.id, model: $0, invocation: invocation) }
+    }
+
     private static func report(
         _ capability: MereRunCommandCapability,
         _ invocation: MereRunCommandInvocation
     ) -> MereRunFamilyResolutionReport {
-        capability.resolutionReport(
-            invocation,
-            platform: platform,
-            identify: { ModelFamilyIdentifier.identify(capabilityID: capability.id, model: $0, invocation: invocation) },
-            chooseDefault: { ModelFamilyIdentifier.machineDefault(capabilityID: capability.id, candidates: $0) },
-            routedFamily: { CLIFamilyRouters.family(capabilityID: capability.id, invocation: invocation) }
+        capability.report(
+            for: resolution(capability, invocation), invocation, identify: identify(capability, invocation)
         )
     }
 

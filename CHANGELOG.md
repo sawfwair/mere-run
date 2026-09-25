@@ -41,6 +41,14 @@ The format is based on Keep a Changelog.
     `--kv-quant-scheme UNIFORM` or `--input-rate 016000`. It skips `--help`,
     `-help`, `--experimental-dump-help`, `--version`, and listing flags such
     as `speech listen --list-devices`.
+  - `api serve` applies the same check to chat, image, video, speech,
+    transcription, and diarization requests before anything loads. A field
+    the selected model refuses returns HTTP 400 naming the field, including
+    ones that used to fail only after loading, such as `steps` 8 on Qwen-Image-Edit
+    Lightning or an image sent to a text-only Qwen3.6 model. A field it
+    ignores, such as `guidance_scale` on Krea 2 or `top_p` on DiffusionGemma,
+    adds an `x-mere-warning` response header; response bodies are unchanged,
+    and no request the server ran before is refused.
   - A refusal exits with status 64 and the usage line, like the commands' own
     option errors. It comes before any preflight work, so a refused
     `--preflight` run prints no report, and under `--json` no JSON. That

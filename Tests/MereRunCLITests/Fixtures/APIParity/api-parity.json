@@ -1,0 +1,389 @@
+{
+  "rows": [
+    {
+      "route": "image",
+      "body": "{\"prompt\":\"x\"}",
+      "main": "passes",
+      "evidence": "The default Z-Image Nano request; nothing is scoped.",
+      "branch": "passes"
+    },
+    {
+      "route": "image",
+      "body": "{\"prompt\":\"x\",\"model\":\"image-krea2-turbo\",\"guidance_scale\":3.5}",
+      "main": "passes",
+      "evidence": "ImageGenerationPlan.issues has no Krea guidance check and Krea2Generator never reads guidance.",
+      "branch": "warns",
+      "warnings": [
+        "--cfg has no effect with Krea 2. It applies to FLUX.1-dev, FLUX.2 Klein, FLUX.2-dev, Z-Image, HiDream-O1, SenseNova U1.5, Qwen-Image 2.1, Qwen-Image-Edit, Qwen-Image-Edit Lightning and Ideogram 4."
+      ]
+    },
+    {
+      "route": "image",
+      "body": "{\"prompt\":\"x\",\"model\":\"image-krea2-turbo\",\"negative_prompt\":\"blurry\"}",
+      "main": "passes",
+      "evidence": "Only FLUX.1-dev refuses a negative prompt in ImageGenerationPlan.issues; Krea never reads it.",
+      "branch": "warns",
+      "warnings": [
+        "--negative-prompt has no effect with Krea 2. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, Qwen-Image 2.1 and Qwen-Image-Edit."
+      ]
+    },
+    {
+      "route": "image",
+      "body": "{\"prompt\":\"x\",\"model\":\"image-flux2-dev\",\"negative_prompt\":\"blurry\"}",
+      "main": "passes",
+      "evidence": "FLUX.2-dev's embedded guidance never reads the negative prompt; no issue refuses it.",
+      "branch": "warns",
+      "warnings": [
+        "--negative-prompt has no effect with FLUX.2-dev. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, Qwen-Image 2.1 and Qwen-Image-Edit."
+      ]
+    },
+    {
+      "route": "image",
+      "body": "{\"prompt\":\"x\",\"model\":\"image-flux1-dev\",\"negative_prompt\":\"blurry\"}",
+      "main": "refuses",
+      "evidence": "ImageGenerationPlan.issues negative_prompt_unsupported, a 400 before load.",
+      "branch": "refuses",
+      "field": "negative_prompt"
+    },
+    {
+      "route": "image",
+      "body": "{\"prompt\":\"x\",\"model\":\"image-qwen-21\",\"steps\":1}",
+      "main": "refuses",
+      "evidence": "ImageGenerationPlan.issues: Qwen Image 2.1 requires at least two steps, a 400 before load.",
+      "branch": "refuses",
+      "field": "steps"
+    },
+    {
+      "route": "image",
+      "body": "{\"prompt\":\"x\",\"model\":\"image-klein-shared\"}",
+      "main": "refuses",
+      "evidence": "The route resolves image-klein-shared like image generate, which main refuses once the model resolves (main-behaviour.json).",
+      "branch": "refuses",
+      "field": "model"
+    },
+    {
+      "route": "image",
+      "body": "{\"prompt\":\"x\",\"model\":\"/tmp/not-a-model\",\"guidance_scale\":9}",
+      "main": "refuses",
+      "evidence": "The route refuses a folder with no manifest (MereRunModelManifest.loadRequired); the scope leaves an unidentified model to it.",
+      "branch": "passes"
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-qwen-edit-2511-lightning", "prompt": "x", "steps": "4", "guidance_scale": "1"},
+      "images": 1,
+      "main": "passes",
+      "evidence": "Lightning runs 4 steps at guidance 1.",
+      "branch": "passes"
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-qwen-edit-2511-lightning", "prompt": "x", "steps": "8"},
+      "images": 1,
+      "main": "refuses",
+      "evidence": "QwenImageEditGenerator lightningRequiresFourSteps, thrown after the model loads (a 500 on main).",
+      "branch": "refuses",
+      "field": "steps"
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-qwen-edit-2511-lightning", "prompt": "x", "steps": "4", "guidance_scale": "4"},
+      "images": 1,
+      "main": "refuses",
+      "evidence": "QwenImageEditGenerator lightningDoesNotSupportCFG, thrown after the model loads (a 500 on main).",
+      "branch": "refuses",
+      "field": "guidance_scale"
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-qwen-edit-2511-lightning", "prompt": "x", "negative_prompt": "blurry"},
+      "images": 1,
+      "main": "passes",
+      "evidence": "Lightning never reads the negative prompt.",
+      "branch": "warns",
+      "warnings": [
+        "--negative-prompt has no effect with Qwen-Image-Edit Lightning. It applies to FLUX.2 Klein, Z-Image, HiDream-O1, SenseNova U1.5, Qwen-Image 2.1 and Qwen-Image-Edit."
+      ]
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-qwen-21", "prompt": "x", "strength": "0.5"},
+      "images": 1,
+      "main": "refuses",
+      "evidence": "ImageGenerationPlan.issues strength_unsupported for Qwen Image 2.1, a 400 before load.",
+      "branch": "refuses",
+      "field": "strength"
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-hidream-o1", "prompt": "x", "strength": "0.5"},
+      "images": 1,
+      "main": "passes",
+      "evidence": "HiDream-O1 conditions on the image without a strength; no issue refuses it.",
+      "branch": "warns",
+      "warnings": [
+        "--strength has no effect with HiDream-O1. It applies to FLUX.2 Klein, FLUX.2-dev and Z-Image."
+      ]
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-krea2-turbo", "prompt": "x"},
+      "images": 1,
+      "main": "refuses",
+      "evidence": "ImageGenerationPlan.issues input_mode_unsupported for Krea 2, a 400 before load.",
+      "branch": "refuses",
+      "field": "image"
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-zimage-nano", "prompt": "x"},
+      "images": 2,
+      "main": "refuses",
+      "evidence": "ImageGenerationPlan.issues references_unsupported for Z-Image, a 400 before load.",
+      "branch": "refuses",
+      "field": "image"
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-klein-nano", "prompt": "x"},
+      "images": 6,
+      "main": "passes",
+      "evidence": "The Klein generator keeps the first four references.",
+      "branch": "warns",
+      "warnings": [
+        "FLUX.2 Klein takes --ref-image at most 4 times; got 5."
+      ]
+    },
+    {
+      "route": "image_edit",
+      "form": {"model": "image-qwen-edit-2511", "prompt": "x"},
+      "images": 5,
+      "main": "refuses",
+      "evidence": "ImageGenerationPlan.issues reference_count_invalid (at most 3 distinct images) stays the check: it counts after removing duplicates.",
+      "branch": "passes"
+    },
+    {
+      "route": "video",
+      "body": "{\"prompt\":\"x\"}",
+      "main": "passes",
+      "evidence": "The default LTX-2.5 Distilled request, with the route's own 24 fps.",
+      "branch": "passes"
+    },
+    {
+      "route": "video",
+      "body": "{\"prompt\":\"x\",\"model\":\"video-ltx25-distilled-bf16\",\"options\":[\"--steps\",\"8\"]}",
+      "main": "passes",
+      "evidence": "main-behaviour.json: LTX distilled runs its fixed schedule and never reads --steps.",
+      "branch": "warns",
+      "warnings": [
+        "--steps has no effect with LTX-2.5 Distilled. It applies to Wan 2.2 TI2V, MiniMax-H3 FL2VA, MiniMax-H3 FL2VA 4-bit, MiniMax-H3 FastH3, MiniMax-H3 FastH3 with an adapter and MiniMax-H3 Ref2VA."
+      ]
+    },
+    {
+      "route": "video",
+      "body": "{\"prompt\":\"x\",\"model\":\"video-minimax-h3-fl2va-bf16-mlx\"}",
+      "main": "passes",
+      "evidence": "The route always sets fps 24, which MiniMax-H3 runs.",
+      "branch": "passes"
+    },
+    {
+      "route": "video",
+      "body": "{\"prompt\":\"x\",\"model\":\"video-minimax-h3-fl2va-bf16-mlx\",\"fps\":30}",
+      "main": "passes",
+      "evidence": "main-behaviour.json: video generate --model video-minimax-h3-fl2va-bf16-mlx --fps 30 passes; H3 renders 24 fps.",
+      "branch": "warns",
+      "warnings": [
+        "--fps 30 has no effect with MiniMax-H3 FL2VA; it runs 24. Remove --fps or pass 24."
+      ]
+    },
+    {
+      "route": "video",
+      "body": "{\"prompt\":\"x\",\"model\":\"video-ltx23-av-mlx\",\"quality\":\"final\"}",
+      "main": "refuses",
+      "evidence": "main-behaviour.json: the selected checkpoint does not match the requested --quality (Core, before load).",
+      "branch": "refuses",
+      "field": "quality"
+    },
+    {
+      "route": "video",
+      "body": "{\"prompt\":\"x\",\"model\":\"video-minimax-h3-fl2va-bf16-mlx\",\"quality\":\"final\"}",
+      "main": "refuses",
+      "evidence": "main-behaviour.json: --quality cannot be combined with MiniMax-H3 (Core, before load).",
+      "branch": "refuses",
+      "field": "quality"
+    },
+    {
+      "route": "video",
+      "body": "{\"prompt\":\"x\",\"model\":\"video-ltx25-distilled-bf16\",\"options\":[\"--ltx-teacache\"]}",
+      "main": "refuses",
+      "evidence": "main-behaviour.json: TeaCache on a distilled LTX checkpoint is refused once the model resolves.",
+      "branch": "refuses",
+      "field": "options"
+    },
+    {
+      "route": "video",
+      "body": "{\"prompt\":\"x\",\"model\":\"video-cosmos3-edge-mlx\"}",
+      "main": "refuses",
+      "evidence": "main-behaviour.json: video generate --model video-cosmos3-edge-mlx is refused once the model resolves.",
+      "branch": "refuses",
+      "field": "model"
+    },
+    {
+      "route": "speech",
+      "body": "{\"input\":\"hello\"}",
+      "main": "passes",
+      "evidence": "The default voice description in style mode.",
+      "branch": "passes"
+    },
+    {
+      "route": "speech",
+      "body": "{\"input\":\"hello\",\"model\":\"speech-tts-qwen3-customvoice\",\"voice\":\"alloy\",\"instructions\":\"warm\"}",
+      "main": "passes",
+      "evidence": "Style mode reads the voice description on either checkpoint.",
+      "branch": "passes"
+    },
+    {
+      "route": "transcription",
+      "form": {},
+      "main": "passes",
+      "evidence": "The default Parakeet request; the route's own 448-token budget is not the client's.",
+      "branch": "passes"
+    },
+    {
+      "route": "transcription",
+      "form": {"model": "speech-asr-parakeet", "max_tokens": "64"},
+      "main": "passes",
+      "evidence": "Parakeet never reads the token budget.",
+      "branch": "warns",
+      "warnings": [
+        "--max-tokens has no effect with Parakeet. It applies to Qwen3-ASR."
+      ]
+    },
+    {
+      "route": "transcription",
+      "form": {"model": "speech-asr-qwen3", "max_tokens": "64"},
+      "main": "passes",
+      "evidence": "Qwen3-ASR reads the token budget.",
+      "branch": "passes"
+    },
+    {
+      "route": "transcription",
+      "form": {"model": "speech-asr-parakeet", "task": "translate"},
+      "main": "passes",
+      "evidence": "SpeechTranscriptionResolver runs translation on Qwen3-ASR and drops the Parakeet id.",
+      "branch": "warns",
+      "warnings": [
+        "--model speech-asr-parakeet has no effect: the other options select Qwen3-ASR."
+      ]
+    },
+    {
+      "route": "transcription",
+      "form": {"model": "text-chat-gemma4-nano"},
+      "main": "refuses",
+      "evidence": "APITranscription.resolveModel refuses a model that is not an ASR model; the scope leaves an unlisted id to it.",
+      "branch": "passes"
+    },
+    {
+      "route": "diarization",
+      "form": {"model": "speech-diarization-sortformer"},
+      "main": "passes",
+      "evidence": "Sortformer runs offline.",
+      "branch": "passes"
+    },
+    {
+      "route": "diarization",
+      "form": {"model": "speech-diarization-sortformer", "latency": "offline"},
+      "main": "passes",
+      "evidence": "Sortformer always runs offline, so the latency changes nothing.",
+      "branch": "warns",
+      "warnings": [
+        "--latency has no effect with Sortformer. It applies to Nemotron 3 Diarization."
+      ]
+    },
+    {
+      "route": "diarization",
+      "form": {"model": "speech-diarization-sortformer", "latency": "1.04"},
+      "main": "refuses",
+      "evidence": "APIServerContract.diarizationPlan: latency is supported only by Nemotron 3.",
+      "branch": "refuses",
+      "field": "latency"
+    },
+    {
+      "route": "diarization",
+      "form": {"latency": "0.32"},
+      "main": "passes",
+      "evidence": "The route's default Nemotron 3 streams at 0.32 s.",
+      "branch": "passes"
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"text-chat-gemma4-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"temperature\":0.7,\"top_p\":0.9}",
+      "main": "passes",
+      "evidence": "Gemma 4 samples with temperature and top-p.",
+      "branch": "passes"
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"text-chat-gemma4-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"top_k\":5}",
+      "main": "refuses",
+      "evidence": "APIServerContract.chatRequest: top-k sampling is not supported by this engine.",
+      "branch": "refuses",
+      "field": "top_k"
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"text-chat-gemma4-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"top_k\":0}",
+      "main": "passes",
+      "evidence": "The route reads a top-k of 0 as off.",
+      "branch": "passes"
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"text-chat-diffusiongemma-26b-optiq-4bit\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"top_p\":0.9,\"top_k\":20}",
+      "main": "passes",
+      "evidence": "The route accepts them for DiffusionGemma, whose generator reads neither.",
+      "branch": "warns",
+      "warnings": [
+        "--top-p has no effect with DiffusionGemma. It applies to Gemma 4, Gemma 4 12B vision, Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision, Qwen3.8, llama.cpp GGUF and Psi.",
+        "--top-k has no effect with DiffusionGemma. It applies to Laguna, Inkling-Small, Muse Glimmer, Nemotron 3.5 Lightning, Nemotron 3 Nano Omni, LFM2.5, LFM2.5 A1B 8-bit, LFM2.5-VL, Qwen3.6 text, Qwen3.6 vision and Qwen3.8."
+      ]
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"text-chat-q36-nano\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,AAAA\"}}]}]}",
+      "main": "refuses",
+      "evidence": "Q35Generator: the model does not include a vision tower, thrown after it loads.",
+      "branch": "refuses",
+      "field": "messages.content"
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"vision-chat-q38-27b\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,AAAA\"}}]}]}",
+      "main": "passes",
+      "evidence": "Qwen3.8 reads images.",
+      "branch": "passes"
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"text-chat-q36-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"seed\":1}",
+      "main": "refuses",
+      "evidence": "APIServerContract.chatRequest: deterministic seeds are not supported by this engine (the CLI now accepts --seed; the route is unchanged).",
+      "branch": "refuses",
+      "field": "seed"
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"text-agent-deepseek-v4-flash\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"top_p\":0.9}",
+      "main": "passes",
+      "evidence": "The route serves DeepSeek V4 Flash through its proxy, a model text chat can't run.",
+      "branch": "passes"
+    },
+    {
+      "route": "chat",
+      "body": "{\"model\":\"text-chat-mebot\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"response_format\":{\"type\":\"json_object\"}}",
+      "main": "passes",
+      "evidence": "The route serves text-chat-mebot under its own engine, a model text chat can't run.",
+      "branch": "passes"
+    }
+  ]
+}

@@ -3004,6 +3004,12 @@ Supported endpoint surface:
 - `POST /runtime/models/{id}/unload`
 - `GET/PATCH /runtime/models/{id}/settings`
 
+Chat, image, video, speech, transcription, and diarization requests go through
+the [model scope check](#model-scope-check): a field the selected model refuses
+returns HTTP 400 before anything loads, and one it ignores adds an
+`x-mere-warning` response header. See
+[model scope](./runtime/api-server.md#model-scope).
+
 The four `/runtime/models/{id}` load, unload, and settings operations target the
 chat/text runtime pool only. Managed embedding, image, TTS, and ASR sidecar TTL/pinning is
 configured through `mere.run model runtime set` or the settings file; sidecars

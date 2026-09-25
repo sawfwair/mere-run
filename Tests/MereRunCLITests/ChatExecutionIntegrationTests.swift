@@ -226,7 +226,7 @@ final class ChatExecutionIntegrationTests: XCTestCase {
         RuntimeChatSession(
             plan: .init(
                 lease: model, request: .init(messages: [.init(role: .user, content: "hello")]),
-                modelID: "fixture", engine: .textChatQ35, includeUsage: true
+                modelID: "fixture", engine: .textChatQ35, includeUsage: true, scope: APIModelScope(warnings: [])
             ), admission: try await admission.acquire()
         )
     }

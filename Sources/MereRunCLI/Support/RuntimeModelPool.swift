@@ -523,6 +523,7 @@ struct RuntimeChatPlan: Sendable {
     let modelID: String
     let engine: RuntimeServingEngine
     let includeUsage: Bool
+    let scope: APIModelScope
 }
 
 enum RuntimeModelPoolError: LocalizedError, Equatable {
@@ -1004,6 +1005,8 @@ actor RuntimeModelPool {
             servedModelID: resolved.id,
             apiProfile: resolved.apiProfile
         )
+        // Scoped on what the client sent, not the model's runtime defaults.
+        let scope = try APIModelScope.chat(openAIRequest, resolved: chatRequest, modelID: resolved.id)
         chatRequest.kvCacheMode = resolved.settings.kvCacheMode
         let includeUsage = try APIServerContract.includeUsageInStreaming(
             effectiveRequest,
@@ -1022,7 +1025,8 @@ actor RuntimeModelPool {
             request: chatRequest,
             modelID: resolved.id,
             engine: resolved.engine,
-            includeUsage: includeUsage
+            includeUsage: includeUsage,
+            scope: scope
         )
     }
 

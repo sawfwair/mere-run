@@ -18,6 +18,15 @@ public struct MereRunCommandInvocation: Equatable, Sendable {
     public let positionals: [String]
     public let undeclared: [String]
 
+    /// An invocation from typed values rather than argv, for a caller that is not a command line
+    /// (an HTTP request): each passed option under its canonical flag, a Boolean that is on as
+    /// `[]`.
+    public init(values: [String: [String]], positionals: [String] = []) {
+        self.values = values
+        self.positionals = positionals
+        self.undeclared = []
+    }
+
     public init(capability: MereRunCommandCapability, arguments: [String]) {
         var spellings: [String: MereRunCapabilityOption] = [:]
         for option in capability.options {

@@ -14,6 +14,8 @@ final class RuntimeChatSession: @unchecked Sendable {
     let modelID: String
     let engine: RuntimeServingEngine
     let includeUsage: Bool
+    /// The model scope check's warnings for the request, sent as response headers.
+    let scope: APIModelScope
     var requestID: UUID { admission.requestID }
 
     private let model: any RuntimeChatModelLease
@@ -26,6 +28,7 @@ final class RuntimeChatSession: @unchecked Sendable {
         self.modelID = plan.modelID
         self.engine = plan.engine
         self.includeUsage = plan.includeUsage
+        self.scope = plan.scope
         self.model = plan.lease
         self.admission = admission
     }
