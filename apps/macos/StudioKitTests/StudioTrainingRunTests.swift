@@ -313,8 +313,9 @@ final class StudioTrainingRunTests: XCTestCase {
 
     func testTheModelPickerOffersTrainableBasesOnly() {
         XCTAssertTrue(StudioTrainingRun.isTrainableBase("image-krea2-raw", for: .imageTrainLoRA))
-        XCTAssertTrue(StudioTrainingRun.isTrainableBase("image-krea2-turbo", for: .imageTrainLoRA))
-        XCTAssertTrue(StudioTrainingRun.isTrainableBase("image-klein-base-9b-8bit", for: .imageTrainLoRA))
+        XCTAssertFalse(StudioTrainingRun.isTrainableBase("image-krea2-turbo", for: .imageTrainLoRA), "distilled; the CLI refuses it")
+        XCTAssertTrue(StudioTrainingRun.isTrainableBase("image-klein-base-9b", for: .imageTrainLoRA))
+        XCTAssertTrue(StudioTrainingRun.isTrainableBase("image-klein-base", for: .imageTrainLoRA))
         XCTAssertFalse(StudioTrainingRun.isTrainableBase("image-klein-9b", for: .imageTrainLoRA), "the distilled Klein is not a training base")
         XCTAssertFalse(StudioTrainingRun.isTrainableBase("image-zimage-nano", for: .imageTrainLoRA))
         XCTAssertTrue(StudioTrainingRun.isTrainableBase("music-acestep-xl-sft", for: .musicTrainAdapter))

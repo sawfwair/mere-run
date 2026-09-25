@@ -109,7 +109,7 @@ The public image families are:
 - `image-zimage-*`: ZImage image family
 - `image-hidream-o1*`: HiDream O1 unified pixel-transformer family
 - `image-sensenova-u1-5-8b-mot`: SenseNova U1.5 raw-pixel generation and editing family
-- `image-krea2-raw`: Krea 2 Raw base checkpoint for LoRA training
+- `image-krea2-raw`: Krea 2 Raw base checkpoint for LoRA training; `image generate` also runs it
 - `image-krea2-turbo`: Krea 2 Turbo text-to-image and LoRA inference family
 - `image-qwen-edit-2511`: Qwen Image Edit 2511 40-step quality lane
 - `image-qwen-edit-2511-lightning`: pinned four-step Qwen Edit Lightning lane
@@ -354,8 +354,9 @@ train-lora --help` and the [CLI reference](../cli.md) list the full flag
 surface.
 
 Klein resume restores the selected adapter checkpoint before the next optimizer
-step. Krea 2 rejects `--resume-from` explicitly instead of silently starting
-another run. Image ▸ Train discovers checkpoint artifacts beside a prior output
+step. Krea 2 refuses `--resume-from`, like every Klein-only training option,
+before it resolves the base model, instead of silently starting another run.
+`mere.run guide image train-lora` lists which trainer takes which option. Image ▸ Train discovers checkpoint artifacts beside a prior output
 and sends the same public flag.
 
 ```bash

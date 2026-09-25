@@ -133,31 +133,35 @@ final class ImageLoRATrainingOperationTests: XCTestCase {
         XCTAssertEqual(config.datasetRoot, data.path)
     }
 
-    func testFamilyAndTargetValidationRunWithoutLoadingWeights() throws {
-        let krea = try makeFixture(family: .krea)
-        defer { try? FileManager.default.removeItem(at: krea.root) }
-        var invalid = krea.options
-        invalid.checkpointInterval = 2
-        XCTAssertThrowsError(try ImageLoRATrainingPlan.resolve(invalid)) { error in
-            XCTAssertEqual(error.localizedDescription, "--checkpoint-interval is only supported for FLUX.2 Klein LoRA training")
-        }
-        invalid = krea.options
-        invalid.samplePrompt = "preview"
-        XCTAssertThrowsError(try ImageLoRATrainingPlan.resolve(invalid)) { error in
-            XCTAssertEqual(error.localizedDescription, "Klein training options require a FLUX.2 Klein base model.")
-        }
+    func testTargetValidationRunsWithoutLoadingWeights() throws {
         let klein = try makeFixture(family: .klein)
         defer { try? FileManager.default.removeItem(at: klein.root) }
-        invalid = klein.options
-        invalid.baseQuantizationBits = 4
-        XCTAssertThrowsError(try ImageLoRATrainingPlan.resolve(invalid)) { error in
-            XCTAssertEqual(error.localizedDescription, "--base-quantization-bits is only supported for Krea 2 LoRA training")
-        }
-        invalid = klein.options
+        var invalid = klein.options
         invalid.timestepSampling = "unsupported"
         XCTAssertThrowsError(try ImageLoRATrainingPlan.resolve(invalid)) { error in
             XCTAssertEqual(error.localizedDescription, "Unsupported --timestep-sampling 'unsupported'")
         }
+    }
+
+    /// A Krea 2 recipe on a Klein model keeps its size, steps, and rank but not its schedule, which
+    /// the Klein trainer reads only from the command line; every other pairing is silent.
+    func testAKreaRecipeOnKleinWarnsThatItsScheduleIsNotApplied() throws {
+        let klein = try makeFixture(family: .klein)
+        defer { try? FileManager.default.removeItem(at: klein.root) }
+        var options = klein.options
+        options.recipe = "krea-fast-style"
+        let plan = try ImageLoRATrainingPlan.resolve(options)
+        guard case .klein(_, let config, _, _) = plan.training else { return XCTFail("Expected Klein") }
+        XCTAssertEqual(config.width, 768)
+        XCTAssertEqual(config.loraRank, 32)
+        XCTAssertEqual(config.lrWarmupSteps, Flux2KleinLoRATrainingConfig().lrWarmupSteps, "not the recipe's warmup of 10")
+
+        let warning = try XCTUnwrap(ImageLoRATrainingOptions.recipeWarning(recipe: "krea-fast-style", family: .klein))
+        XCTAssertTrue(warning.hasPrefix("--recipe krea-fast-style is written for Krea 2"))
+        XCTAssertNotNil(ImageLoRATrainingOptions.recipeWarning(recipe: "krea-movie-style", family: .klein), "aliases too")
+        XCTAssertNil(ImageLoRATrainingOptions.recipeWarning(recipe: "krea-fast-style", family: .krea))
+        XCTAssertNil(ImageLoRATrainingOptions.recipeWarning(recipe: "klein-fast-style", family: .klein))
+        XCTAssertNil(ImageLoRATrainingOptions.recipeWarning(recipe: nil, family: .klein))
     }
 
     func testOperationForwardsPreparedInputsAndReturnsSavedOrBenchmarkOutcome() async throws {

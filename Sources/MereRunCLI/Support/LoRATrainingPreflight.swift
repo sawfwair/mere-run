@@ -8,7 +8,6 @@ struct LoRATrainingPreflightInput {
     let recipe: String?
     let excludePreviewImages: Bool
     let syntheticSamples: Int?
-    let requiresKleinModel: Bool
     let options: ImageLoRATrainingOptions.Resolved
     let trainingArgv: [String]
     let runPlan: LoRATrainingRunPlan
@@ -377,19 +376,22 @@ struct LoRATrainingPreflightAnalyzer {
         return modelResult(requested: requested, kind: "unknown", installed: false)
     }
 
+    /// Options a trainer refuses fail the capability gate before preflight runs; what is left
+    /// is a recipe written for the other trainer, which runs half-applied.
     private func appendModelCompatibilityDiagnostics(
         family: String?,
         diagnostics: inout [PreflightDiagnostic]
     ) {
-        guard family == MereRunModelManifest.Family.krea.rawValue,
-              input.requiresKleinModel else {
+        guard let warning = ImageLoRATrainingOptions.recipeWarning(
+            recipe: input.recipe, family: family.flatMap(MereRunModelManifest.Family.init(rawValue:))
+        ) else {
             return
         }
         diagnostics.append(PreflightDiagnostic(
-            id: "klein_training_options_require_klein_model",
-            severity: .blocker,
-            title: "Klein model required",
-            message: "Klein training options require a FLUX.2 Klein base model."
+            id: "recipe_written_for_other_trainer",
+            severity: .warning,
+            title: "Recipe written for Krea 2",
+            message: warning
         ))
     }
 

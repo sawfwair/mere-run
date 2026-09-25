@@ -410,31 +410,22 @@ public struct ImageLoRATrainingOptions: Sendable {
         return ranks
     }
 
-    public func hasKleinOnlyTrainingOptions(options: Resolved) -> Bool {
-        options.maxResolution != nil ||
-            resumeFrom != nil ||
-            progressive ||
-            options.lowRam ||
-            gradientCheckpointing ||
-            benchmarkSteps != nil ||
-            benchmarkWarmupSteps != 5 ||
-            sampleInterval != nil ||
-            samplePrompt != nil ||
-            sampleModel != nil ||
-            sampleSteps != 8 ||
-            sampleGuidanceScale != 1.0 ||
-            sampleLoRAScale != 1.0 ||
-            sampleSeed != nil ||
-            loraTargetRanks != nil ||
-            loraRankPreset != nil ||
-            options.loraTargetPreset != nil ||
-            loraTargetMode != nil ||
-            timestepSampling != nil ||
-            timestepLossWeighting != nil ||
-            lossWeighting != nil ||
-            timestepLow != nil ||
-            timestepHigh != nil ||
-            adamWeightDecay != nil
+    /// The trainer a recipe is written for; nil without a recipe, or for a name `resolve()` rejects.
+    static func recipeFamily(_ raw: String?) -> MereRunModelManifest.Family? {
+        switch (try? resolveLoRATrainingRecipe(raw))?.model {
+        case ModelResolver.ModelID.krea2Raw.rawValue: .krea
+        case ModelResolver.ModelID.kleinBase9B.rawValue: .klein
+        default: nil
+        }
+    }
+
+    /// A Krea 2 recipe on a FLUX.2 Klein model half-applies: the Klein trainer takes the recipe's
+    /// size, steps, learning rate, rank, and alpha, but reads its learning-rate schedule only from
+    /// the command line. nil for every other pairing.
+    public static func recipeWarning(recipe: String?, family: MereRunModelManifest.Family?) -> String? {
+        guard family == .klein, let recipe, recipeFamily(recipe) == .krea else { return nil }
+        return "--recipe \(recipe) is written for Krea 2; FLUX.2 Klein takes its size, steps, learning rate, rank, "
+            + "and alpha, but not its learning-rate warmup, cosine schedule, or floor."
     }
 
     static let kleinLiteTargetSuffixes: [String] = [

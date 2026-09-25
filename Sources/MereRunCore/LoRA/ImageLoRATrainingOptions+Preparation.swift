@@ -1,14 +1,9 @@
 import Foundation
 
 extension ImageLoRATrainingOptions {
+    // Which trainer takes which option is the capability contract's `image.train-lora` scope; the
+    // CLI checks it before a model is resolved, so these prepare what each trainer reads.
     func prepareKrea(options: Resolved) throws -> ImageLoRATrainingPlan.Training {
-        if options.checkpointInterval != nil {
-            throw ImageLoRATrainingIssue("--checkpoint-interval is only supported for FLUX.2 Klein LoRA training")
-        }
-        if hasKleinOnlyTrainingOptions(options: options) {
-            throw ImageLoRATrainingIssue("Klein training options require a FLUX.2 Klein base model.")
-        }
-
         let examples: [Krea2LoRATrainingExample]
         let datasetRoot: String?
         if syntheticSamples != nil {
@@ -60,12 +55,6 @@ extension ImageLoRATrainingOptions {
     }
 
     func prepareKlein(options: Resolved) throws -> ImageLoRATrainingPlan.Training {
-        if baseQuantizationBits != nil {
-            throw ImageLoRATrainingIssue("--base-quantization-bits is only supported for Krea 2 LoRA training")
-        }
-        if syntheticSamples != nil {
-            throw ImageLoRATrainingIssue("--synthetic-samples is only supported for Krea 2 LoRA smoke tests")
-        }
         guard let data else {
             throw ImageLoRATrainingIssue("--data is required")
         }

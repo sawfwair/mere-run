@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 // Image ▸ Train, Chat ▸ Train, and Music ▸ Train are Project surfaces over a task draft: the
 // runner names, validates, prepares, records, and remembers their runs like any other task's.
@@ -87,20 +88,28 @@ package enum StudioTrainingRun {
         return draft
     }
 
-    /// The base model a chosen recipe trains when `--model` is left to it, as the CLI resolves
-    /// the recipe (`resolveLoRATrainingRecipe`): the Klein recipe trains the FLUX.2 Klein 9B
-    /// base, the Krea recipes Krea 2 raw. Nil without a recipe, and for the other trainers.
+    /// The base model a chosen recipe trains when `--model` is left to it: the contract's default
+    /// for the recipe, so the Klein recipe trains the FLUX.2 Klein 9B base and the Krea recipes
+    /// Krea 2 raw. Nil without a recipe, and for the other trainers.
     package static func recipeBaseModel(for draft: StudioTaskDraft) -> String? {
-        guard draft.templateID == .imageTrainLoRA else { return nil }
-        let recipe = draft.text("--recipe").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !recipe.isEmpty else { return nil }
-        return recipe.contains("klein") ? "image-klein-base-9b" : "image-krea2-raw"
+        let recipe = draft.text("--recipe")
+        guard draft.templateID == .imageTrainLoRA, !recipe.isBlank,
+              case .family(_, let model?, .defaultModel) = imageTrainingFamily(["--recipe", recipe]) else { return nil }
+        return model
     }
 
-    /// Whether the image draft trains a FLUX.2 Klein base: the Klein recipe, or a model id that
-    /// says so.
+    /// Whether the image draft trains on the contract's FLUX.2 Klein family: the model it names,
+    /// or the Klein recipe's base when it names none. A local folder is not guessed from its name.
     package static func trainsKlein(_ draft: StudioTaskDraft) -> Bool {
-        draft.text("--recipe") == "klein-fast-style" || StudioTaskSchema.modelID(for: draft).lowercased().contains("klein")
+        guard draft.templateID == .imageTrainLoRA,
+              case .family(let family, _, _) = imageTrainingFamily(draft.arguments) else { return false }
+        return family == "klein"
+    }
+
+    /// The family the image trainer's contract resolves for `arguments`.
+    private static func imageTrainingFamily(_ arguments: [String]) -> MereRunFamilyResolution {
+        let capability = MereRunCapabilityCatalog.imageTrainLoRA
+        return capability.resolveFamily(MereRunCommandInvocation(capability: capability, arguments: arguments))
     }
 
     /// Klein checkpoints and previews are opt-in on the command line; without them a run has
@@ -122,11 +131,13 @@ package enum StudioTrainingRun {
         applyingKleinDefaults(draft)
     }
 
-    /// Whether a managed model is a base the trainer can train: Krea 2 and the Klein base models
-    /// for images, ACE-Step for music, any text-chat model for text.
+    /// Whether a managed model is a base the trainer can train: a model of the image trainer's
+    /// contract families (Krea 2 Raw and the Klein bases), ACE-Step for music, any text-chat
+    /// model for text.
     package static func isTrainableBase(_ modelID: String, for templateID: CommandTemplateID) -> Bool {
         switch templateID {
-        case .imageTrainLoRA: return modelID.hasPrefix("image-krea2") || modelID.hasPrefix("image-klein-base")
+        case .imageTrainLoRA:
+            return MereRunCapabilityCatalog.imageTrainLoRA.routing?.families.contains { $0.models.contains(modelID) } == true
         case .musicTrainAdapter: return modelID.hasPrefix("music-acestep")
         default: return true
         }

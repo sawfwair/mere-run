@@ -140,7 +140,7 @@ extension MereRunCommandCapability {
                 choices: option.kind == .choice ? rule?.values ?? option.choices : option.choices,
                 defaultValue: rule?.defaultValue ?? fixed ?? option.defaultValue, group: option.group,
                 tier: option.tier, range: rule?.range ?? option.range, dependsOn: option.dependsOn,
-                familyRules: rule.map { [$0] } ?? []
+                familyRules: rule.map { [$0] } ?? [], choiceSpellings: option.choiceSpellings
             )
         }
     }
@@ -159,7 +159,11 @@ extension MereRunCommandCapability {
             }
             if let families = option.families, !families.contains(family) {
                 let titles = families.compactMap { routing.family(id: $0)?.title }
-                return [unsupported(option.flag, family: runtime, ignored: option.ignoredBy.contains(family), usedBy: titles)]
+                // A family's rule on an option it ignores lists the values it tolerates, the way a
+                // value-based check in the CLI lets a default through; any other value is refused.
+                let refused = rule.map { !ruleViolations(option, values: values, rule: $0, family: runtime).isEmpty } ?? false
+                let ignored = option.ignoredBy.contains(family) && !refused
+                return [unsupported(option.flag, family: runtime, ignored: ignored, usedBy: titles)]
             }
             guard let rule else { return [] }
             return ruleViolations(option, values: values, rule: rule, family: runtime)
@@ -325,7 +329,7 @@ extension MereRunCommandCapability {
         let option = options.first { $0.flag == condition.flag }
         let familyDefault = option?.familyRules.first { $0.family == family }?.defaultValue
         guard let value = invocation.value(condition.flag) ?? familyDefault ?? option?.defaultValue else { return false }
-        return allowed.contains(value)
+        return allowed.contains(option?.choice(for: value) ?? value)
     }
 
     private func unmatchedDetail(model: String?, candidates: [MereRunRuntimeFamily]) -> String {
@@ -369,7 +373,7 @@ extension MereRunCommandCapability {
         let flag = option.flag
         var found: [MereRunOptionViolation] = []
         let effect = rule.severity == .warning ? "has no effect with \(family.title)" : "is not supported by \(family.title)"
-        if let allowed = rule.values, let value = values.first(where: { !Self.matches($0, allowed, kind: option.kind) }) {
+        if let allowed = rule.values, let value = values.first(where: { !Self.matches(option.choice(for: $0), allowed, kind: option.kind) }) {
             let message = allowed.count == 1
                 ? "\(flag) \(value) \(effect); it runs \(allowed[0]). Remove \(flag) or pass \(allowed[0])."
                 : "\(flag) \(value) \(effect); use \(Self.list(allowed, conjunction: "or"))."
@@ -408,6 +412,7 @@ extension MereRunCommandCapability {
     private static func describe(_ range: MereRunCapabilityRange) -> String {
         let format = { (value: Double) in value.rounded() == value ? String(Int(value)) : String(value) }
         switch (range.min, range.max) {
+        case let (min?, max?) where min == max: return format(min)
         case let (min?, max?): return "a value from \(format(min)) to \(format(max))"
         case let (min?, nil): return "a value of at least \(format(min))"
         case let (nil, max?): return "a value of at most \(format(max))"

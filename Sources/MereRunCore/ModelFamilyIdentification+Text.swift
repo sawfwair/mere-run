@@ -41,6 +41,11 @@ extension ModelFamilyIdentifier {
         return Q35Resources.isQ38ModelId(model) ? .q38 : .q35VL
     }
 
+    static let textProbes: [String: Probe] = [
+        "text.chat": textChatProbe,
+        "text.train-lora": textTrainLoRAProbe,
+    ]
+
     /// The identifier's `text chat` probe. The Qwen fallthrough runs only a model with a Qwen
     /// profile, so any other id is unidentified and the command reports it.
     static func textChatProbe(model: String, invocation: MereRunCommandInvocation) -> String? {

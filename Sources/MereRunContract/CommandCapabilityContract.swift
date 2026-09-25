@@ -103,6 +103,9 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     public let ignoredBy: [String]
     /// Per-family narrowing of an option the family uses.
     public let familyRules: [MereRunOptionFamilyRule]
+    /// Other spellings the CLI accepts for a `.choice` value; `nil` when it takes `choices` as
+    /// written. Rules and default-model conditions compare `choice(for:)`, never the raw text.
+    public let choiceSpellings: MereRunChoiceSpellings?
 
     enum CodingKeys: String, CodingKey {
         case flag
@@ -120,6 +123,7 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         case families
         case ignoredBy = "ignored_by"
         case familyRules = "family_rules"
+        case choiceSpellings = "choice_spellings"
     }
 
     public init(
@@ -137,7 +141,8 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         dependsOn: String? = nil,
         families: [String]? = nil,
         ignoredBy: [String] = [],
-        familyRules: [MereRunOptionFamilyRule] = []
+        familyRules: [MereRunOptionFamilyRule] = [],
+        choiceSpellings: MereRunChoiceSpellings? = nil
     ) {
         self.flag = flag
         self.aliases = aliases
@@ -154,6 +159,7 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         self.families = families
         self.ignoredBy = ignoredBy
         self.familyRules = familyRules
+        self.choiceSpellings = choiceSpellings
     }
 
     /// `aliases`, `families`, `ignored_by`, and `family_rules` are additive: a document written
@@ -175,6 +181,7 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         families = try container.decodeIfPresent([String].self, forKey: .families)
         ignoredBy = try container.decodeIfPresent([String].self, forKey: .ignoredBy) ?? []
         familyRules = try container.decodeIfPresent([MereRunOptionFamilyRule].self, forKey: .familyRules) ?? []
+        choiceSpellings = try container.decodeIfPresent(MereRunChoiceSpellings.self, forKey: .choiceSpellings)
     }
 
     /// Empty additive fields stay absent so a decoder that predates them sees the same JSON it
@@ -196,11 +203,42 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         try container.encodeIfPresent(families, forKey: .families)
         if !ignoredBy.isEmpty { try container.encode(ignoredBy, forKey: .ignoredBy) }
         if !familyRules.isEmpty { try container.encode(familyRules, forKey: .familyRules) }
+        try container.encodeIfPresent(choiceSpellings, forKey: .choiceSpellings)
     }
 
     /// Every spelling ArgumentParser accepts for this option.
     public var spellings: [String] {
         [flag] + aliases
+    }
+
+    /// The choice a passed value means, as the CLI reads it: `value` itself unless
+    /// `choiceSpellings` names another spelling of a choice.
+    public func choice(for value: String) -> String {
+        guard let choiceSpellings else { return value }
+        let key = choiceSpellings.ignoresCase
+            ? value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            : value
+        if let aliased = choiceSpellings.aliases[key] { return aliased }
+        return choices.first { (choiceSpellings.ignoresCase ? $0.lowercased() : $0) == key } ?? value
+    }
+}
+
+/// How the CLI reads a `.choice` option's value beyond the canonical `choices`, which stay what
+/// shells offer. `--recipe` trims and lowercases what it is given and accepts older recipe names.
+public struct MereRunChoiceSpellings: Codable, Equatable, Sendable {
+    /// The CLI trims surrounding whitespace and compares without case.
+    public let ignoresCase: Bool
+    /// Another accepted spelling, keyed lowercased when `ignoresCase`, to the choice it means.
+    public let aliases: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case ignoresCase = "ignores_case"
+        case aliases
+    }
+
+    public init(ignoresCase: Bool, aliases: [String: String] = [:]) {
+        self.ignoresCase = ignoresCase
+        self.aliases = aliases
     }
 }
 
@@ -224,7 +262,7 @@ extension MereRunCapabilityOption {
         return Self(flag: flag, aliases: aliases, label: label, kind: kind, required: required,
             repeatable: repeatable, choices: choices, defaultValue: defaultValue, group: group ?? section,
             tier: tier ?? (required ? .essential : .standard), range: range, dependsOn: dependsOn,
-            families: families, ignoredBy: ignoredBy, familyRules: familyRules)
+            families: families, ignoredBy: ignoredBy, familyRules: familyRules, choiceSpellings: choiceSpellings)
     }
 }
 

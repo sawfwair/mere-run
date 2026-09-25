@@ -9,11 +9,11 @@ public enum ModelFamilyIdentifier {
     /// Inspects `model` for one capability and returns a family id of that capability, or `nil`.
     public typealias Probe = @Sendable (_ model: String, _ invocation: MereRunCommandInvocation) -> String?
 
-    /// Per-capability probes, keyed by capability id. Each domain registers its own.
-    static let probes: [String: Probe] = [
-        "text.chat": textChatProbe,
-        "text.train-lora": textTrainLoRAProbe
-    ]
+    /// Per-capability probes, keyed by capability id. Each domain registers its own table here.
+    static let probes: [String: Probe] = Dictionary(uniqueKeysWithValues: [
+        imageProbes,
+        textProbes,
+    ].flatMap { $0.map { ($0.key, $0.value) } })
 
     public static func identify(
         capabilityID: String,

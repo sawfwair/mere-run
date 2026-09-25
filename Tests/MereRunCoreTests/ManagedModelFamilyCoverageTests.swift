@@ -10,8 +10,6 @@ private let pendingCapabilities: [String: String] = [
     "video.generate": "video domain",
     "video.retake": "video domain",
     "video.session": "video domain",
-    "image.generate": "image domain",
-    "image.train-lora": "image domain",
     "music.generate": "music domain",
     "music.separate": "music domain",
     "music.serve": "music domain",

@@ -53,6 +53,16 @@ private func gateCases(for capability: MereRunCommandCapability) -> [GateCase] {
                     ? .warns(family: family.id, flag: option.flag)
                     : .rejects(flag: option.flag, familyTitle: family.title)
                 cases.append(GateCase(arguments: withOption([validValue(option, rule: rule)]), expectation: expectation))
+                // An ignoring family's rule lists the values it tolerates; any other is refused.
+                if option.ignoredBy.contains(family.id), let rule {
+                    let refused = GateCase.Expectation.rejects(flag: option.flag, familyTitle: family.title)
+                    if let allowed = rule.values, let outside = valueOutside(allowed, option: option) {
+                        cases.append(GateCase(arguments: withOption([outside]), expectation: refused))
+                    }
+                    if let outside = rule.range.flatMap({ $0.max.map { $0 + 1 } ?? $0.min.map { $0 - 1 } }) {
+                        cases.append(GateCase(arguments: withOption([render(outside, option)]), expectation: refused))
+                    }
+                }
                 continue
             }
             if rule?.required == true {
