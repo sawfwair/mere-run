@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 // MARK: - Video templates
 
@@ -102,20 +103,25 @@ extension CommandCatalog {
 // MARK: - Video arguments
 
 extension CommandArguments {
-    package static func videoGenerate(_ draft: CommandDraft) -> [String] {
+    /// `video generate` for `draft`, emitting only the options the selected runtime family uses,
+    /// with values it accepts. `scope` defaults to the family the contract resolves from the
+    /// draft; a caller that has identified a local folder passes that folder's scope instead.
+    package static func videoGenerate(_ draft: CommandDraft, scope: StudioVideoScope? = nil) -> [String] {
         typealias F = CommandFlags.VideoGenerate
+        let hasAudio = !draft.audioPath.isBlank
+        let quality = hasAudio ? LTXVideoQuality.final : draft.videoQuality
+        let outputMode = hasAudio ? LTXVideoOutputMode.audioVideo : draft.videoOutputMode
+        let scope = scope ?? .videoGenerate(draft)
         var args = ArgumentBuilder(F.self)
+        func option(_ flag: String, _ value: String) {
+            if scope.uses(flag, value) { args.option(flag, value) }
+        }
         args.value(draft.prompt)
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         if !draft.modelRoot.isBlank { args.option(F.modelRoot, draft.modelRoot) }
-        let family = StudioVideoModelFamily(model: draft.modelRoot.isBlank ? draft.model : draft.modelRoot)
-        if family == .ltx {
-            let quality = draft.audioPath.isBlank ? draft.videoQuality : .final
-            let outputMode = draft.audioPath.isBlank ? draft.videoOutputMode : .audioVideo
-            args.option(F.quality, quality.rawValue)
-            args.option(F.outputMode, outputMode.rawValue)
-        }
+        option(F.quality, quality.rawValue)
+        option(F.outputMode, outputMode.rawValue)
         args.option(F.width, String(draft.width))
         args.option(F.height, String(draft.height))
         if draft.useDuration {
@@ -123,63 +129,61 @@ extension CommandArguments {
         } else {
             args.option(F.numFrames, String(draft.numFrames))
         }
-        if !family.isMiniMaxH3 { args.option(F.fps, String(draft.fps)) }
+        option(F.fps, String(draft.fps))
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
-        if !family.isMiniMaxH3, !draft.secondaryText.isBlank {
-            args.option(F.negativePrompt, draft.secondaryText)
+        if !draft.secondaryText.isBlank { option(F.negativePrompt, draft.secondaryText) }
+        // MiniMax-H3 picks its schedule from the packed geometry unless the draft overrides it.
+        if scope.uses(F.h3Acceleration) {
+            if let h3Steps = draft.h3Steps { option(F.steps, String(h3Steps)) }
+        } else {
+            option(F.steps, String(draft.steps))
         }
-        if family == .wan {
-            args.option(F.steps, String(draft.steps))
-            args.option(F.guidanceScale, format(draft.cfgScale))
-            args.option(F.shift, format(draft.scheduleShift))
+        option(F.guidanceScale, format(draft.cfgScale))
+        option(F.shift, format(draft.scheduleShift))
+        if let weightMode = draft.h3WeightMode, !weightMode.isBlank { option(F.h3WeightMode, weightMode) }
+        if let accelerationMode = draft.h3AccelerationMode, !accelerationMode.isBlank {
+            option(F.h3Acceleration, accelerationMode)
         }
-        if family.isMiniMaxH3 {
-            if let h3Steps = draft.h3Steps { args.option(F.steps, String(h3Steps)) }
-            if let weightMode = draft.h3WeightMode, !weightMode.isBlank {
-                args.option(F.h3WeightMode, weightMode)
-            }
-            if let accelerationMode = draft.h3AccelerationMode,
-               !accelerationMode.isBlank {
-                args.option(F.h3Acceleration, accelerationMode)
-            }
-            for reference in draft.h3ReferenceInputs ?? [] where !reference.isBlank {
-                args.option(F.reference, reference)
-            }
-        } else if !draft.audioPath.isBlank {
+        for reference in draft.h3ReferenceInputs ?? [] where !reference.isBlank {
+            option(F.reference, reference)
+        }
+        if hasAudio, scope.uses(F.audio) {
             args.option(F.audio, draft.audioPath)
-            args.option(F.audioStartTime, format(draft.audioStartTime))
-            args.option(F.a2vGuidanceScale, format(draft.a2vGuidanceScale))
-            args.option(F.videoCfgGuidanceScale, format(draft.videoCFGGuidanceScale))
-            args.option(F.audioCfgGuidanceScale, format(draft.audioCFGGuidanceScale))
-            args.option(F.v2aGuidanceScale, format(draft.v2aGuidanceScale))
-            args.option(F.a2vSteps, String(draft.a2vSteps))
+            option(F.audioStartTime, format(draft.audioStartTime))
+            option(F.a2vGuidanceScale, format(draft.a2vGuidanceScale))
+            option(F.videoCfgGuidanceScale, format(draft.videoCFGGuidanceScale))
+            option(F.audioCfgGuidanceScale, format(draft.audioCFGGuidanceScale))
+            option(F.v2aGuidanceScale, format(draft.v2aGuidanceScale))
+            option(F.a2vSteps, String(draft.a2vSteps))
             if let audioMaxDuration = draft.audioMaxDuration, audioMaxDuration > 0 {
-                args.option(F.audioMaxDuration, format(audioMaxDuration))
+                option(F.audioMaxDuration, format(audioMaxDuration))
             }
         }
-        if !draft.inputPath.isBlank {
+        if !draft.inputPath.isBlank, scope.uses(F.image) {
             args.option(F.image, draft.inputPath)
-            args.option(F.imageStrength, format(draft.strength))
+            option(F.imageStrength, format(draft.strength))
         }
-        if !draft.endImagePath.isBlank {
+        if !draft.endImagePath.isBlank, scope.uses(F.endImage) {
             args.option(F.endImage, draft.endImagePath)
-            args.option(F.endImageStrength, format(draft.endImageStrength))
+            option(F.endImageStrength, format(draft.endImageStrength))
         }
         if draft.preflight {
             args.flag(F.preflight)
             if draft.json { args.flag(F.json) }
         }
-        if !family.isMiniMaxH3, draft.timings { args.flag(F.timings) }
-        if !family.isMiniMaxH3, !draft.timingsOutputPath.isBlank {
-            args.option(F.timingsOutput, draft.timingsOutputPath)
-        }
+        if draft.timings, scope.uses(F.timings) { args.flag(F.timings) }
+        if !draft.timingsOutputPath.isBlank { option(F.timingsOutput, draft.timingsOutputPath) }
         if draft.quiet { args.flag(F.quiet) }
         return args.arguments
     }
 
     package static func videoRetake(_ draft: CommandDraft) -> [String] {
         typealias F = CommandFlags.VideoRetake
+        let scope = StudioVideoScope.videoRetake(draft)
         var args = ArgumentBuilder(F.self)
+        func option(_ flag: String, _ value: String) {
+            if scope.uses(flag, value) { args.option(flag, value) }
+        }
         args.value(draft.prompt)
         args.option(F.source, draft.inputPath)
         args.option(F.startTime, format(draft.retakeStartTime))
@@ -187,10 +191,8 @@ extension CommandArguments {
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         if !draft.modelRoot.isBlank { args.option(F.modelRoot, draft.modelRoot) }
-        if !draft.secondaryText.isBlank {
-            args.option(F.negativePrompt, draft.secondaryText)
-        }
-        args.option(F.steps, String(draft.steps))
+        if !draft.secondaryText.isBlank { option(F.negativePrompt, draft.secondaryText) }
+        option(F.steps, String(draft.steps))
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
         if draft.retakePreserveVideo { args.flag(F.preserveVideo) }
         if draft.retakePreserveAudio { args.flag(F.preserveAudio) }
@@ -333,21 +335,21 @@ extension CommandCatalog {
     package static func videoValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
         switch id {
         case .videoGenerate:
-            let family = StudioVideoModelFamily(model: draft.modelRoot.isBlank ? draft.model : draft.modelRoot)
-            if family == .miniMaxH3Ref2VA {
-                if !(draft.inputPath.isBlank && draft.endImagePath.isBlank) {
-                    return "MiniMax-H3 Ref2VA uses ordered image, video, or audio references instead of keyframes."
-                }
-                if (draft.h3ReferenceInputs ?? []).isEmpty {
-                    return "MiniMax-H3 Ref2VA requires at least one ordered reference."
-                }
-            } else if !draft.endImagePath.isBlank && draft.inputPath.isBlank {
+            typealias F = CommandFlags.VideoGenerate
+            let scope = StudioVideoScope.videoGenerate(draft)
+            if let refusal = scope.refusal { return refusal }
+            let model = scope.familyTitle ?? "This model"
+            if scope.requires(F.reference), (draft.h3ReferenceInputs ?? []).allSatisfy(\.isBlank) {
+                return "\(model) requires at least one ordered reference."
+            }
+            if scope.requires(F.image), draft.inputPath.isBlank {
+                return "\(model) requires a start image."
+            }
+            if scope.uses(F.endImage), !draft.endImagePath.isBlank, draft.inputPath.isBlank {
                 return "A start image is required when an end keyframe is selected."
             }
-            if family == .miniMaxH3FL2VA && !(draft.h3ReferenceInputs ?? []).isEmpty {
-                return "MiniMax-H3 FL2VA does not accept ordered references."
-            }
         case .videoRetake:
+            if let refusal = StudioVideoScope.videoRetake(draft).refusal { return refusal }
             if draft.retakeStartTime < 0 || draft.retakeStartTime >= draft.retakeEndTime {
                 return "Retake requires a nonnegative start before the end time."
             }
@@ -387,29 +389,93 @@ extension CommandCatalog {
     }
 }
 
-// MARK: - Video model family
+// MARK: - Video runtime family
 
-package enum StudioVideoModelFamily: Equatable {
-    case ltx
-    case wan
-    case miniMaxH3FL2VA
-    case miniMaxH3Ref2VA
+/// The runtime family a video draft selects, as the contract resolves it from the model flags
+/// the builder emits: `--model-root` over `--model`, and for a blank model the default that the
+/// draft's source audio and quality pick. When the contract can't tell (a local folder, which
+/// the CLI identifies when it runs), every option is offered and the CLI checks the run.
+package struct StudioVideoScope {
+    package let capability: MereRunCommandCapability
+    package let resolution: MereRunFamilyResolution
+    /// The family's options with its rules applied; nil when no family resolved.
+    private let options: [String: MereRunCapabilityOption]?
 
-    package init(model: String) {
-        let normalized = model.lowercased()
-        if normalized.contains("minimax-h3") || normalized.contains("minimax_h3") {
-            self = normalized.contains("ref2va") ? .miniMaxH3Ref2VA : .miniMaxH3FL2VA
-        } else if normalized.contains("wan") {
-            self = .wan
+    package init(_ capability: MereRunCommandCapability, arguments: [String]) {
+        self.capability = capability
+        resolution = capability.resolveFamily(MereRunCommandInvocation(capability: capability, arguments: arguments))
+        if case .family(let id, _, _) = resolution {
+            options = Dictionary(uniqueKeysWithValues: capability.options(forFamily: id).map { ($0.flag, $0) })
         } else {
-            self = .ltx
+            options = nil
         }
     }
 
-    package var isMiniMaxH3: Bool {
-        self == .miniMaxH3FL2VA || self == .miniMaxH3Ref2VA
+    package static func videoGenerate(_ draft: CommandDraft) -> Self {
+        videoGenerate(model: draft.model, modelRoot: draft.modelRoot, audioPath: draft.audioPath, quality: draft.videoQuality)
     }
 
+    /// `video generate`'s family from the fields that decide it: the model flags, and for a
+    /// blank model the source audio and quality that select the default checkpoint.
+    package static func videoGenerate(
+        model: String, modelRoot: String = "", audioPath: String, quality: LTXVideoQuality
+    ) -> Self {
+        typealias F = CommandFlags.VideoGenerate
+        var arguments = modelArguments(model: model, modelRoot: modelRoot, flags: (F.model, F.modelRoot))
+        if !audioPath.isBlank { arguments += [F.audio, audioPath] }
+        arguments += [F.quality, (audioPath.isBlank ? quality : .final).rawValue]
+        return Self(MereRunCapabilityCatalog.videoGenerate, arguments: arguments)
+    }
+
+    package static func videoRetake(_ draft: CommandDraft) -> Self {
+        typealias F = CommandFlags.VideoRetake
+        return Self(
+            MereRunCapabilityCatalog.videoRetake,
+            arguments: modelArguments(model: draft.model, modelRoot: draft.modelRoot, flags: (F.model, F.modelRoot))
+        )
+    }
+
+    private static func modelArguments(model: String, modelRoot: String, flags: (model: String, modelRoot: String)) -> [String] {
+        (modelRoot.isBlank ? [] : [flags.modelRoot, modelRoot]) + (model.isBlank ? [] : [flags.model, model])
+    }
+
+    /// The resolved family id; nil when the contract can't tell or the model can't run here.
+    package var family: String? {
+        guard case .family(let id, _, _) = resolution else { return nil }
+        return id
+    }
+
+    package var familyTitle: String? {
+        family.flatMap { capability.routing?.family(id: $0)?.title }
+    }
+
+    /// Why the CLI refuses the selected model outright, in the CLI's words.
+    package var refusal: String? {
+        switch resolution {
+        case .excluded(let excluded):
+            return "\(excluded.id) can't run \(capability.command.joined(separator: " ")): \(excluded.reason)"
+        case .unmatched(_, let detail):
+            return detail
+        case .unrouted, .unidentified, .family:
+            return nil
+        }
+    }
+
+    /// True when the family uses `flag`, and accepts `value` when one is given. An unresolved
+    /// family uses every option.
+    package func uses(_ flag: String, _ value: String? = nil) -> Bool {
+        guard let options else { return true }
+        guard let option = options[flag] else { return false }
+        guard let value, let allowed = option.familyRules.first?.values else { return true }
+        return allowed.contains(value)
+    }
+
+    /// True when the family cannot run without `flag`.
+    package func requires(_ flag: String) -> Bool {
+        options?[flag]?.required == true
+    }
+
+    /// MiniMax-H3 rounds a frame count up to 17n+5 frames, at least 22.
     package static func alignedMiniMaxH3FrameCount(_ requested: Int) -> Int {
         let clamped = max(22, requested)
         return ((clamped - 5 + 16) / 17) * 17 + 5

@@ -203,8 +203,9 @@ enum CommandDraftProbes {
         "voiceMode": ["clone"],
         // `renderProfile == "quality"` emits the SCAIL sampler overrides.
         "renderProfile": ["quality"],
-        // `StudioVideoModelFamily(model:)` reads `modelRoot` when it is non-blank and selects
-        // the LTX, Wan, or MiniMax-H3 branch of `video generate`.
+        // `StudioVideoScope` resolves `--model-root` over `--model` against the contract: the
+        // Wan id selects that family's `video generate` surface; the H3 folder name is a local
+        // root the contract can't identify, so it keeps the full surface.
         "modelRoot": ["video-minimax-h3-ref2va", "video-wan22-ti2v-5b-mlx"],
         // `musicTrainingKind == "lokr"` is the one kind `--factor` applies to.
         "musicTrainingKind": ["lokr"],
