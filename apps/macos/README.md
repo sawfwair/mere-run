@@ -118,7 +118,8 @@ The declarative schemas live in StudioKit beside the model, and the views that
 draw them in StudioUI, one file each side:
 `StudioComposerSchema.swift` and `StudioComposer.swift`,
 `StudioContractSchema.swift` and `StudioContractForm.swift`,
-`StudioInspectorSchema.swift` and `StudioInspector.swift`,
+`StudioInspectorSchema.swift` and `StudioInspector.swift` (its MiniMax-H3
+controls in `StudioInspector+Video.swift`),
 `StudioAnalyzeSchema.swift` / `StudioAnalyzeResults.swift` and
 `StudioAnalyzeCanvas.swift` / `StudioAnalyzeViews.swift`,
 `StudioCommandRows.swift` and `StudioCommandView.swift`,
