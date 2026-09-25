@@ -42,6 +42,9 @@ public struct ASRBackendDecision: Sendable, Hashable, Codable {
 }
 
 public enum ASRBackendRouting {
+    /// Translation always needs Qwen. Otherwise an explicit backend wins; only an automatic
+    /// choice consults the language hint, which sends a language Parakeet does not list to Qwen.
+    /// Callers that name a model pass the model's backend as `preferredBackend`.
     public static func select(
         task: ASRTask,
         languageHint: String?,
@@ -61,7 +64,7 @@ public enum ASRBackendRouting {
             )
         }
 
-        if let raw = languageHint?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+        if preferredBackend == .auto, let raw = languageHint?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
             guard let normalizedHint else {
                 return pick(
                     preferred: .qwen,

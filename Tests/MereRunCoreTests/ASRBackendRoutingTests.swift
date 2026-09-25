@@ -40,6 +40,19 @@ final class ASRBackendRoutingTests: XCTestCase {
         XCTAssertEqual(decision.reason, "unsupported_language_for_parakeet")
     }
 
+    func testExplicitBackendOutranksTheLanguageHint() {
+        let decision = ASRBackendRouting.select(
+            task: .transcribe,
+            languageHint: "klingon-ish",
+            preferredBackend: .parakeet,
+            availableBackends: ASRBackendAvailability(parakeetAvailable: true, qwenAvailable: true),
+            parakeetSupportedLanguageCodes: ["fr"]
+        )
+
+        XCTAssertEqual(decision.backend, .parakeet)
+        XCTAssertEqual(decision.reason, "preferred_parakeet")
+    }
+
     func testUnknownExplicitLanguageHintRoutesToQwen() {
         let decision = ASRBackendRouting.select(
             task: .transcribe,

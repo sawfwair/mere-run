@@ -17,20 +17,29 @@ final class ParakeetCoreMLRoutingTests: XCTestCase {
         XCTAssertEqual(result.result.text, "Parakeet")
     }
 
-    func testDefaultProviderRetainsQwenLanguageFallback() async throws {
-        let result = try await CLIASRRouting.transcribe(
+    /// The language fallback to Qwen applies to an automatic choice; an explicit Parakeet keeps a
+    /// language its router does not list.
+    func testLanguageFallbackToQwenAppliesOnlyToAnAutomaticBackend() async throws {
+        let automatic = try await CLIASRRouting.transcribe(
             request: ASRRequest(audioURL: try audioFixture(), language: "zz"),
-            preferredBackend: .parakeet,
+            preferredBackend: .auto,
             executor: CoreMLRoutingProbe()
         )
-        XCTAssertEqual(result.backend, .qwen)
+        XCTAssertEqual(automatic.backend, .qwen)
+        let explicit = try await CLIASRRouting.transcribe(
+            request: ASRRequest(audioURL: try audioFixture(), language: "zz"),
+            preferredBackend: .parakeet,
+            parakeetExecutionProvider: .coreML(artifactURL: URL(fileURLWithPath: "/tmp/coreml")),
+            executor: CoreMLRoutingProbe()
+        )
+        XCTAssertEqual(explicit.backend, .parakeet)
     }
 
-    func testExplicitCoreMLProviderRejectsLanguageThatRoutesToQwen() async throws {
+    func testExplicitCoreMLProviderRejectsTranslationBeforeExecution() async throws {
         let executor = CoreMLRoutingProbe()
         do {
             _ = try await CLIASRRouting.transcribe(
-                request: ASRRequest(audioURL: try audioFixture(), language: "zz"),
+                request: ASRRequest(audioURL: try audioFixture(), task: .translate),
                 preferredBackend: .parakeet,
                 parakeetExecutionProvider: .coreML(artifactURL: URL(fileURLWithPath: "/tmp/coreml")),
                 executor: executor
