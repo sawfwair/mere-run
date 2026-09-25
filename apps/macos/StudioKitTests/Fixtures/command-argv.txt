@@ -2023,28 +2023,28 @@ speechProfileList	videoQuality=draft	speech profile list 1
 speechProfileList	videoQuality=final	speech profile list 1
 speechProfileList	voiceMode=clone	speech profile list 1
 speechSynthesize	default	speech synthesize 'Hello from mere.run.' --output ~/Music/mere.run/Voice/synthesize-<stamp>.wav --model speech-tts-qwen3-nano --voice 'A calm female voice with clear pronunciation' --temperature 0.7
-speechSynthesize	maximal	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	maximal-booleans-off	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 1
-speechSynthesize	modelRoot=video-minimax-h3-ref2va	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	modelRoot=video-wan22-ti2v-5b-mlx	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	musicLMMode=disable	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	musicLMMode=use	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	musicMIDINoteOffset=-12	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	musicTask=lego	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	musicTask=repaint	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	musicTrainingKind=lokr	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	renderProfile=quality	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	responseFormat=json_object	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	responseFormat=text	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	thinkingMode=automatic	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	thinkingMode=hide	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	thinkingMode=show	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	videoOutputMode=audio-video	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	videoOutputMode=video-only	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	videoQuality=draft	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	videoQuality=final	speech synthesize 1 --output 1 --model 1 --voice 1 --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechSynthesize	voiceMode=clone	speech synthesize 1 --output 1 --model 1 --voice 1 --mode clone --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
-speechTranscribe	default	speech transcribe '' --output ~/Documents/mere.run/Audio/transcribe-<stamp>.txt --backend auto --task transcribe --max-tokens 448
+speechSynthesize	maximal	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	maximal-booleans-off	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 1
+speechSynthesize	modelRoot=video-minimax-h3-ref2va	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	modelRoot=video-wan22-ti2v-5b-mlx	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	musicLMMode=disable	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	musicLMMode=use	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	musicMIDINoteOffset=-12	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	musicTask=lego	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	musicTask=repaint	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	musicTrainingKind=lokr	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	renderProfile=quality	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	responseFormat=json_object	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	responseFormat=text	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	thinkingMode=automatic	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	thinkingMode=hide	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	thinkingMode=show	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	videoOutputMode=audio-video	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	videoOutputMode=video-only	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	videoQuality=draft	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	videoQuality=final	speech synthesize 1 --output 1 --model 1 --voice 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechSynthesize	voiceMode=clone	speech synthesize 1 --output 1 --model 1 --mode clone --profile 1 --ref-audio 1 --ref-text 1 --save-profile 1 --language 1 --temperature 1.2 --stream --stream-chunk-tokens 26 --quiet 1
+speechTranscribe	default	speech transcribe '' --output ~/Documents/mere.run/Audio/transcribe-<stamp>.txt --backend auto --task transcribe
 speechTranscribe	maximal	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1
 speechTranscribe	maximal-booleans-off	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --input-format 1 --sample-rate 16001 --no-timestamps 1
 speechTranscribe	modelRoot=video-minimax-h3-ref2va	speech transcribe 1 --output 1 --model 1 --backend 1 --task 1 --max-tokens 449 --language 1 --stream --stream-chunk-ms 201 --stream-decode-ms 2001 --input-format 1 --sample-rate 16001 --jsonl --quiet 1

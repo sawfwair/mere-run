@@ -18,8 +18,6 @@ package enum StudioCommandChecks {
             return instantMeshMessage(draft: draft)
         case MereRunCapabilityCatalog.visionGeometryMultiview.id:
             return geometryMultiviewMessage(draft: draft)
-        case MereRunCapabilityCatalog.speechDiarize.id:
-            return diarizeMessage(draft: draft)
         case MereRunCapabilityCatalog.imageRunPlan.id:
             return runPlanMessage(draft: draft)
         case MereRunCapabilityCatalog.imageValidate.id:
@@ -67,15 +65,6 @@ package enum StudioCommandChecks {
                 return StudioCameraView(name: url.lastPathComponent, pixelSize: StudioPixelSize.of(url))
             })
         }
-    }
-
-    /// `speech diarize` rejects a streaming input buffer for any model but Nemotron 3, which
-    /// the Sortformer default is; the message names the fix before the CLI does.
-    private static func diarizeMessage(draft: StudioConsoleDraft) -> String? {
-        let latency = draft.text("--latency")
-        let model = draft.text("--model")
-        guard !latency.isEmpty, latency != "offline", !model.localizedCaseInsensitiveContains("nemotron") else { return nil }
-        return "Input buffer latency applies to Nemotron 3 only; choose Offline for \(model.isEmpty ? "Sortformer" : model)."
     }
 
     /// InstantMesh reconstructs from exactly four or six ordered views, and a supplied camera

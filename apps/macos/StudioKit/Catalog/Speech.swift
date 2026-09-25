@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 // MARK: - Speech templates
 
@@ -83,12 +84,17 @@ extension CommandArguments {
         args.value(draft.prompt)
         args.option(F.output, draft.outputPath)
         if !draft.model.isBlank { args.option(F.model, draft.model) }
-        if !draft.secondaryText.isBlank { args.option(F.voice, draft.secondaryText) }
-        if draft.voiceMode == "clone" { args.option(F.mode, "clone") }
-        if !draft.voiceProfile.isBlank { args.option(F.profile, draft.voiceProfile) }
-        if !draft.refAudioPath.isBlank { args.option(F.refAudio, draft.refAudioPath) }
-        if !draft.refText.isBlank { args.option(F.refText, draft.refText) }
-        if !draft.saveProfileName.isBlank { args.option(F.saveProfile, draft.saveProfileName) }
+        // `--mode` picks what the CLI reads: a voice description in style mode, a reference in
+        // clone mode.
+        if draft.voiceMode == "clone" {
+            args.option(F.mode, "clone")
+            if !draft.voiceProfile.isBlank { args.option(F.profile, draft.voiceProfile) }
+            if !draft.refAudioPath.isBlank { args.option(F.refAudio, draft.refAudioPath) }
+            if !draft.refText.isBlank { args.option(F.refText, draft.refText) }
+            if !draft.saveProfileName.isBlank { args.option(F.saveProfile, draft.saveProfileName) }
+        } else if !draft.secondaryText.isBlank {
+            args.option(F.voice, draft.secondaryText)
+        }
         if !draft.language.isBlank, draft.language != "auto" { args.option(F.language, draft.language) }
         args.option(F.temperature, format(draft.temperature))
         if draft.stream {
@@ -107,7 +113,8 @@ extension CommandArguments {
         if !draft.model.isBlank { args.option(F.model, draft.model) }
         args.option(F.backend, draft.backend)
         args.option(F.task, draft.task)
-        args.option(F.maxTokens, String(draft.maxTokens))
+        // Only Qwen3-ASR reads a token budget; Parakeet warns about one it would ignore.
+        args.optionUnlessDefault(F.maxTokens, String(draft.maxTokens))
         if !draft.language.isBlank, draft.language != "auto" { args.option(F.language, draft.language) }
         if draft.stream {
             args.flag(F.stream)
@@ -231,8 +238,8 @@ extension CommandCatalog {
             if !["offline", "1.04", "0.64", "0.32"].contains(latency) {
                 return "Nemotron 3 latency must be offline, 1.04, 0.64, or 0.32 seconds."
             }
-            if latency != "offline" && draft.model == "speech-diarization-sortformer" {
-                return "Custom diarization latency requires Nemotron 3."
+            if let refusal = capabilityGateRefusal(CommandArguments.speechDiarize(draft)) {
+                return refusal
             }
             if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
                 return "Diarization threshold must be between zero and one."
@@ -258,5 +265,13 @@ extension CommandCatalog {
             break
         }
         return nil
+    }
+
+    /// What the CLI's capability gate refuses in `arguments` before loading anything, in its own
+    /// words: a Sortformer run with a streaming input buffer, say. A local model folder the
+    /// contract cannot identify passes here, and the CLI checks it.
+    private static func capabilityGateRefusal(_ arguments: [String]) -> String? {
+        guard let (capability, rest) = MereRunCapabilityCatalog.capability(forCommandLine: arguments) else { return nil }
+        return capability.resolutionReport(MereRunCommandInvocation(capability: capability, arguments: rest)).violations.first
     }
 }
