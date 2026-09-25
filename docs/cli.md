@@ -900,7 +900,14 @@ Key options:
 - `--prompt`
 - `--system`
 - `--model`: canonical model id
-- `--model-root`: explicit local model root
+- `--model-root`: explicit local model root. It locates weights; the runtime
+  still comes from `--model` or the default model.
+- `--image`: for vision checkpoints only: `vision-chat-gemma4-12b`, Muse
+  Glimmer, Nemotron 3 Nano Omni, LFM2.5-VL, Bonsai 27B, the Ornith 1.5 35B
+  vision ids, and Qwen3.8
+- `--seed`: request seed for Qwen-family sampling and DiffusionGemma canvases
+- `--reasoning-effort`: 0 through 1 for Qwen3.8 and Muse Glimmer, 0 through
+  0.99 for Inkling-Small
 - `--max-tokens`
 - `--context-size`: maximum prompt plus generation context. Qwen3.8 and Bonsai
   27B use their published 262,144-token limit by default. Inkling-Small advertises
@@ -916,8 +923,9 @@ Key options:
 - `--min-p`: relative probability floor from 0 through 1; `0` disables it.
   For example, `0.05` removes tokens below 5% of the leading token's
   probability. It does not change greedy generation.
-- `--kv-bits`: native Qwen-family models accept affine 4-bit or 8-bit resident
-  KV caches. Gemma4 also supports its model-specific cache schemes.
+- `--kv-bits`: native Qwen-family, Inkling-Small, and LFM2.5 models accept
+  affine 4-bit or 8-bit resident KV caches. Gemma4 also supports its
+  model-specific cache schemes.
 - `--response-format text|json_object`: require a complete JSON object from a
   native MLX Gemma or Qwen-family model. JSON mode forces thinking off and
   validates each token before streaming.
@@ -952,6 +960,16 @@ variable disables color while retaining useful typography and structure.
 Native Gemma 4, Laguna XS 2.1, Inkling-Small, and LFM2.5 A1B adapters produced by
 `text train-lora` load directly in their matching runtime; `--lora-scale`
 scales the adapter.
+
+Before it resolves, downloads, or loads a model, `text chat` checks every option
+against the selected model's runtime. Options that runtime rejects, such as
+`--image` on a text-only checkpoint, `--lora` on Muse Glimmer, or
+`--response-format json_object` outside Gemma 4 and the Qwen family, fail with
+one message that names the runtimes that accept them. Options the runtime
+accepts but never reads, such as `--top-k` on Gemma 4 or `--tools` on the GGUF
+lane, print a `Warning:` line on stderr and the run continues. Companion
+drafters (`-mtp`, `-dflash`, `-dspark`, `-assistant`), the LTX text encoder,
+MeBot, and DeepSeek V4 Flash are refused with the command they do run.
 
 Examples:
 
@@ -1016,7 +1034,8 @@ loading the model. Gemma 4 and Laguna default to
 attention projections plus `gate_proj,up_proj,down_proj,lm_head`; expert MLPs
 use shared-outer factors to keep the 256-expert adapter tractable. Inkling
 `--reasoning-effort` accepts
-0 through 0.99 and is recorded in the training manifest. Use the same value for
+0 through 0.99 and is recorded in the training manifest; the other trainers
+warn that it has no effect. Use the same value for
 inference. See [Text Runtime](/runtime/text) for the full dataset,
 training-artifact, and behavioral validation flow.
 

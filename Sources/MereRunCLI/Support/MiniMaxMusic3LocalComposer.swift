@@ -43,7 +43,7 @@ enum MiniMaxMusic3LocalComposer {
         quiet: Bool
     ) async throws -> MiniMaxMusic3CompositionReceipt {
         let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        try TextChat.validate(responseFormat: .jsonObject, modelID: normalizedModelID)
+        // Constrained JSON decoding runs on Gemma 4 and the Qwen family only.
         guard Gemma4Resources.handles(modelSpec: normalizedModelID)
                 || Q35Resources.profile(for: normalizedModelID) != nil else {
             throw ValidationError(

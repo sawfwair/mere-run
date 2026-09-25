@@ -1,6 +1,14 @@
+import MereRunContract
 import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore
+
+private typealias ChatFamily = MereRunCapabilityCatalog.TextChatFamily
+
+/// The capability gate's decision for `text chat` with these arguments.
+private func gate(_ arguments: String...) throws -> MereRunFamilyResolutionReport {
+    try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: ["text", "chat", "--prompt", "hi"] + arguments)).report
+}
 
 final class TextChatCommandParsingTests: XCTestCase {
     func testTextChatDefaultsToNonStreamingCLIOutput() throws {
@@ -61,19 +69,24 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, DiffusionGemmaResources.maximumCanvasLength)
         XCTAssertEqual(cmd.seed, 123)
         XCTAssertTrue(cmd.showUnmasking)
-        XCTAssertNoThrow(try TextChat.validateDiffusionOptions(
-            seed: cmd.seed,
-            showUnmasking: cmd.showUnmasking,
-            modelID: cmd.model
-        ))
+        let report = try gate("--model", DiffusionGemmaResources.modelID, "--seed", "123", "--show-unmasking")
+        XCTAssertEqual(report.family, "diffusion-gemma")
+        XCTAssertEqual(report.violations, [])
     }
 
-    func testTextChatRejectsDiffusionOptionsForOtherModels() {
-        XCTAssertThrowsError(try TextChat.validateDiffusionOptions(
-            seed: 123,
-            showUnmasking: false,
-            modelID: Gemma4Resources.nanoModelId
-        ))
+    func testTextChatGateRejectsDiffusionOptionsForOtherModels() throws {
+        let report = try gate("--model", Gemma4Resources.nanoModelId, "--seed", "123", "--show-unmasking")
+        XCTAssertEqual(report.violations, [
+            "--seed is not supported by Gemma 4. It applies to DiffusionGemma, Qwen3.6 text, Qwen3.6 vision and Qwen3.8.",
+            "--show-unmasking is not supported by Gemma 4. It applies to DiffusionGemma."
+        ])
+    }
+
+    /// The Qwen-family runtimes honor a request seed for token sampling and MTP acceptance.
+    func testTextChatGateAcceptsSeedForQwenFamilyModels() throws {
+        for model in [Q35Resources.q36NanoModelId, Q35Resources.bonsai27B1BitModelId, Q35Resources.q38TwentySevenBModelId] {
+            XCTAssertEqual(try gate("--model", model, "--seed", "7").violations, [], model)
+        }
     }
 
     func testDiffusionDraftProgressUsesStderrWithoutMarkingFinalOutputStreamed() throws {
@@ -142,12 +155,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         ])
 
         XCTAssertEqual(cmd.responseFormat, .jsonObject)
-        XCTAssertNoThrow(
-            try TextChat.validate(
-                responseFormat: cmd.responseFormat,
-                modelID: cmd.model
-            )
-        )
+        XCTAssertEqual(try gate("--model", cmd.model, "--response-format", "json_object").violations, [])
     }
 
     func testTextChatRejectsJSONObjectResponseFormatForGGUF() throws {
@@ -157,16 +165,11 @@ final class TextChatCommandParsingTests: XCTestCase {
             "--prompt", "Return an object",
         ])
 
-        XCTAssertThrowsError(
-            try TextChat.validate(
-                responseFormat: cmd.responseFormat,
-                modelID: cmd.model
-            )
-        ) { error in
-            let message = String(describing: error)
-            XCTAssertTrue(message.contains("llama.cpp/GGUF"))
-            XCTAssertTrue(message.contains(Q35Resources.q36NanoModelId))
-        }
+        XCTAssertEqual(cmd.responseFormat, .jsonObject)
+        XCTAssertEqual(
+            try gate("--model", cmd.model, "--response-format", "json_object").violations,
+            ["--response-format json_object is not supported by llama.cpp GGUF; it runs text. Remove --response-format or pass text."]
+        )
     }
 
     func testTextChatParsesLoRAAdapterOptions() throws {
@@ -206,8 +209,9 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.model, InklingResources.modelID)
         XCTAssertEqual(command.contextSize, InklingResources.defaultContextLength)
         XCTAssertTrue(TextChat.backendDescription(for: command.model).contains("native MLX"))
-        XCTAssertThrowsError(
-            try TextChat.validate(responseFormat: .jsonObject, modelID: command.model)
+        XCTAssertEqual(
+            try gate("--model", command.model, "--response-format", "json_object").violations,
+            ["--response-format json_object is not supported by Inkling-Small; it runs text. Remove --response-format or pass text."]
         )
     }
 
@@ -219,17 +223,14 @@ final class TextChatCommandParsingTests: XCTestCase {
         ])
 
         XCTAssertEqual(command.reasoningEffort, 0.2)
-        XCTAssertNoThrow(
-            try TextChat.validateReasoningEffort(command.reasoningEffort, modelID: command.model)
+        XCTAssertEqual(try gate("--model", command.model, "--reasoning-effort", "0.2").violations, [])
+        XCTAssertEqual(
+            try gate("--model", command.model, "--reasoning-effort", "1").violations,
+            ["--reasoning-effort 1 is not supported by Inkling-Small; use a value from 0 to 0.99."]
         )
-        XCTAssertThrowsError(
-            try TextChat.validateReasoningEffort(1, modelID: command.model)
-        )
-        XCTAssertThrowsError(
-            try TextChat.validateReasoningEffort(
-                command.reasoningEffort,
-                modelID: Gemma4Resources.twelveB4BitModelId
-            )
+        XCTAssertEqual(
+            try gate("--model", Gemma4Resources.twelveB4BitModelId, "--reasoning-effort", "0.2").violations,
+            ["--reasoning-effort is not supported by Gemma 4. It applies to Inkling-Small, Muse Glimmer and Qwen3.8."]
         )
     }
 
@@ -245,26 +246,28 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.image, "/tmp/muse-glimmer-input.png")
         XCTAssertEqual(command.reasoningEffort, 1)
         XCTAssertTrue(TextChat.backendDescription(for: command.model).contains("native MLX"))
-        XCTAssertNoThrow(
-            try TextChat.validateReasoningEffort(command.reasoningEffort, modelID: command.model)
+        XCTAssertEqual(
+            try gate("--model", command.model, "--image", "a.png", "--reasoning-effort", "1").violations, []
         )
-        XCTAssertThrowsError(
-            try TextChat.validate(responseFormat: .jsonObject, modelID: command.model)
+        XCTAssertFalse(try gate("--model", command.model, "--response-format", "json_object").violations.isEmpty)
+        XCTAssertEqual(
+            try gate("--model", command.model, "--lora", "adapter.safetensors").violations,
+            ["--lora is not supported by Muse Glimmer. It applies to Gemma 4, Gemma 4 12B vision, Laguna, Inkling-Small, LFM2.5 and LFM2.5-VL."]
         )
     }
 
     func testQ38AcceptsContinuousReasoningEffort() throws {
-        XCTAssertNoThrow(
-            try TextChat.validateReasoningEffort(
-                0.5,
-                modelID: Q35Resources.q38TwentySevenB4BitModelId
-            )
+        XCTAssertEqual(try gate("--model", Q35Resources.q38TwentySevenB4BitModelId, "--reasoning-effort", "0.5").violations, [])
+        XCTAssertEqual(
+            try gate("--model", Q35Resources.q38TwentySevenBModelId, "--reasoning-effort", "1.1").violations,
+            ["--reasoning-effort 1.1 is not supported by Qwen3.8; use a value from 0 to 1."]
         )
-        XCTAssertThrowsError(
-            try TextChat.validateReasoningEffort(
-                1.1,
-                modelID: Q35Resources.q38TwentySevenBModelId
-            )
+    }
+
+    /// Nemotron 3 Nano Omni's chat template reads `reasoning_budget`, not `reasoning_effort`.
+    func testNemotronOmniStillRejectsReasoningEffort() throws {
+        XCTAssertFalse(
+            try gate("--model", NemotronOmniResources.modelID, "--reasoning-effort", "0.5").violations.isEmpty
         )
     }
 
@@ -298,9 +301,7 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.model, NemotronHResources.modelID)
         XCTAssertTrue(command.stats)
         XCTAssertTrue(TextChat.backendDescription(for: command.model).contains("native MLX"))
-        XCTAssertThrowsError(
-            try TextChat.validate(responseFormat: .jsonObject, modelID: command.model)
-        )
+        XCTAssertFalse(try gate("--model", command.model, "--response-format", "json_object").violations.isEmpty)
 
         let formatted = TextChat.formatNemotronDSparkStats(NemotronHDSparkStats(
             enabled: true,
@@ -515,7 +516,8 @@ final class TextChatCommandParsingTests: XCTestCase {
 
         XCTAssertEqual(cmd.model, Q35Resources.bonsai27B1BitModelId)
         XCTAssertEqual(cmd.contextSize, Q35Resources.bonsai27B1BitContextLength)
-        XCTAssertEqual(try cmd.resolveQ35KVCacheMode(for: cmd.model), .affine4)
+        XCTAssertEqual(try cmd.resolveKVCacheMode(for: .q35VL), .affine4)
+        XCTAssertEqual(try gate("--model", cmd.model, "--kv-bits", "4.0").violations, [])
         XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: cmd.model))
         XCTAssertEqual(Q35Resources.recommendedSampling(forModelId: cmd.model)?.temperature, 0.7)
         XCTAssertEqual(Q35Resources.recommendedSampling(forModelId: cmd.model)?.topP, 0.95)
@@ -530,9 +532,100 @@ final class TextChatCommandParsingTests: XCTestCase {
             "--kv-bits", "3",
         ])
 
-        XCTAssertThrowsError(try cmd.resolveQ35KVCacheMode(for: cmd.model)) { error in
-            XCTAssertTrue(String(describing: error).contains("must be 4 or 8"))
+        XCTAssertEqual(cmd.kvBits, 3)
+        XCTAssertEqual(
+            try gate("--model", cmd.model, "--kv-bits", "3").violations,
+            ["--kv-bits 3 is not supported by Qwen3.6 vision; use 4 or 8."]
+        )
+        XCTAssertEqual(
+            try gate("--model", cmd.model, "--kv-bits", "4", "--kv-group-size", "32").violations,
+            ["--kv-group-size is not supported by Qwen3.6 vision. It applies to Gemma 4 and Gemma 4 12B vision."]
+        )
+    }
+
+    /// Inkling and LFM2.5 build affine caches from the request's KV mode, like the Qwen family.
+    func testInklingAndLFM2ReceiveTheAffineKVCacheMode() throws {
+        for (model, family) in [(InklingResources.modelID, ChatFamily.inkling), (LFM2Resources.denseModelId, .lfm2),
+                                (LFM2Resources.visionModelId, .lfm2VL)] {
+            let cmd = try TextChat.parse(["--prompt", "hello", "--model", model, "--kv-bits", "8"])
+            XCTAssertEqual(try cmd.resolveKVCacheMode(for: family), .affine8, model)
+            let request = try cmd.resolvedChatRequest(modelID: model, messages: [ChatMessage(role: .user, content: "hello")])
+            XCTAssertEqual(request.kvCacheMode, .affine8, model)
         }
+        let lfm2 = LFM2Resources.denseModelId
+        XCTAssertEqual(try gate("--model", lfm2, "--kv-bits", "4").warnings, [])
+        XCTAssertEqual(
+            try gate("--model", lfm2, "--kv-bits", "4", "--kv-group-size", "32").warnings,
+            ["--kv-group-size has no effect with LFM2.5. It applies to Gemma 4 and Gemma 4 12B vision."]
+        )
+        let gemma = try TextChat.parse(["--prompt", "hello", "--model", Gemma4Resources.nanoModelId, "--kv-bits", "4"])
+        XCTAssertNil(try gemma.resolveKVCacheMode(for: .gemma4), "Gemma 4 takes its own quantization settings")
+    }
+
+    /// Before the KV plumbing, Inkling and LFM2.5 accepted any width and a scheme alone as no-ops.
+    /// They still run, with a warning and a full-precision cache.
+    func testInklingAndLFM2KeepRunningOtherKVOptionsWithoutEffect() throws {
+        for (model, family, title) in [(InklingResources.modelID, ChatFamily.inkling, "Inkling-Small"),
+                                        (LFM2Resources.denseModelId, .lfm2, "LFM2.5"),
+                                        (LFM2Resources.visionModelId, .lfm2VL, "LFM2.5-VL")] {
+            let width = try gate("--model", model, "--kv-bits", "3")
+            XCTAssertEqual(width.violations, [], model)
+            XCTAssertEqual(width.warnings, ["--kv-bits 3 has no effect with \(title); use 4 or 8."])
+            let threeBit = try TextChat.parse(["--prompt", "hello", "--model", model, "--kv-bits", "3"])
+            XCTAssertNil(try threeBit.resolveKVCacheMode(for: family), model)
+            let request = try threeBit.resolvedChatRequest(modelID: model, messages: [ChatMessage(role: .user, content: "hello")])
+            XCTAssertNil(request.kvCacheMode, model)
+
+            let scheme = try gate("--model", model, "--kv-quant-scheme", "polar")
+            XCTAssertEqual(scheme.violations, [], model)
+            XCTAssertEqual(scheme.warnings, [
+                "--kv-quant-scheme has no effect with \(title). It applies to Gemma 4, Gemma 4 12B vision, "
+                    + "Qwen3.6 text, Qwen3.6 vision and Qwen3.8."
+            ])
+            let schemeOnly = try TextChat.parse(["--prompt", "hello", "--model", model, "--kv-quant-scheme", "uniform"])
+            XCTAssertNil(try schemeOnly.resolveKVCacheMode(for: family), model)
+        }
+    }
+
+    func testQwenKVSchemeStillNeedsAWidth() throws {
+        let cmd = try TextChat.parse([
+            "--prompt", "hello", "--model", Q35Resources.q36NanoModelId, "--kv-quant-scheme", "uniform"
+        ])
+        XCTAssertThrowsError(try cmd.resolveKVCacheMode(for: .q35)) { error in
+            XCTAssertTrue(String(describing: error).contains("require --kv-bits 4 or --kv-bits 8"))
+        }
+    }
+
+    /// Images on a text-only checkpoint failed after the load; the gate refuses them first. Where
+    /// the runtime never reads them they only warn.
+    func testTextChatGateScopesImagesByCheckpoint() throws {
+        for model in [Gemma4Resources.twelveB4BitModelId, InklingResources.modelID, LFM2Resources.denseModelId, Q35Resources.q36NanoModelId] {
+            XCTAssertEqual(try gate("--model", model, "--image", "a.png").violations.count, 1, model)
+        }
+        for model in [Gemma4Resources.visionTwelveBModelId, LFM2Resources.visionModelId, Q35Resources.bonsai2ModelId,
+                      NemotronOmniResources.modelID] {
+            let report = try gate("--model", model, "--image", "a.png")
+            XCTAssertEqual(report.violations, [], model)
+            XCTAssertEqual(report.warnings, [], model)
+        }
+        XCTAssertEqual(
+            try gate("--model", NemotronHResources.modelID, "--image", "a.png").warnings,
+            ["--image has no effect with Nemotron 3.5 Lightning. It applies to Gemma 4 12B vision, Muse Glimmer, Nemotron 3 Nano Omni, LFM2.5-VL, Qwen3.6 vision and Qwen3.8."]
+        )
+    }
+
+    func testTextChatGateDefaultsAndExcludedModels() throws {
+        let blank = try gate()
+        XCTAssertEqual(blank.family, "gemma4")
+        XCTAssertEqual(blank.source, .defaultModel)
+        // --model-root locates weights; the family still comes from the default model.
+        XCTAssertEqual(try gate("--model-root", "/tmp/weights", "--image", "a.png").violations.count, 1)
+        XCTAssertEqual(
+            try gate("--model", "text-agent-deepseek-v4-flash").violations,
+            ["text-agent-deepseek-v4-flash can't run text chat: DeepSeek V4 Flash runs on its llama.cpp server; use `api serve` or `agent start`."]
+        )
+        XCTAssertEqual(try gate("--model", "text-chat-mebot").source, .excluded)
+        XCTAssertEqual(try gate("--model", "text-chat-lfm25-a1b-dspark").source, .excluded)
     }
 }
 

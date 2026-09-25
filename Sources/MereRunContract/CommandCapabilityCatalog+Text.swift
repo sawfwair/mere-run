@@ -9,27 +9,35 @@ extension MereRunCapabilityCatalog {
         options: [
             .init(
                 flag: "--audio", label: "Audio", kind: .file, group: Group.inputs, tier: .expert
-            ),
+            ).scoped(Chat.only(.nemotronOmni, ignoredBy: Chat.allCases.filter { ![.nemotronOmni, .diffusionGemma].contains($0) })),
             .init(
                 flag: "--video", label: "Video", kind: .file, group: Group.inputs, tier: .expert
-            ),
+            ).scoped(Chat.only(.nemotronOmni, ignoredBy: Chat.allCases.filter { ![.nemotronOmni, .diffusionGemma].contains($0) })),
             .init(
                 flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert
-            ),
+            ).scoped(Chat.only(.diffusionGemma, .q35, .q35VL, .q38)),
             .init(
                 flag: "--show-unmasking", label: "Show canvas drafts", kind: .boolean, group: Group.run, tier: .expert
-            ),
+            ).scoped(Chat.only(.diffusionGemma)),
             .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string, required: true, group: Group.prompt, tier: .essential),
-            .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard),
+            .init(flag: "--image", label: "Image", kind: .file, group: Group.inputs, tier: .standard)
+                .scoped(Chat.only(
+                    .gemma4Unified, .museGlimmer, .nemotronOmni, .lfm2VL, .q35VL, .q38,
+                    ignoredBy: [.laguna, .nemotronH, .gguf, .psi]
+                )),
             .init(flag: "--system", aliases: ["-s"], label: "System prompt", kind: .string, group: Group.prompt, tier: .standard),
             .init(
                 flag: "--max-tokens", label: "Max tokens", kind: .integer,
                 defaultValue: "2048", group: Group.sampling, tier: .standard,
                 range: .init(min: 1, max: 131_072, step: 1)
             ),
+            // LFM2.5 caps the context at 32768 tokens whatever is asked for.
             .init(
                 flag: "--context-size", label: "Context size", kind: .integer,
                 group: Group.sampling, tier: .expert, range: .init(min: 512, max: 1_048_576, step: 1)
+            ).scoped(
+                Chat.rule(.lfm2, range: .init(min: 512, max: 32_768, step: 1), severity: .warning),
+                .rule(.lfm2VL, range: .init(min: 512, max: 32_768, step: 1), severity: .warning)
             ),
             .init(
                 flag: "--temperature", label: "Temperature", kind: .number,
@@ -38,54 +46,89 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--top-p", label: "Top-p", kind: .number,
                 group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
-            ),
+            ).scoped(Chat.except(ignoredBy: [.diffusionGemma])),
             .init(
                 flag: "--top-k", label: "Top-k", kind: .integer,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1_000, step: 1)
-            ),
+            ).scoped(Chat.except(ignoredBy: [.gemma4, .gemma4Unified, .diffusionGemma, .gguf, .psi])),
             .init(
                 flag: "--min-p", label: "Min-p", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
-            ),
+            ).scoped(Chat.except(ignoredBy: [.diffusionGemma])),
+            // Gemma 4 takes fractional TurboQuant widths; the affine runtimes take 4 or 8. The Qwen
+            // family refuses other widths, while Inkling and LFM2.5 run with a full-precision cache.
             .init(
-                flag: "--kv-bits", label: "KV bits", kind: .integer,
-                group: Group.run, tier: .expert, range: .init(min: 2, max: 8, step: 1)
+                flag: "--kv-bits", label: "KV bits", kind: .number,
+                group: Group.run, tier: .expert, range: .init(min: 2, max: 8, step: 0.5)
+            ).scoped(
+                Chat.only(.gemma4, .gemma4Unified, .inkling, .lfm2, .lfm2VL, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring),
+                .rule(.inkling, values: ["4", "8"], severity: .warning),
+                .rule(.lfm2, values: ["4", "8"], severity: .warning),
+                .rule(.lfm2VL, values: ["4", "8"], severity: .warning),
+                .rule(.q35, values: ["4", "8"]), .rule(.q35VL, values: ["4", "8"]), .rule(.q38, values: ["4", "8"])
             ),
+            // Gemma 4 Turbo quantizes its KV cache by default, so the scheme, group size, and start
+            // apply there without --kv-bits. Inkling and LFM2.5 only ever use the affine scheme.
             .init(
                 flag: "--kv-quant-scheme",
                 label: "KV quantization",
                 kind: .choice,
                 choices: ["uniform", "polar", "turboquant"],
-                group: Group.run, tier: .expert, dependsOn: "--kv-bits"
+                group: Group.run, tier: .expert
+            ).scoped(
+                Chat.only(.gemma4, .gemma4Unified, .q35, .q35VL, .q38, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL]),
+                .rule(.q35, values: ["uniform"]), .rule(.q35VL, values: ["uniform"]), .rule(.q38, values: ["uniform"])
             ),
+            // The affine runtimes choose their own group size and start; Inkling and LFM2.5 never
+            // read them, and the Qwen family refuses them.
             .init(
                 flag: "--kv-group-size", label: "KV group size", kind: .integer,
-                group: Group.run, tier: .expert, dependsOn: "--kv-bits"
-            ),
+                group: Group.run, tier: .expert
+            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL])),
             .init(
                 flag: "--quantized-kv-start", label: "Quantized KV start", kind: .integer,
-                group: Group.run, tier: .expert, range: .init(min: 0, step: 1), dependsOn: "--kv-bits"
-            ),
+                group: Group.run, tier: .expert, range: .init(min: 0, step: 1)
+            ).scoped(Chat.only(.gemma4, .gemma4Unified, ignoredBy: kvCacheIgnoring + [.inkling, .lfm2, .lfm2VL])),
             .init(flag: "--model-root", aliases: ["-m"], label: "Model root", kind: .directory, group: Group.modelAndAdapters, tier: .expert),
             .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            // Constrained JSON decoding runs on Gemma 4 and the Qwen-family runtimes only.
             .init(
                 flag: "--response-format",
                 label: "Response format",
                 kind: .choice,
                 choices: TextResponseFormat.allCases.map(\.rawValue),
                 defaultValue: TextResponseFormat.text.rawValue, group: Group.output, tier: .standard
+            ).scoped(
+                Chat.rule(.diffusionGemma, values: ["text"]), .rule(.laguna, values: ["text"]),
+                .rule(.inkling, values: ["text"]), .rule(.museGlimmer, values: ["text"]),
+                .rule(.nemotronH, values: ["text"]), .rule(.nemotronOmni, values: ["text"]),
+                .rule(.lfm2, values: ["text"]), .rule(.lfm2VL, values: ["text"]),
+                .rule(.gguf, values: ["text"]), .rule(.psi, values: ["text"])
             ),
-            .init(flag: "--lora", label: "LoRA", kind: .file, group: Group.modelAndAdapters, tier: .standard),
+            .init(flag: "--lora", label: "LoRA", kind: .file, group: Group.modelAndAdapters, tier: .standard)
+                .scoped(Chat.only(
+                    .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2, .lfm2VL,
+                    ignoredBy: [.q35, .q35VL, .q38, .gguf, .psi]
+                )),
+            // Without --lora the scale does nothing anywhere, so it never fails on its own.
             .init(
                 flag: "--lora-scale", label: "LoRA scale", kind: .number,
                 defaultValue: "1.0", group: Group.modelAndAdapters, tier: .standard,
                 range: .init(min: 0, max: 2, step: 0.05), dependsOn: "--lora"
-            ),
+            ).scoped(Chat.only(
+                .gemma4, .gemma4Unified, .laguna, .inkling, .lfm2, .lfm2VL,
+                ignoredBy: [.diffusionGemma, .museGlimmer, .nemotronH, .nemotronOmni, .q35, .q35VL, .q38, .gguf, .psi]
+            )),
             .init(flag: "--thinking", aliases: ["--show-thinking"], label: "Show thinking", kind: .boolean, group: Group.sampling, tier: .standard),
             .init(flag: "--no-thinking", aliases: ["--no-show-thinking"], label: "Disable thinking", kind: .boolean, group: Group.sampling, tier: .standard),
             .init(
-                flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number,
+                flag: "--reasoning-effort", label: "Reasoning effort", kind: .number,
                 group: Group.sampling, tier: .expert, range: .init(min: 0, max: 1, step: 0.01)
+            ).scoped(
+                Chat.only(.inkling, .museGlimmer, .q38),
+                .rule(.inkling, range: .init(min: 0, max: 0.99, step: 0.01)),
+                .rule(.museGlimmer, range: .init(min: 0, max: 1, step: 0.01)),
+                .rule(.q38, range: .init(min: 0, max: 1, step: 0.01))
             ),
             .init(flag: "--stats", label: "Stats", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .standard),
@@ -99,31 +142,43 @@ extension MereRunCapabilityCatalog {
                 tier: .standard,
                 dependsOn: "--stream"
             ),
-            .init(flag: "--tools", label: "Tools", kind: .string, group: Group.run, tier: .expert),
-            .init(flag: "--tool-loop", label: "Tool loop", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--tools"),
+            // The GGUF and Psi runtimes never see tool definitions, so no tool call comes back.
+            .init(flag: "--tools", label: "Tools", kind: .string, group: Group.run, tier: .expert)
+                .scoped(Chat.except(ignoredBy: [.gguf, .psi])),
+            .init(flag: "--tool-loop", label: "Tool loop", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--tools")
+                .scoped(Chat.except(ignoredBy: [.gguf, .psi])),
             .init(
                 flag: "--sandbox-dir", label: "Sandbox directory", kind: .directory,
                 group: Group.run, tier: .expert, dependsOn: "--tools"
-            ),
+            ).scoped(Chat.except(ignoredBy: [.gguf, .psi])),
             .init(
                 flag: "--allow-shell-exec", label: "Allow shell", kind: .boolean,
                 group: Group.run, tier: .expert, dependsOn: "--tools"
-            ),
+            ).scoped(Chat.except(ignoredBy: [.gguf, .psi])),
             .init(
                 flag: "--allow-absolute-tool-paths", label: "Allow absolute paths", kind: .boolean,
                 group: Group.run, tier: .expert, dependsOn: "--tools"
-            ),
+            ).scoped(Chat.except(ignoredBy: [.gguf, .psi])),
             .init(
                 flag: "--auto-approve-tools", label: "Auto-approve tools", kind: .boolean,
                 group: Group.run, tier: .expert, dependsOn: "--tools"
-            ),
+            ).scoped(Chat.except(ignoredBy: [.gguf, .psi])),
             .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
             .init(flag: "--require-installed", label: "Require installed", kind: .boolean, group: Group.run, tier: .expert)
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text),
+        routing: textChatRouting
     )
+
+    private typealias Chat = TextChatFamily
+    private typealias Training = TextTrainLoRAFamily
+
+    /// Families whose runtime keeps its own KV cache whatever the KV options say.
+    private static let kvCacheIgnoring: [Chat] = [
+        .diffusionGemma, .laguna, .museGlimmer, .nemotronH, .nemotronOmni, .gguf, .psi
+    ]
 
     public static let textCode = MereRunCommandCapability(
         id: "text.code",
@@ -233,19 +288,35 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--eval", label: "Eval prompts", kind: .file),
             .init(flag: "--adapter-name", label: "Adapter name", kind: .string),
             .init(flag: "--training-steps", aliases: ["--steps"], label: "Training steps", kind: .integer),
-            .init(flag: "--batch-size", label: "Batch size", kind: .integer),
+            .init(flag: "--batch-size", label: "Batch size", kind: .integer)
+                .scoped(Training.rule(.gemma4VLM, values: ["1"])),
             .init(flag: "--learning-rate", aliases: ["--lr"], label: "Learning rate", kind: .number),
             .init(flag: "--rank", label: "Rank", kind: .integer),
             .init(flag: "--alpha", label: "Alpha", kind: .number),
             .init(flag: "--max-sequence-length", label: "Sequence length", kind: .integer),
-            .init(flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number),
+            // Only Inkling's chat renderer takes an effort; the other trainers render without one.
+            .init(
+                flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number,
+                range: .init(min: 0, max: 0.99, step: 0.01)
+            ).scoped(Training.only(.inkling, ignoredBy: [.gemma4, .gemma4VLM, .lagunaXS, .lfm2A1B])),
             .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--target-modules", label: "Target modules", kind: .string),
+            .init(flag: "--target-modules", label: "Target modules", kind: .string)
+                .scoped(
+                    Training.rule(.gemma4, defaultValue: attentionTargets),
+                    .rule(.gemma4VLM, defaultValue: attentionTargets),
+                    .rule(.lagunaXS, defaultValue: attentionTargets),
+                    .rule(.inkling, defaultValue: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj,lm_head"),
+                    .rule(.lfm2A1B, defaultValue: "q_proj,k_proj,v_proj,out_proj")
+                ),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--visualize", label: "Visualize", kind: .boolean),
             .init(flag: "--visualize-port", label: "Visualization port", kind: .integer),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output"),
+        routing: textTrainLoRARouting
     )
+
+    /// The attention projections Gemma 4 and Laguna train by default.
+    private static let attentionTargets = "q_proj,k_proj,v_proj,o_proj"
 }
