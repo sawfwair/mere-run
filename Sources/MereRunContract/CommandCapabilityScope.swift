@@ -121,7 +121,7 @@ extension MereRunCommandCapability {
             return resolveBySelectors(invocation, routing: routing, platform: platform, identify: identify)
         }
         guard let model = modelValue(invocation, flags: routing.modelFlags) else {
-            return resolveDefault(invocation, routing: routing, platform: platform)
+            return resolveDefault(invocation, routing: routing, platform: platform, identify: identify)
         }
         return resolve(model: model, invocation, routing: routing, identify: identify, allowIdentify: true)
     }
@@ -237,7 +237,8 @@ extension MereRunCommandCapability {
         }
         switch identification {
         case .managedModel(let managed):
-            switch resolve(model: managed, invocation, routing: routing, identify: identify, allowIdentify: false) {
+            let identifiable = routing.identifiedModels.contains(managed)
+            switch resolve(model: managed, invocation, routing: routing, identify: identify, allowIdentify: identifiable) {
             case .family(let id, _, let source):
                 return .family(id: id, model: managed, source: source)
             case .unidentified:
@@ -257,12 +258,19 @@ extension MereRunCommandCapability {
     private func resolveDefault(
         _ invocation: MereRunCommandInvocation,
         routing: MereRunCapabilityRouting,
-        platform: String
+        platform: String,
+        identify: (String) -> MereRunModelIdentification?
     ) -> MereRunFamilyResolution {
         guard let rule = routing.defaultModels.first(where: { rule in
             rule.applies(on: platform) && (rule.whenAny.isEmpty || rule.whenAny.contains { holds($0, invocation, family: nil) })
         }) else {
             return .unmatched(model: nil, detail: "\(command.joined(separator: " ")) has no default model on \(platform).")
+        }
+        if rule.family == nil, rule.models.count == 1, let model = rule.models.first, routing.identifiedModels.contains(model) {
+            switch resolve(model: model, invocation, routing: routing, identify: identify, allowIdentify: true) {
+            case let .family(id, model, _): return .family(id: id, model: model, source: .defaultModel)
+            case let other: return other
+            }
         }
         var familyIDs = rule.family.map { [$0] }
             ?? Array(Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) }))

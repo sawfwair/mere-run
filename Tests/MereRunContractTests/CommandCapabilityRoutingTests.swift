@@ -38,6 +38,11 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
         #expect(routing.excludedModels.allSatisfy { !$0.reason.isEmpty }, "\(id): excluded models need a reason")
         let listed = Set(routing.families.flatMap(\.models))
         #expect(listed.isDisjoint(with: excluded), "\(id): \(listed.intersection(excluded)) are both listed and excluded")
+        let identified = Set(routing.identifiedModels)
+        #expect(identified.count == routing.identifiedModels.count, "\(id): duplicate identified ids")
+        #expect(identified.isDisjoint(with: listed.union(excluded)),
+                "\(id): \(identified.intersection(listed.union(excluded))) are identified and also listed or excluded")
+        #expect(identified.isEmpty || !routing.modelFlags.isEmpty, "\(id): identified models need a model flag")
     }
 }
 
@@ -56,7 +61,10 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
 
 @Test func everyFamilyIsReachable() {
     for (capability, routing) in routed {
-        for family in routing.families where family.models.isEmpty && !routing.routesBySelectors {
+        // A family reached only through an identified model is checked by the CLI's identifier
+        // tests, which know which checkpoints each identified model can land on.
+        for family in routing.families where family.models.isEmpty && !routing.routesBySelectors
+            && routing.identifiedModels.isEmpty {
             #expect(
                 routing.defaultModels.contains { $0.family == family.id },
                 "\(capability.id) \(family.id) lists no model, so a default rule has to name it"
@@ -68,6 +76,9 @@ private let routed = MereRunCapabilityCatalog.document.commands.compactMap { cap
 @Test func everyDefaultRuleResolvesToOneFamilyOnMacOS() {
     for (capability, routing) in routed {
         for rule in routing.defaultModels where rule.applies(on: "macos") {
+            if rule.family == nil, rule.models.count == 1, routing.identifiedModels.contains(rule.models[0]) {
+                continue  // the identifier answers it, as for an explicit --model
+            }
             let families = rule.family.map { [$0] }
                 ?? Array(Set(rule.models.flatMap { model in routing.families.filter { $0.models.contains(model) }.map(\.id) }))
             #expect(families.count == 1, "\(capability.id): default \(rule.models) resolves to \(families)")
@@ -289,6 +300,53 @@ private func invocation(_ arguments: String...) -> MereRunCommandInvocation {
         model: "reader-infinity",
         detail: "reader-infinity runs on Infinity, not LightOn; change the model or the selector flags."
     ))
+}
+
+/// A model whose checkpoint depends on what is installed resolves only through `identify`, as an
+/// explicit model and as a default; without an answer it stays unidentified for a shell to ask
+/// `catalog resolve`.
+@Test func identifiedModelsResolveThroughTheIdentifier() throws {
+    enum ReelFamily: String, MereRunFamilyID { case draft, full }
+    let reel = MereRunCommandCapability(
+        id: "reel.render", command: ["reel", "render"], title: "Reel", summary: "A test capability.",
+        options: [
+            MereRunCapabilityOption(flag: "--model", label: "Model", kind: .string),
+            MereRunCapabilityOption(flag: "--final", label: "Final", kind: .boolean)
+        ],
+        output: .init(kind: .text),
+        routing: MereRunCapabilityRouting(
+            modelFlags: ["--model"],
+            defaultModels: [.init(whenAny: [.init(flag: "--final")], models: ["reel-any"]), .always("reel-draft")],
+            families: [
+                .init(ReelFamily.draft, title: "Draft", models: ["reel-draft"]),
+                .init(ReelFamily.full, title: "Full", models: [])
+            ],
+            identifiedModels: ["reel-any"]
+        )
+    )
+    let installed: (String) -> MereRunModelIdentification? = { model in
+        switch model {
+        case "reel-any": .family("full")
+        case "Reel-Any": .managedModel("reel-any")
+        default: nil
+        }
+    }
+    let resolve = { (arguments: [String], identify: (String) -> MereRunModelIdentification?) in
+        reel.resolveFamily(MereRunCommandInvocation(capability: reel, arguments: arguments), identify: identify)
+    }
+    #expect(resolve(["--model", "reel-any"], installed) == .family(id: "full", model: "reel-any", source: .identified))
+    #expect(resolve(["--model", "Reel-Any"], installed) == .family(id: "full", model: "reel-any", source: .identified))
+    #expect(resolve(["--final"], installed) == .family(id: "full", model: "reel-any", source: .defaultModel))
+    #expect(resolve(["--final"], { _ in nil }) == .unidentified(model: "reel-any"))
+    #expect(resolve(["--model", "reel-any"], { _ in nil }) == .unidentified(model: "reel-any"))
+    #expect(resolve([], { _ in nil }) == .family(id: "draft", model: "reel-draft", source: .defaultModel))
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let json = String(decoding: try encoder.encode(try #require(reel.routing)), as: UTF8.self)
+    #expect(json.contains(#""identified_models":["reel-any"]"#))
+    #expect(try JSONDecoder().decode(MereRunCapabilityRouting.self, from: Data(json.utf8)) == reel.routing)
+    #expect(!String(decoding: try encoder.encode(try #require(clip.routing)), as: UTF8.self).contains("identified_models"))
 }
 
 /// One model in two families split by a flag's absence: the embedded-adapter family without the

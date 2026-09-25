@@ -121,6 +121,10 @@ private func resolve(
                 #expect(commands.contains(capability.id), "\(model) runs \(capability.id) but does not list it")
             }
         }
+        for model in routing.identifiedModels {
+            #expect(ManagedModelCatalog.spec(for: model)?.id == model,
+                    "\(capability.id) identifies \(model), which is not a managed model")
+        }
         for excluded in routing.excludedModels {
             #expect(ManagedModelCatalog.spec(for: excluded.id)?.id == excluded.id,
                     "\(capability.id) excludes \(excluded.id), which is not a managed model")

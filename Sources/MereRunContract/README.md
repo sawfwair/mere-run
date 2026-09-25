@@ -90,7 +90,9 @@ it, each with its managed model ids and any `selectors` (flag values that pick
 the family, such as `--backend qwen`, or a flag that must be `absent`); the `model_flags` whose value names the
 model, highest precedence first; `default_models` rules for a blank model; and
 `excluded_models`, managed models a picker might offer that can't run the
-command, each with a `reason`. Single-runtime commands declare one family.
+command, each with a `reason`; and `identified_models`, managed models whose
+family depends on which checkpoint is installed, which only the CLI's
+identifier (or `catalog resolve`) can answer. Single-runtime commands declare one family.
 Commands without a model, and the multi-runtime commands still being scoped,
 omit `routing`. Each domain keeps its routing in
 `CommandCapabilityCatalog+<Domain>Routing.swift`.

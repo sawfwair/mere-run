@@ -93,13 +93,37 @@ private func minimalArguments(
         guard let flag = family.modelFlag ?? routing.modelFlags.last else { return nil }
         arguments += [flag, model]
     } else if !routing.routesBySelectors {
-        guard let rule = routing.defaultModels.first(where: { $0.family == family.id }) else { return nil }
-        arguments += rule.whenAny.first.map { [$0.flag] + ($0.values.map { [$0[0]] } ?? []) } ?? []
+        if let rule = routing.defaultModels.first(where: { $0.family == family.id }) {
+            arguments += rule.whenAny.first.map { [$0.flag] + ($0.values.map { [$0[0]] } ?? []) } ?? []
+        } else if !routing.identifiedModels.isEmpty, let flag = routing.modelFlags.last {
+            arguments += [flag, identifiedPlaceholder + family.id]
+        } else {
+            return nil
+        }
     }
     for option in capability.options where option.familyRules.contains(where: { $0.family == family.id && $0.required }) {
         arguments += tokens(option, value: validValue(option, rule: option.familyRules.first { $0.family == family.id }))
     }
     return arguments
+}
+
+/// Stands for a checkpoint of the named family in a capability whose family is known only once
+/// the CLI's identifier inspects what is installed (`routing.identifiedModels`). The identifier's
+/// own answers are tested against fixture folders by each domain; these cases test the scope.
+private let identifiedPlaceholder = "identified-family:"
+
+/// The gate's report for a generated command line: the CLI gate's, with the identifier answering
+/// placeholders for the family they name.
+private func gateReport(_ capability: MereRunCommandCapability, _ arguments: [String]) -> MereRunFamilyResolutionReport {
+    guard arguments.contains(where: { $0.hasPrefix(identifiedPlaceholder) }) else {
+        return CLICapabilityGate.evaluate(commandLine: capability.command + arguments)!.report
+    }
+    let invocation = MereRunCommandInvocation(capability: capability, arguments: arguments)
+    return capability.resolutionReport(invocation, platform: CLICapabilityGate.platform) { model in
+        model.hasPrefix(identifiedPlaceholder)
+            ? .family(String(model.dropFirst(identifiedPlaceholder.count)))
+            : ModelFamilyIdentifier.identify(capabilityID: capability.id, model: model, invocation: invocation)
+    }
 }
 
 /// The tokens that make `condition` hold: none for an absent flag, the flag for a Boolean, and
@@ -174,10 +198,8 @@ private func expect(
             return nil
         })
         #expect(families == Set(capability.routing?.families.map(\.id) ?? []), "\(capability.id): every family gets a case")
-        expect(cases, evaluate: { arguments in
-            CLICapabilityGate.evaluate(commandLine: capability.command + arguments)!.report
-        }, context: capability.id)
-        for gateCase in cases {
+        expect(cases, evaluate: { arguments in gateReport(capability, arguments) }, context: capability.id)
+        for gateCase in cases where !gateCase.arguments.contains(where: { $0.hasPrefix(identifiedPlaceholder) }) {
             let argv = ["mere.run"] + capability.command + gateCase.arguments
             if case .rejects = gateCase.expectation {
                 #expect(throws: CLICapabilityGate.Rejection.self, "\(capability.id): \(gateCase)") {

@@ -15,24 +15,51 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// Managed models that list this command, or that its pickers would otherwise offer, but
     /// that cannot run it. Resolving to one is an error that names `reason`.
     public let excludedModels: [MereRunExcludedModel]
+    /// Managed models that run this command on whichever checkpoint the command finds installed,
+    /// so no family lists them: `video-ltx-av` can run an installed LTX 2.3 Full folder. The
+    /// resolver asks `identify` for them, as a default too, and reports them unidentified when it
+    /// can't answer; shells then ask `catalog resolve`.
+    public let identifiedModels: [String]
 
     enum CodingKeys: String, CodingKey {
         case modelFlags = "model_flags"
         case defaultModels = "default_models"
         case families
         case excludedModels = "excluded_models"
+        case identifiedModels = "identified_models"
     }
 
     public init(
         modelFlags: [String],
         defaultModels: [MereRunDefaultModelRule] = [],
         families: [MereRunRuntimeFamily],
-        excludedModels: [MereRunExcludedModel] = []
+        excludedModels: [MereRunExcludedModel] = [],
+        identifiedModels: [String] = []
     ) {
         self.modelFlags = modelFlags
         self.defaultModels = defaultModels
         self.families = families
         self.excludedModels = excludedModels
+        self.identifiedModels = identifiedModels
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        modelFlags = try container.decode([String].self, forKey: .modelFlags)
+        defaultModels = try container.decode([MereRunDefaultModelRule].self, forKey: .defaultModels)
+        families = try container.decode([MereRunRuntimeFamily].self, forKey: .families)
+        excludedModels = try container.decode([MereRunExcludedModel].self, forKey: .excludedModels)
+        identifiedModels = try container.decodeIfPresent([String].self, forKey: .identifiedModels) ?? []
+    }
+
+    /// `identified_models` is written only when non-empty, so other routing serializes as before.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(modelFlags, forKey: .modelFlags)
+        try container.encode(defaultModels, forKey: .defaultModels)
+        try container.encode(families, forKey: .families)
+        try container.encode(excludedModels, forKey: .excludedModels)
+        if !identifiedModels.isEmpty { try container.encode(identifiedModels, forKey: .identifiedModels) }
     }
 
     public func family(id: String) -> MereRunRuntimeFamily? {
