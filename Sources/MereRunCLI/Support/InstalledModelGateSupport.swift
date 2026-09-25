@@ -7,9 +7,10 @@ import MereRunCore
 import FoundationNetworking
 #endif
 
-private struct InstalledDeepSeekBenchmarkReport: Decodable {
+struct InstalledDeepSeekBenchmarkReport: Decodable {
     struct ModelResult: Decodable {
         struct BenchmarkCase: Decodable {
+            let passed: Bool
             let tokensGenerated: Int
             let response: String?
             let error: String?
@@ -23,6 +24,25 @@ private struct InstalledDeepSeekBenchmarkReport: Decodable {
     }
 
     let models: [ModelResult]
+
+    func hasPassingResponse(for model: String) -> Bool {
+        guard models.count == 1,
+              let result = models.first,
+              result.model == model,
+              result.engine == "deepseek-v4-flash-gguf",
+              result.status == "completed",
+              result.error == nil,
+              result.cases.count == 1,
+              let benchmarkCase = result.cases.first,
+              benchmarkCase.passed,
+              benchmarkCase.tokensGenerated > 0,
+              let response = benchmarkCase.response,
+              !response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              benchmarkCase.error == nil else {
+            return false
+        }
+        return true
+    }
 }
 
 private struct InstalledWorldTransitionRequest: Encodable {
@@ -699,32 +719,13 @@ extension GateRunner {
 
     func installedDeepseekCheck(model: String) async throws -> GateObservation {
         let run = try await exec(
-            [
-                "model", "benchmark", "chat",
-                "--models", model,
-                "--cases", "MereChat/1",
-                "--max-tokens", "32",
-                "--temperature", "0",
-                "--log-responses",
-                "--json",
-            ],
+            Self.deepseekBenchmarkArguments(model: model),
             timeout: 3_600
         )
         let data = Data(run.stdout.utf8)
         let report = try JSONDecoder().decode(InstalledDeepSeekBenchmarkReport.self, from: data)
-        guard report.models.count == 1,
-              let result = report.models.first,
-              result.model == model,
-              result.engine == "deepseek-v4-flash-gguf",
-              result.status == "completed",
-              result.error == nil,
-              result.cases.count == 1,
-              let benchmarkCase = result.cases.first,
-              benchmarkCase.tokensGenerated > 0,
-              let response = benchmarkCase.response,
-              !response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              benchmarkCase.error == nil else {
-            throw GateError.invalidArtifact("DeepSeek benchmark did not produce one completed response")
+        guard report.hasPassingResponse(for: model) else {
+            throw GateError.invalidArtifact("DeepSeek benchmark did not pass its semantic response check")
         }
         return GateObservation(
             hash: Self.sha256(data),
@@ -733,6 +734,18 @@ extension GateRunner {
             decodeTps: nil,
             semanticFailure: nil
         )
+    }
+
+    static func deepseekBenchmarkArguments(model: String) -> [String] {
+        [
+            "model", "benchmark", "chat",
+            "--models", model,
+            "--cases", "MereChat/1",
+            "--max-tokens", "128",
+            "--temperature", "0",
+            "--log-responses",
+            "--json",
+        ]
     }
 
     func installedImageCheck(model: String) async throws -> GateObservation {

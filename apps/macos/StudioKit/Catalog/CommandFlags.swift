@@ -1774,6 +1774,7 @@ extension CommandFlags {
         package static let requireAll = "--require-all"
         package static let allInstalled = "--all-installed"
         package static let skipModel = "--skip-model"
+        package static let onlyModel = "--only-model"
         package static let suite = "--suite"
         package static let updateBaselines = "--update-baselines"
         package static let strictPerf = "--strict-perf"

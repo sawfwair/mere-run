@@ -123,6 +123,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
     public func shutdown() {
         if let process, process.isRunning {
             process.terminate()
+            process.waitUntilExit()
         }
         stderrTask?.cancel()
         stderrTask = nil

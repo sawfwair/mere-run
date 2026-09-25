@@ -70,6 +70,12 @@ struct Gate: AsyncParsableCommand {
     )
     var skipModel: String = ""
 
+    @Option(
+        name: [.customLong("only-model")],
+        help: "Comma-separated installed model IDs to rerun. Valid only with --all-installed."
+    )
+    var onlyModel: String = ""
+
     @Flag(name: [.customLong("update-baselines")], help: "Record current outputs and timings as the new baselines.")
     var updateBaselines: Bool = false
 
@@ -90,6 +96,12 @@ struct Gate: AsyncParsableCommand {
         )
         if !skippedModelIDs.isEmpty && !allInstalled {
             throw ValidationError("--skip-model is valid only with --all-installed.")
+        }
+        if !onlyModel.isEmpty && !allInstalled {
+            throw ValidationError("--only-model is valid only with --all-installed.")
+        }
+        if !onlyModel.isEmpty && !skippedModelIDs.isEmpty {
+            throw ValidationError("--only-model cannot be combined with --skip-model.")
         }
 
         let installedModelIDs = ModelInventory.snapshot(mode: .verified).installedModelIDs
@@ -115,9 +127,15 @@ struct Gate: AsyncParsableCommand {
                         + unmapped.map(\.id).sorted().joined(separator: ", ")
                 )
             }
-            checks = installedSpecs.compactMap {
+            let installedChecks = installedSpecs.compactMap {
                 InstalledModelSmokePlans.plan(for: $0, installedIDs: installedModelIDs)?.check
             }
+            checks = try Self.selectInstalledChecks(
+                installedChecks,
+                installedModelIDs: installedModelIDs,
+                onlyModel: onlyModel,
+                suite: suite
+            )
         } else {
             checks = GateChecks.all
         }
@@ -217,6 +235,42 @@ struct Gate: AsyncParsableCommand {
         if results.contains(where: { $0.status == .failed }) {
             throw ExitCode(1)
         }
+    }
+
+    static func selectInstalledChecks(
+        _ checks: [GateCheck],
+        installedModelIDs: Set<String>,
+        onlyModel: String,
+        suite: String
+    ) throws -> [GateCheck] {
+        let requested = Set(
+            onlyModel.split(separator: ",", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        )
+        if !onlyModel.isEmpty {
+            let invalid = requested.subtracting(installedModelIDs)
+            guard invalid.isEmpty else {
+                throw ValidationError(
+                    "--only-model IDs are not installed managed models: "
+                        + invalid.sorted().joined(separator: ", ")
+                )
+            }
+            let selectedSuites = Set(
+                suite.lowercased() == "all"
+                    ? checks.map(\.suite)
+                    : suite.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            )
+            let selected = checks.filter {
+                requested.contains(String($0.id.dropFirst("installed-".count)))
+                    && selectedSuites.contains($0.suite)
+            }
+            guard selected.count == requested.count else {
+                throw ValidationError("--only-model selection conflicts with --suite or has no smoke recipe.")
+            }
+            return selected
+        }
+        return checks.filter { $0.requiredModels != [DeepseekV4FlashResources.defaultModelId] }
+            + checks.filter { $0.requiredModels == [DeepseekV4FlashResources.defaultModelId] }
     }
 
     private static func judge(
