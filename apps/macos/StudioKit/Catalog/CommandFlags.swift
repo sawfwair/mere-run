@@ -1184,6 +1184,11 @@ extension CommandFlags {
     /// `mere.run music serve` — Serve resident music
     package enum MusicServe: CommandFlagNamespace {
         package static let command = ["music", "serve"]
+        package static let defaultValues = [
+            "--decoder-subdirectory": "acestep-v15-turbo",
+            "--vae-subdirectory": "vae",
+            "--adapter-kind": "auto"
+        ]
 
         package static let memoryMode = "--memory-mode"
         package static let performanceMode = "--performance-mode"

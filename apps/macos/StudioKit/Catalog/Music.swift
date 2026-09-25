@@ -110,11 +110,13 @@ extension CommandArguments {
         if !draft.musicCheckpointsRoot.isBlank {
             args.option(F.checkpointsRoot, draft.musicCheckpointsRoot)
         }
+        // ACE-Step's own defaults stay off the command line: MiniMax Music 3 and YuE2 accept them
+        // only to ignore them, and a decoder subdirectory is how the CLI picks the checkpoint.
         if !draft.musicDecoderSubdirectory.isBlank {
-            args.option(F.decoderSubdirectory, draft.musicDecoderSubdirectory)
+            args.optionUnlessDefault(F.decoderSubdirectory, draft.musicDecoderSubdirectory)
         }
         if !draft.musicVAESubdirectory.isBlank {
-            args.option(F.vaeSubdirectory, draft.musicVAESubdirectory)
+            args.optionUnlessDefault(F.vaeSubdirectory, draft.musicVAESubdirectory)
         }
         if !draft.musicLMSubdirectory.isBlank {
             args.option(F.lmSubdirectory, draft.musicLMSubdirectory)
@@ -152,12 +154,12 @@ extension CommandArguments {
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
         if draft.musicCandidates > 0 { args.option(F.candidates, String(draft.musicCandidates)) }
         if draft.musicKeepCandidates { args.flag(F.keepCandidates) }
-        args.option(F.audioCoverStrength, format(draft.musicCoverStrength))
-        args.option(F.coverNoiseStrength, format(draft.musicCoverNoiseStrength))
-        args.option(F.retakeVariance, format(draft.musicRetakeVariance))
-        args.option(F.vocalLanguage, draft.musicVocalLanguage)
-        args.option(F.instruction, draft.musicInstruction)
-        args.option(F.taskType, draft.musicTask)
+        args.number(F.audioCoverStrength, draft.musicCoverStrength, unlessDefault: F.defaultValues)
+        args.number(F.coverNoiseStrength, draft.musicCoverNoiseStrength, unlessDefault: F.defaultValues)
+        args.number(F.retakeVariance, draft.musicRetakeVariance, unlessDefault: F.defaultValues)
+        args.optionUnlessDefault(F.vocalLanguage, draft.musicVocalLanguage)
+        args.optionUnlessDefault(F.instruction, draft.musicInstruction)
+        args.optionUnlessDefault(F.taskType, draft.musicTask)
         if !draft.musicRetakeSeed.isBlank { args.option(F.retakeSeed, draft.musicRetakeSeed) }
         if !draft.musicSourceAudio.isBlank { args.option(F.sourceAudio, draft.musicSourceAudio) }
         args.repeated(F.referenceAudio, pathList(draft.musicReferenceAudioPaths))
@@ -190,12 +192,12 @@ extension CommandArguments {
         if !draft.musicTimeSignature.isBlank {
             args.option(F.timesignature, draft.musicTimeSignature)
         }
-        args.option(F.lmTemperature, format(draft.musicLMTemperature))
-        args.option(F.lmTopK, String(draft.musicLMTopK))
-        args.option(F.lmTopP, format(draft.musicLMTopP))
-        args.option(F.lmRepetitionPenalty, format(draft.musicLMRepetitionPenalty))
-        args.option(F.lmCfgScale, format(draft.musicLMCFGScale))
-        args.option(F.lmNegativePrompt, draft.musicLMNegativePrompt)
+        args.number(F.lmTemperature, draft.musicLMTemperature, unlessDefault: F.defaultValues)
+        args.optionUnlessDefault(F.lmTopK, String(draft.musicLMTopK))
+        args.number(F.lmTopP, draft.musicLMTopP, unlessDefault: F.defaultValues)
+        args.number(F.lmRepetitionPenalty, draft.musicLMRepetitionPenalty, unlessDefault: F.defaultValues)
+        args.number(F.lmCfgScale, draft.musicLMCFGScale, unlessDefault: F.defaultValues)
+        args.optionUnlessDefault(F.lmNegativePrompt, draft.musicLMNegativePrompt)
         if draft.musicInstrumental { args.flag(F.instrumental) }
         if !draft.musicMetadataDuration.isBlank {
             args.option(F.metadataDuration, draft.musicMetadataDuration)
@@ -204,21 +206,20 @@ extension CommandArguments {
             args.option(F.metadataLanguage, draft.musicMetadataLanguage)
         }
         if draft.musicNoTiledVAE { args.flag(F.noTiledVAE) }
-        args.option(F.vaeChunkSize, String(draft.musicVAEChunkSize))
-        args.option(F.vaeOverlap, String(draft.musicVAEOverlap))
-        if draft.model.localizedCaseInsensitiveContains("magenta") {
-            args.option(F.temperature, format(draft.musicTemperature))
-            args.option(F.styleConditioning, draft.musicStyleConditioning)
-            args.option(F.topK, String(draft.musicTopK))
-            args.option(F.cfgMusiccoca, format(draft.musicCFGMusicCoCa))
-            args.option(F.cfgNotes, format(draft.musicCFGNotes))
-            args.option(F.cfgDrums, format(draft.musicCFGDrums))
-            args.option(F.unmaskWidth, String(draft.musicUnmaskWidth))
-            args.option(F.seedRotation, String(draft.musicSeedRotation))
-            args.option(F.prefillDuration, format(draft.musicPrefillDuration))
-            if draft.musicDrumless { args.flag(F.drumless) }
-            if draft.musicPrefillSilence { args.flag(F.prefillSilence) }
-        }
+        args.optionUnlessDefault(F.vaeChunkSize, String(draft.musicVAEChunkSize))
+        args.optionUnlessDefault(F.vaeOverlap, String(draft.musicVAEOverlap))
+        // Magenta RealTime 2's controls, also only when they differ from the CLI's defaults.
+        args.number(F.temperature, draft.musicTemperature, unlessDefault: F.defaultValues)
+        args.optionUnlessDefault(F.styleConditioning, draft.musicStyleConditioning)
+        args.optionUnlessDefault(F.topK, String(draft.musicTopK))
+        args.number(F.cfgMusiccoca, draft.musicCFGMusicCoCa, unlessDefault: F.defaultValues)
+        args.number(F.cfgNotes, draft.musicCFGNotes, unlessDefault: F.defaultValues)
+        args.number(F.cfgDrums, draft.musicCFGDrums, unlessDefault: F.defaultValues)
+        args.optionUnlessDefault(F.unmaskWidth, String(draft.musicUnmaskWidth))
+        args.optionUnlessDefault(F.seedRotation, String(draft.musicSeedRotation))
+        args.number(F.prefillDuration, draft.musicPrefillDuration, unlessDefault: F.defaultValues)
+        if draft.musicDrumless { args.flag(F.drumless) }
+        if draft.musicPrefillSilence { args.flag(F.prefillSilence) }
         if draft.quiet { args.flag(F.quiet) }
         return args.arguments
     }
@@ -371,10 +372,10 @@ extension CommandArguments {
             args.option(F.checkpointsRoot, draft.musicCheckpointsRoot)
         }
         if !draft.musicDecoderSubdirectory.isBlank {
-            args.option(F.decoderSubdirectory, draft.musicDecoderSubdirectory)
+            args.optionUnlessDefault(F.decoderSubdirectory, draft.musicDecoderSubdirectory)
         }
         if !draft.musicVAESubdirectory.isBlank {
-            args.option(F.vaeSubdirectory, draft.musicVAESubdirectory)
+            args.optionUnlessDefault(F.vaeSubdirectory, draft.musicVAESubdirectory)
         }
         if !draft.musicLMSubdirectory.isBlank {
             args.option(F.lmSubdirectory, draft.musicLMSubdirectory)
@@ -391,6 +392,16 @@ extension CommandArguments {
             args.repeated(F.adapterScale, pathList(draft.musicAdapterScales))
         }
         return args.arguments
+    }
+}
+
+private extension ArgumentBuilder {
+    /// Appends `--flag value` unless the value is, as a number, the contract's `default_value`,
+    /// which the CLI runs anyway: `1` and `1.0` are one value there.
+    mutating func number(_ flag: String, _ value: Double, unlessDefault defaults: [String: String]) {
+        let rendered = CommandArguments.format(value)
+        guard defaults[flag].flatMap(Double.init) != Double(rendered) else { return }
+        option(flag, rendered)
     }
 }
 

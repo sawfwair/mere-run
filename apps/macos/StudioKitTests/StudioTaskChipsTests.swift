@@ -69,13 +69,15 @@ final class StudioTaskChipsTests: XCTestCase {
         XCTAssertEqual(StudioTaskSchema.essentials(for: .musicAnalyze, draft: analyze).map(\.flag), ["--duration"])
         XCTAssertTrue(StudioTaskChips.chips(for: try Self.row(for: analyze), titles: .none).contains("Duration 45"))
 
+        // `--variant` only sizes a local checkpoint without a config; a managed MuScriptor model
+        // ignores it, so it is an expert setting rather than a card chip.
         var transcribe = StudioTaskDraft(templateID: .musicTranscribe)
         transcribe.setArgument(0, "/tmp/song.wav")
         transcribe.form["--variant"] = .text("large")
         transcribe.form["--format"] = .text("json")
-        XCTAssertEqual(StudioTaskSchema.essentials(for: .musicTranscribe, draft: transcribe).map(\.flag), ["--variant", "--format"])
+        XCTAssertEqual(StudioTaskSchema.essentials(for: .musicTranscribe, draft: transcribe).map(\.flag), ["--format"])
         let chips = StudioTaskChips.chips(for: try Self.row(for: transcribe), titles: .none)
-        XCTAssertTrue(chips.contains { $0.hasPrefix("Variant ") }, "\(chips)")
+        XCTAssertFalse(chips.contains { $0.hasPrefix("Variant ") }, "\(chips)")
         XCTAssertTrue(chips.contains { $0.hasPrefix("Format ") }, "\(chips)")
     }
 
