@@ -80,10 +80,9 @@ extension CommandCatalog {
 extension CommandArguments {
     package static func sfxGenerate(_ draft: CommandDraft) -> [String] {
         typealias F = CommandFlags.SFXGenerate
-        let scope = ContractFamilyScope(MereRunCapabilityCatalog.sfxGenerate, arguments: modelArguments(F.model, draft))
         var args = ArgumentBuilder(F.self)
         args.value(draft.prompt)
-        if !draft.secondaryText.isBlank, scope.reads(F.negativePrompt) {
+        if !draft.secondaryText.isBlank {
             args.option(F.negativePrompt, draft.secondaryText)
         }
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
@@ -92,18 +91,17 @@ extension CommandArguments {
         args.option(F.steps, String(draft.steps))
         if draft.cfgScale != 1.0 { args.option(F.cfg, format(draft.cfgScale)) }
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
-        if !draft.sfxRenoise.isBlank, scope.reads(F.renoise) { args.option(F.renoise, draft.sfxRenoise) }
+        if !draft.sfxRenoise.isBlank { args.option(F.renoise, draft.sfxRenoise) }
         if draft.quiet { args.flag(F.quiet) }
         return args.arguments
     }
 
     package static func sfxVideo(_ draft: CommandDraft) -> [String] {
         typealias F = CommandFlags.SFXVideoGenerate
-        let scope = ContractFamilyScope(MereRunCapabilityCatalog.sfxVideoGenerate, arguments: modelArguments(F.model, draft))
         var args = ArgumentBuilder(F.self)
         args.value(draft.prompt)
         args.value(draft.inputPath)
-        if !draft.secondaryText.isBlank, scope.reads(F.negativePrompt) {
+        if !draft.secondaryText.isBlank {
             args.option(F.negativePrompt, draft.secondaryText)
         }
         if !draft.outputPath.isBlank { args.option(F.output, draft.outputPath) }
@@ -112,12 +110,12 @@ extension CommandArguments {
         args.option(F.steps, String(draft.steps))
         if draft.cfgScale > 0 { args.option(F.cfg, format(draft.cfgScale)) }
         if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
-        if !draft.sfxRenoise.isBlank, scope.reads(F.renoise) { args.option(F.renoise, draft.sfxRenoise) }
-        if !draft.sfxSynchformerModel.isBlank, scope.reads(F.synchformerModel) {
+        if !draft.sfxRenoise.isBlank { args.option(F.renoise, draft.sfxRenoise) }
+        if !draft.sfxSynchformerModel.isBlank {
             args.option(F.synchformerModel, draft.sfxSynchformerModel)
         }
         args.option(F.syncBatchSize, String(draft.sfxSyncBatchSize))
-        if scope.reads(F.clipBatchSize) { args.option(F.clipBatchSize, String(draft.sfxClipBatchSize)) }
+        args.option(F.clipBatchSize, String(draft.sfxClipBatchSize))
         if draft.preflight { args.flag(F.preflight) }
         if draft.preflight, draft.json { args.flag(F.json) }
         if draft.quiet { args.flag(F.quiet) }

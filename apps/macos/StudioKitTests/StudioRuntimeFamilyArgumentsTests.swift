@@ -2,14 +2,14 @@
 import MereRunContract
 import XCTest
 
-/// The audio, sound-effect, and OCR builders send only the options the selected runtime reads,
+/// The audio, sound-effect, and OCR templates send only the options the selected runtime reads,
 /// as the capability contract scopes them, and the command lines they build pass the CLI's gate.
 final class StudioRuntimeFamilyArgumentsTests: XCTestCase {
     private func flags(_ id: CommandTemplateID, _ edit: (inout CommandDraft) -> Void) throws -> Set<String> {
         let template = try XCTUnwrap(CommandCatalog.template(id: id))
         var draft = template.defaultDraft()
         edit(&draft)
-        let arguments = CommandArguments.build(for: id, draft: draft)
+        let arguments = template.arguments(from: draft)
         let capability = try XCTUnwrap(id.capability)
         let invocation = MereRunCommandInvocation(capability: capability, arguments: Array(arguments.dropFirst(capability.command.count)))
         let report = capability.resolutionReport(invocation)
@@ -45,7 +45,9 @@ final class StudioRuntimeFamilyArgumentsTests: XCTestCase {
             draft.audioODESteps = 6
             draft.seed = "7"
         }
-        XCTAssertFalse(apBWE.contains { ["--input-rate", "--ode-steps", "--seed"].contains($0) })
+        // 16 kHz is the one input rate AP-BWE takes, so it stays; UniverSR's controls do not.
+        XCTAssertTrue(apBWE.contains("--input-rate"))
+        XCTAssertFalse(apBWE.contains { ["--ode-steps", "--seed"].contains($0) })
         let univerSR = try flags(.audioEnhance) { draft in
             draft.model = "audio-enhance-universr-audio"
             draft.audioOverlap = 4

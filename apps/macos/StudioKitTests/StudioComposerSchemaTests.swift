@@ -51,6 +51,8 @@ final class StudioComposerSchemaTests: XCTestCase {
     func testSlotsFeedTheCommandTheModeBuilds() throws {
         var image = StudioDraft()
         image.reset(for: .createImage)
+        // FLUX.2 Klein edits an input image and takes references.
+        image.model = "image-klein-9b"
         image.prompt = "a mug"
         let slots = StudioMode.createImage.attachmentSlots
         slots[0].attach([URL(fileURLWithPath: "/tmp/in.png")], to: &image)
@@ -121,6 +123,7 @@ final class StudioComposerSchemaTests: XCTestCase {
     func testCanvasDropRoutesToTheFirstEmptySlotThatAcceptsTheFile() {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
+        draft.model = "image-klein-9b"
         XCTAssertTrue(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/one.png")], for: .createImage))
         XCTAssertEqual(draft.inputPath, "/tmp/one.png")
         XCTAssertTrue(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/two.png")], for: .createImage))
@@ -136,6 +139,7 @@ final class StudioComposerSchemaTests: XCTestCase {
     func testChatImageSlotCollapsesToThePaperclipUntilFilled() {
         var draft = StudioDraft()
         draft.reset(for: .chat)
+        draft.model = "vision-chat-gemma4-12b"
         XCTAssertFalse(StudioMode.chat.showsAttachmentWell(for: draft))
         StudioMode.chat.attachmentSlots[0].attach([URL(fileURLWithPath: "/tmp/photo.png")], to: &draft)
         XCTAssertTrue(StudioMode.chat.showsAttachmentWell(for: draft))
@@ -247,9 +251,9 @@ final class StudioComposerSchemaTests: XCTestCase {
     func testModelChoicesAreFilteredToTheModeCategoryWithInstalledFirst() {
         let inventory = [
             row("image-zimage-nano", category: "image", status: "installed"),
-            row("image-flux2-klein", category: "image", status: "missing"),
-            row("text-chat-qwen3.6-4b", category: "text-chat", status: "installed"),
-            row("vision-chat-qwen3.6-vl-4b", category: "vision-chat", status: "installed"),
+            row("image-klein-9b", category: "image", status: "missing"),
+            row("text-chat-q36-nano", category: "text-chat", status: "installed"),
+            row("vision-chat-gemma4-12b", category: "vision-chat", status: "installed"),
             row("vision-ground-falcon-perception", category: "vision-ground", status: "missing"),
             row("speech-tts-qwen3-nano", category: "speech-tts", status: "installed"),
             row("music-acestep", category: "music", status: "installed"),
@@ -257,11 +261,11 @@ final class StudioComposerSchemaTests: XCTestCase {
 
         XCTAssertEqual(
             StudioMode.createImage.modelChoices(from: inventory).map(\.id),
-            ["image-zimage-nano", "image-flux2-klein"]
+            ["image-zimage-nano", "image-klein-9b"]
         )
         XCTAssertEqual(
             StudioMode.chat.modelChoices(from: inventory).map(\.id),
-            ["text-chat-qwen3.6-4b", "vision-chat-qwen3.6-vl-4b"]
+            ["text-chat-q36-nano", "vision-chat-gemma4-12b"]
         )
         XCTAssertEqual(StudioMode.findObjects.modelChoices(from: inventory).map(\.id), ["vision-ground-falcon-perception"])
         XCTAssertEqual(StudioMode.speak.modelChoices(from: inventory).map(\.id), ["speech-tts-qwen3-nano"])

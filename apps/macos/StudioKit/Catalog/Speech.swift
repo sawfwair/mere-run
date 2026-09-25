@@ -238,9 +238,6 @@ extension CommandCatalog {
             if !["offline", "1.04", "0.64", "0.32"].contains(latency) {
                 return "Nemotron 3 latency must be offline, 1.04, 0.64, or 0.32 seconds."
             }
-            if let refusal = capabilityGateRefusal(CommandArguments.speechDiarize(draft)) {
-                return refusal
-            }
             if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
                 return "Diarization threshold must be between zero and one."
             }
@@ -265,13 +262,5 @@ extension CommandCatalog {
             break
         }
         return nil
-    }
-
-    /// What the CLI's capability gate refuses in `arguments` before loading anything, in its own
-    /// words: a Sortformer run with a streaming input buffer, say. A local model folder the
-    /// contract cannot identify passes here, and the CLI checks it.
-    private static func capabilityGateRefusal(_ arguments: [String]) -> String? {
-        guard let (capability, rest) = MereRunCapabilityCatalog.capability(forCommandLine: arguments) else { return nil }
-        return capability.resolutionReport(MereRunCommandInvocation(capability: capability, arguments: rest)).violations.first
     }
 }

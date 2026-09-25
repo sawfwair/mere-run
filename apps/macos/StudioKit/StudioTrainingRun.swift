@@ -106,10 +106,9 @@ package enum StudioTrainingRun {
         return family == "klein"
     }
 
-    /// The family the image trainer's contract resolves for `arguments`.
+    /// The family the image trainer runs for `arguments`; the CLI answers for a local folder.
     private static func imageTrainingFamily(_ arguments: [String]) -> MereRunFamilyResolution {
-        let capability = MereRunCapabilityCatalog.imageTrainLoRA
-        return capability.resolveFamily(MereRunCommandInvocation(capability: capability, arguments: arguments))
+        StudioScopeSource.live.scope(capability: MereRunCapabilityCatalog.imageTrainLoRA, commandLine: arguments).resolution
     }
 
     /// Klein checkpoints and previews are opt-in on the command line; without them a run has

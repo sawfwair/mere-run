@@ -52,23 +52,22 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertTrue(slot.acceptedTypes.contains(.audio))
     }
 
-    /// The input buffer is checked against the runtime family the contract resolves, the same
-    /// check the CLI's capability gate makes, so a blank model reads as the Sortformer default.
-    func testDiarizeInputBufferIsValidatedAgainstTheModelFamily() throws {
+    /// The input buffer follows the runtime family the contract resolves, so a blank model reads
+    /// as the Sortformer default: Sortformer runs offline, so a streaming buffer stays in the
+    /// draft but leaves the command line, and Nemotron 3 sends it.
+    func testDiarizeInputBufferFollowsTheModelFamily() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .speechDiarize))
         var draft = template.defaultDraft()
         draft.inputPath = "/tmp/standup.wav"
-        XCTAssertNil(template.validationMessage(for: draft))
         draft.speechDiarizationLatency = "1.04"
-        let refusal = "--latency 1.04 is not supported by Sortformer; it runs offline. Remove --latency or pass offline."
-        XCTAssertEqual(template.validationMessage(for: draft), refusal)
-        draft.model = ""
-        XCTAssertEqual(template.validationMessage(for: draft), refusal)
+        for model in ["speech-diarization-sortformer", ""] {
+            draft.model = model
+            XCTAssertNil(template.validationMessage(for: draft), model)
+            XCTAssertFalse(template.arguments(from: draft).contains("--latency"), model)
+        }
         draft.model = "speech-diarization-nemotron3"
         XCTAssertNil(template.validationMessage(for: draft))
-        draft.model = ""
-        draft.speechDiarizationLatency = "offline"
-        XCTAssertNil(template.validationMessage(for: draft))
+        XCTAssertTrue(template.arguments(from: draft).contains("1.04"))
     }
 
     func testEnhanceTaskDraftBuildsTheAudioToolsPagesArgv() throws {

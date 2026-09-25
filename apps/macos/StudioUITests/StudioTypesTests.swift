@@ -146,6 +146,9 @@ final class StudioTypesTests: XCTestCase {
     func testChatBuildsVisionAndToolLoopFlags() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
         var draft = template.defaultDraft()
+        // The text-only Gemma default takes no image; its vision sibling does.
+        XCTAssertFalse(template.arguments(from: { var text = draft; text.imagePath = "/tmp/in.png"; return text }()).contains("--image"))
+        draft.model = "vision-chat-gemma4-12b"
         draft.imagePath = "/tmp/in.png"
         draft.tools = "write_file,shell_exec"
         draft.toolLoop = true
@@ -216,7 +219,7 @@ final class StudioTypesTests: XCTestCase {
         let args = template.arguments(from: draft)
         assertPair(args, "--response-format", "json_object")
         assertPair(args, "--context-size", "262144")
-        assertPair(args, "--top-k", "20")
+        XCTAssertFalse(args.contains("--top-k"), "Gemma 4 samples without top-k, so Studio leaves it off")
         assertPair(args, "--kv-bits", "4")
         assertPair(args, "--kv-quant-scheme", "polar")
         assertPair(args, "--kv-group-size", "64")
@@ -636,13 +639,17 @@ final class StudioTypesTests: XCTestCase {
         draft.useDuration = true
         draft.durationSeconds = 42
         draft.musicOverrideSteps = true
-        draft.steps = 50
+        draft.steps = 60
         draft.musicCandidates = 4
         draft.musicKeepCandidates = true
         draft.musicAdapterPaths = "/tmp/style.safetensors\n/tmp/singer.safetensors"
         draft.musicAdapterScales = "0.6\n0.8"
         draft.musicStems = "Drums,Bass,Vocals"
         draft.musicDAWBundle = "/tmp/session"
+        // Stem export runs on the ACE-Step Base checkpoint; Turbo leaves it off.
+        draft.model = "music-acestep"
+        XCTAssertFalse(template.arguments(from: draft).contains("--stems"))
+        draft.model = "music-acestep-xl-base"
         draft.musicFlowEdit = true
         draft.musicSourceCaption = "rough acoustic demo"
         draft.musicSourceLyrics = "old lyric"
@@ -655,7 +662,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(args.filter { $0 == "--adapter" }.count, 2)
         XCTAssertEqual(args.filter { $0 == "--adapter-scale" }.count, 2)
         assertPair(args, "--duration", "42")
-        assertPair(args, "--steps", "50")
+        assertPair(args, "--steps", "60")
         assertPair(args, "--candidates", "4")
         assertPair(args, "--stems", "Drums,Bass,Vocals")
         assertPair(args, "--daw-bundle", "/tmp/session")
@@ -681,13 +688,14 @@ final class StudioTypesTests: XCTestCase {
         draft.useDuration = true
         draft.durationSeconds = 60
         draft.musicOverrideSteps = true
-        draft.steps = 50
+        draft.steps = 60
         draft.musicCandidates = 4
         draft.musicKeepCandidates = true
         draft.musicAdapterPaths = "/tmp/artist.safetensors"
         draft.musicAdapterScales = "0.7"
         draft.musicStems = "Drums,Bass,Vocals"
         draft.musicDAWBundle = "/tmp/daw"
+        draft.model = "music-acestep-xl-base"
 
         let request = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft)
         let args = request.template.arguments(from: request.draft)
@@ -695,7 +703,7 @@ final class StudioTypesTests: XCTestCase {
         assertPair(args, "--task-type", "cover")
         assertPair(args, "--source-audio", "/tmp/source.wav")
         assertPair(args, "--duration", "60")
-        assertPair(args, "--steps", "50")
+        assertPair(args, "--steps", "60")
         assertPair(args, "--candidates", "4")
         assertPair(args, "--adapter", "/tmp/artist.safetensors")
         assertPair(args, "--adapter-scale", "0.7")
@@ -1059,9 +1067,11 @@ final class StudioTypesTests: XCTestCase {
                 "--max-text-length", "512",
                 "--scheduler-steps", "1000",
                 "--seed", "7",
-                "--resume-from", "/tmp/checkpoint-step750.safetensors",
             ]
         )
+        // Only the Klein trainer resumes; the draft keeps the checkpoint for it.
+        draft.model = "image-klein-base-9b"
+        assertPair(template.arguments(from: draft), "--resume-from", "/tmp/checkpoint-step750.safetensors")
     }
 
     func testImageTrainingRecipeIsNotSilentlyOverriddenByFormDefaults() throws {
@@ -1111,7 +1121,9 @@ final class StudioTypesTests: XCTestCase {
         draft.progressJSON = true
 
         let args = template.arguments(from: draft)
-        XCTAssertEqual(args.filter { $0 == "--ref-image" }.count, 2)
+        // Krea 2 takes no reference images, and only HiDream-O1 keeps the original aspect.
+        XCTAssertFalse(args.contains("--ref-image"))
+        XCTAssertFalse(args.contains("--keep-original-aspect"))
         assertPair(args, "--structured-prompt-model", "text-chat-q36-nano")
         assertPair(args, "--structured-prompt-model-root", "/tmp/q36")
         assertPair(args, "--structured-prompt-max-tokens", "1024")
@@ -1122,7 +1134,6 @@ final class StudioTypesTests: XCTestCase {
         assertPair(args, "--krea-conditioning-multiplier", "1.25")
         assertPair(args, "--krea-conditioning-layer-weights", "1,1,2.5")
         assertPair(args, "--krea-base-quantization-bits", "8")
-        XCTAssertTrue(args.contains("--keep-original-aspect"))
         XCTAssertTrue(args.contains("--structured-prompt"))
         XCTAssertTrue(args.contains("--preflight"))
         XCTAssertTrue(args.contains("--json"))
@@ -1152,17 +1163,20 @@ final class StudioTypesTests: XCTestCase {
 
         let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
         let args = request.template.arguments(from: request.draft)
-        XCTAssertEqual(args.filter { $0 == "--ref-image" }.count, 2)
+        // Krea 2 takes no reference images or text-encoder budget, and only HiDream-O1 keeps the
+        // original aspect; the draft keeps them for the models that do.
+        XCTAssertFalse(args.contains("--ref-image"))
+        XCTAssertFalse(args.contains("--max-sequence-length"))
+        XCTAssertFalse(args.contains("--keep-original-aspect"))
+        XCTAssertEqual(draft.referenceImagePaths, "/tmp/person.png\n/tmp/wardrobe.png")
         assertPair(args, "--structured-prompt-model", "text-chat-q36-nano")
         assertPair(args, "--structured-prompt-max-tokens", "1024")
-        assertPair(args, "--max-sequence-length", "768")
         assertPair(args, "--lora", "adapter-editorial")
         assertPair(args, "--lora-scale", "0.6")
         assertPair(args, "--sigma-shift", "8")
         assertPair(args, "--krea-conditioning-multiplier", "1.2")
         assertPair(args, "--krea-conditioning-layer-weights", "1,1,2")
         assertPair(args, "--krea-base-quantization-bits", "4")
-        XCTAssertTrue(args.contains("--keep-original-aspect"))
         XCTAssertTrue(args.contains("--structured-prompt"))
         XCTAssertTrue(args.contains("--preflight"))
         XCTAssertTrue(args.contains("--json"))
@@ -1503,6 +1517,7 @@ final class StudioTypesTests: XCTestCase {
         var draft = StudioDraft()
         draft.reset(for: .chat)
         draft.prompt = "what is this?"
+        draft.model = "vision-chat-gemma4-12b"
         draft.inputPath = "/tmp/pic.png"
         let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: UUID())
         XCTAssertEqual(request.draft.imagePath, "/tmp/pic.png")
@@ -1606,7 +1621,7 @@ final class StudioTypesTests: XCTestCase {
 
         assertPair(args, "--response-format", "json_object")
         assertPair(args, "--context-size", "32768")
-        assertPair(args, "--top-k", "20")
+        XCTAssertFalse(args.contains("--top-k"), "Gemma 4 samples without top-k, so Studio leaves it off")
         assertPair(args, "--min-p", "0.02")
         assertPair(args, "--kv-bits", "8")
         assertPair(args, "--kv-quant-scheme", "turboquant")
@@ -1733,7 +1748,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--quality"))
         XCTAssertFalse(args.contains("--output-mode"))
         XCTAssertFalse(args.contains("--audio"))
-        XCTAssertFalse(args.contains("--fps"))
+        assertPair(args, "--fps", "24")
         XCTAssertFalse(args.contains("--timings"))
         assertPair(args, "--num-frames", "73")
         assertPair(args, "--steps", "16")
@@ -1762,13 +1777,6 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--image"))
         XCTAssertFalse(args.contains("--end-image"))
         XCTAssertFalse(args.contains("--quality"))
-    }
-
-    func testMiniMaxH3GeometryAlignmentUsesExactReleasedCadence() {
-        XCTAssertEqual(StudioVideoScope.alignedMiniMaxH3FrameCount(1), 22)
-        XCTAssertEqual(StudioVideoScope.alignedMiniMaxH3FrameCount(22), 22)
-        XCTAssertEqual(StudioVideoScope.alignedMiniMaxH3FrameCount(23), 39)
-        XCTAssertEqual(StudioVideoScope.alignedMiniMaxH3FrameCount(65), 73)
     }
 
     func testAudioEnhancementSeparationAndModelOptimizationAreTyped() throws {

@@ -277,8 +277,18 @@ enum ModelScopeFixtures {
                 if let flag { form[flag] = .text(model) }
             }
             for flag in selectorFlags { form.values[flag] = nil }
+            // The shortest arguments that hold each selector: a value, a switch on or off, or
+            // nothing for a flag that must be absent.
             for condition in family.selectors {
-                form[condition.flag] = condition.values?.first.map { StudioContractValue.text($0) } ?? .flag(true)
+                let tokens = capability.arguments(satisfying: condition)
+                let isSwitch = capability.options.first { $0.flag == condition.flag }?.kind == .boolean
+                if tokens.count == 2 {
+                    form[condition.flag] = .text(tokens[1])
+                } else if isSwitch {
+                    form[condition.flag] = .flag(!tokens.isEmpty)
+                } else {
+                    form.values[condition.flag] = nil
+                }
             }
             return form
         }
@@ -323,7 +333,10 @@ enum ModelScopeFixtures {
             check(validated.isSubset(of: familyFlags), surface, "validates \(validated.subtracting(familyFlags).sorted())")
             let run = StudioConsoleRun(template: template, draft: form, seed: template.defaultDraft(), source: source)
             let emitted = checkEmitted(run?.arguments ?? [], bindable: bindable, shown: shown, surface: surface)
-            check(emitted == validated, surface, "sends \(emitted.symmetricDifference(validated).sorted()) unlike the form it validates")
+            // A secret travels in the environment, not the argv.
+            let secrets = Set(CommandLaunchEnvironment.secretFlags(for: templateID).keys)
+            check(emitted == validated.subtracting(secrets), surface,
+                  "sends \(emitted.symmetricDifference(validated.subtracting(secrets)).sorted()) unlike the form it validates")
             return (shown, validated, emitted)
         }
 

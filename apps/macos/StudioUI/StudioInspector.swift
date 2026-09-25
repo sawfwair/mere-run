@@ -27,7 +27,7 @@ struct StudioInspector: View {
     let onClose: () -> Void
 
     @EnvironmentObject private var controller: MereRunController
-    @Environment(\.studioScopeSource) private var scopeSource
+    @Environment(\.studioScopeSource) var scopeSource
     @State private var showAdvanced = false
     @State private var editingSeed = false
     @State private var showImageEditor = false
@@ -76,8 +76,6 @@ struct StudioInspector: View {
         .task {
             if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
         }
-        .onAppear(perform: normalizeMiniMaxH3Draft)
-        .onChange(of: draft.model) { _, _ in normalizeMiniMaxH3Draft() }
         .sheet(isPresented: $showImageEditor) {
             if !draft.inputPath.isBlank {
                 StudioImageEditor(

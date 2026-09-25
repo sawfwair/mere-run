@@ -62,13 +62,15 @@ final class StudioOptionScopeTests: XCTestCase {
         draft.model = "video-minimax-h3-ref2va-mlx"
         draft.h3ReferenceInputs = ["image:/tmp/keeper.png"]
 
-        var unscoped = try XCTUnwrap(CommandCatalog.template(id: .videoGenerate)).defaultDraft()
-        unscoped.model = draft.model
-        unscoped.inputPath = draft.inputPath
-        unscoped.endImagePath = draft.endImagePath
-        unscoped.h3ReferenceInputs = draft.h3ReferenceInputs
-        let template = try XCTUnwrap(CommandCatalog.template(id: .videoGenerate))
-        XCTAssertNotNil(template.validationMessage(for: unscoped), "the keyframes alone refuse the run")
+        // The keyframes alone would refuse the run: Ref2VA takes ordered references only.
+        var keyframes = try XCTUnwrap(CommandCatalog.template(id: .videoGenerate)).defaultDraft()
+        keyframes.model = draft.model
+        keyframes.prompt = draft.prompt
+        keyframes.inputPath = draft.inputPath
+        keyframes.endImagePath = draft.endImagePath
+        keyframes.h3ReferenceInputs = draft.h3ReferenceInputs
+        let unscoped = CommandArguments.videoGenerate(keyframes, scope: source.scope(capability: Video.capability, commandLine: []))
+        XCTAssertNotNil(source.scope(capability: Video.capability, commandLine: unscoped).refusal)
 
         let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft, source: source)
         XCTAssertEqual(request.draft.inputPath, "")
@@ -146,7 +148,7 @@ final class StudioOptionScopeTests: XCTestCase {
         XCTAssertNil(StudioInspectorSchema.notice(for: .video, draft: draft, source: identified))
     }
 
-    func testTheIdentityStoreKeysAFolderByItsPathAndAsksOnce() async throws {
+    func testTheIdentityStoreSendsTheWholeCommandLineAndAsksOncePerRoutingFlags() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("scope-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -159,23 +161,33 @@ final class StudioOptionScopeTests: XCTestCase {
                 model: folder.path, source: .identified, violations: [], warnings: []
             )
         }
-        XCTAssertEqual(store.identity(of: folder.path, flag: "--model-root", for: Video.capability), .pending)
-        // The same folder spelled with a trailing slash is the same question: it is not asked again.
-        XCTAssertNotEqual(store.identity(of: folder.path + "/", flag: "--model-root", for: Video.capability), .unidentified)
-        for _ in 0..<100 where store.identity(of: folder.path, flag: "--model-root", for: Video.capability) == .pending {
+        let arguments = { (root: String, prompt: String) in ["--model-root", root, prompt, "--seed", "7"] }
+        let identity = { (arguments: [String]) in store.identity(of: arguments, model: folder.path, for: Video.capability) }
+        XCTAssertEqual(identity(arguments(folder.path, "a cat")), .pending)
+        // The same folder with a trailing slash, another prompt, or another seed is the same
+        // question: only the routing flags pick the family, so it is not asked again.
+        XCTAssertNotEqual(identity(arguments(folder.path + "/", "a dog")), .unidentified)
+        for _ in 0..<100 where identity(arguments(folder.path, "a cat")) == .pending {
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertEqual(store.identity(of: folder.path, flag: "--model-root", for: Video.capability), .identified(.family(Video.ref2va)))
+        let answer = StudioModelIdentity.resolved(.family(id: Video.ref2va, model: folder.path, source: .identified))
+        XCTAssertEqual(identity(arguments(folder.path, "a cat")), answer)
+        XCTAssertEqual(identity(["--model-root", folder.path, "a bird", "--seed", "9"]), answer)
         let lines = await asked.lines
-        XCTAssertEqual(lines, [["video", "generate", "--model-root", folder.path]])
+        XCTAssertEqual(lines, [["video", "generate"] + arguments(folder.path, "a cat")], "the CLI hears the whole command line")
     }
 
-    func testAnAliasReportNamesTheManagedModel() {
-        let report = MereRunFamilyResolutionReport(
-            capability: "music.generate", family: Music.yue2, familyTitle: "YuE2", model: "music-yue2",
-            source: .model, violations: [], warnings: []
-        )
-        XCTAssertEqual(StudioModelIdentityStore.identity(from: report, in: Music.capability), .identified(.managedModel("music-yue2")))
+    func testAReportBecomesTheResolutionItDescribes() {
+        let report = { (family: String?, model: String?, source: MereRunFamilyResolutionReport.Source) in
+            MereRunFamilyResolutionReport(
+                capability: "music.generate", family: family, familyTitle: nil, model: model, source: source,
+                violations: [], warnings: []
+            )
+        }
+        XCTAssertEqual(StudioModelIdentityStore.identity(from: report(Music.yue2, "music-yue2", .model), in: Music.capability),
+                       .resolved(.family(id: Music.yue2, model: "music-yue2", source: .model)))
+        XCTAssertEqual(StudioModelIdentityStore.identity(from: report(nil, "/tmp/unknown", .unidentified), in: Music.capability),
+                       .unidentified)
     }
 
     // MARK: Pickers and readiness

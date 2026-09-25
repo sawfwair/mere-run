@@ -36,6 +36,8 @@ final class StudioTrainingRunTests: XCTestCase {
         let checkpoint = root.appendingPathComponent("checkpoint-step750.safetensors")
         try Data().write(to: checkpoint)
         var draft = StudioTaskDraft(templateID: .imageTrainLoRA)
+        // Resuming is the Klein trainer's; Krea 2, the default, starts every run fresh.
+        draft.model = "image-klein-base-9b"
         XCTAssertTrue(image[0].accepts(photos))
         XCTAssertFalse(image[0].accepts(checkpoint), "the dataset slot takes a folder only")
         image[0].attach([photos], to: &draft)
@@ -47,7 +49,9 @@ final class StudioTrainingRunTests: XCTestCase {
     }
 
     func testThePagesEditorsAreTheContractsOverrides() throws {
-        let image = StudioTaskSchema.fields(for: .imageTrain, draft: StudioTaskDraft(templateID: .imageTrainLoRA))
+        var klein = StudioTaskDraft(templateID: .imageTrainLoRA)
+        klein.model = "image-klein-base-9b"
+        let image = StudioTaskSchema.fields(for: .imageTrain, draft: klein)
         let ranks = try XCTUnwrap(image.first { $0.flag == "--lora-target-ranks" })
         XCTAssertEqual(ranks.overrideID, .targetRanks)
         XCTAssertEqual(image.first { $0.flag == "--model" }?.overrideID, .model)

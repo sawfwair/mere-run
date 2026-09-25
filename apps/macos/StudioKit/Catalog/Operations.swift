@@ -277,9 +277,9 @@ extension CommandArguments {
         args.option(F.host, draft.host)
         args.option(F.port, String(draft.port))
         args.option(F.backend, draft.operationsWorldBackend)
-        let scope = StudioVideoScope(
-            MereRunCapabilityCatalog.worldServe,
-            arguments: [F.backend, draft.operationsWorldBackend, F.model, draft.model]
+        let scope = StudioScopeSource.live.scope(
+            capability: MereRunCapabilityCatalog.worldServe,
+            commandLine: [F.backend, draft.operationsWorldBackend, F.model, draft.model]
         )
         if scope.uses(F.baseModel) { args.option(F.baseModel, draft.operationsBaseModel) }
         args.option(F.model, draft.model)

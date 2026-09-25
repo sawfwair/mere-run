@@ -8,9 +8,11 @@ import XCTest
 final class StudioInspectorSchemaTests: XCTestCase {
     func testEveryChipFieldIsAnInspectorFieldForTheModesThatShowIt() {
         for mode in StudioMode.allCases {
-            let inspectorFields = StudioInspectorSchema.fieldIDs(for: mode)
-            for chip in mode.composerChips {
-                for field in chip.draftFieldIDs(for: mode) {
+            // Both follow the model the draft runs, so read them from the same draft.
+            let draft = StudioDraft.baseline(for: mode)
+            let inspectorFields = StudioContractSchema.draftFieldIDs(for: mode, draft: draft)
+            for chip in mode.composerChips(for: draft) {
+                for field in chip.kind.draftFieldIDs(for: mode) {
                     XCTAssertTrue(inspectorFields.contains(field), "\(mode) chip \(chip) edits \(field), which its inspector does not show")
                 }
             }

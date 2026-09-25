@@ -67,37 +67,56 @@ package struct StudioOptionScope: Equatable {
     /// Why the CLI would refuse this command line before loading anything, or nil.
     package let refusal: String?
 
-    /// Reads `arguments` (the argv after the command path) through the contract resolver.
-    /// `identities` answers only for a model the contract does not list.
+    /// Reads `arguments` (the argv after the command path) through the contract resolver, and asks
+    /// `identities` about a command line the contract cannot settle alone (`needsCLI`). While that
+    /// answer is out, a family the contract names stands in for it; a model the contract could not
+    /// place shows every option.
     package init(capability: MereRunCommandCapability, arguments: [String], identities: any StudioModelIdentifying) {
         let invocation = MereRunCommandInvocation(capability: capability, arguments: arguments)
-        var asked: StudioIdentityState = .notNeeded
-        let identify = { (model: String) -> MereRunModelIdentification? in
-            guard let routing = capability.routing, !Self.lists(model, routing) else { return nil }
-            switch identities.identity(of: model, flag: Self.flag(carrying: model, invocation, routing), for: capability) {
+        let contract = capability.resolveFamily(invocation)
+        var resolution = contract
+        var identify: (String) -> MereRunModelIdentification? = { _ in nil }
+        var state: StudioIdentityState = .notNeeded
+        if let routing = capability.routing, Self.needsCLI(contract, routing) {
+            let model = Self.model(invocation, routing)
+            switch identities.identity(of: arguments, model: model, for: capability) {
+            case .resolved(let answer):
+                resolution = answer
             case .identified(let identification):
-                return identification
+                identify = { $0 == model ? identification : nil }
+                resolution = capability.resolveFamily(invocation, identify: identify)
             case .pending:
-                asked = .pending(model: model)
-                return nil
+                if case .unidentified = contract { state = .pending(model: model ?? "the default model") }
             case .unidentified:
-                asked = .failed(model: model)
-                return nil
+                if case .unidentified = contract { state = .failed(model: model ?? "the default model") }
             }
         }
-        let resolution = capability.resolveFamily(invocation, identify: identify)
-        let report = capability.resolutionReport(invocation, identify: identify)
         self.capability = capability
         self.invocation = invocation
         self.resolution = resolution
-        // Selectors can name the family of a folder nobody has identified; only a model that
-        // left the family open is waiting on the CLI.
-        if case .unidentified = resolution { identity = asked } else { identity = .notNeeded }
+        identity = state
         let family: String?
         if case .family(let id, _, _) = resolution { family = id } else { family = nil }
         options = capability.options(forFamily: family)
-        violations = family.map { capability.violations(invocation, family: $0) } ?? []
-        refusal = report.violations.first
+        violations = family.map { capability.violations(invocation, family: $0, identify: identify) } ?? []
+        refusal = capability.report(for: resolution, invocation, identify: identify).violations.first
+    }
+
+    /// Whether only the CLI can settle `resolution`: a model the contract could not place or a
+    /// default the machine chooses (`.unidentified`), a managed id whose family depends on what is
+    /// installed, or a command whose own router has the last word.
+    private static func needsCLI(_ resolution: MereRunFamilyResolution, _ routing: MereRunCapabilityRouting) -> Bool {
+        switch resolution {
+        case .unidentified: return true
+        case .family(_, let model?, _) where routing.identifiedModels.contains(model): return true
+        default: return routing.routedByCommand
+        }
+    }
+
+    /// The model value the command line names, by the flags that name it.
+    private static func model(_ invocation: MereRunCommandInvocation, _ routing: MereRunCapabilityRouting) -> String? {
+        (routing.modelFlags + routing.families.compactMap(\.modelFlag)).lazy
+            .compactMap { invocation.value($0) }.first { !$0.isEmpty }
     }
 
     /// The runtime family the command line runs, when the contract (or the CLI) knows it.
@@ -109,7 +128,8 @@ package struct StudioOptionScope: Equatable {
     /// The managed model the command line runs, when it names or defaults to one.
     package var managedModel: String? {
         guard case .family(_, let model?, _) = resolution, let routing = capability.routing,
-              Self.lists(model, routing) else { return nil }
+              routing.excludedModel(id: model) != nil || routing.identifiedModels.contains(model)
+                || routing.families.contains(where: { $0.models.contains(model) }) else { return nil }
         return model
     }
 
@@ -131,6 +151,17 @@ package struct StudioOptionScope: Equatable {
         return values[0]
     }
 
+    /// Whether the family uses `flag`, with `value` when one is given. Every flag is used while the
+    /// family is unknown.
+    package func uses(_ flag: String, _ value: String? = nil) -> Bool {
+        value.map { accepts(flag, values: [$0]) } ?? allows(flag)
+    }
+
+    /// Whether the family cannot run without `flag`.
+    package func requires(_ flag: String) -> Bool {
+        family != nil && option(flag)?.required == true
+    }
+
     /// Flags the command line passes that the family does not use, or with a value its rule
     /// turns away. A missing required option is not one: the run needs it, not less of it.
     package var unusedFlags: Set<String> {
@@ -144,19 +175,6 @@ package struct StudioOptionScope: Equatable {
         let occurrence = MereRunCommandInvocation(capability: capability, arguments: values.flatMap { [flag, $0] })
         return !capability.violations(occurrence, family: family.id)
             .contains { $0.flag == flag && $0.kind != .missingRequired }
-    }
-
-    private static func lists(_ model: String, _ routing: MereRunCapabilityRouting) -> Bool {
-        routing.excludedModel(id: model) != nil || routing.families.contains { $0.models.contains(model) }
-    }
-
-    private static func flag(
-        carrying model: String,
-        _ invocation: MereRunCommandInvocation,
-        _ routing: MereRunCapabilityRouting
-    ) -> String {
-        let flags = routing.modelFlags + routing.families.compactMap(\.modelFlag)
-        return flags.first { invocation.value($0) == model } ?? flags.first ?? "--model"
     }
 }
 
@@ -219,11 +237,15 @@ package enum StudioOptionScopes {
     /// `argv` (a full command line) without the declared options `scope`'s family does not use,
     /// whose value its rule turns away, past its most occurrences, or that repeat the value the
     /// family runs when the option is left off. Positionals and undeclared tokens stay, in order.
+    /// While the family is unknown (a folder the CLI has not identified yet), only values every
+    /// family that takes the option runs anyway go: ACE-Step's `--quality song` would be refused
+    /// by a YuE2 folder and adds nothing on an ACE-Step one.
     ///
     /// The builders call this before appending Extra arguments, which stay a raw escape hatch
     /// that the CLI's gate answers. A replay calls it on the whole recorded command.
     package static func filtered(_ argv: [String], scope: StudioOptionScope) -> [String] {
-        guard let family = scope.family, argv.starts(with: scope.capability.command) else { return argv }
+        guard argv.starts(with: scope.capability.command) else { return argv }
+        guard let family = scope.family else { return withoutUniversalDefaults(argv, scope: scope) }
         let path = scope.capability.command.count
         var kept = Array(argv.prefix(path))
         var counts: [String: Int] = [:]
@@ -246,12 +268,32 @@ package enum StudioOptionScopes {
             }
             if let maximum = rule.maxCount, counts[flag, default: 0] > maximum { continue }
             // The family runs its own default when the option is left off, so saying it again
-            // adds nothing — and on a folder not identified yet it would be a flag another
-            // family refuses.
+            // adds nothing.
             if let familyDefault = rule.defaultValue, values.count == 1, option.reads(values[0], asOneOf: [familyDefault]) {
                 continue
             }
             kept += tokens
+        }
+        return kept
+    }
+
+    /// `argv` without the options whose value every family that takes them runs when they are
+    /// left off.
+    private static func withoutUniversalDefaults(_ argv: [String], scope: StudioOptionScope) -> [String] {
+        guard let routing = scope.capability.routing else { return argv }
+        let path = scope.capability.command.count
+        var kept = Array(argv.prefix(path))
+        for token in StudioArgvToken.read(Array(argv.dropFirst(path)), capability: scope.capability) {
+            guard case let .option(flag, tokens, values) = token, values.count == 1,
+                  let option = scope.capability.options.first(where: { $0.flag == flag }) else {
+                kept += token.tokens
+                continue
+            }
+            let defaults = routing.families.filter { option.families?.contains($0.id) ?? true }.map { family in
+                option.familyRules.first { $0.family == family.id }?.defaultValue ?? option.defaultValue
+            }
+            let universal = !defaults.isEmpty && defaults.allSatisfy { $0.map { option.reads(values[0], asOneOf: [$0]) } == true }
+            if !universal { kept += tokens }
         }
         return kept
     }

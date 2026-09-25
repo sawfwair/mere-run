@@ -62,7 +62,11 @@ final class StudioSoundTaskTests: XCTestCase {
         XCTAssertTrue(fields.contains { $0.flag == "--preflight" })
         XCTAssertTrue(fields.contains { $0.flag == "--synchformer-model" }, "the Synchformer model stays reachable")
         XCTAssertTrue(fields.contains { $0.flag == "--sync-batch-size" })
-        XCTAssertTrue(fields.contains { $0.flag == "--clip-batch-size" })
+        // Only MMAudio batches CLIP frames; the Woosh default leaves the control out.
+        XCTAssertFalse(fields.contains { $0.flag == "--clip-batch-size" })
+        var mmaudio = StudioTaskDraft(templateID: .sfxVideo)
+        mmaudio.model = "sfx-mmaudio-large-44k-v2"
+        XCTAssertTrue(StudioTaskSchema.fields(for: .soundFoley, draft: mmaudio).contains { $0.flag == "--clip-batch-size" })
     }
 
     // MARK: Argv parity

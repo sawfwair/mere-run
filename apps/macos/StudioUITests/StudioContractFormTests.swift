@@ -198,7 +198,12 @@ final class StudioContractFormTests: XCTestCase {
         }
 
         // An option with no range passes through untouched.
-        let krea = try XCTUnwrap(fields.first { $0.flag == "--krea-conditioning-multiplier" })
+        var kreaDraft = StudioDraft()
+        kreaDraft.reset(for: .createImage)
+        kreaDraft.model = "image-krea2-raw"
+        let krea = try XCTUnwrap(
+            StudioContractSchema.boundFields(for: .createImage, draft: kreaDraft).first { $0.flag == "--krea-conditioning-multiplier" }
+        )
         XCTAssertEqual(krea.clamped(.number(37.5)), .number(37.5))
 
         // Writing through the field clamps as well, so a control can never store an invalid value.

@@ -2,15 +2,21 @@ import Combine
 import Foundation
 import MereRunContract
 
-// The contract resolves a managed id, a blank model, and selector flags on its own. A model it
-// does not list (a local folder, an upstream alias) is a question only the CLI can answer: it
-// runs the same Core identifier as the gate, behind `mere.run catalog resolve --json`. Studio
-// asks once per folder and remembers the answer until the folder changes, and every surface
-// reads that answer through `StudioModelIdentifying` so tests can hand in a fixed one.
+// The contract resolves a managed id, a blank model, and selector flags on its own. Some command
+// lines only the CLI can settle: a model the contract does not list (a local folder, an upstream
+// alias), a managed id whose family depends on what is installed, a default the machine chooses,
+// and a command whose own router has the last word. For those Studio asks
+// `mere.run catalog resolve --json -- <command line>`, which runs the gate's resolver with Core's
+// identifier, choosers, and routers, and remembers the answer until a flag that picks the family,
+// or the folder it names, changes. Every surface reads that answer through
+// `StudioModelIdentifying`, so tests can hand in a fixed one.
 
-/// What Studio knows about a model the contract does not list.
+/// What Studio knows about a command line the contract could not settle alone.
 package enum StudioModelIdentity: Equatable, Sendable {
-    /// `catalog resolve` named its family, or the managed model it is an alias of.
+    /// `catalog resolve` answered for the whole command line.
+    case resolved(MereRunFamilyResolution)
+    /// What the model value is, on its own: a family, or the managed model it names. Fixed
+    /// answers in tests and offscreen renders; the contract resolves the command line with it.
     case identified(MereRunModelIdentification)
     /// The CLI could not say, or could not be asked.
     case unidentified
@@ -18,16 +24,17 @@ package enum StudioModelIdentity: Equatable, Sendable {
     case pending
 }
 
-/// Answers the contract resolver's `identify` hook for one capability. Never blocks: a model
+/// Answers for command lines the contract cannot settle alone. Never blocks: a command line
 /// nobody has asked about yet reads as `.pending` while the lookup runs.
 package protocol StudioModelIdentifying: Sendable {
-    /// `flag` is the option that carries `model` on the command line (`--model`,
-    /// `--model-root`), which the CLI's identifier may read.
-    func identity(of model: String, flag: String, for capability: MereRunCommandCapability) -> StudioModelIdentity
+    /// `arguments` is the argv after `capability`'s command path; `model` is the model value it
+    /// names, or nil when it names none (a default, a selector-routed command).
+    func identity(of arguments: [String], model: String?, for capability: MereRunCommandCapability) -> StudioModelIdentity
 }
 
 /// The same answer every time, per model value: what tests and offscreen renders use in place of
-/// the CLI. A model the map does not name is unidentified.
+/// the CLI. A command line that names no model is looked up under "". Anything the map does not
+/// name is unidentified.
 package struct StudioFixedModelIdentities: StudioModelIdentifying {
     package var answers: [String: StudioModelIdentity]
 
@@ -35,15 +42,19 @@ package struct StudioFixedModelIdentities: StudioModelIdentifying {
         self.answers = answers
     }
 
-    package func identity(of model: String, flag: String, for capability: MereRunCommandCapability) -> StudioModelIdentity {
-        answers[model] ?? .unidentified
+    package func identity(of arguments: [String], model: String?, for capability: MereRunCommandCapability) -> StudioModelIdentity {
+        answers[model ?? ""] ?? .unidentified
     }
 }
 
-/// The app's answers from `catalog resolve`, keyed by capability, standardized path, and the
-/// folder's modification date, so editing a checkpoint folder asks again. `MereRunController`
-/// supplies the resolver (a utility-lane CLI run) and republishes each answer, so every surface
-/// that showed the full option list while it waited re-renders scoped.
+/// The app's answers from `catalog resolve`, keyed by capability and the tokens that can change
+/// the family: the routing flags (`MereRunCapabilityRouting.routingFlags`), a folder by its path
+/// and modification date, and every choice and switch, which the CLI's identifier may read (video
+/// generate's `--output-mode` picks the folder `video-ltx-av` runs). Typing a prompt or stepping a
+/// number never asks again; editing a checkpoint folder does. While a new question about the same
+/// model is out, its last answer stands, so a surface does not flash back to every option.
+/// `MereRunController` supplies the resolver (a utility-lane CLI run) and republishes each
+/// answer, so every surface that waited re-renders scoped.
 ///
 /// Reads are synchronous and safe from any thread: argv builders consult the store from wherever
 /// they run. Answers are recorded on the main actor.
@@ -55,13 +66,18 @@ package final class StudioModelIdentityStore: ObservableObject, StudioModelIdent
     package static let shared = StudioModelIdentityStore()
 
     private struct Key: Hashable {
-        let capability: String
-        let model: String
-        let modified: Date?
+        /// The capability and its model flags' tokens: one model, whatever else the line says.
+        let model: [String]
+        /// The other tokens that can change the family.
+        let routing: [String]
+        /// Modification dates of the folders among them, in order.
+        let modified: [Date?]
     }
 
     private let lock = NSLock()
     private var answers: [Key: StudioModelIdentity] = [:]
+    /// The latest answer for each model, standing in while a new question about it is out.
+    private var latest: [[String]: StudioModelIdentity] = [:]
     private var resolver: Resolver?
     /// Bumped whenever the answers stop applying (another CLI, another model location), so a
     /// lookup that started before cannot record into the new set.
@@ -75,6 +91,7 @@ package final class StudioModelIdentityStore: ObservableObject, StudioModelIdent
         lock.withLock {
             self.resolver = resolver
             answers = [:]
+            latest = [:]
             generation += 1
         }
         objectWillChange.send()
@@ -85,28 +102,32 @@ package final class StudioModelIdentityStore: ObservableObject, StudioModelIdent
     package func forget() {
         lock.withLock {
             answers = [:]
+            latest = [:]
             generation += 1
         }
         objectWillChange.send()
     }
 
-    package func identity(of model: String, flag: String, for capability: MereRunCommandCapability) -> StudioModelIdentity {
-        let key = Self.key(model: model, capability: capability)
+    package func identity(of arguments: [String], model: String?, for capability: MereRunCommandCapability) -> StudioModelIdentity {
+        let key = Self.key(arguments, capability: capability)
         let lookup: (resolver: Resolver, generation: Int)? = lock.withLock {
             guard answers[key] == nil, let resolver else { return nil }
             answers[key] = .pending
             return (resolver, generation)
         }
         guard let lookup else {
-            return lock.withLock { answers[key] } ?? .unidentified
+            return lock.withLock {
+                guard let answer = answers[key] else { return .unidentified }
+                return answer == .pending ? latest[key.model] ?? .pending : answer
+            }
         }
-        let commandLine = capability.command + [flag, model]
+        let commandLine = capability.command + arguments
         Task { @MainActor [weak self] in
             let report = await lookup.resolver(commandLine)
             self?.record(report.map { Self.identity(from: $0, in: capability) } ?? .unidentified,
                          for: key, generation: lookup.generation)
         }
-        return .pending
+        return lock.withLock { latest[key.model] } ?? .pending
     }
 
     @MainActor
@@ -114,32 +135,48 @@ package final class StudioModelIdentityStore: ObservableObject, StudioModelIdent
         let recorded = lock.withLock {
             guard generation == self.generation else { return false }
             answers[key] = identity
+            latest[key.model] = identity
             return true
         }
         if recorded { objectWillChange.send() }
     }
 
-    /// What a `catalog resolve` report says about the model it was asked about: the managed model
-    /// an alias names (listed or excluded), else the family a folder belongs to.
+    /// What a `catalog resolve` report says about the command line it was asked about.
     package static func identity(
         from report: MereRunFamilyResolutionReport,
         in capability: MereRunCommandCapability
     ) -> StudioModelIdentity {
-        if let model = report.model, let routing = capability.routing,
-           routing.excludedModel(id: model) != nil || routing.families.contains(where: { $0.models.contains(model) }) {
-            return .identified(.managedModel(model))
+        switch report.resolution(in: capability) {
+        case .unidentified, .unrouted: return .unidentified
+        case let resolution: return .resolved(resolution)
         }
-        if let family = report.family { return .identified(.family(family)) }
-        return .unidentified
     }
 
-    /// A folder is keyed by its absolute path and modification date; anything else by its text.
-    private static func key(model: String, capability: MereRunCommandCapability) -> Key {
-        guard model.hasPrefix("/") || model.hasPrefix("~") else {
-            return Key(capability: capability.id, model: model, modified: nil)
+    /// The command line's model tokens and the other tokens that can change its family, in order,
+    /// each folder by its standardized path, and the folders' modification dates.
+    private static func key(_ arguments: [String], capability: MereRunCommandCapability) -> Key {
+        let routing = capability.routing
+        let modelFlags = Set((routing?.modelFlags ?? []) + (routing?.families.compactMap(\.modelFlag) ?? []))
+        let routingFlags = routing?.routingFlags ?? []
+        var model = [capability.id]
+        var other: [String] = []
+        var modified: [Date?] = []
+        for token in StudioArgvToken.read(arguments, capability: capability) {
+            guard case let .option(flag, _, values) = token,
+                  let option = capability.options.first(where: { $0.flag == flag }),
+                  routingFlags.contains(flag) || option.kind == .choice || option.kind == .boolean else { continue }
+            var tokens = [flag]
+            for value in values {
+                guard value.hasPrefix("/") || value.hasPrefix("~") else {
+                    tokens.append(value)
+                    continue
+                }
+                let url = URL(fileURLWithPath: NSString(string: value).expandingTildeInPath).standardizedFileURL
+                tokens.append(url.path)
+                modified.append(try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+            }
+            if modelFlags.contains(flag) { model += tokens } else { other += tokens }
         }
-        let url = URL(fileURLWithPath: NSString(string: model).expandingTildeInPath).standardizedFileURL
-        let modified = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-        return Key(capability: capability.id, model: url.path, modified: modified)
+        return Key(model: model, routing: other, modified: modified)
     }
 }

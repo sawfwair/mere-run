@@ -64,7 +64,7 @@ final class MereRunControllerTests: XCTestCase {
         draft.reset(for: .createImage)
 
         controller.checkReadiness(for: .createImage, draft: draft)
-        draft.model = "video-ltx-av"
+        draft.model = "image-klein-9b"
         controller.checkReadiness(for: .createImage, draft: draft)
 
         // `model capabilities --all --json` does not depend on the model, so the second request
@@ -77,7 +77,7 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertTrue(controller.jobs.running(in: .inference).isEmpty)
         XCTAssertEqual(controller.readinessByMode[.createImage], .checking)
 
-        runner.starts[0].stdout(supportedCapabilitiesOutput(for: "video-ltx-av", minimum: 64))
+        runner.starts[0].stdout(supportedCapabilitiesOutput(for: "image-klein-9b", minimum: 64))
         runner.starts[0].termination(0)
         await settle()
         XCTAssertEqual(controller.readinessByMode[.createImage], .checking)
@@ -87,7 +87,7 @@ final class MereRunControllerTests: XCTestCase {
         // The result is evaluated against the model current at completion: the new one is
         // installed, the original is not.
         runner.starts[1].stdout(
-            "ID Category Status Size\nvideo-ltx-av media installed 12 GB\nimage-zimage-nano media missing 1 GB\n"
+            "ID Category Status Size\nimage-klein-9b image installed 12 GB\nimage-zimage-nano image missing 1 GB\n"
         )
         runner.starts[1].termination(0)
         await settle()
@@ -770,7 +770,7 @@ final class MereRunControllerTests: XCTestCase {
     private func chatTurn(_ conversationID: UUID, prompt: String = "hi") throws -> StudioRunRequest {
         var draft = StudioDraft()
         draft.reset(for: .chat)
-        draft.model = "text-chat-qwen3.6-4b"
+        draft.model = "text-chat-q36-nano"
         draft.prompt = prompt
         return try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: conversationID, validating: false)
     }

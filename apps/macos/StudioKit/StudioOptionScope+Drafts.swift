@@ -90,13 +90,22 @@ extension StudioDraft {
 // MARK: - Contract forms
 
 extension StudioConsoleDraft {
-    /// The form a run launches: without the values the scope withholds, so the CLI runs the
-    /// family's own. `self` keeps them, so switching back to a model that uses them brings them
-    /// back. Extra arguments stay as typed; the CLI's gate answers them.
+    /// The form a run launches: without the values the scope withholds or that repeat the
+    /// family's default, so the CLI runs the family's own. `self` keeps them, so switching back
+    /// to a model that uses them brings them back. Extra arguments stay as typed; the CLI's gate
+    /// answers them.
     package func scoped(to scope: StudioOptionScope) -> StudioConsoleDraft {
-        guard scope.family != nil else { return self }
+        guard let family = scope.family else { return self }
         var scoped = self
         for flag in scope.withheld(values.keys) { scoped.values[flag] = nil }
+        // The family runs its own default when the flag is left off, so the run leaves it off,
+        // as `StudioOptionScopes.filtered` does for a template's argv.
+        for flag in scoped.values.keys {
+            guard let option = scope.option(flag),
+                  let familyDefault = option.familyRules.first(where: { $0.family == family.id })?.defaultValue,
+                  option.reads(scoped.text(flag), asOneOf: [familyDefault]) else { continue }
+            scoped.values[flag] = nil
+        }
         return scoped
     }
 }

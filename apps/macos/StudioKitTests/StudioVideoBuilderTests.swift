@@ -2,9 +2,9 @@
 import MereRunContract
 import XCTest
 
-/// The video builders emit only what the selected runtime family uses, with values it accepts,
+/// The video templates send only what the selected runtime family uses, with values it accepts,
 /// so the CLI's gate finds nothing to refuse or warn about in any draft Studio can build.
-final class StudioVideoScopeTests: XCTestCase {
+final class StudioVideoBuilderTests: XCTestCase {
     private func maximalDraft(_ id: CommandTemplateID, model: String) throws -> CommandDraft {
         let template = try XCTUnwrap(CommandCatalog.template(id: id))
         return try CommandDraftProbes.maximalDraft(
@@ -47,7 +47,7 @@ final class StudioVideoScopeTests: XCTestCase {
             draft.inputPath = "start.png"
             draft.endImagePath = "end.png"
             edit(&draft)
-            return CommandArguments.videoGenerate(draft)
+            return try XCTUnwrap(CommandCatalog.template(id: .videoGenerate)).arguments(from: draft)
         }
         // The draft checkpoint no longer receives Studio's final-quality default.
         XCTAssertFalse(try arguments("video-ltx23-av-mlx").contains("--quality"))
@@ -64,7 +64,9 @@ final class StudioVideoScopeTests: XCTestCase {
         let distilled = try arguments("video-ltx25-distilled-bf16") { $0.audioPath = "song.wav" }
         XCTAssertFalse(distilled.contains("--steps") || distilled.contains("--audio"))
         // A local folder keeps the full surface; the CLI identifies it when it runs.
-        XCTAssertNil(StudioVideoScope.videoGenerate(model: "/Volumes/models/h3", audioPath: "", quality: .final).family)
+        var folder = try XCTUnwrap(CommandCatalog.template(id: .videoGenerate)).defaultDraft()
+        folder.model = "/Volumes/models/h3"
+        XCTAssertNil(StudioOptionScope.videoGenerate(folder, source: StudioScopeSource(identities: StudioFixedModelIdentities())).family)
     }
 
     func testExcludedModelsAreRefusedWithTheGatesReason() throws {
