@@ -128,7 +128,9 @@ warns: an empty `string` value, a `list_separator` list with no item left
 (text chat `--image " "`). Such a value also counts as absent for routing.
 `overridden_by` lists conditions under which the command replaces the option's
 value with its default for every family (`--flow-edit` runs text-to-music
-whatever `--task-type` says); a passed value then only warns. A rule on a family in `ignored_by` lists the only
+whatever `--task-type` says, and source `--audio` drops `video generate
+--video-conditioning`); a passed value then only warns. A condition on a flag
+the family refuses never holds. A rule on a family in `ignored_by` lists the only
 `values` or `range` that family tolerates: a runtime that runs without the
 option but refuses anything except its own value (`--vocal-language en` on
 YuE2) warns for those and fails for the rest. Such a rule may hold only `when`

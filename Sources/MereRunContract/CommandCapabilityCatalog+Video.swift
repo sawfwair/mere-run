@@ -8,6 +8,10 @@ private typealias S = MereRunCapabilityCatalog.VideoSessionFamily
 /// lanes rather than the audio-to-video one (`VideoGenerationOperation.prepare`).
 private let withoutSourceAudio: [MereRunFlagCondition] = [.absent("--audio")]
 
+/// A merged LTX run that loads the unified audio-video generator rather than the distilled
+/// video-only one (`VideoGenerationModelProfile.ltxRoute`).
+private let audioVideoOutput: [MereRunFlagCondition] = [.init(flag: "--output-mode", values: ["audio-video"])]
+
 private extension MereRunCapabilityCatalog.VideoGenerateFamily {
     /// `families` use the option, `ignoredBy` accept it without effect, and the rest reject it.
     static func used(by families: [Self], ignoredBy: [Self] = []) -> MereRunOptionScope<Self> {
@@ -307,13 +311,16 @@ extension MereRunCapabilityCatalog {
                 group: Group.sampling, tier: .expert, range: .init(min: 0, step: 1)
             ).scoped(V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             .init(flag: "--lora", label: "LTX LoRA", kind: .string, repeatable: true, group: Group.modelAndAdapters, tier: .standard).scoped(V.readOnly(by: [.ltxMerged, .ltx23Distilled, .ltx23Full, .ltx23A2Vid, .ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
-            // The full LTX-2.3 checkpoints drop the IC-LoRA reference controls on the source-audio
-            // path, and fail on them after loading without it (`LTXUnifiedAVGenerator.generate`).
+            // Source audio sends every checkpoint to the audio-to-video lane, which drops the
+            // IC-LoRA references (`VideoGenerationLTXRequest.audioToVideoOptions`). Without it, the
+            // full LTX-2.3 checkpoints fail on them after loading, and so does the merged one on
+            // audio-video output (`LTXUnifiedAVGenerator.generate`); its video-only lane drops them.
             .init(
                 flag: "--video-conditioning", label: "IC-LoRA reference video", kind: .string, repeatable: true,
-                group: Group.inputs, tier: .expert
+                group: Group.inputs, tier: .expert, overriddenBy: [.init(flag: "--audio")]
             ).scoped(
                 V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA]),
+                .rule(.ltxMerged, values: [""], when: audioVideoOutput),
                 .rule(.ltx23Full, values: [""], when: withoutSourceAudio), .rule(.ltx23A2Vid, values: [""], when: withoutSourceAudio)
             ),
             .init(
@@ -326,9 +333,11 @@ extension MereRunCapabilityCatalog {
                 group: Group.inputs, tier: .expert, dependsOn: "--video-conditioning"
             ).scoped(V.readOnly(by: [.ltx25Distilled, .ltx25DistilledDiffusion, .ltx25Full])),
             // Every full checkpoint refuses stage-one previews after loading, except on the
-            // source-audio path, which drops them.
+            // source-audio path, which drops them; the merged one refuses them on audio-video
+            // output, and its video-only lane drops them.
             .init(flag: "--skip-stage-2", label: "Stage one preview", kind: .boolean, group: Group.sampling, tier: .expert).scoped(
                 V.used(by: [.ltx25Distilled, .ltx25DistilledDiffusion], ignoredBy: [.ltxMerged, .ltx23Full, .ltx23A2Vid, .ltx25Full, .wan, .h3FL2VA, .h3FL2VAQ4, .fastH3Adapter, .fastH3, .h3Ref2VA]),
+                .rule(.ltxMerged, values: ["false"], when: audioVideoOutput),
                 .rule(.ltx23Full, values: ["false"], when: withoutSourceAudio), .rule(.ltx23A2Vid, values: ["false"], when: withoutSourceAudio),
                 .rule(.ltx25Full, values: ["false"], when: withoutSourceAudio)
             ),

@@ -116,7 +116,8 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     public let listSeparator: String?
     /// Conditions under which the command replaces this option's value with its default, whatever
     /// the family (`--flow-edit` runs text-to-music whatever `--task-type` says). A passed value
-    /// then has no effect: a family that takes the option only warns.
+    /// then has no effect: a family that takes the option only warns. A condition on a flag the
+    /// family refuses never holds, since the command stops on that flag first.
     public let overriddenBy: [MereRunFlagCondition]
 
     enum CodingKeys: String, CodingKey {

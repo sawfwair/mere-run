@@ -193,7 +193,7 @@ import Testing
                     + "LTX-2.5 Distilled with the diffusion decoder and LTX-2.5 Full."
             ], "\(model): \(refused)")
             let dropped = try report(generate + ["--audio", "a.wav"] + reference)
-            #expect(dropped.violations.isEmpty && dropped.warnings.contains { $0.hasPrefix("--video-conditioning has no effect") },
+            #expect(dropped.violations.isEmpty && dropped.warnings.contains("--video-conditioning r.mp4 has no effect with --audio."),
                     "\(model): \(dropped)")
         }
         let full25 = try report(["video", "generate", "p", "--model", "video-ltx25-full-bf16"] + reference)
@@ -203,6 +203,57 @@ import Testing
         #expect(distilled.violations.isEmpty && distilled.warnings.isEmpty, "\(distilled)")
         let wan = try report(["video", "generate", "p", "--model", "video-wan22-ti2v-5b-mlx", "--image", "a.png", "--skip-stage-2"] + reference)
         #expect(wan.violations.isEmpty && wan.warnings.count == 3, "\(wan)")
+    }
+
+    /// Source audio sends LTX-2.5 Full to the audio-to-video lane, which drops the IC-LoRA
+    /// references it otherwise runs (`VideoGenerationLTXRequest.audioToVideoOptions`), so they
+    /// only warn there.
+    @Test func sourceAudioDropsLTX25FullReferences() throws {
+        let root = try makeRoot(LTX25Resources.fullRequiredRelativePaths)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let reference = ["--video-conditioning", "r.mp4", "--lora", "ic.safetensors"]
+        for model in [["--model", "video-ltx25-full-bf16"], ["--model-root", root.path]] {
+            let generate = ["video", "generate", "p"] + model
+            let dropped = try report(generate + ["--audio", "a.wav"] + reference)
+            #expect(dropped.family == "ltx25-full" && dropped.violations.isEmpty, "\(model): \(dropped)")
+            #expect(dropped.warnings == ["--video-conditioning r.mp4 has no effect with --audio."], "\(model): \(dropped)")
+            #expect(throws: Never.self) { try CLICapabilityGate.check(arguments: ["mere.run"] + generate + ["--audio", "a.wav"] + reference) }
+            let used = try report(generate + reference)
+            #expect(used.violations.isEmpty && used.warnings.isEmpty, "\(model): \(used)")
+            // A blank --audio is not source audio, as the command reads it.
+            #expect(try report(generate + ["--audio", " "] + reference).warnings.isEmpty, "\(model)")
+        }
+        // A checkpoint that refuses source audio stops there; the references are not dropped.
+        let distilled = try report(["video", "generate", "p", "--model", "video-ltx25-distilled-bf16", "--audio", "a.wav"] + reference)
+        #expect(distilled.violations.count == 1 && distilled.violations[0].hasPrefix("--audio is not supported"), "\(distilled)")
+        #expect(distilled.warnings.isEmpty, "\(distilled)")
+    }
+
+    /// The merged checkpoint's video-only lane drops stage-one previews and IC-LoRA references;
+    /// audio-video output loads the unified generator, which refuses both after loading
+    /// (`LTXUnifiedAVGenerator.generate`), so the gate refuses them before.
+    @Test func theMergedCheckpointRefusesReferenceControlsOnlyForAudioVideo() throws {
+        let root = try makeRoot(Self.mergedFiles)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generate = ["video", "generate", "p", "--model-root", root.path]
+        let reference = ["--video-conditioning", "r.mp4", "--lora", "ic.safetensors"]
+        let conditioning = "--video-conditioning is not supported by LTX (merged) with --output-mode audio-video. "
+            + "It applies to LTX-2.5 Distilled, LTX-2.5 Distilled with the diffusion decoder and LTX-2.5 Full."
+        let preview = "--skip-stage-2 is not supported by LTX (merged) with --output-mode audio-video. "
+            + "It applies to LTX-2.5 Distilled and LTX-2.5 Distilled with the diffusion decoder."
+        let audioVideo = try report(generate + ["--output-mode", "audio-video", "--skip-stage-2"] + reference)
+        #expect(audioVideo.family == "ltx-merged", "\(audioVideo)")
+        #expect(audioVideo.violations == [conditioning, preview], "\(audioVideo)")
+        #expect(throws: CLICapabilityGate.Rejection.self) {
+            try CLICapabilityGate.check(arguments: ["mere.run"] + generate + ["--output-mode", "audio-video"] + reference)
+        }
+        for videoOnly in [[], ["--output-mode", "video-only"]] {
+            let dropped = try report(generate + videoOnly + ["--skip-stage-2"] + reference)
+            #expect(dropped.family == "ltx-merged" && dropped.violations.isEmpty, "\(videoOnly): \(dropped)")
+            let ignored = ["--video-conditioning", "--skip-stage-2"].map { "\($0) has no effect with LTX (merged)." }
+            #expect(ignored.allSatisfy { prefix in dropped.warnings.contains { $0.hasPrefix(prefix) } }, "\(videoOnly): \(dropped)")
+            #expect(throws: Never.self) { try CLICapabilityGate.check(arguments: ["mere.run"] + generate + videoOnly + ["--skip-stage-2"] + reference) }
+        }
     }
 
     /// The managed LTX-2.5 Distilled checkpoint has no diffusion decoder and decodes with the
@@ -249,6 +300,12 @@ import Testing
         }
         return root
     }
+
+    /// A merged LTX folder as `VideoGenerationModelResolver.validate` accepts it.
+    private static let mergedFiles = [
+        "text_encoder/config.json", "text_encoder/model.safetensors.index.json", "tokenizer/tokenizer.json",
+        "ltx-2-19b-distilled.safetensors", "ltx-2-spatial-upscaler-x2-1.0.safetensors"
+    ]
 
     private static let ltx23A2VidFiles = [
         "split_model.json", "config.json", "connector.safetensors", "transformer-dev.safetensors",

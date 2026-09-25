@@ -241,8 +241,11 @@ extension MereRunCommandCapability {
                 return overriddenModel(option.flag, invocation, routing: routing, family: runtime, identify: identify)
             }
             let takes = option.families?.contains(family) ?? true
+            // A condition on a flag the family refuses never holds: the command stops there first.
             if takes || option.ignoredBy.contains(family),
-               let overriding = option.overriddenBy.first(where: { holds($0, invocation, family: family) }) {
+               let overriding = option.overriddenBy.first(where: { condition in
+                   accepts(condition.flag, family: family) && holds(condition, invocation, family: family)
+               }) {
                 return overridden(option, values: values, by: overriding)
             }
             if let families = option.families, !families.contains(family) {
@@ -517,6 +520,12 @@ extension MereRunCommandCapability {
 
     /// An omitted flag reads as the family's default for it, else the option's default. A Boolean
     /// reads as "true" when passed and "false" when omitted.
+    /// Whether `family` uses or ignores `flag`, rather than refusing it.
+    private func accepts(_ flag: String, family: String) -> Bool {
+        guard let option = options.first(where: { $0.flag == flag }) else { return true }
+        return option.families?.contains(family) ?? true || option.ignoredBy.contains(family)
+    }
+
     private func holds(_ condition: MereRunFlagCondition, _ invocation: MereRunCommandInvocation, family: String?) -> Bool {
         let option = options.first { $0.flag == condition.flag }
         // A blank value the CLI reads as omitted is not passed (`--audio ""` routes as no audio).

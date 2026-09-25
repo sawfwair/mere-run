@@ -39,12 +39,17 @@ The format is based on Keep a Changelog.
     model and the models that take the option: `--image` on a text-only chat
     model, `--lora` on Muse Glimmer, a Klein-only option on the Krea 2
     trainer, `--latency 1.04` on Sortformer, `--task-type extract` on
-    ACE-Step Turbo, or `video generate --skip-stage-2` on a full LTX
+    ACE-Step Turbo, `video generate --skip-stage-2` on a full LTX
     checkpoint without source `--audio` (with it, the audio-to-video run
-    drops the flag, which only warns).
+    drops the flag, which only warns), or `--skip-stage-2` and
+    `--video-conditioning` on the merged `video-ltx-av` checkpoint with
+    `--output-mode audio-video` (its video-only run drops them, which only
+    warns).
   - An option a model accepts but never reads now prints a warning that it
     has no effect, and the run continues: `--cfg` on Krea 2, `--top-k` on
-    Gemma 4, `--voice` in clone mode, `--max-tokens` on Parakeet. A value
+    Gemma 4, `--voice` in clone mode, `--max-tokens` on Parakeet, or
+    `video generate --video-conditioning` with source `--audio`, which the
+    audio-to-video run drops on LTX-2.5 Full too. A value
     the command reads as not passed only warns: an empty text value such as
     `--negative-prompt ""`, a blank `text chat --image`, or `--stems ","`.
     Warnings print once the command line has parsed and validated, never

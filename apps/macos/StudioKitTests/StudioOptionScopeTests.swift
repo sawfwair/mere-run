@@ -371,6 +371,23 @@ final class StudioOptionScopeTests: XCTestCase {
         }
     }
 
+    /// Source audio drops LTX-2.5 Full's IC-LoRA references, so Studio marks them unused with it;
+    /// a checkpoint that takes no source audio drops the audio and keeps the references.
+    func testSourceAudioDropsReferencesOnlyWhereItIsSent() throws {
+        let capability = MereRunCapabilityCatalog.videoGenerate
+        let reference = ["--video-conditioning", "/tmp/r.mp4", "--lora", "/tmp/ic.safetensors"]
+        let full = ["video", "generate", "a cat", "--model", "video-ltx25-full-bf16", "--audio", "/tmp/a.wav"]
+        let fullScope = StudioScopeSource.contract.scope(capability: capability, commandLine: full + reference)
+        XCTAssertNil(fullScope.refusal)
+        XCTAssertEqual(fullScope.unusedFlags, ["--video-conditioning"])
+
+        let distilled = ["video", "generate", "a cat", "--model", "video-ltx25-distilled-bf16"]
+        let argv = distilled + ["--audio", "/tmp/a.wav"] + reference
+        let distilledScope = StudioScopeSource.contract.scope(capability: capability, commandLine: argv)
+        XCTAssertEqual(distilledScope.unusedFlags, ["--audio"])
+        XCTAssertEqual(StudioOptionScopes.filtered(argv, scope: distilledScope), distilled + reference)
+    }
+
     func testAFixedValueIsKeptOnlyAsTheFamilyRunsIt() throws {
         let scope = source.scope(capability: Video.capability, commandLine: [
             "video", "generate", "x", "--model", "video-minimax-h3-fasth3-vsa-datafree-mlx", "--steps", "30",
