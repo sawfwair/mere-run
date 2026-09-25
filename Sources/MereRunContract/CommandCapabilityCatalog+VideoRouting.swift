@@ -76,3 +76,158 @@ extension MereRunCapabilityCatalog {
         )
     )
 }
+
+// MARK: - video generate, retake, and session
+
+extension MereRunCapabilityCatalog {
+    /// The checkpoint layouts `video generate` runs (`VideoGenerationModelProfile`). FastH3 shares
+    /// FL2VA's layout; its managed id selects the embedded FastH3 adapter.
+    enum VideoGenerateFamily: String, MereRunFamilyID {
+        case ltxMerged = "ltx-merged"
+        case ltx23Distilled = "ltx23-distilled"
+        case ltx23Full = "ltx23-full"
+        case ltx23A2Vid = "ltx23-a2vid"
+        case ltx25Distilled = "ltx25-distilled"
+        case ltx25Full = "ltx25-full"
+        case wan = "wan22-ti2v"
+        case h3FL2VA = "h3-fl2va"
+        case fastH3 = "h3-fast"
+        /// The FastH3 id with an explicit `--h3-adapter`, which replaces the embedded adapter and
+        /// its fixed recipe; it runs like FL2VA.
+        case fastH3Adapter = "h3-fast-adapter"
+        case h3Ref2VA = "h3-ref2va"
+    }
+
+    enum VideoRetakeFamily: String, MereRunFamilyID {
+        case ltx25Distilled = "ltx25-distilled"
+        case ltx25Full = "ltx25-full"
+    }
+
+    enum VideoSessionFamily: String, MereRunFamilyID {
+        case ltx23Distilled = "ltx23-distilled"
+        case ltx23Full = "ltx23-full"
+        case ltx25Distilled = "ltx25-distilled"
+        case ltx25Full = "ltx25-full"
+    }
+
+    /// Video models with a command of their own.
+    private static let otherVideoModels = [
+        "video-cosmos3-edge-mlx", "video-scail2-14b-mlx", "video-dreamx-world-5b-ar-mlx"
+    ]
+    private static let otherVideoModelsReason =
+        "It has its own command: `video cosmos3`, `video animate`, or `world serve`."
+
+    /// `--model-root` names a folder whose files decide the family, and wins over `--model`. With
+    /// neither, the options pick the checkpoint (`VideoGenerationOptions.resolvedRequestedModel`),
+    /// in order: an LTX-2.5 Full recipe, an LTX-2.5 workflow, source audio or final quality, and
+    /// otherwise the LTX-2.3 draft checkpoint.
+    static let videoGenerateRouting = MereRunCapabilityRouting(
+        modelFlags: ["--model-root", "--model"],
+        defaultModels: [
+            MereRunDefaultModelRule(
+                whenAny: [
+                    .init(flag: "--dfr"),
+                    .init(flag: "--ltx-preset", values: ["hq"]),
+                    .init(flag: "--ltx-pipeline", values: ["keyframe-interpolation", "dev-one-stage"]),
+                    .init(flag: "--ltx-sampler"),
+                    .init(flag: "--distilled-lora-strength-stage-1"),
+                    .init(flag: "--distilled-lora-strength-stage-2")
+                ],
+                models: ["video-ltx25-full-bf16"]
+            ),
+            MereRunDefaultModelRule(
+                whenAny: [
+                    .init(flag: "--hdr"),
+                    .init(flag: "--high-quality-hdr"),
+                    .init(flag: "--text-embeddings"),
+                    .init(flag: "--enhance-prompt"),
+                    .init(flag: "--auto-duration"),
+                    .init(flag: "--video-decoder"),
+                    .init(flag: "--image-conditioning"),
+                    .init(flag: "--num-generated-keyframes", values: (1...16).map(String.init)),
+                    .init(flag: "--generated-keyframe"),
+                    .init(flag: "--video-conditioning")
+                ],
+                models: ["video-ltx25-distilled-bf16"]
+            ),
+            MereRunDefaultModelRule(
+                whenAny: [
+                    .init(flag: "--audio"),
+                    .init(flag: "--quality", values: ["final"]),
+                    .init(flag: "--variant", values: ["unified-av"])
+                ],
+                models: ["video-ltx23-full-mlx"]
+            ),
+            .always("video-ltx23-av-mlx")
+        ],
+        families: [
+            .init(VideoGenerateFamily.ltxMerged, title: "LTX (merged)", models: []),
+            .init(VideoGenerateFamily.ltx23Distilled, title: "LTX-2.3 Distilled", models: ["video-ltx23-av-mlx"]),
+            .init(VideoGenerateFamily.ltx23Full, title: "LTX-2.3 Full", models: []),
+            .init(VideoGenerateFamily.ltx23A2Vid, title: "LTX-2.3 A2Vid", models: []),
+            .init(VideoGenerateFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoGenerateFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"]),
+            .init(VideoGenerateFamily.wan, title: "Wan 2.2 TI2V", models: ["video-wan22-ti2v-5b-mlx"]),
+            .init(
+                VideoGenerateFamily.h3FL2VA, title: "MiniMax-H3 FL2VA",
+                models: ["video-minimax-h3-fl2va-mlx", "video-minimax-h3-fl2va-bf16-mlx", "video-minimax-h3-fl2va-8bit-mlx"]
+            ),
+            .init(
+                VideoGenerateFamily.fastH3, title: "MiniMax-H3 FastH3", models: [fastH3Model],
+                selectors: [.absent("--h3-adapter")]
+            ),
+            .init(
+                VideoGenerateFamily.fastH3Adapter, title: "MiniMax-H3 FastH3 with an adapter", models: [fastH3Model],
+                selectors: [.init(flag: "--h3-adapter")]
+            ),
+            .init(VideoGenerateFamily.h3Ref2VA, title: "MiniMax-H3 Ref2VA", models: ["video-minimax-h3-ref2va-mlx"])
+        ],
+        excludedModels: .models(otherVideoModels, reason: otherVideoModelsReason),
+        identifiedModels: ltx23InstallDependentModels
+    )
+
+    private static let fastH3Model = "video-minimax-h3-fasth3-vsa-datafree-mlx"
+
+    /// The ids whose checkpoint depends on what is installed: `video-ltx-av` can run a suggested
+    /// LTX 2.3 folder (`VideoGenerationModelResolver.location`), and the LTX 2.3 Full and A2Vid
+    /// ids fall back to each other's installs. The CLI identifies the folder each will run.
+    private static let ltx23InstallDependentModels = ["video-ltx-av", "video-ltx23-full-mlx", "video-ltx23-a2vid-mlx"]
+
+    /// Retake runs any official LTX-2.5 folder, on the full lane when the full checkpoint
+    /// validates. Every other checkpoint fails after resolution (`VideoRetakeCommand.run`).
+    /// `video-ltx-av` resolves to a suggested folder, which `MERERUN_VIDEO_LTX_MODEL_ROOT` can
+    /// point at an LTX-2.5 install, so the CLI identifies it; the LTX 2.3 ids only ever land on
+    /// LTX 2.3 folders.
+    static let videoRetakeRouting = MereRunCapabilityRouting(
+        modelFlags: ["--model-root", "--model"],
+        defaultModels: [.always("video-ltx25-distilled-bf16")],
+        families: [
+            .init(VideoRetakeFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoRetakeFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
+        ],
+        excludedModels: .models(
+            videoGenerationModels.filter { !$0.hasPrefix("video-ltx25-") && $0 != "video-ltx-av" },
+            reason: "`video retake` needs an official LTX-2.5 checkpoint."
+        ).and(otherVideoModels, reason: otherVideoModelsReason),
+        identifiedModels: ["video-ltx-av"]
+    )
+
+    /// The session keeps the split or full LTX-2.3 runtime, or either LTX-2.5 runtime, resident
+    /// (`VideoSessionCommand.run`). The install-dependent LTX 2.3 ids are identified by the
+    /// folder they resolve to, which the session may or may not run.
+    static let videoSessionRouting = MereRunCapabilityRouting(
+        modelFlags: ["--model-root", "--model"],
+        defaultModels: [.always("video-ltx23-av-mlx")],
+        families: [
+            .init(VideoSessionFamily.ltx23Distilled, title: "LTX-2.3 Distilled", models: ["video-ltx23-av-mlx"]),
+            .init(VideoSessionFamily.ltx23Full, title: "LTX-2.3 Full", models: []),
+            .init(VideoSessionFamily.ltx25Distilled, title: "LTX-2.5 Distilled", models: ["video-ltx25-distilled-bf16"]),
+            .init(VideoSessionFamily.ltx25Full, title: "LTX-2.5 Full", models: ["video-ltx25-full-bf16"])
+        ],
+        excludedModels: .models(
+            videoGenerationModels.filter { $0.hasPrefix("video-wan") || $0.hasPrefix("video-minimax-h3-") },
+            reason: "The resident session runs LTX-2.3 and LTX-2.5 checkpoints; use `video generate`."
+        ).and(otherVideoModels, reason: otherVideoModelsReason),
+        identifiedModels: ltx23InstallDependentModels
+    )
+}

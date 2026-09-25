@@ -6,9 +6,20 @@ import UniformTypeIdentifiers
 /// The inspector's MiniMax-H3 controls: the adaptive-schedule override that replaces the step
 /// slider, the ordered Ref2VA reference list, and the draft normalization the model requires.
 extension StudioInspector {
+    /// The `video generate` family the draft selects, resolved by the contract.
+    private var videoScope: StudioVideoScope {
+        .videoGenerate(model: draft.model, audioPath: draft.audioPath, quality: draft.videoQuality)
+    }
+
+    /// MiniMax-H3 families take an adaptive schedule; they alone use `--h3-acceleration`.
+    private var usesMiniMaxH3Schedule: Bool {
+        let scope = videoScope
+        return scope.family != nil && scope.uses(CommandFlags.VideoGenerate.h3Acceleration)
+    }
+
     @ViewBuilder
     var videoStepsControl: some View {
-        if StudioVideoModelFamily(model: draft.model).isMiniMaxH3 {
+        if usesMiniMaxH3Schedule {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle(
                     "Override adaptive schedule",
@@ -85,21 +96,21 @@ extension StudioInspector {
     }
 
     /// MiniMax-H3 fixes the frame rate, aligns the size to 32 pixels and the frame count to 17n+5,
-    /// and takes either an ordered reference list or a start/end keyframe pair, never both.
+    /// and clears the inputs the selected family does not take: keyframes for Ref2VA and FastH3,
+    /// ordered references for FL2VA, and source audio and timings for every H3 family.
     func normalizeMiniMaxH3Draft() {
-        guard mode == .video, StudioVideoModelFamily(model: draft.model).isMiniMaxH3 else { return }
+        guard mode == .video, usesMiniMaxH3Schedule else { return }
+        typealias F = CommandFlags.VideoGenerate
+        let scope = videoScope
         draft.fps = 24
         draft.width = max(32, (draft.width / 32) * 32)
         draft.height = max(32, (draft.height / 32) * 32)
-        draft.numFrames = StudioVideoModelFamily.alignedMiniMaxH3FrameCount(draft.numFrames)
+        draft.numFrames = StudioVideoScope.alignedMiniMaxH3FrameCount(draft.numFrames)
         draft.audioPath = ""
         draft.timings = false
         draft.timingsOutputPath = ""
-        if StudioVideoModelFamily(model: draft.model) == .miniMaxH3Ref2VA {
-            draft.inputPath = ""
-            draft.endImagePath = ""
-        } else {
-            draft.h3ReferenceInputs = []
-        }
+        if !scope.uses(F.image) { draft.inputPath = "" }
+        if !scope.uses(F.endImage) { draft.endImagePath = "" }
+        if !scope.uses(F.reference) { draft.h3ReferenceInputs = [] }
     }
 }

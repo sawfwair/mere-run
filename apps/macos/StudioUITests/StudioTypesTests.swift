@@ -1765,10 +1765,10 @@ final class StudioTypesTests: XCTestCase {
     }
 
     func testMiniMaxH3GeometryAlignmentUsesExactReleasedCadence() {
-        XCTAssertEqual(StudioVideoModelFamily.alignedMiniMaxH3FrameCount(1), 22)
-        XCTAssertEqual(StudioVideoModelFamily.alignedMiniMaxH3FrameCount(22), 22)
-        XCTAssertEqual(StudioVideoModelFamily.alignedMiniMaxH3FrameCount(23), 39)
-        XCTAssertEqual(StudioVideoModelFamily.alignedMiniMaxH3FrameCount(65), 73)
+        XCTAssertEqual(StudioVideoScope.alignedMiniMaxH3FrameCount(1), 22)
+        XCTAssertEqual(StudioVideoScope.alignedMiniMaxH3FrameCount(22), 22)
+        XCTAssertEqual(StudioVideoScope.alignedMiniMaxH3FrameCount(23), 39)
+        XCTAssertEqual(StudioVideoScope.alignedMiniMaxH3FrameCount(65), 73)
     }
 
     func testAudioEnhancementSeparationAndModelOptimizationAreTyped() throws {

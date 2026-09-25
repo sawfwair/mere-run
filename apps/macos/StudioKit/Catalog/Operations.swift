@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 // MARK: - Operations templates
 
@@ -276,7 +277,11 @@ extension CommandArguments {
         args.option(F.host, draft.host)
         args.option(F.port, String(draft.port))
         args.option(F.backend, draft.operationsWorldBackend)
-        args.option(F.baseModel, draft.operationsBaseModel)
+        let scope = StudioVideoScope(
+            MereRunCapabilityCatalog.worldServe,
+            arguments: [F.backend, draft.operationsWorldBackend, F.model, draft.model]
+        )
+        if scope.uses(F.baseModel) { args.option(F.baseModel, draft.operationsBaseModel) }
         args.option(F.model, draft.model)
         if !draft.operationsStateDirectory.isBlank {
             args.option(F.stateDirectory, draft.operationsStateDirectory)

@@ -48,6 +48,12 @@ Install it explicitly from NVIDIA's public OpenMDW-1.1 repository:
 mere.run model pull video-cosmos3-edge-mlx
 ```
 
+`--backend` (default `dreamx`) picks the runtime. With `--backend cosmos3`,
+`--base-model`, `--disable-scene-memory`, and the `--scene-memory-*` options
+have no effect and print a `Warning:` on stderr. `--model`'s DreamX default
+means "the Cosmos3 default" on that backend. A Cosmos3 id with the DreamX
+backend stops before anything loads.
+
 ## Start a session
 
 ```bash

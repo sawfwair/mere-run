@@ -1713,7 +1713,8 @@ extension CommandFlags {
             "--scene-memory-max-yaw": "2.0",
             "--scene-memory-max-translation": "0.1",
             "--scene-memory-exact-yaw": "0.01",
-            "--scene-memory-exact-translation": "0.001"
+            "--scene-memory-exact-translation": "0.001",
+            "--backend": "dreamx"
         ]
 
         package static let disableSceneMemory = "--disable-scene-memory"

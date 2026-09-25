@@ -60,6 +60,13 @@ extension VideoGenerationOptions {
     }
 
     public var effectiveOutputMode: LTXVideoOutputMode {
+        Self.effectiveOutputMode(audio: audio, outputMode: outputMode, dfr: dfr, legacyVariant: legacyVariant)
+    }
+
+    /// Source audio forces audio-video; then `--output-mode`, `--dfr`, and `--variant`.
+    public static func effectiveOutputMode(
+        audio: String?, outputMode: LTXVideoOutputMode?, dfr: Bool, legacyVariant: LTXVideoVariant?
+    ) -> LTXVideoOutputMode {
         if audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
             return .audioVideo
         }

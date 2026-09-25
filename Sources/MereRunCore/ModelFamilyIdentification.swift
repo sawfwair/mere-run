@@ -19,6 +19,7 @@ public enum ModelFamilyIdentifier {
         imageProbes,
         musicProbes,
         textProbes,
+        videoProbes,
     ]
 
     public static func identify(

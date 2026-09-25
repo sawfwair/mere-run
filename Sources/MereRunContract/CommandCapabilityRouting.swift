@@ -21,6 +21,11 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
     /// about a listed or default model first, and uses the id's family only when it can't tell.
     /// Shells without an identifier resolve the id as listed.
     public let identifiesInstalledModels: Bool
+    /// Managed models that run this command on whichever checkpoint the command finds installed,
+    /// so no family lists them: `video-ltx-av` can run an installed LTX 2.3 Full folder. The
+    /// resolver asks `identify` for them, as a default too, and reports them unidentified when it
+    /// can't answer; shells then ask `catalog resolve`.
+    public let identifiedModels: [String]
 
     enum CodingKeys: String, CodingKey {
         case modelFlags = "model_flags"
@@ -28,6 +33,7 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         case families
         case excludedModels = "excluded_models"
         case identifiesInstalledModels = "identifies_installed_models"
+        case identifiedModels = "identified_models"
     }
 
     public init(
@@ -35,13 +41,15 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         defaultModels: [MereRunDefaultModelRule] = [],
         families: [MereRunRuntimeFamily],
         excludedModels: [MereRunExcludedModel] = [],
-        identifiesInstalledModels: Bool = false
+        identifiesInstalledModels: Bool = false,
+        identifiedModels: [String] = []
     ) {
         self.modelFlags = modelFlags
         self.defaultModels = defaultModels
         self.families = families
         self.excludedModels = excludedModels
         self.identifiesInstalledModels = identifiesInstalledModels
+        self.identifiedModels = identifiedModels
     }
 
     public init(from decoder: Decoder) throws {
@@ -51,9 +59,11 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         families = try container.decode([MereRunRuntimeFamily].self, forKey: .families)
         excludedModels = try container.decode([MereRunExcludedModel].self, forKey: .excludedModels)
         identifiesInstalledModels = try container.decodeIfPresent(Bool.self, forKey: .identifiesInstalledModels) ?? false
+        identifiedModels = try container.decodeIfPresent([String].self, forKey: .identifiedModels) ?? []
     }
 
-    /// `identifies_installed_models` is written only when true.
+    /// `identifies_installed_models` is written only when true and `identified_models` only when
+    /// non-empty, so other routing serializes as before.
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(modelFlags, forKey: .modelFlags)
@@ -61,6 +71,7 @@ public struct MereRunCapabilityRouting: Codable, Equatable, Sendable {
         try container.encode(families, forKey: .families)
         try container.encode(excludedModels, forKey: .excludedModels)
         if identifiesInstalledModels { try container.encode(true, forKey: .identifiesInstalledModels) }
+        if !identifiedModels.isEmpty { try container.encode(identifiedModels, forKey: .identifiedModels) }
     }
 
     public func family(id: String) -> MereRunRuntimeFamily? {
@@ -138,10 +149,56 @@ public struct MereRunFlagCondition: Codable, Equatable, Sendable {
     /// `nil`: the flag is present (a Boolean is on). Otherwise the flag's value, or its default
     /// when omitted, is one of these, rendered as the CLI parses them.
     public let values: [String]?
+    /// The flag is not passed at all; `values` is then `nil`. FastH3 runs its embedded adapter
+    /// only without `--h3-adapter`.
+    public let absent: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case flag, values, absent
+    }
 
     public init(flag: String, values: [String]? = nil) {
         self.flag = flag
         self.values = values
+        absent = false
+    }
+
+    /// Holds when `flag` is not passed.
+    public static func absent(_ flag: String) -> Self {
+        Self(flag: flag, values: nil, absent: true)
+    }
+
+    private init(flag: String, values: [String]?, absent: Bool) {
+        self.flag = flag
+        self.values = values
+        self.absent = absent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        flag = try container.decode(String.self, forKey: .flag)
+        values = try container.decodeIfPresent([String].self, forKey: .values)
+        absent = try container.decodeIfPresent(Bool.self, forKey: .absent) ?? false
+    }
+
+    /// `absent` is written only when set, so existing conditions serialize as before.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(flag, forKey: .flag)
+        try container.encodeIfPresent(values, forKey: .values)
+        if absent { try container.encode(true, forKey: .absent) }
+    }
+
+    /// True when no command line satisfies both conditions: one needs the flag absent and the
+    /// other needs it passed, or both allow only disjoint values.
+    public func excludes(_ other: Self) -> Bool {
+        guard flag == other.flag else { return false }
+        if absent || other.absent {
+            let present = absent ? other : self
+            return !present.absent && present.values == nil
+        }
+        guard let values, let otherValues = other.values else { return false }
+        return Set(values).isDisjoint(with: otherValues)
     }
 }
 

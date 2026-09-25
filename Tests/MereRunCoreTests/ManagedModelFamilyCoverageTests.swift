@@ -7,9 +7,6 @@ import Testing
 /// Multi-family capabilities whose routing a model-scope domain change declares. Each domain
 /// removes its entries; the integration requires this to be empty.
 private let pendingCapabilities: [String: String] = [
-    "video.generate": "video domain",
-    "video.retake": "video domain",
-    "video.session": "video domain",
     "speech.transcribe": "speech domain",
     "speech.diarize": "speech domain",
     "speech.synthesize": "speech domain",
@@ -27,8 +24,7 @@ private let unroutedCapabilities: [String: String] = [
     "agent.start": "Starts an agent session over a served model; the server owns the runtime.",
     "model.benchmark.chat": "Benchmarks a list of models, each on its own runtime.",
     "model.benchmark.code": "Benchmarks a list of models, each on its own runtime.",
-    "model.benchmark.vlm": "Benchmarks a list of models, each on its own runtime.",
-    "world.serve": "`--backend` selects Cosmos 3 or DreamX World; the model-scope design has not scoped it yet."
+    "model.benchmark.vlm": "Benchmarks a list of models, each on its own runtime."
 ]
 
 /// `defaultCLICommands` entries that name no cataloged capability.
@@ -60,9 +56,15 @@ private func resolve(
     flags: [String] = []
 ) -> MereRunFamilyResolution? {
     guard let routing = capability.routing else { return nil }
-    let owner = routing.families.first { $0.models.contains(model) }
+    let canonical = ManagedModelCatalog.spec(for: model)?.id ?? model
+    let owner = routing.families.first { $0.models.contains(canonical) }
     guard let modelFlag = owner?.modelFlag ?? routing.modelFlags.last else { return nil }
-    let selectors = owner?.selectors.flatMap { selector in [selector.flag] + (selector.values.map { [$0[0]] } ?? []) } ?? []
+    let selectors = owner?.selectors.flatMap { selector -> [String] in
+        guard !selector.absent else { return [] }
+        let option = capability.options.first { $0.flag == selector.flag }
+        let value = selector.values?.first ?? (option?.kind == .boolean ? nil : option?.defaultValue ?? "value")
+        return [selector.flag] + (value.map { [$0] } ?? [])
+    } ?? []
     let invocation = MereRunCommandInvocation(capability: capability, arguments: flags + selectors + [modelFlag, model])
     return capability.resolveFamily(invocation) { identified in
         ModelFamilyIdentifier.identify(capabilityID: capability.id, model: identified, invocation: invocation)
@@ -109,6 +111,10 @@ private func resolve(
                 let commands = spec.defaultCLICommands.map { ListedCommand($0).id }
                 #expect(commands.contains(capability.id), "\(model) runs \(capability.id) but does not list it")
             }
+        }
+        for model in routing.identifiedModels {
+            #expect(ManagedModelCatalog.spec(for: model)?.id == model,
+                    "\(capability.id) identifies \(model), which is not a managed model")
         }
         for excluded in routing.excludedModels {
             #expect(ManagedModelCatalog.spec(for: excluded.id)?.id == excluded.id,
