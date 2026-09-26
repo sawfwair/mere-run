@@ -341,8 +341,16 @@ extension StudioTaskSessions {
         return fresh
     }
 
+    /// Every edit of a task draft lands here — the composer, the inspector, the Command view, a
+    /// Reset — so this is where its undo step is registered.
     package func setTaskDraft(_ draft: StudioTaskDraft, for task: StudioTask) {
-        set(draft, for: Self.taskDraftKey(task))
+        let key = Self.taskDraftKey(task)
+        let previous = taskDraft(for: task)
+        set(draft, for: key)
+        guard let previous else { return }
+        registerDraftChange(keys: [key], from: previous, to: draft) {
+            draft.undoName(from: previous, task: task, source: .contract)
+        }
     }
 
     package static func taskDraftKey(_ task: StudioTask) -> String {

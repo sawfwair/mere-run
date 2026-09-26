@@ -27,16 +27,38 @@ package final class StudioPromptTaskController {
         self.library = library
         self.runner = StudioTaskRunner(controller: controller, library: library)
         self.seededDrafts = seededDrafts
+        controller.taskSessions.observeRestorations { [weak self] keys in self?.reloadDraft(after: keys) }
     }
 
     package var activatedMode: StudioMode? { active.mode }
     package var activeConversationID: UUID? { active.conversationID }
+    /// Every edit of the open prompt task's draft lands here, so this is where its undo step is
+    /// registered. Switching task or thread replaces `active` whole and registers nothing.
     package var draft: StudioDraft {
         get { active.draft }
         set {
+            let previous = active.draft
             active.draft = newValue
             persistDraft()
+            guard let mode = activatedMode else { return }
+            sessions.registerDraftChange(keys: draftKeys(for: mode), from: previous, to: newValue) {
+                newValue.undoName(from: previous, mode: mode, source: controller.scopeSource)
+            }
         }
+    }
+
+    /// Where the open draft is stored: the task's key, and the thread's for Chat and Code.
+    private func draftKeys(for mode: StudioMode) -> [String] {
+        let taskKey = mode.task.rawValue + ".draft"
+        guard mode.isConversational else { return [taskKey] }
+        return [taskKey, sessions.conversationDraftKey(activeConversationID, mode: mode)]
+    }
+
+    /// An undo or redo wrote stored drafts back: the open draft follows when its key was one.
+    private func reloadDraft(after keys: Set<String>) {
+        guard let mode = activatedMode, let key = draftKeys(for: mode).last, keys.contains(key),
+              let stored = sessions.value(for: key, default: Optional<StudioDraft>.none) else { return }
+        active.draft = stored
     }
 
     var sessions: StudioTaskSessions { controller.taskSessions }
@@ -171,11 +193,22 @@ package final class StudioPromptTaskController {
     package func continueResult(_ action: StudioResultContinuation, item: StudioLibraryItem, url: URL) -> Bool {
         guard let mode = action.task.mode,
               let next = action.draft(from: item, url: url, baseline: freshDraft(for: mode)) else { return false }
-        sessions.set(next, for: action.task.rawValue + ".draft")
-        sessions.set(Optional<StudioTaskCommandState>.none, for: action.task.rawValue + ".commandOverride")
-        sessions.setFocus(nil, for: action.task)
-        if mode == activatedMode { draft = next }
+        replaceDraft(of: mode, with: next, undoName: action.title)
         return true
+    }
+
+    /// Makes `next` the task's draft in place of any Command view edits and focus, as one undo
+    /// step that brings all three back.
+    private func replaceDraft(of mode: StudioMode, with next: StudioDraft, undoName: String) {
+        let task = mode.task
+        let keys = [task.rawValue + ".draft", task.rawValue + ".commandOverride", task.rawValue + ".focus"]
+            + (mode == activatedMode ? draftKeys(for: mode) : [])
+        sessions.undoably(undoName, keys: Array(Set(keys))) {
+            sessions.set(next, for: task.rawValue + ".draft")
+            sessions.set(Optional<StudioTaskCommandState>.none, for: task.rawValue + ".commandOverride")
+            sessions.setFocus(nil, for: task)
+            if mode == activatedMode { draft = next }
+        }
     }
 
     /// Library ▸ "Use these settings": makes the run's recorded command the task's draft, in
@@ -189,12 +222,12 @@ package final class StudioPromptTaskController {
         guard let next = StudioLibraryDraftRestoration.draft(
             from: item, baseline: freshDraft(for: mode), source: controller.scopeSource
         ) else { return false }
-        sessions.set(next, for: mode.task.rawValue + ".draft")
-        sessions.set(Optional<StudioTaskCommandState>.none, for: mode.task.rawValue + ".commandOverride")
-        sessions.setFocus(nil, for: mode.task)
-        if mode == activatedMode { draft = next }
+        replaceDraft(of: mode, with: next, undoName: Self.useSettingsUndoName)
         return true
     }
+
+    /// The Edit menu's name for Library ▸ "Use these settings".
+    package static let useSettingsUndoName = "Use These Settings"
 
     /// "Use these settings" for a row of a task on the shared task workspace: the recorded
     /// command becomes the task's draft (`"<task>.taskDraft"`), in place of any Command edits,
@@ -204,9 +237,12 @@ package final class StudioPromptTaskController {
         guard let restored = StudioLibraryDraftRestoration.taskDraft(from: item, source: controller.scopeSource),
               var next = sessions.taskDraft(for: task) else { return false }
         next.adopt(restored)
-        sessions.setTaskDraft(next, for: task)
-        sessions.set(Optional<StudioTaskCommandState>.none, for: task.rawValue + ".commandOverride")
-        sessions.setFocus(nil, for: task)
+        let keys = [StudioTaskSessions.taskDraftKey(task), task.rawValue + ".commandOverride", task.rawValue + ".focus"]
+        sessions.undoably(Self.useSettingsUndoName, keys: keys) {
+            sessions.setTaskDraft(next, for: task)
+            sessions.set(Optional<StudioTaskCommandState>.none, for: task.rawValue + ".commandOverride")
+            sessions.setFocus(nil, for: task)
+        }
         return true
     }
 
@@ -216,6 +252,14 @@ package final class StudioPromptTaskController {
     /// one; a model the user picked by hand stays, as does an open thread's. nil restores the
     /// built-in default.
     package func setPreferredModel(_ modelID: String?, for mode: StudioMode) {
+        let keys = [mode.task.rawValue + ".preferredModel", mode.task.rawValue + ".draft"]
+            + (mode == activatedMode ? draftKeys(for: mode) : [])
+        sessions.undoably("Change Default Model", keys: Array(Set(keys))) {
+            followPreferredModel(modelID, for: mode)
+        }
+    }
+
+    private func followPreferredModel(_ modelID: String?, for mode: StudioMode) {
         let previous = freshDraft(for: mode).model
         sessions.setPreferredModel(modelID, for: mode)
         let next = freshDraft(for: mode).model

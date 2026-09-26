@@ -20,13 +20,16 @@ package final class StudioLibraryStore: ObservableObject {
     /// The file is copied aside once per launch before the first rewrite that carries
     /// preserved rows, so an untouched original always exists.
     private var hasQuarantinedOriginal = false
-    /// How a deleted row's files reach the Trash. Injected so tests can delete without a Trash.
-    private let trashItem: (URL) throws -> Void
+    /// How a deleted row's files reach the Trash, answering where each landed so Undo can move
+    /// it back. Injected so tests can delete without touching the real Trash.
+    private let trashItem: (URL) throws -> URL?
+    /// Where deletions, renames, and favorites register their undo steps.
+    package let undo = StudioUndo()
 
     package init(
         libraryURL: URL = StudioLibraryStore.defaultLibraryURL(),
         fileManager: FileManager = .default,
-        trashItem: @escaping (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        trashItem: @escaping (URL) throws -> URL? = StudioLibraryStore.moveToTrash
     ) {
         self.libraryURL = libraryURL
         self.fileManager = fileManager
@@ -44,6 +47,12 @@ package final class StudioLibraryStore: ObservableObject {
         default:
             return "\(preservedRowCount) history entries can't be read by this version of mere.run. They're kept in the file but not shown."
         }
+    }
+
+    nonisolated package static func moveToTrash(_ url: URL) throws -> URL? {
+        var resulting: NSURL?
+        try FileManager.default.trashItem(at: url, resultingItemURL: &resulting)
+        return resulting as URL?
     }
 
     package static func defaultLibraryURL() -> URL {
@@ -447,24 +456,69 @@ package final class StudioLibraryStore: ObservableObject {
         save()
     }
 
+    /// Removes a row the app itself emptied (a thread whose only turn was taken back for
+    /// editing). Not an undo step: the user did not ask for a deletion.
     package func delete(id: UUID) {
-        delete(ids: [id], trashingFiles: false)
+        _ = remove(ids: [id], trashingFiles: false)
     }
 
-    /// Removes rows, and — when the user asked for it — moves every file they produced to the
-    /// Trash. Deleting the row is never blocked by a file that will not move (already deleted,
-    /// on a volume with no Trash); those come back so the caller can say which.
+    /// Library ▸ Delete: removes rows, and — when the user asked for it — moves every file they
+    /// produced to the Trash. Deleting the row is never blocked by a file that will not move
+    /// (already deleted, on a volume with no Trash); those come back so the caller can say which.
+    ///
+    /// The deletion is written at once and is one undo step. Undo puts the rows back where they
+    /// were and moves the files back out of the Trash; the files never wait anywhere the app
+    /// would have to clean up, so a deletion nobody undoes is exactly what the user asked for.
     @discardableResult
     package func delete(ids: Set<UUID>, trashingFiles: Bool) -> [URL] {
-        guard !ids.isEmpty else { return [] }
+        let removal = remove(ids: ids, trashingFiles: trashingFiles)
+        guard !removal.rows.isEmpty else { return removal.failures }
+        let name = Self.deletionUndoName(removal.rows.map(\.item))
+        undo.register(name) { [weak self] in self?.restore(removal, name: name, trashingFiles: trashingFiles) }
+        return removal.failures
+    }
+
+    /// The Edit menu's name for deleting `items`: "Delete Run", "Delete Threads", "Delete Items".
+    package static func deletionUndoName(_ items: [StudioLibraryItem]) -> String {
+        let noun: String
+        if items.allSatisfy(\.isConversation) {
+            noun = "Thread"
+        } else if items.allSatisfy({ !$0.isConversation }) {
+            noun = "Run"
+        } else {
+            noun = "Item"
+        }
+        return "Delete " + noun + (items.count == 1 ? "" : "s")
+    }
+
+    private struct Removal {
+        struct Row {
+            let index: Int
+            let item: StudioLibraryItem
+        }
+
+        struct TrashedFile {
+            let original: URL
+            let trashed: URL
+        }
+
+        let rows: [Row]
+        let trashed: [TrashedFile]
+        let failures: [URL]
+    }
+
+    private func remove(ids: Set<UUID>, trashingFiles: Bool) -> Removal {
+        let rows = items.enumerated().filter { ids.contains($0.element.id) }.map { Removal.Row(index: $0.offset, item: $0.element) }
+        guard !rows.isEmpty else { return Removal(rows: [], trashed: [], failures: []) }
+        var trashed: [Removal.TrashedFile] = []
         var failures: [URL] = []
         if trashingFiles {
             var seen = Set<URL>()
-            for item in items where ids.contains(item.id) {
-                for url in item.allArtifactURLs where seen.insert(url.standardizedFileURL).inserted {
+            for row in rows {
+                for url in row.item.allArtifactURLs where seen.insert(url.standardizedFileURL).inserted {
                     guard fileManager.fileExists(atPath: url.path) else { continue }
                     do {
-                        try trashItem(url)
+                        if let landed = try trashItem(url) { trashed.append(.init(original: url, trashed: landed)) }
                     } catch {
                         failures.append(url)
                     }
@@ -473,28 +527,52 @@ package final class StudioLibraryStore: ObservableObject {
         }
         items.removeAll { ids.contains($0.id) }
         save()
-        return failures
+        return Removal(rows: rows, trashed: trashed, failures: failures)
+    }
+
+    /// Undo of a deletion: every file still in the Trash goes back where it was, and every row
+    /// returns to its place. A file emptied from the Trash since stays gone; its row comes back
+    /// all the same, the way a row whose file was deleted in Finder reads.
+    private func restore(_ removal: Removal, name: String, trashingFiles: Bool) {
+        for file in removal.trashed where !fileManager.fileExists(atPath: file.original.path) {
+            try? fileManager.createDirectory(at: file.original.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? fileManager.moveItem(at: file.trashed, to: file.original)
+        }
+        for row in removal.rows.sorted(by: { $0.index < $1.index }) where !items.contains(where: { $0.id == row.item.id }) {
+            items.insert(row.item, at: min(row.index, items.count))
+        }
+        save()
+        let ids = Set(removal.rows.map(\.item.id))
+        undo.register(name) { [weak self] in self?.delete(ids: ids, trashingFiles: trashingFiles) }
     }
 
     package func setFavorite(id: UUID, isFavorite: Bool) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         var item = items[index]
+        let wasFavorite = item.isFavorite == true
         // Written as nil rather than false when unstarred, so a row that was never starred keeps
         // the shape older builds decode.
         item.isFavorite = isFavorite ? true : nil
         item.updatedAt = Date()
         items[index] = item
         save()
+        guard wasFavorite != isFavorite else { return }
+        undo.register(isFavorite ? "Add to Favorites" : "Remove from Favorites") { [weak self] in
+            self?.setFavorite(id: id, isFavorite: wasFavorite)
+        }
     }
 
     package func rename(id: UUID, title: String) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         var item = items[index]
+        let previous = item.customTitle
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         item.customTitle = trimmed.isEmpty ? nil : trimmed
         item.updatedAt = Date()
         items[index] = item
         save()
+        guard item.customTitle != previous else { return }
+        undo.register("Rename") { [weak self] in self?.rename(id: id, title: previous ?? "") }
     }
 
     package func upsert(_ item: StudioLibraryItem) {

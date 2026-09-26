@@ -113,6 +113,10 @@ surface for is still reachable the day the contract declares it.
   `ProcessRunner`, and the read-only `StudioJobMonitor`.
 - `StudioKit/MereRunController.swift`: the facade views bind to.
 - `StudioKit/StudioLibraryStore.swift`: local library persistence.
+- `StudioKit/StudioUndo.swift`, `StudioKit/StudioDraftUndo.swift`, and
+  `StudioKit/StudioTaskSessions+Undo.swift`: undo registration, draft change
+  names and patches, and the session-side steps. `StudioUI/StudioUndoBinding.swift`
+  hands the key window's `UndoManager` to the stores.
 
 The declarative schemas live in StudioKit beside the model, and the views that
 draw them in StudioUI, one file each side:
@@ -271,7 +275,8 @@ Rows carry a hover star (`StudioLibraryItem.isFavorite`, an additive optional
 written as `nil` when unstarred), rename in place, and drag as file URLs onto
 another task's well, composer, or canvas, or out to Finder or any app. ⌘ and ⇧ click build a batch (`StudioLibrarySelection`) with a bar for
 Reveal, Save to…, and Delete; Delete asks first and offers to move the run's
-files to the Trash. A batch of exactly two finished image runs adds **Compare**
+files to the Trash. Delete, rename, and the favorite star are undoable (see
+[Undo and redo](#undo-and-redo)). A batch of exactly two finished image runs adds **Compare**
 to the bar and the context menu, which opens the older run in the result
 workspace with the newer beside it. Search matches a run's title, kind, prompt,
 model (the name the app shows or the exact id, from the thread, the recorded
@@ -306,6 +311,40 @@ launch credentials and preserves unreadable files. Prompt edits update task
 sessions synchronously. `studio.drafts` remains a migration source for earlier
 prompt-only scene state; importing it preserves unvisited tasks and gives full
 session drafts precedence.
+
+### Undo and redo
+
+Edit ▸ Undo (⌘Z) and Redo (⇧⌘Z) run through the key window's `UndoManager`,
+with named steps such as "Undo Delete Run" and "Undo Change Steps". Undo is
+registered where the user's work is written, not per control:
+`StudioTaskSessions.setTaskDraft` for task drafts, the `draft` setter of
+`StudioPromptTaskController` for prompt drafts, and `StudioLibraryStore` for
+Library rows. StudioKit holds a `StudioUndo` per store; the window hands it the
+manager while it is key (`StudioUndoBinding`), and with none nothing is
+registered.
+
+- **Library.** Delete (a run, a batch, or a chat thread), rename, and Add to or
+  Remove from Favorites. A deletion is written at once. When the user chose to
+  move the files, they go to the macOS Trash (`FileManager.trashItem`) and Undo
+  moves them back from where the Trash put them, then returns the rows to their
+  places. Nothing waits in an app-owned holding area, so there is nothing to
+  purge and a deletion that is never undone is exactly the one the user asked
+  for; a file emptied from the Trash since stays gone and its row comes back
+  pointing at it. Removing a thread the app emptied itself (taking back its only
+  turn to edit) is not an undo step.
+- **Drafts.** Inspector and composer options, model switches, attachments added
+  or removed, Reset (named for its section, or "Reset Advanced Settings"), and
+  Library ▸ "Use these settings", which replaces the draft, its Command view
+  override, and focus as one step that Undo brings back whole. Changes to the
+  same field less than a second apart coalesce, so a slider drag is one step.
+  Models ▸ "Use for … by default" is one step with the drafts it moved.
+- **Typing is the text field's.** A text field keeps its own undo while it is
+  focused, so draft undo never registers typed text: the prompt, the system
+  prompt, the seed, free-text options, numbers typed in the Command view, and
+  extra arguments. A change arriving in an event where another registrar (the
+  field's typing) already registered a step is left to that step too. Draft
+  steps are therefore undone as patches: only the values the step changed go
+  back, so undoing a model switch keeps the prompt typed after it.
 
 Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…; View ▸
 Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C), and the system sidebar toggle; Go ▸ every domain

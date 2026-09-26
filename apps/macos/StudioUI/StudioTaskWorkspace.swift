@@ -337,8 +337,13 @@ struct StudioTaskWorkspace: View {
         }
         var next = draft
         next.adopt(restored)
-        draft = next
-        sessions?.set(Optional<StudioTaskCommandState>.none, for: task.rawValue + ".commandOverride")
+        let overrideKey = task.rawValue + ".commandOverride"
+        // The draft's setter writes through these sessions, so without them there is nothing to write.
+        sessions?.undoably(StudioPromptTaskController.useSettingsUndoName,
+                           keys: [StudioTaskSessions.taskDraftKey(task), overrideKey]) {
+            draft = next
+            sessions?.set(Optional<StudioTaskCommandState>.none, for: overrideKey)
+        }
         error = nil
         navigation.selectedLibraryID = item.id
         promptFocused = true

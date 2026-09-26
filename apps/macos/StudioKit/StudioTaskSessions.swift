@@ -11,6 +11,9 @@ package final class StudioTaskSessions {
     @ObservationIgnored private let url: URL?
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var canSave = true
+    /// Where draft edits and the Library's "Use these settings" register their undo steps.
+    @ObservationIgnored package let undo = StudioUndo()
+    @ObservationIgnored private var restorationObservers: [(Set<String>) -> Void] = []
 
     package static var defaultURL: URL {
         StudioLibraryStore.defaultLibraryURL().deletingLastPathComponent()
@@ -92,14 +95,45 @@ package final class StudioTaskSessions {
             guard entries[key] != data else { return }
             entries[key] = data
             persistedEntries[key] = persisted
-            saveTask?.cancel()
-            saveTask = Task { [weak self] in
-                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
-                self?.flush()
-            }
+            scheduleSave()
         } catch {
             lastPersistenceError = "Task settings could not be saved: \(error.localizedDescription)"
         }
+    }
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            self?.flush()
+        }
+    }
+
+    /// What is stored under `keys`, byte for byte, including what is absent.
+    func snapshot(_ keys: [String]) -> StudioSessionSnapshot {
+        StudioSessionSnapshot(values: Dictionary(uniqueKeysWithValues: keys.map { key in
+            (key, StudioSessionSnapshot.Stored(entry: entries[key], persisted: persistedEntries[key]))
+        }))
+    }
+
+    /// Puts `snapshot` back and tells every reader holding a copy of those keys.
+    func restore(_ snapshot: StudioSessionSnapshot) {
+        for (key, stored) in snapshot.values {
+            entries[key] = stored.entry
+            persistedEntries[key] = stored.persisted
+        }
+        scheduleSave()
+        didRestore(Set(snapshot.values.keys))
+    }
+
+    /// Calls `observer` with the keys an undo or redo wrote back, so a reader that keeps its own
+    /// copy of a stored value (the prompt workspace's active draft) can read it again.
+    package func observeRestorations(_ observer: @escaping (Set<String>) -> Void) {
+        restorationObservers.append(observer)
+    }
+
+    func didRestore(_ keys: Set<String>) {
+        for observer in restorationObservers { observer(keys) }
     }
 
     package struct Selection {

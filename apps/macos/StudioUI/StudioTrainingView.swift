@@ -702,9 +702,11 @@ struct StudioTrainingView: View {
                 Spacer(minLength: 0)
                 if showAdvanced, advancedFields.contains(where: { $0.changedCount(draft: draft, baseline: baseline) > 0 }) {
                     Button("Reset") {
-                        var next = draft
-                        for field in advancedFields { field.reset(&next, to: baseline) }
-                        draft = next
+                        StudioUndoNaming.reset("Advanced Settings", in: sessions) {
+                            var next = draft
+                            for field in advancedFields { field.reset(&next, to: baseline) }
+                            draft = next
+                        }
                     }
                     .buttonStyle(.plain)
                     .font(.caption.weight(.medium))
@@ -1120,7 +1122,8 @@ struct StudioTrainingView: View {
     private func adoptPageDefaults() {
         guard let sessions, !sessions.contains(StudioTaskSessions.taskDraftKey(task)),
               StudioTrainingRun.isUntouched(draft) else { return }
-        draft = StudioTrainingRun.applyingPageDefaults(draft)
+        // The page's own starting point, not an edit: nothing to undo.
+        sessions.undo.suppressing { draft = StudioTrainingRun.applyingPageDefaults(draft) }
     }
 
     /// A manifest the draft names that this page did not write — one chosen in the Command view,
@@ -1136,7 +1139,7 @@ struct StudioTrainingView: View {
         guard !StudioMusicTrainingManifest.isDraftURL(url) else { return }
         var next = draft
         next.form["--dataset"] = .unset
-        draft = next
+        withoutUndo { draft = next }
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         do {
             musicManifest = try StudioMusicTrainingManifest.importing(Data(contentsOf: url), from: url)
@@ -1175,7 +1178,14 @@ struct StudioTrainingView: View {
         guard isOurs, current != (path ?? "") else { return }
         var next = draft
         next.form["--dataset"] = path.map { .text($0) } ?? .unset
-        draft = next
+        withoutUndo { draft = next }
+    }
+
+    /// The page keeping `--dataset` pointed at the clip list it saves is bookkeeping, not an edit
+    /// the user would expect ⌘Z to take back.
+    private func withoutUndo(_ body: () -> Void) {
+        guard let sessions else { return body() }
+        sessions.undo.suppressing(body)
     }
 
     private func pick(_ slot: StudioAttachmentSlot) {
