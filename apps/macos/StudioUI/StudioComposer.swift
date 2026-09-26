@@ -537,7 +537,17 @@ struct StudioComposer: View {
         .accessibilityLabel("Stop current run")
     }
 
+    @ViewBuilder
     private var sendButton: some View {
+        if let count = mode.attachmentSlots(for: draft, source: scopeSource).batchRunCount(in: draft) {
+            StudioBatchRunButton(count: count, isEnabled: sendEnabled,
+                                 blockedReason: sendEnabled ? nil : sendHelp, action: onRun)
+        } else {
+            singleSendButton
+        }
+    }
+
+    private var singleSendButton: some View {
         Button(action: onRun) {
             ZStack {
                 Circle().fill(sendEnabled ? MereRunTheme.accent : MereRunTheme.surfaceRaised)
@@ -614,7 +624,8 @@ struct StudioComposerChipLabel: View {
 /// Accepts a drop (a Finder file or a Library row), a paste (⌘V while focused: a copied file,
 /// picture, or sound, routed like a drop), and a click: straight to the open panel, or — when
 /// the Library holds a file the slot takes — a menu of From Disk…, From Library…, and, on an
-/// audio slot, Record…, which files the recording with the task's domain.
+/// audio slot, Record…, which files the recording with the task's domain. A batching slot that
+/// holds several files draws their stack instead (`StudioBatchWellTile`).
 struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
     let slot: StudioAttachmentSlot
     @Binding var draft: Draft
@@ -644,7 +655,16 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
         StudioLibraryInputs.hasCandidates(in: libraryItems, for: target.requirement)
     }
 
+    @ViewBuilder
     var body: some View {
+        if slot.isBatched(in: draft) {
+            StudioBatchWellTile(slot: slot, draft: $draft, onAddFromDisk: onPick)
+        } else {
+            singleTile
+        }
+    }
+
+    private var singleTile: some View {
         StudioAttachMenu(
             target: target,
             chooseFromDisk: onPick,

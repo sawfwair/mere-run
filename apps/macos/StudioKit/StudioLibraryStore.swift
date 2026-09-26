@@ -575,6 +575,15 @@ package final class StudioLibraryStore: ObservableObject {
         undo.register("Rename") { [weak self] in self?.rename(id: id, title: previous ?? "") }
     }
 
+    /// Files the rows of one batch under `group` (`StudioLibraryItem.batchGroup`), in one write.
+    package func assignBatchGroup(_ group: UUID, to ids: [UUID]) {
+        let members = Set(ids)
+        for index in items.indices where members.contains(items[index].id) {
+            items[index].batchGroup = group
+        }
+        save()
+    }
+
     package func upsert(_ item: StudioLibraryItem) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index] = item

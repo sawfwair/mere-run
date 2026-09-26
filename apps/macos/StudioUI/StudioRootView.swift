@@ -66,6 +66,8 @@ private struct StudioWorkspaceView: View {
     /// A run of this mode that finished while its card was off-screen ("New result ↓").
     @State private var newResultID: UUID?
     @State private var pendingRestrictedPull: StudioRunRequest?
+    /// A batch some of whose files can't run, waiting on the user's answer.
+    @State private var pendingBatch: StudioBatchReview?
     @State private var studioErrorStorage: String?
     private var studioError: String? {
         get { studioErrorStorage }
@@ -404,7 +406,9 @@ private struct StudioWorkspaceView: View {
                         navigation.showActivity = false
                         navigation.open(task: .modelsInstalled)
                     },
-                    onOpen: openFromActivity
+                    onOpen: openFromActivity,
+                    batches: prompt.runner.activeBatches(),
+                    onStopBatch: { prompt.runner.stopBatch($0) }
                 )
                 .padding(.leading, 10)
                 .padding(.bottom, 56)
@@ -834,7 +838,12 @@ private struct StudioWorkspaceView: View {
                 canvas
             }
 
-            if focusedResult == nil { composer }
+            if focusedResult == nil {
+                if let batch = prompt.runner.activeBatch(for: destination.task) {
+                    StudioBatchStatusBar(progress: batch, onStop: { prompt.runner.stopBatch(batch.group) })
+                }
+                composer
+            }
 
             if let studioError {
                 MereBanner(severity: .error, text: studioError, onDismiss: { self.studioError = nil })
@@ -1166,6 +1175,7 @@ private struct StudioWorkspaceView: View {
 
     private var lifecycleShell: some View {
         presentedShell
+        .studioBatchConfirmation($pendingBatch, onRun: runBatch)
         // The footer reads whether a server answers from the endpoint monitor. What `status`
         // still tells it — the installed-model count, and that the CLI answers at all — changes
         // only when the inventory or the CLI settings do, so the probe runs then, not on a timer.
@@ -1536,6 +1546,10 @@ private struct StudioWorkspaceView: View {
         do {
             if let taskDraft = taskDraftBinding {
                 // The task workspace's Run and the Command view's Run submit the same draft.
+                if let review = try prompt.runner.reviewBatch(taskDraft.wrappedValue, task: destination.task) {
+                    studioError = StudioBatchLaunch.start(review, pending: &pendingBatch, run: runBatch)
+                    return
+                }
                 navigation.selectedLibraryID = try prompt.runner.run(taskDraft.wrappedValue, task: destination.task).id
                 return
             }
@@ -1544,12 +1558,25 @@ private struct StudioWorkspaceView: View {
                 if !runServer(base) { _ = try prompt.runTask(base, task: destination.task) }
                 return
             }
+            if let review = try prompt.reviewPromptBatch() {
+                studioError = StudioBatchLaunch.start(review, pending: &pendingBatch, run: runBatch)
+                return
+            }
             guard let submission = try prompt.runPrompt(inventory: modelInventory) else { return }
             if let reason = submission.outputFallbackReason { announceOutputFallback(reason) }
             navigation.selectedLibraryID = submission.request.conversationID ?? submission.request.id
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    /// Runs the files of the current task's batch, one run each, and shows the first.
+    private func runBatch(_ paths: [String]) {
+        let submission = taskDraftBinding.map { prompt.runner.runBatch($0.wrappedValue, task: destination.task, paths: paths) }
+            ?? prompt.runPromptBatch(paths: paths)
+        guard let submission else { return }
+        navigation.selectedLibraryID = submission.requests.first?.id
+        studioError = StudioBatchLaunch.failureMessage(submission)
     }
 
     /// Runs a server task's command through the server's owner, so it starts in the service lane

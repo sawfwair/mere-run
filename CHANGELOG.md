@@ -34,6 +34,15 @@ The format is based on Keep a Changelog.
   ⌘V in the composer, a well, or the canvas attaches copied files, screenshots,
   and copied audio through the same path as a drop. Pasted pictures and sounds
   are written under Application Support, and text still pastes as text.
+- Studio runs a task once per file when several files are dropped, pasted, or
+  picked for an input that takes one (Transcribe, Read, Find, Enhance,
+  Separate, Depth, and more, decided by the slot schema). The well shows the
+  stack with a file list to remove or add files, Run reads "Run 12", and the
+  Library picker can check several files. Readiness is checked once and every
+  file is checked before anything runs, with the option to skip the ones that
+  can't. Each file is its own run with its own output, queued in order, and
+  the Library rows share a batch id. A bar on the page and a row in the
+  Activity popover follow the batch and stop it.
 
 ## 0.58.0 - 2026-09-26
 

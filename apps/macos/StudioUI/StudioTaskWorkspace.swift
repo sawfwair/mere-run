@@ -42,6 +42,8 @@ struct StudioTaskWorkspace: View {
     @State private var highlightedCardID: UUID?
     @State private var newResultID: UUID?
     @State private var isDropTargeted = false
+    /// A batch some of whose files can't run, waiting on the user's answer.
+    @State private var pendingBatch: StudioBatchReview?
 
     init(task: StudioTask, models: StudioModelStore) {
         self.task = task
@@ -107,7 +109,12 @@ struct StudioTaskWorkspace: View {
                 canvas
             }
 
-            if focusedResult == nil { composer }
+            if focusedResult == nil {
+                if let batch = runner?.activeBatch(for: task) {
+                    StudioBatchStatusBar(progress: batch, onStop: { runner?.stopBatch(batch.group) })
+                }
+                composer
+            }
 
             if let error {
                 MereBanner(severity: .error, text: error, onDismiss: { self.error = nil })
@@ -167,6 +174,7 @@ struct StudioTaskWorkspace: View {
             // The canvas takes a paste the way it takes a drop: into the first slot that fits.
             StudioAttachmentPaste.paste(into: &draft, slots: draft.slots(source: scopeSource), allowsText: false)
         }
+        .studioBatchConfirmation($pendingBatch, onRun: runBatch)
         .onAppear {
             jobMonitor.attach(controller.jobs)
             refreshReadiness()
@@ -298,11 +306,23 @@ struct StudioTaskWorkspace: View {
         error = nil
         guard let runner else { return }
         do {
+            if let review = try runner.reviewBatch(draft, task: task) {
+                error = StudioBatchLaunch.start(review, pending: &pendingBatch, run: runBatch)
+                return
+            }
             let request = try runner.run(draft, task: task)
             navigation.selectedLibraryID = request.id
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Runs the batch's files, one run each, and shows the first.
+    private func runBatch(_ paths: [String]) {
+        guard let runner else { return }
+        let submission = runner.runBatch(draft, task: task, paths: paths)
+        navigation.selectedLibraryID = submission.requests.first?.id
+        error = StudioBatchLaunch.failureMessage(submission)
     }
 
     private func refreshReadiness() {

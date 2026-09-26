@@ -317,6 +317,9 @@ struct StudioActivityPopover: View {
     let onOpenModels: () -> Void
     /// Opens a job's page, or a finished run's row in the Library.
     var onOpen: (Job) -> Void = { _ in }
+    /// Batches with files still running or waiting, each shown once above the lanes.
+    var batches: [StudioBatchProgress] = []
+    var onStopBatch: (UUID) -> Void = { _ in }
     @Environment(\.studioModelTitles) private var titles
 
     /// Bumped on every job event: lane membership and queue order are not themselves published,
@@ -338,6 +341,12 @@ struct StudioActivityPopover: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if sections.isEmpty {
                         machineDetails
+                    }
+                    if !batches.isEmpty {
+                        eyebrow(batches.count == 1 ? "Batch" : "Batches")
+                        ForEach(batches) { batch in
+                            StudioBatchQueueRow(progress: batch, onStop: { onStopBatch(batch.group) })
+                        }
                     }
                     ForEach(sections) { section in
                         eyebrow(StudioActivity.laneTitle(section.lane))
