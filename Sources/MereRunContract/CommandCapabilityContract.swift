@@ -76,6 +76,9 @@ public enum MereRunCapabilityOptionGroup {
 
 public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     public let flag: String
+    /// Every other spelling ArgumentParser accepts for this option, long and short (`-m`,
+    /// `--cfg-scale`). The other polarity of an inverted Boolean is its own option, not an alias.
+    public let aliases: [String]
     public let label: String
     public let kind: MereRunCapabilityValueKind
     public let required: Bool
@@ -92,9 +95,34 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
     /// Flag of another option on the same capability that must be set for this
     /// option to have any effect.
     public let dependsOn: String?
+    /// Ids of the capability's runtime families (`routing.families`) that use this option.
+    /// `nil`: every family, and every option of a capability without routing.
+    public let families: [String]?
+    /// Families that accept this option today but run without it. Passing it to one of them
+    /// warns; a family in neither `families` nor `ignoredBy` rejects it.
+    public let ignoredBy: [String]
+    /// Per-family narrowing of an option the family uses, or the only values an ignoring family
+    /// accepts (see `MereRunOptionFamilyRule`).
+    public let familyRules: [MereRunOptionFamilyRule]
+    /// Other spellings the CLI accepts for a `.choice` value; `nil` when it takes `choices` as
+    /// written. Rules and default-model conditions compare through `reads(_:asOneOf:)`, never the raw text.
+    public let choiceSpellings: MereRunChoiceSpellings?
+    /// The CLI reads a value that is empty once surrounding whitespace is trimmed as if the option
+    /// were not passed (text chat `--image ""`, video generate `--audio ""`). Such a value neither
+    /// routes nor draws a family's refusal; it only warns where the family does not use it.
+    public let blankReadsAsOmitted: Bool
+    /// The CLI splits the value on this separator and drops blank items (`--stems "vocals,drums"`),
+    /// so a value with no item left (`","`) reads as omitted, like an empty text value.
+    public let listSeparator: String?
+    /// Conditions under which the command replaces this option's value with its default, whatever
+    /// the family (`--flow-edit` runs text-to-music whatever `--task-type` says). A passed value
+    /// then has no effect: a family that takes the option only warns. A condition on a flag the
+    /// family refuses never holds, since the command stops on that flag first.
+    public let overriddenBy: [MereRunFlagCondition]
 
     enum CodingKeys: String, CodingKey {
         case flag
+        case aliases
         case label
         case kind
         case required
@@ -105,10 +133,18 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         case tier
         case range
         case dependsOn = "depends_on"
+        case families
+        case ignoredBy = "ignored_by"
+        case familyRules = "family_rules"
+        case choiceSpellings = "choice_spellings"
+        case blankReadsAsOmitted = "blank_reads_as_omitted"
+        case listSeparator = "list_separator"
+        case overriddenBy = "overridden_by"
     }
 
     public init(
         flag: String,
+        aliases: [String] = [],
         label: String,
         kind: MereRunCapabilityValueKind,
         required: Bool = false,
@@ -118,9 +154,17 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         group: String? = nil,
         tier: MereRunCapabilityOptionTier? = nil,
         range: MereRunCapabilityRange? = nil,
-        dependsOn: String? = nil
+        dependsOn: String? = nil,
+        families: [String]? = nil,
+        ignoredBy: [String] = [],
+        familyRules: [MereRunOptionFamilyRule] = [],
+        choiceSpellings: MereRunChoiceSpellings? = nil,
+        blankReadsAsOmitted: Bool = false,
+        listSeparator: String? = nil,
+        overriddenBy: [MereRunFlagCondition] = []
     ) {
         self.flag = flag
+        self.aliases = aliases
         self.label = label
         self.kind = kind
         self.required = required
@@ -131,6 +175,139 @@ public struct MereRunCapabilityOption: Codable, Equatable, Sendable {
         self.tier = tier
         self.range = range
         self.dependsOn = dependsOn
+        self.families = families
+        self.ignoredBy = ignoredBy
+        self.familyRules = familyRules
+        self.choiceSpellings = choiceSpellings
+        self.blankReadsAsOmitted = blankReadsAsOmitted
+        self.listSeparator = listSeparator
+        self.overriddenBy = overriddenBy
+    }
+
+    /// `aliases`, `families`, `ignored_by`, and `family_rules` are additive: a document written
+    /// before they existed decodes with no aliases and an option every family uses.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        flag = try container.decode(String.self, forKey: .flag)
+        aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
+        label = try container.decode(String.self, forKey: .label)
+        kind = try container.decode(MereRunCapabilityValueKind.self, forKey: .kind)
+        required = try container.decode(Bool.self, forKey: .required)
+        repeatable = try container.decode(Bool.self, forKey: .repeatable)
+        choices = try container.decode([String].self, forKey: .choices)
+        defaultValue = try container.decodeIfPresent(String.self, forKey: .defaultValue)
+        group = try container.decodeIfPresent(String.self, forKey: .group)
+        tier = try container.decodeIfPresent(MereRunCapabilityOptionTier.self, forKey: .tier)
+        range = try container.decodeIfPresent(MereRunCapabilityRange.self, forKey: .range)
+        dependsOn = try container.decodeIfPresent(String.self, forKey: .dependsOn)
+        families = try container.decodeIfPresent([String].self, forKey: .families)
+        ignoredBy = try container.decodeIfPresent([String].self, forKey: .ignoredBy) ?? []
+        familyRules = try container.decodeIfPresent([MereRunOptionFamilyRule].self, forKey: .familyRules) ?? []
+        choiceSpellings = try container.decodeIfPresent(MereRunChoiceSpellings.self, forKey: .choiceSpellings)
+        blankReadsAsOmitted = try container.decodeIfPresent(Bool.self, forKey: .blankReadsAsOmitted) ?? false
+        listSeparator = try container.decodeIfPresent(String.self, forKey: .listSeparator)
+        overriddenBy = try container.decodeIfPresent([MereRunFlagCondition].self, forKey: .overriddenBy) ?? []
+    }
+
+    /// Empty additive fields stay absent so a decoder that predates them sees the same JSON it
+    /// always did.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(flag, forKey: .flag)
+        if !aliases.isEmpty { try container.encode(aliases, forKey: .aliases) }
+        try container.encode(label, forKey: .label)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(required, forKey: .required)
+        try container.encode(repeatable, forKey: .repeatable)
+        try container.encode(choices, forKey: .choices)
+        try container.encodeIfPresent(defaultValue, forKey: .defaultValue)
+        try container.encodeIfPresent(group, forKey: .group)
+        try container.encodeIfPresent(tier, forKey: .tier)
+        try container.encodeIfPresent(range, forKey: .range)
+        try container.encodeIfPresent(dependsOn, forKey: .dependsOn)
+        try container.encodeIfPresent(families, forKey: .families)
+        if !ignoredBy.isEmpty { try container.encode(ignoredBy, forKey: .ignoredBy) }
+        if !familyRules.isEmpty { try container.encode(familyRules, forKey: .familyRules) }
+        try container.encodeIfPresent(choiceSpellings, forKey: .choiceSpellings)
+        if blankReadsAsOmitted { try container.encode(true, forKey: .blankReadsAsOmitted) }
+        try container.encodeIfPresent(listSeparator, forKey: .listSeparator)
+        if !overriddenBy.isEmpty { try container.encode(overriddenBy, forKey: .overriddenBy) }
+    }
+
+    /// Every spelling ArgumentParser accepts for this option.
+    public var spellings: [String] {
+        [flag] + aliases
+    }
+
+    /// The choice a passed value means, as the CLI reads it: `value` itself unless
+    /// `choiceSpellings` names another spelling of a choice.
+    public func choice(for value: String) -> String {
+        guard let choiceSpellings else { return value }
+        if choiceSpellings.numeric, let number = Double(value) {
+            return choices.first { Double($0) == number } ?? value
+        }
+        let key = choiceSpellings.ignoresCase
+            ? value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            : value
+        if let aliased = choiceSpellings.aliases[key] { return aliased }
+        return choices.first { (choiceSpellings.ignoresCase ? $0.lowercased() : $0) == key } ?? value
+    }
+
+    /// Whether the CLI reads `value` as one of `allowed`: an integer or number by value (`4.0`
+    /// and `04` are `4`), a choice by any spelling `choiceSpellings` names, anything else as
+    /// typed. Family rules, selectors, and default-model conditions all compare through it.
+    public func reads(_ value: String, asOneOf allowed: [String]) -> Bool {
+        guard kind == .integer || kind == .number, let number = Double(value) else {
+            return allowed.contains(choice(for: value))
+        }
+        return allowed.contains { Double($0) == number }
+    }
+}
+
+/// How the CLI reads a `.choice` option's value beyond the canonical `choices`, which stay what
+/// shells offer. `--recipe` trims and lowercases what it is given and accepts older recipe names;
+/// `--input-rate` parses an integer, so `016000` is `16000`; `.exact` says the CLI takes the
+/// choices as written (a raw-value enum ArgumentParser does not enumerate).
+public struct MereRunChoiceSpellings: Codable, Equatable, Sendable {
+    /// The CLI trims surrounding whitespace and compares without case.
+    public let ignoresCase: Bool
+    /// Another accepted spelling, keyed lowercased when `ignoresCase`, to the choice it means.
+    public let aliases: [String: String]
+    /// The CLI parses the value as a number, so a choice matches by value.
+    public let numeric: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case ignoresCase = "ignores_case"
+        case aliases
+        case numeric
+    }
+
+    public init(ignoresCase: Bool, aliases: [String: String] = [:], numeric: Bool = false) {
+        self.ignoresCase = ignoresCase
+        self.aliases = aliases
+        self.numeric = numeric
+    }
+
+    /// The choices exactly as written.
+    public static let exact = Self(ignoresCase: false)
+    /// The choices trimmed and without case.
+    public static let caseInsensitive = Self(ignoresCase: true)
+    /// The choices as numbers.
+    public static let number = Self(ignoresCase: false, numeric: true)
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ignoresCase = try container.decode(Bool.self, forKey: .ignoresCase)
+        aliases = try container.decodeIfPresent([String: String].self, forKey: .aliases) ?? [:]
+        numeric = try container.decodeIfPresent(Bool.self, forKey: .numeric) ?? false
+    }
+
+    /// `aliases` and `numeric` are written only when set.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(ignoresCase, forKey: .ignoresCase)
+        if !aliases.isEmpty { try container.encode(aliases, forKey: .aliases) }
+        if numeric { try container.encode(true, forKey: .numeric) }
     }
 }
 
@@ -151,9 +328,11 @@ extension MereRunCapabilityOption {
         } else {
             section = MereRunCapabilityOptionGroup.run
         }
-        return Self(flag: flag, label: label, kind: kind, required: required, repeatable: repeatable,
-            choices: choices, defaultValue: defaultValue, group: group ?? section,
-            tier: tier ?? (required ? .essential : .standard), range: range, dependsOn: dependsOn)
+        return Self(flag: flag, aliases: aliases, label: label, kind: kind, required: required,
+            repeatable: repeatable, choices: choices, defaultValue: defaultValue, group: group ?? section,
+            tier: tier ?? (required ? .essential : .standard), range: range, dependsOn: dependsOn,
+            families: families, ignoredBy: ignoredBy, familyRules: familyRules, choiceSpellings: choiceSpellings,
+            blankReadsAsOmitted: blankReadsAsOmitted, listSeparator: listSeparator, overriddenBy: overriddenBy)
     }
 }
 
@@ -234,6 +413,9 @@ public struct MereRunCommandCapability: Codable, Equatable, Sendable {
     public let arguments: [MereRunCapabilityArgument]
     public let options: [MereRunCapabilityOption]
     public let output: MereRunCapabilityOutput
+    /// How the capability chooses the runtime family that runs it. Absent for commands that
+    /// load no model, and omitted from JSON then, so an older decoder sees the JSON it always did.
+    public let routing: MereRunCapabilityRouting?
 
     public init(
         id: String,
@@ -242,7 +424,8 @@ public struct MereRunCommandCapability: Codable, Equatable, Sendable {
         summary: String,
         arguments: [MereRunCapabilityArgument] = [],
         options: [MereRunCapabilityOption],
-        output: MereRunCapabilityOutput
+        output: MereRunCapabilityOutput,
+        routing: MereRunCapabilityRouting? = nil
     ) {
         self.id = id
         self.command = command
@@ -251,6 +434,7 @@ public struct MereRunCommandCapability: Codable, Equatable, Sendable {
         self.arguments = arguments
         self.options = options.map { $0.withPresentation(outputFlag: output.flag) }
         self.output = output
+        self.routing = routing
     }
 }
 

@@ -24,6 +24,8 @@ Public tree:
 <!-- BEGIN GENERATED: CLI TREE -->
 - [`mere.run guide`](/cookbooks) — Read offline mere.run command cookbooks.
 - [`mere.run catalog`](/cli) — Inspect the machine-readable command capability contract.
+  - `mere.run catalog show` — Print the capability contract, or one capability by id (the default).
+  - `mere.run catalog resolve` — Show which runtime family a command line would run, and the options it rejects or ignores.
 - [`mere.run image`](/runtime/image) — Generate and validate image models.
   - `mere.run image dataset` — Inspect image training datasets.
     - `mere.run image dataset discover` — Find image-caption dataset candidates under a root directory.
@@ -240,6 +242,66 @@ That is equivalent to setting:
 export MERERUN_MODELS_DIR=/Volumes/FastSSD/mererun-models
 ```
 
+## Model scope check
+
+Before a command queues for machine admission, resolves its model, or downloads
+anything, the CLI checks the command line against the capability contract. It
+picks the runtime family the command will run from the model options, the
+command's default model, and any selector flags, and then:
+
+- stops with the reason and the command to use when the managed model can't
+  run this command, for example an ACE-Step language model passed to
+  `music analyze --model`;
+- stops when the family rejects an option;
+- prints a `Warning:` line on stderr when the family ignores an option, and
+  runs.
+
+It reads the command line the way the parser does: a repeated single-value
+option counts once, with its last value; grouped short options such as `-qm`
+and `-m=<id>` spell the same options; and a value the command reads as not
+passed, such as an empty `--negative-prompt` or a blank `text chat --image`,
+counts as omitted.
+
+A local model folder, an upstream repository id, or a managed model whose
+checkpoint depends on what is installed is identified the way the command
+identifies it, from its files, and checked as that family. One the CLI can't
+identify passes, and the command checks it when it loads. The parser's own
+requests (`--help`, `-h`, `-help`, `--experimental-dump-help`, `--version`,
+and completion scripts) and listing flags such as `--list-devices` are never
+checked.
+
+A refusal exits with status 64 and prints the usage line, like the commands'
+own option errors. It comes before any preflight work, so under
+`--preflight --json` a refused command line prints no JSON report; the error is
+on stderr. Warnings print once the whole command line has parsed and validated,
+so a run that fails validation shows only its error, and `--quiet` leaves them
+out.
+
+A command that prints a JSON object on stdout also carries the warnings in it,
+under `--quiet` too, as a top-level `warnings` array of the same sentences:
+
+```json
+{"event":"result","exit":0,"outputs":[{"kind":"text","path":"/abs/talk.txt"}],"warnings":["--max-tokens has no effect with Parakeet. It applies to Qwen3-ASR."]}
+```
+
+- It covers `--preflight --json` and `--dry-run --json` reports, `--json`
+  results, `--receipt` lines, and the commands whose result is a JSON object
+  (`audio edit`, `audio enhance`, `music analyze`, `music separate`,
+  `sfx clap score`, `speech diarize --format json`, `text anonymize --json`,
+  `text decide`, `text embed`, and `vision embed`).
+- With no warnings the key is left out, so the JSON is unchanged.
+- Only stdout carries them. A file the command writes, such as an `--output`
+  copy or the `audio enhance` and `music separate` manifests, keeps the result
+  alone.
+- JSON Lines streams (`--jsonl`, `video session`), servers,
+  and outputs that are the product itself rather than a report (`music
+  transcribe --format json`, `vision ocr`) are unchanged. So is
+  `video prepare-masks --json`, whose `warnings` counts mask-quality warnings;
+  its single model has no options it ignores.
+
+To see the decision without running anything, use
+[`mere.run catalog resolve`](#mere-run-catalog-resolve).
+
 ## Canonical managed model IDs
 
 See [`model-sources.md`](./model-sources.md) for the full source story,
@@ -451,6 +513,40 @@ mere.run text chat \
   --lora mere-platform-assistant \
   --prompt "Summarize the active project workspace."
 ```
+
+### `mere.run catalog resolve`
+
+Report which runtime family a command line runs, and what the
+[model scope check](#model-scope-check) decides for it. Pass the command line
+after `--`, without `mere.run`:
+
+```bash
+mere.run catalog resolve -- music analyze song.wav --model music-acestep
+mere.run catalog resolve --json -- music analyze song.wav --model music-acestep-lm-4b
+```
+
+Nothing is loaded, downloaded, or admitted. The report names:
+
+- `capability`: the capability id, such as `music.analyze`;
+- `family` and `family_title`: the runtime family, when one is known;
+- `model`: the model the family runs, when one is known;
+- `source`: how the family was chosen. `model`, `default`, and `selector` come
+  from the command line; `identified` from inspecting a local model;
+  `unidentified` means a local model or unlisted id the CLI checks only when it
+  loads; `excluded` is a managed model that can't run the command; `unmatched`
+  is a model whose selector flags fit no family; `unrouted` is a command that
+  loads no model, or a model it would refuse behind a listing flag such as
+  `--list-devices`;
+- `violations`: why the command would stop, empty when it runs;
+- `warnings`: options the family would run without.
+
+A listing flag such as `speech listen --list-devices` answers before the
+command reads any other option, so its command line reports no violations or
+warnings.
+
+`--json` prints the report as the `MereRunFamilyResolutionReport` type from
+`MereRunContract`. `mere.run catalog` with no subcommand keeps printing the
+capability contract, the same as `mere.run catalog show`.
 
 ### `mere.run plugin`
 
@@ -851,7 +947,14 @@ Key options:
 - `--prompt`
 - `--system`
 - `--model`: canonical model id
-- `--model-root`: explicit local model root
+- `--model-root`: explicit local model root. It locates weights; the runtime
+  still comes from `--model` or the default model.
+- `--image`: for vision checkpoints only: `vision-chat-gemma4-12b`, Muse
+  Glimmer, Nemotron 3 Nano Omni, LFM2.5-VL, Bonsai 27B, the Ornith 1.5 35B
+  vision ids, and Qwen3.8
+- `--seed`: request seed for Qwen-family sampling and DiffusionGemma canvases
+- `--reasoning-effort`: 0 through 1 for Qwen3.8 and Muse Glimmer, 0 through
+  0.99 for Inkling-Small
 - `--max-tokens`
 - `--context-size`: maximum prompt plus generation context. Qwen3.8 and Bonsai
   27B use their published 262,144-token limit by default. Inkling-Small advertises
@@ -867,8 +970,9 @@ Key options:
 - `--min-p`: relative probability floor from 0 through 1; `0` disables it.
   For example, `0.05` removes tokens below 5% of the leading token's
   probability. It does not change greedy generation.
-- `--kv-bits`: native Qwen-family models accept affine 4-bit or 8-bit resident
-  KV caches. Gemma4 also supports its model-specific cache schemes.
+- `--kv-bits`: native Qwen-family, Inkling-Small, and LFM2.5 models accept
+  affine 4-bit or 8-bit resident KV caches. Gemma4 also supports its
+  model-specific cache schemes.
 - `--response-format text|json_object`: require a complete JSON object from a
   native MLX Gemma or Qwen-family model. JSON mode forces thinking off and
   validates each token before streaming.
@@ -903,6 +1007,16 @@ variable disables color while retaining useful typography and structure.
 Native Gemma 4, Laguna XS 2.1, Inkling-Small, and LFM2.5 A1B adapters produced by
 `text train-lora` load directly in their matching runtime; `--lora-scale`
 scales the adapter.
+
+Before it resolves, downloads, or loads a model, `text chat` checks every option
+against the selected model's runtime. Options that runtime rejects, such as
+`--image` on a text-only checkpoint, `--lora` on Muse Glimmer, or
+`--response-format json_object` outside Gemma 4 and the Qwen family, fail with
+one message that names the runtimes that accept them. Options the runtime
+accepts but never reads, such as `--top-k` on Gemma 4 or `--tools` on the GGUF
+lane, print a `Warning:` line on stderr and the run continues. Companion
+drafters (`-mtp`, `-dflash`, `-dspark`, `-assistant`), the LTX text encoder,
+MeBot, and DeepSeek V4 Flash are refused with the command they do run.
 
 Examples:
 
@@ -967,7 +1081,8 @@ loading the model. Gemma 4 and Laguna default to
 attention projections plus `gate_proj,up_proj,down_proj,lm_head`; expert MLPs
 use shared-outer factors to keep the 256-expert adapter tractable. Inkling
 `--reasoning-effort` accepts
-0 through 0.99 and is recorded in the training manifest. Use the same value for
+0 through 0.99 and is recorded in the training manifest; the other trainers
+warn that it has no effect. Use the same value for
 inference. See [Text Runtime](/runtime/text) for the full dataset,
 training-artifact, and behavioral validation flow.
 
@@ -1088,6 +1203,9 @@ Key options:
 - `--output`: required
 - `--model`: canonical speech TTS id or local model path
 - `--voice`
+- `--speaker`: a CustomVoice named speaker in style mode; for
+  `speech-tts-qwen3-customvoice`, one of `aiden`, `dylan`, `eric`,
+  `ono_anna`, `ryan`, `serena`, `sohee`, `uncle_fu`, or `vivian`
 - `--mode`: `style` or `clone`
 - `--profile`
 - `--ref-audio`
@@ -1109,6 +1227,7 @@ Examples:
 swift run mere.run speech synthesize "Hello from mere.run" --output ./hello.wav
 swift run mere.run speech synthesize "Welcome aboard" --voice "A calm British male voice" --output ./welcome.wav
 swift run mere.run speech synthesize "Read this in my cloned voice" --mode clone --profile my-voice --output ./clone.wav
+swift run mere.run speech synthesize "Welcome aboard" --model speech-tts-qwen3-customvoice --speaker ryan --output ./ryan.wav
 ```
 
 ### `mere.run speech transcribe`
@@ -1123,7 +1242,8 @@ Key options:
 
 - positional audio path
 - `--backend`: `auto`, `qwen`, or `parakeet`
-- `--task`: `transcribe` or `translate`
+- `--task`: `transcribe` or `translate` (Qwen3-ASR, into English; `--language`
+  has no effect with it)
 - `--model`
 - `--language`
 - `--max-tokens`
@@ -2891,6 +3011,12 @@ Supported endpoint surface:
 - `POST /runtime/models/{id}/unload`
 - `GET/PATCH /runtime/models/{id}/settings`
 
+Chat, image, video, speech, transcription, and diarization requests go through
+the [model scope check](#model-scope-check): a field the selected model refuses
+returns HTTP 400 before anything loads, and one it ignores adds an
+`x-mere-warning` response header. See
+[model scope](./runtime/api-server.md#model-scope).
+
 The four `/runtime/models/{id}` load, unload, and settings operations target the
 chat/text runtime pool only. Managed embedding, image, TTS, and ASR sidecar TTL/pinning is
 configured through `mere.run model runtime set` or the settings file; sidecars
@@ -3243,6 +3369,8 @@ the rest:
 - The receipt is printed only after a successful run, so `exit` is always `0`;
   a failed run exits nonzero without a receipt. `--receipt` is rejected
   together with `--preflight`, which prints a report and produces no result.
+- A `warnings` array follows when the [model scope check](#model-scope-check)
+  warned about an option; without warnings the key is absent.
 - Supported by `image generate`, `video generate`, `music generate`,
   `sfx generate`, `speech synthesize`, `speech transcribe`, `vision ground`,
   `vision segment`, and `vision track`.

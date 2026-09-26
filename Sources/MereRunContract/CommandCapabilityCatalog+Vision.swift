@@ -10,7 +10,7 @@ extension MereRunCapabilityCatalog {
             .init(name: "prompt-words", label: "Prompt words", kind: .string, required: false, repeatable: true)],
         options: [
             .init(flag: "--prompt", label: "Prompt", kind: .string, group: Group.prompt, tier: .essential),
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
             .init(
                 flag: "--max-tokens", label: "Max tokens", kind: .integer,
                 defaultValue: "2048", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 8_192, step: 1)
@@ -24,7 +24,8 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "0.9", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
             )
         ],
-        output: .init(kind: .text)
+        output: .init(kind: .text),
+        routing: qwenVLRouting
     )
 
     public static let visionEmbed = MereRunCommandCapability(
@@ -37,15 +38,16 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--image", label: "Image inputs", kind: .file, repeatable: true),
             .init(flag: "--input-json", label: "JSON batch", kind: .file),
             .init(flag: "--instruction", label: "Retrieval instruction", kind: .string),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--dimensions", label: "Dimensions", kind: .integer),
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
             .init(flag: "--min-pixels", label: "Minimum pixels", kind: .integer),
             .init(flag: "--max-pixels", label: "Maximum pixels", kind: .integer),
-            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "Output", kind: .file),
             .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean)
         ],
-        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true)
+        output: .init(kind: .text, fileExtension: "json", flag: "--output", optional: true),
+        routing: visionEmbedRouting
     )
 
     public static let visionCaption = MereRunCommandCapability(
@@ -55,8 +57,8 @@ extension MereRunCapabilityCatalog {
         summary: "Generate training-friendly captions for one or more images.",
         arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
         options: [
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
-            .init(flag: "--output-dir", label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output-dir", aliases: ["-o"], label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
             .init(flag: "--prompt", label: "Prompt", kind: .string, group: Group.prompt, tier: .essential),
             .init(flag: "--prompt-file", label: "Prompt file", kind: .file, group: Group.prompt, tier: .expert),
             .init(flag: "--focus", label: "Focus", kind: .string, repeatable: true, group: Group.prompt, tier: .standard),
@@ -74,95 +76,107 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "0.9", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 1, step: 0.01)
             )
         ],
-        output: .init(kind: .directory, flag: "--output-dir")
+        output: .init(kind: .directory, flag: "--output-dir"),
+        routing: qwenVLRouting
     )
 
-    public static let visionOCR = MereRunCommandCapability(
-        id: "vision.ocr",
-        command: ["vision", "ocr"],
-        title: "OCR",
-        summary: "Extract text with native LightOn/Infinity or external GLM/Infinity runtimes.",
-        arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
-        options: [
-            .init(
-                flag: "--backend", label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity"],
-                defaultValue: "lighton", group: Group.modelAndAdapters, tier: .essential
-            ),
-            .init(flag: "--compare", label: "Compare", kind: .boolean, group: Group.run, tier: .expert),
-            .init(
-                flag: "--model", label: "LightOn model", kind: .string,
-                defaultValue: "vision-ocr-lighton", group: Group.modelAndAdapters, tier: .standard
-            ),
-            .init(
-                flag: "--glmocr-cli", label: "GLM executable", kind: .file,
-                defaultValue: "glmocr", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(flag: "--glm-config", label: "GLM config", kind: .file, group: Group.modelAndAdapters, tier: .expert),
-            .init(
-                flag: "--infinity-runtime", label: "Infinity runtime", kind: .choice, choices: ["native", "external"],
-                defaultValue: "native", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-parser-cli", label: "Parser executable", kind: .file,
-                defaultValue: "parser", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-model", label: "Infinity model", kind: .string,
-                defaultValue: "vision-ocr-infinity-pro-int8", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-backend",
-                label: "Infinity backend",
-                kind: .choice,
-                choices: ["transformers", "vllm-engine", "vllm-server"],
-                defaultValue: "vllm-server", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-api-url", label: "Infinity API URL", kind: .string,
-                defaultValue: "http://localhost:8000/v1/chat/completions", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-api-key", label: "Infinity API key", kind: .string,
-                defaultValue: "EMPTY", group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-task", label: "Infinity task", kind: .choice, choices: ["doc2json", "doc2md", "custom"],
-                defaultValue: "doc2json", group: Group.prompt, tier: .expert
-            ),
-            .init(flag: "--infinity-prompt", label: "Infinity prompt", kind: .string, group: Group.prompt, tier: .expert),
-            .init(
-                flag: "--infinity-output-format", label: "Infinity format", kind: .choice, choices: ["md", "json"],
-                defaultValue: "md", group: Group.output, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-batch-size", label: "Batch size", kind: .integer,
-                defaultValue: "1", group: Group.run, tier: .expert, range: .init(min: 1, max: 64, step: 1)
-            ),
-            .init(
-                flag: "--infinity-model-cache-dir", label: "Model cache", kind: .directory,
-                group: Group.modelAndAdapters, tier: .expert
-            ),
-            .init(
-                flag: "--infinity-min-pixels", label: "Minimum pixels", kind: .integer,
-                defaultValue: "2048", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
-            ),
-            .init(
-                flag: "--infinity-max-pixels", label: "Maximum pixels", kind: .integer,
-                defaultValue: "16777216", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
-            ),
-            .init(flag: "--output-dir", label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
-            .init(
-                flag: "--max-tokens", label: "Max tokens", kind: .integer,
-                defaultValue: "4096", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 16_384, step: 1)
-            ),
-            .init(
-                flag: "--temperature", label: "Temperature", kind: .number,
-                defaultValue: "0.2", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
-            ),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
-        ],
-        output: .init(kind: .text, flag: "--output-dir", optional: true)
-    )
+    public static let visionOCR: MereRunCommandCapability = {
+        typealias F = OCRFamily
+        let lightOn = F.usedBy(F.lightOnRuns)
+        let glm = F.usedBy(F.glmRuns)
+        let infinity = F.usedBy(F.infinityRuns)
+        let externalInfinity = F.usedBy(F.externalInfinityRuns)
+        return MereRunCommandCapability(
+            id: "vision.ocr",
+            command: ["vision", "ocr"],
+            title: "OCR",
+            summary: "Extract text with native LightOn/Infinity or external GLM/Infinity runtimes.",
+            arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
+            options: [
+                .init(
+                    flag: "--backend", aliases: ["-b"], label: "Backend", kind: .choice, choices: ["lighton", "glm", "infinity"],
+                    defaultValue: "lighton", group: Group.modelAndAdapters, tier: .essential
+                ),
+                .init(flag: "--compare", label: "Compare", kind: .boolean, group: Group.run, tier: .expert),
+                .init(
+                    flag: "--model", aliases: ["-m"], label: "LightOn model", kind: .string,
+                    defaultValue: "vision-ocr-lighton", group: Group.modelAndAdapters, tier: .standard
+                ).scoped(lightOn),
+                .init(
+                    flag: "--glmocr-cli", label: "GLM executable", kind: .file,
+                    defaultValue: "glmocr", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(glm),
+                .init(flag: "--glm-config", label: "GLM config", kind: .file, group: Group.modelAndAdapters, tier: .expert)
+                    .scoped(glm),
+                .init(
+                    flag: "--infinity-runtime", label: "Infinity runtime", kind: .choice, choices: ["native", "external"],
+                    defaultValue: "native", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(infinity),
+                .init(
+                    flag: "--infinity-parser-cli", label: "Parser executable", kind: .file,
+                    defaultValue: "parser", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-model", label: "Infinity model", kind: .string,
+                    defaultValue: "vision-ocr-infinity-pro-int8", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(infinity),
+                .init(
+                    flag: "--infinity-backend",
+                    label: "Infinity backend",
+                    kind: .choice,
+                    choices: ["transformers", "vllm-engine", "vllm-server"],
+                    defaultValue: "vllm-server", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-api-url", label: "Infinity API URL", kind: .string,
+                    defaultValue: "http://localhost:8000/v1/chat/completions", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-api-key", label: "Infinity API key", kind: .string,
+                    defaultValue: "EMPTY", group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-task", label: "Infinity task", kind: .choice, choices: ["doc2json", "doc2md", "custom"],
+                    defaultValue: "doc2json", group: Group.prompt, tier: .expert
+                ).scoped(infinity),
+                .init(flag: "--infinity-prompt", label: "Infinity prompt", kind: .string, group: Group.prompt, tier: .expert)
+                    .scoped(infinity),
+                .init(
+                    flag: "--infinity-output-format", label: "Infinity format", kind: .choice, choices: ["md", "json"],
+                    defaultValue: "md", group: Group.output, tier: .expert
+                ).scoped(infinity),
+                .init(
+                    flag: "--infinity-batch-size", label: "Batch size", kind: .integer,
+                    defaultValue: "1", group: Group.run, tier: .expert, range: .init(min: 1, max: 64, step: 1)
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-model-cache-dir", label: "Model cache", kind: .directory,
+                    group: Group.modelAndAdapters, tier: .expert
+                ).scoped(externalInfinity),
+                .init(
+                    flag: "--infinity-min-pixels", label: "Minimum pixels", kind: .integer,
+                    defaultValue: "2048", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
+                ).scoped(infinity),
+                .init(
+                    flag: "--infinity-max-pixels", label: "Maximum pixels", kind: .integer,
+                    defaultValue: "16777216", group: Group.inputs, tier: .expert, range: .init(min: 1, step: 1)
+                ).scoped(infinity),
+                .init(flag: "--output-dir", aliases: ["-o"], label: "Output directory", kind: .directory, group: Group.output, tier: .standard),
+                // The native runtimes sample; GLM-OCR and the external parser never read these.
+                .init(
+                    flag: "--max-tokens", label: "Max tokens", kind: .integer,
+                    defaultValue: "4096", group: Group.sampling, tier: .standard, range: .init(min: 1, max: 16_384, step: 1)
+                ).scoped(F.usedBy(F.lightOnRuns + [.infinityNative])),
+                .init(
+                    flag: "--temperature", label: "Temperature", kind: .number,
+                    defaultValue: "0.2", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
+                ).scoped(F.usedBy(F.lightOnRuns + [.infinityNative])),
+                .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert)
+            ],
+            output: .init(kind: .text, flag: "--output-dir", optional: true),
+            routing: visionOCRRouting
+        )
+    }()
 
     public static let visionGround = MereRunCommandCapability(
         id: "vision.ground",
@@ -171,17 +185,18 @@ extension MereRunCapabilityCatalog {
         summary: "Ground one or more text expressions with native Falcon Perception.",
         arguments: [.init(name: "image", label: "Image", kind: .file, required: true)],
         options: [
-            .init(flag: "--query", label: "Query", kind: .string, repeatable: true, group: Group.prompt, tier: .essential),
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
-            .init(flag: "--output", label: "Annotated image", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--query", aliases: ["--prompt"], label: "Query", kind: .string, repeatable: true, group: Group.prompt, tier: .essential),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output", aliases: ["-o"], label: "Annotated image", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--json-output", label: "JSON output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory, group: Group.output, tier: .standard),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "png", flag: "--output")
+        output: .init(kind: .file, fileExtension: "png", flag: "--output"),
+        routing: visionGroundRouting
     )
 
     public static let visionSegment = MereRunCommandCapability(
@@ -194,8 +209,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--prompt", label: "Text prompt", kind: .string, repeatable: true, group: Group.prompt, tier: .essential),
             .init(flag: "--box", label: "Box prompt", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
             .init(flag: "--point", label: "Point prompt", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
-            .init(flag: "--output", label: "Annotated image", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output", aliases: ["-o"], label: "Annotated image", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--json-output", label: "JSON output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory, group: Group.output, tier: .standard),
             .init(
@@ -210,10 +225,11 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--multimask", label: "Multiple masks", kind: .boolean, group: Group.sampling, tier: .expert),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "png", flag: "--output")
+        output: .init(kind: .file, fileExtension: "png", flag: "--output"),
+        routing: sam31Routing
     )
 
     public static let visionTrack = MereRunCommandCapability(
@@ -226,8 +242,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--prompt", label: "Text prompt", kind: .string, repeatable: true, group: Group.prompt, tier: .essential),
             .init(flag: "--box", label: "Box prompt", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
             .init(flag: "--point", label: "Point prompt", kind: .string, repeatable: true, group: Group.inputs, tier: .standard),
-            .init(flag: "--model", label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
-            .init(flag: "--output", label: "Annotated video", kind: .file, group: Group.output, tier: .standard),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string, group: Group.modelAndAdapters, tier: .essential),
+            .init(flag: "--output", aliases: ["-o"], label: "Annotated video", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--json-output", label: "JSON output", kind: .file, group: Group.output, tier: .standard),
             .init(flag: "--mask-output-dir", label: "Mask directory", kind: .directory, group: Group.output, tier: .standard),
             .init(
@@ -250,10 +266,11 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--show-labels", label: "Show labels", kind: .boolean, group: Group.output, tier: .expert),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean, group: Group.run, tier: .expert),
             .init(flag: "--json", label: "JSON preflight", kind: .boolean, group: Group.run, tier: .expert, dependsOn: "--preflight"),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean, group: Group.run, tier: .expert),
             receiptOption
         ],
-        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output"),
+        routing: sam31Routing
     )
 
     public static let visionTrackLive = MereRunCommandCapability(
@@ -263,8 +280,8 @@ extension MereRunCapabilityCatalog {
         summary: "Capture a camera and track prompted objects.",
         options: [
             .init(flag: "--prompt", label: "Prompt", kind: .string, repeatable: true),
-            .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--output", label: "Annotated video", kind: .file, required: true),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
+            .init(flag: "--output", aliases: ["-o"], label: "Annotated video", kind: .file, required: true),
             .init(flag: "--json-output", label: "JSON output", kind: .file),
             .init(flag: "--camera", label: "Camera", kind: .integer),
             .init(flag: "--duration-seconds", label: "Duration", kind: .number),
@@ -275,7 +292,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--show-boxes", label: "Show boxes", kind: .boolean),
             .init(flag: "--show-labels", label: "Show labels", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "mp4", flag: "--output")
+        output: .init(kind: .file, fileExtension: "mp4", flag: "--output"),
+        routing: sam31Routing
     )
 
     public static let visionFaceDetect = MereRunCommandCapability(
@@ -288,7 +306,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--max-faces", label: "Max faces", kind: .integer),
             .init(flag: "--include-embeddings", label: "Embeddings", kind: .boolean)
         ],
-        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true)
+        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true),
+        routing: visionFaceRouting
     )
 
     public static let visionFaceEmbed = MereRunCommandCapability(
@@ -300,7 +319,8 @@ extension MereRunCapabilityCatalog {
         options: faceOptions + [
             .init(flag: "--face-index", label: "Face index", kind: .integer)
         ],
-        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true)
+        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true),
+        routing: visionFaceRouting
     )
 
     public static let visionFaceCompare = MereRunCommandCapability(
@@ -316,7 +336,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--reference-face-index", label: "Reference index", kind: .integer),
             .init(flag: "--candidate-face-index", label: "Candidate index", kind: .integer)
         ],
-        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true)
+        output: .init(kind: .text, fileExtension: "json", flag: "--json-output", optional: true),
+        routing: visionFaceRouting
     )
 
     public static let visionFaceBatch = MereRunCommandCapability(
@@ -327,7 +348,7 @@ extension MereRunCapabilityCatalog {
         arguments: [.init(name: "images", label: "Images", kind: .file, required: false, repeatable: true)],
         options: [
             .init(flag: "--input-list", label: "Input list", kind: .file),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--score-threshold", label: "Score threshold", kind: .number),
             .init(flag: "--execution-provider", label: "Provider", kind: .choice, choices: ["auto", "coreml", "cpu"]),
             .init(flag: "--max-faces", label: "Max faces", kind: .integer),
@@ -335,11 +356,12 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--jsonl-output", label: "JSONL output", kind: .file),
             .init(flag: "--fail-fast", label: "Fail fast", kind: .boolean)
         ],
-        output: .init(kind: .text, fileExtension: "jsonl", flag: "--jsonl-output", optional: true)
+        output: .init(kind: .text, fileExtension: "jsonl", flag: "--jsonl-output", optional: true),
+        routing: visionFaceRouting
     )
 
     private static let faceOptions: [MereRunCapabilityOption] = [
-        .init(flag: "--model", label: "Model", kind: .string),
+        .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
         .init(flag: "--score-threshold", label: "Score threshold", kind: .number),
         .init(flag: "--execution-provider", label: "Provider", kind: .choice, choices: ["auto", "coreml", "cpu"]),
         .init(flag: "--json-output", label: "JSON output", kind: .file),
@@ -374,7 +396,7 @@ extension MereRunCapabilityCatalog {
             .init(name: "to", label: "To", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Flow output", kind: .file),
+            .init(flag: "--output", aliases: ["-o"], label: "Flow output", kind: .file),
             .init(flag: "--json-output", label: "JSON output", kind: .file),
             .init(flag: "--accuracy", label: "Accuracy", kind: .choice, choices: ["low", "medium", "high", "very-high"]),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
@@ -389,7 +411,7 @@ extension MereRunCapabilityCatalog {
         summary: "Estimate relative depth for a still image with native Marigold V2.",
         arguments: [.init(name: "input", label: "Image", kind: .file, required: true)],
         options: [
-            .init(flag: "--output", label: "Output directory", kind: .directory),
+            .init(flag: "--output", aliases: ["-o"], label: "Output directory", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--max-edge", label: "Maximum inference edge", kind: .integer),
             .init(flag: "--native", label: "Use source resolution", kind: .boolean),
@@ -404,7 +426,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--json", label: "Print JSON", kind: .boolean),
             receiptOption
         ],
-        output: .init(kind: .directory, flag: "--output")
+        output: .init(kind: .directory, flag: "--output"),
+        routing: visionDepthRouting
     )
 
     public static let visionDepthVideo = MereRunCommandCapability(
@@ -414,14 +437,15 @@ extension MereRunCapabilityCatalog {
         summary: "Generate temporally consistent relative or metric depth.",
         arguments: [.init(name: "input", label: "Video", kind: .file, required: true)],
         options: [
-            .init(flag: "--output", label: "Output directory", kind: .directory),
+            .init(flag: "--output", aliases: ["-o"], label: "Output directory", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--input-size", label: "Input edge", kind: .integer),
             .init(flag: "--max-frames", label: "Max frames", kind: .integer),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory, flag: "--output")
+        output: .init(kind: .directory, flag: "--output"),
+        routing: visionDepthVideoRouting
     )
 
     public static let visionGeometry = MereRunCommandCapability(
@@ -431,7 +455,7 @@ extension MereRunCapabilityCatalog {
         summary: "Generate metric depth, normals, camera intrinsics, and a point cloud.",
         arguments: [.init(name: "input", label: "Image", kind: .file, required: true)],
         options: [
-            .init(flag: "--output", label: "Output directory", kind: .directory),
+            .init(flag: "--output", aliases: ["-o"], label: "Output directory", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--resolution-level", label: "Quality", kind: .integer),
             .init(flag: "--token-count", label: "Token count", kind: .integer),
@@ -439,7 +463,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory, flag: "--output")
+        output: .init(kind: .directory, flag: "--output"),
+        routing: visionGeometryRouting
     )
 
     public static let visionGeometryMultiview = MereRunCommandCapability(
@@ -449,7 +474,7 @@ extension MereRunCapabilityCatalog {
         summary: "Solve relative geometry, confidence, and cameras from ordered views.",
         arguments: [.init(name: "images", label: "Images", kind: .file, required: true, repeatable: true)],
         options: [
-            .init(flag: "--output", label: "Output directory", kind: .directory),
+            .init(flag: "--output", aliases: ["-o"], label: "Output directory", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--cameras", label: "Cameras", kind: .file),
             .init(flag: "--process-resolution", label: "Process resolution", kind: .integer),
@@ -459,7 +484,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "Print JSON", kind: .boolean)
         ],
-        output: .init(kind: .directory, flag: "--output")
+        output: .init(kind: .directory, flag: "--output"),
+        routing: visionGeometryMultiviewRouting
     )
 
     public static let visionServe = MereRunCommandCapability(
@@ -469,8 +495,8 @@ extension MereRunCapabilityCatalog {
         summary: "Serve resident, binary-frame vision grounding over HTTP.",
         options: [
             .init(flag: "--host", label: "Host", kind: .string),
-            .init(flag: "--port", label: "Port", kind: .integer),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--port", aliases: ["-p"], label: "Port", kind: .integer),
+            .init(flag: "--model", aliases: ["-m"], label: "Model", kind: .string),
             .init(flag: "--api-key", label: "API key", kind: .string),
             .init(flag: "--max-frame-bytes", label: "Max frame bytes", kind: .integer),
             .init(flag: "--max-batch-size", label: "Max batch size", kind: .integer),

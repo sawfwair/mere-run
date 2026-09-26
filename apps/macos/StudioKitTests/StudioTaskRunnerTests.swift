@@ -86,12 +86,12 @@ final class StudioTaskRunnerTests: XCTestCase {
         let draft = try enhanceDraft()
         XCTAssertEqual(draft.text("--output"), "", "the draft keeps no destination")
 
-        let preview = StudioTaskRunner.launchPreview(draft)
+        let preview = StudioTaskRunner.launchPreview(draft, source: .contract)
         let previewed = preview.text("--output")
         XCTAssertTrue(previewed.hasPrefix(root.appendingPathComponent("outputs/Audio").path), previewed)
         let request = try runner.run(draft, task: .audioEnhance)
         XCTAssertEqual(request.draft.outputPath, previewed)
-        XCTAssertEqual(request.execution?.arguments, preview.arguments)
+        XCTAssertEqual(request.execution?.arguments, preview.arguments(source: .contract))
     }
 
     /// Audio ▸ Separate runs Music ▸ Separate's command. Stop on either acts on that task's own
@@ -257,7 +257,7 @@ final class StudioTaskRunnerTests: XCTestCase {
         draft.inputPath = root.appendingPathComponent("standup.wav").path
         draft.outputPath = root.appendingPathComponent("outputs/Audio/standup.json").path
         let base = StudioRunRequest(mode: .listen, templateID: .speechDiarize, template: template, draft: draft)
-        let prepared = try StudioTaskRunner.prepare(base, sessions: controller.taskSessions)
+        let prepared = try StudioTaskRunner.prepare(base, sessions: controller.taskSessions, source: .contract)
         XCTAssertNil(prepared.fallbackReason)
         XCTAssertEqual(prepared.request.draft, draft)
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("outputs/Audio").path))

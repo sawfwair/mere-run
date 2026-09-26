@@ -92,7 +92,7 @@ final class ProcessRecoveryTests: XCTestCase {
             draft.outputPath = root.appendingPathComponent("\(name).png").path
             return .init(
                 lane: .inference, template: template, draft: draft, requestID: UUID(),
-                configuration: configuration(script, root: root), displayCommand: "fixture \(name)"
+                configuration: configuration(script, root: root), displayCommand: "fixture \(name)", scopeSource: .contract
             )
         }
         let first = store.submit(request("first", script: "trap '' TERM; printf ready; sleep 30"))

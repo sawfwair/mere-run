@@ -107,12 +107,9 @@ struct SFXVideoGenerate: AsyncParsableCommand {
         }
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        if SFXMMAudioRuntime.isMMAudio(model: model) {
+        if MMAudioResources.isMMAudio(model: model) {
             try await runMMAudio(inputURL: inputURL, outputURL: outputURL)
             return
-        }
-        guard negativePrompt.isEmpty else {
-            throw ValidationError("--negative-prompt is only supported by MMAudio models.")
         }
 
         let resolved = try await SFXWooshRuntime.resolve(model: model, quiet: quiet)
@@ -154,9 +151,6 @@ struct SFXVideoGenerate: AsyncParsableCommand {
     private func runMMAudio(inputURL: URL, outputURL: URL) async throws {
         guard inputURL.pathExtension.lowercased() != "npy" else {
             throw ValidationError("MMAudio video generation requires the original video, not Synchformer-only .npy features.")
-        }
-        guard renoise == nil else {
-            throw ValidationError("--renoise is only supported by Woosh models.")
         }
         let resources = try await SFXMMAudioRuntime.resolve(model: model, quiet: quiet)
         let stepCount = steps ?? MMAudioResources.defaultSteps
@@ -311,7 +305,7 @@ struct SFXVideoGenerate: AsyncParsableCommand {
     private func runPreflight(inputURL: URL, outputURL: URL) throws {
         let envelope = makePreflightEnvelope(inputURL: inputURL, outputURL: outputURL)
         if json {
-            print(try StructuredRunOutput.encode(envelope))
+            print(try StructuredRunOutput.encode(GateWarned(envelope)))
         } else {
             print(envelope.summary)
             for diagnostic in envelope.diagnostics {

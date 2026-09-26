@@ -294,6 +294,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         let outputURL = try ImageLoRATrainingPlan.outputURL(for: output)
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let plan = try ImageLoRATrainingPlan.resolve(input)
+        if let warning = ImageLoRATrainingOptions.recipeWarning(recipe: recipe, family: plan.modelManifest.family) {
+            CLIStderr.write("Warning: \(warning)\n")
+        }
         let runContext = try startRunContextIfNeeded(
             outputURL: outputURL, modelRoot: plan.modelRoot,
             modelManifest: plan.modelManifest, options: resolvedOptions
@@ -332,7 +335,6 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             recipe: recipe,
             excludePreviewImages: excludePreviewImages,
             syntheticSamples: syntheticSamples,
-            requiresKleinModel: options.checkpointInterval != nil || hasKleinOnlyTrainingOptions(options: options),
             options: options,
             trainingArgv: trainingActionArguments(),
             runPlan: makeRunPlan(options: options, fileManager: fileManager, now: now),
@@ -348,7 +350,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     private func runPreflight(options: ResolvedLoRATrainingOptions) throws {
         let envelope = makePreflightEnvelope(options: options)
         if json {
-            print(try StructuredRunOutput.encode(envelope))
+            print(try StructuredRunOutput.encode(GateWarned(envelope)))
         } else {
             print(envelope.summary)
             for diagnostic in envelope.diagnostics {
@@ -622,10 +624,6 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             }
         }
         return LoRATrainingRunContext(logger: logger, serverTask: task)
-    }
-
-    private func hasKleinOnlyTrainingOptions(options: ResolvedLoRATrainingOptions) -> Bool {
-        trainingOptions().hasKleinOnlyTrainingOptions(options: options)
     }
 
     private func makeTrainingProgressHandler(

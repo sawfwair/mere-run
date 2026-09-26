@@ -81,7 +81,7 @@ extension ManagedModelCatalog {
             validationKind: .wooshClap,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 2 * 1_073_741_824,
-            defaultCLICommands: ["sfx clap"]
+            defaultCLICommands: ["sfx clap score"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wooshSynchformer.rawValue,

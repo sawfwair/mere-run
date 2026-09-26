@@ -164,6 +164,11 @@ swift run mere.run sfx video generate \
   --output ./skateboard.wav
 ```
 
+Only MMAudio takes `--negative-prompt`; only the distilled DFlow and DVFlow
+models renoise, so MMAudio refuses `--renoise` and Flow and VFlow ignore it with
+a warning. The CLI refuses a Woosh model named for the wrong command, such as
+`sfx-woosh-vflow-8s` for `sfx generate`, before it loads any weights.
+
 MMAudio video generation needs the original video because it conditions on
 both DFN5B CLIP frames and Synchformer features. A Synchformer-only `.npy`
 input cannot supply the CLIP stream. The model produces 44.1 kHz audio and

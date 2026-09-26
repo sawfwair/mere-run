@@ -24,8 +24,8 @@ extension MereRunCapabilityCatalog {
                 group: Group.run, tier: .expert
             ),
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--model-root", aliases: ["-m"], label: "Model root", kind: .directory),
+            .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string),
             .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
             .init(flag: "--prompt-repeat", label: "Prompt repeat", kind: .integer),
             .init(flag: "--prompt-repeat-values", label: "Prompt repeat matrix", kind: .string),
@@ -57,7 +57,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--top-p", label: "Top-p", kind: .number),
             .init(flag: "--top-k", label: "Top-k", kind: .integer),
             .init(flag: "--min-p", label: "Min-p", kind: .number),
-            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string),
             .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
             .init(
                 flag: "--fixture",
@@ -314,8 +314,8 @@ extension MereRunCapabilityCatalog {
         summary: "Compare Gemma4 default KV cache decode against packed PolarKV.",
         options: [
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--model-root", aliases: ["-m"], label: "Model root", kind: .directory),
+            .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string),
             .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
             .init(flag: "--prompt-repeat", label: "Prompt repeat", kind: .integer),
             .init(flag: "--prompt-repeat-values", label: "Prompt repeat matrix", kind: .string),
@@ -335,8 +335,8 @@ extension MereRunCapabilityCatalog {
         summary: "Compare Gemma4 serial decode against verified MTP speculative decode.",
         options: [
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--model-root", label: "Model root", kind: .directory),
-            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--model-root", aliases: ["-m"], label: "Model root", kind: .directory),
+            .init(flag: "--prompt", aliases: ["-p"], label: "Prompt", kind: .string),
             .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
             .init(flag: "--prompt-repeat", label: "Prompt repeat", kind: .integer),
             .init(flag: "--prompt-repeat-values", label: "Prompt repeat matrix", kind: .string),

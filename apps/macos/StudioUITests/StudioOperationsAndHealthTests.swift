@@ -153,7 +153,7 @@ final class StudioOperationsAndHealthTests: XCTestCase {
 
     func testManifestRepairTemplateDefaultsToStructuredPreview() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .modelRepairManifests))
-        let arguments = template.arguments(from: template.defaultDraft())
+        let arguments = template.arguments(from: template.defaultDraft(), source: .contract)
 
         XCTAssertEqual(arguments, ["model", "repair-manifests", "--dry-run", "--json"])
     }

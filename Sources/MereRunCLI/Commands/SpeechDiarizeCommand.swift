@@ -149,11 +149,9 @@ struct SpeechDiarize: AsyncParsableCommand {
             throw ValidationError("Audio file not found: \(audioURL.path)")
         }
 
+        // The capability gate refused a Sortformer run with a streaming `--latency` before this.
         let modelRoot = try Self.resolveModelRoot(model)
-        let useNemotron = Self.isNemotron3(model: model, root: modelRoot)
-        guard useNemotron || latency == .offline else {
-            throw ValidationError("--latency is supported only with speech-diarization-nemotron3.")
-        }
+        let useNemotron = Nemotron3DiarizationResources.isNemotron3(model: model, root: modelRoot)
         if !quiet {
             CLIStderr.write("Loading \(useNemotron ? "Nemotron 3 Diarization" : "Sortformer") from \(modelRoot.path)\n")
             CLIStderr.write("[runtime] diarization backend: \(NativeMLXRuntime.backendDescription)\n")
@@ -188,13 +186,10 @@ struct SpeechDiarize: AsyncParsableCommand {
                 mergeGap: mergeGap
             )
         }
-        let rendered = try render(
-            result,
-            sourceURL: audioURL,
-            durationSeconds: Double(audioBuffer.samples.count) / Double(audioBuffer.sampleRate)
-        )
+        let durationSeconds = Double(audioBuffer.samples.count) / Double(audioBuffer.sampleRate)
 
         if let output {
+            let rendered = try render(result, sourceURL: audioURL, durationSeconds: durationSeconds, warnings: [])
             let outputURL = URL(fileURLWithPath: output).standardizedFileURL
             try FileManager.default.createDirectory(
                 at: outputURL.deletingLastPathComponent(),
@@ -211,7 +206,8 @@ struct SpeechDiarize: AsyncParsableCommand {
                 "Detected \(result.numSpeakers) speaker(s) across \(result.segments.count) segment(s).\n"
             )
         }
-        print(rendered)
+        // Only stdout carries the gate's warnings; the file keeps the diarization alone.
+        print(try render(result, sourceURL: audioURL, durationSeconds: durationSeconds, warnings: CLIGateWarnings.current))
     }
 
     static func resolveModelRoot(
@@ -233,17 +229,11 @@ struct SpeechDiarize: AsyncParsableCommand {
         return try ModelResolver(fileManager: fileManager).resolve(modelID).rootURL
     }
 
-    static func isNemotron3(model: String, root: URL) -> Bool {
-        model == ModelResolver.ModelID.nemotron3Diarization.rawValue
-            || FileManager.default.fileExists(
-                atPath: root.appendingPathComponent(Nemotron3DiarizationResources.archivePin.filename).path
-            )
-    }
-
     private func render(
         _ result: DiarizationOutput,
         sourceURL: URL,
-        durationSeconds: Double
+        durationSeconds: Double,
+        warnings: [String]
     ) throws -> String {
         switch format {
         case .rttm:
@@ -259,7 +249,7 @@ struct SpeechDiarize: AsyncParsableCommand {
             )
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            return String(decoding: try encoder.encode(payload), as: UTF8.self)
+            return String(decoding: try encoder.encode(GateWarned(payload, warnings: warnings)), as: UTF8.self)
         }
     }
 }

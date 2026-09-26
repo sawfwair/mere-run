@@ -1,5 +1,6 @@
 #if os(macOS) || os(Linux)
 import Foundation
+import MereRunContract
 
 extension NativeChatRuntime {
     /// A command uses generator defaults; a server can explicitly override
@@ -65,6 +66,13 @@ extension NativeChatRuntime {
         }
     }
 
+    /// The `text chat` family that runs `modelID`: the contract's exact managed ids first, then
+    /// the identifier's reading of any other id.
+    public static func commandFamily(modelID: String) -> MereRunCapabilityCatalog.TextChatFamily {
+        MereRunCapabilityCatalog.TextChatFamily(managedModel: modelID)
+            ?? ModelFamilyIdentifier.textChatFamily(matching: modelID)
+    }
+
     /// Preserves command family selection, including command-only Psi and
     /// Inkling runtimes. API selection uses its managed serving profile.
     public static func command(
@@ -72,31 +80,32 @@ extension NativeChatRuntime {
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization()
     ) throws -> Self {
         let engine: RuntimeServingEngine
-        if modelID == Psi3ChatResources.defaultModelId {
+        switch commandFamily(modelID: modelID) {
+        case .psi:
             return .textChatPsi(Psi3ChatGenerator(modelId: modelID), modelPath: modelPath)
-        } else if modelID == DiffusionGemmaResources.modelID {
+        case .inkling:
+            return .textChatInkling(InklingGenerator(modelID: modelID), modelPath: modelPath)
+        case .diffusionGemma:
             engine = .textChatDiffusionGemma
-        } else if Gemma4Resources.handles(modelSpec: modelID) {
+        case .gemma4, .gemma4Unified:
             engine = .textChatGemma4
-        } else if LagunaResources.handles(modelSpec: modelID) {
+        case .laguna:
             guard modelPath != nil else {
                 let id = LagunaResources.managedModelID(for: modelID) ?? modelID
                 throw ChatRequestIssue("model", "'\(id)' is not installed. Run 'mere.run model pull \(id)' first.")
             }
             engine = .textChatLaguna
-        } else if ManagedModelCatalog.spec(for: modelID)?.validationKind == .codegenGGUF {
+        case .gguf:
             engine = .textCode
-        } else if InklingResources.handles(modelSpec: modelID) {
-            return .textChatInkling(InklingGenerator(modelID: modelID), modelPath: modelPath)
-        } else if MuseGlimmerResources.handles(modelSpec: modelID) {
+        case .museGlimmer:
             engine = .textChatMuseGlimmer
-        } else if NemotronOmniResources.handles(modelSpec: modelID) {
+        case .nemotronOmni:
             engine = .textChatNemotronOmni
-        } else if NemotronHResources.handles(modelSpec: modelID) {
+        case .nemotronH:
             engine = .textChatNemotronH
-        } else if LFM2Resources.handles(modelSpec: modelID) {
+        case .lfm2, .lfm2A1B, .lfm2VL:
             engine = .textChatLFM2
-        } else {
+        case .q35, .q35VL, .q38:
             engine = .textChatQ35
         }
         // Gemma4 claims an empty spec, so an empty ID must fall back to the selected

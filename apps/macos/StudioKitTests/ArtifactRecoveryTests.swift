@@ -43,8 +43,8 @@ final class ArtifactRecoveryTests: XCTestCase {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
         draft.prompt = "fixture"
-        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
-        library.start(request: request, commandPreview: "fixture")
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft, source: .contract)
+        library.start(request: request, commandPreview: "fixture", source: .contract)
         library.updateOutput(id: request.id, outputURL: output)
         library.updateArtifacts(id: request.id, artifactURLs: [output])
         library.complete(id: request.id, exitCode: 1, outputURL: nil, outputText: "failed", commandPreview: "fixture")
@@ -63,7 +63,7 @@ final class ArtifactRecoveryTests: XCTestCase {
             lane: .inference, template: template, draft: draft, requestID: UUID(),
             configuration: .init(executableURL: URL(fileURLWithPath: "/usr/bin/true"), arguments: [],
                                  currentDirectoryURL: directory, environment: [:], keepsStandardInputOpen: true),
-            displayCommand: "fixture"
+            displayCommand: "fixture", scopeSource: .contract
         ))
         let resolver = ArtifactResolver(fileSystem: FileManager.default)
         job.markRunning(status: "Ready")
@@ -97,7 +97,7 @@ final class ArtifactRecoveryTests: XCTestCase {
             lane: .inference, template: template, draft: draft, requestID: UUID(),
             configuration: .init(executableURL: URL(fileURLWithPath: "/usr/bin/true"), arguments: [],
                                  currentDirectoryURL: output.deletingLastPathComponent(), environment: [:], keepsStandardInputOpen: false),
-            displayCommand: "fixture"
+            displayCommand: "fixture", scopeSource: .contract
         ))
     }
 

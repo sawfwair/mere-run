@@ -97,6 +97,7 @@ extension Qwen3TTSGenerator {
     func generateVoiceDesign(
         text: String,
         language: String,
+        speaker: String?,
         instruct: String,
         speakerHintTokens: [Int]?,
         referencePromptTokens: [Int]?,
@@ -113,7 +114,7 @@ extension Qwen3TTSGenerator {
         let (inputEmbeds, trailingTextHidden, ttsPadEmbed) = prepareGenerationInputs(
             text: text,
             language: language,
-            speaker: nil,
+            speaker: speaker,
             instruct: instruct,
             speakerHintTokens: speakerHintTokens,
             referencePromptTokens: referencePromptTokens,

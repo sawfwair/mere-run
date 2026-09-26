@@ -148,6 +148,17 @@ package struct StudioTaskPresentation: Equatable {
         self.attachLabel = attachLabel
     }
 
+    /// A prompt mode's presentation for the wells the model its draft runs takes
+    /// (`StudioMode.emptyMessage(slots:)`).
+    package init(mode: StudioMode, slots: [StudioAttachmentSlot]) {
+        let base = StudioTaskPresentation(mode: mode)
+        self.init(
+            title: base.title, systemImage: base.systemImage, emptyTitle: base.emptyTitle,
+            emptyMessage: mode.emptyMessage(slots: slots), promptPlaceholder: base.promptPlaceholder,
+            examplePrompts: base.examplePrompts, requiresAttachment: base.requiresAttachment, attachLabel: base.attachLabel
+        )
+    }
+
     package init(mode: StudioMode) {
         let attachLabel: String
         switch mode {

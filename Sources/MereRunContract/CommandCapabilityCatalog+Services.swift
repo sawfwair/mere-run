@@ -41,7 +41,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--skip-configure", label: "Skip configure", kind: .boolean),
             .init(flag: "--reset", label: "Reset", kind: .boolean),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .service)
     )
@@ -60,9 +60,9 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--no-warmup", label: "Skip model warmup", kind: .boolean, group: Group.run, tier: .expert
             ),
-            .init(flag: "--port", label: "Port", kind: .integer),
+            .init(flag: "--port", aliases: ["-p"], label: "Port", kind: .integer),
             .init(flag: "--host", label: "Host", kind: .string),
-            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model", aliases: ["-m", "--model-path"], label: "Model", kind: .string),
             .init(
                 flag: "--engine",
                 label: "Engine",

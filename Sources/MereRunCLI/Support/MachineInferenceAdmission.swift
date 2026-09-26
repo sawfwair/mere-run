@@ -30,8 +30,9 @@ enum CLIInferenceAdmissionClassifier {
         }
         let commandTokens = commandPath(tokens)
         guard let topLevel = commandTokens.first else { return nil }
-        // Guides only read bundled text, even when a large model is selected.
-        guard topLevel != "guide" else { return nil }
+        // Guides only read bundled text, and `catalog resolve` only reads the command line it
+        // is given, even when that line selects a large model.
+        guard !["guide", "catalog"].contains(topLevel) else { return nil }
         let subcommand = commandTokens.dropFirst().first
         let nestedSubcommand = commandTokens.dropFirst(2).first
         let label = [topLevel, subcommand].compactMap { $0 }.joined(separator: " ")

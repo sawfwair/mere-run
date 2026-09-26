@@ -249,7 +249,7 @@ struct VisionTrack: AsyncParsableCommand {
             maskOutputDirectoryURL: maskOutputDirectoryURL
         )
         if json {
-            print(try StructuredRunOutput.encode(envelope))
+            print(try StructuredRunOutput.encode(GateWarned(envelope)))
         } else {
             print(envelope.summary)
             for diagnostic in envelope.diagnostics {

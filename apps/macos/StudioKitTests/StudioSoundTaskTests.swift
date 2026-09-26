@@ -55,26 +55,31 @@ final class StudioSoundTaskTests: XCTestCase {
     /// Foley's inspector shows renoise once, as its editor, and neither the destination routing
     /// fills nor the machine-output switch the launcher owns; the page's Preflight toggle stays.
     func testFoleyShowsRenoiseAsItsEditorAndHidesWhatRoutingOwns() {
-        let fields = StudioTaskSchema.fields(for: .soundFoley, draft: StudioTaskDraft(templateID: .sfxVideo))
+        let fields = StudioTaskSchema.fields(for: .soundFoley, draft: StudioTaskDraft(templateID: .sfxVideo), source: .contract)
         XCTAssertEqual(fields.filter { $0.overrideID == .renoise }.count, 1)
         XCTAssertEqual(fields.first { $0.overrideID == .renoise }?.bindings.map(\.fieldID), ["--renoise"])
         XCTAssertFalse(fields.contains { ["--output", "--json"].contains($0.flag) })
         XCTAssertTrue(fields.contains { $0.flag == "--preflight" })
         XCTAssertTrue(fields.contains { $0.flag == "--synchformer-model" }, "the Synchformer model stays reachable")
         XCTAssertTrue(fields.contains { $0.flag == "--sync-batch-size" })
-        XCTAssertTrue(fields.contains { $0.flag == "--clip-batch-size" })
+        // Only MMAudio batches CLIP frames; the Woosh default leaves the control out.
+        XCTAssertFalse(fields.contains { $0.flag == "--clip-batch-size" })
+        var mmaudio = StudioTaskDraft(templateID: .sfxVideo)
+        mmaudio.model = "sfx-mmaudio-large-44k-v2"
+        XCTAssertTrue(StudioTaskSchema.fields(for: .soundFoley, draft: mmaudio, source: .contract).contains { $0.flag == "--clip-batch-size" })
     }
 
     // MARK: Argv parity
 
     /// The page's Video Foley form and a task draft holding the same settings send one argv,
-    /// and the seeded draft is exactly that form read back.
+    /// and the seeded draft is exactly that form read back. The settings are the ones Woosh
+    /// DVFlow reads: it refuses a negative prompt and ignores the MMAudio CLIP batch size, so the
+    /// page leaves both off.
     func testAFoleyTaskDraftSendsWhatThePageSent() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .sfxVideo))
         var page = template.defaultDraft()
         page.prompt = "footsteps on wet gravel"
         page.inputPath = "/tmp/walk.mp4"
-        page.secondaryText = "music, speech"
         page.model = "sfx-woosh-dvflow-8s"
         page.durationSeconds = 6
         page.steps = 8
@@ -83,13 +88,11 @@ final class StudioSoundTaskTests: XCTestCase {
         page.sfxRenoise = "0.3,0.3,0.3,0.3,0.2,0.2,0.1,0.1"
         page.sfxSynchformerModel = "sfx-woosh-synchformer"
         page.sfxSyncBatchSize = 2
-        page.sfxClipBatchSize = 8
         page.outputPath = "/tmp/out/walk.wav"
 
         var draft = StudioTaskDraft(templateID: .sfxVideo)
         draft.prompt = "footsteps on wet gravel"
         draft.setArgument(1, "/tmp/walk.mp4")
-        draft.form["--negative-prompt"] = .text("music, speech")
         draft.model = "sfx-woosh-dvflow-8s"
         draft.form["--duration"] = .number(6)
         draft.form["--steps"] = .integer(8)
@@ -98,20 +101,19 @@ final class StudioSoundTaskTests: XCTestCase {
         draft.form["--renoise"] = .text("0.3,0.3,0.3,0.3,0.2,0.2,0.1,0.1")
         draft.form["--synchformer-model"] = .text("sfx-woosh-synchformer")
         draft.form["--sync-batch-size"] = .integer(2)
-        draft.form["--clip-batch-size"] = .integer(8)
         draft.form["--output"] = .text("/tmp/out/walk.wav")
 
         // The console emits options in the contract's order; the page's builder had its own.
         // The CLI reads either, so the settings are compared, not the order.
-        XCTAssertEqual(Self.settings(of: draft.arguments), Self.settings(of: template.arguments(from: page)))
+        XCTAssertEqual(Self.settings(of: draft.arguments(source: .contract)), Self.settings(of: template.arguments(from: page, source: .contract)))
         XCTAssertEqual(
-            StudioTaskDraft(templateID: .sfxVideo, form: StudioConsoleCommand.seed(template: template, draft: page)).arguments,
-            draft.arguments,
+            StudioTaskDraft(templateID: .sfxVideo, form: StudioConsoleCommand.seed(template: template, draft: page, source: .contract)).arguments(source: .contract),
+            draft.arguments(source: .contract),
             "the page's draft read back is the same command"
         )
-        let request = try XCTUnwrap(draft.request())
+        let request = try XCTUnwrap(draft.request(source: .contract))
         XCTAssertEqual(request.mode, .sfx, "the template files under Sound, as the page did")
-        XCTAssertEqual(request.execution?.arguments, draft.arguments)
+        XCTAssertEqual(request.execution?.arguments, draft.arguments(source: .contract))
     }
 
     /// The positionals in order, then each option with its value, sorted: what the CLI reads,
@@ -162,9 +164,9 @@ final class StudioSoundTaskTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var page = template.defaultDraft()
             edit(&page)
-            let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(template: template, draft: page))
-            XCTAssertEqual(Self.settings(of: draft.arguments), Self.settings(of: template.arguments(from: page)), "\(templateID)")
-            XCTAssertEqual(draft.request()?.mode, .sfx, "\(templateID)")
+            let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(template: template, draft: page, source: .contract))
+            XCTAssertEqual(Self.settings(of: draft.arguments(source: .contract)), Self.settings(of: template.arguments(from: page, source: .contract)), "\(templateID)")
+            XCTAssertEqual(draft.request(source: .contract)?.mode, .sfx, "\(templateID)")
         }
     }
 
@@ -201,8 +203,8 @@ final class StudioSoundTaskTests: XCTestCase {
         // The runner refuses the same draft before anything is created or recorded.
         draft.form["--steps"] = .integer(4)
         draft.form["--renoise"] = .text("0.1,0.2,0.3")
-        let request = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request())
-        XCTAssertThrowsError(try StudioTaskRunner.prepare(request, sessions: StudioTaskSessions())) { error in
+        let request = try XCTUnwrap(StudioOutputLocation.destination(for: draft, source: .contract).request(source: .contract))
+        XCTAssertThrowsError(try StudioTaskRunner.prepare(request, sessions: StudioTaskSessions(), source: .contract)) { error in
             XCTAssertEqual(
                 error as? StudioValidationError,
                 StudioValidationError(message: "The renoise schedule has 3 values but the run has 4 steps.")
@@ -266,7 +268,7 @@ final class StudioSoundTaskTests: XCTestCase {
                 id: UUID(), mode: .sfx, prompt: page.prompt, inputURL: URL(fileURLWithPath: page.inputPath),
                 outputURL: URL(fileURLWithPath: page.outputPath), createdAt: Date(), updatedAt: Date(),
                 status: .completed, exitCode: 0, commandPreview: "mere.run sfx video generate …", outputText: nil,
-                templateID: templateID, commandDraft: page, commandArguments: template.arguments(from: page),
+                templateID: templateID, commandDraft: page, commandArguments: template.arguments(from: page, source: .contract),
                 artifactURLs: [URL(fileURLWithPath: page.outputPath)]
             )
         }
@@ -276,7 +278,7 @@ final class StudioSoundTaskTests: XCTestCase {
         XCTAssertEqual(StudioFeedCardBuilder.cards(items: [row, encodeRow], task: .soundFoley) { _ in nil }.map(\.id), [row.id])
         XCTAssertEqual(StudioFeedCardBuilder.cards(items: [row, encodeRow], task: .soundEncode) { _ in nil }.map(\.id), [encodeRow.id])
         XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(row))
-        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: row))
+        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: row, source: .contract))
         XCTAssertEqual(restored.templateID, .sfxVideo)
         XCTAssertEqual(restored.prompt, "hooves on cobbles")
         XCTAssertEqual(restored.primaryInputPath, "/tmp/horse.mp4")
@@ -284,7 +286,7 @@ final class StudioSoundTaskTests: XCTestCase {
         XCTAssertEqual(restored.text("--output"), "", "the row's destination was that run's; routing names the next one")
         var settingsOnly = page
         settingsOnly.outputPath = ""
-        XCTAssertEqual(Self.settings(of: restored.arguments), Self.settings(of: template.arguments(from: settingsOnly)))
+        XCTAssertEqual(Self.settings(of: restored.arguments(source: .contract)), Self.settings(of: template.arguments(from: settingsOnly, source: .contract)))
     }
 
     // MARK: Results
@@ -342,27 +344,27 @@ final class StudioSoundTaskTests: XCTestCase {
         foley.prompt = "Footsteps on wet gravel"
         foley.setArgument(1, "/tmp/walk.mp4")
         foley.form["--seed"] = .integer(11)
-        let foleyOutput = StudioOutputLocation.destination(for: foley).text("--output")
+        let foleyOutput = StudioOutputLocation.destination(for: foley, source: .contract).text("--output")
         XCTAssertEqual(URL(fileURLWithPath: foleyOutput).deletingLastPathComponent().path, sound)
         XCTAssertEqual(URL(fileURLWithPath: foleyOutput).lastPathComponent, "footsteps-on-wet-gravel-11.wav")
 
         var condition = StudioTaskDraft(templateID: .sfxConditionText)
         condition.prompt = "Heavy wooden door"
-        let conditionOutput = StudioOutputLocation.destination(for: condition).text("--output")
+        let conditionOutput = StudioOutputLocation.destination(for: condition, source: .contract).text("--output")
         XCTAssertEqual(URL(fileURLWithPath: conditionOutput).deletingLastPathComponent().path, sound)
         XCTAssertTrue(URL(fileURLWithPath: conditionOutput).lastPathComponent.hasPrefix("heavy-wooden-door-"), conditionOutput)
         XCTAssertEqual(URL(fileURLWithPath: conditionOutput).pathExtension, "safetensors")
 
         var encode = StudioTaskDraft(templateID: .sfxAEEncode)
         encode.setArgument(0, "/tmp/hit.wav")
-        let encodeOutput = StudioOutputLocation.destination(for: encode).text("--output")
+        let encodeOutput = StudioOutputLocation.destination(for: encode, source: .contract).text("--output")
         XCTAssertEqual(URL(fileURLWithPath: encodeOutput).deletingLastPathComponent().path, sound)
         XCTAssertTrue(URL(fileURLWithPath: encodeOutput).lastPathComponent.hasPrefix("hit-"), "named after the input: \(encodeOutput)")
         XCTAssertEqual(URL(fileURLWithPath: encodeOutput).pathExtension, "npy")
 
         var decode = StudioTaskDraft(templateID: .sfxAEDecode)
         decode.setArgument(0, "/tmp/hit.npy")
-        let decodeOutput = StudioOutputLocation.destination(for: decode).text("--output")
+        let decodeOutput = StudioOutputLocation.destination(for: decode, source: .contract).text("--output")
         XCTAssertEqual(URL(fileURLWithPath: decodeOutput).deletingLastPathComponent().path, sound)
         XCTAssertTrue(URL(fileURLWithPath: decodeOutput).lastPathComponent.hasPrefix("hit-"), decodeOutput)
         XCTAssertEqual(URL(fileURLWithPath: decodeOutput).pathExtension, "wav")
@@ -370,7 +372,7 @@ final class StudioSoundTaskTests: XCTestCase {
         var score = StudioTaskDraft(templateID: .sfxClapScore)
         score.prompt = "a bottle"
         score.setArgument(1, "/tmp/bottle.wav")
-        XCTAssertEqual(StudioOutputLocation.destination(for: score), score, "Score prints its result; nothing to name")
+        XCTAssertEqual(StudioOutputLocation.destination(for: score, source: .contract), score, "Score prints its result; nothing to name")
     }
 
     /// The inspector's editor and the runner's validation count steps the same way: the form's

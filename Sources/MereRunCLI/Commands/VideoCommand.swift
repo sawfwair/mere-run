@@ -187,8 +187,8 @@ struct VideoGenerate: AsyncParsableCommand {
           swift run mere.run video generate "a kinetic live performance" --audio song.wav --audio-start-time 30 --duration 5 --image performer.png
           swift run mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
           swift run mere.run video generate "use this subject and motion" --model video-minimax-h3-ref2va-mlx --reference image:subject.png --reference video:motion.mp4
-          swift run mere.run video generate "one continuous tracking shot" --model minimax-h3-fl2va-bf16-mlx --duration 15 --h3-window-frames 124 --h3-window-overlap 35
-          swift run mere.run video generate "the actor crosses three sets" --model minimax-h3-fl2va-bf16-mlx --h3-frame 72:second-set.png --h3-frame 144:third-set.png
+          swift run mere.run video generate "one continuous tracking shot" --model video-minimax-h3-fl2va-bf16-mlx --duration 15 --h3-window-frames 124 --h3-window-overlap 35
+          swift run mere.run video generate "the actor crosses three sets" --model video-minimax-h3-fl2va-bf16-mlx --h3-frame 72:second-set.png --h3-frame 144:third-set.png
         """
     )
 
@@ -800,7 +800,7 @@ struct VideoGenerate: AsyncParsableCommand {
         encoder.nonConformingFloatEncodingStrategy = .convertToString(
             positiveInfinity: "Infinity", negativeInfinity: "-Infinity", nan: "NaN"
         )
-        return String(decoding: try encoder.encode(envelope), as: UTF8.self)
+        return String(decoding: try encoder.encode(GateWarned(envelope)), as: UTF8.self)
     }
 
     private func runPreflight(outputURL: URL) throws {
@@ -847,7 +847,7 @@ struct VideoGenerate: AsyncParsableCommand {
         if let legacyVariant {
             args += ["--variant", legacyVariant.rawValue]
         }
-        if isMiniMaxH3Request {
+        if generationOptions.observedProfile().isH3 || VideoGenerationModelProfile.managed(resolvedRequestedModel).isH3 {
             args += [
                 "--h3-weight-mode", h3WeightMode.rawValue,
                 "--h3-acceleration", h3Acceleration.rawValue,
@@ -1077,22 +1077,6 @@ struct VideoGenerate: AsyncParsableCommand {
             args += ["--timings-output", timingsOutput]
         }
         return args
-    }
-
-    private var isMiniMaxH3Request: Bool {
-        let requested = resolvedRequestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
-            return true
-        }
-        guard let modelRoot else { return false }
-        let resources = MiniMaxH3Resources(
-            rootURL: URL(fileURLWithPath: modelRoot).standardizedFileURL
-        )
-        return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
     }
 }
 

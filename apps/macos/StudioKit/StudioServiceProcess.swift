@@ -85,7 +85,7 @@ package final class StudioServiceProcess: ObservableObject {
             templateID: templateID,
             template: template,
             draft: draft
-        ))
+        ), source: controller.scopeSource)
         let arguments = request.execution.map { Self.pinning(pinned, in: $0.arguments) }
         jobID = controller.startService(template: template, draft: request.draft, arguments: arguments)
         refresh()
@@ -132,7 +132,7 @@ package final class StudioServiceProcess: ObservableObject {
         preflight.preflight = true
         preflight.json = true
         let result = await controller.utilityCommandResult(
-            args: template.arguments(from: preflight),
+            args: template.arguments(from: preflight, source: controller.scopeSource),
             environmentOverrides: CommandLaunchEnvironment.overrides(templateID: templateID, draft: preflight)
         )
         return result.exitCode == 0 ? nil : StudioActivitySanitizer.sanitize(result.outputText)

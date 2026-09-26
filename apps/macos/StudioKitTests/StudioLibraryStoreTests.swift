@@ -43,10 +43,10 @@ final class StudioLibraryStoreTests: XCTestCase {
                 draft.reset(for: .createImage)
                 draft.prompt = "a blue plate"
                 return draft
-            }()
+            }(), source: .contract
         )
 
-        store.start(request: request, commandPreview: "preview")
+        store.start(request: request, commandPreview: "preview", source: .contract)
         store.complete(
             id: request.id,
             exitCode: 0,
@@ -74,7 +74,7 @@ final class StudioLibraryStoreTests: XCTestCase {
             draft: draft
         )
 
-        store.start(request: request, commandPreview: "mere.run music train-adapter")
+        store.start(request: request, commandPreview: "mere.run music train-adapter", source: .contract)
         store.complete(
             id: request.id,
             exitCode: 0,
@@ -105,10 +105,10 @@ final class StudioLibraryStoreTests: XCTestCase {
                 draft.reset(for: .createImage)
                 draft.prompt = "a blue plate"
                 return draft
-            }()
+            }(), source: .contract
         )
 
-        store.start(request: request, commandPreview: "preview")
+        store.start(request: request, commandPreview: "preview", source: .contract)
         XCTAssertNil(store.items.first?.outputURL)
 
         store.updateOutput(id: request.id, outputURL: URL(fileURLWithPath: "/tmp/plate.png"))
@@ -127,10 +127,10 @@ final class StudioLibraryStoreTests: XCTestCase {
                 draft.reset(for: .chat)
                 draft.prompt = "Hello"
                 return draft
-            }()
+            }(), source: .contract
         )
 
-        store.start(request: request, commandPreview: "preview")
+        store.start(request: request, commandPreview: "preview", source: .contract)
         store.complete(
             id: request.id,
             exitCode: 0,

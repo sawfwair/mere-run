@@ -84,9 +84,19 @@ struct ContractFormControl<Draft>: View {
         }
     }
 
-    /// The inspector's shape: the option's label, then its control.
+    /// The inspector's shape: the option's label, then its control, or the value the model fixes.
     @ViewBuilder
     private var labelled: some View {
+        if let fixed = field.fixedValue {
+            StudioFixedValueRow(label: field.label, value: fixed)
+                .help(field.flag)
+        } else {
+            control
+        }
+    }
+
+    @ViewBuilder
+    private var control: some View {
         switch field.control {
         case .toggle:
             Toggle(field.label, isOn: flagBinding)
@@ -232,20 +242,33 @@ struct ContractFormControl<Draft>: View {
     }
 
     /// A range the contract leaves open at one or both ends: nudge it rather than pretend to
-    /// know its span.
+    /// know its span. A family that takes only a set of values steps from one to the next.
+    @ViewBuilder
     private var stepper: some View {
-        let lower: Double = field.option.range?.min ?? -.greatestFiniteMagnitude
-        let upper: Double = field.option.range?.max ?? .greatestFiniteMagnitude
-        let step: Double = field.option.range?.step ?? (field.kind == .integer ? 1 : 0.1)
         let value = numberBinding
-        return StudioInspectorLabeledRow(field.label) {
-            Stepper(value: value, in: lower...upper, step: step) {
-                Text(format(value.wrappedValue))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(MereRunTheme.textPrimary)
+        let label = Text(format(value.wrappedValue))
+            .font(.system(size: 12, design: .monospaced))
+            .foregroundStyle(MereRunTheme.textPrimary)
+        StudioInspectorLabeledRow(field.label) {
+            if field.allowedValues != nil {
+                Stepper {
+                    label
+                } onIncrement: {
+                    value.wrappedValue = field.stepped(from: value.wrappedValue, by: 1)
+                } onDecrement: {
+                    value.wrappedValue = field.stepped(from: value.wrappedValue, by: -1)
+                }
+                .accessibilityLabel(field.label)
+                .accessibilityValue(format(value.wrappedValue))
+            } else {
+                let range = field.option.range
+                let step: Double = range?.step ?? (field.kind == .integer ? 1 : 0.1)
+                Stepper(value: value, in: (range?.min ?? -.greatestFiniteMagnitude)...(range?.max ?? .greatestFiniteMagnitude), step: step) {
+                    label
+                }
+                .accessibilityLabel(field.label)
+                .accessibilityValue(format(value.wrappedValue))
             }
-            .accessibilityLabel(field.label)
-            .accessibilityValue(format(value.wrappedValue))
         }
         .help(field.flag)
     }
@@ -300,9 +323,14 @@ struct ContractFormControl<Draft>: View {
         choice.isEmpty ? (unsetChoice ?? "") : StudioContractChoiceTitles.title(for: choice, flag: field.flag)
     }
 
-    /// "Custom" where the choices are named presets the user can do without; "Default" elsewhere.
+    /// "Custom" where the choices are named presets the user can do without, "None" for a
+    /// speaker the voice description stands in for, and "Default" elsewhere.
     static func noneTitle(for flag: String) -> String {
-        flag == "--recipe" ? "Custom" : "Default"
+        switch flag {
+        case "--recipe": "Custom"
+        case "--speaker": "None"
+        default: "Default"
+        }
     }
 
     private var choiceBinding: Binding<String> {
@@ -452,5 +480,26 @@ struct ContractFormPathRow: View {
         if panel.runModal() == .OK {
             path = panel.urls.map(\.path).joined(separator: "\n")
         }
+    }
+}
+
+/// A value the selected model always runs, in an inspector row: the label, the value, and a lock,
+/// with no control, since nothing the draft holds would change what runs.
+struct StudioFixedValueRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        StudioInspectorLabeledRow(label) {
+            HStack(spacing: 5) {
+                Image(systemName: "lock.fill")
+                    .font(.caption2)
+                Text(value)
+                    .font(.system(size: 12, design: .monospaced))
+            }
+            .foregroundStyle(MereRunTheme.textMuted)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value), set by the model")
     }
 }

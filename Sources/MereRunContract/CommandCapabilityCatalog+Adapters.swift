@@ -25,7 +25,7 @@ extension MereRunCapabilityCatalog {
                 flag: "--accept-license", label: "Accept adapter terms", kind: .boolean, group: Group.run, tier: .expert
             ),
             .init(flag: "--force", label: "Replace install", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file, fileExtension: "safetensors")
     )

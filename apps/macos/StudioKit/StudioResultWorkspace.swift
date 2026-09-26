@@ -33,11 +33,15 @@ package enum StudioResultComparison {
         item.templateID?.capability != nil && (item.commandArguments != nil || item.commandDraft != nil)
     }
 
-    package static func differences(_ first: StudioLibraryItem, _ second: StudioLibraryItem) -> [StudioResultDifference] {
+    package static func differences(
+        _ first: StudioLibraryItem,
+        _ second: StudioLibraryItem,
+        source: StudioScopeSource
+    ) -> [StudioResultDifference] {
         func form(_ item: StudioLibraryItem) -> StudioConsoleDraft? {
             guard hasSettings(item), let id = item.templateID, let template = CommandCatalog.template(id: id) else { return nil }
             return StudioExecution(templateID: id, arguments: item.commandArguments
-                ?? item.commandDraft.map(template.arguments(from:)) ?? []).form
+                ?? item.commandDraft.map { template.arguments(from: $0, source: source) } ?? []).form
         }
         guard let a = form(first), let b = form(second) else { return [] }
         let omitted: Set<String> = ["--output", "--json-output", "--mask-output-dir", "--receipt",

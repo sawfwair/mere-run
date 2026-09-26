@@ -30,6 +30,7 @@ struct StudioCamera: Identifiable, Equatable {
 /// so the Command view edits the same form; the run goes through the task runner, which keeps
 /// the camera-access gate (`MereRunController.run(studio:)`) in front of the CLI.
 struct StudioLiveTrackSession: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     private static let task = StudioTask.visionLive
 
     @EnvironmentObject private var controller: MereRunController
@@ -84,7 +85,7 @@ struct StudioLiveTrackSession: View {
 
     private var activePullJob: Job? {
         _ = jobMonitor.generation
-        return jobMonitor.pullJob(for: StudioTaskSchema.modelID(for: draft))
+        return jobMonitor.pullJob(for: StudioTaskSchema.modelID(for: draft, source: scopeSource))
     }
 
     private var phase: StudioSessionPhase {
@@ -234,7 +235,7 @@ struct StudioLiveTrackSession: View {
 
     private var modelChip: some View {
         StudioModelChip(
-            scope: StudioTaskSchema.modelScope(for: draft),
+            scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
             model: draftBinding.model,
             modelInventory: models.rows,
             readiness: readiness,
@@ -378,7 +379,7 @@ struct StudioLiveTrackSession: View {
     /// the camera while there is a list to pick from (with no camera found, the index stays a
     /// number field here, as the page's stepper was).
     private var sections: [(section: StudioTaskSection, fields: [StudioContractField<StudioTaskDraft>])] {
-        StudioTaskSchema.sections(for: Self.task, draft: draft).compactMap { section in
+        StudioTaskSchema.sections(for: Self.task, draft: draft, source: scopeSource).compactMap { section in
             let fields = section.fields.filter { field in
                 field.overrideID != .model && (field.flag != "--camera" || cameras.isEmpty)
             }
@@ -387,7 +388,7 @@ struct StudioLiveTrackSession: View {
     }
 
     private var advancedFields: [StudioContractField<StudioTaskDraft>] {
-        StudioTaskSchema.advanced(for: Self.task, draft: draft)
+        StudioTaskSchema.advanced(for: Self.task, draft: draft, source: scopeSource)
     }
 
     private var settingsColumn: some View {
@@ -447,10 +448,10 @@ struct StudioLiveTrackSession: View {
 
     private var readinessActions: StudioReadinessActions {
         StudioReadinessActions(
-            scope: StudioTaskSchema.modelScope(for: draft),
+            scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
             model: draftBinding.model,
             modelInventory: models.rows,
-            pullModel: { pull(modelID: StudioTaskSchema.modelID(for: draft)) },
+            pullModel: { pull(modelID: StudioTaskSchema.modelID(for: draft, source: scopeSource)) },
             openModels: { navigation.open(task: .modelsInstalled) },
             recheck: refreshReadiness
         )
@@ -477,7 +478,7 @@ struct StudioLiveTrackSession: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.requiredModelID(for: draft))
+        controller.checkReadiness(for: Self.task, requirement: StudioTaskSchema.requirement(for: draft, source: scopeSource))
     }
 
     /// Lists the cameras now attached; an index remembered for a camera that is gone falls back

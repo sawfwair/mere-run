@@ -33,6 +33,7 @@ private struct StudioWorkspaceView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.studioScopeSource) private var scopeSource
     // Persisted per scene so relaunch restores the last place, the last prompt mode, and the panel
     // layout. `studio.mode` keeps its v1 meaning (the last prompt mode) so drafts and readiness
     // stay attached to it while a System or Lab task is shown.
@@ -76,6 +77,8 @@ private struct StudioWorkspaceView: View {
     /// A run whose user-visible destination could not be created, explained once per launch.
     @State private var outputFallbackNotice: String?
     @State private var outputFallbackAnnounced = false
+    /// What Run again or Vary left out of a Library row's recorded command.
+    @State private var replayNotice: StudioScopeNotice?
     /// The "B" side Library ▸ Compare asked for, handed to the focused result once it opens.
     @State private var pendingComparison: StudioResultSelection?
 
@@ -178,7 +181,7 @@ private struct StudioWorkspaceView: View {
     /// The `model pull` in flight for this mode's model, so the readiness card shows its progress.
     private var activePullJob: Job? {
         _ = jobMonitor.generation
-        return jobMonitor.pullJob(for: StudioCommandAdapter.requiredModel(for: mode, draft: draft))
+        return jobMonitor.pullJob(for: StudioCommandAdapter.requiredModel(for: mode, draft: draft, source: scopeSource))
     }
 
     private var selectedItem: StudioLibraryItem? {
@@ -220,7 +223,7 @@ private struct StudioWorkspaceView: View {
     /// terms send the user to Models first, and the shell's pull, navigate, and recheck.
     private var readinessActions: StudioReadinessActions {
         StudioReadinessActions(
-            scope: StudioModelScope(mode: mode),
+            scope: StudioModelScope(mode: mode, readImageAction: draft.readImageAction, source: scopeSource),
             model: $prompt.draft.model,
             modelInventory: modelInventory,
             pullModel: pullModel,
@@ -244,7 +247,7 @@ private struct StudioWorkspaceView: View {
             guard let candidate = domain.defaultTask.mode else { continue }
             var candidateDraft = StudioDraft()
             candidateDraft.reset(for: candidate)
-            let requirement = StudioCommandAdapter.capabilityRequirement(for: candidate, draft: candidateDraft)
+            let requirement = StudioCommandAdapter.capabilityRequirement(for: candidate, draft: candidateDraft, source: scopeSource)
             guard let requirement,
                   case .managedModel(let modelID) = requirement,
                   let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage(titles: models.titles) else {
@@ -517,6 +520,17 @@ private struct StudioWorkspaceView: View {
             .padding(.top, MereRunTheme.Spacing.sm)
         }
 
+        if let replayNotice {
+            MereBanner(
+                severity: .info,
+                text: replayNotice.accessibilityLabel,
+                systemImage: "eye.slash",
+                onDismiss: { self.replayNotice = nil }
+            )
+            .padding(.horizontal, MereRunTheme.Spacing.lg)
+            .padding(.top, MereRunTheme.Spacing.sm)
+        }
+
         if !hasCompletedWelcome {
             MereBanner(
                 severity: .info,
@@ -620,13 +634,13 @@ private struct StudioWorkspaceView: View {
 
     private var baseTaskRequest: StudioRunRequest? {
         if showsPromptWorkspace {
-            return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false)
+            return try? StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false, source: scopeSource)
         }
         if let taskDraft = taskDraftBinding {
             // The Command view previews the task draft's own form with its launch-time defaults
             // applied and its destination named the way the runner names it at submit time, so
             // "Will run" shows the argv that runs.
-            return StudioTaskRunner.launchPreview(taskDraft.wrappedValue).request()
+            return StudioTaskRunner.launchPreview(taskDraft.wrappedValue, source: scopeSource).request(source: scopeSource)
         }
         let key = destination.task.rawValue
         let chosen = controller.taskSessions.value(for: key + ".commandTemplate", default: Optional<CommandTemplateID>.none)
@@ -636,11 +650,11 @@ private struct StudioWorkspaceView: View {
     }
 
     private func commandForm(for request: StudioRunRequest) -> StudioConsoleDraft {
-        controller.taskSessions.commandForm(for: request)
+        controller.taskSessions.commandForm(for: request, source: scopeSource)
     }
 
     private func resolvedCommand(_ base: StudioRunRequest) -> StudioRunRequest {
-        controller.taskSessions.resolving(base)
+        controller.taskSessions.resolving(base, source: scopeSource)
     }
 
     @ViewBuilder
@@ -662,14 +676,21 @@ private struct StudioWorkspaceView: View {
                     }
                     let source = baseTaskRequest ?? request
                     controller.taskSessions.set(StudioTaskCommandState(templateID: request.templateID,
-                        sourceArguments: source.template.arguments(from: source.draft), form: edited),
+                        sourceArguments: source.template.arguments(from: source.draft, source: scopeSource), form: edited),
                         for: request.templateID.studioTask.rawValue + ".commandOverride")
                 }
-            ), onRun: runStudioCommand, onClose: toggleCommand, canRun: canRunCurrentTask, launching: { form in
+            ), onRun: runStudioCommand, onClose: toggleCommand, canRun: canRunCurrentTask,
+            // The composer's hidden values never reach the form (its request is built from the
+            // scoped draft), so the prompt workspace names them itself.
+            notSent: showsPromptWorkspace
+                ? { StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) } : nil,
+            launching: { form in
                 // A task draft's preview is what the runner launches: its launch-time defaults
                 // and the destination routing names.
                 guard taskDraftBinding != nil else { return form }
-                return StudioTaskRunner.launchPreview(StudioTaskDraft(templateID: request.templateID, form: form)).form
+                return StudioTaskRunner.launchPreview(
+                    StudioTaskDraft(templateID: request.templateID, form: form), source: scopeSource
+                ).form
             })
         }
     }
@@ -826,12 +847,12 @@ private struct StudioWorkspaceView: View {
         }
         .dropDestination(for: URL.self) { urls, _ in
             // A file dropped anywhere on the canvas lands in the first well slot that takes it.
-            guard draft.attach(dropped: urls, for: mode) else { return false }
+            guard draft.attach(dropped: urls, for: mode, source: scopeSource) else { return false }
             studioError = nil
             return true
         } isTargeted: { targeted in
             withAnimation(MereRunTheme.Motion.quick) {
-                isDropTargeted = targeted && !mode.attachmentSlots.isEmpty
+                isDropTargeted = targeted && !mode.attachmentSlots(for: draft, source: scopeSource).isEmpty
             }
         }
         .overlay {
@@ -864,7 +885,7 @@ private struct StudioWorkspaceView: View {
         } else if let archetype = destination.task.analyzeArchetype {
             StudioAnalyzeCanvas(
                 archetype: archetype,
-                presentation: StudioTaskPresentation(mode: mode),
+                presentation: StudioTaskPresentation(mode: mode, slots: mode.attachmentSlots(for: draft, source: scopeSource)),
                 cards: feedCards,
                 selectedID: navigation.selectedLibraryID,
                 inputPath: draft.inputPath,
@@ -877,8 +898,8 @@ private struct StudioWorkspaceView: View {
             )
         } else {
             StudioFeedCanvas(
-                presentation: StudioTaskPresentation(mode: mode),
-                slots: mode.attachmentSlots,
+                presentation: StudioTaskPresentation(mode: mode, slots: mode.attachmentSlots(for: draft, source: scopeSource)),
+                slots: mode.attachmentSlots(for: draft, source: scopeSource),
                 cards: feedCards,
                 readiness: readiness,
                 pullJob: activePullJob,
@@ -1049,7 +1070,8 @@ private struct StudioWorkspaceView: View {
             promptFocus: $promptFocused,
             onRun: runStudioCommand,
             onStop: stopModeRun,
-            onShowModels: { navigation.open(task: .modelsInstalled) }
+            onShowModels: { navigation.open(task: .modelsInstalled) },
+            showsScopeNote: !showsInspectorColumn && !showsCommandColumn
         )
     }
 
@@ -1445,7 +1467,7 @@ private struct StudioWorkspaceView: View {
             controller.select(request.template)
             controller.draft = request.draft
             controller.consoleSeedArguments = resolvedCommand(request).execution?.arguments
-                ?? request.template.arguments(from: request.draft)
+                ?? request.template.arguments(from: request.draft, source: scopeSource)
         }
         openWindow(id: StudioConsoleWindow.id)
     }
@@ -1626,7 +1648,7 @@ private struct StudioWorkspaceView: View {
 
     /// Loads an output into the composer's well as the next run's input.
     private func useOutputAsInput(_ url: URL) {
-        guard draft.attach(dropped: [url], for: mode) else {
+        guard draft.attach(dropped: [url], for: mode, source: scopeSource) else {
             studioError = "\(mode.title) does not take \(url.lastPathComponent) as an input."
             return
         }
@@ -1688,6 +1710,7 @@ private struct StudioWorkspaceView: View {
         do {
             let variationSeed = commandDraft.seed != item.commandDraft?.seed ? commandDraft.seed : nil
             navigation.selectedLibraryID = try prompt.replay(item, variationSeed: variationSeed).id
+            replayNotice = StudioLibraryReplay.notice(for: item, source: scopeSource)
         } catch {
             studioError = error.localizedDescription
         }
@@ -1814,7 +1837,7 @@ private struct StudioWorkspaceView: View {
         var target = draft
         if let modelID { target.model = modelID }
 
-        switch StudioCommandAdapter.capabilityRequirement(for: mode, draft: target) {
+        switch StudioCommandAdapter.capabilityRequirement(for: mode, draft: target, source: scopeSource) {
         case .unavailable(let message):
             studioError = message
             return
@@ -1833,7 +1856,7 @@ private struct StudioWorkspaceView: View {
         }
 
         do {
-            guard let request = try StudioCommandAdapter.pullRequest(for: mode, draft: target) else {
+            guard let request = try StudioCommandAdapter.pullRequest(for: mode, draft: target, source: scopeSource) else {
                 studioError = "This mode does not need a managed model."
                 return
             }
@@ -1897,7 +1920,7 @@ private struct StudioWorkspaceView: View {
     /// text field, holds focus): the first empty image slot, else the first image slot. Prefers a
     /// pasted image file; otherwise writes the pasted bitmap to a temporary PNG.
     private func pasteImageFromClipboard() {
-        guard let slot = mode.pastedImageSlot(in: draft) else { return }
+        guard let slot = mode.pastedImageSlot(in: draft, source: scopeSource) else { return }
         let pasteboard = NSPasteboard.general
         let urls = StudioAttachmentPasteboard.fileURLs(from: pasteboard, for: slot)
         if !urls.isEmpty {

@@ -172,9 +172,13 @@ model and derived adapters.
 - `--min-p`: discard tokens whose probability is below this fraction of the
   most likely token's probability. `0` disables the filter; `0.05` means a
   token must have at least 5% of the leading token's probability.
-- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: KV cache quantization controls. Qwen-family models accept affine `--kv-bits 4` or `8`; the runtime chooses group size and start. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
-- `--model-root`, `-m`: explicit local model root.
+- `--kv-bits`, `--kv-quant-scheme`, `--kv-group-size`, `--quantized-kv-start`: KV cache quantization controls. Qwen-family, Inkling-Small, and LFM2.5 models accept affine `--kv-bits 4` or `8`; the runtime chooses group size and start. `text-chat-gemma4-turbo` defaults to the existing 4-bit affine TurboQuant KV cache from token 0; explicit flags override that. `--kv-quant-scheme polar --kv-bits 2` enables the experimental packed PolarKV path for memory-pressure and long-context synthetic decode testing.
+- `--model-root`, `-m`: explicit local model root. It locates weights; the runtime still comes from `--model` or the default model.
 - `--model`: canonical model id.
+- `--image`: local path or `data:image/...` URL for a vision checkpoint: `vision-chat-gemma4-12b`, Muse Glimmer, Nemotron 3 Nano Omni, LFM2.5-VL, Bonsai 27B, the Ornith 1.5 35B vision ids, and Qwen3.8.
+- `--audio`, `--video`: local media for Nemotron 3 Nano Omni.
+- `--seed`: request seed for Qwen-family sampling (Qwen3.6, Bonsai, Ornith, and Qwen3.8) and DiffusionGemma canvases.
+- `--reasoning-effort`: 0 through 1 for Qwen3.8 and Muse Glimmer; 0 through 0.99 for Inkling-Small.
 - `--response-format`: `text` (default) or `json_object`. JSON-object mode is
   available for native MLX Gemma and Qwen-family chat models, forces thinking
   off, and validates every generated token against the JSON grammar.
@@ -184,7 +188,10 @@ model and derived adapters.
   separate prefill and decode tokens/sec. Gemma4 runs also include MTP state
   and accept/draft counts.
 - `--stream`: stream tokens to stdout.
-- `--lora`: local `.safetensors` adapter path for supported native chat models.
+- `--lora`: local `.safetensors` adapter path for supported native chat models:
+  Gemma 4, Laguna, Inkling-Small, and, among LFM2.5 checkpoints, only
+  `text-chat-lfm25-a1b-8bit`. A blank `--lora`, `--image`, `--audio`, or
+  `--video` reads as not passed.
 - `--lora-scale`: adapter scale; defaults to `1.0`.
 - `--tools`: comma-separated built-ins, currently `write_file` and `shell_exec`.
 - `--tool-loop`: let the model call tools repeatedly.
@@ -193,6 +200,15 @@ model and derived adapters.
 - `--allow-absolute-tool-paths`: allow absolute paths for `write_file`.
 - `--auto-approve-tools`: skip interactive approval.
 - `--quiet`, `-q`: suppress progress output.
+
+Before it resolves or loads a model, the command checks each option against the
+selected model's runtime. An option that runtime rejects fails with one message
+that names the runtimes that accept it, for example `--image` on a text-only
+checkpoint or `--lora` on Muse Glimmer. An option the runtime accepts but never
+reads prints a `Warning:` line on stderr and the run continues, for example
+`--top-k` on Gemma 4 or `--tools` on the GGUF lane. To see which runtime a
+command line selects, run
+`mere.run catalog resolve --json -- text chat --model <id> <options>`.
 
 ## Prompting Patterns
 
@@ -274,6 +290,9 @@ mere.run text chat \
 - JSON object mode rejected for a GGUF model: use the native MLX
   `text-chat-q36-nano` model on Apple Silicon; the llama.cpp grammar is not yet
   wired.
+- A model is refused as unable to run `text chat`: DeepSeek V4 Flash runs through
+  `api serve` or `agent start`, and drafter or assistant companions such as
+  `text-chat-gemma4-12b-mtp` load with their target model; pass the target.
 
 ## Sources
 

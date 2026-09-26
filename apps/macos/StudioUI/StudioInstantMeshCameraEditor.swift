@@ -108,6 +108,7 @@ struct StudioInstantMeshCameraEditor: View {
 /// `--cameras` points at, and a file the draft names from elsewhere (Use these settings) is read
 /// back into the editor.
 struct StudioInstantMeshCamerasOverride: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     @Binding var draft: StudioTaskDraft
     @EnvironmentObject private var library: StudioLibraryStore
     @StudioStoredValue("3DCreation.cameras") private var cameras = StudioInstantMeshCameraDocument()
@@ -121,7 +122,7 @@ struct StudioInstantMeshCamerasOverride: View {
     private static let camerasFlag = "--cameras"
 
     private var viewSlot: StudioAttachmentSlot? {
-        draft.slots.first { $0.id == Self.viewFlag }
+        draft.slots(source: scopeSource).first { $0.id == Self.viewFlag }
     }
 
     private var views: [String] {

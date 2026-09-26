@@ -2,12 +2,13 @@
 
 ## Purpose
 
-Generate WAV speech from text with Qwen3-TTS. Use style mode for described voices and clone mode when a reference profile or audio file should guide timbre.
+Generate WAV speech from text with Qwen3-TTS. Use style mode for described voices or, with the CustomVoice checkpoint, a named speaker, and clone mode when a reference profile or audio file should guide timbre.
 
 ## Required Models
 
 - `speech-tts-qwen3-nano` for voice design/style.
-- `speech-tts-qwen3-customvoice` for clone workflows.
+- `speech-tts-qwen3-customvoice` for named speakers (`--speaker`) and clone
+  workflows.
 
 ## Install And Check
 
@@ -21,13 +22,22 @@ mere.run speech synthesize --help
 - positional text: text to speak.
 - `--output`, `-o`: required WAV path.
 - `--model`, `-m`: model id or local path.
-- `--voice`, `-v`: natural-language voice description.
-- `--mode`: `style` or `clone`.
+- `--voice`, `-v`: natural-language voice description, style mode only. With
+  `--speaker` it is an optional delivery instruction, such as "Speak slowly
+  and warmly"; the default description is not sent with a speaker.
+- `--speaker`: a named speaker of a CustomVoice checkpoint, style mode only.
+  `speech-tts-qwen3-customvoice` has `aiden`, `dylan`, `eric`, `ono_anna`,
+  `ryan`, `serena`, `sohee`, `uncle_fu`, and `vivian`, matched without case. A local CustomVoice checkpoint lists its own in `config.json`
+  (`talker_config.spk_id`). An unknown name stops before the weights load and
+  lists the checkpoint's speakers. Other checkpoints and clone mode ignore
+  `--speaker`, with a warning.
+- `--mode`: `style` or `clone`. It picks which of the other options apply; the
+  CLI warns about one the mode ignores.
 - `--profile`: saved clone profile id or name.
-- `--ref-audio`: reference audio path for clone mode.
+- `--ref-audio`: reference audio path for clone mode. Ignored with `--profile`.
 - `--ref-text`: transcript override for reference audio.
 - `--language`: language hint, default `auto`.
-- `--save-profile`: save clone reference for reuse.
+- `--save-profile`: save clone reference for reuse. Ignored with `--profile`.
 - `--temperature`: sampling temperature, default `0.6`.
 - `--stream`: stream audio chunks to the WAV writer.
 - `--stream-chunk-tokens`: token interval for streaming chunks.
@@ -60,6 +70,29 @@ mere.run speech synthesize \
   --save-profile myvoice \
   --output ./cloned.wav
 ```
+
+## Named Speakers
+
+The CustomVoice checkpoint speaks as one of its trained speakers. Pick one with
+`--speaker`, and optionally steer delivery with `--voice`:
+
+```bash
+mere.run speech synthesize \
+  "Thanks for calling. How can I help?" \
+  --model speech-tts-qwen3-customvoice \
+  --speaker ryan \
+  --output ./ryan.wav
+
+mere.run speech synthesize \
+  "I can't believe we won!" \
+  --model speech-tts-qwen3-customvoice \
+  --speaker vivian \
+  --voice "Excited and breathless" \
+  --output ./vivian.wav
+```
+
+`dylan` speaks Beijing dialect and `eric` Sichuan dialect when `--language` is
+`auto` or `chinese`, as the upstream model does.
 
 ## Prompting Patterns
 

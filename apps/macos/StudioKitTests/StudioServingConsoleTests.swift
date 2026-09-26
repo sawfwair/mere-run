@@ -206,7 +206,7 @@ final class StudioServingConsoleTests: XCTestCase {
         draft.host = "0.0.0.0"
         draft.apiKey = "private-key"
 
-        XCTAssertFalse(template.arguments(from: draft).contains("private-key"))
+        XCTAssertFalse(template.arguments(from: draft, source: .contract).contains("private-key"))
         XCTAssertEqual(
             CommandLaunchEnvironment.overrides(templateID: .apiServe, draft: draft)["MERERUN_API_KEY"],
             "private-key"

@@ -180,6 +180,7 @@ struct MereRunApp: App {
     var body: some Scene {
         WindowGroup(id: "studio") {
             MereRunRootView()
+                .environment(\.studioScopeSource, controller.scopeSource)
                 .environmentObject(controller)
                 .environmentObject(library)
                 .environmentObject(navigation)
@@ -213,6 +214,7 @@ struct MereRunApp: App {
 
         Window(StudioConsoleWindow.title, id: StudioConsoleWindow.id) {
             StudioConsoleView()
+                .environment(\.studioScopeSource, controller.scopeSource)
                 .environmentObject(controller)
                 .environmentObject(library)
                 .environmentObject(navigation)

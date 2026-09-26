@@ -54,6 +54,8 @@ package struct StudioSeparationManifest: Decodable, Equatable {
     package let elapsedSeconds: Double
     package let stems: [Stem]
     package let manifestPath: String
+    /// The CLI's "has no effect" warnings for the run; only the stdout copy carries them.
+    package var warnings: [String]?
 
     package enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -64,6 +66,7 @@ package struct StudioSeparationManifest: Decodable, Equatable {
         case elapsedSeconds = "elapsed_seconds"
         case stems
         case manifestPath = "manifest_path"
+        case warnings
     }
 
     package init(

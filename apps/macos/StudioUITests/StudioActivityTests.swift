@@ -252,7 +252,7 @@ final class StudioActivityTests: XCTestCase {
         draft.prompt = draft.prompt.isEmpty ? "a ceramic coffee mug in soft morning light" : draft.prompt
         draft.inputPath = "/tmp/input.wav"
         configure(&draft)
-        let args = template.arguments(from: draft)
+        let args = template.arguments(from: draft, source: .contract)
         return JobRequest(
             lane: lane,
             template: template,
@@ -266,7 +266,7 @@ final class StudioActivityTests: XCTestCase {
                 keepsStandardInputOpen: false
             ),
             displayCommand: (["mere.run"] + args).shellQuoted(),
-            dedupeKey: dedupeKey
+            dedupeKey: dedupeKey, scopeSource: .contract
         )
     }
 

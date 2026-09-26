@@ -102,8 +102,8 @@ final class StudioThreeDTaskTests: XCTestCase {
         taskTripoSR.form["--no-vertex-colors"] = .flag(true)
         taskTripoSR.form["--dry-run"] = .flag(true)
         taskTripoSR.form["--json"] = .flag(true)
-        XCTAssertEqual(Self.pairs(taskTripoSR.arguments, tripoSR), Self.pairs(tripoSR.arguments(from: pageTripoSR), tripoSR))
-        XCTAssertEqual(Array(taskTripoSR.arguments.prefix(3)), ["image", "reconstruct-3d", "/tmp/chair.png"])
+        XCTAssertEqual(Self.pairs(taskTripoSR.arguments(source: .contract), tripoSR), Self.pairs(tripoSR.arguments(from: pageTripoSR, source: .contract), tripoSR))
+        XCTAssertEqual(Array(taskTripoSR.arguments(source: .contract).prefix(3)), ["image", "reconstruct-3d", "/tmp/chair.png"])
 
         let trellis = try XCTUnwrap(CommandCatalog.template(id: .imageReconstruct3DTrellis2))
         var pageTrellis = trellis.defaultDraft()
@@ -123,7 +123,7 @@ final class StudioThreeDTaskTests: XCTestCase {
         taskTrellis.form["--max-tokens"] = .integer(1_048_576)
         taskTrellis.form["--remesh-band"] = .number(2)
         taskTrellis.form["--seal-radius"] = .integer(8)
-        XCTAssertEqual(Self.pairs(taskTrellis.arguments, trellis), Self.pairs(trellis.arguments(from: pageTrellis), trellis))
+        XCTAssertEqual(Self.pairs(taskTrellis.arguments(source: .contract), trellis), Self.pairs(trellis.arguments(from: pageTrellis, source: .contract), trellis))
 
         let views = (1...4).map { "/tmp/view-\($0).png" }
         let instantMesh = try XCTUnwrap(CommandCatalog.template(id: .imageReconstruct3DMultiview))
@@ -141,10 +141,10 @@ final class StudioThreeDTaskTests: XCTestCase {
         taskInstantMesh.form["--cameras"] = .text("/tmp/cameras.json")
         taskInstantMesh.form["--dry-run"] = .flag(true)
         taskInstantMesh.form["--json"] = .flag(true)
-        XCTAssertEqual(Self.pairs(taskInstantMesh.arguments, instantMesh), Self.pairs(instantMesh.arguments(from: pageInstantMesh), instantMesh))
-        XCTAssertEqual(taskInstantMesh.arguments.filter { $0 == "--view" }.count, 4)
+        XCTAssertEqual(Self.pairs(taskInstantMesh.arguments(source: .contract), instantMesh), Self.pairs(instantMesh.arguments(from: pageInstantMesh, source: .contract), instantMesh))
+        XCTAssertEqual(taskInstantMesh.arguments(source: .contract).filter { $0 == "--view" }.count, 4)
         // The order of the views is the order the argv carries them.
-        let argv = taskInstantMesh.arguments
+        let argv = taskInstantMesh.arguments(source: .contract)
         XCTAssertEqual(argv.indices.filter { argv[$0] == "--view" }.map { argv[$0 + 1] }, views)
     }
 
@@ -166,9 +166,9 @@ final class StudioThreeDTaskTests: XCTestCase {
             return draft
         }
         func refusal(_ draft: StudioTaskDraft) throws -> String? {
-            let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request())
+            let base = try XCTUnwrap(StudioOutputLocation.destination(for: draft, source: .contract).request(source: .contract))
             do {
-                _ = try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions())
+                _ = try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions(), source: .contract)
                 return nil
             } catch let error as StudioValidationError {
                 return error.message
@@ -196,7 +196,7 @@ final class StudioThreeDTaskTests: XCTestCase {
         // The Command view's Run validates the same form and shows the same reason.
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageReconstruct3DMultiview))
         let shortDraft = draft(views: views, cameras: short)
-        let run = try XCTUnwrap(StudioConsoleRun(template: template, draft: shortDraft.form, seed: shortDraft.seed))
+        let run = try XCTUnwrap(StudioConsoleRun(template: template, draft: shortDraft.form, seed: shortDraft.seed, source: .contract))
         XCTAssertEqual(run.validationMessage, "Add one camera per view: 4 views, 3 cameras.")
     }
 
@@ -210,16 +210,16 @@ final class StudioThreeDTaskTests: XCTestCase {
         for templateID in [CommandTemplateID.imageReconstruct3DTrellis2, .imageReconstruct3D] {
             var draft = StudioTaskDraft(templateID: templateID)
             draft.setArgument(0, picture.path)
-            let named = StudioOutputLocation.destination(for: draft)
+            let named = StudioOutputLocation.destination(for: draft, source: .contract)
             let output = URL(fileURLWithPath: named.text("--output"))
             XCTAssertEqual(output.deletingLastPathComponent().path, root.appendingPathComponent("outputs/3D").path, "\(templateID)")
             XCTAssertTrue(output.lastPathComponent.hasPrefix("chair"), "\(templateID): \(output.lastPathComponent)")
             XCTAssertEqual(output.pathExtension, "", "a directory, not a file")
-            XCTAssertEqual(StudioOutputLocation.destination(for: named).text("--output"), named.text("--output"), "naming is stable")
+            XCTAssertEqual(StudioOutputLocation.destination(for: named, source: .contract).text("--output"), named.text("--output"), "naming is stable")
 
-            let base = try XCTUnwrap(named.request())
+            let base = try XCTUnwrap(named.request(source: .contract))
             XCTAssertEqual(base.mode, .createImage, "3D rows keep the attribution the page gave them")
-            let prepared = try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions())
+            let prepared = try StudioTaskRunner.prepare(base, sessions: StudioTaskSessions(), source: .contract)
             XCTAssertNil(prepared.fallbackReason)
             XCTAssertTrue(FileManager.default.fileExists(atPath: output.deletingLastPathComponent().path))
             let arguments = try XCTUnwrap(prepared.request.execution?.arguments)
@@ -237,14 +237,14 @@ final class StudioThreeDTaskTests: XCTestCase {
         StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0].attach(views.map { URL(fileURLWithPath: $0) }, to: &draft)
         draft.form["--cameras"] = .text("/tmp/cameras.json")
         draft.form["--resolution"] = .integer(192)
-        let request = try XCTUnwrap(StudioOutputLocation.destination(for: draft).request())
+        let request = try XCTUnwrap(StudioOutputLocation.destination(for: draft, source: .contract).request(source: .contract))
         let row = StudioLibraryItem(
             id: request.id, mode: request.mode, prompt: "", inputURL: nil, outputURL: nil, createdAt: Date(), updatedAt: Date(),
             status: .completed, exitCode: 0, commandPreview: "", outputText: nil, templateID: .imageReconstruct3DMultiview,
             commandDraft: request.draft, commandArguments: request.execution?.arguments
         )
         XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(row))
-        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: row))
+        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: row, source: .contract))
         XCTAssertEqual(restored.templateID, .imageReconstruct3DMultiview)
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageReconstruct3DMultiview)[0].paths(in: restored), views)
         XCTAssertEqual(restored.text("--cameras"), "/tmp/cameras.json")
@@ -254,7 +254,7 @@ final class StudioThreeDTaskTests: XCTestCase {
         let outputIndex = try XCTUnwrap(recorded.firstIndex(of: "--output"))
         var withoutDestination = recorded
         withoutDestination.removeSubrange(outputIndex...(outputIndex + 1))
-        XCTAssertEqual(restored.arguments, withoutDestination, "everything but the destination is the recorded command")
+        XCTAssertEqual(restored.arguments(source: .contract), withoutDestination, "everything but the destination is the recorded command")
     }
 
     /// The same normalization `StudioTaskSchemaTests` uses: the catalog builder and the contract

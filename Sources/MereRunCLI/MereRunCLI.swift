@@ -17,13 +17,56 @@ struct MereRunCLI: AsyncParsableCommand {
         try validate(arguments: CommandLine.arguments)
     }
 
-    mutating func validate(arguments: [String]) throws {
+    /// ArgumentParser validates the root before it parses the leaf, so this runs first for every
+    /// command. `arguments` is the process argv, executable first.
+    mutating func validate(
+        arguments: [String],
+        admit: ([String]) throws -> Void = CLIProcessAdmissionBootstrap.acquireIfNeeded
+    ) throws {
         if let modelsRoot, !modelsRoot.isEmpty {
             CLIModelStoreBootstrap.applyOverridePath(modelsRoot)
         } else {
             _ = _mereRunCLIModelStoreBootstrap
         }
-        try CLIProcessAdmissionBootstrap.acquireIfNeeded(arguments: arguments)
+        // Before admission, so a run the contract rejects never queues for permits, resolves
+        // a model, or downloads one. A refusal is a validation error, as the commands' own
+        // option checks are: usage under the message and exit status 64.
+        // Its warnings print from `main` once every command has validated.
+        do {
+            try CLICapabilityGate.check(arguments: arguments)
+        } catch let rejection as CLICapabilityGate.Rejection {
+            throw ValidationError(rejection.messages.joined(separator: "\n"))
+        }
+        try admit(arguments)
+    }
+
+    /// ArgumentParser's entry point, plus the gate's warnings: they print only once the whole
+    /// command line has parsed and every command's `validate()` has passed, so a run that ends
+    /// in a usage error shows the error alone, and the command's JSON output carries them. The
+    /// gate already let this command line through in `validate`, so asking it again only
+    /// collects the warnings.
+    static func main() async {
+        do {
+            let command = try parseAsRoot()
+            let gate = try CLICapabilityGate.pass(arguments: CommandLine.arguments)
+            for line in gate.stderrLines {
+                CLIStderr.write(line)
+            }
+            try await run(command, warnings: gate.warnings)
+        } catch {
+            exit(withError: error)
+        }
+    }
+
+    private nonisolated static func run(_ command: sending any ParsableCommand, warnings: [String]) async throws {
+        var command = command
+        try await CLIGateWarnings.$current.withValue(warnings) {
+            if var asyncCommand = command as? AsyncParsableCommand {
+                try await asyncCommand.run()
+            } else {
+                try command.run()
+            }
+        }
     }
 
     static let configuration = CommandConfiguration(

@@ -72,7 +72,7 @@ mere.run video generate --help
 - `--image-conditioning`: repeatable arbitrary timed image as
   `PIXEL_FRAME:PATH[:STRENGTH[:CRF]]`.
 - `--num-generated-keyframes`, `--generated-keyframe`: generated absolute
-  keyframe slots.
+  keyframe slots. Without a model, any positive count selects LTX-2.5 Distilled.
 - `--ltx-pipeline two-stage|keyframe-interpolation|dev-one-stage`,
   `--ltx-preset`, `--ltx-sampler`, `--ltx-sigmas`, and
   guidance/LoRA controls: full/dev, HQ Res2s, and custom sampler recipes.
@@ -92,6 +92,41 @@ mere.run video generate --help
   merged distilled roots do not expose phase timings.
 - `--timings-output`: write those timings as JSON.
 - `--quiet`, `-q`: suppress diagnostics.
+
+## Model Scope
+
+Each checkpoint family takes its own subset of these options. The CLI checks the
+command line against the selected family before it loads or resolves the model:
+
+- An option the family can't run stops the command with one message that names
+  the family and the families that take the option. Examples: `--end-image` on
+  Wan 2.2, `--image` on MiniMax-H3 Ref2VA or FastH3, `--audio` on
+  `video-ltx23-av-mlx` or `video-ltx25-distilled-bf16`, TeaCache on the
+  distilled LTX checkpoints, and `--quality final` on a draft checkpoint.
+- An option the family accepts and never reads prints a `Warning:` line on
+  stderr and the run continues. Examples: `--steps` on every LTX checkpoint,
+  `--image-strength` on Wan 2.2 and MiniMax-H3, `--negative-prompt` on the
+  distilled LTX checkpoints, and `--fps` other than 24 on MiniMax-H3.
+- FastH3 runs exactly 5 steps with `--h3-acceleration quality` and no image
+  inputs, unless `--h3-adapter` replaces its embedded adapter; the adapter's
+  recipe then applies. Only the exact FastH3 id runs its embedded adapter; its
+  upstream repository or another spelling runs as FL2VA. The legacy 4-bit
+  `video-minimax-h3-fl2va-mlx` refuses `--h3-adapter`, since Turbo adapters need
+  BF16 or Q8. Ref2VA requires `--reference`; Wan 2.2 requires `--image`.
+- `video-cosmos3-edge-mlx`, `video-scail2-14b-mlx`, and
+  `video-dreamx-world-5b-ar-mlx` stop at once; use `video cosmos3`,
+  `video animate`, or `world serve`.
+
+`--model-root` wins over `--model`, and a local folder's family comes from its
+files. `video-ltx-av`, `video-ltx23-full-mlx`, and `video-ltx23-a2vid-mlx` are
+checked as the folder they resolve to: with audio-video output `video-ltx-av`
+runs an installed LTX 2.3 Full folder, and the LTX 2.3 Full and A2Vid ids fall
+back to each other's installs. To see which family a command line runs and what the check reports,
+without running it:
+
+```bash
+mere.run catalog resolve -- video generate "a harbor" --model video-wan22-ti2v-5b-mlx --image frame.png
+```
 
 ## Prompting Patterns
 
@@ -116,7 +151,8 @@ mere.run video generate --help
 - Use `--preflight --json` before long renders to confirm model availability,
   keyframe paths, output overwrite risk, resolved dimensions, and resolved
   frame count/duration. Preflight also rejects `--timings` for legacy merged
-  distilled roots and Wan2.2 before generation starts.
+  distilled roots before generation starts; Wan2.2 and MiniMax-H3 reject it
+  before preflight runs.
 
 ## Examples
 

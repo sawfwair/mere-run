@@ -765,7 +765,26 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertFalse(commandFromPlan.json)
     }
 
-    func testTrainLoRAPreflightBlocksKleinPreviewOptionsForKreaModel() throws {
+    /// The capability gate reads a local model's manifest the way the trainer does, so a Klein
+    /// option on a local Krea 2 base is refused before preflight or training looks at it.
+    func testTheGateRefusesKleinPreviewOptionsForALocalKreaModel() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "local-krea", family: .krea, to: model)
+        let commandLine = [
+            "image", "train-lora", "--data", temp.path, "--output", temp.appendingPathComponent("style.safetensors").path,
+            "--model", model.path, "--sample-prompt", "preview", "--preflight", "--json",
+        ]
+
+        let report = try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: commandLine)).report
+        XCTAssertEqual(report.family, "krea")
+        XCTAssertEqual(report.source, .identified)
+        XCTAssertEqual(report.violations, ["--sample-prompt is not supported by Krea 2. It applies to FLUX.2 Klein."])
+    }
+
+    /// A Krea 2 recipe on a Klein base runs half-applied; preflight says so without blocking.
+    func testTrainLoRAPreflightWarnsAboutAKreaRecipeOnAKleinModel() throws {
         let temp = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: temp) }
         let dataset = temp.appendingPathComponent("dataset", isDirectory: true)
@@ -773,12 +792,12 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         try Data("image".utf8).write(to: dataset.appendingPathComponent("frame.png"))
         try Data("caption".utf8).write(to: dataset.appendingPathComponent("frame.txt"))
         let model = temp.appendingPathComponent("model", isDirectory: true)
-        try writeManifest(id: "local-krea", family: .krea, to: model)
+        try writeManifest(id: "local-klein", family: .klein, to: model)
         let cmd = try ImageTrainLoRA.parse([
             "--data", dataset.path,
             "--output", temp.appendingPathComponent("style.safetensors").path,
             "--model", model.path,
-            "--sample-prompt", "preview",
+            "--recipe", "krea-fast-style",
             "--preflight",
             "--json",
         ])
@@ -788,11 +807,10 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             now: { Date(timeIntervalSince1970: 0) }
         )
 
-        XCTAssertEqual(envelope.status, .blocked)
-        XCTAssertTrue(envelope.diagnostics.contains {
-            $0.id == "klein_training_options_require_klein_model" && $0.severity == .blocker
-        })
-        XCTAssertEqual(envelope.actions.first { $0.id == "start-training" }?.enabled, false)
+        let warning = try XCTUnwrap(envelope.diagnostics.first { $0.id == "recipe_written_for_other_trainer" })
+        XCTAssertEqual(warning.severity, .warning)
+        XCTAssertTrue(warning.message.hasPrefix("--recipe krea-fast-style is written for Krea 2"))
+        XCTAssertNotEqual(envelope.status, .blocked)
     }
 
     func testImageRunPlanMaterializesDurableRunDirectory() throws {

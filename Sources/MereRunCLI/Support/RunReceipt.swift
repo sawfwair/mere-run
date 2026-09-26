@@ -10,7 +10,8 @@ import Foundation
 /// carry a `role` (`detections`, `masks`, `recipe`, `lyrics`, ...). A receipt
 /// is only printed after the command succeeded, so `exit` is always `0`; a
 /// failed run exits nonzero without a receipt. Human output above the receipt
-/// is unchanged, so wrappers parse the last line and ignore the rest.
+/// is unchanged, so wrappers parse the last line and ignore the rest. A run the
+/// capability gate warned about adds `"warnings":["…"]`.
 struct RunReceipt: Codable, Equatable {
     enum OutputKind: String, Codable {
         case image
@@ -64,11 +65,15 @@ struct RunReceipt: Codable, Equatable {
     let event: String
     let outputs: [Output]
     let exit: Int32
+    /// The capability gate's "has no effect" warnings for the run; left out of the line when
+    /// there are none.
+    let warnings: [String]?
 
-    init(outputs: [Output], exit: Int32 = 0) {
+    init(outputs: [Output], exit: Int32 = 0, warnings: [String] = CLIGateWarnings.current) {
         self.event = Self.eventName
         self.outputs = outputs
         self.exit = exit
+        self.warnings = warnings.isEmpty ? nil : warnings
     }
 
     /// One JSON object with no embedded newlines, suitable for NDJSON streams.

@@ -110,6 +110,37 @@ Streaming responses send SSE keepalive comments during long generations, includi
 buffered tool calls. Clients should ignore comment frames and wait for response
 data and the final usage chunk.
 
+### Model scope
+
+Chat, image generation and edits, video generation, speech, transcription, and
+diarization requests go through the CLI's
+[model scope check](../cli.md#model-scope-check) before anything loads. The
+server reads the request's fields as the command-line options they stand for,
+such as `guidance_scale` as `image generate --cfg` or `top_k` as
+`text chat --top-k`, and resolves the model the way the CLI does.
+
+- A field the selected model refuses returns HTTP 400 with an
+  `invalid_request_error` that names the field, for example `steps` other than
+  4 on `image-qwen-edit-2511-lightning`, which used to fail only once the
+  model loaded.
+- A field the model accepts but never reads, such as `guidance_scale` on Krea 2,
+  `top_p` on DiffusionGemma, or `max_tokens` on Parakeet, still runs. Each
+  warning comes back as an `x-mere-warning` response header in the CLI's
+  words; the response body is unchanged:
+
+  ```text
+  x-mere-warning: --cfg has no effect with Krea 2. It applies to FLUX.1-dev, FLUX.2 Klein, ...
+  ```
+
+The route's own validation still runs after the check. A request the server
+used to run is never refused; one it refused only once the model loaded is now
+refused before. The check reads only the fields a client sent: the server's own
+defaults, such as video's 24 fps or transcription's token budget, never warn.
+Chat leaves models that `text chat` can't run, such as
+`text-agent-deepseek-v4-flash`, to the server, which serves them under their
+own engines. The other routes (embeddings, decisions, and the vision geometry,
+3D, and depth routes) run one model family with no options to scope.
+
 ## Generate a video
 
 Send video requests from the serving machine. This route is loopback-only
@@ -882,7 +913,8 @@ response body, including partial transcoding output on failure.
 - `model`: `speech-asr-parakeet`, `speech-asr-qwen3`, a local ASR model path,
   or OpenAI names such as `whisper-1` mapped to `speech-asr-parakeet`
 - `language`
-- `task`: `transcribe` or `translate`
+- `task`: `transcribe` or `translate`. Translation runs Qwen3-ASR and
+  returns English; `language` does not change the target
 - `response_format`: `json`, `text`, `verbose_json`, `srt`, or `vtt`
 - `max_tokens`: 1 through 4,096; defaults to 448
 

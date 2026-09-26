@@ -42,19 +42,23 @@ struct TextDecide: AsyncParsableCommand {
         let operation = try LayaDecisionOperation(root: root, modelID: managed?.id ?? root.lastPathComponent)
         let encoder = JSONEncoder()
         encoder.outputFormatting = pretty ? [.prettyPrinted, .sortedKeys] : [.sortedKeys]
-        let result: Data
+        // The file keeps the result alone; stdout adds the gate's warnings.
+        func encoded(_ value: some Encodable) throws -> (file: Data, stdout: Data) {
+            (try encoder.encode(value), try encoder.encode(GateWarned(value)))
+        }
+        let result: (file: Data, stdout: Data)
         if preflight {
-            result = try encoder.encode(operation.prepare(request).plan)
+            result = try encoded(operation.prepare(request).plan)
         } else {
             try MLXBundleSupport.ensureAvailable(quiet: true)
-            result = try encoder.encode(operation.predict(request))
+            result = try encoded(operation.predict(request))
         }
         if let output {
             let destination = URL(fileURLWithPath: output)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try result.write(to: destination, options: .atomic)
+            try result.file.write(to: destination, options: .atomic)
         }
-        FileHandle.standardOutput.write(result)
+        FileHandle.standardOutput.write(result.stdout)
         FileHandle.standardOutput.write(Data([10]))
     }
 

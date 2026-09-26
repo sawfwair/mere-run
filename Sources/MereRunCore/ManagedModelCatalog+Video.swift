@@ -27,7 +27,7 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 93_069_609_104,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate", "video export-latents"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo23AVMLX.rawValue,
@@ -48,7 +48,7 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo23MLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 120 * 1_073_741_824,
-            defaultCLICommands: ["video generate"],
+            defaultCLICommands: ["video generate", "video session"],
             companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
         ),
         ManagedModelSpec(
@@ -71,7 +71,7 @@ extension ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             resolutionFallbackIDs: [ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue],
             estimatedDownloadBytes: 56_000_000_000,
-            defaultCLICommands: ["video generate"],
+            defaultCLICommands: ["video generate", "video session"],
             companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
         ),
         ManagedModelSpec(
@@ -116,7 +116,7 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo25,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LTX25Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate", "video retake", "video session", "video dub-it"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
@@ -137,7 +137,7 @@ extension ManagedModelCatalog {
             validationKind: .ltxVideo25,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LTX25Resources.fullEstimatedDownloadBytes,
-            defaultCLICommands: ["video generate"]
+            defaultCLICommands: ["video generate", "video retake", "video session", "video dub-it"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,

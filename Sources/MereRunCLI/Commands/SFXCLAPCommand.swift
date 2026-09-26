@@ -60,7 +60,7 @@ struct SFXCLAPScoreCommand: AsyncParsableCommand {
             audio: audioURL.path,
             model: model
         )
-        let data = try JSONEncoder().encode(output)
+        let data = try JSONEncoder().encode(GateWarned(output))
         print(String(decoding: data, as: UTF8.self))
     }
 }

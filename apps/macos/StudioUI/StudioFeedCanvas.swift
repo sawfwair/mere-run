@@ -250,6 +250,7 @@ private extension View {
 
 /// Prompt (13.5 medium) with the time on the right (11.5 muted), then the run's parameter chips.
 private struct StudioCardHeader: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     let item: StudioLibraryItem
     let when: String
     @Environment(\.studioModelTitles) private var titles
@@ -273,7 +274,7 @@ private struct StudioCardHeader: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            let chips = StudioFeedChips.chips(for: item, titles: titles)
+            let chips = StudioFeedChips.chips(for: item, titles: titles, source: scopeSource)
             if !chips.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(chips, id: \.self) { chip in
@@ -319,13 +320,13 @@ enum StudioFeedTime {
 /// The parameter chips a card shows under its prompt, read from the run's own command draft so
 /// a card always says what actually ran.
 enum StudioFeedChips {
-    static func chips(for item: StudioLibraryItem, titles: StudioModelTitles) -> [String] {
+    static func chips(for item: StudioLibraryItem, titles: StudioModelTitles, source: StudioScopeSource) -> [String] {
         guard let draft = item.commandDraft else { return [] }
         var chips: [String] = []
         // A task on the shared workspace records its exact argv; its chips are the composer's
         // (the template's essentials) valued from that, not the fields of the mode that files it.
         if item.templateID?.studioTask.usesTaskDraft == true {
-            return StudioTaskChips.chips(for: item, titles: titles)
+            return StudioTaskChips.chips(for: item, titles: titles, source: source)
         }
         switch item.mode {
         case .createImage, .video:

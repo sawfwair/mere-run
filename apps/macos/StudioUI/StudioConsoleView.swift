@@ -23,6 +23,7 @@ package enum StudioConsoleWindow {
 /// While this window is key the menu bar acts on the console's own Run/Stop and on the Studio
 /// window's navigation.
 package struct StudioConsoleView: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     package init() {}
 
     @EnvironmentObject private var controller: MereRunController
@@ -86,12 +87,12 @@ package struct StudioConsoleView: View {
         if let arguments = controller.consoleSeedArguments, let capability {
             draft = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
         } else {
-            draft = StudioConsoleCommand.seed(template: controller.selectedTemplate, draft: controller.draft)
+            draft = StudioConsoleCommand.seed(template: controller.selectedTemplate, draft: controller.draft, source: scopeSource)
         }
     }
 
     private var canRun: Bool {
-        StudioConsoleRun(template: controller.selectedTemplate, draft: draft, seed: controller.draft)?
+        StudioConsoleRun(template: controller.selectedTemplate, draft: draft, seed: controller.draft, source: scopeSource)?
             .validationMessage == nil
     }
 
@@ -99,7 +100,7 @@ package struct StudioConsoleView: View {
     /// command and not the draft it was seeded from — and hands it to the inference lane.
     private func run() {
         let template = controller.selectedTemplate
-        guard let launch = StudioConsoleRun(template: template, draft: draft, seed: controller.draft),
+        guard let launch = StudioConsoleRun(template: template, draft: draft, seed: controller.draft, source: scopeSource),
               launch.validationMessage == nil else {
             return
         }
@@ -127,7 +128,8 @@ package struct StudioConsoleView: View {
             request: request,
             commandPreview: controller.commandPreview(arguments: arguments, masksSecrets: true),
             status: status,
-            arguments: arguments
+            arguments: arguments,
+            source: scopeSource
         )
         requestID = request.id
         controller.runConsole(
@@ -245,6 +247,7 @@ private struct StudioConsoleCatalog: View {
 /// same values build.
 private struct StudioConsoleForm: View {
     @EnvironmentObject private var controller: MereRunController
+    @Environment(\.studioScopeSource) private var scopeSource
     @Binding var draft: StudioConsoleDraft
     let run: () -> Void
     let stop: () -> Void
@@ -256,7 +259,13 @@ private struct StudioConsoleForm: View {
     private var capability: MereRunCommandCapability? { template.id.capability }
 
     private var launch: StudioConsoleRun? {
-        StudioConsoleRun(template: template, draft: draft, seed: controller.draft)
+        StudioConsoleRun(template: template, draft: draft, seed: controller.draft, source: scopeSource)
+    }
+
+    /// The form's scope: the options the model it runs takes. What the form holds for the rest
+    /// is listed in the note and kept, not run.
+    private var scope: StudioOptionScope? {
+        capability.map { scopeSource.scope(capability: $0, form: draft) }
     }
 
     private var displayCommand: String {
@@ -273,7 +282,12 @@ private struct StudioConsoleForm: View {
                     if let url = template.externalURL {
                         externalSection(url)
                     } else if let capability {
-                        ForEach(StudioConsoleCommand.groups(for: capability)) { group in
+                        if let notice = scope?.notice(form: draft) {
+                            StudioScopeNote(notice: notice)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 14)
+                        }
+                        ForEach(StudioConsoleCommand.groups(for: capability, scope: scope)) { group in
                             groupView(group, capability: capability)
                         }
                         extraArgumentsSection(lines: 1...4)

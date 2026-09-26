@@ -76,7 +76,9 @@ mere.run music generate "English jazz, brushed drums, upright bass" \
 Score conditioning generates a complete recording. It does not preserve
 unchanged regions of an existing waveform. Audio-to-score transcription with
 SheetSage2 is outside this integration. ACE-Step editing, adapters, MiniMax
-composition, and music server controls do not apply to YuE2.
+composition, and music server controls do not apply to YuE2; they fail before
+the model loads. `--instrumental` has no effect on YuE2 and prints a warning;
+leave out the lyrics instead.
 
 The native runtime loads BF16 transformer weights, releases the transformer,
 and then decodes with the standard FP32 VAE. The experimental memory estimates

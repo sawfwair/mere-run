@@ -24,8 +24,13 @@ struct StudioComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// Whether the composer carries the scope note: only while no side column is open. The
+    /// inspector shows it at its top, beside the controls it explains, and the Command view as
+    /// its "Not sent" line.
+    var showsScopeNote = true
 
     @EnvironmentObject private var controller: MereRunController
+    @Environment(\.studioScopeSource) private var scopeSource
     @State private var editingChip: StudioComposerChipKind?
 
     private enum Metrics {
@@ -38,12 +43,15 @@ struct StudioComposer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.rowSpacing) {
-            if mode.showsAttachmentWell(for: draft) {
+            if mode.showsAttachmentWell(for: draft, source: scopeSource) {
                 attachmentWell
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
             promptEntry
             chipStrip
+            if showsScopeNote, let notice = StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) {
+                StudioScopeNote(notice: notice)
+            }
         }
         .padding(Metrics.innerInsets)
         .background {
@@ -57,13 +65,13 @@ struct StudioComposer: View {
         }
         .mereFocusRing(promptFocus.wrappedValue, cornerRadius: Metrics.cornerRadius)
         .padding(Metrics.outerInsets)
-        .animation(MereRunTheme.Motion.standard, value: mode.showsAttachmentWell(for: draft))
+        .animation(MereRunTheme.Motion.standard, value: mode.showsAttachmentWell(for: draft, source: scopeSource))
     }
 
     // MARK: - Attachment well
 
     private var visibleSlots: [StudioAttachmentSlot] {
-        mode.attachmentSlots.filter { !$0.isTransient || $0.isFilled(in: draft) }
+        mode.attachmentSlots(for: draft, source: scopeSource).filter { !$0.isTransient || $0.isFilled(in: draft) }
     }
 
     private var attachmentWell: some View {
@@ -121,8 +129,12 @@ struct StudioComposer: View {
 
     private var chipStrip: some View {
         HStack(alignment: .center, spacing: 6) {
-            ForEach(mode.composerChips) { kind in
-                chip(for: kind)
+            ForEach(mode.composerChips(for: draft, source: scopeSource)) { chip in
+                if let value = chip.fixedValue {
+                    fixedChip(chip.kind, value: value, family: chip.fixedBy)
+                } else {
+                    self.chip(for: chip.kind)
+                }
             }
             Spacer(minLength: 8)
             HStack(spacing: 8) {
@@ -145,6 +157,18 @@ struct StudioComposer: View {
         case .thinking: thinkingChip
         case .model: modelChip
         }
+    }
+
+    /// A chip whose value the model's family fixes: shown as it runs, without a menu.
+    private func fixedChip(_ kind: StudioComposerChipKind, value: String, family: String?) -> some View {
+        let title = StudioComposerPresets.fixedTitle(kind, value: value)
+        let reason = family.map { "\($0) always runs \(title.lowercased())" } ?? "This model always runs \(title.lowercased())"
+        return StudioComposerChipLabel(title: title, leadingSystemImage: "lock", menu: false)
+            .fixedSize()
+            .help(reason)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(kind.accessibilityTitle)
+            .accessibilityValue("\(title). \(reason).")
     }
 
     private var dimensionsChip: some View {
@@ -238,12 +262,27 @@ struct StudioComposer: View {
         if mode != .sfx { draft.useDuration = true }
     }
 
+    /// MiniMax-H3 picks its steps from an adaptive schedule; the chip then edits the schedule's
+    /// override, which is what the command line carries, not the step slider other models use.
+    private var usesAdaptiveSchedule: Bool {
+        guard mode == .video, let scope = scopeSource.scope(mode: mode, draft: draft), scope.family != nil else { return false }
+        return scope.allows(CommandFlags.VideoGenerate.h3Acceleration)
+    }
+
     private var stepsChip: some View {
         chipMenu(
-            title: StudioComposerPresets.stepsTitle(draft, mode: mode),
+            title: usesAdaptiveSchedule
+                ? draft.h3Steps.map { $0 == 1 ? "1 step" : "\($0) steps" } ?? "Adaptive steps"
+                : StudioComposerPresets.stepsTitle(draft, mode: mode),
             accessibilityLabel: "Steps",
             kind: .steps
         ) {
+            if usesAdaptiveSchedule {
+                Toggle(isOn: Binding(get: { draft.h3Steps == nil }, set: { _ in draft.h3Steps = nil })) {
+                    Text("Adaptive schedule")
+                }
+                Divider()
+            }
             if mode == .music {
                 Toggle(isOn: Binding(get: { !draft.musicOverrideSteps }, set: { _ in draft.musicOverrideSteps = false })) {
                     Text("Preset steps")
@@ -252,7 +291,7 @@ struct StudioComposer: View {
             }
             ForEach(StudioComposerPresets.steps(for: mode), id: \.self) { steps in
                 Toggle(isOn: Binding(
-                    get: { stepsAreExplicit && draft.steps == steps },
+                    get: { usesAdaptiveSchedule ? draft.h3Steps == steps : stepsAreExplicit && draft.steps == steps },
                     set: { _ in setSteps(steps) }
                 )) {
                     Text(steps == 1 ? "1 step" : "\(steps) steps")
@@ -261,7 +300,11 @@ struct StudioComposer: View {
             Divider()
             Button("Custom steps…") { editingChip = .steps }
         } editor: {
-            numberField("Steps", value: Binding(get: { draft.steps }, set: { setSteps($0) }), range: 1...200)
+            numberField(
+                "Steps",
+                value: Binding(get: { usesAdaptiveSchedule ? draft.h3Steps ?? 21 : draft.steps }, set: { setSteps($0) }),
+                range: usesAdaptiveSchedule ? 1...64 : 1...200
+            )
         }
     }
 
@@ -270,6 +313,10 @@ struct StudioComposer: View {
     }
 
     private func setSteps(_ steps: Int) {
+        if usesAdaptiveSchedule {
+            draft.h3Steps = steps
+            return
+        }
         draft.steps = steps
         if mode == .music { draft.musicOverrideSteps = true }
     }
@@ -341,7 +388,7 @@ struct StudioComposer: View {
         guard mode == .readImage else { return nil }
         var candidateDraft = draft
         candidateDraft.readImageAction = action
-        switch StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: candidateDraft) {
+        switch StudioCommandAdapter.capabilityRequirement(for: .readImage, draft: candidateDraft, source: scopeSource) {
         case .unavailable(let message):
             return message
         case .managedModel(let modelID):
@@ -439,7 +486,7 @@ struct StudioComposer: View {
 
     private var modelChip: some View {
         StudioModelChip(
-            mode: mode,
+            scope: StudioModelScope(mode: mode, readImageAction: draft.readImageAction, source: scopeSource),
             model: $draft.model,
             modelInventory: modelInventory,
             readiness: readiness,
@@ -452,12 +499,13 @@ struct StudioComposer: View {
     /// Only a collapsed well (Chat's per-turn image) needs the paperclip; declared slots pick
     /// from the well itself.
     private var showsPaperclip: Bool {
-        !mode.attachmentSlots.isEmpty && !mode.showsAttachmentWell(for: draft)
+        !mode.attachmentSlots(for: draft, source: scopeSource).isEmpty
+            && !mode.showsAttachmentWell(for: draft, source: scopeSource)
     }
 
     private var paperclipButton: some View {
         Button {
-            if let slot = mode.attachmentSlots.first { pickFiles(for: slot) }
+            if let slot = mode.attachmentSlots(for: draft, source: scopeSource).first { pickFiles(for: slot) }
         } label: {
             Image(systemName: "paperclip")
                 .font(.system(size: 15, weight: .medium))

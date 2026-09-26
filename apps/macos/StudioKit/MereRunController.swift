@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Combine
 import Foundation
+import MereRunContract
 import UserNotifications
 
 package enum MereRunLaunch: Equatable {
@@ -280,13 +281,22 @@ package final class MereRunController: ObservableObject {
         }
     }
     @Published package var cliPath: String {
-        didSet { UserDefaults.standard.set(cliPath, forKey: Keys.cliPath) }
+        didSet {
+            UserDefaults.standard.set(cliPath, forKey: Keys.cliPath)
+            if cliPath != oldValue { modelIdentities.forget() }
+        }
     }
     @Published package var modelsRoot: String {
-        didSet { UserDefaults.standard.set(modelsRoot, forKey: Keys.modelsRoot) }
+        didSet {
+            UserDefaults.standard.set(modelsRoot, forKey: Keys.modelsRoot)
+            if modelsRoot != oldValue { modelIdentities.forget() }
+        }
     }
     @Published package var hubCache: String {
-        didSet { UserDefaults.standard.set(hubCache, forKey: Keys.hubCache) }
+        didSet {
+            UserDefaults.standard.set(hubCache, forKey: Keys.hubCache)
+            if hubCache != oldValue { modelIdentities.forget() }
+        }
     }
     @Published package var workingDirectory: String {
         didSet { UserDefaults.standard.set(workingDirectory, forKey: Keys.workingDirectory) }
@@ -376,6 +386,20 @@ package final class MereRunController: ObservableObject {
     /// library by request id. Persists past completion so the last run's result stays visible.
     private var foregroundJob: Job?
     private var jobEventSubscription: AnyCancellable?
+    private var identitySubscription: AnyCancellable?
+    /// What the CLI says about models the contract does not list (`catalog resolve`), for every
+    /// surface's `StudioOptionScope`. The controller asks through its utility lane and
+    /// republishes each answer, so a surface showing every option while a folder is identified
+    /// re-renders scoped when the answer lands. Each controller owns its own: answers from one CLI
+    /// and model location never reach another controller's surfaces.
+    package let modelIdentities = StudioModelIdentityStore()
+
+    /// Where this controller's surfaces, validation, and argv builders read their scopes: the
+    /// shipped contract and this controller's `catalog resolve` answers. The app injects it into
+    /// the view environment (`studioScopeSource`); nothing reads a process-wide one.
+    package var scopeSource: StudioScopeSource {
+        StudioScopeSource(identities: modelIdentities)
+    }
 
     /// Conservative cap on simultaneous inference runs. ML inference is memory-heavy, so this
     /// stays small; `JobLane.inference.capacity` is the single knob.
@@ -458,6 +482,12 @@ package final class MereRunController: ObservableObject {
         runtimeAPIKeyStorageNotice = storedKey.notice
         jobEventSubscription = jobs.events.sink { [weak self] event in
             self?.handle(event)
+        }
+        modelIdentities.use { [weak self] commandLine in
+            await self?.resolveFamily(commandLine: commandLine)
+        }
+        identitySubscription = modelIdentities.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
         }
         if resolvesCLIOnInit {
             refreshResolvedCLI()
@@ -883,7 +913,7 @@ package final class MereRunController: ObservableObject {
     }
 
     package func commandArguments(template: CommandTemplate, draft: CommandDraft) -> [String] {
-        cliArguments(template.arguments(from: draft))
+        cliArguments(template.arguments(from: draft, source: scopeSource))
     }
 
     /// The complete `mere.run` arguments for a command: the configured models root, then `args`.
@@ -902,6 +932,19 @@ package final class MereRunController: ObservableObject {
         let launch = cliResolve(cliPath)
         let args = cliArguments(arguments)
         return launch.displayCommand(for: masksSecrets ? args.maskingSecrets() : args)
+    }
+
+    /// `mere.run catalog resolve --json -- <commandLine>`: which runtime family the CLI would run
+    /// the command line with, answered by the same resolver and model identifier as its gate.
+    /// Nothing is loaded or admitted. nil when the command fails or prints something else.
+    package func resolveFamily(commandLine: [String]) async -> MereRunFamilyResolutionReport? {
+        let result = await utilityCommandResult(args: ["catalog", "resolve", "--json", "--"] + commandLine)
+        guard result.exitCode == 0 else { return nil }
+        do {
+            return try JSONDecoder().decode(MereRunFamilyResolutionReport.self, from: Data(result.stdout.utf8))
+        } catch {
+            return nil
+        }
     }
 
     package func utilityCommandResult(
@@ -1079,7 +1122,10 @@ package final class MereRunController: ObservableObject {
     /// lane under the mode's dedupe key, so at most one readiness process runs per mode and a
     /// probe launched with stale Settings is superseded rather than raced.
     package func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
-        checkReadiness(task: mode.task, requirement: StudioCommandAdapter.capabilityRequirement(for: mode, draft: studioDraft))
+        checkReadiness(
+            task: mode.task,
+            requirement: StudioCommandAdapter.capabilityRequirement(for: mode, draft: studioDraft, source: scopeSource)
+        )
     }
 
     /// The same check for a task on the shared task workspace, whose draft names its model
@@ -1088,6 +1134,12 @@ package final class MereRunController: ObservableObject {
     package func checkReadiness(for task: StudioTask, modelID: String) {
         let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         checkReadiness(task: task, requirement: trimmed.isEmpty ? nil : .managedModel(trimmed))
+    }
+
+    /// The same check for a task draft's requirement (`StudioTaskSchema.requirement(for:)`),
+    /// which also blocks a model the command excludes with the CLI gate's reason.
+    package func checkReadiness(for task: StudioTask, requirement: StudioCapabilityRequirement?) {
+        checkReadiness(task: task, requirement: requirement)
     }
 
     /// Readiness for any task: the mode's entry for a prompt task, the task's own otherwise.
@@ -1162,7 +1214,7 @@ package final class MereRunController: ObservableObject {
         var draft = template.defaultDraft()
         draft.all = true
         draft.json = true
-        submitReadinessProbe(for: task, args: template.arguments(from: draft)) { [weak self] result in
+        submitReadinessProbe(for: task, args: template.arguments(from: draft, source: scopeSource)) { [weak self] result in
             self?.finishCapabilitiesProbe(for: task, result: result)
         }
     }
@@ -1200,7 +1252,7 @@ package final class MereRunController: ObservableObject {
 
     private func probeModelList(for task: StudioTask) {
         guard let template = CommandCatalog.template(id: .modelList) else { return }
-        let args = template.arguments(from: template.defaultDraft())
+        let args = template.arguments(from: template.defaultDraft(), source: scopeSource)
         submitReadinessProbe(for: task, args: args) { [weak self] result in
             guard let self else { return }
             readinessProbes[task] = nil
@@ -1323,7 +1375,8 @@ package final class MereRunController: ObservableObject {
             requestID: requestID,
             configuration: processConfiguration(launch: launch, args: args, template: template, draft: draft),
             displayCommand: launch.displayCommand(for: args),
-            execution: execution
+            execution: execution,
+            scopeSource: scopeSource
         ))
     }
 
@@ -1356,7 +1409,8 @@ package final class MereRunController: ObservableObject {
                 draft: draft
             ),
             displayCommand: launch.displayCommand(for: args),
-            execution: execution
+            execution: execution,
+            scopeSource: scopeSource
         )
         let id = jobs.submit(request)
         refreshQueuedRunCount()
@@ -1451,6 +1505,8 @@ package final class MereRunController: ObservableObject {
             mirrorForeground(job)
             mirrorCrossRunState(job)
         case .finished(let job, let result):
+            // An installed or removed model changes what `catalog resolve` answers.
+            if [.modelPull, .modelRemove].contains(job.request.templateID) { modelIdentities.forget() }
             guard job.lane == .inference else { return }
             finish(job, result: result)
         }
@@ -1825,8 +1881,11 @@ private extension URL {
 }
 
 extension Array where Element == String {
+    /// The options whose value is a credential, wherever they appear on a command line.
+    package static let secretFlags: Set<String> = ["--api-key", "--infinity-api-key", "--admin-password", "--hf-token", "hf-token"]
+
     package func maskingSecrets() -> [String] {
-        let secretFlags: Set<String> = ["--api-key", "--infinity-api-key", "--admin-password", "--hf-token", "hf-token"]
+        let secretFlags = Self.secretFlags
         var masked = self
         var index = 0
         while index < masked.count {
@@ -1842,6 +1901,25 @@ extension Array where Element == String {
             index += 1
         }
         return masked
+    }
+
+    /// The command line without its credentials, flag and value both (`--api-key sk` and
+    /// `--api-key=sk`): what a helper process that only reads the rest of the line is given, so a
+    /// key never shows in the process list.
+    package func removingSecrets() -> [String] {
+        var kept: [String] = []
+        var index = 0
+        while index < count {
+            let token = self[index]
+            let flag = token.split(separator: "=", maxSplits: 1).first.map(String.init) ?? token
+            if Self.secretFlags.contains(flag) {
+                index += token.contains("=") ? 1 : 2
+                continue
+            }
+            kept.append(token)
+            index += 1
+        }
+        return kept
     }
 
     package func shellQuoted() -> String {

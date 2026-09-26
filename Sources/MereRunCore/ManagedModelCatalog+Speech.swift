@@ -76,7 +76,7 @@ extension ManagedModelCatalog {
             validationKind: .qwen3ASR,
             normalizationKind: .qwen3ASRNested,
             estimatedDownloadBytes: 2_467_855_342,
-            defaultCLICommands: ["speech transcribe"]
+            defaultCLICommands: ["speech transcribe", "speech listen"]
         ),
         ManagedModelSpec(
             id: "speech-asr-parakeet",
@@ -143,7 +143,7 @@ extension ManagedModelCatalog {
             validationKind: .sortformer,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 198_676_480,
-            defaultCLICommands: ["speech diarize"]
+            defaultCLICommands: ["speech diarize", "speech diarize-live"]
         ),
     ]
 

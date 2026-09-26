@@ -32,32 +32,7 @@ extension Qwen3TTSGenerator {
         let ttsEosEmbed = ttsEmbeds[0..., 1..<2, 0...]
         let ttsPadEmbed = ttsEmbeds[0..., 2..<3, 0...]
 
-        var languageId: Int?
-        if language.lowercased() != "auto", let map = talkerConfig.codecLanguageId {
-            languageId = map[language.lowercased()]
-        }
-
-        var codecPrefill: [Int]
-        if let languageId {
-            codecPrefill = [
-                talkerConfig.codecThinkId,
-                talkerConfig.codecThinkBosId,
-                languageId,
-                talkerConfig.codecThinkEosId
-            ]
-        } else {
-            codecPrefill = [
-                talkerConfig.codecNoThinkId,
-                talkerConfig.codecThinkBosId,
-                talkerConfig.codecThinkEosId
-            ]
-        }
-
-        if let speaker,
-           let spkMap = talkerConfig.spkId,
-           let spkIds = spkMap[speaker.lowercased()] {
-            codecPrefill.append(contentsOf: spkIds)
-        }
+        var codecPrefill = Self.styleCodecPrefill(language: language, speaker: speaker, talkerConfig: talkerConfig)
         if let speakerHintTokens, !speakerHintTokens.isEmpty {
             codecPrefill.append(contentsOf: speakerHintTokens)
         }
@@ -106,6 +81,26 @@ extension Qwen3TTSGenerator {
         }
 
         return (inputEmbeds, MLX.concatenated([trailingEmbed, ttsEosEmbed], axis: 1), ttsPadEmbed)
+    }
+
+    /// The codec tokens a style prompt opens with: the language tag (or none for `auto`), then a
+    /// named speaker's id from the checkpoint's `spk_id`. A dialect speaker (CustomVoice's Dylan
+    /// speaks Beijing dialect) takes its dialect's tag when the language is Chinese or `auto`, as
+    /// upstream's `generate` does.
+    static func styleCodecPrefill(language: String, speaker: String?, talkerConfig: Qwen3TTSTalkerConfig) -> [Int] {
+        let language = language.lowercased()
+        var languageId = language == "auto" ? nil : talkerConfig.codecLanguageId?[language]
+        if let speaker, ["chinese", "auto"].contains(language),
+           let dialect = talkerConfig.spkIsDialect?[speaker], let dialectId = talkerConfig.codecLanguageId?[dialect] {
+            languageId = dialectId
+        }
+        var prefill = languageId.map {
+            [talkerConfig.codecThinkId, talkerConfig.codecThinkBosId, $0, talkerConfig.codecThinkEosId]
+        } ?? [talkerConfig.codecNoThinkId, talkerConfig.codecThinkBosId, talkerConfig.codecThinkEosId]
+        if let speaker, let ids = talkerConfig.spkId?[speaker.lowercased()] {
+            prefill.append(contentsOf: ids)
+        }
+        return prefill
     }
 
     func prepareICLGenerationInputs(

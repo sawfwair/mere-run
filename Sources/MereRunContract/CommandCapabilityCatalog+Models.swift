@@ -134,9 +134,9 @@ extension MereRunCapabilityCatalog {
             ),
             .init(flag: "--all", label: "All models", kind: .boolean),
             .init(flag: "--force", label: "Force download", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean),
             .init(flag: "--allow-unsupported", label: "Allow unsupported", kind: .boolean),
-            .init(flag: "--accept-model-license", label: "Accept model terms", kind: .boolean),
+            .init(flag: "--accept-model-license", aliases: ["--accept-license-terms"], label: "Accept model terms", kind: .boolean),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],

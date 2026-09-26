@@ -8,7 +8,8 @@ import UniformTypeIdentifiers
 /// task's capability into sections (the contract's `group`), a disclosure (its `tier`), and one
 /// control per option (its `kind`, `range`, `choices`, and `depends_on`); `ContractForm` draws
 /// them. The handful of controls the contract cannot describe — the aspect pair, the seed row, the
-/// mask canvas, the ordered MiniMax references — come from this file through the override builder.
+/// mask canvas, the ordered MiniMax references — come from this file and
+/// `StudioInspector+Video.swift` through the override builder.
 ///
 /// Every control binds the same `StudioDraft` the composer's chips edit, so a change in either
 /// shows in both, and the header counts what differs from the mode's defaults.
@@ -26,6 +27,7 @@ struct StudioInspector: View {
     let onClose: () -> Void
 
     @EnvironmentObject private var controller: MereRunController
+    @Environment(\.studioScopeSource) var scopeSource
     @State private var showAdvanced = false
     @State private var editingSeed = false
     @State private var showImageEditor = false
@@ -34,15 +36,15 @@ struct StudioInspector: View {
     static let width = StudioLayoutPolicy.inspectorWidth
 
     private var sections: [StudioContractSection] {
-        StudioInspectorSchema.sections(for: mode, draft: draft)
+        StudioInspectorSchema.sections(for: mode, draft: draft, source: scopeSource)
     }
 
     private var advancedFields: [StudioContractField<StudioDraft>] {
-        StudioInspectorSchema.advancedFields(for: mode, draft: draft)
+        StudioInspectorSchema.advancedFields(for: mode, draft: draft, source: scopeSource)
     }
 
     private var changedCount: Int {
-        StudioInspectorSchema.changedCount(mode: mode, draft: draft, baseline: baseline)
+        StudioInspectorSchema.changedCount(mode: mode, draft: draft, baseline: baseline, source: scopeSource)
     }
 
     var body: some View {
@@ -50,6 +52,11 @@ struct StudioInspector: View {
             header
             ScrollView {
                 VStack(spacing: 0) {
+                    if let notice = StudioInspectorSchema.notice(for: mode, draft: draft, source: scopeSource) {
+                        StudioScopeNote(notice: notice)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                    }
                     ForEach(sections) { section in
                         sectionView(section)
                     }
@@ -69,8 +76,6 @@ struct StudioInspector: View {
         .task {
             if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
         }
-        .onAppear(perform: normalizeMiniMaxH3Draft)
-        .onChange(of: draft.model) { _, _ in normalizeMiniMaxH3Draft() }
         .sheet(isPresented: $showImageEditor) {
             if !draft.inputPath.isBlank {
                 StudioImageEditor(
@@ -154,8 +159,11 @@ struct StudioInspector: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(showAdvanced ? "Hide advanced settings" : "Show \(advancedFields.count) advanced settings")
                 Spacer(minLength: 0)
-                if showAdvanced, StudioInspectorSchema.advancedChanged(mode: mode, draft: draft, baseline: baseline) {
-                    resetButton { StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline) }
+                if showAdvanced,
+                   StudioInspectorSchema.advancedChanged(mode: mode, draft: draft, baseline: baseline, source: scopeSource) {
+                    resetButton {
+                        StudioInspectorSchema.resetAdvanced(for: mode, &draft, to: baseline, source: scopeSource)
+                    }
                 }
             }
             if showAdvanced {
@@ -170,7 +178,7 @@ struct StudioInspector: View {
     private func form(_ fields: [StudioContractField<StudioDraft>]) -> some View {
         ContractForm(
             fields: fields,
-            dependencies: StudioContractSchema.dependencies(for: mode, draft: draft),
+            dependencies: StudioContractSchema.dependencies(for: mode, draft: draft, source: scopeSource),
             draft: $draft
         ) { override in
             overrideControl(override)
@@ -245,7 +253,10 @@ struct StudioInspector: View {
     // MARK: Model & adapters
 
     private var modelPicker: some View {
-        StudioModelPicker(mode: mode, model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels) {
+        StudioModelPicker(
+            scope: StudioModelScope(mode: mode, readImageAction: draft.readImageAction, source: scopeSource),
+            model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels
+        ) {
             HStack(spacing: 8) {
                 if let glyph = modelStatusGlyph {
                     Image(systemName: glyph)
@@ -447,25 +458,8 @@ struct StudioInspector: View {
         switch mode {
         case .createImage:
             stepsSlider(range: 1...30)
-        case .video where StudioVideoModelFamily(model: draft.model).isMiniMaxH3:
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle(
-                    "Override adaptive schedule",
-                    isOn: Binding(get: { draft.h3Steps != nil }, set: { draft.h3Steps = $0 ? 21 : nil })
-                )
-                .toggleStyle(.checkbox)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(MereRunTheme.textSecondary)
-                if draft.h3Steps != nil {
-                    StudioInspectorSlider(
-                        label: "Schedule points",
-                        value: Binding(get: { Double(draft.h3Steps ?? 21) }, set: { draft.h3Steps = Int($0.rounded()) }),
-                        range: 1...64, step: 1, format: { String(Int($0)) }
-                    )
-                }
-            }
         case .video:
-            stepsSlider(range: 1...60)
+            videoStepsControl
         case .music:
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Override preset steps", isOn: $draft.musicOverrideSteps)
@@ -479,7 +473,7 @@ struct StudioInspector: View {
         }
     }
 
-    private func stepsSlider(range: ClosedRange<Double>) -> some View {
+    func stepsSlider(range: ClosedRange<Double>) -> some View {
         StudioInspectorSlider(
             label: "Steps",
             value: Binding(get: { Double(draft.steps) }, set: { draft.steps = Int($0.rounded()) }),
@@ -565,39 +559,6 @@ struct StudioInspector: View {
         ].contains { $0 > 0 }
     }
 
-    @ViewBuilder
-    private var orderedReferences: some View {
-        let references = draft.h3ReferenceInputs ?? []
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Ordered Ref2VA references")
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-            ForEach(Array(references.enumerated()), id: \.offset) { index, reference in
-                HStack(spacing: 5) {
-                    Text(reference)
-                        .font(MereRunTheme.captionFont)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer()
-                    Button { moveH3Reference(index, by: -1) } label: { Image(systemName: "arrow.up") }
-                        .disabled(index == 0)
-                        .accessibilityLabel("Move up")
-                    Button { moveH3Reference(index, by: 1) } label: { Image(systemName: "arrow.down") }
-                        .disabled(index == references.count - 1)
-                        .accessibilityLabel("Move down")
-                    Button(role: .destructive) { removeH3Reference(index) } label: { Image(systemName: "trash") }
-                        .accessibilityLabel("Remove reference")
-                }
-            }
-            HStack {
-                Button("Image") { chooseH3Reference(kind: "image", type: .image) }
-                Button("Video") { chooseH3Reference(kind: "video", type: .movie) }
-                Button("Audio") { chooseH3Reference(kind: "audio", type: .audio) }
-            }
-            .controlSize(.small)
-        }
-    }
-
     // MARK: Pickers
 
     private func chooseLoRAFile() {
@@ -619,46 +580,6 @@ struct StudioInspector: View {
             let existing = StudioAttachmentSlot.separatedPaths(draft.musicAdapterPaths)
             let added = panel.urls.map(\.path).filter { !existing.contains($0) }
             draft.musicAdapterPaths = (existing + added).joined(separator: "\n")
-        }
-    }
-
-    private func chooseH3Reference(kind: String, type: UTType) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [type]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        draft.h3ReferenceInputs = (draft.h3ReferenceInputs ?? []) + ["\(kind):\(url.path)"]
-    }
-
-    private func moveH3Reference(_ index: Int, by offset: Int) {
-        var references = draft.h3ReferenceInputs ?? []
-        references.swapAt(index, index + offset)
-        draft.h3ReferenceInputs = references
-    }
-
-    private func removeH3Reference(_ index: Int) {
-        var references = draft.h3ReferenceInputs ?? []
-        references.remove(at: index)
-        draft.h3ReferenceInputs = references
-    }
-
-    /// MiniMax-H3 fixes the frame rate, aligns the size to 32 pixels and the frame count to 17n+5,
-    /// and takes either an ordered reference list or a start/end keyframe pair, never both.
-    private func normalizeMiniMaxH3Draft() {
-        guard mode == .video, StudioVideoModelFamily(model: draft.model).isMiniMaxH3 else { return }
-        draft.fps = 24
-        draft.width = max(32, (draft.width / 32) * 32)
-        draft.height = max(32, (draft.height / 32) * 32)
-        draft.numFrames = StudioVideoModelFamily.alignedMiniMaxH3FrameCount(draft.numFrames)
-        draft.audioPath = ""
-        draft.timings = false
-        draft.timingsOutputPath = ""
-        if StudioVideoModelFamily(model: draft.model) == .miniMaxH3Ref2VA {
-            draft.inputPath = ""
-            draft.endImagePath = ""
-        } else {
-            draft.h3ReferenceInputs = []
         }
     }
 }

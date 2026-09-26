@@ -864,6 +864,11 @@ extension CommandFlags {
     /// `mere.run audio edit` — Edit or generate AuK speech
     package enum AudioEdit: CommandFlagNamespace {
         package static let command = ["audio", "edit"]
+        package static let defaultValues = [
+            "--steps": "32",
+            "--guidance": "2.0",
+            "--seed": "42"
+        ]
 
         package static let audio = "--audio"
         package static let model = "--model"
@@ -1224,6 +1229,11 @@ extension CommandFlags {
     /// `mere.run music serve` — Serve resident music
     package enum MusicServe: CommandFlagNamespace {
         package static let command = ["music", "serve"]
+        package static let defaultValues = [
+            "--decoder-subdirectory": "acestep-v15-turbo",
+            "--vae-subdirectory": "vae",
+            "--adapter-kind": "auto"
+        ]
 
         package static let memoryMode = "--memory-mode"
         package static let performanceMode = "--performance-mode"
@@ -1387,6 +1397,9 @@ extension CommandFlags {
     /// `mere.run video retake` — Retake video region
     package enum VideoRetake: CommandFlagNamespace {
         package static let command = ["video", "retake"]
+        package static let defaultValues = [
+            "--video-decoder": "diffusion"
+        ]
 
         package static let source = "--source"
         package static let frameRate = "--frame-rate"
@@ -1748,7 +1761,8 @@ extension CommandFlags {
             "--scene-memory-max-yaw": "2.0",
             "--scene-memory-max-translation": "0.1",
             "--scene-memory-exact-yaw": "0.01",
-            "--scene-memory-exact-translation": "0.001"
+            "--scene-memory-exact-translation": "0.001",
+            "--backend": "dreamx"
         ]
 
         package static let disableSceneMemory = "--disable-scene-memory"
@@ -2451,6 +2465,7 @@ extension CommandFlags {
         package static let output = "--output"
         package static let model = "--model"
         package static let voice = "--voice"
+        package static let speaker = "--speaker"
         package static let mode = "--mode"
         package static let profile = "--profile"
         package static let refAudio = "--ref-audio"
@@ -2640,6 +2655,9 @@ extension CommandFlags {
     /// `mere.run sfx video generate` — Video foley
     package enum SFXVideoGenerate: CommandFlagNamespace {
         package static let command = ["sfx", "video", "generate"]
+        package static let defaultValues = [
+            "--duration": "8.0"
+        ]
 
         package static let negativePrompt = "--negative-prompt"
         package static let output = "--output"
@@ -2862,6 +2880,17 @@ extension CommandFlags {
         package static let model = "--model"
         package static let json = "--json"
         package static let markdown = "--markdown"
+    }
+}
+
+// MARK: - catalog resolve
+
+extension CommandFlags {
+    /// `mere.run catalog resolve` — Resolve a command's runtime
+    package enum CatalogResolve: CommandFlagNamespace {
+        package static let command = ["catalog", "resolve"]
+
+        package static let json = "--json"
     }
 }
 

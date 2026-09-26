@@ -78,8 +78,9 @@ Treat these as reproducible full-song A/B controls, not speed or quality
 presets.
 
 Incompatible ACE-Step cover, editing, LM-planner, adapter, VAE,
-candidate-ranking, stem, and DAW settings fail explicitly for this model.
-Magenta RT2 settings also fail instead of being silently ignored.
+candidate-ranking, stem, and DAW settings fail before the model loads, as do
+Magenta RT2 settings. An ACE-Step or Magenta RT2 option passed at its own
+default prints a warning instead, because it has no effect on this model.
 
 ## Upstream parameter map
 

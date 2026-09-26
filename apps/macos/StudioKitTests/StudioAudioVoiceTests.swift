@@ -24,7 +24,7 @@ final class StudioAudioVoiceTests: XCTestCase {
         var draft = StudioTaskDraft(templateID: .speechDiarize)
         draft.setArgument(0, "/tmp/standup.wav")
         fixedOutput("/tmp/standup-speakers.json", in: &draft, flag: "--output")
-        XCTAssertEqual(draft.arguments, template.arguments(from: legacy))
+        XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: legacy, source: .contract))
         XCTAssertEqual(draft.primaryInputPath, "/tmp/standup.wav")
 
         // The Nemotron 3 switch and its input buffer, as the page's buttons set them.
@@ -36,37 +36,45 @@ final class StudioAudioVoiceTests: XCTestCase {
         draft.form["--latency"] = .text("0.64")
         draft.form["--format"] = .text("rttm")
         fixedOutput("/tmp/standup-speakers.rttm", in: &draft, flag: "--output")
-        XCTAssertEqual(draft.arguments, template.arguments(from: legacy))
+        XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: legacy, source: .contract))
     }
 
+    /// Sortformer, the default, always runs offline, so its page offers no input buffer; Nemotron 3
+    /// streams, and its page offers the buffer as a chip beside the format.
     func testWhoSpokeOffersTheModelFormatAndInputBufferAsChips() throws {
-        let draft = StudioTaskDraft(templateID: .speechDiarize)
-        let chips = StudioTaskSchema.essentials(for: .audioWhoSpoke, draft: draft).map(\.flag)
-        XCTAssertEqual(chips, ["--format", "--latency"], "the model chip is drawn separately")
-        let sections = StudioTaskSchema.sections(for: .audioWhoSpoke, draft: draft)
+        var draft = StudioTaskDraft(templateID: .speechDiarize)
+        let chips = StudioTaskSchema.essentials(for: .audioWhoSpoke, draft: draft, source: .contract).map(\.flag)
+        XCTAssertEqual(chips, ["--format"], "the model chip is drawn separately")
+        let sections = StudioTaskSchema.sections(for: .audioWhoSpoke, draft: draft, source: .contract)
         XCTAssertEqual(Set(sections.flatMap(\.fields).map(\.flag)),
-                       ["--model", "--format", "--threshold", "--min-duration", "--merge-gap", "--latency"])
-        XCTAssertEqual(StudioTaskSchema.advanced(for: .audioWhoSpoke, draft: draft).map(\.flag), ["--quiet"])
+                       ["--model", "--format", "--threshold", "--min-duration", "--merge-gap"])
+        XCTAssertEqual(StudioTaskSchema.advanced(for: .audioWhoSpoke, draft: draft, source: .contract).map(\.flag), ["--quiet"])
+        draft.model = "speech-diarization-nemotron3"
+        XCTAssertEqual(
+            StudioTaskSchema.essentials(for: .audioWhoSpoke, draft: draft, source: .contract).map(\.flag),
+            ["--format", "--latency"]
+        )
         let slot = try XCTUnwrap(StudioTaskSchema.primarySlot(for: .speechDiarize))
         XCTAssertEqual(slot.storage, .argument(0))
         XCTAssertTrue(slot.acceptedTypes.contains(.audio))
     }
 
-    func testDiarizeInputBufferIsValidatedAgainstTheModel() throws {
-        let capability = try XCTUnwrap(CommandTemplateID.speechDiarize.capability)
-        var draft = StudioTaskDraft(templateID: .speechDiarize)
-        draft.setArgument(0, "/tmp/standup.wav")
-        XCTAssertNil(StudioConsoleCommand.validationMessage(for: capability, draft: draft.form))
-        draft.form["--latency"] = .text("1.04")
-        XCTAssertEqual(
-            StudioConsoleCommand.validationMessage(for: capability, draft: draft.form),
-            "Input buffer latency applies to Nemotron 3 only; choose Offline for speech-diarization-sortformer."
-        )
+    /// The input buffer follows the runtime family the contract resolves, so a blank model reads
+    /// as the Sortformer default: Sortformer runs offline, so a streaming buffer stays in the
+    /// draft but leaves the command line, and Nemotron 3 sends it.
+    func testDiarizeInputBufferFollowsTheModelFamily() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .speechDiarize))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/standup.wav"
+        draft.speechDiarizationLatency = "1.04"
+        for model in ["speech-diarization-sortformer", ""] {
+            draft.model = model
+            XCTAssertNil(template.validationMessage(for: draft, source: .contract), model)
+            XCTAssertFalse(template.arguments(from: draft, source: .contract).contains("--latency"), model)
+        }
         draft.model = "speech-diarization-nemotron3"
-        XCTAssertNil(StudioConsoleCommand.validationMessage(for: capability, draft: draft.form))
-        draft.model = ""
-        draft.form["--latency"] = .text("offline")
-        XCTAssertNil(StudioConsoleCommand.validationMessage(for: capability, draft: draft.form))
+        XCTAssertNil(template.validationMessage(for: draft, source: .contract))
+        XCTAssertTrue(template.arguments(from: draft, source: .contract).contains("1.04"))
     }
 
     func testEnhanceTaskDraftBuildsTheAudioToolsPagesArgv() throws {
@@ -91,8 +99,8 @@ final class StudioAudioVoiceTests: XCTestCase {
         draft.form["--guidance-scale"] = .number(2)
         draft.form["--chunk-seconds"] = .integer(12)
         draft.form["--dtype"] = .text("float16")
-        XCTAssertEqual(draft.arguments, template.arguments(from: legacy))
-        XCTAssertEqual(StudioTaskSchema.essentials(for: .audioEnhance, draft: draft).map(\.flag), ["--dtype"])
+        XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: legacy, source: .contract))
+        XCTAssertEqual(StudioTaskSchema.essentials(for: .audioEnhance, draft: draft, source: .contract).map(\.flag), ["--dtype"])
     }
 
     func testAudioEditIsNotAnEnhanceVariant() {
@@ -116,7 +124,7 @@ final class StudioAudioVoiceTests: XCTestCase {
             draft.model = "music-separate-bs-roformer-4stem"
             draft.form["--overlap"] = .integer(4)
             draft.form["--dtype"] = .text("float32")
-            XCTAssertEqual(draft.arguments, template.arguments(from: legacy), "\(task)")
+            XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: legacy, source: .contract), "\(task)")
             XCTAssertTrue(task.runs(.musicSeparate))
         }
     }
@@ -232,12 +240,12 @@ final class StudioAudioVoiceTests: XCTestCase {
         var listen = StudioTaskDraft(templateID: .speechListen)
         listen.form["--device"] = .text("BuiltInMicrophoneDevice")
         listen.form["--language"] = .text("en")
-        XCTAssertEqual(listen.arguments, ["speech", "listen", "--device", "BuiltInMicrophoneDevice", "--language", "en"])
+        XCTAssertEqual(listen.arguments(source: .contract), ["speech", "listen", "--device", "BuiltInMicrophoneDevice", "--language", "en"])
         XCTAssertEqual(
-            listen.liveListenLaunch().arguments,
+            listen.liveListenLaunch().arguments(source: .contract),
             ["speech", "listen", "--device", "BuiltInMicrophoneDevice", "--language", "en", "--quiet", "--jsonl"]
         )
-        XCTAssertFalse(listen.arguments.contains("--jsonl"), "the parked draft never carries the launch switches")
+        XCTAssertFalse(listen.arguments(source: .contract).contains("--jsonl"), "the parked draft never carries the launch switches")
 
         var speakers = listen
         speakers.switchTemplate(to: .speechDiarizeLive)
@@ -245,14 +253,14 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertEqual(speakers.model, "", "the switch clears the model; the CLI's default is Nemotron 3")
         speakers.form["--latency"] = .text("0.64")
         XCTAssertEqual(
-            speakers.liveListenLaunch().arguments,
+            speakers.liveListenLaunch().arguments(source: .contract),
             ["speech", "diarize-live", "--device", "BuiltInMicrophoneDevice", "--latency", "0.64", "--quiet"]
         )
         XCTAssertEqual(
-            StudioTaskDraft(templateID: .speechDiarizeLive).liveListenLaunch().arguments,
+            StudioTaskDraft(templateID: .speechDiarizeLive).liveListenLaunch().arguments(source: .contract),
             ["speech", "diarize-live", "--model", "speech-diarization-nemotron3", "--quiet"]
         )
-        for field in StudioTaskSchema.fields(for: .audioLive, draft: listen) + StudioTaskSchema.fields(for: .audioLive, draft: speakers)
+        for field in StudioTaskSchema.fields(for: .audioLive, draft: listen, source: .contract) + StudioTaskSchema.fields(for: .audioLive, draft: speakers, source: .contract)
         where StudioTaskDraft.liveListenOwnedFlags.contains(field.flag) {
             XCTAssertTrue(["--device", "--list-devices", "--stdin", "--jsonl", "--quiet"].contains(field.flag))
         }
@@ -285,11 +293,11 @@ final class StudioAudioVoiceTests: XCTestCase {
         slot.attach([URL(fileURLWithPath: "/tmp/narrator.wav")], to: &draft)
         draft.form["--text"] = .text("A calm reading of the opening paragraph.")
         draft.form["--language"] = .text("en")
-        XCTAssertEqual(draft.arguments, template.arguments(from: legacy))
+        XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: legacy, source: .contract))
         XCTAssertEqual(draft.primaryInputPath, "/tmp/narrator.wav")
 
         let id = UUID()
-        XCTAssertEqual(StudioTaskDraft.deletingVoiceProfile(id).arguments, ["speech", "profile", "delete", "--id", id.uuidString])
+        XCTAssertEqual(StudioTaskDraft.deletingVoiceProfile(id).arguments(source: .contract), ["speech", "profile", "delete", "--id", id.uuidString])
         XCTAssertEqual(StudioTask.voiceVoices.variantTemplates.map(\.id), [.speechProfileCreate])
     }
 
@@ -419,9 +427,9 @@ final class StudioAudioVoiceTests: XCTestCase {
         XCTAssertNil(session.requestID, "nothing to adopt while the page is up and idle")
 
         let draft = StudioTaskDraft(templateID: .speechListen)
-        XCTAssertFalse(draft.arguments.contains("--jsonl"), "the draft keeps only settings")
-        let preview = StudioTaskRunner.launchPreview(draft)
-        XCTAssertTrue(preview.arguments.contains("--jsonl") && preview.arguments.contains("--quiet"), "Will run shows them")
+        XCTAssertFalse(draft.arguments(source: .contract).contains("--jsonl"), "the draft keeps only settings")
+        let preview = StudioTaskRunner.launchPreview(draft, source: .contract)
+        XCTAssertTrue(preview.arguments(source: .contract).contains("--jsonl") && preview.arguments(source: .contract).contains("--quiet"), "Will run shows them")
         let request = try fixture.runner.run(draft, task: .audioLive)
         let start = try XCTUnwrap(fixture.processRunner.starts.last)
         XCTAssertTrue(start.configuration.arguments.contains("--jsonl"))
@@ -462,7 +470,7 @@ final class StudioAudioVoiceTests: XCTestCase {
         let template = try XCTUnwrap(CommandCatalog.template(id: .visionTrackLive))
         let request = StudioRunRequest(mode: template.libraryMode, templateID: .visionTrackLive, template: template,
                                        draft: template.defaultDraft())
-        fixture.library.start(request: request, commandPreview: "fixture", status: .running)
+        fixture.library.start(request: request, commandPreview: "fixture", status: .running, source: .contract)
         fixture.controller.taskSessions.set(Optional(request.id), for: StudioTask.visionLive.rawValue + ".requestID")
         XCTAssertTrue(fixture.runner.isAwaitingLaunch(request.id), "the camera prompt's retry would launch it")
 
@@ -480,7 +488,7 @@ final class StudioAudioVoiceTests: XCTestCase {
         let controller = fixture.controller
         let library = fixture.library
         let runner = fixture.runner
-        controller.checkReadiness(for: .voiceVoices, modelID: StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .speechProfileCreate)))
+        controller.checkReadiness(for: .voiceVoices, modelID: StudioTaskSchema.modelID(for: StudioTaskDraft(templateID: .speechProfileCreate), source: .contract))
         XCTAssertEqual(controller.readiness(for: .voiceVoices), .ready, "profile create runs no managed model")
 
         let reference = root.appendingPathComponent("narrator.wav")

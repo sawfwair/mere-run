@@ -373,9 +373,18 @@ command guides:
 
 ```bash
 mere.run catalog --json
+mere.run catalog resolve --json -- video generate "a wave" --model video-ltx25-full-bf16
 mere.run guide video generate
 mere.run video --help
 ```
+
+The catalog declares, for each model-loading command, the runtime families that
+run it and which options each family uses. Every command line is checked against
+it before anything loads: an option the selected model refuses stops the run
+with one message that names the models that take it, and an option the model
+accepts but never reads prints a warning that it has no effect. `catalog
+resolve` reports that decision, with the family and model the command would run,
+without loading anything.
 
 On commands that support preflight, `--preflight --json` reports a plan before
 loading a model or writing output. The `--progress-json` option provides

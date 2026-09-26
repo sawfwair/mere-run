@@ -411,7 +411,7 @@ private enum FaceCLI {
             try data.write(to: url, options: .atomic)
         }
         if printJSON {
-            print(String(decoding: data, as: UTF8.self))
+            print(String(decoding: try encoder.encode(GateWarned(value)), as: UTF8.self))
         } else {
             humanOutput()
         }

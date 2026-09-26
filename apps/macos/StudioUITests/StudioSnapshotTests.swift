@@ -95,6 +95,185 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Model scope across the prompt modes, over the shipped contract with no CLI to ask: each
+    /// draft holds values its model does not use or runs its own way, so the inspector opens on
+    /// the model's own options with the note at its top, light and dark. FastH3 with an end
+    /// image, timings, and 30 steps (and the Command view listing them under "Not sent"); FL2VA
+    /// with source audio and timings; YuE2 set to cover a source song; Magenta with ACE-Step's
+    /// steps and seed; Krea 2 with references and CFG; Qwen-Image-Edit with an input image;
+    /// text-only Gemma 4 with an image and top-k; Qwen3-ASR on French; and, in the Command
+    /// Console, GLM-OCR with LightOnOCR's model and budget. Then the note's states on their own, light and dark.
+    func testModelScopeSnapshots() throws {
+        let installed: [(id: String, category: String, title: String)] = [
+            ("video-minimax-h3-fasth3-vsa-datafree-mlx", "video", "FastH3"),
+            ("video-minimax-h3-fl2va-mlx", "video", "MiniMax-H3 FL2VA"),
+            ("music-yue2", "music", "YuE2"),
+            ("music-magenta-rt2-small", "music", "Magenta RealTime 2 Small"),
+            ("image-krea2-raw", "image", "Krea 2 Raw"),
+            ("image-qwen-edit-2511", "image", "Qwen-Image-Edit"),
+            ("text-chat-gemma4-12b-4bit", "text-chat", "Gemma 4 12B"),
+            ("vision-ocr-lighton", "vision-ocr", "LightOnOCR"),
+            ("speech-asr-qwen3", "speech-asr", "Qwen3-ASR"),
+        ]
+        // The mockup Library holds Image rows only, so Chat opens on a new thread with the draft's model.
+        let scoped = try SnapshotFixture(
+            outputDirectory: fixture.outputDirectory,
+            seed: .mockup,
+            processRunner: SnapshotProcessRunner(script: ModelsInventoryScript.readinessResponses(installing: installed))
+        )
+        defer { scoped.tearDown() }
+        let source = StudioScopeSource(identities: StudioFixedModelIdentities())
+
+        func draft(_ mode: StudioMode, _ edit: (inout StudioDraft) -> Void) -> StudioDraft {
+            var draft = StudioDraft()
+            draft.reset(for: mode)
+            edit(&draft)
+            return draft
+        }
+        let cases: [(name: String, mode: StudioMode, task: StudioTask, draft: StudioDraft)] = [
+            ("scope-video-fasth3", .video, .videoGenerate, draft(.video) {
+                $0.prompt = "A lighthouse at dusk, waves breaking on the rocks"
+                $0.model = "video-minimax-h3-fasth3-vsa-datafree-mlx"
+                $0.endImagePath = "/tmp/lighthouse-end.png"
+                $0.timings = true
+                $0.h3Steps = 30
+            }),
+            ("scope-video-fl2va", .video, .videoGenerate, draft(.video) {
+                $0.prompt = "A brass robot walking through fog"
+                $0.model = "video-minimax-h3-fl2va-mlx"
+                $0.inputPath = "/tmp/robot-start.png"
+                $0.audioPath = "/tmp/footsteps.wav"
+                $0.timings = true
+            }),
+            ("scope-music-yue2", .music, .musicCompose, draft(.music) {
+                $0.prompt = "warm indie folk with a whistled hook"
+                $0.model = "music-yue2"
+                $0.musicTask = "cover"
+                $0.musicSourceAudio = "/tmp/demo.wav"
+            }),
+            ("scope-music-magenta", .music, .musicCompose, draft(.music) {
+                $0.prompt = "slow ambient pads"
+                $0.model = "music-magenta-rt2-small"
+                $0.musicOverrideSteps = true
+                $0.steps = 50
+                $0.seed = "7"
+            }),
+            ("scope-image-krea", .createImage, .imageGenerate, draft(.createImage) {
+                $0.prompt = "editorial portrait, window light"
+                $0.model = "image-krea2-raw"
+                $0.referenceImagePaths = "/tmp/person.png"
+                $0.cfgScale = 4
+            }),
+            ("scope-image-qwen-edit", .createImage, .imageGenerate, draft(.createImage) {
+                $0.prompt = "replace the sky with a storm front"
+                $0.model = "image-qwen-edit-2511"
+                $0.inputPath = "/tmp/field.png"
+            }),
+            ("scope-chat-gemma", .chat, .chatChat, draft(.chat) {
+                $0.model = "text-chat-gemma4-12b-4bit"
+                $0.inputPath = "/tmp/receipt.png"
+                $0.topK = 20
+            }),
+            ("scope-transcribe-qwen", .listen, .audioTranscribe, draft(.listen) {
+                $0.model = "speech-asr-qwen3"
+                $0.inputPath = "/tmp/interview.wav"
+                $0.language = "fr"
+            }),
+        ]
+        for item in cases {
+            for appearance in StudioSnapshotAppearance.allCases {
+                try render(item.draft, mode: item.mode, task: item.task, command: false,
+                           name: "\(item.name)-\(appearance.rawValue)", appearance: appearance)
+            }
+        }
+        try render(cases[0].draft, mode: .video, task: .videoGenerate, command: true,
+                   name: "scope-video-fasth3-command-light", appearance: .light)
+
+        // A local folder while the CLI identifies it, and once it could not: every option shows,
+        // none locked to another model's value, and the note says why.
+        let folder = "/tmp/checkpoints/my-ltx-folder"
+        for (state, identity) in [("pending", StudioModelIdentity.pending), ("failed", .unidentified)] {
+            let folderSource = StudioScopeSource(identities: StudioFixedModelIdentities([folder: identity]))
+            let folderDraft = draft(.video) {
+                $0.prompt = "A lighthouse at dusk, waves breaking on the rocks"
+                $0.model = folder
+            }
+            for appearance in StudioSnapshotAppearance.allCases {
+                try render(folderDraft, mode: .video, task: .videoGenerate, command: false,
+                           name: "scope-video-folder-\(state)-\(appearance.rawValue)", appearance: appearance, source: folderSource)
+            }
+        }
+
+        // OCR picks its backend in the Command Console: GLM-OCR reads neither LightOnOCR's model
+        // nor its token budget, which the console lists under the note.
+        if let ocr = CommandCatalog.template(id: .visionOCR) {
+            scoped.controller.select(ocr)
+            scoped.controller.consoleSeedArguments = [
+                "vision", "ocr", "/tmp/receipt.png", "--backend", "glm", "--model", "vision-ocr-lighton", "--max-tokens", "4096",
+            ]
+        }
+        for appearance in StudioSnapshotAppearance.allCases {
+            let view = StudioConsoleView()
+                .environment(\.studioScopeSource, source)
+                .environmentObject(scoped.controller)
+                .environmentObject(scoped.library)
+                .environmentObject(NavigationModel())
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try scoped.write(view, size: Self.fidelitySize, appearance: appearance,
+                             name: "scope-ocr-glm-\(appearance.rawValue)", settle: 2.0)
+        }
+
+        func render(
+            _ draft: StudioDraft, mode: StudioMode, task: StudioTask, command: Bool,
+            name: String, appearance: StudioSnapshotAppearance, source overriding: StudioScopeSource? = nil
+        ) throws {
+            let navigation = NavigationModel()
+            let view = StudioRootView(seededDrafts: [mode: draft])
+                .environment(\.studioScopeSource, overriding ?? source)
+                .environmentObject(scoped.controller)
+                .environmentObject(scoped.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try scoped.write(
+                view, size: Self.fidelitySize, appearance: appearance, name: name, settle: 2.5,
+                afterAppear: {
+                    navigation.open(task: task)
+                    if command {
+                        navigation.showLibrary = false
+                        navigation.toggleCommandColumn()
+                    } else {
+                        navigation.toggleInspector(for: task)
+                    }
+                }
+            )
+        }
+
+        let notes = VStack(alignment: .leading, spacing: 14) {
+            StudioScopeNote(notice: StudioScopeNotice(
+                kind: .identifying, title: "Identifying h3-ref2va-local…",
+                details: ["Every option shows until mere.run knows which model this is."]
+            ))
+            StudioScopeNote(notice: StudioScopeNotice(
+                kind: .unidentified, title: "mere.run couldn't identify my-checkpoint",
+                details: ["Every option is shown, and the CLI checks them when it runs."]
+            ))
+            StudioScopeNote(notice: StudioScopeNotice(
+                kind: .unused, title: "Not used by FastH3: End image, Timings.",
+                details: ["Denoising steps: FastH3 runs 5; your 30 is kept.", "Your values are kept for when you switch back."]
+            ))
+            StudioScopeNote(
+                notice: StudioScopeNotice(kind: .unused, title: "Not used by YuE2: Source audio, Task type.", details: []),
+                eyebrow: "Not sent"
+            )
+        }
+        .padding(16)
+        .frame(width: 320, alignment: .topLeading)
+        .background(MereRunTheme.background)
+        for (name, appearance) in [("scope-note-light", StudioSnapshotAppearance.light), ("scope-note-dark", .dark)] {
+            try scoped.write(notes, size: CGSize(width: 320, height: 380), appearance: appearance, name: name)
+        }
+    }
+
     /// The Library column at the mockup's 1440×900 on Image ▸ Generate: list mode light and dark
     /// (which must still read as `Main.png`'s column), grid mode light and dark with the same rows
     /// as three-across thumbnails, and one render with three rows selected so the batch bar shows.
@@ -1515,7 +1694,7 @@ final class StudioSnapshotTests: XCTestCase {
                     useExample: { _ in }, attach: {}
                 ),
                 readinessActions: StudioReadinessActions(
-                    scope: StudioModelScope(mode: .createImage), model: .constant("image-zimage-turbo"), modelInventory: inventory,
+                    scope: StudioModelScope(mode: .createImage, source: .contract), model: .constant("image-zimage-turbo"), modelInventory: inventory,
                     pullModel: {}, openModels: {}, recheck: {}
                 )
             )
@@ -2555,7 +2734,7 @@ private final class SnapshotFixture {
         library.start(
             request: running,
             commandPreview: controller.commandPreview(template: running.template, draft: running.draft, masksSecrets: true),
-            status: .running
+            status: .running, source: .contract
         )
         guard controller.run(studio: running), let live = runner.liveStarts.last,
               let job = controller.jobs.job(requestID: running.id) else {
@@ -2580,13 +2759,13 @@ private final class SnapshotFixture {
         library.start(
             request: queued,
             commandPreview: controller.commandPreview(template: queued.template, draft: queued.draft, masksSecrets: true),
-            status: .queued
+            status: .queued, source: .contract
         )
         guard controller.run(studio: queued) else { throw StudioSnapshotError.noContentView }
     }
 
     private static func mockupRequest(mode: StudioMode, draft: StudioDraft, hour: Int, minute: Int) throws -> StudioRunRequest {
-        let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, source: .contract)
         return StudioRunRequest(
             id: request.id,
             mode: request.mode,
@@ -2683,7 +2862,7 @@ private final class SnapshotFixture {
             updatedAt: Self.mockupTime(hour: 8, minute: 41),
             status: .failed,
             exitCode: 1,
-            commandPreview: "mere.run " + template.arguments(from: draft).joined(separator: " "),
+            commandPreview: "mere.run " + template.arguments(from: draft, source: .contract).joined(separator: " "),
             outputText: "error: image-zimage-turbo is not installed; run `mere.run model pull image-zimage-turbo`",
             templateID: .imageGenerate,
             commandDraft: draft
@@ -2911,7 +3090,7 @@ private final class SnapshotFixture {
         draft.model = Self.converseChatModelID
         draft.thinkingMode = .hide
         draft.prompt = ConversationTranscript.render(messages: thread.messages ?? []).prompt
-        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: thread.id)
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft, conversationID: thread.id, source: .contract)
         runner.liveSessionMarkers = ["chat"]
         guard controller.run(studio: request), let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
@@ -2952,7 +3131,7 @@ private final class SnapshotFixture {
             createdAt: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-249)
         )
         let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
-        library.start(request: request, commandPreview: preview, status: .running)
+        library.start(request: request, commandPreview: preview, status: .running, source: .contract)
 
         guard let runner = liveSessionRunner else {
             throw StudioSnapshotError.noContentView
@@ -3139,7 +3318,7 @@ private final class SnapshotFixture {
             createdAt: StudioSnapshotRenderer.referenceDate.addingTimeInterval(-95)
         )
         let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
-        library.start(request: request, commandPreview: preview, status: .running)
+        library.start(request: request, commandPreview: preview, status: .running, source: .contract)
         guard let runner = liveSessionRunner else { throw StudioSnapshotError.noContentView }
         runner.liveSessionMarkers = ["prepare-masks"]
         guard controller.run(studio: request), let live = runner.liveStarts.last else {
@@ -3441,7 +3620,7 @@ private final class SnapshotFixture {
             outputText: nil,
             templateID: .audioEnhance,
             commandDraft: draft,
-            commandArguments: template.arguments(from: request.draft),
+            commandArguments: template.arguments(from: request.draft, source: .contract),
             artifactURLs: [enhanced]
         )
         row.inputIdentity = StudioInputIdentity.read(memo)
@@ -3513,7 +3692,7 @@ private final class SnapshotFixture {
             draft.inputPath = run.input?.path ?? ""
             draft.outputPath = run.output?.path ?? ""
             run.edit(&draft)
-            let arguments = template.arguments(from: draft)
+            let arguments = template.arguments(from: draft, source: .contract)
             var row = StudioLibraryItem(
                 id: UUID(),
                 mode: .sfx,
@@ -3536,7 +3715,7 @@ private final class SnapshotFixture {
             // The parked draft is the run's settings with the destination left to routing.
             var parked = draft
             parked.outputPath = ""
-            let taskDraft = StudioTaskDraft(templateID: run.templateID, form: StudioConsoleCommand.seed(template: template, draft: parked))
+            let taskDraft = StudioTaskDraft(templateID: run.templateID, form: StudioConsoleCommand.seed(template: template, draft: parked, source: .contract))
             controller.taskSessions.setTaskDraft(taskDraft, for: run.task)
             controller.taskSessions.set(Optional(row.id), for: run.task.rawValue + ".requestID")
         }
@@ -3593,11 +3772,11 @@ private final class SnapshotFixture {
                 updatedAt: startedAt.addingTimeInterval(2.6),
                 status: .completed,
                 exitCode: 0,
-                commandPreview: "mere.run " + draft.arguments.joined(separator: " "),
+                commandPreview: "mere.run " + draft.arguments(source: .contract).joined(separator: " "),
                 outputText: nil,
                 templateID: templateID,
-                commandDraft: draft.run?.commandDraft,
-                commandArguments: draft.arguments,
+                commandDraft: draft.run(source: .contract)?.commandDraft,
+                commandArguments: draft.arguments(source: .contract),
                 artifactURLs: artifacts
             )
             if let input = inputs.first { row.inputIdentity = StudioInputIdentity.read(input) }
@@ -3807,7 +3986,7 @@ private final class SnapshotFixture {
             outputText: manifest,
             templateID: .musicSeparate,
             commandDraft: draft,
-            commandArguments: template.arguments(from: draft),
+            commandArguments: template.arguments(from: draft, source: .contract),
             artifactURLs: [stems] + stemURLs + [manifestURL]
         )
         row.inputIdentity = StudioInputIdentity.read(track)
@@ -3851,7 +4030,7 @@ private final class SnapshotFixture {
         var draft = StudioTaskDraft(templateID: .speechListen)
         draft.form["--language"] = .text("en")
         controller.taskSessions.setTaskDraft(draft, for: .audioLive)
-        controller.checkReadiness(for: .audioLive, modelID: StudioTaskSchema.modelID(for: draft))
+        controller.checkReadiness(for: .audioLive, modelID: StudioTaskSchema.modelID(for: draft, source: .contract))
         let request = try StudioTaskRunner(controller: controller, library: library).run(draft.liveListenLaunch(), task: .audioLive)
         guard let live = runner.liveStarts.last else {
             throw StudioSnapshotError.noContentView
@@ -3914,7 +4093,7 @@ private final class SnapshotFixture {
             outputText: nil,
             templateID: .imageReconstruct3D,
             commandDraft: draft,
-            commandArguments: template.arguments(from: request.draft),
+            commandArguments: template.arguments(from: request.draft, source: .contract),
             artifactURLs: [mesh, manifest, runManifest],
             artifactRoles: [
                 manifest.standardizedFileURL.path: "mesh-manifest-json",
@@ -4034,7 +4213,7 @@ private final class SnapshotFixture {
             """,
             templateID: .geoTessera,
             commandDraft: draft,
-            commandArguments: template.arguments(from: request.draft),
+            commandArguments: template.arguments(from: request.draft, source: .contract),
             artifactURLs: [embedding]
         )
         row.inputIdentity = StudioInputIdentity.read(bundle)
@@ -4126,7 +4305,7 @@ private final class SnapshotFixture {
                 outputText: nil,
                 templateID: .imageTrainLoRA,
                 commandDraft: draft,
-                commandArguments: template.arguments(from: draft),
+                commandArguments: template.arguments(from: draft, source: .contract),
                 artifactURLs: [adapter]
             )
             row.inputIdentity = StudioInputIdentity.read(dataset)
@@ -4178,7 +4357,7 @@ private final class SnapshotFixture {
             outputText: Self.musicAnalysisOutput(audio: song),
             templateID: .musicAnalyze,
             commandDraft: draft,
-            commandArguments: template.arguments(from: draft)
+            commandArguments: template.arguments(from: draft, source: .contract)
         )
         row.inputIdentity = StudioInputIdentity.read(song)
         library.upsert(row)
@@ -4208,7 +4387,7 @@ private final class SnapshotFixture {
         var ran = taskDraft
         ran.form["--output"] = .text(midi.path)
         ran.form["--context-output"] = .text(context.path)
-        guard let request = ran.request() else { throw StudioSnapshotError.noContentView }
+        guard let request = ran.request(source: .contract) else { throw StudioSnapshotError.noContentView }
         let startedAt = Self.mockupTime(hour: 11, minute: 52)
         var row = StudioLibraryItem(
             id: UUID(),

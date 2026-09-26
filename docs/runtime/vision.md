@@ -519,8 +519,10 @@ swift run mere.run vision ocr ./page.png --backend lighton
 swift run mere.run vision ocr ./page.png --backend infinity --infinity-task doc2md
 ```
 
-For an external Infinity-Parser2 parity evaluation against an already-running
-vLLM server, run:
+`--backend`, `--infinity-runtime`, and `--compare` pick the runtime; each
+reads only its own options and prints a warning for the rest. For an external
+Infinity-Parser2 parity evaluation against an already-running vLLM server,
+run:
 
 ```bash
 swift run mere.run vision ocr ./page.png \

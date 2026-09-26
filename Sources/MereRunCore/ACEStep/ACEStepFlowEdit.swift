@@ -95,7 +95,8 @@ extension ACEStepPipeline {
         lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata = .init(),
         referenceTimbreLatents25Hz: [MLXArray]? = nil,
         referenceTimbreAudio48kHz: [MLXArray]? = nil,
-        vocalLanguage: String = "en"
+        vocalLanguage: String = "en",
+        progress: ACEStepStageHandler? = nil
     ) throws -> MLXArray {
         try flowEdit.validate()
         guard sourceLatents25Hz != nil || sourceAudio48kHz != nil else {
@@ -162,8 +163,10 @@ extension ACEStepPipeline {
             sourceCondition: sourceCondition,
             targetCondition: targetCondition,
             config: config,
-            flowEdit: flowEdit
+            flowEdit: flowEdit,
+            progress: progress
         )
+        progress?(.decoding)
         if config.useTiledVaeDecode {
             return vae.tiledDecode(
                 targetLatents,
@@ -213,7 +216,8 @@ extension ACEStepPipeline {
             contextLatents: MLXArray
         ),
         config: ACEStepInferenceConfig,
-        flowEdit: ACEStepFlowEditConfiguration
+        flowEdit: ACEStepFlowEditConfiguration,
+        progress: ACEStepStageHandler?
     ) throws -> MLXArray {
         var timesteps = inferenceTimesteps(config)
         if timesteps.last != 0 {
@@ -352,6 +356,7 @@ extension ACEStepPipeline {
 
         for step in 0..<stepCount {
             try Task.checkCancellation()
+            progress?(.denoising(step: step, steps: stepCount))
             guard step >= window.minimum else {
                 continue
             }

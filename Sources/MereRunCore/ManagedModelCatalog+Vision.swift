@@ -97,7 +97,7 @@ extension ManagedModelCatalog {
             validationKind: .sam31,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 3_498_072_777,
-            defaultCLICommands: ["vision segment"]
+            defaultCLICommands: ["vision segment", "vision track", "vision track-live", "video prepare-masks"]
         ),
         ManagedModelSpec(
             id: "vision-ground-falcon-perception",

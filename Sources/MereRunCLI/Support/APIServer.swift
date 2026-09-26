@@ -492,9 +492,9 @@ actor CodeGenServer {
                 )
             }
             if openaiRequest.stream == true {
-                return try await handleStreamingChat(session)
+                return try await handleStreamingChat(session).addingWarnings(of: session.scope)
             }
-            return handleNonStreamingChat(session)
+            return handleNonStreamingChat(session).addingWarnings(of: session.scope)
         } catch let error as APIRequestValidationError {
             await session.finish(cancelled: Task.isCancelled)
             return makeErrorResponse(
@@ -725,11 +725,11 @@ actor CodeGenServer {
                 from: Data(body.readableBytesView)
             )
             let plan = try APIServerContract.imageGenerationPlan(from: openaiRequest)
+            let scope = try APIModelScope.image(plan)
             return try await withRuntimeRequestAdmission(using: requestAdmission) {
                 let outputURL = try await generateImage(plan)
                 let response = try APIServerContract.imageResponse(outputURL: outputURL, plan: plan)
-                let encoded = try jsonResponse(response)
-                return encoded
+                return try jsonResponse(response).addingWarnings(of: scope)
             }
         } catch {
             return runtimeErrorResponse(error)
@@ -777,6 +777,7 @@ actor CodeGenServer {
                 from: Data(body.readableBytesView)
             )
             let plan = try APIServerContract.videoGenerationPlan(from: request)
+            let scope = try APIModelScope.video(plan)
             return try await withVFXRequestAdmission(using: requestAdmission) {
                 let outputDirectory = try temporaryOutputDirectory(
                     directoryName: "mere-run-api-video"
@@ -790,7 +791,7 @@ actor CodeGenServer {
                             plan: plan
                         ),
                         outputDirectory: outputDirectory
-                    )
+                    ).addingWarnings(of: scope)
                 } catch {
                     try? FileManager.default.removeItem(at: outputDirectory)
                     throw error
@@ -850,11 +851,11 @@ actor CodeGenServer {
                 inputImageURLs: inputImageURLs,
                 maskImageURL: maskImageURL
             )
+            let scope = try APIModelScope.image(plan)
             return try await withRuntimeRequestAdmission(using: requestAdmission) {
                 let outputURL = try await generateImage(plan)
                 let response = try APIServerContract.imageResponse(outputURL: outputURL, plan: plan)
-                let encoded = try jsonResponse(response)
-                return encoded
+                return try jsonResponse(response).addingWarnings(of: scope)
             }
         } catch {
             return runtimeErrorResponse(error)
@@ -1294,6 +1295,7 @@ actor CodeGenServer {
                 from: Data(body.readableBytesView)
             )
             let plan = try APIServerContract.speechPlan(from: openaiRequest)
+            let scope = try APIModelScope.speech(plan)
             // No observeClientDisconnect() here: Hummingbird itself does not
             // cancel a handler when the client goes away, but the router's
             // APIRequestCancellationMiddleware does. That cancellation releases
@@ -1310,11 +1312,10 @@ actor CodeGenServer {
                     if responseURL != outputURL { try? FileManager.default.removeItem(at: responseURL) }
                 }
                 let data = try Data(contentsOf: responseURL)
-                let response = binaryResponse(
+                return binaryResponse(
                     data,
                     contentType: APIServerContract.speechContentType(for: plan.responseFormat)
-                )
-                return response
+                ).addingWarnings(of: scope)
             }
         } catch {
             return runtimeErrorResponse(error)
@@ -1352,6 +1353,7 @@ actor CodeGenServer {
         do {
             let form = try MultipartFormData.parse(body: Data(body.readableBytesView), boundary: boundary)
             let plan = try APIServerContract.transcriptionPlan(from: form)
+            let scope = try APIModelScope.transcription(plan, form: form)
             guard let file = form.file(named: "file"), !file.body.isEmpty else {
                 throw APIRequestValidationError.invalidField("file", "audio file is required")
             }
@@ -1377,7 +1379,7 @@ actor CodeGenServer {
                     APIServerContract.transcriptionResponse(from: result, verbose: false)
                 )
             }
-            return response
+            return response.addingWarnings(of: scope)
         } catch {
             return runtimeErrorResponse(error)
         }
@@ -1413,6 +1415,7 @@ actor CodeGenServer {
         do {
             let form = try MultipartFormData.parse(body: Data(body.readableBytesView), boundary: boundary)
             let plan = try APIServerContract.diarizationPlan(from: form)
+            let scope = try APIModelScope.diarization(plan, form: form)
             guard let file = form.file(named: "file") else {
                 throw APIRequestValidationError.invalidField("file", "one nonempty audio file is required")
             }
@@ -1455,14 +1458,14 @@ actor CodeGenServer {
                     return binaryResponse(
                         Data(result.rttm(fileID: fileID).utf8),
                         contentType: "text/plain; charset=utf-8"
-                    )
+                    ).addingWarnings(of: scope)
                 case .json:
                     return try jsonResponse(SpeechDiarizationPayload.make(
                         result: result,
                         model: plan.modelID,
                         source: source,
                         durationSeconds: Double(audio.samples.count) / Double(audio.sampleRate)
-                    ))
+                    )).addingWarnings(of: scope)
                 }
             }
         } catch {

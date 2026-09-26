@@ -65,7 +65,7 @@ final class StudioContractFormTests: XCTestCase {
         let draft = StudioDraft()
         XCTAssertNotNil(StudioContractSchema.fields(for: .createImage).first { $0.flag == "--input" })
         XCTAssertNil(
-            StudioContractSchema.inspectorFields(for: .createImage, draft: draft).first { $0.flag == "--input" },
+            StudioContractSchema.inspectorFields(for: .createImage, draft: draft, source: .contract).first { $0.flag == "--input" },
             "the attachment well owns --input"
         )
     }
@@ -76,7 +76,7 @@ final class StudioContractFormTests: XCTestCase {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
         XCTAssertEqual(
-            StudioContractSchema.sections(for: .createImage, draft: draft).map(\.title),
+            StudioContractSchema.sections(for: .createImage, draft: draft, source: .contract).map(\.title),
             ["Prompt", "Inputs", "Output", "Model & adapters", "Sampling"]
         )
         XCTAssertEqual(
@@ -85,7 +85,7 @@ final class StudioContractFormTests: XCTestCase {
         )
 
         // Every group's fields keep the contract's own declaration order.
-        let sampling = StudioContractSchema.sections(for: .createImage, draft: draft)
+        let sampling = StudioContractSchema.sections(for: .createImage, draft: draft, source: .contract)
             .first { $0.group == .sampling }
         XCTAssertEqual(sampling?.fields.map(\.flag), ["--cfg", "--steps", "--seed"])
     }
@@ -93,9 +93,9 @@ final class StudioContractFormTests: XCTestCase {
     func testTiersSplitTheInspectorBetweenItsSectionsAndAdvanced() {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
-        let sections = StudioContractSchema.sections(for: .createImage, draft: draft)
+        let sections = StudioContractSchema.sections(for: .createImage, draft: draft, source: .contract)
         XCTAssertTrue(sections.flatMap(\.fields).allSatisfy { $0.tier != .expert })
-        let advanced = StudioContractSchema.expertFields(for: .createImage, draft: draft)
+        let advanced = StudioContractSchema.expertFields(for: .createImage, draft: draft, source: .contract)
         XCTAssertTrue(advanced.allSatisfy { $0.tier == .expert })
         XCTAssertTrue(advanced.contains { $0.flag == "--sigma-shift" })
         XCTAssertFalse(advanced.isEmpty)
@@ -106,27 +106,27 @@ final class StudioContractFormTests: XCTestCase {
     func testDependentRowsStayHiddenUntilTheirOptionCarriesAValue() {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
-        let fields = StudioContractSchema.boundFields(for: .createImage, draft: draft)
+        let fields = StudioContractSchema.boundFields(for: .createImage, draft: draft, source: .contract)
         let promptModel = fields.first { $0.flag == "--structured-prompt-model" }!
 
         XCTAssertFalse(
-            StudioContractSchema.isVisible(promptModel, for: .createImage, in: draft),
+            StudioContractSchema.isVisible(promptModel, for: .createImage, in: draft, source: .contract),
             "the prompt model depends on --structured-prompt"
         )
         draft.structuredPrompt = true
-        XCTAssertTrue(StudioContractSchema.isVisible(promptModel, for: .createImage, in: draft))
+        XCTAssertTrue(StudioContractSchema.isVisible(promptModel, for: .createImage, in: draft, source: .contract))
 
         // A chained dependency: --json needs --preflight, which nothing else gates.
         let json = fields.first { $0.flag == "--json" }!
-        XCTAssertFalse(StudioContractSchema.isVisible(json, for: .createImage, in: draft))
+        XCTAssertFalse(StudioContractSchema.isVisible(json, for: .createImage, in: draft, source: .contract))
         draft.preflight = true
-        XCTAssertTrue(StudioContractSchema.isVisible(json, for: .createImage, in: draft))
+        XCTAssertTrue(StudioContractSchema.isVisible(json, for: .createImage, in: draft, source: .contract))
 
         // A dependency the composer's well owns is read from the draft all the same.
         let feather = fields.first { $0.flag == "--mask" }!
-        XCTAssertFalse(StudioContractSchema.isVisible(feather, for: .createImage, in: draft))
+        XCTAssertFalse(StudioContractSchema.isVisible(feather, for: .createImage, in: draft, source: .contract))
         draft.inputPath = "/tmp/mug.png"
-        XCTAssertTrue(StudioContractSchema.isVisible(feather, for: .createImage, in: draft))
+        XCTAssertTrue(StudioContractSchema.isVisible(feather, for: .createImage, in: draft, source: .contract))
     }
 
     // MARK: default_value
@@ -135,7 +135,7 @@ final class StudioContractFormTests: XCTestCase {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
         // Per flag, before the composite editors fold their flags into one row.
-        let fields = StudioContractSchema.boundFields(for: .createImage, draft: draft)
+        let fields = StudioContractSchema.boundFields(for: .createImage, draft: draft, source: .contract)
         let feather = try XCTUnwrap(fields.first { $0.flag == "--mask-feather" })
         XCTAssertEqual(feather.option.defaultValue, "8")
         XCTAssertTrue(feather.isAtDefault(in: draft))
@@ -158,23 +158,23 @@ final class StudioContractFormTests: XCTestCase {
         // minimum, is the app saying it has no opinion, and the argv leaves the flag out.
         var chat = StudioDraft()
         chat.reset(for: .chat)
-        let chatFields = StudioContractSchema.boundFields(for: .chat, draft: chat)
+        let chatFields = StudioContractSchema.boundFields(for: .chat, draft: chat, source: .contract)
         let kvBits = try XCTUnwrap(chatFields.first { $0.flag == "--kv-bits" })
         XCTAssertEqual(chat.kvBits, 0)
         XCTAssertFalse(kvBits.emits(in: chat))
         let scheme = try XCTUnwrap(chatFields.first { $0.flag == "--kv-quant-scheme" })
-        XCTAssertFalse(
-            StudioContractSchema.isVisible(scheme, for: .chat, in: chat),
-            "the KV scheme depends on --kv-bits"
+        XCTAssertTrue(
+            StudioContractSchema.isVisible(scheme, for: .chat, in: chat, source: .contract),
+            "Gemma 4 Turbo quantizes its KV cache by default, so the scheme applies without --kv-bits"
         )
         chat.kvBits = 4
         XCTAssertTrue(kvBits.emits(in: chat))
-        XCTAssertTrue(StudioContractSchema.isVisible(scheme, for: .chat, in: chat))
 
         var video = StudioDraft()
         video.reset(for: .video)
+        video.model = "video-minimax-h3-fl2va-mlx"
         let weights = try XCTUnwrap(
-            StudioContractSchema.boundFields(for: .video, draft: video).first { $0.flag == "--h3-weight-mode" }
+            StudioContractSchema.boundFields(for: .video, draft: video, source: .contract).first { $0.flag == "--h3-weight-mode" }
         )
         XCTAssertFalse(weights.emits(in: video), "an optional the draft leaves nil")
         video.h3WeightMode = "quantized"
@@ -184,7 +184,7 @@ final class StudioContractFormTests: XCTestCase {
     // MARK: range
 
     func testValuesClampAndSnapToTheContractsRange() throws {
-        let fields = StudioContractSchema.boundFields(for: .createImage)
+        let fields = StudioContractSchema.boundFields(for: .createImage, source: .contract)
         let steps = try XCTUnwrap(fields.first { $0.flag == "--steps" })
         XCTAssertEqual(steps.clamped(.integer(500)), .integer(100), "the contract caps steps at 100")
         XCTAssertEqual(steps.clamped(.integer(0)), .integer(1))
@@ -198,7 +198,12 @@ final class StudioContractFormTests: XCTestCase {
         }
 
         // An option with no range passes through untouched.
-        let krea = try XCTUnwrap(fields.first { $0.flag == "--krea-conditioning-multiplier" })
+        var kreaDraft = StudioDraft()
+        kreaDraft.reset(for: .createImage)
+        kreaDraft.model = "image-krea2-raw"
+        let krea = try XCTUnwrap(
+            StudioContractSchema.boundFields(for: .createImage, draft: kreaDraft, source: .contract).first { $0.flag == "--krea-conditioning-multiplier" }
+        )
         XCTAssertEqual(krea.clamped(.number(37.5)), .number(37.5))
 
         // Writing through the field clamps as well, so a control can never store an invalid value.
@@ -215,21 +220,21 @@ final class StudioContractFormTests: XCTestCase {
             var draft = StudioDraft()
             draft.reset(for: mode)
             // Move every control the mode's form owns off its default, the way editing would.
-            for field in StudioContractSchema.fields(for: mode, draft: draft) {
+            for field in StudioContractSchema.fields(for: mode, draft: draft, source: .contract) {
                 for binding in field.bindings {
                     binding.write(&draft, Self.perturbed(binding.read(draft), field: field))
                 }
             }
 
             let edited = draft
-            let before = try StudioCommandAdapter.makeRequest(mode: mode, draft: edited, validating: false)
-            StudioContractSchema.roundTrip(&draft, for: mode)
-            let after = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false)
+            let before = try StudioCommandAdapter.makeRequest(mode: mode, draft: edited, validating: false, source: .contract)
+            StudioContractSchema.roundTrip(&draft, for: mode, source: .contract)
+            let after = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft, validating: false, source: .contract)
 
             XCTAssertEqual(draft, edited, "\(mode): a control that reads and writes itself must not move the draft")
             XCTAssertEqual(
-                after.template.arguments(from: after.draft),
-                before.template.arguments(from: before.draft),
+                after.template.arguments(from: after.draft, source: .contract),
+                before.template.arguments(from: before.draft, source: .contract),
                 "\(mode): the contract-driven form changed the argv"
             )
         }

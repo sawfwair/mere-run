@@ -41,7 +41,8 @@ the audio does not leave the machine.
 Speech is split across two domains. **Voice ▸ Speak** is the prompt task for
 synthesis, styled or cloned: attaching a reference recording to its composer
 well (or picking a saved voice in the inspector) is clone mode, with streaming
-chunk controls and language selection. **Voice ▸ Voices** is the Manage page
+chunk controls and language selection. With the CustomVoice model selected, the
+inspector offers its named speakers. **Voice ▸ Voices** is the Manage page
 for saved voices — a list, a detail that plays the reference and shows its
 transcript, Delete behind a confirmation, and New voice, which records or
 attaches a reference and runs `speech profile create`.
@@ -79,7 +80,9 @@ window. `--latency offline` uses a 30.4-second input buffer. For the released
 model's smaller buffer settings, choose `--latency 1.04`, `0.64`, or `0.32`.
 These values describe buffered audio, not total processing time. The existing
 four-speaker Sortformer remains the command default; `--latency` applies only
-to Nemotron 3.
+to Nemotron 3. A local model folder runs Nemotron 3 when it holds
+`Nemotron-3-Diarization.nemo`, and Sortformer otherwise. A buffer other than
+`offline` for Sortformer stops before any model is loaded.
 
 ### Diarize live audio
 
@@ -119,16 +122,59 @@ swift run mere.run speech synthesize \
   --output ./hello.wav
 ```
 
+`speech-tts-qwen3-customvoice` also speaks as one of its named speakers in
+style mode: `aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`, `sohee`,
+`uncle_fu`, and `vivian`. Pass `--speaker`, and use `--voice` only for an
+optional delivery instruction; the default voice description is
+not sent with a speaker. A local CustomVoice checkpoint's speakers come from
+its `config.json` (`talker_config.spk_id`), and an unknown name stops before
+the weights load. Other checkpoints, and clone mode, ignore `--speaker` with a
+`Warning:` line.
+
+```bash
+swift run mere.run speech synthesize \
+  "Hello from mere.run" \
+  --model speech-tts-qwen3-customvoice --speaker ryan \
+  --output ./ryan.wav
+```
+
 ### Transcribe audio
 
 ```bash
 swift run mere.run speech transcribe ./hello.wav --backend auto
 ```
 
-In automatic mode, transcription prefers Parakeet while translation routes to
-Qwen. Streaming transcription uses the selected backend and accepts raw
-`pcm-s16le/16000/mono` on stdin. Use `--backend parakeet` or `--backend qwen`
-to pin it explicitly:
+The backend is chosen in this order:
+
+1. `--task translate` always runs Qwen, because Parakeet does not translate.
+2. A `--language` that Parakeet's router does not recognize runs Qwen, which
+   supports more languages.
+3. `--backend parakeet` or `--backend qwen` runs that backend.
+4. A `--model` runs its own backend.
+5. Otherwise Parakeet runs.
+
+A managed model of the other backend is replaced by the chosen backend's
+default, and a flag the choice overrules has no effect. The CLI prints a
+`Warning:` line for either, for example for `--model speech-asr-parakeet --task
+translate`. A local model folder of the other backend stops the run instead.
+Each backend also ignores the other's options, with a warning: Qwen returns no
+timestamps, so `--timestamps` and `--no-timestamps` apply to Parakeet, and
+Parakeet has no token budget, so `--max-tokens` applies to Qwen.
+
+Translation always produces English, whatever language the audio is in, so
+`--language` has no effect with `--task translate` and the CLI says so.
+Qwen3-ASR's model card documents recognition only; mere.run asks the model for
+an English translation in the prompt, after the audio, and the answer's
+language tag is English. Review translations before relying on them.
+
+```bash
+swift run mere.run speech transcribe ./interview-de.wav --task translate
+```
+
+Streaming transcription chooses the backend and model the same way, except
+that a local model folder runs its own backend whatever the `--language` hint
+says, and accepts raw `pcm-s16le/16000/mono` on stdin. Its transcript carries no timestamps. Use
+`--backend parakeet` or `--backend qwen` to pin it explicitly:
 
 ```bash
 audio-source | swift run mere.run speech transcribe - \
@@ -141,6 +187,9 @@ swift run mere.run speech listen --device <core-audio-uid>
 ```
 
 `speech listen` remains the Qwen-backed macOS microphone convenience command.
+It runs Qwen3-ASR whatever `--model` names, so a Parakeet id prints a
+`Warning:` line and runs Qwen3-ASR. `--list-devices` lists inputs for `speech
+listen` and `speech diarize-live` before any model is read.
 
 #### Record and retry a transcription
 
@@ -194,9 +243,10 @@ mere.run speech transcribe ./short.wav \
   --coreml-encoder /path/to/parakeet-coreml
 ```
 
-An explicit Core ML request fails if its language hint would route to Qwen.
-To use Qwen, select `--backend qwen` and omit `--provider coreml` and
-`--coreml-encoder`.
+Core ML needs `--backend parakeet` and a transcription task, and an explicit
+Core ML request fails if its language hint would route to Qwen. Qwen rejects
+`--provider coreml` and `--coreml-encoder` before loading, including for
+`--task translate`. To use Qwen, select `--backend qwen` and omit both.
 
 The converter downloads NVIDIA's exact
 `nvidia/parakeet-tdt-0.6b-v3` revision
@@ -330,6 +380,11 @@ If `--ref-text` is omitted, the speech transcriber automatically transcribes the
 reference audio. `--language` hints the language (default `auto`). Add
 `--stream` to emit audio incrementally while generating; `--stream-chunk-tokens`
 sets the chunk interval (default 25).
+
+Each mode reads its own options. Clone mode ignores `--voice`, and style mode
+ignores `--profile`, `--ref-audio`, `--ref-text`, and `--save-profile`; the CLI
+prints a `Warning:` line for any it ignores. With `--profile`, clone mode also
+ignores `--ref-audio` and `--save-profile`.
 
 ## Runtime entry points
 

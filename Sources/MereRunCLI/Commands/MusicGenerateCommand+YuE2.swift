@@ -4,21 +4,12 @@ import Foundation
 import MereRunCore
 
 extension MusicGenerate {
-    var isYuE2Request: Bool {
-        model == YuE2Resources.modelID || YuE2Resources.looksLikeRoot(resolveUserPath(model))
-    }
-
     func resolvedYuE2Plan(explicitDurationSeconds: Float?) throws -> YuE2GenerationPlan {
-        try validateStandaloneMusicOptions(modelName: "YuE2")
-        if miniMaxOutputSampleRate != nil || miniMaxLoadingStrategy != nil || miniMaxPerformanceMode != nil
-            || miniMaxSamplingTier != nil || miniMaxFlowStrategy != nil || miniMaxFlowSolver != nil
-            || miniMaxAutoregressiveGuidanceFrames != nil || miniMaxFlowGuidanceEnd != nil
-            || miniMaxSeedStrategy != nil || miniMaxProfileOutput != nil || miniMaxCompose
-            || miniMaxComposerModelRoot != nil || miniMaxRequireComposerInstalled || miniMaxCompositionOutput != nil
-            || miniMaxLyricPreflightPolicy != .warn || miniMaxComposerModel != TextChat.defaultChatModelId {
-            throw ValidationError("MiniMax composer, runtime, and profiling options do not apply to YuE2.")
+        // The machine-dependent default composer is the one value YuE2 accepts; the contract can't
+        // name it, so the gate only warns that the option has no effect.
+        if miniMaxComposerModel != TextChat.defaultChatModelId {
+            throw ValidationError("--composer-model applies to MiniMax Music 3 --compose; YuE2 does not compose.")
         }
-        guard lrcFile == nil else { throw ValidationError("YuE2 accepts plain lyrics; use --lyrics or --lyrics-file.") }
         guard lyricsFile == nil || lyrics.isEmpty, !instrumental || (lyricsFile == nil && lyrics.isEmpty) else {
             throw ValidationError("Pass only one of --lyrics, --lyrics-file, or --instrumental.")
         }
@@ -86,7 +77,7 @@ extension MusicGenerate {
             throw ValidationError("YuE2 output paths must be distinct and must not overwrite the lyrics or input score.")
         }
         let rootURL: URL
-        if model == YuE2Resources.modelID {
+        if MusicModelRuntime.namesManagedYuE2(model) {
             do { rootURL = try ModelResolver().resolve(.yue2).rootURL }
             catch {
                 throw ValidationError("YuE2 is not installed. Review its noncommercial license, then run "

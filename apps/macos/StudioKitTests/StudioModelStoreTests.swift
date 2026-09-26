@@ -241,19 +241,19 @@ final class StudioModelStoreTests: XCTestCase {
         initialReadiness.termination(0)
         try await waitUntil { host.readinessByMode[.createImage] == .missingModel("image-zimage-nano") }
         XCTAssertTrue(host.modelStore.startPull(try pull("image-zimage-nano")))
-        draft.model = "text-chat-gemma4-12b-4bit"
+        draft.model = "image-klein-9b"
         host.checkReadiness(for: .createImage, draft: draft)
         let updatedMetadata = try await start(3, from: runner)
         updatedMetadata.stdout(capabilities(draft.model)); updatedMetadata.termination(0)
         let updatedReadiness = try await start(4, from: runner)
-        updatedReadiness.stdout("ID Category Status Size\ntext-chat-gemma4-12b-4bit text installed 1 GB\n")
+        updatedReadiness.stdout("ID Category Status Size\nimage-klein-9b image installed 1 GB\n")
         updatedReadiness.termination(0)
         try await waitUntil { host.readinessByMode[.createImage] == .ready }
         XCTAssertEqual(host.readinessByMode[.createImage], .ready)
         runner.starts[2].termination(0)
         try await waitUntil { host.modelStore.downloadMessage == "Download complete." && runner.starts.count > 5 }
         let probe = try XCTUnwrap(runner.starts.last { Array($0.configuration.arguments.suffix(2)) == ["model", "list"] })
-        probe.stdout("ID Category Status Size\nimage-zimage-nano image missing 1 GB\ntext-chat-gemma4-12b-4bit text installed 1 GB\n")
+        probe.stdout("ID Category Status Size\nimage-zimage-nano image missing 1 GB\nimage-klein-9b image installed 1 GB\n")
         probe.termination(0)
         try await waitUntil { host.readinessByMode[.createImage] == .ready }
         XCTAssertEqual(host.readinessByMode[.createImage], .ready)

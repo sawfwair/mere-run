@@ -11,6 +11,10 @@ Shared helpers and runtime adapters for the public command surface.
 - `APIMultipartFormData.swift`: ordered multipart parsing and shared field checks.
   Each route declares its allowed fields, diagnostics, and text-decoding policy.
 - `APIServer.swift`: HTTP routing, authentication, transport, and streaming ownership.
+- `APIModelScope.swift`: the model scope check for API requests. Each scoped
+  route reads its fields as the CLI flags they stand for and resolves them with
+  `CLICapabilityGate`'s resolver: a refusal is the route's 400, a warning an
+  `x-mere-warning` response header.
 - Geometry, reconstruction, and video-depth routes call their Core generation
   operations for shared settings, execution, and awaited unloading. HTTP handlers
   retain admission, upload and output cleanup, and artifact retention.
@@ -20,6 +24,9 @@ Shared helpers and runtime adapters for the public command surface.
 
 - `CLIModelStoreBootstrap.swift`: global model-root handling.
 - `CLIOutput.swift` and `CLIStderr.swift`: output channel discipline.
+- `CLICapabilityGate.swift`: the pre-admission model scope check.
+  `CLIGateWarnings.swift` carries its warnings for the run into the JSON a
+  command prints on stdout (`GateWarned`, and `RunReceipt.warnings`).
 - `TerminalMarkdownPresentation.swift` and `TerminalMarkdownStream.swift`:
   safe, append-only Markdown presentation for interactive token streams while
   preserving raw piped output.

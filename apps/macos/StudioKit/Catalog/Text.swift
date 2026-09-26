@@ -236,3 +236,15 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Text validation
+
+extension CommandCatalog {
+    /// The reason a text template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    /// No text template has one yet; Chat and Code check their reply budget against the
+    /// contract afterwards.
+    package static func textValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        nil
+    }
+}

@@ -332,11 +332,11 @@ final class StudioVisionResultsTests: XCTestCase {
             let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
             var page = template.defaultDraft()
             configure(&page)
-            let pageArgv = template.arguments(from: page)
-            let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(template: template, draft: page))
-            XCTAssertEqual(draft.arguments, pageArgv, "\(templateID)")
-            XCTAssertEqual(draft.request()?.execution?.arguments, pageArgv, "\(templateID) request")
-            XCTAssertEqual(draft.request()?.mode, template.libraryMode, "\(templateID) attribution")
+            let pageArgv = template.arguments(from: page, source: .contract)
+            let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(template: template, draft: page, source: .contract))
+            XCTAssertEqual(draft.arguments(source: .contract), pageArgv, "\(templateID)")
+            XCTAssertEqual(draft.request(source: .contract)?.execution?.arguments, pageArgv, "\(templateID) request")
+            XCTAssertEqual(draft.request(source: .contract)?.mode, template.libraryMode, "\(templateID) attribution")
         }
     }
 
@@ -379,8 +379,8 @@ final class StudioVisionResultsTests: XCTestCase {
                 let parsed = StudioCommandRows.parse(arguments: arguments, commandPathCount: capability.command.count)
                 return Dictionary(parsed.flags.map { ($0.0, $0.1 ?? "") }, uniquingKeysWith: { first, _ in first })
             }
-            let pageFlags = flags(template.arguments(from: page))
-            let freshFlags = flags(StudioTaskDraft(templateID: templateID).arguments)
+            let pageFlags = flags(template.arguments(from: page, source: .contract))
+            let freshFlags = flags(StudioTaskDraft(templateID: templateID).arguments(source: .contract))
             let outputs = StudioTaskSchema.outputFlags(for: capability)
             for (flag, value) in pageFlags where !outputs.contains(flag) && flag != "--prompt" {
                 if let fresh = freshFlags[flag] {
@@ -419,7 +419,7 @@ final class StudioVisionResultsTests: XCTestCase {
         var draft = StudioTaskDraft(templateID: .visionGeometryMultiview)
         StudioTaskSchema.slots(for: .visionGeometryMultiview)[0].attach([viewA, viewB], to: &draft)
         draft.form["--cameras"] = .text(draftFile.path)
-        let prepared = try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions())
+        let prepared = try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions(), source: .contract)
         let argv = try XCTUnwrap(prepared.request.execution?.arguments)
         let output = try XCTUnwrap(argv.firstIndex(of: "--output").map { argv[$0 + 1] })
         let placed = try XCTUnwrap(StudioCameraDocuments.referencedPaths(in: argv).first)
@@ -432,13 +432,13 @@ final class StudioVisionResultsTests: XCTestCase {
         let picked = root.appendingPathComponent("mine.cameras.json")
         try document.json().write(to: picked)
         draft.form["--cameras"] = .text(picked.path)
-        let kept = try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions())
+        let kept = try StudioTaskRunner.prepare(draft: draft, sessions: StudioTaskSessions(), source: .contract)
         XCTAssertEqual(StudioCameraDocuments.referencedPaths(in: kept.request.execution?.arguments ?? []), [picked.path])
 
         // One view is not a multi-view solve.
         var single = StudioTaskDraft(templateID: .visionGeometryMultiview)
         StudioTaskSchema.slots(for: .visionGeometryMultiview)[0].attach([viewA], to: &single)
-        XCTAssertThrowsError(try StudioTaskRunner.prepare(draft: single, sessions: StudioTaskSessions())) { error in
+        XCTAssertThrowsError(try StudioTaskRunner.prepare(draft: single, sessions: StudioTaskSessions(), source: .contract)) { error in
             XCTAssertEqual((error as? StudioValidationError)?.message, "Add at least two ordered views.")
         }
         XCTAssertEqual(StudioCameraDocuments.referencedPaths(in: ["vision", "--cameras", "/a.json", "--dry-run", "--cameras"]), ["/a.json"])
@@ -452,9 +452,9 @@ final class StudioVisionResultsTests: XCTestCase {
         draft.switchTemplate(to: .visionFaceCompare)
         XCTAssertEqual(draft.argument(0), "/tmp/a.png")
         StudioTaskSchema.slots(for: .visionFaceCompare)[1].attach([URL(fileURLWithPath: "/tmp/b.png")], to: &draft)
-        XCTAssertEqual(Array(draft.arguments.prefix(5)), ["vision", "face", "compare", "/tmp/a.png", "/tmp/b.png"])
+        XCTAssertEqual(Array(draft.arguments(source: .contract).prefix(5)), ["vision", "face", "compare", "/tmp/a.png", "/tmp/b.png"])
         draft.form["--reference-face-index"] = .integer(1)
-        XCTAssertEqual(draft.arguments.firstIndex(of: "--reference-face-index").map { draft.arguments[$0 + 1] }, "1")
+        XCTAssertEqual(draft.arguments(source: .contract).firstIndex(of: "--reference-face-index").map { draft.arguments(source: .contract)[$0 + 1] }, "1")
         XCTAssertEqual(StudioTaskSchema.overrideID(forFlag: "--reference-face-index", templateID: .visionFaceCompare), .faceIndex)
         XCTAssertEqual(StudioTaskSchema.overrideID(forFlag: "--cameras", templateID: .visionGeometryMultiview), .cameras)
     }

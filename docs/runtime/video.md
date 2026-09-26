@@ -136,6 +136,29 @@ Console**, which builds their form from the same capability contract.
   forward/inverse dynamics, and camera-controlled world transitions. Its model
   weights are governed by OpenMDW-1.1.
 
+### Options each checkpoint takes
+
+`video generate`, `video retake`, and `video session` check the command line
+against the selected checkpoint's family before they resolve or load it. An
+option the family can't run stops the command; an option it accepts but never
+reads prints a `Warning:` on stderr and the run continues.
+The Model Scope section of `mere.run guide video-generate` lists the main
+`video generate` cases. The other two commands:
+
+- `video retake` runs `video-ltx25-distilled-bf16` (the default) or
+  `video-ltx25-full-bf16`. The distilled checkpoint warns about
+  `--negative-prompt`, `--steps`, and the video and audio guidance options, and
+  runs the convolutional decoder whatever `--video-decoder` says. Every other
+  video checkpoint stops at once.
+- `video session` runs `video-ltx23-av-mlx` (the default),
+  `video-ltx23-full-mlx`, or either LTX 2.5 checkpoint. `--ltx-teacache` stops
+  the session on the distilled checkpoints before loading, rather than failing
+  each request; LTX 2.3 Full warns that TeaCache has no effect. Wan 2.2 and
+  MiniMax-H3 stop at once.
+
+`mere.run catalog resolve -- <command line>` prints the family a command line
+selects and what the check reports, without running it.
+
 ## Typical workflows
 
 ### MiniMax-H3 synchronized video and audio

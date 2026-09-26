@@ -51,12 +51,14 @@ final class StudioComposerSchemaTests: XCTestCase {
     func testSlotsFeedTheCommandTheModeBuilds() throws {
         var image = StudioDraft()
         image.reset(for: .createImage)
+        // FLUX.2 Klein edits an input image and takes references.
+        image.model = "image-klein-9b"
         image.prompt = "a mug"
         let slots = StudioMode.createImage.attachmentSlots
         slots[0].attach([URL(fileURLWithPath: "/tmp/in.png")], to: &image)
         slots[1].attach([URL(fileURLWithPath: "/tmp/ref-a.png"), URL(fileURLWithPath: "/tmp/ref-b.jpg")], to: &image)
-        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: image)
-        let arguments = request.template.arguments(from: request.draft)
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: image, source: .contract)
+        let arguments = request.template.arguments(from: request.draft, source: .contract)
         XCTAssertTrue(arguments.contains("/tmp/in.png"))
         XCTAssertTrue(arguments.contains("/tmp/ref-a.png"))
         XCTAssertTrue(arguments.contains("/tmp/ref-b.jpg"))
@@ -65,8 +67,8 @@ final class StudioComposerSchemaTests: XCTestCase {
         find.reset(for: .findObjects)
         find.prompt = "every coffee cup"
         StudioMode.findObjects.attachmentSlots[0].attach([URL(fileURLWithPath: "/tmp/mug.png")], to: &find)
-        let findRequest = try StudioCommandAdapter.makeRequest(mode: .findObjects, draft: find)
-        let findArguments = findRequest.template.arguments(from: findRequest.draft)
+        let findRequest = try StudioCommandAdapter.makeRequest(mode: .findObjects, draft: find, source: .contract)
+        let findArguments = findRequest.template.arguments(from: findRequest.draft, source: .contract)
         XCTAssertTrue(findArguments.contains("/tmp/mug.png"))
         XCTAssertFalse(findArguments.contains("--threshold"), "vision ground has no threshold flag")
 
@@ -75,8 +77,8 @@ final class StudioComposerSchemaTests: XCTestCase {
         segment.prompt = "the cup"
         segment.visionThreshold = 0.3
         StudioMode.segment.attachmentSlots[0].attach([URL(fileURLWithPath: "/tmp/mug.png")], to: &segment)
-        let segmentRequest = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment)
-        let segmentArguments = segmentRequest.template.arguments(from: segmentRequest.draft)
+        let segmentRequest = try StudioCommandAdapter.makeRequest(mode: .segment, draft: segment, source: .contract)
+        let segmentArguments = segmentRequest.template.arguments(from: segmentRequest.draft, source: .contract)
         let thresholdIndex = try XCTUnwrap(segmentArguments.firstIndex(of: "--threshold"))
         XCTAssertEqual(segmentArguments[thresholdIndex + 1], "0.3")
     }
@@ -121,31 +123,33 @@ final class StudioComposerSchemaTests: XCTestCase {
     func testCanvasDropRoutesToTheFirstEmptySlotThatAcceptsTheFile() {
         var draft = StudioDraft()
         draft.reset(for: .createImage)
-        XCTAssertTrue(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/one.png")], for: .createImage))
+        draft.model = "image-klein-9b"
+        XCTAssertTrue(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/one.png")], for: .createImage, source: .contract))
         XCTAssertEqual(draft.inputPath, "/tmp/one.png")
-        XCTAssertTrue(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/two.png")], for: .createImage))
+        XCTAssertTrue(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/two.png")], for: .createImage, source: .contract))
         XCTAssertEqual(draft.inputPath, "/tmp/one.png")
         XCTAssertEqual(draft.referenceImagePaths, "/tmp/two.png")
-        XCTAssertFalse(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/song.wav")], for: .createImage))
+        XCTAssertFalse(draft.attach(dropped: [URL(fileURLWithPath: "/tmp/song.wav")], for: .createImage, source: .contract))
 
         var code = StudioDraft()
         code.reset(for: .code)
-        XCTAssertFalse(code.attach(dropped: [URL(fileURLWithPath: "/tmp/one.png")], for: .code))
+        XCTAssertFalse(code.attach(dropped: [URL(fileURLWithPath: "/tmp/one.png")], for: .code, source: .contract))
     }
 
     func testChatImageSlotCollapsesToThePaperclipUntilFilled() {
         var draft = StudioDraft()
         draft.reset(for: .chat)
-        XCTAssertFalse(StudioMode.chat.showsAttachmentWell(for: draft))
+        draft.model = "vision-chat-gemma4-12b"
+        XCTAssertFalse(StudioMode.chat.showsAttachmentWell(for: draft, source: .contract))
         StudioMode.chat.attachmentSlots[0].attach([URL(fileURLWithPath: "/tmp/photo.png")], to: &draft)
-        XCTAssertTrue(StudioMode.chat.showsAttachmentWell(for: draft))
+        XCTAssertTrue(StudioMode.chat.showsAttachmentWell(for: draft, source: .contract))
 
         var image = StudioDraft()
         image.reset(for: .createImage)
-        XCTAssertTrue(StudioMode.createImage.showsAttachmentWell(for: image))
+        XCTAssertTrue(StudioMode.createImage.showsAttachmentWell(for: image, source: .contract))
         var sfx = StudioDraft()
         sfx.reset(for: .sfx)
-        XCTAssertFalse(StudioMode.sfx.showsAttachmentWell(for: sfx))
+        XCTAssertFalse(StudioMode.sfx.showsAttachmentWell(for: sfx, source: .contract))
     }
 
     // MARK: - Chips
@@ -247,26 +251,26 @@ final class StudioComposerSchemaTests: XCTestCase {
     func testModelChoicesAreFilteredToTheModeCategoryWithInstalledFirst() {
         let inventory = [
             row("image-zimage-nano", category: "image", status: "installed"),
-            row("image-flux2-klein", category: "image", status: "missing"),
-            row("text-chat-qwen3.6-4b", category: "text-chat", status: "installed"),
-            row("vision-chat-qwen3.6-vl-4b", category: "vision-chat", status: "installed"),
+            row("image-klein-9b", category: "image", status: "missing"),
+            row("text-chat-q36-nano", category: "text-chat", status: "installed"),
+            row("vision-chat-gemma4-12b", category: "vision-chat", status: "installed"),
             row("vision-ground-falcon-perception", category: "vision-ground", status: "missing"),
             row("speech-tts-qwen3-nano", category: "speech-tts", status: "installed"),
             row("music-acestep", category: "music", status: "installed"),
         ]
 
         XCTAssertEqual(
-            StudioMode.createImage.modelChoices(from: inventory).map(\.id),
-            ["image-zimage-nano", "image-flux2-klein"]
+            StudioMode.createImage.modelChoices(from: inventory, source: .contract).map(\.id),
+            ["image-zimage-nano", "image-klein-9b"]
         )
         XCTAssertEqual(
-            StudioMode.chat.modelChoices(from: inventory).map(\.id),
-            ["text-chat-qwen3.6-4b", "vision-chat-qwen3.6-vl-4b"]
+            StudioMode.chat.modelChoices(from: inventory, source: .contract).map(\.id),
+            ["text-chat-q36-nano", "vision-chat-gemma4-12b"]
         )
-        XCTAssertEqual(StudioMode.findObjects.modelChoices(from: inventory).map(\.id), ["vision-ground-falcon-perception"])
-        XCTAssertEqual(StudioMode.speak.modelChoices(from: inventory).map(\.id), ["speech-tts-qwen3-nano"])
-        XCTAssertEqual(StudioMode.music.modelChoices(from: inventory).map(\.id), ["music-acestep"])
-        XCTAssertTrue(StudioMode.video.modelChoices(from: inventory).isEmpty)
+        XCTAssertEqual(StudioMode.findObjects.modelChoices(from: inventory, source: .contract).map(\.id), ["vision-ground-falcon-perception"])
+        XCTAssertEqual(StudioMode.speak.modelChoices(from: inventory, source: .contract).map(\.id), ["speech-tts-qwen3-nano"])
+        XCTAssertEqual(StudioMode.music.modelChoices(from: inventory, source: .contract).map(\.id), ["music-acestep"])
+        XCTAssertTrue(StudioMode.video.modelChoices(from: inventory, source: .contract).isEmpty)
     }
 
     func testEveryModeDefaultModelFallsInsideItsOwnCategories() throws {

@@ -166,6 +166,18 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// `emptyMessage` for the wells the model the draft runs takes: guidance that offers an
+    /// optional picture says so only while a well takes one (FastH3 has no start frame, Krea 2 no
+    /// reference well).
+    package func emptyMessage(slots: [StudioAttachmentSlot]) -> String {
+        let takesImage = slots.contains { $0.acceptedTypes.contains(.image) }
+        switch self {
+        case .video where !slots.contains(where: { $0.id == "startFrame" }): return "Describe a shot and create a clip."
+        case .createImage where !takesImage: return "Write a prompt, then create."
+        default: return emptyMessage
+        }
+    }
+
     /// One-click starters shown on the empty canvas. They fill the composer, never auto-run.
     /// Attachment-first modes keep prompts short (they name the subject, not the scene).
     package var examplePrompts: [String] {
@@ -285,6 +297,9 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var voiceProfile = ""
     package var refAudioPath = ""
     package var saveProfileName = ""
+    /// A CustomVoice named speaker (`--speaker`) in style mode. Optional preserves saved Studio
+    /// drafts from before speakers were exposed; nil sends none.
+    package var voiceSpeaker: String?
     // Advanced depth the contract-driven inspector binds. Defaults are seeded from the matching
     // template's CommandDraft so the two surfaces never drift.
     package var temperature = 0.7
@@ -412,6 +427,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         voiceProfile = ""
         refAudioPath = ""
         saveProfileName = ""
+        voiceSpeaker = nil
         temperature = base?.temperature ?? 0.7
         topP = base?.topP ?? 0.9
         minP = base?.minP ?? 0
@@ -600,21 +616,45 @@ package enum StudioCommandError: LocalizedError, Equatable {
 package enum StudioCommandAdapter {
     /// Translates the composer's draft into the command it runs. `validating: false` skips the
     /// prompt/attachment checks so a preview (the Command view) can show an incomplete draft.
+    ///
+    /// The command is scoped to the model it runs (`StudioOptionScope`): a value the model does
+    /// not use stays in `studioDraft`, so switching back brings it back, but is reset to its
+    /// baseline in the copy this validates and launches.
     package static func makeRequest(
         mode: StudioMode,
         draft studioDraft: StudioDraft,
         conversationID: UUID? = nil,
-        validating: Bool = true
+        validating: Bool = true,
+        source: StudioScopeSource
     ) throws -> StudioRunRequest {
         let templateID = templateID(for: mode, draft: studioDraft)
         guard let template = CommandCatalog.template(id: templateID) else {
             throw StudioCommandError.missingTemplate(templateID)
         }
+        let effective = source.scope(mode: mode, draft: studioDraft).map { studioDraft.scoped(to: $0, mode: mode) }
+            ?? studioDraft
 
         if validating {
-            try validate(mode: mode, templateID: templateID, draft: studioDraft)
+            try validate(mode: mode, templateID: templateID, draft: effective)
         }
 
+        return StudioRunRequest(
+            mode: mode, templateID: templateID, template: template,
+            draft: commandDraft(mode: mode, draft: effective, template: template, conversationID: conversationID),
+            conversationID: conversationID, parentID: studioDraft.parentID
+        )
+    }
+
+    /// The command draft the composer's draft builds, unscoped: every field copied the way the
+    /// mode forwards it. `makeRequest` builds it from the scoped copy; the scope itself is read
+    /// from the argv this builds from the draft as it stands.
+    package static func commandDraft(
+        mode: StudioMode,
+        draft studioDraft: StudioDraft,
+        template: CommandTemplate,
+        conversationID: UUID? = nil
+    ) -> CommandDraft {
+        let templateID = template.id
         var draft = template.defaultDraft()
         let prompt = studioDraft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let secondary = studioDraft.secondaryText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -723,6 +763,8 @@ package enum StudioCommandAdapter {
                 draft.voiceProfile = studioDraft.voiceProfile
                 draft.refAudioPath = studioDraft.refAudioPath
                 draft.saveProfileName = studioDraft.saveProfileName
+            } else {
+                draft.voiceSpeaker = studioDraft.voiceSpeaker
             }
 
         case .listen:
@@ -844,14 +886,11 @@ package enum StudioCommandAdapter {
             draft.seed = studioDraft.seed
         }
 
-        return StudioRunRequest(
-            mode: mode, templateID: templateID, template: template, draft: draft,
-            conversationID: conversationID, parentID: studioDraft.parentID
-        )
+        return draft
     }
 
-    package static func pullRequest(for mode: StudioMode, draft: StudioDraft) throws -> StudioRunRequest? {
-        guard let requirement = capabilityRequirement(for: mode, draft: draft),
+    package static func pullRequest(for mode: StudioMode, draft: StudioDraft, source: StudioScopeSource) throws -> StudioRunRequest? {
+        guard let requirement = capabilityRequirement(for: mode, draft: draft, source: source),
               case .managedModel(let model) = requirement else {
             return nil
         }
@@ -865,24 +904,37 @@ package enum StudioCommandAdapter {
         return StudioRunRequest(mode: mode, templateID: .modelPull, template: template, draft: commandDraft)
     }
 
-    package static func requiredModel(for mode: StudioMode, draft: StudioDraft) -> String {
-        if !draft.model.isBlank { return draft.model }
-        let templateID = templateID(for: mode, draft: draft)
-        return CommandCatalog.template(id: templateID)?.defaultModel ?? ""
-    }
-
-    package static func capabilityRequirement(for mode: StudioMode, draft: StudioDraft) -> StudioCapabilityRequirement? {
-        // Read Image actions inspect/caption use a vision-language model the CLI
-        // auto-downloads on demand, so they are not gated by the managed catalog; only
-        // actions with a managed default model (OCR) require a readiness check.
-        if let modelID = managedCapabilityModelID(for: mode, draft: draft) {
-            return .managedModel(modelID)
+    /// The managed model the composer's run needs, for its pull progress; empty when none.
+    package static func requiredModel(for mode: StudioMode, draft: StudioDraft, source: StudioScopeSource) -> String {
+        guard case .managedModel(let model)? = capabilityRequirement(for: mode, draft: draft, source: source) else {
+            if !draft.model.isBlank { return draft.model }
+            return CommandCatalog.template(id: templateID(for: mode, draft: draft))?.defaultModel ?? ""
         }
-
-        return nil
+        return model
     }
 
-    private static func templateID(for mode: StudioMode, draft: StudioDraft) -> CommandTemplateID {
+    /// What the readiness check asks for before the composer runs. For a command the contract
+    /// routes, the one resolution every surface shares (`StudioOptionScope`): the managed model
+    /// the argv names or defaults to; nothing for a local folder, or a default the CLI downloads
+    /// by repository (Read Image's inspect and caption); and a model the command excludes, or
+    /// whose selectors match no family, blocks the run with the gate's reason. Otherwise the
+    /// draft's model, else the template's.
+    package static func capabilityRequirement(
+        for mode: StudioMode,
+        draft: StudioDraft,
+        source: StudioScopeSource
+    ) -> StudioCapabilityRequirement? {
+        if let scope = source.scope(mode: mode, draft: draft), scope.capability.routing != nil {
+            if let reason = scope.blockingReason { return .unavailable(reason) }
+            if case .unidentified(let model) = scope.resolution {
+                return StudioTaskSchema.isLocalPath(model) ? nil : .managedModel(model)
+            }
+            return scope.managedModel.map(StudioCapabilityRequirement.managedModel)
+        }
+        return managedCapabilityModelID(for: mode, draft: draft).map(StudioCapabilityRequirement.managedModel)
+    }
+
+    package static func templateID(for mode: StudioMode, draft: StudioDraft) -> CommandTemplateID {
         if mode == .readImage {
             return draft.readImageAction.templateID
         }
@@ -890,7 +942,8 @@ package enum StudioCommandAdapter {
     }
 
     private static func managedCapabilityModelID(for mode: StudioMode, draft: StudioDraft) -> String? {
-        let model = requiredModel(for: mode, draft: draft)
+        if !draft.model.isBlank { return draft.model }
+        let model = CommandCatalog.template(id: templateID(for: mode, draft: draft))?.defaultModel ?? ""
         if !model.isBlank {
             return model
         }
@@ -902,7 +955,7 @@ package enum StudioCommandAdapter {
         return nil
     }
 
-    private static func validate(
+    package static func validate(
         mode: StudioMode,
         templateID: CommandTemplateID,
         draft: StudioDraft
@@ -1733,6 +1786,8 @@ package struct StudioRunReceipt: Decodable, Equatable {
     package let event: String
     package let exit: Int32
     package let outputs: [Output]
+    /// The CLI's "has no effect" warnings for the run; absent when there were none.
+    package var warnings: [String]?
 
     /// The last receipt in `stdout`, or nil when the run predates `--receipt` or did not emit one.
     /// Lines that merely look like JSON are skipped, so a trailing progress or protocol line

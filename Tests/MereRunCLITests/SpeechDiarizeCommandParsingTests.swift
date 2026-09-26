@@ -46,9 +46,9 @@ final class SpeechDiarizeCommandParsingTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        XCTAssertFalse(SpeechDiarize.isNemotron3(model: root.path, root: root))
+        XCTAssertFalse(Nemotron3DiarizationResources.isNemotron3(model: root.path, root: root))
         try Data().write(to: root.appendingPathComponent("Nemotron-3-Diarization.nemo"))
-        XCTAssertTrue(SpeechDiarize.isNemotron3(model: root.path, root: root))
+        XCTAssertTrue(Nemotron3DiarizationResources.isNemotron3(model: root.path, root: root))
     }
 
     func testResolvesLocalModelDirectory() throws {

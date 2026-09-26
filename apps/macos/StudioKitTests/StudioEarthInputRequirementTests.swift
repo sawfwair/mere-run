@@ -160,14 +160,14 @@ final class StudioEarthInputRequirementTests: XCTestCase {
             draft.inputPath = "/tiles/batch.safetensors"
             draft.outputPath = "/out/result.safetensors"
             edit(&draft)
-            return (draft, template.arguments(from: draft))
+            return (draft, template.arguments(from: draft, source: .contract))
         }
         func task(_ id: CommandTemplateID, _ edit: (inout StudioTaskDraft) -> Void) -> [String] {
             var draft = StudioTaskDraft(templateID: id)
             draft.setArgument(0, "/tiles/batch.safetensors")
             draft.form["--output"] = .text("/out/result.safetensors")
             edit(&draft)
-            return draft.arguments
+            return draft.arguments(source: .contract)
         }
 
         let (_, flood) = try page(.geoFlood) { $0.model = "vision-flood-terramind-base"; $0.preflight = true }
@@ -218,30 +218,30 @@ final class StudioEarthInputRequirementTests: XCTestCase {
             XCTAssertEqual(StudioTaskSchema.slots(for: id).first?.isRequired, true)
             let task = id.studioTask
             let draft = StudioTaskDraft(templateID: id)
-            let shown = StudioTaskSchema.sections(for: task, draft: draft).flatMap(\.fields)
+            let shown = StudioTaskSchema.sections(for: task, draft: draft, source: .contract).flatMap(\.fields)
             XCTAssertFalse(shown.contains { $0.flag == "--json" || $0.flag == "--output" }, "\(id)")
             XCTAssertTrue(shown.contains { $0.flag == "--preflight" }, "\(id) keeps Preflight reachable")
             XCTAssertTrue(shown.contains { $0.overrideID == .model }, "\(id)")
-            XCTAssertTrue(draft.arguments.contains("--json"), "\(id) fresh draft asks for the JSON the panel reads")
+            XCTAssertTrue(draft.arguments(source: .contract).contains("--json"), "\(id) fresh draft asks for the JSON the panel reads")
         }
         XCTAssertEqual(StudioTaskSchema.overrideID(forFlag: "--dimensions", templateID: .geoTessera), .earthDimensions)
         XCTAssertNil(StudioTaskSchema.overrideID(forFlag: "--dimensions", templateID: .imageGenerate),
                      "another command's --dimensions is its own")
-        let tessera = StudioTaskSchema.sections(for: .earthTessera, draft: StudioTaskDraft(templateID: .geoTessera)).flatMap(\.fields)
+        let tessera = StudioTaskSchema.sections(for: .earthTessera, draft: StudioTaskDraft(templateID: .geoTessera), source: .contract).flatMap(\.fields)
         XCTAssertEqual(tessera.first { $0.flag == "--dimensions" }?.overrideID, .earthDimensions)
         // Patch size and resolution are one editor (the four sizes the command accepts, metres
         // above zero) drawn where the first of its flags is declared; the tokens switch is plain.
         XCTAssertEqual(StudioTaskSchema.overrideID(forFlag: "--patch-size", templateID: .geoOlmoEarth), .earthSampling)
         XCTAssertEqual(StudioTaskSchema.overrideID(forFlag: "--input-resolution", templateID: .geoOlmoEarth), .earthSampling)
-        let olmo = StudioTaskSchema.sections(for: .earthOlmoEarth, draft: StudioTaskDraft(templateID: .geoOlmoEarth)).flatMap(\.fields)
+        let olmo = StudioTaskSchema.sections(for: .earthOlmoEarth, draft: StudioTaskDraft(templateID: .geoOlmoEarth), source: .contract).flatMap(\.fields)
         let sampling = try XCTUnwrap(olmo.first { $0.overrideID == .earthSampling })
         XCTAssertEqual(sampling.bindings.map(\.fieldID), ["--patch-size", "--input-resolution"])
         XCTAssertEqual(olmo.filter { $0.overrideID == .earthSampling }.count, 1, "one row for the pair")
         XCTAssertEqual(olmo.first { $0.flag == "--include-tokens" }?.overrideID, nil)
-        XCTAssertEqual(StudioModelScope(templateID: .geoFlood).categories, ["vision-flood"])
-        XCTAssertEqual(StudioModelScope(templateID: .geoFire).categories, ["vision-fire"])
-        XCTAssertEqual(StudioModelScope(templateID: .geoTessera).categories, ["vision-embed"])
-        XCTAssertEqual(StudioModelScope(templateID: .geoOlmoEarth).categories, ["vision-embed"])
+        XCTAssertEqual(StudioModelScope(templateID: .geoFlood, source: .contract).categories, ["vision-flood"])
+        XCTAssertEqual(StudioModelScope(templateID: .geoFire, source: .contract).categories, ["vision-fire"])
+        XCTAssertEqual(StudioModelScope(templateID: .geoTessera, source: .contract).categories, ["vision-embed"])
+        XCTAssertEqual(StudioModelScope(templateID: .geoOlmoEarth, source: .contract).categories, ["vision-embed"])
     }
 
     /// The page's dictionary key, a `String` enum without `CodingKeyRepresentable`, which
@@ -290,13 +290,13 @@ final class StudioEarthInputRequirementTests: XCTestCase {
         defer { StudioTestDefaults.restore() }
         var draft = StudioTaskDraft(templateID: .geoOlmoEarth)
         draft.setArgument(0, "/tiles/valley-2024.safetensors")
-        let named = StudioOutputLocation.destination(for: draft)
+        let named = StudioOutputLocation.destination(for: draft, source: .contract)
         let output = URL(fileURLWithPath: named.text("--output"))
         XCTAssertEqual(output.deletingLastPathComponent().path, root.appendingPathComponent("Earth").path)
         XCTAssertTrue(output.lastPathComponent.hasPrefix("valley-2024-"), output.path)
         XCTAssertEqual(output.pathExtension, "safetensors")
-        XCTAssertEqual(StudioOutputLocation.destination(for: named).text("--output"), output.path, "stable on its own result")
-        XCTAssertEqual(named.request()?.mode, .readImage, "Library rows keep the page's attribution")
+        XCTAssertEqual(StudioOutputLocation.destination(for: named, source: .contract).text("--output"), output.path, "stable on its own result")
+        XCTAssertEqual(named.request(source: .contract)?.mode, .readImage, "Library rows keep the page's attribution")
     }
 
     static let tesseraTensors: [TensorFixtures.Tensor] = [

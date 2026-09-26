@@ -25,6 +25,7 @@ struct StudioLiveListenSession: View {
 }
 
 private struct StudioLiveListenSessionContent: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     @ObservedObject var session: StudioLiveListenModel
     @ObservedObject var models: StudioModelStore
 
@@ -90,7 +91,7 @@ private struct StudioLiveListenSessionContent: View {
     /// The template's options the page does not draw as chips: everything but the variant, the
     /// model, the device, and the switches the launch owns.
     private var optionFields: [StudioContractField<StudioTaskDraft>] {
-        StudioTaskSchema.fields(for: Self.task, draft: draft).filter { field in
+        StudioTaskSchema.fields(for: Self.task, draft: draft, source: scopeSource).filter { field in
             field.overrideID != .variant && field.overrideID != .model
                 && !StudioTaskDraft.liveListenOwnedFlags.contains(field.flag)
         }
@@ -156,7 +157,7 @@ private struct StudioLiveListenSessionContent: View {
             deviceChip
             optionsChip
             StudioModelChip(
-                scope: StudioTaskSchema.modelScope(for: draft),
+                scope: StudioTaskSchema.modelScope(for: draft, source: scopeSource),
                 model: draftBinding.model,
                 modelInventory: models.rows,
                 readiness: readiness,
@@ -396,7 +397,7 @@ private struct StudioLiveListenSessionContent: View {
     }
 
     private func refreshReadiness() {
-        controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.requiredModelID(for: draft))
+        controller.checkReadiness(for: Self.task, requirement: StudioTaskSchema.requirement(for: draft, source: scopeSource))
     }
 
     private func save() {

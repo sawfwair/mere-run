@@ -169,7 +169,7 @@ struct MusicAnalyze: AsyncParsableCommand {
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(output)
+        let data = try encoder.encode(GateWarned(output))
         guard let rendered = String(data: data, encoding: .utf8) else {
             throw ValidationError("Could not encode music analysis JSON as UTF-8.")
         }

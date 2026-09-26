@@ -37,11 +37,14 @@ package final class StudioTaskRunner {
     package static func prepare(
         _ base: StudioRunRequest,
         sessions: StudioTaskSessions,
+        source: StudioScopeSource,
         validating: Bool = true,
         fileManager: FileManager = .default
     ) throws -> (request: StudioRunRequest, fallbackReason: String?) {
-        let resolved = sessions.resolving(base)
-        if validating, let message = resolved.template.validationMessage(for: resolved.draft, execution: resolved.execution) {
+        let resolved = sessions.resolving(base, source: source)
+        if validating, let message = resolved.template.validationMessage(
+            for: resolved.draft, execution: resolved.execution, source: source
+        ) {
             throw StudioValidationError(message: message)
         }
         return StudioOutputLocation.preparing(resolved, fileManager: fileManager)
@@ -52,18 +55,18 @@ package final class StudioTaskRunner {
     /// as JSON lines where the transcript reads them). The runner and the Command view's
     /// "Will run" both go through this, so a Run from either surface and the preview agree;
     /// every other task's draft is left as it is.
-    package static func launching(_ draft: StudioTaskDraft) -> StudioTaskDraft {
+    package static func launching(_ draft: StudioTaskDraft, source: StudioScopeSource) -> StudioTaskDraft {
         switch draft.templateID {
         case .speechListen, .speechDiarizeLive: return draft.liveListenLaunch()
-        default: return StudioTrainingRun.launchDraft(draft)
+        default: return StudioTrainingRun.launchDraft(draft, source: source)
         }
     }
 
     /// The draft a Run launches, destinations and all: `launching`, then named by
     /// `StudioOutputLocation.destination(for:)`. The Command view's "Will run" reads this, so it
     /// shows the files the run will write rather than the draft's blank destination.
-    package static func launchPreview(_ draft: StudioTaskDraft) -> StudioTaskDraft {
-        StudioOutputLocation.destination(for: launching(draft))
+    package static func launchPreview(_ draft: StudioTaskDraft, source: StudioScopeSource) -> StudioTaskDraft {
+        StudioOutputLocation.destination(for: launching(draft, source: source), source: source)
     }
 
     /// The request a task draft runs: its launch-time defaults applied, its destination named,
@@ -74,24 +77,25 @@ package final class StudioTaskRunner {
     package static func prepare(
         draft: StudioTaskDraft,
         sessions: StudioTaskSessions,
+        source: StudioScopeSource,
         fileManager: FileManager = .default
     ) throws -> (request: StudioRunRequest, fallbackReason: String?) {
-        let named = StudioOutputLocation.destination(for: launching(draft), fileManager: fileManager)
-        guard let base = named.request() else {
+        let named = StudioOutputLocation.destination(for: launching(draft, source: source), source: source, fileManager: fileManager)
+        guard let base = named.request(source: source) else {
             throw StudioValidationError(message: "This command can't run from Studio.")
         }
-        var prepared = try prepare(base, sessions: sessions, fileManager: fileManager)
+        var prepared = try prepare(base, sessions: sessions, source: source, fileManager: fileManager)
         if prepared.fallbackReason == nil, let page = StudioCameraDocuments.draftPage(for: draft.templateID) {
             let placed = try StudioCameraDocuments.placingDraft(of: named, page: page, fileManager: fileManager)
-            if placed != named, let request = placed.request() {
-                prepared = try prepare(request, sessions: sessions, fileManager: fileManager)
+            if placed != named, let request = placed.request(source: source) {
+                prepared = try prepare(request, sessions: sessions, source: source, fileManager: fileManager)
             }
         }
         return prepared
     }
 
     package func request(for draft: StudioTaskDraft, task: StudioTask) throws -> StudioRunRequest {
-        let prepared = try Self.prepare(draft: draft, sessions: sessions)
+        let prepared = try Self.prepare(draft: draft, sessions: sessions, source: controller.scopeSource)
         if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
         return prepared.request
     }
@@ -109,7 +113,9 @@ package final class StudioTaskRunner {
         // contract itself requires the first slot, only that slot fills the well.
         if let slot = StudioTaskSchema.primarySlot(for: draft.templateID),
            task.presentation.attaching(slot).requiresAttachment,
-           slot.isRequired ? draft.primaryInputPath.isBlank : draft.slots.allSatisfy({ $0.paths(in: draft).isEmpty }) {
+           slot.isRequired
+            ? draft.primaryInputPath.isBlank
+            : draft.slots(source: controller.scopeSource).allSatisfy({ $0.paths(in: draft).isEmpty }) {
             throw StudioValidationError(message: "Attach \(slot.label.lowercased()) first.")
         }
         // A typed input is the run's whole subject; `text anonymize` would otherwise launch and
@@ -133,7 +139,7 @@ package final class StudioTaskRunner {
         validating: Bool = true,
         onLaunchRefused: (() -> Void)? = nil
     ) throws -> StudioRunRequest {
-        let prepared = try Self.prepare(base, sessions: sessions, validating: validating)
+        let prepared = try Self.prepare(base, sessions: sessions, source: controller.scopeSource, validating: validating)
         if let reason = prepared.fallbackReason { controller.noteOutputFallback(reason) }
         if !submit(prepared.request, task: task) { onLaunchRefused?() }
         return prepared.request
@@ -145,10 +151,11 @@ package final class StudioTaskRunner {
     private func submit(_ request: StudioRunRequest, task: StudioTask) -> Bool {
         sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
         sessions.noteSubmission(request.id, from: task)
-        let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft)
+        let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft, source: controller.scopeSource)
         let preview = controller.commandPreview(arguments: arguments, masksSecrets: true)
         library.start(request: request, commandPreview: preview,
-                      status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued)
+                      status: controller.jobs.hasCapacity(in: .inference) ? .running : .queued,
+                      source: controller.scopeSource)
         // `run(studio:)` keeps the camera-access gate in front of `vision track-live`. While the
         // system is still asking, the controller retries once the answer comes — unless Stop
         // cancelled the row in the meantime.

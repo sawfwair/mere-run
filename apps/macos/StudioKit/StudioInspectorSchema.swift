@@ -8,32 +8,61 @@ import Foundation
 package enum StudioInspectorSchema {
     /// The sections a mode's inspector shows, in the contract's group order. Attachment slots
     /// (input, references, audio) live in the composer's well and are not repeated here.
-    package static func sections(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> [StudioContractSection] {
-        StudioContractSchema.sections(for: mode, draft: draft)
+    package static func sections(
+        for mode: StudioMode,
+        draft: StudioDraft = StudioDraft(),
+        source: StudioScopeSource
+    ) -> [StudioContractSection] {
+        StudioContractSchema.sections(for: mode, draft: draft, source: source)
     }
 
     /// Everything else the mode's command takes, collapsed under "Advanced · N more". The count is
     /// this list's length; Reset restores every draft field behind it.
-    package static func advancedFields(for mode: StudioMode, draft: StudioDraft = StudioDraft()) -> [StudioContractField<StudioDraft>] {
-        StudioContractSchema.expertFields(for: mode, draft: draft)
+    package static func advancedFields(
+        for mode: StudioMode,
+        draft: StudioDraft = StudioDraft(),
+        source: StudioScopeSource
+    ) -> [StudioContractField<StudioDraft>] {
+        StudioContractSchema.expertFields(for: mode, draft: draft, source: source)
     }
 
     /// The ids of every draft field the inspector (sections and Advanced) binds for `mode`.
-    package static func fieldIDs(for mode: StudioMode) -> Set<String> {
-        StudioContractSchema.draftFieldIDs(for: mode)
+    package static func fieldIDs(for mode: StudioMode, source: StudioScopeSource) -> Set<String> {
+        StudioContractSchema.draftFieldIDs(for: mode, source: source)
     }
 
     /// How many inspector fields differ from the mode's baseline draft; the header badge.
-    package static func changedCount(mode: StudioMode, draft: StudioDraft, baseline: StudioDraft) -> Int {
-        StudioContractSchema.changedCount(mode: mode, draft: draft, baseline: baseline)
+    package static func changedCount(
+        mode: StudioMode,
+        draft: StudioDraft,
+        baseline: StudioDraft,
+        source: StudioScopeSource
+    ) -> Int {
+        StudioContractSchema.changedCount(mode: mode, draft: draft, baseline: baseline, source: source)
     }
 
-    package static func resetAdvanced(for mode: StudioMode, _ draft: inout StudioDraft, to baseline: StudioDraft) {
-        for field in advancedFields(for: mode, draft: draft) { field.reset(&draft, to: baseline) }
+    package static func resetAdvanced(
+        for mode: StudioMode,
+        _ draft: inout StudioDraft,
+        to baseline: StudioDraft,
+        source: StudioScopeSource
+    ) {
+        for field in advancedFields(for: mode, draft: draft, source: source) { field.reset(&draft, to: baseline) }
     }
 
-    package static func advancedChanged(mode: StudioMode, draft: StudioDraft, baseline: StudioDraft) -> Bool {
-        advancedFields(for: mode, draft: draft).contains { $0.changedCount(draft: draft, baseline: baseline) > 0 }
+    package static func advancedChanged(
+        mode: StudioMode,
+        draft: StudioDraft,
+        baseline: StudioDraft,
+        source: StudioScopeSource
+    ) -> Bool {
+        advancedFields(for: mode, draft: draft, source: source).contains { $0.changedCount(draft: draft, baseline: baseline) > 0 }
+    }
+
+    /// The note at the top of the inspector and under the composer's chips: what the draft sets
+    /// that the model it runs leaves out or replaces, or that the CLI is identifying its folder.
+    package static func notice(for mode: StudioMode, draft: StudioDraft, source: StudioScopeSource) -> StudioScopeNotice? {
+        source.scope(mode: mode, draft: draft)?.notice(mode: mode, draft: draft)
     }
 }
 

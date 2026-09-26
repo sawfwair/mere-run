@@ -270,7 +270,7 @@ final class StudioOutputLocationTests: XCTestCase {
         studio.prompt = "A ceramic coffee mug in soft morning light"
         studio.seed = "8812"
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: studio)
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: studio, source: .contract)
         let url = URL(fileURLWithPath: request.draft.outputPath)
 
         XCTAssertEqual(url.lastPathComponent, "a-ceramic-coffee-mug-in-soft-morning-light-8812.png")
@@ -285,7 +285,7 @@ final class StudioOutputLocationTests: XCTestCase {
         studio.prompt = "every coffee cup"
         studio.inputPath = "/tmp/mug.png"
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .findObjects, draft: studio)
+        let request = try StudioCommandAdapter.makeRequest(mode: .findObjects, draft: studio, source: .contract)
         let output = URL(fileURLWithPath: request.draft.outputPath)
         let stem = output.deletingPathExtension()
 
@@ -299,8 +299,8 @@ final class StudioOutputLocationTests: XCTestCase {
         studio.reset(for: .createImage)
         studio.prompt = "a rainy diner window at dusk"
 
-        let preview = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: studio, validating: false)
-        let run = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: studio)
+        let preview = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: studio, validating: false, source: .contract)
+        let run = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: studio, source: .contract)
         XCTAssertEqual(preview.draft.outputPath, run.draft.outputPath)
     }
 
@@ -309,7 +309,7 @@ final class StudioOutputLocationTests: XCTestCase {
         studio.reset(for: .listen)
         studio.inputPath = "/tmp/Morning Standup.wav"
 
-        let request = try StudioCommandAdapter.makeRequest(mode: .listen, draft: studio)
+        let request = try StudioCommandAdapter.makeRequest(mode: .listen, draft: studio, source: .contract)
         XCTAssertTrue(
             URL(fileURLWithPath: request.draft.outputPath).lastPathComponent.hasPrefix("morning-standup-"),
             request.draft.outputPath
@@ -415,7 +415,7 @@ final class StudioOutputLocationTests: XCTestCase {
             templateID: .sfxGenerate,
             template: template,
             draft: draft,
-            execution: StudioExecution(templateID: .sfxGenerate, arguments: template.arguments(from: draft))
+            execution: StudioExecution(templateID: .sfxGenerate, arguments: template.arguments(from: draft, source: .contract))
         )
 
         let prepared = StudioOutputLocation.preparing(request)
@@ -441,7 +441,7 @@ final class StudioOutputLocationTests: XCTestCase {
         draft.setAttachmentText("/tmp/harbor-lights.wav", for: slot.storage)
         draft.form["--output"] = .text(intended.appendingPathComponent("harbor-lights-a1b2c3.mid").path)
         draft.form["--context-output"] = .text(intended.appendingPathComponent("harbor-lights-a1b2c3-context.json").path)
-        let request = try XCTUnwrap(draft.request())
+        let request = try XCTUnwrap(draft.request(source: .contract))
 
         let prepared = StudioOutputLocation.preparing(request)
 
@@ -515,21 +515,21 @@ final class StudioOutputLocationTests: XCTestCase {
             // Enhance's seed (42) would be the identifier and mask an unstable fingerprint, so the
             // stability checks below run on templates without one as well.
             enhance.form["--seed"] = .unset
-            let named = StudioOutputLocation.destination(for: enhance)
+            let named = StudioOutputLocation.destination(for: enhance, source: .contract)
             let output = named.text("--output")
             XCTAssertEqual(URL(fileURLWithPath: output).deletingLastPathComponent().path, root.appendingPathComponent("Audio").path)
             XCTAssertTrue(URL(fileURLWithPath: output).lastPathComponent.hasPrefix("voice-memo-"), output)
             XCTAssertEqual(URL(fileURLWithPath: output).pathExtension, "wav")
-            XCTAssertEqual(StudioOutputLocation.destination(for: named).text("--output"), output,
+            XCTAssertEqual(StudioOutputLocation.destination(for: named, source: .contract).text("--output"), output,
                            "naming reads the same on its own result: the Command view's preview is the run")
             var edited = named
             edited.form["--overlap"] = .integer(4)
-            XCTAssertNotEqual(StudioOutputLocation.destination(for: edited).text("--output"), output, "a different run is a different file")
+            XCTAssertNotEqual(StudioOutputLocation.destination(for: edited, source: .contract).text("--output"), output, "a different run is a different file")
 
             var transcribe = StudioTaskDraft(templateID: .musicTranscribe)
             transcribe.setArgument(0, "/tmp/harbor-lights.wav")
-            let midi = StudioOutputLocation.destination(for: transcribe)
-            XCTAssertEqual(StudioOutputLocation.destination(for: midi), midi, "sidecars and output are stable too")
+            let midi = StudioOutputLocation.destination(for: transcribe, source: .contract)
+            XCTAssertEqual(StudioOutputLocation.destination(for: midi, source: .contract), midi, "sidecars and output are stable too")
             XCTAssertEqual(URL(fileURLWithPath: midi.text("--output")).pathExtension, "mid", "the format decides the extension")
             XCTAssertEqual(
                 midi.text("--context-output"),
@@ -537,35 +537,35 @@ final class StudioOutputLocationTests: XCTestCase {
                 "the context document sits beside the MIDI, its stem plus what it is"
             )
             transcribe.form["--format"] = .text("json")
-            XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: transcribe).text("--output")).pathExtension, "json")
+            XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: transcribe, source: .contract).text("--output")).pathExtension, "json")
 
             var diarize = StudioTaskDraft(templateID: .speechDiarize)
             diarize.setArgument(0, "/tmp/standup.wav")
             diarize.form["--format"] = .text("rttm")
-            XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: diarize).text("--output")).pathExtension, "rttm")
+            XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: diarize, source: .contract).text("--output")).pathExtension, "rttm")
 
             var depth = StudioTaskDraft(templateID: .visionDepth)
             depth.setArgument(0, "/tmp/street.png")
-            let directory = StudioOutputLocation.destination(for: depth).text("--output")
-            XCTAssertEqual(StudioOutputLocation.destination(for: StudioOutputLocation.destination(for: depth)).text("--output"), directory)
+            let directory = StudioOutputLocation.destination(for: depth, source: .contract).text("--output")
+            XCTAssertEqual(StudioOutputLocation.destination(for: StudioOutputLocation.destination(for: depth, source: .contract), source: .contract).text("--output"), directory)
             XCTAssertEqual(URL(fileURLWithPath: directory).deletingLastPathComponent().path, root.appendingPathComponent("Vision").path)
             XCTAssertTrue(URL(fileURLWithPath: directory).lastPathComponent.hasPrefix("street-"), "a directory output, named the same way")
             XCTAssertTrue(URL(fileURLWithPath: directory).pathExtension.isEmpty)
 
             var faces = StudioTaskDraft(templateID: .visionFaceDetect)
             faces.setArgument(0, "/tmp/portrait.png")
-            let json = StudioOutputLocation.destination(for: faces)
+            let json = StudioOutputLocation.destination(for: faces, source: .contract)
             XCTAssertEqual(URL(fileURLWithPath: json.text("--json-output")).pathExtension, "json", "the primary output is the JSON document")
             XCTAssertEqual(json.form.values.keys.filter { $0.hasSuffix("-output") }.count, 1, "no sidecar duplicates the primary")
 
             var conditionDraft = StudioTaskDraft(templateID: .sfxConditionText)
             XCTAssertTrue(
-                URL(fileURLWithPath: StudioOutputLocation.destination(for: conditionDraft).text("--output")).lastPathComponent
+                URL(fileURLWithPath: StudioOutputLocation.destination(for: conditionDraft, source: .contract).text("--output")).lastPathComponent
                     .hasPrefix("a-heavy-wooden-door"),
                 "a prompt names the file, as it does for a prompt task"
             )
             conditionDraft.prompt = ""
-            let condition = StudioOutputLocation.destination(for: conditionDraft)
+            let condition = StudioOutputLocation.destination(for: conditionDraft, source: .contract)
             XCTAssertEqual(URL(fileURLWithPath: condition.text("--output")).pathExtension, "safetensors")
             XCTAssertTrue(URL(fileURLWithPath: condition.text("--output")).lastPathComponent.hasPrefix("conditioning"),
                           "no input and no prompt: the template's title names it")
@@ -580,7 +580,7 @@ final class StudioOutputLocationTests: XCTestCase {
             var transcribe = StudioTaskDraft(templateID: .musicTranscribe)
             transcribe.setArgument(0, "/tmp/harbor-lights.wav")
             transcribe.form["--format"] = .text("json")
-            let named = StudioOutputLocation.destination(for: transcribe)
+            let named = StudioOutputLocation.destination(for: transcribe, source: .contract)
             let output = URL(fileURLWithPath: named.text("--output"))
             let context = URL(fileURLWithPath: named.text("--context-output"))
             XCTAssertEqual(output.pathExtension, "json")
@@ -591,7 +591,7 @@ final class StudioOutputLocationTests: XCTestCase {
             // The app-named sidecar moves with a renamed primary.
             var moved = named
             moved.setArgument(0, "/tmp/other-song.wav")
-            let renamed = StudioOutputLocation.destination(for: moved)
+            let renamed = StudioOutputLocation.destination(for: moved, source: .contract)
             XCTAssertTrue(URL(fileURLWithPath: renamed.text("--output")).lastPathComponent.hasPrefix("other-song-"))
             XCTAssertEqual(
                 URL(fileURLWithPath: renamed.text("--context-output")).lastPathComponent,
@@ -601,20 +601,20 @@ final class StudioOutputLocationTests: XCTestCase {
             // A sidecar the user pointed elsewhere stays.
             var chosen = named
             chosen.form["--context-output"] = .text("/Volumes/Work/keep/context.json")
-            XCTAssertEqual(StudioOutputLocation.destination(for: chosen).text("--context-output"), "/Volumes/Work/keep/context.json")
+            XCTAssertEqual(StudioOutputLocation.destination(for: chosen, source: .contract).text("--context-output"), "/Volumes/Work/keep/context.json")
 
             // No musical context: the app-named document is dropped, a user-named one kept.
             var silent = named
             silent.form["--no-musical-context"] = .flag(true)
-            XCTAssertEqual(StudioOutputLocation.destination(for: silent).text("--context-output"), "")
-            XCTAssertFalse(StudioOutputLocation.destination(for: silent).arguments.contains("--context-output"))
+            XCTAssertEqual(StudioOutputLocation.destination(for: silent, source: .contract).text("--context-output"), "")
+            XCTAssertFalse(StudioOutputLocation.destination(for: silent, source: .contract).arguments(source: .contract).contains("--context-output"))
             chosen.form["--no-musical-context"] = .flag(true)
-            XCTAssertEqual(StudioOutputLocation.destination(for: chosen).text("--context-output"), "/Volumes/Work/keep/context.json")
+            XCTAssertEqual(StudioOutputLocation.destination(for: chosen, source: .contract).text("--context-output"), "/Volumes/Work/keep/context.json")
 
             // The vision document keeps its bare `<stem>.json` beside a `.png` primary.
             var faces = StudioTaskDraft(templateID: .visionFaceDetect)
             faces.setArgument(0, "/tmp/portrait.png")
-            XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: faces).text("--json-output")).pathExtension, "json")
+            XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: faces, source: .contract).text("--json-output")).pathExtension, "json")
             _ = root
         }
     }
@@ -624,14 +624,14 @@ final class StudioOutputLocationTests: XCTestCase {
             var draft = StudioTaskDraft(templateID: .audioEnhance)
             draft.setArgument(0, "/tmp/voice-memo.wav")
             draft.form["--output"] = .text("/Volumes/Work/keep/voice.wav")
-            XCTAssertEqual(StudioOutputLocation.destination(for: draft).text("--output"), "/Volumes/Work/keep/voice.wav")
+            XCTAssertEqual(StudioOutputLocation.destination(for: draft, source: .contract).text("--output"), "/Volumes/Work/keep/voice.wav")
 
             draft.form["--output"] = .text(root.appendingPathComponent("Audio/enhance-20260903-101500.wav").path)
-            let renamed = StudioOutputLocation.destination(for: draft).text("--output")
+            let renamed = StudioOutputLocation.destination(for: draft, source: .contract).text("--output")
             XCTAssertNotEqual(renamed, draft.text("--output"), "the template's stamped default is the app's to rename")
 
             StudioOutputLocation.reserve(renamed)
-            let second = StudioOutputLocation.destination(for: draft).text("--output")
+            let second = StudioOutputLocation.destination(for: draft, source: .contract).text("--output")
             XCTAssertEqual(
                 URL(fileURLWithPath: second).lastPathComponent,
                 URL(fileURLWithPath: renamed).deletingPathExtension().lastPathComponent + "-2.wav",
@@ -650,17 +650,17 @@ final class StudioOutputLocationTests: XCTestCase {
             enhance.setArgument(0, "/tmp/voice-memo.wav")
             let file = chosen.appendingPathComponent("voice.wav")
             enhance.form["--output"] = .text(file.path)
-            XCTAssertEqual(StudioOutputLocation.destination(for: enhance).text("--output"), file.path, "a free path is kept")
+            XCTAssertEqual(StudioOutputLocation.destination(for: enhance, source: .contract).text("--output"), file.path, "a free path is kept")
 
             try Data([0x52]).write(to: file)
-            let stepped = StudioOutputLocation.destination(for: enhance).text("--output")
+            let stepped = StudioOutputLocation.destination(for: enhance, source: .contract).text("--output")
             XCTAssertEqual(stepped, chosen.appendingPathComponent("voice-2.wav").path, "an earlier run's file is not overwritten")
             var named = enhance
             named.form["--output"] = .text(stepped)
-            XCTAssertEqual(StudioOutputLocation.destination(for: named).text("--output"), stepped, "naming again changes nothing")
+            XCTAssertEqual(StudioOutputLocation.destination(for: named, source: .contract).text("--output"), stepped, "naming again changes nothing")
 
             StudioOutputLocation.reserve(stepped)
-            XCTAssertEqual(StudioOutputLocation.destination(for: enhance).text("--output"), chosen.appendingPathComponent("voice-3.wav").path)
+            XCTAssertEqual(StudioOutputLocation.destination(for: enhance, source: .contract).text("--output"), chosen.appendingPathComponent("voice-3.wav").path)
 
             var separate = StudioTaskDraft(templateID: .musicSeparate)
             separate.setArgument(0, "/tmp/harbor-lights.wav")
@@ -668,7 +668,7 @@ final class StudioOutputLocationTests: XCTestCase {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             separate.form["--output-dir"] = .text(folder.path)
             XCTAssertEqual(
-                StudioOutputLocation.destination(for: separate).text("--output-dir"),
+                StudioOutputLocation.destination(for: separate, source: .contract).text("--output-dir"),
                 chosen.appendingPathComponent("stems.v1-2").path,
                 "a directory keeps its whole name, dots included"
             )
@@ -699,9 +699,9 @@ final class StudioOutputLocationTests: XCTestCase {
         draft.setAttachmentText("/tmp/harbor-lights.wav", for: slot.storage)
         draft.form["--format"] = .text("json")
         try withConfiguredRoot { root in
-            let first = StudioOutputLocation.destination(for: draft).text("--output")
+            let first = StudioOutputLocation.destination(for: draft, source: .contract).text("--output")
             StudioOutputLocation.reserve(first)
-            let second = StudioOutputLocation.destination(for: draft).text("--output")
+            let second = StudioOutputLocation.destination(for: draft, source: .contract).text("--output")
             XCTAssertNotEqual(first, second, "the second run does not write over the first")
             for path in [first, second] {
                 XCTAssertEqual(URL(fileURLWithPath: path).pathExtension, "json", path)

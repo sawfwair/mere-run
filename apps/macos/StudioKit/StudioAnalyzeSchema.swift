@@ -429,11 +429,11 @@ package struct StudioAnalyzeHandoff: Equatable {
     }
 
     /// Applies the handoff to the draft the target task is about to show.
-    package func apply(to draft: inout StudioDraft) {
+    package func apply(to draft: inout StudioDraft, source: StudioScopeSource) {
         guard let mode = task.mode else { return }
         draft.prompt = prompt
         guard !inputPath.isEmpty else { return }
-        _ = draft.attach(dropped: [URL(fileURLWithPath: inputPath)], for: mode)
+        _ = draft.attach(dropped: [URL(fileURLWithPath: inputPath)], for: mode, source: source)
         // Prompts drawn on the target's previous input do not belong on this one.
         if task.drawsRegionPrompts {
             draft.visionRegionPrompts = regionPrompts.isEmpty ? nil : regionPrompts

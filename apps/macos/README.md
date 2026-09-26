@@ -95,8 +95,10 @@ surface for is still reachable the day the contract declares it.
 - `StudioKit/StudioTypes.swift`: user-facing mode, draft, and request types.
 - `StudioKit/CommandCatalog.swift`: `CommandTemplateID`, `CommandDraft`, and the
   `CommandTemplate` record type.
-- `StudioKit/Catalog/`: one file per command category holding that category's
-  `CommandTemplate` records and the function that builds each template's argv.
+- `StudioKit/Catalog/`: one file per command category, with Music & Video split
+  into `Audio.swift`, `Video.swift`, and `Music.swift`, holding that category's
+  `CommandTemplate` records, the function that builds each template's argv, and
+  the checks a template's draft must pass before it runs.
   `CommandFlags.swift` is generated from `MereRunCapabilityCatalog` by
   `./scripts/update-studio-command-flags.sh`, so every flag the app emits is a
   constant the shared contract declares and a renamed flag is a compile error;
@@ -116,7 +118,8 @@ The declarative schemas live in StudioKit beside the model, and the views that
 draw them in StudioUI, one file each side:
 `StudioComposerSchema.swift` and `StudioComposer.swift`,
 `StudioContractSchema.swift` and `StudioContractForm.swift`,
-`StudioInspectorSchema.swift` and `StudioInspector.swift`,
+`StudioInspectorSchema.swift` and `StudioInspector.swift` (its MiniMax-H3
+controls in `StudioInspector+Video.swift`),
 `StudioAnalyzeSchema.swift` / `StudioAnalyzeResults.swift` and
 `StudioAnalyzeCanvas.swift` / `StudioAnalyzeViews.swift`,
 `StudioCommandRows.swift` and `StudioCommandView.swift`,
@@ -526,8 +529,45 @@ external override like the attachment well: the canvas is their editor, so the
 inspector never shows them as text while a Command-view edit still flows back
 into the drawing.
 
+Every surface is scoped to the model the run uses (`StudioKit/StudioOptionScope.swift`).
+The contract resolves the runtime family from the argv the surface would launch:
+the model the draft names (the template's when it names none, the contract's
+default for a task form without `--model`), `--model-root` where it wins, and
+selector flags such as `--backend`. `options(forFamily:)` then decides what the
+composer's fields, chips, and attachment wells, the task inspector, the Command
+view, the Command Console, validation, readiness, and the model pickers offer,
+and what the argv builders send. A value the model doesn't use stays in the
+draft, so switching back brings it back, but the copy a run validates and
+launches resets it, and a note (`StudioUI/StudioScopeNote.swift`) lists it once
+per window: at the top of the open inspector, as the open Command view's "Not
+sent" line, or under the composer's chips when neither column is open. A value
+the family fixes shows locked, and a numeric option whose family takes a set of
+values steps through that set. Where only the CLI can tell the family (a local
+model folder, a managed model that runs whatever checkpoint is installed, a
+machine-chosen default, or transcription's language routing), Studio sends the
+whole command line, less any key, to `mere.run catalog resolve --json`
+(`StudioModelIdentity.swift`). It asks once typing stops, reads folder dates off
+the main thread, asks again after a failed answer, and keeps each answer until a
+flag that can change the family or the folder it names changes, a model is
+pulled or removed, or the inventory refreshes. While a question is out, the
+surface shows the family the contract names (adding `--task translate` to a
+Parakeet transcription shows Qwen3-ASR's options at once), or, for a model only
+the CLI can place, its last answer for the same model and routing flags. A
+folder with no answer yet shows every option, and a run started before the
+answer is refused with "Run it again in a moment". Pickers list the models the
+command runs: its families' models, the ones whose family depends on the
+checkpoint installed (`video-ltx-av`), and its defaults. A model the command
+excludes is never listed, and one named anyway blocks the run with the CLI
+gate's reason. A Library row replayed with Run again or Vary is scoped the same
+way, and a note says what it left out. `StudioModelScopeGoldenTests` checks
+every routed command and family: what each surface shows, validates, and sends
+equals what the contract allows, with per-command fixtures under
+`StudioKitTests/Fixtures/model-scope/`
+(`./scripts/update-studio-model-scope-fixtures.sh` re-records them).
+
 The **Command** panel (⌥⌘C or the header toggle) exposes the current task's
-complete editable contract. It replaces the inspector and uses a 440-point
+complete editable command for the model it runs. The panel replaces the
+inspector and uses a 440-point
 column when space permits, otherwise an overlay. Each row is headed by the
 option's label with its flag beneath in small monospace, over the same typed
 controls the Console draws. The preview, validation, and
@@ -545,9 +585,10 @@ typed rather than dragged, so the console has no per-command view of its own:
 `StudioConsoleDraft` keeps one value per flag, `StudioConsoleCommand` reads a
 template's own argv into those values and builds the argv back out of them, and
 the eyebrows, controls, dependencies, positional arguments and "Will run" block
-all come from `MereRunCapabilityCatalog`. Nothing is filtered by tier and
-nothing is compared against a default: the console emits a flag exactly when the
-draft holds a value, because what it shows is what it runs.
+all come from `MereRunCapabilityCatalog`. Nothing is filtered by tier, and the
+form shows the options of the model the command runs: the rest keep their
+values, listed under the form's note, and are left off the command line.
+Otherwise the console emits a flag exactly when the draft holds a value.
 `StudioConsoleDraftTests` holds the identity that makes that safe: for every
 template in the catalog, seeding from its default command and rebuilding
 produces the same command. Options the contract does not describe go in Extra
@@ -713,12 +754,13 @@ launch sets a checkpoint and a preview every 250 steps when neither was chosen.
 Runs go through the task runner, so Stop, the Library row, and the root's
 Command view share the draft; the pages' saved drafts import once.
 
-**Video** ▸ Generate uses model-family-aware controls: LTX uses `--quality` and
+**Video** ▸ Generate uses controls for the selected model: LTX uses `--quality` and
 `--output-mode`, while native MiniMax-H3 exposes its exact `17n+5` frame
 cadence, adaptive or explicit denoising schedule, weight-residency policy,
 exact/balanced/maximum denoise acceleration, and ordered Ref2VA image, video,
 and audio references, without emitting incompatible LTX flags. Its attachment
-well takes a start image, an end keyframe, and source audio. Video ▸ Subjects is
+well offers only the start image, end keyframe, and source audio inputs that the
+selected model supports. Video ▸ Subjects is
 the SCAIL subject flow as a three-stage project board (Plan → Track → Animate)
 with a stage rail, a mask preview that scrubs by frame and flips between masks
 and the driving clip, subject rows, and stats read only from the CLI's manifest,

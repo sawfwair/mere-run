@@ -33,12 +33,12 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         var draft = StudioTaskDraft(templateID: .textEmbed)
         // The template's defaults: its example text, the default model, and the page's --pretty.
         XCTAssertEqual(draft.prompt, "semantic search query")
-        XCTAssertEqual(Array(draft.arguments.prefix(5)), ["text", "embed", "semantic search query", "--model", "text-embed-qwen3-0.6b"])
-        XCTAssertEqual(draft.arguments.last, "--pretty")
+        XCTAssertEqual(Array(draft.arguments(source: .contract).prefix(5)), ["text", "embed", "semantic search query", "--model", "text-embed-qwen3-0.6b"])
+        XCTAssertEqual(draft.arguments(source: .contract).last, "--pretty")
         draft.prompt = "semantic search query\nrelated document"
         draft.form["--max-tokens"] = .integer(2_048)
         XCTAssertEqual(draft.prompt, "semantic search query\nrelated document")
-        let named = StudioOutputLocation.destination(for: draft)
+        let named = StudioOutputLocation.destination(for: draft, source: .contract)
         let output = named.text("--output")
         XCTAssertTrue(output.hasPrefix(root.appendingPathComponent("Text").path), output)
         XCTAssertEqual(URL(fileURLWithPath: output).pathExtension, "json")
@@ -49,8 +49,8 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         page.maxTokens = 2_048
         page.force = true
         page.outputPath = output
-        XCTAssertEqual(named.arguments, template.arguments(from: page))
-        XCTAssertEqual(named.arguments, [
+        XCTAssertEqual(named.arguments(source: .contract), template.arguments(from: page, source: .contract))
+        XCTAssertEqual(named.arguments(source: .contract), [
             "text", "embed", "semantic search query", "related document", "--model", "text-embed-qwen3-0.6b",
             "--max-tokens", "2048", "--output", output, "--pretty",
         ])
@@ -65,7 +65,7 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         XCTAssertEqual(draft.prompt, paste)
         XCTAssertEqual(draft.form.arguments, [paste])
         draft.form["--max-tokens"] = .integer(2_048)
-        let named = StudioOutputLocation.destination(for: draft)
+        let named = StudioOutputLocation.destination(for: draft, source: .contract)
         let output = named.text("--output")
         XCTAssertTrue(output.hasPrefix(root.appendingPathComponent("Text").path), output)
 
@@ -79,9 +79,9 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         page.force = true
         page.outputPath = output
         // The page emitted its options in its builder's order; the form emits the contract's.
-        XCTAssertEqual(Set(named.arguments), Set(template.arguments(from: page)))
-        XCTAssertEqual(Array(named.arguments.prefix(3)), ["text", "anonymize", paste])
-        XCTAssertEqual(named.arguments.count, template.arguments(from: page).count)
+        XCTAssertEqual(Set(named.arguments(source: .contract)), Set(template.arguments(from: page, source: .contract)))
+        XCTAssertEqual(Array(named.arguments(source: .contract).prefix(3)), ["text", "anonymize", paste])
+        XCTAssertEqual(named.arguments(source: .contract).count, template.arguments(from: page, source: .contract).count)
     }
 
     /// Anonymize's contract names no extension, so its destination follows `--json`; every run
@@ -91,19 +91,19 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         first.prompt = "Alice"
         var second = StudioTaskDraft(templateID: .textAnonymize)
         second.prompt = "Bob"
-        let firstOutput = StudioOutputLocation.destination(for: first).text("--output")
-        let secondOutput = StudioOutputLocation.destination(for: second).text("--output")
+        let firstOutput = StudioOutputLocation.destination(for: first, source: .contract).text("--output")
+        let secondOutput = StudioOutputLocation.destination(for: second, source: .contract).text("--output")
         XCTAssertNotEqual(firstOutput, secondOutput)
         XCTAssertTrue(firstOutput.hasPrefix(root.appendingPathComponent("Text").path), firstOutput)
         XCTAssertEqual(URL(fileURLWithPath: firstOutput).pathExtension, "json")
 
         var plain = first
         plain.form["--json"] = .flag(false)
-        XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: plain).text("--output")).pathExtension, "txt")
+        XCTAssertEqual(URL(fileURLWithPath: StudioOutputLocation.destination(for: plain, source: .contract).text("--output")).pathExtension, "txt")
 
-        let restored = StudioOutputLocation.destination(for: first).withoutDestinations()
+        let restored = StudioOutputLocation.destination(for: first, source: .contract).withoutDestinations()
         XCTAssertEqual(restored.text("--output"), "")
-        let renamed = StudioOutputLocation.destination(for: restored).text("--output")
+        let renamed = StudioOutputLocation.destination(for: restored, source: .contract).text("--output")
         XCTAssertEqual(renamed, firstOutput, "the same command names the same file again")
     }
 
@@ -117,17 +117,17 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         let folder = root.appendingPathComponent("datasets", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var draft = StudioTaskDraft(templateID: .imageDatasetDiscover)
-        XCTAssertTrue(draft.attach(dropped: [folder], slots: draft.slots))
+        XCTAssertTrue(draft.attach(dropped: [folder], slots: draft.slots(source: .contract)))
         XCTAssertEqual(draft.primaryInputPath, folder.path)
 
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageDatasetDiscover))
         var page = template.defaultDraft()
         page.inputPath = folder.path
-        XCTAssertEqual(draft.arguments, template.arguments(from: page))
-        XCTAssertEqual(draft.arguments, [
+        XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: page, source: .contract))
+        XCTAssertEqual(draft.arguments(source: .contract), [
             "image", "dataset", "discover", "--root", folder.path, "--max-depth", "4", "--min-usable-pairs", "1", "--json",
         ])
-        XCTAssertEqual(StudioOutputLocation.destination(for: draft).arguments, draft.arguments, "discover prints; nothing to route")
+        XCTAssertEqual(StudioOutputLocation.destination(for: draft, source: .contract).arguments(source: .contract), draft.arguments(source: .contract), "discover prints; nothing to route")
     }
 
     /// Run plan starts as the page did, on Preflight; turning it off and naming a run directory
@@ -137,7 +137,7 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         var draft = StudioTaskDraft(templateID: .imageRunPlan)
         draft.setArgument(0, plan)
         XCTAssertEqual(draft.primaryInputPath, plan)
-        XCTAssertEqual(draft.arguments, ["image", "run-plan", plan, "--preflight", "--json"])
+        XCTAssertEqual(draft.arguments(source: .contract), ["image", "run-plan", plan, "--preflight", "--json"])
 
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageRunPlan))
         var page = template.defaultDraft()
@@ -145,16 +145,16 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
         page.preflight = true
         page.materializePath = ""
         page.json = true
-        XCTAssertEqual(draft.arguments, template.arguments(from: page))
+        XCTAssertEqual(draft.arguments(source: .contract), template.arguments(from: page, source: .contract))
 
         let runDirectory = root.appendingPathComponent("run-plan", isDirectory: true).path
         draft.form["--preflight"] = .flag(false)
         draft.form["--materialize"] = .text(runDirectory)
         page.preflight = false
         page.materializePath = runDirectory
-        XCTAssertEqual(Set(draft.arguments), Set(template.arguments(from: page)))
-        XCTAssertEqual(draft.arguments, ["image", "run-plan", plan, "--json", "--materialize", runDirectory])
-        XCTAssertEqual(StudioOutputLocation.destination(for: draft).arguments, draft.arguments, "the run directory is the user's choice")
+        XCTAssertEqual(Set(draft.arguments(source: .contract)), Set(template.arguments(from: page, source: .contract)))
+        XCTAssertEqual(draft.arguments(source: .contract), ["image", "run-plan", plan, "--json", "--materialize", runDirectory])
+        XCTAssertEqual(StudioOutputLocation.destination(for: draft, source: .contract).arguments(source: .contract), draft.arguments(source: .contract), "the run directory is the user's choice")
     }
 
     /// Validate takes no input; the suite and family chips carry the page's defaults and the
@@ -162,15 +162,15 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
     func testValidateDraftBuildsThePagesArgvWithARoutedArtifactFolder() throws {
         XCTAssertEqual(StudioTaskSchema.slots(for: .imageValidate), [])
         let draft = StudioTaskDraft(templateID: .imageValidate)
-        let named = StudioOutputLocation.destination(for: draft)
+        let named = StudioOutputLocation.destination(for: draft, source: .contract)
         let output = named.text("--output")
         XCTAssertTrue(output.hasPrefix(root.appendingPathComponent("Image").path), output)
 
         let template = try XCTUnwrap(CommandCatalog.template(id: .imageValidate))
         var page = template.defaultDraft()
         page.outputPath = output
-        XCTAssertEqual(named.arguments, template.arguments(from: page))
-        XCTAssertEqual(named.arguments, ["image", "validate", "--test", "all", "--family", "zimage", "--output", output])
+        XCTAssertEqual(named.arguments(source: .contract), template.arguments(from: page, source: .contract))
+        XCTAssertEqual(named.arguments(source: .contract), ["image", "validate", "--test", "all", "--family", "zimage", "--output", output])
     }
 
     /// Image ▸ Datasets opens on Discover, and its three variants keep the input each takes.
@@ -194,16 +194,16 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
             id: UUID(), mode: .chat, prompt: "first\nsecond", inputURL: nil, outputURL: nil,
             createdAt: Date(), updatedAt: Date(), status: .completed, exitCode: 0,
             commandPreview: "mere.run text embed first second --pretty", outputText: nil,
-            templateID: .textEmbed, commandDraft: page, commandArguments: template.arguments(from: page)
+            templateID: .textEmbed, commandDraft: page, commandArguments: template.arguments(from: page, source: .contract)
         )
         XCTAssertTrue(StudioLibraryDraftRestoration.canRestore(item))
-        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: item))
+        let restored = try XCTUnwrap(StudioLibraryDraftRestoration.taskDraft(from: item, source: .contract))
         XCTAssertEqual(restored.templateID, .textEmbed)
         XCTAssertEqual(restored.prompt, "first\nsecond")
         // The recorded run's destination was that run's, not a setting: routing names a new one.
-        XCTAssertFalse(restored.arguments.contains("--output"))
+        XCTAssertFalse(restored.arguments(source: .contract).contains("--output"))
         page.outputPath = ""
-        XCTAssertEqual(restored.arguments, template.arguments(from: page))
+        XCTAssertEqual(restored.arguments(source: .contract), template.arguments(from: page, source: .contract))
     }
 
     // MARK: - Documents
@@ -317,7 +317,7 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
             id: UUID(), mode: .createImage, prompt: "", inputURL: nil, outputURL: folder,
             createdAt: Date(), updatedAt: Date(), status: .completed, exitCode: 0,
             commandPreview: "mere.run image validate …", outputText: "Image validation\n  family: Klein\n  suite: all",
-            templateID: .imageValidate, commandDraft: page, commandArguments: template.arguments(from: page)
+            templateID: .imageValidate, commandDraft: page, commandArguments: template.arguments(from: page, source: .contract)
         )
         guard case .validation(let report) = try XCTUnwrap(StudioAnalyzeDocument.derived(from: item)) else {
             return XCTFail("Expected a validation report")
@@ -348,7 +348,7 @@ final class StudioTextDatasetsWorkspaceTests: XCTestCase {
     func testRunPlanPreflightAndMaterializeExcludeEachOther() throws {
         var plan = StudioTaskDraft(templateID: .imageRunPlan)
         XCTAssertEqual(plan.form["--preflight"].flag, true, "a fresh Run plan checks the plan")
-        let fields = StudioTaskSchema.fields(for: .imageDatasets, draft: plan)
+        let fields = StudioTaskSchema.fields(for: .imageDatasets, draft: plan, source: .contract)
         let materialize = try XCTUnwrap(fields.first { $0.flag == "--materialize" })
         let preflight = try XCTUnwrap(fields.first { $0.flag == "--preflight" })
 

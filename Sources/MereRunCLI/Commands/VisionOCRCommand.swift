@@ -10,6 +10,22 @@ enum OCRBackend: String, ExpressibleByArgument, CaseIterable {
     case infinity
 }
 
+/// What one `vision ocr` command line runs.
+enum VisionOCRPlan: Equatable {
+    case lightOn
+    /// GLM-OCR or Infinity-Parser2 alone.
+    case single(OCRBackend)
+    /// LightOnOCR, then this backend.
+    case comparison(OCRBackend)
+
+    var runsLightOn: Bool {
+        switch self {
+        case .lightOn, .comparison: true
+        case .single: false
+        }
+    }
+}
+
 enum InfinityParserBackend: String, ExpressibleByArgument, CaseIterable {
     case transformers
     case vllmEngine = "vllm-engine"
@@ -144,6 +160,16 @@ struct VisionOCR: AsyncParsableCommand {
         }
     }
 
+    /// `--compare` pairs LightOnOCR with GLM-OCR unless `--backend infinity` names
+    /// Infinity-Parser2. The capability contract's `vision ocr` families follow this plan, with
+    /// `--infinity-runtime` splitting the Infinity-Parser2 runs.
+    var plan: VisionOCRPlan {
+        if compare {
+            return .comparison(backend == .lighton ? .glm : backend)
+        }
+        return backend == .lighton ? .lightOn : .single(backend)
+    }
+
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
@@ -151,9 +177,9 @@ struct VisionOCR: AsyncParsableCommand {
             throw ValidationError("Provide at least one image path.")
         }
 
-        let needsLightOn = compare || backend == .lighton
+        let plan = plan
         let modelURL: URL?
-        if needsLightOn {
+        if plan.runsLightOn {
             do {
                 let resolved = try await ManagedModelResolver.resolveForRuntime(
                     requestedModel: model,
@@ -205,27 +231,22 @@ struct VisionOCR: AsyncParsableCommand {
             }
 
             let output: OCROutput
-            if compare {
+            switch plan {
+            case .comparison(let other):
                 guard let modelURL else { throw ValidationError("LightOn model resolution failed.") }
                 let lighton = try await generator.ocr(
                     imageURL: imageURL,
                     modelPath: modelURL.path,
                     config: config
                 )
-                let compareBackend = backend == .lighton ? OCRBackend.glm : backend
-                let secondary = try await selectedSecondaryResult(
-                    compareBackend,
-                    imageURL: imageURL,
-                    glm: glm,
-                    infinity: infinity
-                )
+                let secondary = try await otherResult(other, imageURL: imageURL, glm: glm, infinity: infinity)
                 output = .comparison(
                     lighton: lighton.text,
                     externalName: secondary.name,
                     external: secondary.text,
                     externalJSON: secondary.json
                 )
-            } else if backend == .lighton {
+            case .lightOn:
                 guard let modelURL else { throw ValidationError("LightOn model resolution failed.") }
                 let result = try await generator.ocr(
                     imageURL: imageURL,
@@ -233,12 +254,9 @@ struct VisionOCR: AsyncParsableCommand {
                     config: config
                 )
                 output = .single(text: result.text)
-            } else if backend == .glm {
-                let glmResult = try glm.ocr(imageURL: imageURL)
-                output = .single(text: glmResult.text)
-            } else {
-                let infinityResult = try await infinityResult(imageURL: imageURL, externalCLI: infinity)
-                output = .single(text: infinityResult.text)
+            case .single(let other):
+                let result = try await otherResult(other, imageURL: imageURL, glm: glm, infinity: infinity)
+                output = .single(text: result.text)
             }
 
             if let outDirURL {
@@ -261,7 +279,7 @@ struct VisionOCR: AsyncParsableCommand {
         }
     }
 
-    private func selectedSecondaryResult(
+    private func otherResult(
         _ backend: OCRBackend,
         imageURL: URL,
         glm: GLMOCRCLI,

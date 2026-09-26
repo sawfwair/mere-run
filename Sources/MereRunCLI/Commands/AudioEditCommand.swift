@@ -35,6 +35,9 @@ struct AudioEdit: ParsableCommand {
     @Flag(name: [.short, .long], help: "Suppress progress diagnostics.")
     var quiet = false
 
+    /// The model ids the command runs, each by exact id; `--model-path` only relocates weights.
+    static let supportedModels = ["audio-auk-base", "audio-auk-flash"]
+
     var options: AuKGenerationOptions {
         var result = AuKGenerationOptions()
         result.variant = model == "audio-auk-flash" ? .flash : .base
@@ -46,7 +49,7 @@ struct AudioEdit: ParsableCommand {
     }
 
     func validate() throws {
-        guard ["audio-auk-base", "audio-auk-flash"].contains(model) else {
+        guard Self.supportedModels.contains(model) else {
             throw ValidationError("--model must be audio-auk-base or audio-auk-flash")
         }
         guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -88,7 +91,7 @@ struct AudioEdit: ParsableCommand {
                             sourceRevision: AuKGenerator.sourceRevision, validation: "experimental")
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        var data = try encoder.encode(result)
+        var data = try encoder.encode(GateWarned(result))
         data.append(10)
         try FileHandle.standardOutput.write(contentsOf: data)
     }

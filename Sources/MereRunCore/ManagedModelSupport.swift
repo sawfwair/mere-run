@@ -769,7 +769,7 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 "speech-tts-qwen3-customvoice",
                 "Custom voice TTS",
-                "Synthesizes speech with the Qwen3 custom-voice model layout.",
+                "Synthesizes speech as one of nine named speakers with Qwen3-TTS CustomVoice.",
                 minimum: 12,
                 recommended: 16
             ),

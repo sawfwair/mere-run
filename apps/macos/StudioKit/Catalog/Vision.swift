@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 
 // MARK: - Vision templates
 
@@ -248,17 +249,22 @@ extension CommandArguments {
         if draft.all { args.flag(F.compare) }
         if !draft.visionGLMOCRCLI.isBlank { args.option(F.glmocrCli, draft.visionGLMOCRCLI) }
         if !draft.visionGLMConfig.isBlank { args.option(F.glmConfig, draft.visionGLMConfig) }
-        args.option(F.infinityRuntime, draft.visionInfinityRuntime)
-        args.option(F.infinityParserCli, draft.visionInfinityParserCLI)
-        args.option(F.infinityModel, draft.visionInfinityModel)
-        args.option(F.infinityBackend, draft.visionInfinityBackend)
-        args.option(F.infinityAPIURL, draft.visionInfinityAPIURL)
-        args.option(F.infinityAPIKey, draft.visionInfinityAPIKey)
-        args.option(F.infinityTask, draft.visionInfinityTask)
-        args.option(F.infinityOutputFormat, draft.visionInfinityOutputFormat)
-        args.option(F.infinityBatchSize, String(draft.visionInfinityBatchSize))
-        args.option(F.infinityMinPixels, String(draft.visionInfinityMinPixels))
-        args.option(F.infinityMaxPixels, String(draft.visionInfinityMaxPixels))
+        let infinity: [(flag: String, value: String)] = [
+            (F.infinityRuntime, draft.visionInfinityRuntime),
+            (F.infinityParserCli, draft.visionInfinityParserCLI),
+            (F.infinityModel, draft.visionInfinityModel),
+            (F.infinityBackend, draft.visionInfinityBackend),
+            (F.infinityAPIURL, draft.visionInfinityAPIURL),
+            (F.infinityAPIKey, draft.visionInfinityAPIKey),
+            (F.infinityTask, draft.visionInfinityTask),
+            (F.infinityOutputFormat, draft.visionInfinityOutputFormat),
+            (F.infinityBatchSize, String(draft.visionInfinityBatchSize)),
+            (F.infinityMinPixels, String(draft.visionInfinityMinPixels)),
+            (F.infinityMaxPixels, String(draft.visionInfinityMaxPixels))
+        ]
+        for (flag, value) in infinity {
+            args.option(flag, value)
+        }
         if !draft.visionInfinityPrompt.isBlank {
             args.option(F.infinityPrompt, draft.visionInfinityPrompt)
         }
@@ -503,5 +509,43 @@ extension CommandArguments {
         if draft.dryRun { args.flag(F.dryRun) }
         if draft.json { args.flag(F.json) }
         return args.arguments
+    }
+}
+
+// MARK: - Vision validation
+
+extension CommandCatalog {
+    /// The reason a vision template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func visionValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .visionEmbed:
+            if draft.prompt.isBlank && draft.inputPath.isBlank {
+                return "Text or image input is required."
+            }
+        case .visionSegment, .visionTrack:
+            if draft.prompt.isBlank && draft.visionBoxPrompts.isBlank
+                && draft.visionPointPrompts.isBlank {
+                return "Add a text, box, or point prompt."
+            }
+        case .visionFaceCompare, .visionFlow:
+            if draft.visionSecondInputPath.isBlank {
+                return "A second image is required."
+            }
+        case .visionFaceBatch:
+            if draft.inputPath.isBlank && draft.visionAdditionalInputs.isBlank
+                && draft.visionInputList.isBlank {
+                return "Choose images or an input-list file."
+            }
+        case .visionGeometryMultiview:
+            let images = ([draft.inputPath] + CommandArguments.pathList(draft.visionAdditionalInputs))
+                .filter { !$0.isBlank }
+            if images.count < 2 {
+                return "Add at least two ordered views."
+            }
+        default:
+            break
+        }
+        return nil
     }
 }

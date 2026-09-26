@@ -17,13 +17,13 @@ final class StudioResultWorkflowTests: XCTestCase {
         draft.seed = seed
         draft.outputPath = output
         return library.start(request: StudioRunRequest(mode: .createImage, templateID: template.id,
-            template: template, draft: draft), commandPreview: "fixture")
+            template: template, draft: draft), commandPreview: "fixture", source: .contract)
     }
 
     func testReplayReservesDistinctDestinationsBeforeFilesExistAndKeepsLineage() throws {
         let item = try image(library())
-        let first = try XCTUnwrap(StudioLibraryReplay.request(for: item))
-        let second = try XCTUnwrap(StudioLibraryReplay.request(for: item))
+        let first = try XCTUnwrap(StudioLibraryReplay.request(for: item, source: .contract))
+        let second = try XCTUnwrap(StudioLibraryReplay.request(for: item, source: .contract))
         XCTAssertNotEqual(first.draft.outputPath, second.draft.outputPath)
         XCTAssertNotEqual(first.draft.outputPath, item.commandDraft?.outputPath)
         XCTAssertEqual(first.parentID, item.id)
@@ -50,9 +50,9 @@ final class StudioResultWorkflowTests: XCTestCase {
         draft.musicContextOutput = "/tmp/out/harbor-lights-a1b2c3-context.json"
         draft.musicInstruments = "piano"
         let row = library().start(request: StudioRunRequest(mode: .music, templateID: .musicTranscribe,
-            template: template, draft: draft), commandPreview: "fixture")
+            template: template, draft: draft), commandPreview: "fixture", source: .contract)
 
-        let replay = try XCTUnwrap(StudioLibraryReplay.request(for: row))
+        let replay = try XCTUnwrap(StudioLibraryReplay.request(for: row, source: .contract))
         let form = try XCTUnwrap(replay.execution?.form)
 
         XCTAssertNotEqual(replay.draft.outputPath, draft.outputPath)
@@ -65,7 +65,7 @@ final class StudioResultWorkflowTests: XCTestCase {
         XCTAssertEqual(form.text("--instruments"), "piano")
 
         let batchTemplate = try XCTUnwrap(CommandCatalog.template(id: .visionFaceBatch))
-        let batch = StudioExecution(templateID: .visionFaceBatch, arguments: batchTemplate.arguments(from: batchTemplate.defaultDraft())
+        let batch = StudioExecution(templateID: .visionFaceBatch, arguments: batchTemplate.arguments(from: batchTemplate.defaultDraft(), source: .contract)
             + ["/tmp/1.png", "--jsonl-output", "/tmp/out/faces.jsonl"])
         XCTAssertNotEqual(try XCTUnwrap(batch.replay(outputPath: "/tmp/out/faces-2.jsonl").form).text("--jsonl-output"), "/tmp/out/faces.jsonl")
     }
@@ -81,8 +81,8 @@ final class StudioResultWorkflowTests: XCTestCase {
         transcription.musicTranscribeFormat = "json"
         transcription.outputPath = "/tmp/out/harbor-lights-a1b2c3.json"
         let transcribed = store.start(request: StudioRunRequest(mode: .music, templateID: .musicTranscribe,
-            template: transcribe, draft: transcription), commandPreview: "fixture")
-        let rerun = try XCTUnwrap(StudioLibraryReplay.request(for: transcribed))
+            template: transcribe, draft: transcription), commandPreview: "fixture", source: .contract)
+        let rerun = try XCTUnwrap(StudioLibraryReplay.request(for: transcribed, source: .contract))
         XCTAssertEqual(URL(fileURLWithPath: rerun.draft.outputPath).pathExtension, "json", rerun.draft.outputPath)
         XCTAssertEqual(try XCTUnwrap(rerun.execution?.form).text("--output"), rerun.draft.outputPath)
 
@@ -92,8 +92,8 @@ final class StudioResultWorkflowTests: XCTestCase {
         speakers.speechDiarizationFormat = "rttm"
         speakers.outputPath = "/tmp/out/standup-d4e5f6.rttm"
         let diarized = store.start(request: StudioRunRequest(mode: .listen, templateID: .speechDiarize,
-            template: diarize, draft: speakers), commandPreview: "fixture")
-        let again = try XCTUnwrap(StudioLibraryReplay.request(for: diarized))
+            template: diarize, draft: speakers), commandPreview: "fixture", source: .contract)
+        let again = try XCTUnwrap(StudioLibraryReplay.request(for: diarized, source: .contract))
         XCTAssertEqual(URL(fileURLWithPath: again.draft.outputPath).pathExtension, "rttm", again.draft.outputPath)
     }
 
@@ -101,7 +101,7 @@ final class StudioResultWorkflowTests: XCTestCase {
         let store = library()
         let first = try image(store)
         let second = try image(store, seed: "99", output: "/tmp/new.png")
-        let changes = StudioResultComparison.differences(first, second)
+        let changes = StudioResultComparison.differences(first, second, source: .contract)
         XCTAssertEqual(changes.map(\.id), ["--seed"])
         XCTAssertEqual(changes.first?.first, "42")
         XCTAssertEqual(changes.first?.second, "99")
@@ -113,7 +113,7 @@ final class StudioResultWorkflowTests: XCTestCase {
         first.commandArguments = ["music", "generate", "A quiet piano", "--future-option", "one", "--hf-token", "first-secret"]
         var second = first
         second.commandArguments = ["music", "generate", "A brass band", "--future-option", "two", "--hf-token", "second-secret"]
-        let changes = StudioResultComparison.differences(first, second)
+        let changes = StudioResultComparison.differences(first, second, source: .contract)
         XCTAssertEqual(changes.map(\.id), ["argument.0", "extraArguments"])
         XCTAssertEqual(changes.first?.first, "A quiet piano")
         XCTAssertEqual(changes.first?.second, "A brass band")
@@ -127,11 +127,11 @@ final class StudioResultWorkflowTests: XCTestCase {
         var second = first
         second.templateID = .musicGenerate
         second.commandArguments = ["music", "generate", "A quiet piano"]
-        XCTAssertEqual(StudioResultComparison.differences(first, second).first?.id, "command")
+        XCTAssertEqual(StudioResultComparison.differences(first, second, source: .contract).first?.id, "command")
         second.commandArguments = nil
         second.commandDraft = nil
         XCTAssertFalse(StudioResultComparison.hasSettings(second))
-        XCTAssertTrue(StudioResultComparison.differences(first, second).isEmpty)
+        XCTAssertTrue(StudioResultComparison.differences(first, second, source: .contract).isEmpty)
     }
 
     func testImagePanningStaysInsideTheViewportAfterZoomingOutOrResizing() {

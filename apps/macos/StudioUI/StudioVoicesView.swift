@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 /// `speech profile create`, so it lands in the Library under Voice like any run. Speak's clone
 /// mode lists the same profiles.
 struct StudioVoicesView: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
     @Environment(\.studioTaskRunner) private var runner
@@ -97,7 +98,7 @@ struct StudioVoicesView: View {
         .foregroundStyle(MereRunTheme.textPrimary)
         .onAppear {
             jobMonitor.attach(controller.jobs)
-            controller.checkReadiness(for: Self.task, modelID: StudioTaskSchema.requiredModelID(for: draft))
+            controller.checkReadiness(for: Self.task, requirement: StudioTaskSchema.requirement(for: draft, source: scopeSource))
             refreshProfiles()
         }
         .onReceive(controller.runCompletions) { result in

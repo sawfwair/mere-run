@@ -28,9 +28,4 @@ struct YuE2CLIOptions: ParsableArguments {
 
     @Option(name: .customLong("semantic-repetition-penalty"), help: "YuE2 frequency penalty over the last 50 music tokens (default: 1.2).")
     var repetitionPenalty: Float?
-
-    var isSpecified: Bool {
-        planning != nil || abcFile != nil || abcOutput != nil || abcMaximumTokens != nil
-            || temperature != nil || topP != nil || topK != nil || repetitionPenalty != nil
-    }
 }

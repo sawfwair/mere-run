@@ -58,13 +58,22 @@ package struct StudioTaskDraft: Codable, Equatable {
     /// draft's stamped destination is not carried: a draft never holds a destination the app
     /// names, so routing names a fresh one for each run, with the extension its `--format` asks
     /// for and under whatever root is configured when it runs.
+    ///
+    /// The reading is of the template's argv before any scope: a default only another model uses
+    /// (UniverSR's seed and solver while the template defaults to AP-BWE) is in the form, hidden
+    /// and left out of the run, so switching to that model runs what its page ran.
     package init(templateID: CommandTemplateID) {
         self.templateID = templateID
         guard let template = CommandCatalog.template(id: templateID) else {
             form = StudioConsoleDraft()
             return
         }
-        form = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
+        let defaults = template.defaultDraft()
+        form = templateID.capability.map {
+            // The template's own defaults name a managed model the contract places, so the
+            // shipped contract alone builds the argv a fresh draft starts from.
+            StudioConsoleCommand.seed(capability: $0, arguments: template.unscopedArguments(from: defaults, source: .contract))
+        } ?? StudioConsoleDraft(extraArguments: defaults.extraArguments)
         for flag in Self.launcherDefaults(for: templateID) where form.values[flag] == nil {
             form[flag] = .flag(true)
         }
@@ -145,22 +154,23 @@ package struct StudioTaskDraft: Codable, Equatable {
         template?.defaultDraft() ?? CommandDraft()
     }
 
-    /// Exactly what the Command view's "Will run" shows for the same form.
-    package var arguments: [String] {
-        guard let capability else { return [] }
-        return StudioConsoleCommand.arguments(for: capability, draft: form)
+    /// Exactly what the Command view's "Will run" shows for the same form: the form scoped to the
+    /// model it runs, so a value that model does not use is kept in the form but not run.
+    package func arguments(source: StudioScopeSource) -> [String] {
+        guard let capability = source.capability(for: templateID) else { return [] }
+        return StudioConsoleCommand.arguments(for: capability, draft: form.scoped(to: source.scope(capability: capability, form: form)))
     }
 
     /// The launch for this draft, or nil for a template the app cannot run itself.
-    package var run: StudioConsoleRun? {
+    package func run(source: StudioScopeSource) -> StudioConsoleRun? {
         guard let template else { return nil }
-        return StudioConsoleRun(template: template, draft: form, seed: seed)
+        return StudioConsoleRun(template: template, draft: form, seed: seed, source: source)
     }
 
     /// The request the task runner submits: the template's own Library attribution, the console
     /// projection as the draft, and the argv as the execution history and replay keep.
-    package func request(id: UUID = UUID(), createdAt: Date = Date()) -> StudioRunRequest? {
-        guard let template, let run else { return nil }
+    package func request(id: UUID = UUID(), createdAt: Date = Date(), source: StudioScopeSource) -> StudioRunRequest? {
+        guard let template, let run = run(source: source) else { return nil }
         return StudioRunRequest(
             id: id, mode: template.libraryMode, templateID: templateID, template: template,
             draft: run.commandDraft, createdAt: createdAt,

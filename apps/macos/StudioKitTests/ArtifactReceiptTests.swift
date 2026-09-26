@@ -25,6 +25,16 @@ final class ArtifactReceiptTests: XCTestCase {
         XCTAssertEqual(receipt.outputs.map(\.path), ["/out/render.png", "/out/render.prompt.json"])
         XCTAssertEqual(receipt.outputs.map(\.kind), ["image", "json"])
         XCTAssertEqual(receipt.outputs.map(\.role), [nil, "structured-prompt"])
+        XCTAssertNil(receipt.warnings)
+    }
+
+    func testReceiptCarriesTheGateWarnings() throws {
+        let stdout = #"""
+        {"event":"result","exit":0,"outputs":[{"kind":"audio","path":"/out/song.wav"}],"warnings":["--steps has no effect with ACE-Step Turbo."]}
+        """#
+        let receipt = try XCTUnwrap(StudioRunReceipt.parse(stdout: stdout))
+        XCTAssertEqual(receipt.outputs.map(\.path), ["/out/song.wav"])
+        XCTAssertEqual(receipt.warnings, ["--steps has no effect with ACE-Step Turbo."])
     }
 
     func testMalformedAndAbsentReceiptsAreIgnored() {
@@ -204,7 +214,7 @@ final class ArtifactReceiptTests: XCTestCase {
             var draft = template.defaultDraft()
             draft.preflight = false
             draft.dryRun = false
-            let arguments = template.arguments(from: draft)
+            let arguments = template.arguments(from: draft, source: .contract)
             let flags = StudioMachineOutputFlags.arguments(
                 template: template,
                 draft: draft,
@@ -235,7 +245,7 @@ final class ArtifactReceiptTests: XCTestCase {
         for template in CommandCatalog.templates where template.id.emitsRunReceipt {
             var draft = template.defaultDraft()
             draft.preflight = true
-            let arguments = template.arguments(from: draft)
+            let arguments = template.arguments(from: draft, source: .contract)
             XCTAssertEqual(
                 StudioMachineOutputFlags.arguments(template: template, draft: draft, appendingTo: arguments),
                 [],
@@ -248,7 +258,7 @@ final class ArtifactReceiptTests: XCTestCase {
                 StudioMachineOutputFlags.arguments(
                     template: template,
                     draft: other,
-                    appendingTo: template.arguments(from: other) + ["--preflight"]
+                    appendingTo: template.arguments(from: other, source: .contract) + ["--preflight"]
                 ),
                 []
             )
@@ -261,7 +271,7 @@ final class ArtifactReceiptTests: XCTestCase {
         draft.prompt = "a cat"
         draft.outputPath = "/out/render.png"
         draft.progressJSON = true
-        let arguments = template.arguments(from: draft)
+        let arguments = template.arguments(from: draft, source: .contract)
 
         XCTAssertTrue(arguments.contains(StudioMachineOutputFlags.progressJSON))
         XCTAssertEqual(
@@ -495,7 +505,7 @@ final class ArtifactReceiptTests: XCTestCase {
     }
 
     private func makeRequest(template: CommandTemplate, draft: CommandDraft) -> JobRequest {
-        let arguments = template.arguments(from: draft)
+        let arguments = template.arguments(from: draft, source: .contract)
         let launched = arguments + StudioMachineOutputFlags.arguments(
             template: template,
             draft: draft,
@@ -514,7 +524,7 @@ final class ArtifactReceiptTests: XCTestCase {
                 environment: [:],
                 keepsStandardInputOpen: false
             ),
-            displayCommand: (["mere.run"] + arguments).shellQuoted()
+            displayCommand: (["mere.run"] + arguments).shellQuoted(), scopeSource: .contract
         )
     }
 

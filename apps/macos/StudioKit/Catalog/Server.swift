@@ -223,3 +223,28 @@ extension CommandArguments {
         return args.arguments
     }
 }
+
+// MARK: - Server validation
+
+extension CommandCatalog {
+    /// The reason a server template's draft cannot run, beyond the prompt and input checks
+    /// every template shares; nil for a draft that can, and for every other template.
+    package static func serverValidationMessage(for id: CommandTemplateID, draft: CommandDraft) -> String? {
+        switch id {
+        case .apiServe, .openWebui:
+            if !(1...65_535).contains(draft.port) {
+                return "Port must be between 1 and 65535."
+            }
+            if id == .openWebui && !(1...65_535).contains(draft.openWebUIPort) {
+                return "Open WebUI port must be between 1 and 65535."
+            }
+            if id == .apiServe && draft.apiMemoryGuard == "custom"
+                && draft.apiMemoryGuardCustomCeilingGB.isBlank {
+                return "A custom memory ceiling is required for the custom guard."
+            }
+        default:
+            break
+        }
+        return nil
+    }
+}

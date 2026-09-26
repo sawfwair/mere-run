@@ -110,8 +110,9 @@ extension Qwen3ASRGenerator {
         let audioLen = audioFeatures.dim(1)
         let prompt = tokenizer.createQwen3ASRPrompt(
             audioPlaceholderCount: audioLen,
-            language: language,
-            supportedLanguages: modelConfig?.supportLanguages
+            language: Self.promptLanguage(task: task, language: language),
+            supportedLanguages: modelConfig?.supportLanguages,
+            instruction: Self.instruction(for: task)
         )
         let output = try generateWithPrompt(
             prompt,
@@ -160,19 +161,21 @@ extension Qwen3ASRGenerator {
         return "language \(value)"
     }
 
-    private func instructionFor(task: ASRTask, language: String?) -> String {
-        let trimmedLang = language?.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// What the user turn asks after the audio. Transcription asks nothing, as upstream's
+    /// `qwen_asr` prompt does; translation asks for English there, which the model follows.
+    static func instruction(for task: ASRTask) -> String? {
         switch task {
-        case .transcribe:
-            if let trimmedLang, !trimmedLang.isEmpty {
-                return "Transcribe the audio in \(trimmedLang)."
-            }
-            return "Transcribe the audio."
-        case .translate:
-            if let trimmedLang, !trimmedLang.isEmpty {
-                return "Translate the audio to \(trimmedLang)."
-            }
-            return "Translate the audio to English."
+        case .transcribe: nil
+        case .translate: "Translate the audio to English."
+        }
+    }
+
+    /// The language the answer opens with (`language X<asr_text>`): the hint when transcribing,
+    /// English when translating, whatever language the audio is in.
+    static func promptLanguage(task: ASRTask, language: String?) -> String? {
+        switch task {
+        case .transcribe: language
+        case .translate: "English"
         }
     }
 

@@ -15,8 +15,9 @@ struct MusicGenerate: AsyncParsableCommand {
 
         MiniMax Music 3 consumes caption, lyrics, duration/max-frames, steps,
         seed, and guidance scale. Run `mere.run guide music generate --model
-        music-minimax-music3` for the model-specific contract; ACE-Step and
-        Magenta controls are rejected instead of silently ignored.
+        music-minimax-music3` for the model-specific contract. ACE-Step and
+        Magenta controls fail before loading unless they carry their own
+        default, which only prints a warning.
 
         Example:
           mere.run music generate "upbeat electronic groove" \
@@ -494,12 +495,10 @@ struct MusicGenerate: AsyncParsableCommand {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         let explicitDurationSeconds = try resolvedExplicitDurationSeconds()
-        if isYuE2Request {
+        let musicRuntime = MusicModelRuntime.generation(model: model)
+        if musicRuntime == .yue2 {
             try await runYuE2(explicitDurationSeconds: explicitDurationSeconds, exportPlan: exportPlan)
             return
-        }
-        if yue2Options.isSpecified {
-            throw ValidationError("Score and semantic sampling options require YuE2 (--model music-yue2).")
         }
         if useLM && noLM {
             throw ValidationError("Pass either --use-lm or --no-lm, not both.")
@@ -610,38 +609,15 @@ struct MusicGenerate: AsyncParsableCommand {
             )
         }
 
-        if isMiniMaxMusic3Request {
+        switch musicRuntime {
+        case .miniMaxMusic3:
             try await runMiniMaxMusic3(explicitDurationSeconds: explicitDurationSeconds, exportPlan: exportPlan)
             return
-        }
-
-        if miniMaxMaximumFrames != nil
-            || miniMaxMinimumFrames != nil
-            || miniMaxMinimumDurationSeconds != nil
-            || miniMaxOutputSampleRate != nil
-            || miniMaxLoadingStrategy != nil
-            || miniMaxPerformanceMode != nil
-            || miniMaxSamplingTier != nil
-            || miniMaxFlowStrategy != nil
-            || miniMaxFlowSolver != nil
-            || miniMaxAutoregressiveGuidanceFrames != nil
-            || miniMaxFlowGuidanceEnd != nil
-            || miniMaxSeedStrategy != nil
-            || miniMaxProfileOutput != nil
-            || miniMaxCompose
-            || miniMaxComposerModelRoot != nil
-            || miniMaxRequireComposerInstalled
-            || miniMaxCompositionOutput != nil
-            || miniMaxLyricPreflightPolicy != .warn
-        {
-            throw ValidationError(
-                "MiniMax composer, lyric-preflight, duration-frame, sample-rate, memory-mode, performance-mode, flow, seed, sampling-tier, and profiling options require MiniMax Music 3."
-            )
-        }
-
-        if isMagentaRT2Request {
+        case .magentaRT2:
             try await runMagentaRT2()
             return
+        case .yue2, .aceStep:
+            break
         }
 
         let effectiveTask = resolvedACEStepTask
@@ -730,6 +706,7 @@ struct MusicGenerate: AsyncParsableCommand {
         )
         let resources = try await container.resources()
         let runtime = ACEStepMusicRuntime(resources: resources, variant: checkpointVariant)
+        let progressStream = progressJson ? JSONProgressStream() : nil
         try await runtime.perform { operation in
             let loadedAdapters = try loadAdapters(into: operation.session.pipeline)
             var options = ACEStepGenerationOptions(prompt: caption)
@@ -789,6 +766,7 @@ struct MusicGenerate: AsyncParsableCommand {
             options.planningSeed = seed
             options.analyzeSourceAudio = analyzeSourceAudio
             options.roundMetadataDuration = false
+            progressStream?.report(stage: "planning", step: 0, totalSteps: 1)
             let plan = try operation.prepare(options)
             let inference = plan.request.config
             let effectiveCaption = plan.request.caption
@@ -803,7 +781,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 CLIStderr.write("ACE-Step effective plan: \(ACEStepPlanningPolicy.summary(userMetadata))\n")
                 CLIStderr.write("Running ACE-Step in one warm session; candidates=\(plan.candidateCount)\n")
             }
-            let ranked = try operation.generate(plan)
+            let ranked = try operation.generate(plan, progress: progressStream.map { stream in
+                { Self.reportACEStepProgress($0, to: stream) }
+            })
 
             let exportOptions = exportPlan.options
             let primaryExport = try AudioExportService.write(
@@ -825,7 +805,7 @@ struct MusicGenerate: AsyncParsableCommand {
             }
 
             var stemTracks: [ACEStepDAWBundleWriter.Track] = []
-            for stemName in stemNames {
+            for (stemIndex, stemName) in stemNames.enumerated() {
                 if !quiet {
                     CLIStderr.write("Extracting ACE-Step stem: \(stemName)\n")
                 }
@@ -845,7 +825,10 @@ struct MusicGenerate: AsyncParsableCommand {
                         task: .extract,
                         useLanguageModel: false
                     ),
-                    candidateCount: 1
+                    candidateCount: 1,
+                    progress: progressStream.map { stream in
+                        { Self.reportACEStepStemProgress($0, stem: stemIndex, stemCount: stemNames.count, to: stream) }
+                    }
                 ).best
                 let stemURL = stemOutputURL(
                     selectedOutputURL: outputURL,
@@ -1018,6 +1001,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 }
                 CLIStderr.write("Saved audio: \(outputURL.path)\n")
             }
+            progressStream?.finish()
             print(outputURL.path)
             if let synchronizedLyricsURL {
                 receiptSidecars.append(.init(url: synchronizedLyricsURL, kind: .text, role: "lyrics"))
@@ -1072,21 +1056,6 @@ struct MusicGenerate: AsyncParsableCommand {
         }
     }
 
-    private var isMagentaRT2Request: Bool {
-        if MagentaRT2Resources.isMagentaRT2Model(model) {
-            return true
-        }
-        let url = URL(fileURLWithPath: model).standardizedFileURL
-        return MagentaRT2Resources.looksLikeMagentaRT2Root(url)
-    }
-
-    private var isMiniMaxMusic3Request: Bool {
-        if model == ModelResolver.ModelID.miniMaxMusic3.rawValue {
-            return true
-        }
-        return MiniMaxMusic3Resources.looksLikeRoot(resolveUserPath(model))
-    }
-
     private func resolvedExportPlan() throws -> AudioExportPlan {
         do {
             return try AudioExportPlan(options: .init(
@@ -1130,7 +1099,7 @@ struct MusicGenerate: AsyncParsableCommand {
         )
 
         let rootURL: URL
-        if model == ModelResolver.ModelID.miniMaxMusic3.rawValue {
+        if MusicModelRuntime.namesManagedMiniMaxMusic3(model) {
             do {
                 rootURL = try ModelResolver().resolve(.miniMaxMusic3).rootURL
             } catch {
@@ -1398,6 +1367,32 @@ struct MusicGenerate: AsyncParsableCommand {
         }
     }
 
+    /// ACE-Step runs candidates one after another, each denoising then decoding. Denoising steps
+    /// flatten across candidates into one monotonic stage, and each candidate's decode is a
+    /// milestone beside it, so a second candidate never reopens a closed stage.
+    static func reportACEStepProgress(_ progress: ACEStepGenerationProgress, to stream: JSONProgressStream) {
+        switch progress.stage {
+        case let .denoising(step, steps):
+            stream.report(
+                stage: "denoising", step: progress.candidate * steps + step,
+                totalSteps: progress.candidateCount * steps
+            )
+        case .decoding:
+            stream.mark(stage: "decoding", step: progress.candidate, totalSteps: progress.candidateCount)
+        }
+    }
+
+    /// Stem extraction re-runs the decoder once per stem; its steps flatten across stems.
+    static func reportACEStepStemProgress(
+        _ progress: ACEStepGenerationProgress,
+        stem: Int,
+        stemCount: Int,
+        to stream: JSONProgressStream
+    ) {
+        guard case let .denoising(step, steps) = progress.stage else { return }
+        stream.report(stage: "stems", step: stem * steps + step, totalSteps: stemCount * steps)
+    }
+
     var resolvedMiniMaxInferenceSteps: Int {
         steps ?? miniMaxSamplingTier?.inferenceSteps ?? MiniMaxMusic3SamplingTier.quality.inferenceSteps
     }
@@ -1497,108 +1492,6 @@ struct MusicGenerate: AsyncParsableCommand {
         if let resolvedMinimumFrames, resolvedMinimumFrames > resolvedMaximumFrames {
             throw ValidationError("MiniMax Music 3 minimum duration cannot exceed its output upper bound.")
         }
-        try validateStandaloneMusicOptions(modelName: "MiniMax Music 3")
-    }
-
-    func validateStandaloneMusicOptions(modelName: String) throws {
-        if useLM || noLM || analyzeSourceAudio || lmModel != nil || lmSubdirectory != nil {
-            throw ValidationError("\(modelName) uses its built-in autoregressive stage; ACE-Step LM options do not apply.")
-        }
-        if taskType != .textToMusic
-            || sourceAudio != nil
-            || !referenceAudio.isEmpty
-            || nonCover
-            || flowEdit
-            || trackName != nil
-            || completeTrackClasses != nil
-        {
-            throw ValidationError("\(modelName) currently supports text-and-lyrics generation only.")
-        }
-        if !adapters.isEmpty || !adapterScales.isEmpty || stems != nil {
-            throw ValidationError("\(modelName) does not support ACE-Step adapters or stem extraction.")
-        }
-        if shift != nil
-            || inferMethod != nil
-            || samplerMode != nil
-            || guidanceMode != nil
-            || cfgIntervalStart != nil
-            || cfgIntervalEnd != nil
-            || velocityNormThreshold != nil
-            || velocityEMAFactor != nil
-        {
-            throw ValidationError(
-                "ACE-Step scheduler controls do not apply to \(modelName)."
-            )
-        }
-        if let candidateCount, candidateCount != 1 {
-            throw ValidationError("\(modelName) currently supports one candidate per invocation.")
-        }
-        if keepCandidates || dawBundle != nil || lrcOutput != nil {
-            throw ValidationError("Candidate, DAW-bundle, and LRC export are not yet available for \(modelName).")
-        }
-        if checkpointsRoot != nil
-            || turboSubdirectory != "acestep-v15-turbo"
-            || vaeSubdirectory != "vae"
-            || textSubdirectory != nil
-            || adapterKind != .auto
-        {
-            throw ValidationError("ACE-Step component-layout options do not apply to \(modelName).")
-        }
-        if quality != nil
-            || audioCoverStrength != 1
-            || coverNoiseStrength != 0
-            || retakeSeed != nil
-            || retakeVariance != 0
-            || vocalLanguage != "en"
-            || instruction != "Fill the audio semantic mask based on the given conditions:"
-        {
-            throw ValidationError("ACE-Step quality, cover, retake, language, and instruction options do not apply to \(modelName).")
-        }
-        if repaintStartSeconds != 0
-            || repaintEndSeconds != -1
-            || chunkMaskMode != .auto
-            || repaintMode != .balanced
-            || repaintStrength != 0.5
-            || sourceCaption != nil
-            || !sourceLyrics.isEmpty
-            || flowEditNMin != 0
-            || flowEditNMax != 1
-            || flowEditNAverage != 1
-        {
-            throw ValidationError("ACE-Step repaint and flow-edit controls do not apply to \(modelName).")
-        }
-        if bpm != nil
-            || keyscale != nil
-            || timesignature != nil
-            || metadataDuration != nil
-            || metadataLanguage != nil
-            || lmTopK != 0
-            || lmTopP != 0.9
-            || lmTemperature != 0.85
-            || lmRepetitionPenalty != 1
-            || lmCFGScale != 2
-            || lmNegativePrompt != "NO USER INPUT"
-            || noLMCaptionRewrite
-        {
-            throw ValidationError("ACE-Step metadata aliases and LM sampling controls do not apply to \(modelName); put musical details in the caption.")
-        }
-        if noTiledVAE
-            || vaeChunkSize != 512
-            || vaeOverlap != 64
-            || magentaTemperature != 1
-            || magentaStyleConditioning != .streaming
-            || magentaTopK != 100
-            || magentaCFGMusicCoCa != 3
-            || magentaCFGNotes != 5
-            || magentaCFGDrums != 1
-            || magentaDrumless
-            || magentaUnmaskWidth != 0
-            || magentaSeedRotation != 0
-            || magentaPrefillSilence
-            || magentaPrefillDuration != 1.64
-        {
-            throw ValidationError("ACE-Step VAE and Magenta RT2 controls do not apply to \(modelName).")
-        }
     }
 
     private func candidateOutputURL(
@@ -1640,7 +1533,7 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     private func runMagentaRT2() async throws {
-        try validateMagentaRT2Options()
+        _ = try magentaControls()
 
         let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-magenta-rt2", defaultExtension: "wav")
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -1692,47 +1585,6 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         print(outputURL.path)
         try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL), enabled: receipt)
-    }
-
-    private func validateMagentaRT2Options() throws {
-        if !lyrics.isEmpty || lyricsFile != nil {
-            throw ValidationError("Magenta RT2 does not support --lyrics or --lyrics-file. Put musical direction in the prompt.")
-        }
-        if useLM {
-            throw ValidationError("Magenta RT2 does not support --use-lm; that option is ACE-Step only.")
-        }
-        if noLM {
-            throw ValidationError("Magenta RT2 does not support --no-lm; that option is ACE-Step only.")
-        }
-        if taskType != .textToMusic {
-            throw ValidationError("Magenta RT2 does not support --task-type; that option is ACE-Step only.")
-        }
-        if trackName != nil
-            || completeTrackClasses != nil
-            || nonCover
-            || sourceAudio != nil
-            || coverNoiseStrength != 0.0
-            || !referenceAudio.isEmpty
-        {
-            throw ValidationError("Magenta RT2 does not support ACE-Step cover/extract/lego options.")
-        }
-        if seed != nil {
-            throw ValidationError("Magenta RT2 uses --seed-rotation instead of --seed.")
-        }
-        if steps != nil
-            || shift != nil
-            || inferMethod != nil
-            || samplerMode != nil
-            || guidanceScale != nil
-            || guidanceMode != nil
-            || cfgIntervalStart != nil
-            || cfgIntervalEnd != nil
-            || velocityNormThreshold != nil
-            || velocityEMAFactor != nil
-        {
-            throw ValidationError("Magenta RT2 does not use ACE-Step diffusion or guidance options.")
-        }
-        _ = try magentaControls()
     }
 
     private func magentaControls() throws -> MagentaRT2Controls {

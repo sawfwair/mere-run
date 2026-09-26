@@ -716,6 +716,7 @@ struct StudioAnalyzeResultPanel: View {
 
 /// What was asked, and the settings it ran with.
 struct StudioAnalyzePromptPanel: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     let item: StudioLibraryItem
     @Environment(\.studioModelTitles) private var titles
 
@@ -725,7 +726,7 @@ struct StudioAnalyzePromptPanel: View {
 
     /// The run's own chips, capitalized the way the board draws them.
     private var chips: [String] {
-        StudioFeedChips.chips(for: item, titles: titles).map { chip in
+        StudioFeedChips.chips(for: item, titles: titles, source: scopeSource).map { chip in
             guard let first = chip.first else { return chip }
             return first.uppercased() + chip.dropFirst()
         }

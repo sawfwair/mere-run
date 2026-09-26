@@ -16,7 +16,8 @@ extension ManagedModelCatalog {
             category: .textChat,
             installShape: .directoryRoot,
             validationKind: .hfTextChat,
-            runtimeAutoDownloadAllowed: false
+            runtimeAutoDownloadAllowed: false,
+            defaultCLICommands: ["text chat"]
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4",
@@ -279,7 +280,7 @@ extension ManagedModelCatalog {
             upstreamRevision: Q35Resources.q36NanoUpstreamRevision,
             validationKind: .q35,
             estimatedDownloadBytes: 24 * 1_073_741_824,
-            defaultCLICommands: ["chat", "api serve"],
+            defaultCLICommands: ["text chat", "api serve"],
             apiProfile: .q36(contextWindow: Q35Resources.defaultContextLength)
         ),
         ManagedModelSpec(
@@ -535,7 +536,7 @@ extension ManagedModelCatalog {
             upstreamRevision: Q35Resources.ornith9BUpstreamRevision,
             validationKind: .q35,
             estimatedDownloadBytes: Q35Resources.ornith9BEstimatedDownloadBytes,
-            defaultCLICommands: ["chat", "api serve", "agent start"],
+            defaultCLICommands: ["text chat", "api serve", "agent start"],
             apiProfile: .q36(
                 contextWindow: Q35Resources.defaultContextLength,
                 fixedReasoning: true
@@ -574,7 +575,7 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Q35Resources.ornith35BMLX6BitEstimatedDownloadBytes,
-            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            defaultCLICommands: ["text chat", "api serve", "agent start", "model benchmark code"],
             companionModelIDs: [Q35Resources.ornith35BMTPModelId],
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
@@ -591,7 +592,7 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Q35Resources.ornith35BMLX8BitEstimatedDownloadBytes,
-            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            defaultCLICommands: ["text chat", "api serve", "agent start", "model benchmark code"],
             companionModelIDs: [Q35Resources.ornith35BMTPModelId],
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
@@ -608,7 +609,7 @@ extension ManagedModelCatalog {
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Q35Resources.ornith35BMLXEstimatedDownloadBytes,
-            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            defaultCLICommands: ["text chat", "api serve", "agent start", "model benchmark code"],
             companionModelIDs: [Q35Resources.ornith35BMTPModelId],
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
@@ -710,7 +711,7 @@ extension ManagedModelCatalog {
             upstreamRevision: DeepseekV4FlashResources.defaultRevision,
             validationKind: .deepseekV4FlashIMatrixGGUF,
             estimatedDownloadBytes: DeepseekV4FlashResources.defaultGGUFByteCount,
-            defaultCLICommands: ["api serve", "agent"],
+            defaultCLICommands: ["api serve", "agent start"],
             apiProfile: .deepseekV4Flash()
         ),
         ManagedModelSpec(

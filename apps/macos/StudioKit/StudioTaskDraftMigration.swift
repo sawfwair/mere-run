@@ -46,7 +46,9 @@ package enum StudioTaskDraftMigration {
         let templates = task.variantTemplates
         let pages = templates.compactMap { template in
             pageDraft(for: template.id, task: task, in: sessions).map {
-                StudioTaskDraft(templateID: template.id, form: StudioConsoleCommand.seed(template: template, draft: $0))
+                // A page's saved draft names a managed model or a folder its page chose; the
+                // import keeps every value and scopes nothing, so the contract alone reads it.
+                StudioTaskDraft(templateID: template.id, form: StudioConsoleCommand.seed(template: template, draft: $0, source: .contract))
             }
         }
         guard let first = templates.first, !pages.isEmpty else { return nil }

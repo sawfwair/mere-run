@@ -3,11 +3,12 @@ import MereRunContract
 
 extension CommandTemplate {
     /// Both preparation and final job admission validate the same effective command.
-    package func validationMessage(for draft: CommandDraft, execution: StudioExecution?) -> String? {
+    package func validationMessage(for draft: CommandDraft, execution: StudioExecution?, source: StudioScopeSource) -> String? {
         if let execution {
-            return execution.validationMessage ?? StudioConsoleCommand.connectionValidationMessage(for: id, draft: draft)
+            return execution.validationMessage(source: source)
+                ?? StudioConsoleCommand.connectionValidationMessage(for: id, draft: draft)
         }
-        return validationMessage(for: draft)
+        return validationMessage(for: draft, source: source)
     }
 }
 
@@ -26,9 +27,40 @@ package struct StudioExecution: Codable, Equatable {
         templateID.capability.map { StudioConsoleCommand.seed(capability: $0, arguments: arguments) }
     }
 
-    package var validationMessage: String? {
+    /// The form's checks, then the CLI gate's own sentence for exactly these arguments.
+    package func validationMessage(source: StudioScopeSource) -> String? {
         guard let capability = templateID.capability, let form else { return nil }
-        return StudioConsoleCommand.validationMessage(for: capability, draft: form)
+        return StudioConsoleCommand.validationMessage(
+            for: capability, draft: form,
+            launching: source.scope(capability: capability, commandLine: arguments)
+        )
+    }
+
+    /// The same command without the options the model it runs does not take (`StudioOptionScopes
+    /// .filtered`): a Library row recorded before its model's options were scoped replays as the
+    /// model runs today, rather than as a command the CLI refuses.
+    package func scoped(source: StudioScopeSource) -> StudioExecution {
+        guard let capability = source.capability(for: templateID) else { return self }
+        let scope = source.scope(capability: capability, commandLine: arguments)
+        return StudioExecution(templateID: templateID, arguments: StudioOptionScopes.filtered(arguments, scope: scope))
+    }
+
+    /// What `scoped(source:)` leaves out, said the way the scope note says it: the options this
+    /// command carries that the model it runs does not take, or takes with another value. nil
+    /// when it runs the command whole.
+    package func rescopeNotice(source: StudioScopeSource) -> StudioScopeNotice? {
+        guard let capability = source.capability(for: templateID) else { return nil }
+        let scope = source.scope(capability: capability, commandLine: arguments)
+        guard let family = scope.family else { return nil }
+        let carried = Set(scope.invocation.values.keys)
+        let dropped = scope.withheld(capability.options.map(\.flag).filter(carried.contains))
+        let labels = capability.options.filter { dropped.contains($0.flag) }.map(\.label)
+        guard !labels.isEmpty else { return nil }
+        return StudioScopeNotice(
+            kind: .unused,
+            title: "Run again left out \(labels.joined(separator: ", ")): \(family.title) doesn't take \(labels.count == 1 ? "it" : "them").",
+            details: ["The Library keeps the command as it was recorded."]
+        )
     }
 
     /// Projects fields used by history and artifact discovery. The vector remains authoritative:
@@ -105,11 +137,22 @@ extension CommandDraft {
 }
 
 package enum StudioLibraryReplay {
-    package static func request(for item: StudioLibraryItem, variationSeed: String? = nil) -> StudioRunRequest? {
+    /// What running `item` again leaves out of its recorded command (`StudioExecution
+    /// .rescopeNotice`), for the surface that ran it to show; nil when nothing is left out.
+    package static func notice(for item: StudioLibraryItem, source: StudioScopeSource) -> StudioScopeNotice? {
+        guard let templateID = item.templateID, let arguments = item.commandArguments else { return nil }
+        return StudioExecution(templateID: templateID, arguments: arguments).rescopeNotice(source: source)
+    }
+
+    package static func request(
+        for item: StudioLibraryItem,
+        variationSeed: String? = nil,
+        source: StudioScopeSource
+    ) -> StudioRunRequest? {
         guard let templateID = item.templateID, let template = CommandCatalog.template(id: templateID),
               let stored = item.commandDraft else { return nil }
         let original = StudioExecution(templateID: templateID,
-                                       arguments: item.commandArguments ?? template.arguments(from: stored))
+                                       arguments: item.commandArguments ?? template.arguments(from: stored, source: source))
         let draft = original.project(onto: stored)
         // A command whose file follows its `--format` (a JSON transcription, an RTTM diarization)
         // wrote the recorded file's extension, not the template's default one.
@@ -129,7 +172,7 @@ package enum StudioLibraryReplay {
         let namedURL = URL(fileURLWithPath: namedOutput)
         let output = namedOutput.isEmpty ? "" : namedURL.deletingPathExtension().path + "-"
             + UUID().uuidString.prefix(8) + (namedURL.pathExtension.isEmpty ? "" : "." + namedURL.pathExtension)
-        let execution = original.replay(outputPath: output, seed: variationSeed)
+        let execution = original.replay(outputPath: output, seed: variationSeed).scoped(source: source)
         return StudioRunRequest(mode: item.mode, templateID: templateID, template: template,
                                 draft: stored.withoutSecrets, execution: execution, parentID: item.id)
     }
@@ -159,22 +202,22 @@ package enum StudioLibraryDraftRestoration {
     /// afresh rather than written over this one's files — and, for a trainer's preflight or dry
     /// run, minus the check-only switches. nil for a thread or a row with no recorded command.
     /// The workspace reads the same form the Command view edits.
-    package static func taskDraft(from item: StudioLibraryItem) -> StudioTaskDraft? {
+    package static func taskDraft(from item: StudioLibraryItem, source: StudioScopeSource) -> StudioTaskDraft? {
         guard !item.isConversation, let templateID = item.templateID,
               let recorded = item.commandDraft, let template = CommandCatalog.template(id: templateID),
               let capability = templateID.capability else { return nil }
-        let arguments = item.commandArguments ?? template.arguments(from: recorded)
+        let arguments = item.commandArguments ?? template.arguments(from: recorded, source: source)
         let draft = StudioTaskDraft(templateID: templateID, form: StudioConsoleCommand.seed(capability: capability, arguments: arguments))
         // A trainer's preflight row restores as the training run it checked.
         return StudioTrainingRun.withoutCheckSwitches(draft).withoutDestinations()
     }
 
     /// nil exactly when `canRestore` is false.
-    package static func draft(from item: StudioLibraryItem, baseline: StudioDraft) -> StudioDraft? {
+    package static func draft(from item: StudioLibraryItem, baseline: StudioDraft, source: StudioScopeSource) -> StudioDraft? {
         guard canRestore(item), let templateID = item.templateID, let recorded = item.commandDraft,
               let template = CommandCatalog.template(id: templateID), let capability = templateID.capability
         else { return nil }
-        let arguments = item.commandArguments ?? template.arguments(from: recorded)
+        let arguments = item.commandArguments ?? template.arguments(from: recorded, source: source)
         let form = StudioConsoleCommand.seed(capability: capability, arguments: arguments)
         var draft = baseline
         form.applyingChanges(from: StudioConsoleDraft(), to: &draft, mode: item.mode, templateID: templateID)

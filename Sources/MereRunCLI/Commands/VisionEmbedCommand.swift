@@ -146,7 +146,7 @@ struct VisionEmbed: AsyncParsableCommand {
             )
             try data.write(to: outputURL, options: .atomic)
         }
-        guard let json = String(data: data, encoding: .utf8) else {
+        guard let json = String(data: try encoder.encode(GateWarned(payload)), encoding: .utf8) else {
             throw ValidationError("Failed to encode embedding output as UTF-8.")
         }
         print(json)

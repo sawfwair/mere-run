@@ -1,5 +1,6 @@
 import Foundation
 import MediaIO
+import MereRunContract
 import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore
@@ -184,6 +185,26 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
                 "Gemma 4 VLM LoRA training currently requires --batch-size 1"
             )
         }
+    }
+
+    /// The gate refuses the batch size before the dataset is read, and says when the reasoning
+    /// effort reaches no trainer but Inkling's.
+    func testTrainLoRAGateScopesBatchSizeAndReasoningEffort() throws {
+        let gate = { (arguments: [String]) in
+            try XCTUnwrap(CLICapabilityGate.evaluate(
+                commandLine: ["text", "train-lora", "--data", "d.jsonl", "--output", "a.safetensors"] + arguments
+            )).report
+        }
+        XCTAssertEqual(
+            try gate(["--model", Gemma4Resources.visionTwelveBModelId, "--batch-size", "2"]).violations,
+            ["--batch-size 2 is not supported by Gemma 4 12B vision; it runs 1. Remove --batch-size or pass 1."]
+        )
+        XCTAssertEqual(
+            try gate(["--reasoning-effort", "0.2"]).warnings,
+            ["--reasoning-effort has no effect with Gemma 4. It applies to Inkling-Small."]
+        )
+        XCTAssertEqual(try gate(["--model", InklingResources.modelID, "--reasoning-effort", "0.2"]).warnings, [])
+        XCTAssertEqual(try gate(["--model", "text-chat-laguna-s-2-1"]).source, .excluded)
     }
 
     func testInklingReceptivityFixturesAreHeldOutParaphrases() throws {

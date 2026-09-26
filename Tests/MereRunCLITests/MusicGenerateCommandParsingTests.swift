@@ -230,22 +230,24 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             ["--temperature", "0.8"],
             ["--checkpoints-root", "/tmp/checkpoints"],
         ]
-
+        let base = ["music", "generate", "cinematic synth-pop", "--model", MiniMaxMusic3Resources.modelID, "--instrumental"]
         for arguments in rejectedArguments {
-            let command = try MusicGenerate.parse(
-                [
-                    "cinematic synth-pop",
-                    "--model", MiniMaxMusic3Resources.modelID,
-                    "--instrumental",
-                ] + arguments
-            )
-            XCTAssertThrowsError(
-                try command.validateMiniMaxMusic3Options(
-                    explicitDurationSeconds: nil
-                ),
-                arguments.joined(separator: " ")
-            )
+            let report = try XCTUnwrap(CLICapabilityGate.evaluate(commandLine: base + arguments)).report
+            XCTAssertEqual(report.family, "minimax-music3", arguments.joined(separator: " "))
+            XCTAssertEqual(report.violations.count, 1, arguments.joined(separator: " "))
+            XCTAssertTrue(report.violations.allSatisfy { $0.contains(arguments[0]) && $0.contains("MiniMax Music 3") })
         }
+
+        // An ACE-Step or Magenta option at its own default ran before and still runs; it only warns.
+        let defaults = try XCTUnwrap(CLICapabilityGate.evaluate(
+            commandLine: base + ["--lm-temperature", "0.85", "--vae-chunk-size", "512", "--temperature", "1"]
+        )).report
+        XCTAssertEqual(defaults.violations, [])
+        XCTAssertEqual(defaults.warnings, [
+            "--lm-temperature has no effect with MiniMax Music 3. It applies to ACE-Step Turbo, ACE-Step SFT and ACE-Step Base.",
+            "--vae-chunk-size has no effect with MiniMax Music 3. It applies to ACE-Step Turbo, ACE-Step SFT and ACE-Step Base.",
+            "--temperature has no effect with MiniMax Music 3. It applies to Magenta RealTime 2.",
+        ])
     }
 
     func testMusicGenerateParsesModelAndAdvancedOverrides() throws {

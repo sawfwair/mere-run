@@ -67,7 +67,7 @@ extension ManagedModelCatalog {
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 15_980_131_711,
-            defaultCLICommands: ["image generate"]
+            defaultCLICommands: ["image generate", "image train-lora"]
         ),
         ManagedModelSpec(
             // FLUX.2 [klein] Base 9B — undistilled bf16 9B transformer for LoRA/fine-tuning.
@@ -398,7 +398,7 @@ extension ManagedModelCatalog {
             validationKind: .krea2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Krea2RawResources.estimatedDownloadBytes,
-            defaultCLICommands: ["image train-lora"]
+            defaultCLICommands: ["image generate", "image train-lora"]
         ),
         ManagedModelSpec(
             id: Krea2Resources.modelId,
@@ -486,7 +486,7 @@ extension ManagedModelCatalog {
             validationKind: .ideogram4SDNQ,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Ideogram4Resources.estimatedDownloadBytes,
-            defaultCLICommands: []
+            defaultCLICommands: ["image generate"]
         ),
     ]
 

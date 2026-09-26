@@ -14,6 +14,25 @@ selection memory, result focus, command overrides, and persistence. Keep session
 values. `CommandTemplate.validationMessage(for:execution:)` applies the same
 validation during preparation and final job admission.
 
+`StudioOptionScope` is the one answer to "which options does this run's model
+take". Build it through `StudioScopeSource` from the argv a surface would
+launch (`scope(mode:draft:)`, `scope(capability:form:)`), never from a model
+name. It resolves the family with the contract, asks `StudioModelIdentifying`
+about the whole command line when only the CLI can settle it (a model the
+contract doesn't list, an `identified_models` id, a machine-chosen default, or a
+`routed_by_command` capability), and hands every surface `options(forFamily:)`.
+Builders emit everything the draft holds; `CommandTemplate.arguments(from:)`
+scopes it with `StudioOptionScopes.filtered`, which drops what the family does
+not take or runs by default. Drafts keep hidden values;
+`StudioDraft.scoped(to:mode:)` and `StudioConsoleDraft.scoped(to:)` reset them in
+the copy that validates and launches. Each `MereRunController` owns a
+`StudioModelIdentityStore` that caches its `catalog resolve` answers by the
+tokens that can change the family, a folder by its path and modification date,
+and hands out `scopeSource`; there is no process-wide store. Every surface,
+validation, and argv builder takes the source it reads as a parameter (views
+read `studioScopeSource`, which the app sets from the controller). Tests pass
+`StudioScopeSource.contract` or a source with fixed identities.
+
 `StudioTaskRunner` is the one submission path for every task run that is not a
 conversation turn: it names the destination
 (`StudioOutputLocation.destination(for:)`), applies Command edits, validates,

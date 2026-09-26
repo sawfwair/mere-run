@@ -53,6 +53,17 @@ mere.run vision ocr --help
 - `--temperature`: lower is more deterministic.
 - `--quiet`, `-q`: output only OCR text.
 
+Each backend reads only its own options. `--model` is LightOn's (also read by
+`--compare`), `--infinity-*` options are Infinity-Parser2's, and the GLM options
+are GLM-OCR's. The external-runtime options (`--infinity-parser-cli`,
+`--infinity-backend`, `--infinity-api-url`, `--infinity-api-key`,
+`--infinity-batch-size`, `--infinity-model-cache-dir`) apply only to
+`--infinity-runtime external`, and `--max-tokens` and `--temperature` only to
+the native runtimes. An option the selected backend doesn't read prints a
+warning that it has no effect. Invalid `--infinity-*` values still fail with any
+backend. A LightOn id passed as `--infinity-model`, or an Infinity id passed as
+`--model`, stops before loading and names the option to use.
+
 ## Usage Patterns
 
 - Use `--backend lighton` for the small managed OCR path.

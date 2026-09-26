@@ -6,11 +6,152 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- `speech transcribe --task translate` now translates. It always ran
+  Qwen3-ASR, but the task never reached the prompt, so it returned a
+  transcript in the spoken language. The prompt now asks Qwen3-ASR for an
+  English translation after the audio, and the answer opens in English, for
+  files, streams, and the API's `task=translate`. `--language` has no effect
+  with `--task translate`, and the CLI warns about it. Transcription prompts
+  are unchanged.
+- Add `speech synthesize --speaker` for the Qwen3-TTS CustomVoice checkpoint's
+  named speakers (`aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`,
+  `sohee`, `uncle_fu`, `vivian`), in style mode. The name is checked against
+  the checkpoint's `config.json` before the weights load, so a local
+  CustomVoice checkpoint can name its own. With a speaker, `--voice` is an
+  optional delivery instruction and the default description is not sent;
+  `dylan` and `eric` take their Chinese dialects as upstream does. Other
+  checkpoints and clone mode ignore `--speaker` with a warning. Studio's
+  Voice ▸ Speak inspector offers the speakers when CustomVoice is selected.
 - Parse LFM2.5 tool calls in the checkpoint's native format and preserve that
   format in API conversation history. This fixes tool-call continuation for
   LFM2.5 text and vision models.
 - Accept base64 image data URLs in Qwen-family vision chat requests, including
   Ornith screenshots sent through the local OpenAI-compatible API.
+- Check every model-loading command line against the capability contract
+  before machine admission, model resolution, or download. The contract now
+  declares the runtime families behind each command (their models, the flags
+  that select them, the defaults, and the managed models that can't run the
+  command) and, for each option, which families use it. This is not a
+  breaking change: no run that worked before is refused, though a few
+  `--preflight` checks now stop earlier (see below).
+  - A managed model that can't run the command stops at once with the reason
+    and the command to use, for example `music analyze --model
+    music-acestep-lm-4b` or a Woosh VFlow folder given to `sfx generate`.
+  - An option the selected model already refused, often only after loading
+    it, now stops before anything loads, with one message that names the
+    model and the models that take the option: `--image` on a text-only chat
+    model, `--lora` on Muse Glimmer, a Klein-only option on the Krea 2
+    trainer, `--latency 1.04` on Sortformer, `--task-type extract` on
+    ACE-Step Turbo, `video generate --skip-stage-2` on a full LTX
+    checkpoint without source `--audio` (with it, the audio-to-video run
+    drops the flag, which only warns), or `--skip-stage-2` and
+    `--video-conditioning` on the merged `video-ltx-av` checkpoint with
+    `--output-mode audio-video` or its compatibility spelling `--variant
+    unified-av` (its video-only run drops them, which only warns).
+  - An option a model accepts but never reads now prints a warning that it
+    has no effect, and the run continues: `--cfg` on Krea 2, `--top-k` on
+    Gemma 4, `--voice` in clone mode, `--max-tokens` on Parakeet, or
+    `video generate --video-conditioning` with source `--audio`, which the
+    audio-to-video run drops on LTX-2.5 Full too. A value
+    the command reads as not passed only warns: an empty text value such as
+    `--negative-prompt ""`, a blank `text chat --image`, or `--stems ","`.
+    `--video-decoder diffusion` does not warn on an LTX-2.5 Distilled folder
+    that holds the diffusion decoder, including the managed
+    `video-ltx25-distilled-bf16` install with the decoder added by hand.
+    Warnings print once the command line has parsed and validated, never
+    beside a validation error, and not under `--quiet`. A command that prints
+    a JSON object on stdout (`--json`, `--preflight --json`, `--dry-run
+    --json`, `--receipt`, or a JSON result such as `music analyze`) adds them
+    as a `warnings` array of strings, under `--quiet` too; with none the key
+    is left out and the JSON is unchanged.
+  - The check reads a command line the way the parser does: the last of a
+    repeated single-value option, grouped short options such as `-qm`,
+    `-m=<id>`, and the spellings a command normalizes, such as
+    `--kv-quant-scheme UNIFORM` or `--input-rate 016000`. It skips `--help`,
+    `-help`, `--experimental-dump-help`, `--version`, and listing flags such
+    as `speech listen --list-devices`.
+  - `api serve` applies the same check to chat, image, video, speech,
+    transcription, and diarization requests before anything loads. A field
+    the selected model refuses returns HTTP 400 naming the field, including
+    ones that used to fail only after loading, such as `steps` 8 on Qwen-Image-Edit
+    Lightning or an image sent to a text-only Qwen3.6 model. A field it
+    ignores, such as `guidance_scale` on Krea 2 or `top_p` on DiffusionGemma,
+    adds an `x-mere-warning` response header; response bodies are unchanged,
+    and no request the server ran before is refused.
+  - A refusal exits with status 64 and the usage line, like the commands' own
+    option errors. It comes before any preflight work, so a refused
+    `--preflight` run prints no report, and under `--json` no JSON. That
+    includes a few preflights that used to pass because the command checked
+    the option only in a real run: `--negative-prompt` for a Woosh model in
+    `sfx video generate`, a `video generate` model given to `video animate`,
+    and `--synthetic-samples` for a FLUX.2 Klein base in `image train-lora`.
+- Fix runs the new checks surfaced. `text chat --seed` is now accepted on the
+  Qwen family (Qwen3.6, Bonsai, Ornith, and Qwen3.8), where the CLI refused
+  it, and reaches its sampler; `--kv-bits 4` or `8` now quantizes the Inkling
+  and LFM2.5 KV cache. `speech transcribe --stream` routes like a file: it
+  runs translation on Qwen3-ASR where it refused an explicit Parakeet backend,
+  loads a named Qwen3-ASR model with the right loader, and sends a language
+  Parakeet doesn't recognize to Qwen3-ASR, while a local model folder keeps
+  its own backend. `--lora` on an LFM2.5 checkpoint other than the 8-bit A1B,
+  and `--h3-adapter` on the legacy 4-bit MiniMax-H3 FL2VA checkpoint, now
+  stop before loading instead of after. `music generate --progress-json`
+  reports ACE-Step's stages. A Krea recipe on a FLUX.2 Klein base warns that
+  it runs half-applied.
+- Add `mere.run catalog resolve [--json] -- <command line>`, which reports the
+  runtime family and model a command line runs, the options it would reject,
+  and the ones that would have no effect, without loading anything. It answers
+  what only the CLI knows: a local model folder, a managed model that runs
+  whatever checkpoint is installed (such as `video-ltx-av` or an ACE-Step
+  override root), the default this machine picks for `geo tessera`, and
+  `speech transcribe`'s language routing. `mere.run catalog` keeps printing the
+  capability contract; `mere.run catalog show` is the same command.
+- Add to `catalog --json`, additively: every spelling of each option, such as
+  `-m` for `--model`, as `aliases`; the per-capability `routing` (families,
+  `default_models`, `excluded_models` with an optional `severity`,
+  `identified_models`, `listing_flags`, and the `selectors_override_model` and
+  `routed_by_command` flags, with a numeric `minimum` among a condition's
+  tests); and per option, `families`, `ignored_by`, `family_rules` (with the
+  `when` conditions under which a rule holds),
+  `choice_spellings` (with `numeric`), `blank_reads_as_omitted`,
+  `list_separator`, and `overridden_by`.
+  `schema_version` stays 1.
+- Scope Studio to the model a run uses. The composer's fields, chips, and
+  attachment wells, the inspector, the task pages, the Command view, and the
+  Command Console show, validate, and send only the options the model's
+  runtime family uses, as the capability contract declares them, and leave off
+  values the model runs by default. A value the model doesn't use stays in the
+  draft and comes back when you switch models; a note beside the controls
+  lists it, once per window. A value the model fixes, such as FastH3's 5 steps,
+  shows locked. Model pickers offer every model that runs the command,
+  including the ones whose family depends on the installed checkpoint
+  (`video-ltx-av`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`) and each
+  command's default models, and never one the command excludes; a model the
+  command excludes blocks the run with its reason. Where only the CLI can tell
+  the family (a local folder, an install-dependent model, a machine-chosen
+  default, or transcription's language routing), Studio asks
+  `mere.run catalog resolve` about the whole command line and shows every
+  option, locking none, until it knows. A run started before the first answer
+  for a model the contract can't place asks you to run it again; otherwise it
+  runs as the contract, or the last answer for the same routing flags, places
+  it. Studio asks once typing stops, reads folder dates
+  off the main thread, retries a failed answer, asks again after a model is
+  pulled or removed, and never passes API keys to that helper process. Run
+  again and Vary say which recorded options they left out for the model the
+  row runs today, and the Command Console writes negative values as
+  `--flag=-1`, which the CLI accepts. A music separation model's chunk
+  overlap steps through the values that model takes, and the MiniMax-H3
+  inspector no longer rewrites the draft's size, frame rate, and inputs.
+- List the commands managed models run: `vision track`, `vision track-live`,
+  and `video prepare-masks` for SAM 3.1, `music analyze` and
+  `music train-adapter` for every ACE-Step checkpoint, `video dub-it` for both
+  LTX-2.5 checkpoints, `video export-latents` for the merged LTX model,
+  `speech listen` for Qwen3-ASR, `speech diarize-live` for Nemotron 3
+  Diarization, `image generate` for Ideogram 4 and Krea 2 Raw,
+  `image train-lora` for the FLUX.2 Klein 4B base, `text chat` for Psi and the
+  Qwen and Ornith chat checkpoints, `agent start` for DeepSeek V4 Flash, and
+  `sfx clap score` for Woosh CLAP.
+- Document, in each command's guide and in the docs, which options each model
+  uses, which the CLI refuses before loading, and which only warn.
 
 ## 0.56.0 - 2026-09-24
 

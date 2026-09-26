@@ -31,12 +31,25 @@ private struct ParserHelp: Decodable {
         var flags: Set<String> {
             Set((names ?? []).filter { $0.kind == .long }.map { "--" + $0.name })
         }
+
+        /// Every spelling of the polarity `flag` belongs to: long, short, and single-dash long
+        /// names. An inverted Boolean's `--no-` names form the other polarity.
+        func spellings(sharing flag: String) -> Set<String> {
+            let all = Set((names ?? []).map(\.spelling))
+            guard kind == .flag else { return all }
+            let negative = all.filter { $0.hasPrefix("--no-") }
+            return negative.contains(flag) ? negative : all.subtracting(negative)
+        }
     }
 
     struct Name: Decodable {
         enum Kind: String, Decodable { case long, short, longWithSingleDash }
         let kind: Kind
         let name: String
+
+        var spelling: String {
+            (kind == .long ? "--" : "-") + name
+        }
     }
 }
 
@@ -82,6 +95,9 @@ private func parserCommands() throws -> [String: ParserHelp.Command] {
         for option in capability.options {
             let parsed = try #require(options.first { $0.flags.contains(option.flag) })
             let context = "\(capability.id) \(option.flag)"
+            // The invocation reader folds every spelling into the canonical flag, so the
+            // contract must know each one ArgumentParser accepts.
+            #expect(Set(option.spellings) == parsed.spellings(sharing: option.flag), "\(context): aliases")
             #expect(option.required == !parsed.isOptional, "\(context): required")
             #expect(option.repeatable == parsed.isRepeating, "\(context): repeatable")
             #expect((option.kind == .boolean) == (parsed.kind == .flag), "\(context): flag or value")
@@ -95,6 +111,44 @@ private func parserCommands() throws -> [String: ParserHelp.Command] {
         if let flag = capability.output.flag {
             #expect(parsed.contains(flag), "\(capability.id) output flag is not parsed: \(flag)")
         }
+    }
+}
+
+/// ArgumentParser enumerates a `CaseIterable` enum's values and takes them as written. A `String`
+/// or a raw-value enum it does not enumerate reads the value its own way (`--kv-quant-scheme`
+/// trims and lowercases, `--input-rate` parses an integer). Wherever the contract compares such a
+/// choice (a family rule's values, a selector, a default-model condition), the option declares how
+/// the CLI reads it, so the gate never refuses a spelling the CLI takes.
+@Test func everyComparedChoiceArgumentParserDoesNotEnumerateDeclaresItsSpellings() throws {
+    let commands = try parserCommands()
+    var compared = 0
+    for capability in MereRunCapabilityCatalog.document.commands {
+        guard let routing = capability.routing, let command = commands[capability.id] else { continue }
+        let conditions = routing.families.flatMap(\.selectors) + routing.defaultModels.flatMap(\.whenAny)
+        for option in capability.options where option.kind == .choice {
+            let comparesValues = option.familyRules.contains { $0.values != nil }
+                || conditions.contains { $0.flag == option.flag && $0.values != nil }
+            let parsed = command.arguments?.first { $0.flags.contains(option.flag) }
+            guard comparesValues, parsed?.allValues == nil else { continue }
+            compared += 1
+            #expect(option.choiceSpellings != nil, "\(capability.id) \(option.flag): say how the CLI reads it")
+        }
+    }
+    #expect(compared >= 7, "the String-typed choices the gate compares")
+}
+
+/// An alias command takes exactly its capability's options, so the gate reads it as that
+/// capability.
+@Test func aliasCommandsTakeTheirCapabilitysOptions() throws {
+    let commands = try parserCommands()
+    for (alias, path) in CLICapabilityGate.aliasCommands {
+        let aliased = try #require(commands[alias.joined(separator: ".")], "\(alias)")
+        let capability = try #require(MereRunCapabilityCatalog.document.commands.first { $0.command == path })
+        let spellings = Set((aliased.arguments ?? []).filter { $0.kind != .positional && $0.shouldDisplay }
+            .flatMap { ($0.names ?? []).map(\.spelling) }).subtracting(["--help", "-h", "--version"])
+        #expect(spellings == Set(capability.options.flatMap(\.spellings)), "\(alias)")
+        let report = try #require(CLICapabilityGate.evaluate(commandLine: alias + ["a.png"])).report
+        #expect(report.capability == capability.id && report.family != nil, "\(alias): \(report)")
     }
 }
 
@@ -137,10 +191,19 @@ private let positionalNameAliases: [String: String] = [
 }
 
 @Test func catalogCommandParsesASelectedCapability() throws {
-    let command = try CatalogCommand.parse(["video.generate", "--json"])
+    let command = try #require(try CatalogCommand.parseAsRoot(["video.generate", "--json"]) as? CatalogShowCommand)
     #expect(command.id == "video.generate")
     #expect(command.json)
     #expect(MereRunCapabilityCatalog.command(id: command.id ?? "")?.id == "video.generate")
+}
+
+@Test func catalogResolveTakesTheCommandLineAfterTheTerminator() throws {
+    let command = try #require(
+        try CatalogCommand.parseAsRoot(["resolve", "--json", "--", "music", "analyze", "--model", "x"])
+            as? CatalogResolveCommand
+    )
+    #expect(command.json)
+    #expect(command.commandLine == ["music", "analyze", "--model", "x"])
 }
 
 /// Every public CLI leaf command must either be described by the shared
@@ -150,7 +213,7 @@ private let positionalNameAliases: [String: String] = [
 /// contract, and the app's inverse coverage test is keyed to the contract too,
 /// so an uncataloged command is invisible to both.
 let contractExemptCommandIDs: [String: String] = [
-    "catalog": "Emits the contract itself; shells compile against MereRunContract instead.",
+    "catalog.show": "Emits the contract itself; shells compile against MereRunContract instead.",
     "relay.serve": "Relay console owns the control plane. See apps/macos/README.md.",
     "executor.add.ssh": "Relay console owns executor profiles.",
     "executor.add.relay": "Relay console owns executor profiles.",

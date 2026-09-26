@@ -4,6 +4,7 @@ import SwiftUI
 
 /// A shared viewport makes a comparison about the output, with the changed settings beside it.
 struct StudioResultWorkspaceView: View {
+    @Environment(\.studioScopeSource) private var scopeSource
     let item: StudioLibraryItem
     let url: URL
     let items: [StudioLibraryItem]
@@ -129,7 +130,7 @@ struct StudioResultWorkspaceView: View {
     }
 
     private func differences(_ other: StudioLibraryItem) -> some View {
-        let differences = StudioResultComparison.differences(item, other)
+        let differences = StudioResultComparison.differences(item, other, source: scopeSource)
         return ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Changed settings").font(.headline)

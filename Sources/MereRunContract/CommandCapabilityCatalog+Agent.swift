@@ -14,7 +14,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--host", label: "API host", kind: .string),
             .init(flag: "--port", label: "API port", kind: .integer),
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .text)
     )
@@ -66,7 +66,7 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--skip-server", label: "Skip server", kind: .boolean),
             .init(flag: "--allow-unsupported", label: "Allow unsupported", kind: .boolean),
             .init(flag: "--no-bootstrap", label: "No bootstrap", kind: .boolean),
-            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+            .init(flag: "--quiet", aliases: ["-q"], label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .service)
     )

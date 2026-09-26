@@ -46,8 +46,8 @@ final class StudioConsoleDraftTests: XCTestCase {
     func testSeedingEveryTemplateRebuildsItsOwnCommand() throws {
         for template in CommandCatalog.templates {
             guard let capability = template.id.capability else { continue }
-            let expected = template.arguments(from: template.defaultDraft())
-            let draft = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
+            let expected = template.arguments(from: template.defaultDraft(), source: .contract)
+            let draft = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft(), source: .contract)
             let rebuilt = StudioConsoleCommand.arguments(for: capability, draft: draft)
 
             XCTAssertEqual(
@@ -217,10 +217,10 @@ final class StudioConsoleDraftTests: XCTestCase {
     /// filled instead.
     func testASecretNeverReachesTheCommandLine() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .apiServe))
-        var draft = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft())
+        var draft = StudioConsoleCommand.seed(template: template, draft: template.defaultDraft(), source: .contract)
         draft["--api-key"] = .text("sk-not-in-argv")
 
-        let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: draft, seed: template.defaultDraft()))
+        let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: draft, seed: template.defaultDraft(), source: .contract))
         XCTAssertFalse(launch.arguments.contains("--api-key"))
         XCTAssertFalse(launch.arguments.contains("sk-not-in-argv"))
         XCTAssertEqual(launch.commandDraft.apiKey, "sk-not-in-argv")
@@ -237,11 +237,11 @@ final class StudioConsoleDraftTests: XCTestCase {
         let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
         var draft = StudioConsoleDraft()
         XCTAssertNotNil(
-            StudioConsoleRun(template: template, draft: draft, seed: template.defaultDraft())?.validationMessage,
+            StudioConsoleRun(template: template, draft: draft, seed: template.defaultDraft(), source: .contract)?.validationMessage,
             "an empty command line cannot run"
         )
         draft.extraArguments = "model list --json"
-        let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: draft, seed: template.defaultDraft()))
+        let launch = try XCTUnwrap(StudioConsoleRun(template: template, draft: draft, seed: template.defaultDraft(), source: .contract))
         XCTAssertNil(launch.validationMessage)
         XCTAssertEqual(launch.arguments, ["model", "list", "--json"])
     }
@@ -249,7 +249,7 @@ final class StudioConsoleDraftTests: XCTestCase {
     /// A template that hands off to another product has no command to build.
     func testAnExternalTemplateHasNothingToLaunch() throws {
         let external = try XCTUnwrap(CommandCatalog.templates.first { $0.externalURL != nil })
-        XCTAssertNil(StudioConsoleRun(template: external, draft: StudioConsoleDraft(), seed: CommandDraft()))
+        XCTAssertNil(StudioConsoleRun(template: external, draft: StudioConsoleDraft(), seed: CommandDraft(), source: .contract))
     }
 
     /// A number a control wrote reaches the argv with every digit it has: the two-decimal chip
@@ -278,7 +278,7 @@ final class StudioConsoleDraftTests: XCTestCase {
         let template = try XCTUnwrap(CommandCatalog.template(id: .modelList))
         controller.select(template)
         let capability = try XCTUnwrap(template.id.capability)
-        var draft = StudioConsoleCommand.seed(template: template, draft: controller.draft)
+        var draft = StudioConsoleCommand.seed(template: template, draft: controller.draft, source: .contract)
         draft.extraArguments = "--json"
 
         let arguments = StudioConsoleCommand.arguments(for: capability, draft: draft)

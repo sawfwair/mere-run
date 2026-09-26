@@ -80,8 +80,9 @@ package enum StudioTaskSchema {
     /// Inputs group (`image dataset discover --root` among them) that is not an output, a model
     /// location, or a composite editor's flag. Accepted types come from the template's own
     /// `inputKind` for the primary input and from a per-flag table for the rest; a directory
-    /// option takes a folder.
-    package static func slots(for templateID: CommandTemplateID) -> [StudioAttachmentSlot] {
+    /// option takes a folder. With a scope, an option slot the model does not take is left out;
+    /// a file in it stays in the draft for when the user switches back.
+    package static func slots(for templateID: CommandTemplateID, scope: StudioOptionScope? = nil) -> [StudioAttachmentSlot] {
         guard let capability = templateID.capability, let template = CommandCatalog.template(id: templateID) else {
             return []
         }
@@ -114,7 +115,7 @@ package enum StudioTaskSchema {
         let excluded = outputFlags(for: capability).union(chosenOutputFlags).union(modelLocationFlags)
             .union(overrideFlags(for: templateID))
         var optionSlots: [StudioAttachmentSlot] = []
-        for option in capability.options where [.file, .directory].contains(option.kind) {
+        for option in scope?.options ?? capability.options where [.file, .directory].contains(option.kind) {
             guard StudioContractGroup(contractGroup: option.group) == .inputs, !excluded.contains(option.flag) else { continue }
             let types: [UTType] = option.kind == .directory ? [.folder] : acceptedTypes(forFlag: option.flag)
             optionSlots.append(StudioAttachmentSlot(
@@ -234,10 +235,16 @@ package enum StudioTaskSchema {
     }
 
     /// Every option of the draft's template the inspector and chips can edit, in contract order:
-    /// the variant first when the task has several templates, then the options minus the slots
-    /// the well owns, the destinations routing fills, and the prompt the composer shows.
-    package static func fields(for task: StudioTask, draft: StudioTaskDraft) -> [StudioContractField<StudioTaskDraft>] {
-        guard let capability = draft.capability else { return [] }
+    /// the variant first when the task has several templates, then the options the model the
+    /// draft runs takes (`StudioOptionScope`, narrowed to its family), minus the slots the well
+    /// owns, the destinations routing fills, and the prompt the composer shows.
+    package static func fields(
+        for task: StudioTask,
+        draft: StudioTaskDraft,
+        source: StudioScopeSource
+    ) -> [StudioContractField<StudioTaskDraft>] {
+        guard let scope = source.scope(for: draft) else { return [] }
+        let capability = scope.capability
         var fields: [StudioContractField<StudioTaskDraft>] = []
         if let variant = variantField(for: task) { fields.append(variant) }
         let slotFlags = Set(slots(for: draft.templateID).compactMap { slot -> String? in
@@ -246,10 +253,11 @@ package enum StudioTaskSchema {
             return nil
         })
         let hidden = hiddenFlags(for: capability).union(slotFlags)
+        let options = scope.options
         var prompt: String?
         if case .flag(let flag) = promptField(for: capability) { prompt = flag }
         var claimed: Set<StudioContractOverrideID> = []
-        for declared in capability.options where !hidden.contains(declared.flag) && declared.flag != prompt {
+        for declared in options where !hidden.contains(declared.flag) && declared.flag != prompt {
             // A model location the contract filed under Inputs (a `.directory` option) belongs
             // with the model it points at; a destination the user chooses belongs under Output.
             let option: MereRunCapabilityOption
@@ -263,13 +271,13 @@ package enum StudioTaskSchema {
             if let override = overrideID(forFlag: option.flag, templateID: draft.templateID) {
                 // A composite editor renders once, where the first of its flags is declared.
                 guard claimed.insert(override).inserted else { continue }
-                let owned = capability.options.filter { overrideID(forFlag: $0.flag, templateID: draft.templateID) == override }
+                let owned = options.filter { overrideID(forFlag: $0.flag, templateID: draft.templateID) == override }
                 fields.append(StudioContractField(
-                    option: option, bindings: owned.map { .flag($0.flag) }, overrideID: override
+                    option: option, bindings: owned.map { .flag($0.flag) }, overrideID: override, family: scope.family?.id
                 ))
                 continue
             }
-            fields.append(StudioContractField(option: option, bindings: [.flag(option.flag)]))
+            fields.append(StudioContractField(option: option, bindings: [.flag(option.flag)], family: scope.family?.id))
         }
         return fields
     }
@@ -303,13 +311,21 @@ package enum StudioTaskSchema {
     }
 
     /// The two to four essentials shown as chips under the prompt, in contract order.
-    package static func essentials(for task: StudioTask, draft: StudioTaskDraft) -> [StudioContractField<StudioTaskDraft>] {
-        fields(for: task, draft: draft).filter { $0.tier == .essential && $0.overrideID != .model }
+    package static func essentials(
+        for task: StudioTask,
+        draft: StudioTaskDraft,
+        source: StudioScopeSource
+    ) -> [StudioContractField<StudioTaskDraft>] {
+        fields(for: task, draft: draft, source: source).filter { $0.tier == .essential && $0.overrideID != .model }
     }
 
     /// The inspector's sections: `essential` and `standard` fields by group, in group order.
-    package static func sections(for task: StudioTask, draft: StudioTaskDraft) -> [StudioTaskSection] {
-        let fields = fields(for: task, draft: draft).filter { $0.tier != .expert }
+    package static func sections(
+        for task: StudioTask,
+        draft: StudioTaskDraft,
+        source: StudioScopeSource
+    ) -> [StudioTaskSection] {
+        let fields = fields(for: task, draft: draft, source: source).filter { $0.tier != .expert }
         return StudioContractGroup.allCases.compactMap { group in
             let grouped = fields.filter { $0.group == group }
             guard !grouped.isEmpty else { return nil }
@@ -318,8 +334,12 @@ package enum StudioTaskSchema {
     }
 
     /// Everything the template takes that collapses under "Advanced · N more".
-    package static func advanced(for task: StudioTask, draft: StudioTaskDraft) -> [StudioContractField<StudioTaskDraft>] {
-        fields(for: task, draft: draft).filter { $0.tier == .expert }
+    package static func advanced(
+        for task: StudioTask,
+        draft: StudioTaskDraft,
+        source: StudioScopeSource
+    ) -> [StudioContractField<StudioTaskDraft>] {
+        fields(for: task, draft: draft, source: source).filter { $0.tier == .expert }
     }
 
     /// Whether each flag carries a value and what it depends on, for `ContractForm`'s gating.
@@ -329,9 +349,15 @@ package enum StudioTaskSchema {
     }
 
     /// How many fields differ from the template's fresh draft; the inspector's badge.
-    package static func changedCount(for task: StudioTask, draft: StudioTaskDraft) -> Int {
+    package static func changedCount(for task: StudioTask, draft: StudioTaskDraft, source: StudioScopeSource) -> Int {
         let baseline = StudioTaskDraft(templateID: draft.templateID)
-        return fields(for: task, draft: draft).reduce(0) { $0 + $1.changedCount(draft: draft, baseline: baseline) }
+        return fields(for: task, draft: draft, source: source).reduce(0) { $0 + $1.changedCount(draft: draft, baseline: baseline) }
+    }
+
+    /// The note under the task inspector's header and the composer's chips: the values the draft
+    /// holds, away from the template's fresh draft, that the model it runs leaves out or replaces.
+    package static func notice(for draft: StudioTaskDraft, source: StudioScopeSource) -> StudioScopeNotice? {
+        source.scope(for: draft)?.notice(form: draft.form, baseline: StudioTaskDraft(templateID: draft.templateID).form)
     }
 
     // MARK: Prompt
@@ -350,28 +376,49 @@ package enum StudioTaskSchema {
     }
 
     /// The model scope the chip, the inspector row, and the readiness card share for a draft.
-    package static func modelScope(for draft: StudioTaskDraft) -> StudioModelScope {
-        StudioModelScope(templateID: draft.templateID)
+    /// For a routed command its default is what the form runs with its model cleared, so
+    /// "Auto" names the model the contract picks for the options the form holds.
+    package static func modelScope(for draft: StudioTaskDraft, source: StudioScopeSource) -> StudioModelScope {
+        var scope = StudioModelScope(templateID: draft.templateID, source: source)
+        if let capability = source.capability(for: draft.templateID), let routing = capability.routing {
+            var unset = draft.form
+            for flag in routing.modelFlags { unset.values[flag] = nil }
+            if let model = source.scope(capability: capability, form: unset).managedModel { scope.defaultModelID = model }
+        }
+        return scope
     }
 
-    /// The model the draft will run: its `--model`, else the base its training recipe trains
-    /// (`StudioTrainingRun.recipeBaseModel`), else the template's default; empty when the
-    /// template runs no managed model.
-    package static func modelID(for draft: StudioTaskDraft) -> String {
+    /// The model the draft will run. For a routed command, the model its scope resolves to: the
+    /// managed model it names or defaults to, else what the form names. Otherwise its
+    /// `--model`, else the base its training recipe trains (`StudioTrainingRun.recipeBaseModel`),
+    /// else the template's default; empty when the template runs no managed model.
+    package static func modelID(for draft: StudioTaskDraft, source: StudioScopeSource) -> String {
         let model = draft.text("--model")
-        if model.isBlank, let base = StudioTrainingRun.recipeBaseModel(for: draft) { return base }
-        return modelScope(for: draft).resolvedModelID(model: model)
+        if let scope = source.scope(for: draft), scope.capability.routing != nil {
+            return scope.managedModel ?? model
+        }
+        if model.isBlank, let base = StudioTrainingRun.recipeBaseModel(for: draft, source: source) { return base }
+        return modelScope(for: draft, source: source).resolvedModelID(model: model)
     }
 
-    /// The managed model the readiness check asks for before a run: `modelID(for:)`, or none
-    /// when the run reads its weights from a folder on disk — a `--model` that is a path (the
-    /// Woosh commands take a local checkpoints root there) or a local model location the
-    /// trainers take beside the id (`--model-path`, `--checkpoints-root`). The CLI resolves those
-    /// itself; `model list` has no row for them.
-    package static func requiredModelID(for draft: StudioTaskDraft) -> String {
-        if isLocalPath(draft.text("--model").trimmingCharacters(in: .whitespacesAndNewlines)) { return "" }
-        if ["--model-path", "--checkpoints-root"].contains(where: { !draft.text($0).isBlank }) { return "" }
-        return modelID(for: draft)
+    /// What the readiness check asks for before a run: the managed model `modelID(for:)` names,
+    /// or nothing when the run reads its weights from a folder on disk — a `--model` that is a
+    /// path (the Woosh commands take a local checkpoints root there) or a local model location the
+    /// trainers take beside the id (`--model-path`, `--checkpoints-root`); the CLI resolves those
+    /// itself and `model list` has no row for them. A model the command excludes, or whose
+    /// selectors match no family, blocks the run with the CLI gate's reason.
+    package static func requirement(for draft: StudioTaskDraft, source: StudioScopeSource) -> StudioCapabilityRequirement? {
+        if let reason = source.scope(for: draft)?.blockingReason { return .unavailable(reason) }
+        if isLocalPath(draft.text("--model").trimmingCharacters(in: .whitespacesAndNewlines)) { return nil }
+        if ["--model-path", "--checkpoints-root"].contains(where: { !draft.text($0).isBlank }) { return nil }
+        let model = modelID(for: draft, source: source)
+        return model.isBlank ? nil : .managedModel(model)
+    }
+
+    /// The managed model `requirement(for:)` asks for; empty when it asks for none.
+    package static func requiredModelID(for draft: StudioTaskDraft, source: StudioScopeSource) -> String {
+        guard case .managedModel(let model)? = requirement(for: draft, source: source) else { return "" }
+        return model
     }
 
     /// Whether a `--model` value names a folder rather than a managed id: it starts at the root,
@@ -430,8 +477,9 @@ extension StudioTaskDraft {
         StudioTaskSchema.primarySlot(for: templateID)?.paths(in: self).first ?? ""
     }
 
-    package var slots: [StudioAttachmentSlot] {
-        StudioTaskSchema.slots(for: templateID)
+    /// The well's slots for the model the draft runs.
+    package func slots(source: StudioScopeSource) -> [StudioAttachmentSlot] {
+        StudioTaskSchema.slots(for: templateID, scope: source.scope(for: self))
     }
 
     /// The model this draft names, as the model chip binds it.

@@ -66,7 +66,7 @@ struct TextEmbed: AsyncParsableCommand {
             try data.write(to: outputURL, options: [.atomic])
         }
 
-        if let text = String(data: data, encoding: .utf8) {
+        if let text = String(data: try encoder.encode(GateWarned(payload)), encoding: .utf8) {
             print(text)
         } else {
             throw ValidationError("Failed to encode embedding output as UTF-8.")

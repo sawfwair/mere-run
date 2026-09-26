@@ -10,12 +10,13 @@ extension MereRunCapabilityCatalog {
             .init(name: "input", label: "Tile safetensors", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Logits output", kind: .file, required: true),
+            .init(flag: "--output", aliases: ["-o"], label: "Logits output", kind: .file, required: true),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output"),
+        routing: geoFloodRouting
     )
 
     public static let geoFire = MereRunCommandCapability(
@@ -27,12 +28,13 @@ extension MereRunCapabilityCatalog {
             .init(name: "input", label: "Tile safetensors", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Logits output", kind: .file, required: true),
+            .init(flag: "--output", aliases: ["-o"], label: "Logits output", kind: .file, required: true),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output"),
+        routing: geoFireRouting
     )
 
     public static let geoTessera = MereRunCommandCapability(
@@ -44,13 +46,17 @@ extension MereRunCapabilityCatalog {
             .init(name: "input", label: "Observation safetensors", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Embedding output", kind: .file, required: true),
+            .init(flag: "--output", aliases: ["-o"], label: "Embedding output", kind: .file, required: true),
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--dimensions", label: "Dimensions", kind: .integer),
+            .init(flag: "--dimensions", label: "Dimensions", kind: .integer).scoped(
+                TESSERAFamily.rule(.student, values: ["16", "32", "64", "128"], defaultValue: "128"),
+                .rule(.teacher, values: ["1024"])
+            ),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output"),
+        routing: geoTESSERARouting
     )
 
     public static let geoOlmoEarth = MereRunCommandCapability(
@@ -62,7 +68,7 @@ extension MereRunCapabilityCatalog {
             .init(name: "input", label: "Observation safetensors", kind: .file, required: true)
         ],
         options: [
-            .init(flag: "--output", label: "Embedding output", kind: .file, required: true),
+            .init(flag: "--output", aliases: ["-o"], label: "Embedding output", kind: .file, required: true),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--patch-size", label: "Patch size", kind: .integer),
             .init(flag: "--input-resolution", label: "Input resolution", kind: .number),
@@ -70,7 +76,8 @@ extension MereRunCapabilityCatalog {
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
-        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output")
+        output: .init(kind: .file, fileExtension: "safetensors", flag: "--output"),
+        routing: geoOlmoEarthRouting
     )
 
     // MARK: - Model store locations
