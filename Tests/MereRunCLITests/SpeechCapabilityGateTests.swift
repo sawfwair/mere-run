@@ -173,13 +173,15 @@ private func temporaryFolder() throws -> URL {
 @Test func synthesizeScopesOptionsByModeAndCheckpoint() throws {
     let style = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--voice", "calm", "--profile", "narrator")
     #expect(style.family == "style" && style.model == "speech-tts-qwen3-nano" && style.violations.isEmpty)
-    #expect(style.warnings == ["--profile has no effect with Qwen3-TTS style. It applies to Qwen3-TTS clone."])
+    #expect(style.warnings == [
+        "--profile has no effect with Qwen3-TTS style. It applies to Breeze TTS 2 clone and direction and Qwen3-TTS clone."
+    ])
 
     let clone = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--mode", "clone", "-v", "calm",
                            "--ref-audio", "me.wav", "--model", "speech-tts-qwen3-customvoice")
     #expect(clone.family == "clone" && clone.model == "speech-tts-qwen3-customvoice")
     #expect(clone.warnings == [
-        "--voice has no effect with Qwen3-TTS clone. It applies to Qwen3-TTS style and Qwen3-TTS CustomVoice."
+        "--voice has no effect with Qwen3-TTS clone. It applies to Qwen3-TTS style, Qwen3-TTS CustomVoice, Breeze TTS 2 and Breeze TTS 2 clone and direction."
     ])
 
     let speaker = try report("speech", "synthesize", "Hi", "-o", "a.wav", "--model", "speech-tts-qwen3-customvoice",
@@ -240,6 +242,20 @@ private func temporaryFolder() throws -> URL {
     #expect(routing.family(id: "style")?.models == [Qwen3TTSResources.defaultModelId])
     #expect(routing.family(id: "custom-voice")?.models == [Qwen3TTSResources.customVoiceModelId])
     #expect(Set(routing.family(id: "clone")?.models ?? []) == Qwen3TTSResources.supportedModelIds)
+    #expect(routing.family(id: "breeze")?.models == ["speech-tts-breeze-2"])
+    #expect(routing.family(id: "breeze-clone")?.models == ["speech-tts-breeze-2"])
+}
+
+@Test func synthesizeRoutesBreezeVoiceDesignAndDirection() throws {
+    let design = try report("speech", "synthesize", "Hello", "-o", "a.wav",
+                            "--model", "speech-tts-breeze-2", "--voice", "A warm voice", "--stream")
+    #expect(design.family == "breeze" && design.violations.isEmpty)
+
+    let direction = try report("speech", "synthesize", "Hello", "-o", "a.wav",
+                               "--model", "speech-tts-breeze-2", "--mode", "clone",
+                               "--ref-audio", "ref.wav", "--ref-text", "Exact reference words",
+                               "--voice", "Speak softly")
+    #expect(direction.family == "breeze-clone" && direction.violations.isEmpty)
 }
 
 /// The speakers Studio offers are the published CustomVoice checkpoint's.

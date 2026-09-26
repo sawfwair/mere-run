@@ -1061,6 +1061,9 @@ package enum StudioContractBindings {
         "--profile": .text("voiceProfile", \.voiceProfile),
         "--speaker": .optionalText("voiceSpeaker", \.voiceSpeaker),
         "--ref-audio": .text("refAudioPath", \.refAudioPath),
+        "--ref-text": .text("refText", \.refText),
+        "--seed": .integerText("seed", \.seed),
+        "--cfg-scale": .optionalNumber("speechCFGScale", \.speechCFGScale),
         "--save-profile": .text("saveProfileName", \.saveProfileName),
     ]) { first, _ in first } }
 

@@ -2473,6 +2473,8 @@ extension CommandFlags {
         package static let language = "--language"
         package static let saveProfile = "--save-profile"
         package static let temperature = "--temperature"
+        package static let seed = "--seed"
+        package static let cfgScale = "--cfg-scale"
         package static let stream = "--stream"
         package static let streamChunkTokens = "--stream-chunk-tokens"
         package static let quiet = "--quiet"

@@ -1,7 +1,7 @@
 import Foundation
 
 public enum SpeechSynthesisField: String, Sendable {
-    case text, temperature, speed, cloneReference, output, streamChunkTokens
+    case text, temperature, speed, seed, cfgScale, cloneReference, output, streamChunkTokens
 }
 
 public enum SpeechSynthesisError: LocalizedError, Sendable {
@@ -30,6 +30,7 @@ public struct SpeechSynthesisPlan: Sendable, Hashable {
 
     public init(request: TTSRequest, streamingOptions: TTSStreamingOptions? = nil) throws {
         try Self.validateParameters(text: request.text, temperature: request.temperature, speed: request.speed)
+        try Self.validateCFGScale(request.cfgScale)
         guard request.outputURL.isFileURL else {
             throw SpeechSynthesisError.invalidInput(.output, "Speech output must be a local file URL.")
         }
@@ -70,6 +71,12 @@ public struct SpeechSynthesisPlan: Sendable, Hashable {
             throw SpeechSynthesisError.invalidInput(.speed, "Speed must be finite and between 0.25 and 4.0.")
         }
         return Float(speed)
+    }
+
+    public static func validateCFGScale(_ scale: Float?) throws {
+        if let scale, (!scale.isFinite || !(0...20).contains(scale)) {
+            throw SpeechSynthesisError.invalidInput(.cfgScale, "CFG scale must be finite and between 0 and 20.")
+        }
     }
 
     public static func validateStreamingOptions(_ options: TTSStreamingOptions?) throws {

@@ -186,20 +186,20 @@ final class StudioModelIdentityStoreTests: XCTestCase {
     func testAFailedAnswerIsAskedAgainAfterABackoff() async throws {
         let attempts = AskedLines()
         let store = StudioModelIdentityStore(debounce: .zero, retryDelays: [.milliseconds(40)])
-        let folder = "/tmp/model-scope/flaky"
+        let model = "flaky-model"
         store.use { commandLine in
             await attempts.append(commandLine)
             guard await attempts.lines.count > 1 else { return nil }
             return MereRunFamilyResolutionReport(
                 capability: "video.generate", family: "h3-ref2va", familyTitle: "MiniMax-H3 Ref2VA",
-                model: folder, source: .identified, violations: [], warnings: []
+                model: model, source: .identified, violations: [], warnings: []
             )
         }
-        let arguments = ["x", "--model", folder]
-        try await settle(store) { store.identity(of: arguments, model: folder, for: self.video) == .unidentified }
+        let arguments = ["x", "--model", model]
+        try await settle(store) { store.identity(of: arguments, model: model, for: self.video) == .unidentified }
         try await Task.sleep(for: .milliseconds(80))
         try await settle(store) {
-            if case .resolved = store.identity(of: arguments, model: folder, for: self.video) { return true }
+            if case .resolved = store.identity(of: arguments, model: model, for: self.video) { return true }
             return false
         }
         let count = await attempts.lines.count

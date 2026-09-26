@@ -16,10 +16,11 @@ final class SpeechSynthesisModelSelectionTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
+        try Data(#"{"tts_model_type":"base"}"#.utf8).write(to: directory.appendingPathComponent("config.json"))
         let selected = try SpeechSynthesisModelSelection.resolve(directory.path + "/./")
         XCTAssertEqual(selected.modelID, "speech-tts-qwen3-nano")
         XCTAssertEqual(selected.modelPath, directory.standardizedFileURL.path)
-        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["config.json"])
     }
 
     func testNonTTSModelsAndWireOnlyAliasesDoNotReachTheNativeRuntime() {

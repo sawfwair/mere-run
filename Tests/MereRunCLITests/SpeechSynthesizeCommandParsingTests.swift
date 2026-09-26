@@ -1,9 +1,29 @@
 import XCTest
 import AudioCore
+import AudioTTS
 import MereRunCore
 @testable import MereRunCLI
 
 final class SpeechSynthesizeCommandParsingTests: XCTestCase {
+    func testBreezeSelectionUsesManagedIDAndIdentifiesLocalCheckpoint() throws {
+        let managed = try SpeechSynthesisModelSelection.resolve("speech-tts-breeze-2")
+        XCTAssertEqual(managed.backend, .breeze)
+        XCTAssertNil(managed.modelPath)
+        let apiPlan = try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            model: "speech-tts-breeze-2", input: "Hello"
+        ))
+        XCTAssertEqual(try apiPlan.modelSelection().backend, .breeze)
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Data(#"{"model_type":"breeze"}"#.utf8).write(to: directory.appendingPathComponent("config.json"))
+        let local = try SpeechSynthesisModelSelection.resolve(directory.path)
+        XCTAssertEqual(local.modelID, "speech-tts-breeze-2")
+        XCTAssertEqual(local.modelPath, directory.path)
+        XCTAssertEqual(local.backend, .breeze)
+    }
+
     func testCLIAndAPIUseEquivalentDefaultAndExplicitSynthesisPlans() throws {
         let output = URL(fileURLWithPath: "/fixture/output.wav")
         let defaults = try SpeechSynthesize.parse(["hello", "--output", output.path])
@@ -38,6 +58,57 @@ final class SpeechSynthesizeCommandParsingTests: XCTestCase {
         XCTAssertEqual(plan.streamingOptions?.emitTokenEvents, true)
         XCTAssertEqual(plan.streamingOptions?.chunkTokenInterval, 17)
         XCTAssertEqual(plan.exportPlan.options.format, .float32)
+    }
+
+    func testBreezeSeedAndCFGPassThroughCLIAndAPI() throws {
+        let output = URL(fileURLWithPath: "/fixture/output.wav")
+        let cli = try SpeechSynthesize.parse([
+            "(laugh) Hello", "--output", output.path, "--model", "speech-tts-breeze-2",
+            "--seed", "42", "--cfg-scale", "3.5"
+        ])
+        let request = try cli.synthesisPlan(outputURL: output).request
+        XCTAssertEqual(request.seed, 42)
+        XCTAssertEqual(request.cfgScale, 3.5)
+
+        let api = try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            model: "speech-tts-breeze-2", input: "(laugh) Hello", seed: 42, cfg_scale: 3.5
+        ))
+        XCTAssertEqual(try api.synthesisPlan(outputURL: output).request, request)
+    }
+
+    func testBreezeCFGRejectsInvalidValuesBeforeModelLoading() async throws {
+        let output = URL(fileURLWithPath: "/tmp/breeze-cfg-invalid.wav")
+        for value in ["nan", "inf", "-1", "20.1"] {
+            let cli = try SpeechSynthesize.parse([
+                "Hello", "--output", output.path, "--model", "speech-tts-breeze-2", "--cfg-scale=\(value)"
+            ])
+            do { try await cli.run(); XCTFail("Invalid CFG scale was accepted") }
+            catch SpeechSynthesisError.invalidInput(let field, _) { XCTAssertEqual(field, .cfgScale) }
+        }
+        XCTAssertThrowsError(try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            model: "speech-tts-breeze-2", input: "Hello", cfg_scale: .infinity
+        )))
+    }
+
+    func testBreezeControlsAreRejectedForQwen() async throws {
+        let cli = try SpeechSynthesize.parse([
+            "Hello", "--output", "/tmp/qwen-seed-invalid.wav", "--seed", "42"
+        ])
+        do { try await cli.run(); XCTFail("Qwen accepted a Breeze-only seed") }
+        catch { XCTAssertTrue(String(describing: error).contains("Breeze TTS 2")) }
+        XCTAssertThrowsError(try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            input: "Hello", cfg_scale: 4
+        )))
+        XCTAssertThrowsError(try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            model: "missing-speech-fixture", input: "Hello", seed: 42
+        )))
+        let request = TTSRequest(text: "Hello", seed: 42, outputURL: URL(fileURLWithPath: "/tmp/unused.wav"))
+        do {
+            _ = try await Qwen3TTSGenerator().generateAudio(request)
+            XCTFail("Direct Qwen request accepted a Breeze seed")
+        } catch SpeechSynthesisError.invalidInput(let field, _) {
+            XCTAssertEqual(field, .seed)
+        }
     }
 
     func testInvalidScalarsFailBeforeModelLookupAndOutputCreation() async throws {

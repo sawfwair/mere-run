@@ -157,7 +157,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
     static let defaultIdleTTLSeconds = 300
 
     private let imageSlot: APISidecarResidentSlot<APISidecarImageKey, APISidecarImageGenerator>
-    private let speechSlot: APISidecarResidentSlot<APISidecarSpeechKey, Qwen3TTSGenerator>
+    private let speechSlot: APISidecarResidentSlot<APISidecarSpeechKey, SpeechSynthesisGenerator>
     private let asrSlot: APISidecarResidentSlot<APISidecarASRKey, APISidecarASRGenerator>
     private let embeddingSlot: APISidecarResidentSlot<APISidecarEmbeddingKey, APISidecarEmbeddingRuntime>
     private let decisionSlot: APISidecarResidentSlot<APISidecarEmbeddingKey, APISidecarDecisionRuntime>

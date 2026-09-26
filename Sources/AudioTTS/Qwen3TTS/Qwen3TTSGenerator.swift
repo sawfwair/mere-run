@@ -91,6 +91,12 @@ public actor Qwen3TTSGenerator: TTSGenerator {
         progressHandler: (@Sendable (TTSProgress) -> Void)?,
         continuation: AsyncThrowingStream<TTSStreamingEvent, Error>.Continuation?
     ) async throws -> AudioWaveform {
+        if plan.request.seed != nil {
+            throw SpeechSynthesisError.invalidInput(.seed, "Seed is supported only by Breeze TTS 2.")
+        }
+        if plan.request.cfgScale != nil {
+            throw SpeechSynthesisError.invalidInput(.cfgScale, "CFG scale is supported only by Breeze TTS 2.")
+        }
         try plan.validateForExecution()
         return try await Stream.withDefaultStream(streams) {
             defer {

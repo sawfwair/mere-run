@@ -120,6 +120,22 @@ final class StudioComposerSchemaTests: XCTestCase {
         XCTAssertEqual(draft.refAudioPath, "/tmp/me.wav")
     }
 
+    func testBreezeCloneComposerSendsReferenceTranscript() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .speak)
+        draft.model = "speech-tts-breeze-2"
+        draft.prompt = "A new sentence."
+        draft.voiceMode = "clone"
+        draft.refAudioPath = "/tmp/reference.wav"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft, source: .contract))
+
+        draft.refText = "The exact reference words."
+        let request = try StudioCommandAdapter.makeRequest(mode: .speak, draft: draft, source: .contract)
+        let arguments = request.template.arguments(from: request.draft, source: .contract)
+        let index = try XCTUnwrap(arguments.firstIndex(of: "--ref-text"))
+        XCTAssertEqual(arguments[index + 1], draft.refText)
+    }
+
     func testCanvasDropRoutesToTheFirstEmptySlotThatAcceptsTheFile() {
         var draft = StudioDraft()
         draft.reset(for: .createImage)

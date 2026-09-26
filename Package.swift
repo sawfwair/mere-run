@@ -546,6 +546,19 @@ targets.append(
 
 targets.append(
   .target(
+    name: "AudioBreezeTTSModel",
+    dependencies: [.target(name: "MereRunKVCache"), .target(name: "AudioQwen3TTSModel"),
+                   .target(name: "MereRunDecode"), .target(name: "MereRunTensor"),
+                   .product(name: "Tokenizers", package: "swift-transformers")]
+      + mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
+    path: "Sources/AudioBreezeTTSModel",
+    exclude: ["README.md"],
+    swiftSettings: commonSwiftSettings
+  )
+)
+
+targets.append(
+  .target(
     name: "MereRunKVCache",
     dependencies: mlxDependency("MLX") + mlxDependency("MLXFast") + mlxDependency("MLXNN"),
     path: "Sources/MereRunKVCache",
@@ -771,7 +784,7 @@ targets.append(
 targets.append(
   .target(
     name: "AudioTTS",
-    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel"],
+    dependencies: audioRuntimeDependencies + ["AudioQwen3TTSModel", "AudioBreezeTTSModel"],
     path: "Sources/AudioTTS",
     exclude: [
       "Qwen3TTS/README.md"

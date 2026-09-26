@@ -10,7 +10,7 @@ the audio does not leave the machine.
 
 | Command | What it does |
 | --- | --- |
-| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS. |
+| `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS or Breeze TTS 2. |
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
 | `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX diarization. |
 | `mere.run speech diarize-live` | Emit incremental Nemotron 3 speaker activity from a microphone or PCM stdin. |
@@ -25,6 +25,7 @@ the audio does not leave the machine.
 
 - `speech-tts-qwen3-nano`
 - `speech-tts-qwen3-customvoice`
+- `speech-tts-breeze-2` (English and Chinese; research and non-commercial use only)
 
 ### Speech-to-text
 
@@ -41,8 +42,10 @@ the audio does not leave the machine.
 Speech is split across two domains. **Voice ▸ Speak** is the prompt task for
 synthesis, styled or cloned: attaching a reference recording to its composer
 well (or picking a saved voice in the inspector) is clone mode, with streaming
-chunk controls and language selection. With the CustomVoice model selected, the
-inspector offers its named speakers. **Voice ▸ Voices** is the Manage page
+chunk controls and language selection. For Breeze TTS 2 cloning, enter the exact
+reference transcript in the inspector. Breeze TTS 2 also accepts a voice
+instruction with a reference recording for voice direction. With the CustomVoice
+model selected, the inspector offers its named speakers. **Voice ▸ Voices** is the Manage page
 for saved voices — a list, a detail that plays the reference and shows its
 transcript, Delete behind a confirmation, and New voice, which records or
 attaches a reference and runs `speech profile create`.
@@ -121,6 +124,30 @@ swift run mere.run speech synthesize \
   "Hello from mere.run" \
   --output ./hello.wav
 ```
+
+Breeze TTS 2 is a native Swift/MLX alternative for English and Chinese. Review
+its [research and non-commercial license](https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE)
+before pulling the pinned checkpoint. Its weights and self-hosted outputs have
+use restrictions. The CLI does not download this model automatically.
+
+```bash
+mere.run model pull speech-tts-breeze-2 --accept-model-license
+mere.run speech synthesize "Welcome to mere.run." \
+  --model speech-tts-breeze-2 --voice "A warm, steady narrator" \
+  --output ./breeze.wav
+mere.run speech synthesize "I am speaking with a new direction." \
+  --model speech-tts-breeze-2 --mode clone \
+  --ref-audio ./reference.wav --ref-text "The exact words in the reference." \
+  --voice "Speak softly and slowly" --output ./directed.wav
+```
+
+Breeze TTS 2 needs the exact reference transcript for cloning. It produces
+24 kHz WAV output and supports `--stream` for incremental audio chunks. For
+smaller first chunks, use `--stream-chunk-tokens 5`. English text can include
+vocal event markers such as `(laugh)` and `(sigh)`. The Breeze-only `--seed`
+control repeats the sampling sequence; `--cfg-scale` sets voice instruction
+guidance from 0 through 20 (default 4). Studio exposes both controls for
+Breeze style and clone modes.
 
 `speech-tts-qwen3-customvoice` also speaks as one of its named speakers in
 style mode: `aiden`, `dylan`, `eric`, `ono_anna`, `ryan`, `serena`, `sohee`,

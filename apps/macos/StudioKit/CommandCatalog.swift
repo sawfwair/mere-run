@@ -872,6 +872,7 @@ package struct CommandDraft: Equatable, Codable {
     package var voiceProfile = ""
     package var refAudioPath = ""
     package var refText = ""
+    package var speechCFGScale: Double?
     package var saveProfileName = ""
     /// A CustomVoice named speaker (`--speaker`), style mode only. Optional preserves decoding of
     /// Library rows created before speakers were exposed.

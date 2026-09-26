@@ -296,6 +296,8 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     package var voiceMode = "style"
     package var voiceProfile = ""
     package var refAudioPath = ""
+    package var refText = ""
+    package var speechCFGScale: Double?
     package var saveProfileName = ""
     /// A CustomVoice named speaker (`--speaker`) in style mode. Optional preserves saved Studio
     /// drafts from before speakers were exposed; nil sends none.
@@ -426,6 +428,8 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         voiceMode = "style"
         voiceProfile = ""
         refAudioPath = ""
+        refText = ""
+        speechCFGScale = nil
         saveProfileName = ""
         voiceSpeaker = nil
         temperature = base?.temperature ?? 0.7
@@ -756,12 +760,15 @@ package enum StudioCommandAdapter {
 
         case .speak:
             draft.prompt = prompt
+            draft.seed = studioDraft.seed
+            draft.speechCFGScale = studioDraft.speechCFGScale
             draft.secondaryText = secondary.isEmpty ? draft.secondaryText : secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.voiceMode = studioDraft.voiceMode
             if studioDraft.voiceMode == "clone" {
                 draft.voiceProfile = studioDraft.voiceProfile
                 draft.refAudioPath = studioDraft.refAudioPath
+                draft.refText = studioDraft.refText
                 draft.saveProfileName = studioDraft.saveProfileName
             } else {
                 draft.voiceSpeaker = studioDraft.voiceSpeaker
@@ -972,6 +979,10 @@ package enum StudioCommandAdapter {
         if mode == .speak, draft.voiceMode == "clone",
            draft.voiceProfile.isBlank, draft.refAudioPath.isBlank {
             throw StudioCommandError.missingPrompt("A saved voice profile or reference audio")
+        }
+        if mode == .speak, draft.voiceMode == "clone", draft.model == "speech-tts-breeze-2",
+           draft.voiceProfile.isBlank, draft.refText.isBlank {
+            throw StudioCommandError.missingPrompt("The exact reference transcript")
         }
         if mode == .music {
             let sourceTasks = ["repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]

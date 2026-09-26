@@ -216,8 +216,9 @@ Public Qwen ASR, Parakeet, and Sortformer types are re-exported from their ownin
 
 ### Speech model libraries
 
-`Sources/AudioQwen3ASRModel`, `Sources/AudioQwen3TTSModel`, and
-`Sources/AudioParakeetModel` own configuration and tensor computation.
+`Sources/AudioQwen3ASRModel`, `Sources/AudioQwen3TTSModel`,
+`Sources/AudioBreezeTTSModel`, and `Sources/AudioParakeetModel` own configuration
+and tensor computation.
 `Sources/AudioSortformer` owns the diarization runtime. These libraries build
 without `MereRunCore`, audio codecs, or model downloads. Qwen uses the same
 attention caches as Core through `Sources/MereRunKVCache`. Sortformer uses
@@ -229,6 +230,7 @@ attention caches as Core through `Sources/MereRunKVCache`. Sortformer uses
 Text-to-speech orchestration, audio-input adapters, and compatibility exports.
 
 - `Qwen3TTS/`: native Qwen TTS loading, prompts, token generation, and audio output
+- `BreezeTTS/`: native Breeze TTS 2 loading, reference audio, and stream orchestration
 - `TTS/`: shared TTS support types
 
 ## Tests

@@ -18,7 +18,7 @@ extension MereRunCapabilityCatalog {
             .init(
                 flag: "--voice", aliases: ["-v"], label: "Voice", kind: .string,
                 defaultValue: "A calm female voice with clear pronunciation", group: Group.prompt, tier: .essential
-            ).scoped(SpeechSynthesizeFamily.only(.style, .customVoice, ignoredBy: [.clone])),
+            ).scoped(SpeechSynthesizeFamily.only(.style, .customVoice, .breeze, .breezeClone, ignoredBy: [.clone])),
             // The published CustomVoice checkpoint's speakers (`talker_config.spk_id`). The gate
             // compares no value: the command checks the name against the checkpoint that runs, so
             // a local CustomVoice folder can name its own.
@@ -32,22 +32,28 @@ extension MereRunCapabilityCatalog {
                 defaultValue: "style", group: Group.inputs, tier: .standard, choiceSpellings: .exact
             ),
             .init(flag: "--profile", label: "Profile", kind: .string, group: Group.inputs, tier: .standard)
-                .scoped(SpeechSynthesizeFamily.only(.clone, ignoredBy: [.style])),
+                .scoped(SpeechSynthesizeFamily.only(.clone, .breezeClone, ignoredBy: [.style, .breeze])),
             .init(flag: "--ref-audio", label: "Reference audio", kind: .file, group: Group.inputs, tier: .standard)
-                .scoped(SpeechSynthesizeFamily.only(.clone, ignoredBy: [.style])),
+                .scoped(SpeechSynthesizeFamily.only(.clone, .breezeClone, ignoredBy: [.style, .breeze])),
             .init(
                 flag: "--ref-text", label: "Reference text", kind: .string,
                 group: Group.inputs, tier: .standard, dependsOn: "--ref-audio"
-            ).scoped(SpeechSynthesizeFamily.only(.clone, ignoredBy: [.style])),
+            ).scoped(SpeechSynthesizeFamily.only(.clone, .breezeClone, ignoredBy: [.style, .breeze])),
             .init(flag: "--language", label: "Language", kind: .string, defaultValue: "auto", group: Group.prompt, tier: .standard),
             .init(
                 flag: "--save-profile", label: "Save profile", kind: .string,
                 group: Group.inputs, tier: .expert, dependsOn: "--ref-audio"
-            ).scoped(SpeechSynthesizeFamily.only(.clone, ignoredBy: [.style])),
+            ).scoped(SpeechSynthesizeFamily.only(.clone, .breezeClone, ignoredBy: [.style, .breeze])),
             .init(
                 flag: "--temperature", label: "Temperature", kind: .number,
                 defaultValue: "0.6", group: Group.sampling, tier: .standard, range: .init(min: 0, max: 2, step: 0.05)
             ),
+            .init(flag: "--seed", label: "Seed", kind: .integer, group: Group.sampling, tier: .expert,
+                  range: .init(min: 0, max: 2_147_483_647, step: 1))
+                .scoped(SpeechSynthesizeFamily.only(.breeze, .breezeClone)),
+            .init(flag: "--cfg-scale", label: "CFG scale", kind: .number,
+                  group: Group.sampling, tier: .expert, range: .init(min: 0, max: 20, step: 0.1))
+                .scoped(SpeechSynthesizeFamily.only(.breeze, .breezeClone)),
             .init(flag: "--stream", label: "Stream", kind: .boolean, group: Group.output, tier: .expert),
             .init(
                 flag: "--stream-chunk-tokens", label: "Chunk tokens", kind: .integer,

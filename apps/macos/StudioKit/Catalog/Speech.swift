@@ -92,12 +92,17 @@ extension CommandArguments {
             if !draft.refAudioPath.isBlank { args.option(F.refAudio, draft.refAudioPath) }
             if !draft.refText.isBlank { args.option(F.refText, draft.refText) }
             if !draft.saveProfileName.isBlank { args.option(F.saveProfile, draft.saveProfileName) }
+            if draft.model == "speech-tts-breeze-2", !draft.secondaryText.isBlank {
+                args.option(F.voice, draft.secondaryText)
+            }
         } else {
             if let speaker = draft.voiceSpeaker, !speaker.isBlank { args.option(F.speaker, speaker) }
             if !draft.secondaryText.isBlank { args.option(F.voice, draft.secondaryText) }
         }
         if !draft.language.isBlank, draft.language != "auto" { args.option(F.language, draft.language) }
         args.option(F.temperature, format(draft.temperature))
+        if !draft.seed.isBlank { args.option(F.seed, draft.seed) }
+        if let scale = draft.speechCFGScale { args.option(F.cfgScale, format(scale)) }
         if draft.stream {
             args.flag(F.stream)
             args.option(F.streamChunkTokens, String(draft.speechStreamChunkTokens))

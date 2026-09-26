@@ -1400,6 +1400,22 @@ catalog entry pins the license and requires explicit acceptance before pull.
 Qwen is licensed under the Qwen RESEARCH LICENSE AGREEMENT, Copyright (c) 2026
 Hangzhou Tongyi Laboratory Technology Co., Ltd. All Rights Reserved.
 
+## Breeze TTS 2 native speech synthesis
+
+`Sources/AudioBreezeTTSModel/BreezeTTSConfig.swift`,
+`BreezeTTSTextEncoder.swift`, `BreezeTTSModules.swift`, and parts of
+`BreezeTTSModel.swift` adapt the Swift/MLX implementation from
+[Blaizzy/mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift/tree/01dec7c9bdce3088a6b6b7ab9f2e403458195efb/Sources/MLXAudioTTS/Models/BreezeTTS).
+Copyright (c) 2025 Prince Canuma. The source is licensed under MIT; its
+license text is included in the MIT notices above. The architecture was also
+checked against [BreezeBlue's Apache-2.0 inference source](https://github.com/breezeblue-ai/breeze-tts/tree/008f769016b0a24711becd7a4925030bc93f608c).
+
+The [BreezeBlue/Breeze-TTS-2 checkpoint](https://huggingface.co/BreezeBlue/Breeze-TTS-2/tree/3e28c5151381a722f1d8661b4118c298caa77aa4)
+is downloaded separately. Its weights, derivative checkpoints, and self-hosted
+outputs are governed by the BreezeBlue Research and Non-Commercial License,
+independently of the Swift and Python source licenses. No checkpoint weights
+are bundled here.
+
 ## Laya native decision implementation
 
 - source: [Convai Innovations Laya](https://github.com/NandhaKishorM/laya/tree/573e5b62696ba441230cd6be71d593331b5d23af), Apache-2.0

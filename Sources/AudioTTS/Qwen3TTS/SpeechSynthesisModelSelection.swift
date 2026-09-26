@@ -4,8 +4,10 @@ import MereRunCore
 
 /// Resolves the common CLI/API selector without loading or downloading a model.
 public struct SpeechSynthesisModelSelection: Sendable, Hashable {
+    public enum Backend: Sendable, Hashable { case qwen3, breeze }
     public let modelID: String
     public let modelPath: String?
+    public let backend: Backend
 
     public static func resolve(_ selector: String, fileManager: FileManager = .default) throws -> Self {
         let normalized = selector.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -14,19 +16,50 @@ public struct SpeechSynthesisModelSelection: Sendable, Hashable {
         var isDirectory: ObjCBool = false
         if fileManager.fileExists(atPath: path.path, isDirectory: &isDirectory) {
             guard isDirectory.boolValue else { throw Qwen3TTSError.unsupportedModelId(selected) }
-            return Self(modelID: Qwen3TTSResources.defaultModelId, modelPath: path.path)
+            let configURL = path.appending(path: "config.json")
+            let config = try JSONDecoder().decode(ModelTypeProbe.self, from: Data(contentsOf: configURL))
+            let backend: Backend = config.modelType == "breeze" ? .breeze : .qwen3
+            return Self(modelID: backend == .breeze ? ManagedModelID.breezeTTS2.rawValue
+                        : Qwen3TTSResources.defaultModelId, modelPath: path.path, backend: backend)
         }
         guard let spec = ManagedModelCatalog.spec(for: selected),
-              spec.category == .speechTTS, Qwen3TTSResources.supportedModelIds.contains(spec.id) else {
+              spec.category == .speechTTS,
+              Qwen3TTSResources.supportedModelIds.contains(spec.id) || spec.id == ManagedModelID.breezeTTS2.rawValue else {
             throw Qwen3TTSError.unsupportedModelId(selected)
         }
-        return Self(modelID: spec.id, modelPath: nil)
+        return Self(modelID: spec.id, modelPath: nil,
+                    backend: spec.id == ManagedModelID.breezeTTS2.rawValue ? .breeze : .qwen3)
     }
 
-    public func makeGenerator() -> Qwen3TTSGenerator { Qwen3TTSGenerator(modelId: modelID) }
+    public func makeGenerator() -> SpeechSynthesisGenerator {
+        switch backend {
+        case .qwen3: .qwen3(Qwen3TTSGenerator(modelId: modelID))
+        case .breeze: .breeze(BreezeTTSGenerator(modelID: modelID))
+        }
+    }
 
-    public func executor(using generator: Qwen3TTSGenerator) -> Qwen3TTSSynthesisExecutor {
-        Qwen3TTSSynthesisExecutor(generator: generator, modelPath: modelPath)
+    public func executor(using generator: SpeechSynthesisGenerator) -> any SpeechSynthesisExecutor {
+        switch generator {
+        case .qwen3(let value): Qwen3TTSSynthesisExecutor(generator: value, modelPath: modelPath)
+        case .breeze(let value): BreezeTTSSynthesisExecutor(generator: value, modelPath: modelPath)
+        }
+    }
+}
+
+private struct ModelTypeProbe: Decodable {
+    let modelType: String?
+    enum CodingKeys: String, CodingKey { case modelType = "model_type" }
+}
+
+public enum SpeechSynthesisGenerator: Sendable {
+    case qwen3(Qwen3TTSGenerator)
+    case breeze(BreezeTTSGenerator)
+
+    public func unload() async {
+        switch self {
+        case .qwen3(let value): await value.unload()
+        case .breeze(let value): await value.unload()
+        }
     }
 }
 
