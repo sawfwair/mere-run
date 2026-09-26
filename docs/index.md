@@ -123,6 +123,7 @@ flags that actually change the output.
 
 Serve it, schedule it, measure it, and keep it honest.
 
+- [Business use cases](/business/) — start with a support ticket or a shared archive
 - [Portable workflows, executors, and run artifacts](/workflows)
 - [Model and adapter management](/runtime/model-management)
 - [Raycast example integration](/raycast) — one launcher client for the macOS deep-link routes
