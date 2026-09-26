@@ -328,6 +328,15 @@
     "resourceName": "handbook-privacy-filter.md"
   },
   {
+    "topic": "handbook-breeze-tts-2",
+    "title": "Breeze TTS 2 (BreezeBlue)",
+    "category": "Speech",
+    "models": [
+      "speech-tts-breeze-2"
+    ],
+    "resourceName": "handbook-breeze-tts-2.md"
+  },
+  {
     "topic": "handbook-qwen3-tts",
     "title": "Qwen3 TTS (Qwen)",
     "category": "Speech",

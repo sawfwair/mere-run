@@ -315,7 +315,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: primary)
             }
 
-        case .qwen3TTS:
+        case .qwen3TTS, .breezeTTS:
             return direct(spec, route: "speech synthesize") { runner in
                 try await runner.installedTTSCheck(model: spec.id)
             }

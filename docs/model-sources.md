@@ -130,6 +130,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-lfm25-2.6b-bf16` |
 | `vision-chat` | `vision-chat-lfm25-3b-8bit` |
 | `vision-chat` | `vision-chat-lfm25-3b-bf16` |
+| `speech-tts` | `speech-tts-breeze-2` |
 | `speech-tts` | `speech-tts-qwen3-nano` |
 | `speech-tts` | `speech-tts-qwen3-customvoice` |
 | `speech-asr` | `speech-asr-qwen3` |

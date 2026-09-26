@@ -12,7 +12,7 @@ import MereRunKVCache
 
 package final class Qwen3TTSSpeechTokenizer: Module {
     package let config: Qwen3TTSTokenizerConfig
-    let decodeUpsampleRate: Int
+    package let decodeUpsampleRate: Int
 
     @ModuleInfo(key: "decoder") var decoder: Qwen3TTSSpeechTokenizerDecoder
     @ModuleInfo(key: "encoder_model") package var encoderModel: Qwen3TTSSpeechTokenizerEncoder?

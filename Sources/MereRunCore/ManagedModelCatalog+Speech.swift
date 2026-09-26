@@ -3,6 +3,32 @@ import Foundation
 extension ManagedModelCatalog {
     static let speechSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
+            id: ManagedModelID.breezeTTS2.rawValue,
+            category: .speechTTS,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: breezeTTS2Repository,
+                revision: breezeTTS2Revision,
+                patterns: ["LICENSE", "README.md", "config.json", "generation_config.json",
+                           "model.safetensors.index.json", "model-*.safetensors",
+                           "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json",
+                           "audio_tokenizer/*"]
+            ),
+            upstreamRepoId: breezeTTS2Repository,
+            upstreamRevision: breezeTTS2Revision,
+            usageRestriction: usageRestriction(
+                summary: "Breeze TTS 2 weights and self-hosted outputs are for research and non-commercial use only.",
+                license: "BreezeBlue Research and Non-Commercial License",
+                sourceRepoId: breezeTTS2Repository,
+                sourceRevision: breezeTTS2Revision,
+                licenseURL: "https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/\(breezeTTS2Revision)/LICENSE"
+            ),
+            validationKind: .breezeTTS,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 7_648_850_000,
+            defaultCLICommands: ["speech synthesize"]
+        ),
+        ManagedModelSpec(
             id: "speech-tts-qwen3-nano",
             category: .speechTTS,
             installShape: .directoryRoot,
@@ -148,4 +174,6 @@ extension ManagedModelCatalog {
     ]
 
     private static let sortformerUpstreamRevision = "e23e6404bd9859e93edbf94a740eb1c7fc58f12e"
+    private static let breezeTTS2Repository = "BreezeBlue/Breeze-TTS-2"
+    private static let breezeTTS2Revision = "3e28c5151381a722f1d8661b4118c298caa77aa4"
 }

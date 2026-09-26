@@ -1,9 +1,29 @@
 import XCTest
 import AudioCore
+import AudioTTS
 import MereRunCore
 @testable import MereRunCLI
 
 final class SpeechSynthesizeCommandParsingTests: XCTestCase {
+    func testBreezeSelectionUsesManagedIDAndIdentifiesLocalCheckpoint() throws {
+        let managed = try SpeechSynthesisModelSelection.resolve("speech-tts-breeze-2")
+        XCTAssertEqual(managed.backend, .breeze)
+        XCTAssertNil(managed.modelPath)
+        let apiPlan = try APIServerContract.speechPlan(from: OpenAIAudioSpeechRequest(
+            model: "speech-tts-breeze-2", input: "Hello"
+        ))
+        XCTAssertEqual(try apiPlan.modelSelection().backend, .breeze)
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Data(#"{"model_type":"breeze"}"#.utf8).write(to: directory.appendingPathComponent("config.json"))
+        let local = try SpeechSynthesisModelSelection.resolve(directory.path)
+        XCTAssertEqual(local.modelID, "speech-tts-breeze-2")
+        XCTAssertEqual(local.modelPath, directory.path)
+        XCTAssertEqual(local.backend, .breeze)
+    }
+
     func testCLIAndAPIUseEquivalentDefaultAndExplicitSynthesisPlans() throws {
         let output = URL(fileURLWithPath: "/fixture/output.wav")
         let defaults = try SpeechSynthesize.parse(["hello", "--output", output.path])

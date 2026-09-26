@@ -2,18 +2,22 @@
 
 ## Purpose
 
-Generate WAV speech from text with Qwen3-TTS. Use style mode for described voices or, with the CustomVoice checkpoint, a named speaker, and clone mode when a reference profile or audio file should guide timbre.
+Generate WAV speech from text with Qwen3-TTS or Breeze TTS 2. Use style mode for described voices or, with the CustomVoice checkpoint, a named speaker, and clone mode when a reference profile or audio file should guide timbre.
 
 ## Required Models
 
 - `speech-tts-qwen3-nano` for voice design/style.
 - `speech-tts-qwen3-customvoice` for named speakers (`--speaker`) and clone
   workflows.
+- `speech-tts-breeze-2` for English and Chinese voice design, cloning, and
+  direction. Its checkpoint and self-hosted outputs are restricted to research
+  and non-commercial use.
 
 ## Install And Check
 
 ```bash
 mere.run model pull speech-tts-qwen3-nano
+mere.run model pull speech-tts-breeze-2 --accept-model-license
 mere.run speech synthesize --help
 ```
 
@@ -22,7 +26,8 @@ mere.run speech synthesize --help
 - positional text: text to speak.
 - `--output`, `-o`: required WAV path.
 - `--model`, `-m`: model id or local path.
-- `--voice`, `-v`: natural-language voice description, style mode only. With
+- `--voice`, `-v`: natural-language voice description. Breeze TTS 2 also uses
+  it with a clone reference for voice direction. With
   `--speaker` it is an optional delivery instruction, such as "Speak slowly
   and warmly"; the default description is not sent with a speaker.
 - `--speaker`: a named speaker of a CustomVoice checkpoint, style mode only.
@@ -49,6 +54,7 @@ The set of supported languages is defined by the TTS model, not by mere.run, and
 
 - `speech-tts-qwen3-nano`: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 - `speech-tts-qwen3-customvoice`: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+- `speech-tts-breeze-2`: https://huggingface.co/BreezeBlue/Breeze-TTS-2
 
 Run `mere.run model list` to see which TTS models are installed locally.
 
@@ -94,6 +100,30 @@ mere.run speech synthesize \
 `dylan` speaks Beijing dialect and `eric` Sichuan dialect when `--language` is
 `auto` or `chinese`, as the upstream model does.
 
+## Breeze TTS 2
+
+The model runs through a native Swift/MLX text encoder, acoustic backbone,
+depth decoder, and audio codec. It does not use a Python server. The pinned
+checkpoint does not download automatically because its weights and self-hosted
+outputs are restricted to research and non-commercial use. Review the license
+before using `model pull --accept-model-license`.
+
+```bash
+mere.run speech synthesize "Hello from Breeze." \
+  --model speech-tts-breeze-2 \
+  --voice "A warm, confident voice" --output ./breeze.wav
+
+mere.run speech synthesize "A directed line." \
+  --model speech-tts-breeze-2 --mode clone \
+  --ref-audio ./reference.wav --ref-text "Exact reference transcript." \
+  --voice "Speak slowly and softly" --output ./directed.wav
+```
+
+Use the exact words spoken in the reference clip. Breeze TTS 2 does not have
+named speakers. Its model generates 24 kHz
+audio, and `--language` is a hint for the other TTS backends; Breeze uses the
+text and reference directly.
+
 ## Prompting Patterns
 
 - Put delivery style in `--voice`: age range, accent, energy, pace, emotion, microphone feel.
@@ -136,3 +166,4 @@ mere.run speech synthesize \
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift
 - https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 - https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+- https://huggingface.co/BreezeBlue/Breeze-TTS-2

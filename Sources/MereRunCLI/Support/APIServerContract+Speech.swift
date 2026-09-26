@@ -31,7 +31,7 @@ extension APIServerContract {
                 return try SpeechSynthesisModelSelection.resolve(modelID)
             } catch Qwen3TTSError.unsupportedModelId {
                 throw APIRequestValidationError.invalidField(
-                    "model", "use a mere.run TTS model id or a local Qwen3-TTS model path"
+                    "model", "use a mere.run TTS model id or a local supported TTS model path"
                 )
             }
         }

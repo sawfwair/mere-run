@@ -82,6 +82,7 @@ public enum ManagedModelID: String, CaseIterable, Hashable, Sendable {
     case deepseekV4Flash = "text-agent-deepseek-v4-flash"
     case qwen3TTSNano = "speech-tts-qwen3-nano"
     case qwen3TTSCustomVoice = "speech-tts-qwen3-customvoice"
+    case breezeTTS2 = "speech-tts-breeze-2"
     case qwen3ASR = "speech-asr-qwen3"
     case parakeetASR = "speech-asr-parakeet"
     case sortformerDiarization = "speech-diarization-sortformer"

@@ -774,6 +774,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                "speech-tts-breeze-2",
+                "Breeze TTS 2",
+                "Synthesizes English and Chinese speech with voice design, cloning, and direction. Research and non-commercial use only.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 "speech-asr-qwen3",
                 "Speech recognition, multilingual",
                 "Transcribes and translates speech with Qwen3 ASR.",

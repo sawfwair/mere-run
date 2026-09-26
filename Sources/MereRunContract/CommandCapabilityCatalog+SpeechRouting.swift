@@ -22,6 +22,8 @@ extension MereRunCapabilityCatalog {
     enum SpeechSynthesizeFamily: String, MereRunFamilyID {
         case style
         case customVoice = "custom-voice"
+        case breeze
+        case breezeClone = "breeze-clone"
         case clone
     }
 
@@ -97,9 +99,17 @@ extension MereRunCapabilityCatalog {
                 models: ["speech-tts-qwen3-customvoice"], selectors: [.init(flag: "--mode", values: ["style"])]
             ),
             .init(
+                SpeechSynthesizeFamily.breeze, title: "Breeze TTS 2",
+                models: ["speech-tts-breeze-2"], selectors: [.init(flag: "--mode", values: ["style"])]
+            ),
+            .init(
                 SpeechSynthesizeFamily.clone, title: "Qwen3-TTS clone",
                 models: ["speech-tts-qwen3-nano", "speech-tts-qwen3-customvoice"],
                 selectors: [.init(flag: "--mode", values: ["clone"])]
+            ),
+            .init(
+                SpeechSynthesizeFamily.breezeClone, title: "Breeze TTS 2 clone and direction",
+                models: ["speech-tts-breeze-2"], selectors: [.init(flag: "--mode", values: ["clone"])]
             )
         ]
     )

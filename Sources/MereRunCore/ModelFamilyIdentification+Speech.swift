@@ -29,12 +29,21 @@ extension ModelFamilyIdentifier {
     static let speechSynthesizeProbe: Probe = { model, invocation in
         let config = URL(fileURLWithPath: model).standardizedFileURL.appendingPathComponent("config.json")
         guard let data = try? Data(contentsOf: config),
+              let modelType = try? JSONDecoder().decode(SpeechModelType.self, from: data),
               let speakers = try? JSONDecoder().decode(Qwen3TTSSpeakerTable.self, from: data) else {
             return nil
         }
-        if invocation.value("--mode") == "clone" { return .family("clone") }
+        if invocation.value("--mode") == "clone" {
+            return .family(modelType.modelType == "breeze" ? "breeze-clone" : "clone")
+        }
+        if modelType.modelType == "breeze" { return .family("breeze") }
         return .family(speakers.names.isEmpty ? "style" : "custom-voice")
     }
+}
+
+private struct SpeechModelType: Decodable {
+    let modelType: String?
+    enum CodingKeys: String, CodingKey { case modelType = "model_type" }
 }
 
 /// The speaker names in a Qwen3-TTS `config.json`; each id's shape is the runtime's concern.

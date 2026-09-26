@@ -214,6 +214,8 @@ Speech synthesis command path:
 - Model selection and native adapter: `Sources/AudioTTS/Qwen3TTS/SpeechSynthesisModelSelection.swift`
 - CLI: `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
 - Runtime entry point: `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator.swift`
+- Breeze runtime entry point: `Sources/AudioTTS/BreezeTTS/BreezeTTSGenerator.swift`
+- Breeze Swift/MLX graph: `Sources/AudioBreezeTTSModel/BreezeTTSModel.swift`
 - Read next:
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Loading.swift`
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Generation.swift`

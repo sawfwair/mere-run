@@ -92,6 +92,9 @@ extension CommandArguments {
             if !draft.refAudioPath.isBlank { args.option(F.refAudio, draft.refAudioPath) }
             if !draft.refText.isBlank { args.option(F.refText, draft.refText) }
             if !draft.saveProfileName.isBlank { args.option(F.saveProfile, draft.saveProfileName) }
+            if draft.model == "speech-tts-breeze-2", !draft.secondaryText.isBlank {
+                args.option(F.voice, draft.secondaryText)
+            }
         } else {
             if let speaker = draft.voiceSpeaker, !speaker.isBlank { args.option(F.speaker, speaker) }
             if !draft.secondaryText.isBlank { args.option(F.voice, draft.secondaryText) }

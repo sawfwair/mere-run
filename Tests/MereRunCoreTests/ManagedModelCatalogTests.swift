@@ -194,6 +194,7 @@ final class ManagedModelCatalogTests: XCTestCase {
 
     func testRestrictedModelInventoryIsCompleteAndCannotAutoDownload() throws {
         let expected = Set([
+            "speech-tts-breeze-2",
             "image-qwen-21",
             "image-flux1-dev",
             "image-flux2-dev",
@@ -1705,6 +1706,21 @@ final class ManagedModelCatalogTests: XCTestCase {
             XCTAssertEqual(spec.validationKind, .qwen3TTS)
             XCTAssertEqual(spec.hubFallback?.patterns.contains("speech_tokenizer/*"), true)
         }
+    }
+
+    func testBreezeTTS2RequiresPinnedLicensedCheckpointAndCodec() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "speech-tts-breeze-2"))
+        XCTAssertEqual(spec.category, .speechTTS)
+        XCTAssertEqual(spec.validationKind, .breezeTTS)
+        XCTAssertEqual(spec.hubFallback?.revision, "3e28c5151381a722f1d8661b4118c298caa77aa4")
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertNotNil(spec.usageRestriction)
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let missing = spec.missingPaths(in: root, fileManager: .default).map(\.path)
+        XCTAssertTrue(missing.contains { $0.hasSuffix("audio_tokenizer/model.safetensors") })
+        XCTAssertTrue(missing.contains { $0.hasSuffix("model-00001-of-00002.safetensors") })
     }
 
     func testQwen3TTSRejectsRootMissingSpeechTokenizer() throws {
