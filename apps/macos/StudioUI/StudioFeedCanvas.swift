@@ -24,6 +24,11 @@ struct StudioFeedActions {
     /// The slot the empty state's primary control fills; nil when the task needs no file first.
     let attach: StudioAttachTarget?
     var focus: (StudioLibraryItem, URL) -> Void = { _, _ in }
+    /// "Run variations": the row's command 2, 4, or 8 times with a new seed each. nil where the
+    /// surface does not offer it.
+    var runVariations: ((StudioLibraryItem, StudioVariationCount) -> Void)?
+    /// Opens Compare on these rows. nil where the surface does not offer it.
+    var compare: (([StudioLibraryItem]) -> Void)?
 }
 
 /// What the readiness card needs to offer the next step itself. The model picker is the
@@ -62,6 +67,8 @@ struct StudioFeedCanvas: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleCardIDs: Set<UUID> = []
     @State private var scrollTarget: UUID?
+    /// The finished cards picked with "Select to compare", in the order they were picked.
+    @State private var compareSelection: [UUID] = []
 
     private enum Metrics {
         static let cardSpacing: CGFloat = 14
@@ -113,8 +120,9 @@ struct StudioFeedCanvas: View {
                             StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, attach: actions.attach)
                                 .padding(.vertical, MereRunTheme.Spacing.xl)
                         }
+                        let variations = StudioVariations.positions(in: cards.map(\.item))
                         ForEach(cards) { card in
-                            cardView(card)
+                            cardView(card, variation: variations[card.id])
                                 .id(card.id)
                                 .background {
                                     GeometryReader { geometry in
@@ -154,7 +162,11 @@ struct StudioFeedCanvas: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if pendingNewResultIsOffscreen, let newResultID {
+                if !comparedItems.isEmpty, let compare = actions.compare {
+                    StudioCompareSelectionBar(items: comparedItems, onCompare: compare) { compareSelection = [] }
+                        .padding(.bottom, 10)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else if pendingNewResultIsOffscreen, let newResultID {
                     StudioNewResultPill {
                         scrollTarget = newResultID
                     }
@@ -185,15 +197,33 @@ struct StudioFeedCanvas: View {
         return .handled
     }
 
+    /// The picked cards still in the feed, in the order they were picked.
+    private var comparedItems: [StudioLibraryItem] {
+        compareSelection.compactMap { id in cards.first { $0.id == id && $0.kind == .generation }?.item }
+    }
+
+    private func toggleCompare(_ item: StudioLibraryItem) {
+        if let index = compareSelection.firstIndex(of: item.id) {
+            compareSelection.remove(at: index)
+        } else {
+            compareSelection.append(item.id)
+        }
+    }
+
     @ViewBuilder
-    private func cardView(_ card: StudioFeedCard) -> some View {
+    private func cardView(_ card: StudioFeedCard, variation: StudioVariationPosition?) -> some View {
         let highlighted = highlightedID == card.id
         switch card.kind {
         case .generation:
             StudioGenerationCard(
                 item: card.item,
                 isHighlighted: highlighted,
-                actions: actions
+                actions: actions,
+                variation: variation,
+                variationGroup: card.item.variationGroup.map { StudioCompare.groupItems($0, in: cards.map(\.item)) } ?? [],
+                isPickedForCompare: compareSelection.contains(card.id),
+                onPickForCompare: actions.compare != nil && StudioCompare.media(of: card.item) != nil
+                    ? { toggleCompare(card.item) } : nil
             )
         case .running:
             if let job = card.job {
@@ -396,9 +426,23 @@ struct StudioGenerationCard: View {
     let item: StudioLibraryItem
     let isHighlighted: Bool
     let actions: StudioFeedActions
+    /// Where the run sits in its "Run variations" group, if it was one.
+    var variation: StudioVariationPosition?
+    /// The group's finished runs Compare opens with; empty until two have finished.
+    var variationGroup: [StudioLibraryItem] = []
+    var isPickedForCompare = false
+    /// "Select to compare"; nil where the card cannot be compared.
+    var onPickForCompare: (() -> Void)?
     @Environment(\.studioModelTitles) private var titles
+    @Environment(\.studioScopeSource) private var scopeSource
 
     @State private var copied = false
+
+    /// Where the command takes a seed, Vary and the menu offer a group of variations too.
+    private var variationsRun: ((StudioVariationCount) -> Void)? {
+        guard let run = actions.runVariations, StudioVariations.applies(to: item, source: scopeSource) else { return nil }
+        return { run(item, $0) }
+    }
 
     private var canRestoreSettings: Bool {
         StudioLibraryDraftRestoration.canRestore(item)
@@ -458,7 +502,9 @@ struct StudioGenerationCard: View {
         // it): found once per body, since finding it stats the artifacts and reads a file's front.
         let card = StudioResultRenderers.cardRendering(for: item, files: files)
         VStack(alignment: .leading, spacing: 12) {
-            StudioCardHeader(item: item, when: StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date()))
+            StudioCardHeader(item: item, when: [variation.map { "\($0.index) of \($0.count)" },
+                                                StudioFeedTime.label(for: item.createdAt, now: referenceDate ?? Date())]
+                .compactMap { $0 }.joined(separator: " · "))
             outputs(card: card)
             actionRow
         }
@@ -534,8 +580,17 @@ struct StudioGenerationCard: View {
                 }
                 .buttonStyle(.mereSecondary)
             }
-            if item.commandDraft != nil, item.templateID != nil {
+            if let variationsRun {
+                StudioVaryMenuButton(vary: { actions.vary(item) }, run: variationsRun)
+            } else if item.commandDraft != nil, item.templateID != nil {
                 cardIcon("shuffle", help: "Vary with a new seed") { actions.vary(item) }
+            }
+            if variationGroup.count >= StudioCompare.selectionRange.lowerBound, let compare = actions.compare {
+                Button { compare(variationGroup) } label: {
+                    Label("Compare \(variationGroup.count)", systemImage: StudioVariationSymbols.compare)
+                }
+                .buttonStyle(.mereSecondary)
+                .help("Compare this run's variations side by side")
             }
             if canRestoreSettings {
                 cardIcon("slider.horizontal.3", help: "Use these settings") { actions.useSettings(item) }
@@ -546,6 +601,12 @@ struct StudioGenerationCard: View {
             Menu {
                 if item.commandDraft != nil, item.templateID != nil {
                     Button("Rerun with the same settings") { actions.rerun(item) }
+                }
+                if let variationsRun {
+                    StudioVariationsMenuItems(run: variationsRun)
+                }
+                if let onPickForCompare {
+                    Button(isPickedForCompare ? "Deselect for compare" : "Select to compare", action: onPickForCompare)
                 }
                 if canRestoreSettings {
                     Button("Use these settings") { actions.useSettings(item) }
@@ -567,6 +628,17 @@ struct StudioGenerationCard: View {
             .fixedSize()
             .accessibilityLabel("More result actions")
             Spacer(minLength: 8)
+            if let onPickForCompare {
+                Button(action: onPickForCompare) {
+                    Image(systemName: isPickedForCompare ? "checkmark.circle.fill" : "circle")
+                        .font(.callout.weight(.medium))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.mereIcon(tint: isPickedForCompare ? MereRunTheme.accent : MereRunTheme.textMuted))
+                .help(isPickedForCompare ? "Deselect for compare" : "Select to compare")
+                .accessibilityLabel("Select to compare")
+                .accessibilityAddTraits(isPickedForCompare ? [.isButton, .isSelected] : .isButton)
+            }
             if let primaryURL {
                 StudioSendToButton(url: primaryURL)
                 Button("Save to…") { actions.saveTo(primaryURL) }

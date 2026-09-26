@@ -26,6 +26,8 @@ struct StudioComposer: View {
     let onShowModels: () -> Void
     /// Puts a prompt from the page's history in the field (↑, or Recent prompts) as an undo step.
     let onRecallPrompt: (String) -> Void
+    /// "Run variations" beside Run; nil hides it (a command without a seed, a conversation).
+    var onRunVariations: ((StudioVariationCount) -> Void)?
     /// Whether the composer carries the scope note: only while no side column is open. The
     /// inspector shows it at its top, beside the controls it explains, and the Command view as
     /// its "Not sent" line.
@@ -158,6 +160,10 @@ struct StudioComposer: View {
                     StudioRecentPromptsMenu(prompts: promptHistory, onPick: recallFromMenu)
                 }
                 if showsPaperclip { paperclipButton }
+                // A batch already runs once per file; variations of a batch are not offered.
+                if let onRunVariations, mode.attachmentSlots(for: draft, source: scopeSource).batchRunCount(in: draft) == nil {
+                    StudioVariationsRunButton(isEnabled: sendEnabled, disabledReason: sendHelp, run: onRunVariations)
+                }
                 if isRunning { stopButton } else { sendButton }
             }
         }

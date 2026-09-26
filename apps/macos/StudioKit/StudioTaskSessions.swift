@@ -155,7 +155,11 @@ package final class StudioTaskSessions {
         }
     }
 
+    /// Focuses a result, or with nil returns the page to its canvas and composer. Either way a
+    /// comparison the page showed closes (`setComparison`), so "Use these settings" or Send to
+    /// from a Compare pane lands on a composer that is visible.
     package func setFocus(_ selection: StudioResultSelection?, for task: StudioTask) {
+        set(Optional<StudioCompareSelection>.none, for: task.rawValue + ".compare")
         set(selection, for: task.rawValue + ".focus")
     }
 

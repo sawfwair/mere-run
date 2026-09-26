@@ -144,7 +144,7 @@ final class StudioLibraryCollectionsSnapshotTests: XCTestCase {
             selectedID: .constant(cutout.id),
             onSelect: { _ in }, onDelete: { _, _ in }, onRename: { _, _ in }, onToggleFavorite: { _ in },
             onQuickLook: { _ in }, onReveal: { _ in }, onExport: { _ in }, onRetry: { _ in }, onEdit: { _ in },
-            onUseSettings: { _ in }, onCompare: { _, _ in }
+            onUseSettings: { _ in }, onCompare: { _ in }, onRunVariations: { _, _ in }
         )
         .frame(width: 300, height: 560)
         .environmentObject(library)

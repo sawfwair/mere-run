@@ -1161,6 +1161,9 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
     /// The batch this run was submitted in: every file of one Run over a batched input shares
     /// it (`StudioInputBatch`). Optional and additive; a single run leaves it nil.
     package var batchGroup: UUID? = nil
+    /// The "Run variations" submission this row is one of (`StudioVariations`): every run of the
+    /// group shares the id. Optional and additive, so rows written before variations decode as nil.
+    package var variationGroup: UUID? = nil
 
     package var isStarred: Bool { isFavorite == true }
 

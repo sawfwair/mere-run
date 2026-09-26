@@ -70,6 +70,8 @@ package enum StudioShortcutContext: String, CaseIterable, Sendable {
     case list
     /// While the composer's prompt has focus.
     case prompt
+    /// While Compare shows sounds or videos (it takes focus when it opens).
+    case compare
 }
 
 /// Every action Studio binds a key to.
@@ -93,6 +95,8 @@ package enum StudioShortcutID: Hashable, Sendable {
     case quickLookSelection
     case olderPrompt
     case newerPrompt
+    case comparePlayPause
+    case compareSide
 }
 
 /// One row of the table: the action, the menu it is in, what it says there, and its key.
@@ -171,6 +175,14 @@ package enum StudioKeyboardShortcuts {
             StudioShortcut(
                 id: .newerPrompt, menu: "Prompt", title: "Next prompt, then what you were typing",
                 combo: .init(.downArrow), context: .prompt
+            ),
+            StudioShortcut(
+                id: .comparePlayPause, menu: "Compare", title: "Play or pause", combo: .init(.space), context: .compare
+            ),
+            // 1 stands for the row: 2…8 hear the second to eighth pane the same way.
+            StudioShortcut(
+                id: .compareSide, menu: "Compare", title: "Hear another pane at the same moment", combo: .init("1"),
+                context: .compare
             ),
         ]
         return fixed + domains + rest
@@ -301,6 +313,8 @@ package enum StudioKeyboardShortcuts {
             if case .domain = shortcut.id {
                 guard sections.last?.title != shortcut.menu else { continue }
                 row = HelpRow(title: "Sidebar sections, in order", keys: domainRangeSymbols)
+            } else if shortcut.id == .compareSide {
+                row = HelpRow(title: shortcut.title, keys: "1–8")
             } else {
                 row = HelpRow(title: shortcut.title, keys: shortcut.combo.symbols)
             }

@@ -104,6 +104,14 @@ package final class StudioTaskRunner {
     /// the Library and the inference lane, remembered as the task's current job for Stop.
     @discardableResult
     package func run(_ draft: StudioTaskDraft, task: StudioTask) throws -> StudioRunRequest {
+        try ensureRunnable(draft, task: task)
+        let request = try self.request(for: draft, task: task)
+        submit(request, task: task)
+        return request
+    }
+
+    /// The gates a task draft clears before any of its runs is prepared.
+    private func ensureRunnable(_ draft: StudioTaskDraft, task: StudioTask) throws {
         let readiness = controller.readiness(for: task)
         if readiness.blocksRun { throw StudioValidationError(message: readiness.message(titles: controller.modelStore.titles)) }
         // The contract leaves an input optional when the command has another mode without one
@@ -123,9 +131,51 @@ package final class StudioTaskRunner {
         if task.analyzeArchetype?.inputKind(for: draft.templateID) == .text, draft.prompt.isBlank {
             throw StudioValidationError(message: "Type the text first.")
         }
-        let request = try self.request(for: draft, task: task)
-        submit(request, task: task)
-        return request
+    }
+
+    // MARK: Variations
+
+    /// The composer's "Run variations" on a shared task workspace: the draft once per seed,
+    /// each prepared the way Run prepares it, then submitted as one group.
+    @discardableResult
+    package func runVariations(_ draft: StudioTaskDraft, task: StudioTask, seeds: [String]) throws -> [StudioRunRequest] {
+        try ensureRunnable(draft, task: task)
+        let requests = try seeds.map { try request(for: StudioVariations.seeded(draft, seed: $0), task: task) }
+        submitGroup(requests, task: task)
+        return requests
+    }
+
+    /// Submits requests that differ only in their seed — a prompt composer's variations, or a
+    /// Library row's replays — as one variation group: each destination made real, each run
+    /// recorded and launched like any other, then the rows filed under one group id.
+    @discardableResult
+    package func submitVariations(_ requests: [StudioRunRequest], task: StudioTask) -> StudioVariationSubmission {
+        var fallbackReason: String?
+        let prepared = requests.map { request in
+            let prepared = StudioOutputLocation.preparing(request)
+            if let reason = prepared.fallbackReason {
+                controller.noteOutputFallback(reason)
+                fallbackReason = reason
+            }
+            return prepared.request
+        }
+        submitGroup(prepared, task: task)
+        return StudioVariationSubmission(requests: prepared, outputFallbackReason: fallbackReason)
+    }
+
+    /// "Run variations" on a Library row: its recorded command once per seed, never the task's
+    /// current Command edits, submitted from the task that owns the row.
+    @discardableResult
+    package func replayVariations(of item: StudioLibraryItem, seeds: [String]) throws -> [StudioRunRequest] {
+        let requests = try StudioVariations.replayRequests(for: item, seeds: seeds, source: controller.scopeSource)
+        return submitVariations(requests, task: StudioVariations.submittingTask(for: item)).requests
+    }
+
+    private func submitGroup(_ requests: [StudioRunRequest], task: StudioTask) {
+        for request in requests { submit(request, task: task) }
+        // Stop acts on the run that starts first, not on the last one queued behind it.
+        if let first = requests.first { sessions.set(Optional(first.id), for: task.rawValue + ".requestID") }
+        library.assignVariationGroup(UUID(), to: requests.map(\.id))
     }
 
     /// Runs a request a project, session, or manage page built from its own `CommandDraft`,

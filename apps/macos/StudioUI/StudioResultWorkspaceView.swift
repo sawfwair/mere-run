@@ -195,7 +195,7 @@ struct StudioResultWorkspaceView: View {
     private func resetViewport() { zoom = 1; pan = .zero }
 }
 
-private struct StudioResultImagePane: View {
+struct StudioResultImagePane: View {
     let url: URL
     let label: String
     @Binding var zoom: CGFloat

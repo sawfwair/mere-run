@@ -63,7 +63,8 @@ final class StudioKeyboardShortcutsTests: XCTestCase {
 
     func testTheHelpWindowListsEveryShortcutWithTheSidebarFolded() {
         let sections = StudioKeyboardShortcuts.helpSections
-        XCTAssertEqual(sections.map(\.title), ["File", "Edit", "View", "Go", "Run", "Window", "Help", "Library and feed", "Prompt"])
+        XCTAssertEqual(sections.map(\.title), ["File", "Edit", "View", "Go", "Run", "Window", "Help", "Library and feed", "Prompt", "Compare"])
+        XCTAssertEqual(sections.last?.rows.map(\.keys), ["Space", "1–8"], "Compare's keys, live while Compare has focus")
         let rows = sections.flatMap(\.rows)
         let listed = StudioKeyboardShortcuts.all.filter {
             if case .domain = $0.id { return false }

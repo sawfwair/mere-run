@@ -33,20 +33,28 @@ package enum StudioResultComparison {
         item.templateID?.capability != nil && (item.commandArguments != nil || item.commandDraft != nil)
     }
 
+    /// Flags a comparison never lists: where a run wrote (every run writes somewhere else),
+    /// how it reported progress, and credentials.
+    package static let unlistedFlags: Set<String> = [
+        "--output", "--json-output", "--mask-output-dir", "--receipt",
+        "--progress-json", "--api-key", "--admin-password", "--infinity-api-key", "--hf-token",
+        "--structured-prompt-output", "--lrc-output", "--recipe-output", "--daw-bundle", "--timings-output"
+    ]
+
+    /// The contract form of the command a row recorded; nil for a row without one.
+    package static func recordedForm(_ item: StudioLibraryItem, source: StudioScopeSource) -> StudioConsoleDraft? {
+        guard hasSettings(item), let id = item.templateID, let template = CommandCatalog.template(id: id) else { return nil }
+        return StudioExecution(templateID: id, arguments: item.commandArguments
+            ?? item.commandDraft.map { template.arguments(from: $0, source: source) } ?? []).form
+    }
+
     package static func differences(
         _ first: StudioLibraryItem,
         _ second: StudioLibraryItem,
         source: StudioScopeSource
     ) -> [StudioResultDifference] {
-        func form(_ item: StudioLibraryItem) -> StudioConsoleDraft? {
-            guard hasSettings(item), let id = item.templateID, let template = CommandCatalog.template(id: id) else { return nil }
-            return StudioExecution(templateID: id, arguments: item.commandArguments
-                ?? item.commandDraft.map { template.arguments(from: $0, source: source) } ?? []).form
-        }
-        guard let a = form(first), let b = form(second) else { return [] }
-        let omitted: Set<String> = ["--output", "--json-output", "--mask-output-dir", "--receipt",
-                                   "--progress-json", "--api-key", "--admin-password", "--infinity-api-key", "--hf-token",
-                                   "--structured-prompt-output", "--lrc-output", "--recipe-output", "--daw-bundle", "--timings-output"]
+        guard let a = recordedForm(first, source: source), let b = recordedForm(second, source: source) else { return [] }
+        let omitted = unlistedFlags
         let labels = Dictionary(((first.templateID?.capability?.options ?? []) + (second.templateID?.capability?.options ?? [])).map { ($0.flag, $0.label) },
                                 uniquingKeysWith: { first, _ in first })
         var differences: [StudioResultDifference] = []

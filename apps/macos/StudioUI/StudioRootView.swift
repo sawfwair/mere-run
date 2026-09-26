@@ -81,8 +81,6 @@ private struct StudioWorkspaceView: View {
     @State private var outputFallbackAnnounced = false
     /// What Run again or Vary left out of a Library row's recorded command.
     @State private var replayNotice: StudioScopeNotice?
-    /// The "B" side Library ▸ Compare asked for, handed to the focused result once it opens.
-    @State private var pendingComparison: StudioResultSelection?
 
     /// Once per session: the first run that moved says so; later ones would only repeat it.
     private func announceOutputFallback(_ reason: String) {
@@ -586,7 +584,8 @@ private struct StudioWorkspaceView: View {
             onRetry: retryLibraryItem,
             onEdit: editLibraryItem,
             onUseSettings: useLibraryItemSettings,
-            onCompare: compareLibraryItems,
+            onCompare: openComparison,
+            onRunVariations: runLibraryVariations,
             leadingInset: windowChromeInset
         )
     }
@@ -835,10 +834,14 @@ private struct StudioWorkspaceView: View {
 
     private var promptWorkspace: some View {
         VStack(spacing: 0) {
-            if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
+            if let compared = comparedItems {
+                StudioCompareView(items: compared,
+                    onClose: { controller.taskSessions.setComparison(nil, for: destination.task); promptFocused = true },
+                    onKeep: { toggleLibraryFavorite($0.id) }, onUseSettings: useLibraryItemSettings)
+                .id(compared.map(\.id))
+            } else if let selection = focusedResult, let item = library.items.first(where: { $0.id == selection.itemID }) {
                 StudioResultWorkspaceView(item: item, url: selection.url, items: library.items,
-                    initialComparison: pendingComparison,
-                    onClose: { focusedResult = nil; pendingComparison = nil; promptFocused = true }, onVary: varyLibraryItem,
+                    onClose: { focusedResult = nil; promptFocused = true }, onVary: varyLibraryItem,
                     onSave: saveOutput, onContinue: continueResult)
             } else if mode.isConversational {
                 converseSurface
@@ -846,7 +849,7 @@ private struct StudioWorkspaceView: View {
                 canvas
             }
 
-            if focusedResult == nil {
+            if focusedResult == nil && comparedItems == nil {
                 if let batch = prompt.runner.activeBatch(for: destination.task) {
                     StudioBatchStatusBar(progress: batch, onStop: { prompt.runner.stopBatch(batch.group) })
                 }
@@ -963,7 +966,6 @@ private struct StudioWorkspaceView: View {
         }
         navigation.selectedLibraryID = item.id
         controller.taskSessions.rememberSelection(item.id, for: mode)
-        pendingComparison = nil
         focusedResult = StudioResultSelection(itemID: item.id, url: url)
     }
 
@@ -995,27 +997,6 @@ private struct StudioWorkspaceView: View {
             refreshReadiness()
         }
         promptFocused = true
-    }
-
-    /// Library ▸ Compare on two finished image runs: focuses the first with the second beside
-    /// it, the same view Focus ▸ Compare reaches, so the pair is one click from the column.
-    private func compareLibraryItems(_ first: StudioLibraryItem, _ second: StudioLibraryItem) {
-        func picture(of item: StudioLibraryItem) -> URL? {
-            item.allArtifactURLs.first { StudioOutputFileKind.classify($0) == .image && FileManager.default.fileExists(atPath: $0.path) }
-        }
-        guard let firstURL = picture(of: first), let secondURL = picture(of: second) else {
-            studioError = "Compare needs two image results that are still on disk."
-            return
-        }
-        studioError = nil
-        libraryOverlay = false
-        navigation.selectedLibraryID = first.id
-        controller.taskSessions.rememberSelection(first.id, for: first.mode)
-        pendingComparison = StudioResultSelection(itemID: second.id, url: secondURL)
-        controller.taskSessions.setFocus(StudioResultSelection(itemID: first.id, url: firstURL), for: first.mode.task)
-        if first.mode != mode || !showsPromptWorkspace {
-            navigation.open(destination: first.mode.destination)
-        }
     }
 
     /// Models ▸ "Use for … by default": records the choice and moves the mode's composer onto
@@ -1066,7 +1047,9 @@ private struct StudioWorkspaceView: View {
             pullModel: pullModel,
             useExample: useExamplePrompt,
             attach: inputAttachTarget,
-            focus: focusResult
+            focus: focusResult,
+            runVariations: runLibraryVariations,
+            compare: openComparison
         )
     }
 
@@ -1107,6 +1090,7 @@ private struct StudioWorkspaceView: View {
             onStop: stopModeRun,
             onShowModels: { navigation.open(task: .modelsInstalled) },
             onRecallPrompt: prompt.recallPrompt,
+            onRunVariations: prompt.offersVariations ? { runComposerVariations($0) } : nil,
             showsScopeNote: !showsInspectorColumn && !showsCommandColumn
         )
     }
@@ -1635,6 +1619,51 @@ private struct StudioWorkspaceView: View {
         }
         commandDraft.seed = String(Int.random(in: 1...Int(Int32.max)))
         runLibraryItem(item, draft: commandDraft)
+    }
+
+    // MARK: - Variations and Compare
+
+    /// "Run variations" on a result: its recorded command once per new seed, as one group.
+    private func runLibraryVariations(_ item: StudioLibraryItem, _ count: StudioVariationCount) {
+        do {
+            let requests = try prompt.runner.replayVariations(of: item, seeds: StudioVariations.seeds(count: count.rawValue))
+            studioError = nil
+            navigation.selectedLibraryID = requests.last?.id
+            replayNotice = StudioLibraryReplay.notice(for: item, source: scopeSource)
+        } catch {
+            studioError = error.localizedDescription
+        }
+    }
+
+    /// The composer's "Run variations": the draft once per new seed, as one group.
+    private func runComposerVariations(_ count: StudioVariationCount) {
+        do {
+            let submission = try prompt.runPromptVariations(seeds: StudioVariations.seeds(count: count.rawValue))
+            studioError = nil
+            if let reason = submission.outputFallbackReason { announceOutputFallback(reason) }
+            navigation.selectedLibraryID = submission.requests.last?.id
+        } catch {
+            studioError = error.localizedDescription
+        }
+    }
+
+    /// The comparison the current task's page shows in place of its canvas.
+    private var comparedItems: [StudioLibraryItem]? {
+        controller.taskSessions.comparison(for: destination.task, items: library.items)
+    }
+
+    /// Opens Compare on the page of the task that made the first row, from the Library or a card.
+    private func openComparison(_ items: [StudioLibraryItem]) {
+        guard let first = items.first else { return }
+        if let missing = StudioCompare.missingFile(in: items) {
+            studioError = "\(missing.lastPathComponent) is no longer on disk."
+            return
+        }
+        let task = StudioCompare.hostTask(for: first)
+        studioError = nil
+        libraryOverlay = false
+        controller.taskSessions.setComparison(items, for: task)
+        if task != destination.task { navigation.open(destination: task.destination) }
     }
 
     /// A contextual next step on an Analyze result: opens the sibling task with this run's input
