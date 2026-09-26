@@ -77,17 +77,30 @@ package enum StudioMenuBarIcon {
     }
 }
 
-/// The menu bar extra's label: the glyph, lit while a server answers.
+/// The menu bar extra's label: the glyph, lit while a server answers, and the number of runs in
+/// flight beside it while there are any.
 package struct StudioMenuBarLabel: View {
     @ObservedObject private var server: StudioLocalServer
+    @ObservedObject private var runQueue: StudioRunQueueCounter
 
-    package init(server: StudioLocalServer) {
+    package init(server: StudioLocalServer, runQueue: StudioRunQueueCounter) {
         _server = ObservedObject(wrappedValue: server)
+        _runQueue = ObservedObject(wrappedValue: runQueue)
     }
 
     package var body: some View {
-        Image(nsImage: StudioMenuBarIcon.image(isServing: server.phase.isServing))
-            .accessibilityLabel(server.phase.isServing ? "mere.run, server running" : "mere.run")
+        HStack(spacing: 2) {
+            Image(nsImage: StudioMenuBarIcon.image(isServing: server.phase.isServing))
+            if let count = StudioRunQueue.badgeLabel(activeRuns: runQueue.activeRunCount) {
+                Text(count)
+                    .monospacedDigit()
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(StudioMenuBarCopy.labelAccessibility(
+            isServing: server.phase.isServing,
+            activeRuns: runQueue.activeRunCount
+        ))
     }
 }
 
@@ -102,6 +115,7 @@ package struct StudioMenuBarPanel: View {
     private let controller: MereRunController
     private let onOpenStudio: () -> Void
     private let onOpenServer: () -> Void
+    private let onOpenActivity: () -> Void
 
     /// Bumped on every job event: lane membership is not itself published.
     @State private var generation = 0
@@ -113,7 +127,8 @@ package struct StudioMenuBarPanel: View {
     package init(
         controller: MereRunController,
         onOpenStudio: @escaping () -> Void,
-        onOpenServer: @escaping () -> Void
+        onOpenServer: @escaping () -> Void,
+        onOpenActivity: @escaping () -> Void
     ) {
         self.controller = controller
         _server = ObservedObject(wrappedValue: controller.localServer)
@@ -123,6 +138,7 @@ package struct StudioMenuBarPanel: View {
         _modelStore = ObservedObject(wrappedValue: controller.modelStore)
         self.onOpenStudio = onOpenStudio
         self.onOpenServer = onOpenServer
+        self.onOpenActivity = onOpenActivity
     }
 
     package var body: some View {
@@ -149,12 +165,18 @@ package struct StudioMenuBarPanel: View {
                 section("Activity", trailing: StudioActivity.summary(rows))
                 ForEach(rows) { row in
                     if let job = jobs.job(row.id) {
-                        StudioActivityJobRow(job: job, row: row) { jobs.cancel(row.id) }
+                        StudioActivityJobRow(job: job, row: row) { StudioRunQueue.stop(job, in: jobs) }
                     }
                 }
             }
             divider
             menuRow("Open Studio", action: onOpenStudio)
+            menuRow(
+                "Show Activity",
+                trailing: StudioRunQueue.badgeLabel(activeRuns: StudioRunQueue.activeRunCount(in: jobs)),
+                action: onOpenActivity
+            )
+            .help("Open the Studio window with the run queue showing")
             menuRow("Server Settings…", action: onOpenServer)
             divider
             menuRow("Quit mere.run", shortcut: "⌘Q") { NSApp.terminate(nil) }
@@ -410,11 +432,21 @@ package struct StudioMenuBarPanel: View {
             .padding(.vertical, 5)
     }
 
-    private func menuRow(_ title: String, shortcut: String? = nil, action: @escaping () -> Void) -> some View {
+    private func menuRow(
+        _ title: String,
+        shortcut: String? = nil,
+        trailing: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             HStack {
                 Text(title)
                 Spacer(minLength: 12)
+                if let trailing {
+                    Text(trailing)
+                        .monospacedDigit()
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
                 if let shortcut {
                     Text(shortcut)
                         .foregroundStyle(MereRunTheme.textMuted)
@@ -599,6 +631,17 @@ package enum StudioMenuBarCopy {
         case .serious: return "Thermal: Serious"
         case .critical: return "Thermal: Critical"
         @unknown default: return nil
+        }
+    }
+
+    /// What VoiceOver reads for the menu bar glyph: whether a server answers and how many runs
+    /// are in flight.
+    package static func labelAccessibility(isServing: Bool, activeRuns: Int) -> String {
+        let base = isServing ? "mere.run, server running" : "mere.run"
+        switch activeRuns {
+        case 0: return base
+        case 1: return "\(base), 1 run in progress"
+        default: return "\(base), \(activeRuns) runs in progress"
         }
     }
 

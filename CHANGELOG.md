@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Studio's Activity popover is now a run queue: everything running and waiting
+  across every page, grouped by lane, with each job's model, status (including
+  waiting for a GPU slot or for memory), progress, elapsed time, and time left
+  when it can be measured from progress events or recent runs of the same
+  template and model. Rows offer Stop, Open, and Move up or down for queued
+  jobs; Cancel all queued clears every queue; recent runs link into the
+  Library. The menu bar extra and the Dock icon show the number of runs in
+  flight.
 - Studio can use Library items as inputs. Every attachment entry point (well
   slots, empty-state Choose buttons, the Analyze canvas's Replace, and path
   rows) offers From Disk… and From Library… when the Library holds a compatible

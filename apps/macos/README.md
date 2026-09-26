@@ -198,11 +198,30 @@ and the menu bar extra take from `StudioLocalServer`, not the slower status
 poll), and "CLI not responding" (in red) if the probe never answers within six
 seconds, with "N running" on a second
 line while jobs are in flight. It opens the **Activity popover**
-(`StudioUI/StudioActivity.swift`), a 340pt panel the shell draws over the window from the
-bottom-left: one row per running or queued job in the inference and utility
-lanes (never a probe) with its progress and a stop control, over the app↔CLI
-version handshake and a link into the Server page. A row for one of Studio's own
-CLI reads names the work ("System · Checking models"), never the subcommand.
+(`StudioUI/StudioActivity.swift`), the run queue: a 400pt panel the shell draws
+over the window from the bottom-left that lists everything running and waiting
+across every page, grouped by lane (Model runs, Background tasks, Servers; never
+a probe). Each row shows the task's glyph, title, and model; where the job
+stands ("Denoising 15/24", "Waiting for a GPU slot · 2nd in line", or "Waiting
+for memory" while the CLI waits on machine admission); its progress; elapsed
+time; and time left only when it can be measured: the CLI's own download
+estimate, this run's step rate in its current `--progress-json` stage ("40 sec
+left in denoising"), or the median of the same template and model's recent
+successful runs in this session ("about 2 min left"). A run with none of those,
+or one that has outlasted its history, shows no estimate. Stop uses each page's
+own path (SIGINT first for a Session task, SIGTERM otherwise, removal for a
+queued job); Open goes to the job's page; a waiting job has Move up and Move
+down. `JobStore` admission always takes the head of a lane's queue, so
+`JobStore.moveQueued` reorders exactly what starts next. It never puts a run
+ahead of the queued pull of the model it needs; that row's Move up is disabled
+with "Waits for its model download." A feed's queued
+cards number themselves from the same order. Cancel all queued empties every
+queue and leaves running jobs alone. The last few finished runs sit at the
+bottom with Show in Library. The model behind all of it is
+`StudioKit/Jobs/StudioRunQueue.swift` (`StudioRunQueue`, `StudioRunETA`). A row
+for one of Studio's own CLI reads names the work ("System · Checking models"),
+never the subcommand. The popover's footer carries the app↔CLI version
+handshake and a link into the Server page.
 With nothing running the same panel shows the local server and the models root;
 the resolved CLI path is the footer's tooltip. When `status --json` reports
 `modelLocationIssues` (a registered drive that did not answer in time, usually
@@ -226,7 +245,11 @@ a tinted thermal warning when the Mac is throttling (`StudioMachineMonitor` read
 Mach host statistics every two seconds; the decode rate is the change in
 generated tokens between endpoint polls); the resident text models (each with
 Unload), sidecars, and a Load menu of the server's other text models; the same
-job rows as the Activity popover, and Open Studio, Server Settings…, and Quit.
+job rows as the Activity popover, and Open Studio, Show Activity (which opens
+the Studio window with the run queue showing), Server Settings…, and Quit. While
+runs are in flight the glyph carries their count, and so does the Dock icon's
+badge (`StudioRunQueueCounter`: running plus queued inference runs, republished
+only when the number changes).
 It reads the same `StudioLocalServer` the Server page drives, so the two never
 disagree. Quit asks first while a server Studio started or an inference job is
 still running, since every child process ends with the app; the app delegate owns
@@ -1203,6 +1226,7 @@ images, a run held open by the process seam mid-denoise, a queued run behind a
 concurrent model pull, and the inspector open with two changed settings; then
 the same feed with the Command view column), the Library column in list, grid,
 mixed-kind, and batch states, the Activity popover over those jobs and idle, the
+run queue with running, waiting, and finished rows, the
 composer with the boards' sample prompt and an in-test image attached
 (Image ▸ Generate and Vision ▸ Find), the Analyze board (Vision ▸ Find over a
 1024×1024 in-test image with a seeded `vision ground` document, and

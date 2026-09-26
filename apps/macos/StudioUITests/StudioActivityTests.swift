@@ -205,6 +205,68 @@ final class StudioActivityTests: XCTestCase {
         )
     }
 
+    // MARK: - Run queue
+
+    func testQueueRowsSayWhyAJobIsWaitingAndWhereItIsInLine() throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let running = try XCTUnwrap(store.job(store.submit(try makeRequest(templateID: .imageGenerate))))
+        _ = store.submit(try makeRequest(templateID: .imageGenerate))
+        let next = try XCTUnwrap(store.job(store.submit(try makeRequest(templateID: .imageGenerate))))
+        let third = try XCTUnwrap(store.job(store.submit(try makeRequest(templateID: .imageGenerate))))
+
+        XCTAssertEqual(StudioActivity.statusText(for: running, status: .running), "Running")
+        XCTAssertEqual(StudioActivity.statusText(for: running, status: .waitingForMemory), "Waiting for memory")
+        XCTAssertEqual(StudioActivity.statusText(for: next, status: .queued(position: 0)), "Waiting for a GPU slot · next")
+        XCTAssertEqual(StudioActivity.statusText(for: third, status: .queued(position: 1)), "Waiting for a GPU slot · 2nd in line")
+
+        let sections = StudioRunQueue.sections(in: store)
+        XCTAssertEqual(StudioActivity.queueSummary(sections), "2 running · 2 queued")
+        XCTAssertEqual(StudioActivity.queueSummary([]), "Nothing running")
+        XCTAssertEqual(StudioActivity.laneTitle(.inference), "Model runs")
+    }
+
+    func testTimeLeftNamesWhatItWasMeasuredFrom() {
+        XCTAssertEqual(StudioActivity.etaText(StudioRunETA(remaining: 200, source: .download)), "3 min left")
+        XCTAssertEqual(StudioActivity.etaText(StudioRunETA(remaining: 40, source: .stage("Denoising"))), "40 sec left in denoising")
+        XCTAssertEqual(StudioActivity.etaText(StudioRunETA(remaining: 4_000, source: .history)), "about 1 hr left")
+        XCTAssertEqual(StudioActivity.ordinal(2), "2nd")
+        XCTAssertEqual(StudioActivity.ordinal(3), "3rd")
+        XCTAssertEqual(StudioActivity.ordinal(11), "11th")
+        XCTAssertEqual(StudioActivity.ordinal(21), "21st")
+    }
+
+    func testARunningRowWithoutAMeasurableEstimateShowsElapsedTimeOnly() throws {
+        let store = JobStore(processRunner: RecordingProcessRunner())
+        let job = try XCTUnwrap(store.job(store.submit(try makeRequest(templateID: .imageGenerate))))
+
+        XCTAssertEqual(StudioActivity.timeLine(for: job, elapsed: 41, eta: nil), "0:41")
+        XCTAssertEqual(
+            StudioActivity.timeLine(for: job, elapsed: 41, eta: StudioRunETA(remaining: 51, source: .history)),
+            "0:41 · about 51 sec left"
+        )
+    }
+
+    func testFinishedRowsSayHowTheRunEnded() async throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let done = try XCTUnwrap(store.job(store.submit(try makeRequest(templateID: .imageGenerate))))
+        done.markRunning(status: done.status, at: Date().addingTimeInterval(-92))
+        runner.starts[0].termination(0)
+        let failed = try XCTUnwrap(store.job(store.submit(try makeRequest(templateID: .imageGenerate))))
+        runner.starts[1].termination(1)
+        for _ in 0..<6 { await Task.yield() }
+
+        XCTAssertEqual(StudioActivity.outcomeText(for: done), "Completed in 1:32")
+        XCTAssertEqual(StudioActivity.outcomeText(for: failed), "Failed · exit 1")
+    }
+
+    func testTheMenuBarGlyphReadsTheRunCount() {
+        XCTAssertEqual(StudioMenuBarCopy.labelAccessibility(isServing: false, activeRuns: 0), "mere.run")
+        XCTAssertEqual(StudioMenuBarCopy.labelAccessibility(isServing: true, activeRuns: 1), "mere.run, server running, 1 run in progress")
+        XCTAssertEqual(StudioMenuBarCopy.labelAccessibility(isServing: false, activeRuns: 3), "mere.run, 3 runs in progress")
+    }
+
     // MARK: - Footer pill
 
     func testFooterPillCountsRunningJobs() {

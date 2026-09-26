@@ -7,7 +7,8 @@ import Foundation
 /// once to the controller's store; never mutates it.
 @MainActor
 package final class StudioJobMonitor: ObservableObject {
-    /// Bumped on every start and finish. Views read it through `objectWillChange`.
+    /// Bumped whenever a job joins a queue, starts, finishes, or is moved. Views read it through
+    /// `objectWillChange`.
     @Published package private(set) var generation = 0
     private var store: JobStore?
     private var subscription: AnyCancellable?
@@ -20,7 +21,7 @@ package final class StudioJobMonitor: ObservableObject {
         self.store = store
         subscription = store.events.sink { [weak self] event in
             switch event {
-            case .started, .finished:
+            case .queued, .reordered, .started, .finished:
                 self?.generation += 1
             case .changed, .output:
                 break

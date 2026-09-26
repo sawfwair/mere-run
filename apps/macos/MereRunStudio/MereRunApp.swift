@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Quartz
 import Sparkle
 import StudioKit
@@ -9,6 +10,7 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
     /// The app's shared services. The delegate owns them, rather than a window or a scene, so Quit
     /// can ask about and stop the child processes whether or not a Studio window ever appeared.
     @MainActor lazy var session = StudioAppSession()
+    private var dockBadge: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A window closing, a window coming forward, or a menu bar setting changing can each move
@@ -17,6 +19,10 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
                 DispatchQueue.main.async { MainActor.assumeIsolated { Self.updateDockPresence() } }
             }
+        }
+        // Running plus queued runs on the Dock icon, cleared when the queue empties.
+        dockBadge = session.runQueue.$activeRunCount.sink { count in
+            NSApp.dockTile.badgeLabel = StudioRunQueue.badgeLabel(activeRuns: count)
         }
         if UserDefaults.standard.bool(forKey: StudioMenuBar.serveAtLaunchDefaultsKey) {
             let controller = session.controller
@@ -105,6 +111,10 @@ struct MereRunMenuBarContent: View {
             onOpenServer: {
                 navigation.open(task: .serverServing, windowIsOpen: isStudioOpen)
                 showStudio()
+            },
+            onOpenActivity: {
+                showStudio()
+                navigation.showActivity = true
             }
         )
     }
@@ -230,7 +240,7 @@ struct MereRunApp: App {
         MenuBarExtra(isInserted: menuBarExtraInserted) {
             MereRunMenuBarContent(controller: controller, navigation: navigation, isStudioOpen: isStudioOpen)
         } label: {
-            StudioMenuBarLabel(server: controller.localServer)
+            StudioMenuBarLabel(server: controller.localServer, runQueue: session.runQueue)
         }
         .menuBarExtraStyle(.window)
 

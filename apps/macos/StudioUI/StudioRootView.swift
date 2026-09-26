@@ -365,6 +365,18 @@ private struct StudioWorkspaceView: View {
         return StudioActivity.lanes.reduce(0) { $0 + controller.jobs.running(in: $1).count }
     }
 
+    /// Opens what an Activity row points at: a finished run's row in the Library, or the page a
+    /// running or waiting job belongs to.
+    private func openFromActivity(_ job: Job) {
+        navigation.showActivity = false
+        let libraryID = job.request.conversationID ?? job.request.requestID
+        if job.state.isTerminal, let item = library.items.first(where: { $0.id == libraryID }) {
+            navigation.open(libraryItem: item.id, mode: item.mode)
+        } else if let task = job.request.templateID?.studioTask {
+            navigation.open(task: task)
+        }
+    }
+
     /// The Activity popover, drawn over the whole window rather than inside the sidebar column: it
     /// is 340pt wide and would be clipped by the column, and it must float over the Library.
     @ViewBuilder
@@ -389,7 +401,8 @@ private struct StudioWorkspaceView: View {
                     onOpenModels: {
                         navigation.showActivity = false
                         navigation.open(task: .modelsInstalled)
-                    }
+                    },
+                    onOpen: openFromActivity
                 )
                 .padding(.leading, 10)
                 .padding(.bottom, 56)

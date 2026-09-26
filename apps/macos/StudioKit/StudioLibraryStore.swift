@@ -106,7 +106,7 @@ package final class StudioLibraryStore: ObservableObject {
                 guard let id = job.request.requestID, let output = job.primaryArtifactURL,
                       self.items.first(where: { $0.id == id })?.outputURL != output else { return }
                 self.updateOutput(id: id, outputURL: output)
-            case .output, .finished: break
+            case .queued, .reordered, .output, .finished: break
             }
         }.store(in: &subscriptions)
     }

@@ -343,8 +343,10 @@ package final class StudioLiveListenModel: ObservableObject {
             } else if let requestID, job.request.requestID == requestID {
                 objectWillChange.send()
             }
-        case .changed(let job):
+        case .queued(let job), .changed(let job):
             if let requestID, job.request.requestID == requestID { objectWillChange.send() }
+        case .reordered:
+            break
         case .finished(let job, _):
             guard let requestID, job.request.requestID == requestID else { return }
             objectWillChange.send()
