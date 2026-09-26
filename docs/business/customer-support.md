@@ -150,9 +150,11 @@ one exists. If the run stops early, inspect the app before using
 
 ## Extend the pilot to an inbox
 
-A one-ticket command does not automatically connect GLiNER to Computer Use.
-The Northline multi-ticket runner is a separate demo harness, not part of the
-public plugin. To build a controller for your app, use the following order:
+The one-ticket pilot above is reproducible with the public CLI and plugin. It
+requires you to review the GLiNER result and pass accepted labels to Computer
+Use. The Northline multi-ticket runner is a separate, unpublished demo harness;
+the public plugin does not yet provide an inbox controller. To build one for
+your app, use the following order:
 
 1. Observe the selected ticket and read its message, order context, and status.
 2. Classify the observed text with `mere.run text classify` or its loopback API.
