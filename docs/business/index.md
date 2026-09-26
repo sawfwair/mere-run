@@ -13,12 +13,16 @@ result is useful. They do not require an inference API key.
 | Task | Start with | What the pilot verifies |
 | --- | --- | --- |
 | Route a support request and prepare a reply | [Triage support tickets](./customer-support.md) | Classification, visible app actions, saved draft, and no sent reply |
+| Set up the workflow for your ticketing website | [Adapt the support workflow](./adapt-support-workflow.md) | App mapping, one-ticket verification, and a controller plan |
 | Find evidence across years of mixed files | [Search a shared archive](./shared-archive.md) | Index coverage, source-linked search results, and unresolved claims |
 
 The support guide uses a fictional Northline Care ticket to explain how
 GLiNER2.5 Decide, Ornith, and Cua Driver work together. The archive guide uses
 Archive Tools and its locally generated Harbourline fixture. Both guides
 include commands you can run with the public CLI and plugins.
+
+For an existing ticketing website, the [adaptation guide](./adapt-support-workflow.md)
+includes a prompt you can paste into a coding agent while the website is open.
 
 ## Pilot with your own work
 

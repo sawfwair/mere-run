@@ -75,6 +75,7 @@ export default defineConfig({
         items: [
           { text: 'Business use cases', link: '/business/' },
           { text: 'Triage support tickets', link: '/business/customer-support' },
+          { text: 'Adapt a support workflow', link: '/business/adapt-support-workflow' },
           { text: 'Search a shared archive', link: '/business/shared-archive' }
         ]
       },

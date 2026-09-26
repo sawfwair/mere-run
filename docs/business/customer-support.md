@@ -170,7 +170,9 @@ The page can change between classification and action. The controller must
 recheck the selected ticket before every change. Use a small labeled set of
 your own requests to measure classification errors and the full workflow's
 time and success rate. For a pilot of label selection before any app action,
-see [GLiNER2.5 Decide](../runtime/gliner25-decide.md).
+see [GLiNER2.5 Decide](../runtime/gliner25-decide.md). For app mapping, controller
+requirements, and a prompt you can paste into Codex or Claude, see
+[Adapt the support workflow](./adapt-support-workflow.md).
 
 ## Troubleshoot the first run
 
