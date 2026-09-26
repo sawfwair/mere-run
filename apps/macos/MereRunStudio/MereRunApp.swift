@@ -217,6 +217,7 @@ struct MereRunApp: App {
             MereRunCommands(
                 controller: controller,
                 library: library,
+                navigation: navigation,
                 updater: updaterController.updater,
                 isStudioOpen: isStudioOpen
             )
@@ -234,6 +235,15 @@ struct MereRunApp: App {
         .windowResizability(.contentMinSize)
         // Window ▸ Command Console (⌃⌘C) in MereRunCommands opens it; SwiftUI's own Window-menu
         // item for the scene would list it twice.
+        .commandsRemoved()
+
+        // Help ▸ Keyboard Shortcuts; the Help menu opens it, so SwiftUI's own Window-menu item
+        // would list it twice.
+        Window(StudioKeyboardShortcutsWindow.title, id: StudioKeyboardShortcutsWindow.id) {
+            StudioKeyboardShortcutsView()
+                .frame(width: 460, height: 620)
+        }
+        .windowResizability(.contentSize)
         .commandsRemoved()
 
         // The server outlives the Studio window, so its control does too.

@@ -108,7 +108,7 @@ private struct StudioAttachmentPasteKey: ViewModifier {
 }
 
 /// Reports the window its view is placed in.
-private struct StudioWindowReader: NSViewRepresentable {
+struct StudioWindowReader: NSViewRepresentable {
     let onWindow: (NSWindow?) -> Void
 
     func makeNSView(context: Context) -> WindowView {

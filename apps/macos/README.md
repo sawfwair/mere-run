@@ -117,6 +117,10 @@ surface for is still reachable the day the contract declares it.
   `StudioKit/StudioTaskSessions+Undo.swift`: undo registration, draft change
   names and patches, and the session-side steps. `StudioUI/StudioUndoBinding.swift`
   hands the key window's `UndoManager` to the stores.
+- `StudioKit/StudioKeyboardShortcuts.swift`: every key the menus bind, with the
+  system and text-editing keys it must leave alone. `StudioKit/StudioPromptHistory.swift`
+  and `StudioKit/StudioPageDefaults.swift`: the composer's prompt recall and the
+  inspector's saved defaults.
 
 The declarative schemas live in StudioKit beside the model, and the views that
 draw them in StudioUI, one file each side:
@@ -369,17 +373,54 @@ registered.
   steps are therefore undone as patches: only the values the step changed go
   back, so undoing a model switch keeps the prompt typed after it.
 
-Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…; View ▸
-Show Library (⌥⌘L), Show Inspector (⌥⌘I), Show Command View (⌥⌘C), and the system sidebar toggle; Go ▸ every domain
-(⌘1–⌘9, then ⌥⌘1…) plus the current domain's tasks; Run ▸ Run (⌘↩), Stop (⌘.),
-Open Last Output (⇧⌘O), and Reveal Last Output in Finder (⇧⌘R), acting on the
-current composer; Window ▸ Open Studio and Command Console (⇧⌘C); Help ▸
-mere.run Guide (⌘?), the mere.run link, and Export Diagnostics…. ⌥⌘C is always
-the task's Command view, disabled on the few tasks without one. Settings has
+Menus follow macOS convention: File ▸ New Chat, Quick Look, Delete from
+Library…, and Import Receipt…; Edit ▸ Find in List and Search Library; View ▸
+Show Library, Show Inspector, Show Command View, and the system sidebar toggle;
+Go ▸ every domain plus the current domain's tasks; Run ▸ Run, Stop, Open Last
+Output, and Reveal Last Output in Finder, acting on the current composer;
+Window ▸ Open Studio and Command Console; Help ▸ mere.run Guide, Keyboard
+Shortcuts, the mere.run link, and Export Diagnostics…. The keys are in
+[Keyboard shortcuts](#keyboard-shortcuts). ⌥⌘C is always the task's Command
+view, disabled on the few tasks without one. Settings has
 General, Models, Server, and Advanced tabs; its path settings are pickers with
 Choose…, Reveal, and Reset, and the Server tab's endpoint and key
 apply on Apply or Return, not per keystroke. First run shows the Image empty state with its "Get the model"
 path and a one-time dismissible banner; there is no Welcome sheet.
+
+### Keyboard shortcuts
+
+Every key Studio binds is one table, `StudioKit/StudioKeyboardShortcuts.swift`.
+The menus bind their items from it, Help ▸ Keyboard Shortcuts
+(`StudioUI/StudioKeyboardShortcutsView.swift`) lists it, and
+`StudioKeyboardShortcutsTests` hold it unique and clear of the keys macOS owns.
+A menu key reaches AppKit before the focused text field, so no menu item takes
+a key a text field uses. ⌘⌫ and Space act only while the Library list or the
+feed has focus. ↑ and ↓ act only in the composer's prompt.
+
+| Keys | Action | Where |
+| --- | --- | --- |
+| ⌘N | New Chat | File |
+| ⌘Y | Quick Look the Library's selected run | File |
+| ⌘⌫ | Delete from Library…, through the usual confirmation and undo | File, while the Library list has focus |
+| ⌘F | Find in List: the page's own list (Models, Adapters, Plugins) or the Library beside it | Edit |
+| ⌘L | Search Library, showing the Library column first | Edit |
+| ⌃⌘S | Show or hide the sidebar | View |
+| ⇧⌘L | Show or hide the Library column | View |
+| ⌘E | Show or hide the inspector | View |
+| ⌥⌘C | Show or hide the Command view | View |
+| ⌘1–⌘9, ⌥⌘1–⌥⌘6 | The sidebar's sections, in sidebar order | Go |
+| ⌘↩ | Run the current task | Run |
+| ⌘. | Stop | Run |
+| ⇧⌘O | Open Last Output | Run |
+| ⇧⌘R | Reveal Last Output in Finder | Run |
+| ⇧⌘C | Command Console | Window |
+| ⌘? | mere.run Guide | Help |
+| Space | Quick Look the selected run, or the newest result | Library list or feed, with focus |
+| ↑ / ↓ | Recall an earlier prompt on this page / step back to what you typed | Composer prompt, on its first / last line |
+
+⇧⌘L takes precedence over the system's Search With Google service while
+Studio is in front. Studio has no Find panel, so ⌘E does not shadow Use
+Selection for Find.
 
 ## Composer, feed, and Analyze
 
@@ -408,6 +449,18 @@ and passed to presenters explicitly), else a name formatted from the id, with
 the exact id in the tooltip. The chips and the inspector bind the same `StudioDraft`, so a value
 changed in one shows in the other. ⌘↩ runs; while a conversation turn streams,
 the send circle becomes Stop.
+
+**Prompt history.** ↑ on the prompt's first line recalls the page's earlier
+prompts, newest first, and ↓ on its last line steps back toward the newest
+and then to what was typed before the first ↑. On any other line the arrows
+move the caret as usual. A clock button beside Run lists the page's twelve most
+recent prompts. The history is read from the Library
+(`StudioKit/StudioPromptHistory.swift`): the prompts of the runs the page's feed
+shows, and a thread's user turns, each once. It is not a separate record, so
+deleting a run takes its prompt with it. A recall goes through the page's own
+draft write as one undo step ("Undo Recall Prompt"), because the text field did
+not type it. The keys go through a local key monitor installed while the
+prompt has focus (`StudioUI/StudioPromptHistoryControls.swift`).
 
 The **feed** above the composer (`StudioUI/StudioFeedCanvas.swift`, cards derived in
 `StudioKit/StudioFeedCards.swift`) lists the mode's runs oldest first, newest beside the
@@ -566,7 +619,7 @@ first, naming the thread.
 
 ## Inspector, Command view, and Command Console
 
-The **inspector** (⌥⌘I, the header's Inspector toggle, remembered per task under
+The **inspector** (⌘E, the header's Inspector toggle, remembered per task under
 `studio.inspectorTasks`) is a 300pt column rendered from the capability
 contract. `StudioKit/StudioContractSchema.swift` binds each option
 `MereRunCapabilityCatalog` declares to the `StudioDraft` field the app keeps it
@@ -584,8 +637,21 @@ range the mode's models use, seconds-or-frames, the model picker, the LoRA and
 ACE-Step adapter rows, the mask and outpaint canvas, the ordered MiniMax
 references, and the voice profile list — and marks the attachments the
 composer's well owns so the inspector never repeats them. Each section has
-Reset, and the header badge counts the draft fields that differ from the mode's
+Reset, and the header badge counts the draft fields that differ from the page's
 defaults.
+
+The inspector ends with **Defaults**: "Save as my defaults" keeps the draft's
+settings as the page's own starting point, and "Restore app defaults" forgets
+them and puts the settings back to the app's (`StudioKit/StudioPageDefaults.swift`).
+Fresh drafts and every Reset then start from the saved values. A save keeps
+the options the draft's model uses, the ones its inspector shows. It never
+keeps the inputs, the prompt, the seed, the model (Models ▸ "Use for … by
+default" owns that), output paths, or credentials. A kept value that a later
+draft's model does not use is hidden and left out of the run like any other
+value the model does not take. The values are typed `StudioContractValue`s
+stored in the task-session file under `"<task>.pageDefaults"`, per template
+on the task workspace. Save and Restore are each one undo step; Restore brings
+back both the saved defaults and the draft.
 
 The inspector shows only the flags the binding table maps to a draft field, so
 no control can look live and change nothing. That makes it thin where the table

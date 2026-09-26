@@ -51,7 +51,7 @@ package final class StudioPromptTaskController {
     }
 
     /// Where the open draft is stored: the task's key, and the thread's for Chat and Code.
-    private func draftKeys(for mode: StudioMode) -> [String] {
+    func draftKeys(for mode: StudioMode) -> [String] {
         let taskKey = mode.task.rawValue + ".draft"
         guard mode.isConversational else { return [taskKey] }
         return [taskKey, sessions.conversationDraftKey(activeConversationID, mode: mode)]
@@ -81,11 +81,11 @@ package final class StudioPromptTaskController {
         }
     }
 
+    /// A new draft for `mode`: the app's, with the page's saved defaults over it
+    /// (`StudioPageDefaults`). The inspector's Reset reads against it too.
     package func freshDraft(for mode: StudioMode) -> StudioDraft {
-        var draft = StudioDraft()
-        draft.reset(for: mode)
-        controller.applyRecommendedDefaults(to: &draft, for: mode)
-        if mode.isConversational { draft.prompt = "" }
+        var draft = appFreshDraft(for: mode)
+        sessions.pageDefaults(for: mode.task)?.apply(to: &draft, mode: mode)
         return draft
     }
 

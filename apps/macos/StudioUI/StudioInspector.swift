@@ -25,6 +25,8 @@ struct StudioInspector: View {
     let onShowModels: () -> Void
     let onShowAdapters: () -> Void
     let onClose: () -> Void
+    /// Save as my defaults and Restore app defaults, for the page's draft.
+    let pageDefaults: StudioInspectorPageDefaults
 
     @EnvironmentObject private var controller: MereRunController
     @Environment(\.studioScopeSource) var scopeSource
@@ -63,6 +65,7 @@ struct StudioInspector: View {
                     if !advancedFields.isEmpty {
                         advancedSection
                     }
+                    StudioInspectorDefaultsSection(defaults: pageDefaults)
                 }
             }
         }
@@ -119,7 +122,7 @@ struct StudioInspector: View {
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
-            .help("Hide Inspector (⌥⌘I)")
+            .help(StudioKeyboardShortcuts.help("Hide Inspector", .showInspector))
             .accessibilityLabel("Hide Inspector")
         }
         .padding(.horizontal, 16)

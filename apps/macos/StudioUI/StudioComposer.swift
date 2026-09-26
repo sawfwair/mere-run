@@ -24,6 +24,8 @@ struct StudioComposer: View {
     let onRun: () -> Void
     let onStop: () -> Void
     let onShowModels: () -> Void
+    /// Puts a prompt from the page's history in the field (↑, or Recent prompts) as an undo step.
+    let onRecallPrompt: (String) -> Void
     /// Whether the composer carries the scope note: only while no side column is open. The
     /// inspector shows it at its top, beside the controls it explains, and the Command view as
     /// its "Not sent" line.
@@ -31,6 +33,7 @@ struct StudioComposer: View {
 
     @EnvironmentObject private var controller: MereRunController
     @Environment(\.studioScopeSource) private var scopeSource
+    @Environment(\.studioLibraryItems) private var libraryItems
     @State private var editingChip: StudioComposerChipKind?
 
     private enum Metrics {
@@ -126,8 +129,16 @@ struct StudioComposer: View {
                     into: &draft, slots: mode.attachmentSlots(for: draft, source: scopeSource), allowsText: true
                 )
             }
+            .studioPromptHistoryKeys(
+                isActive: promptFocus.wrappedValue, history: promptHistory, text: draft.prompt, recall: onRecallPrompt
+            )
             .accessibilityLabel(mode.promptPlaceholder)
         }
+    }
+
+    /// The prompts this page has run, newest first.
+    private var promptHistory: [String] {
+        mode == .listen ? [] : StudioPromptHistory.prompts(for: mode.task, in: libraryItems)
     }
 
     // MARK: - Chip strip
@@ -143,6 +154,9 @@ struct StudioComposer: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 8) {
+                if !promptHistory.isEmpty {
+                    StudioRecentPromptsMenu(prompts: promptHistory, onPick: recallFromMenu)
+                }
                 if showsPaperclip { paperclipButton }
                 if isRunning { stopButton } else { sendButton }
             }
@@ -500,6 +514,12 @@ struct StudioComposer: View {
     }
 
     // MARK: - Right cluster
+
+    /// A prompt picked from Recent prompts: into the field, with the field focused to edit it.
+    private func recallFromMenu(_ prompt: String) {
+        onRecallPrompt(prompt)
+        promptFocus.wrappedValue = true
+    }
 
     /// Only a collapsed well (Chat's per-turn image) needs the paperclip; declared slots pick
     /// from the well itself.

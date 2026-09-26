@@ -39,9 +39,9 @@ struct StudioContentHeader: View {
                 isActive: isSidebarShown,
                 action: onToggleSidebar
             )
-            .help(isSidebarShown ? "Hide Sidebar (⌃⌘S)" : "Show Sidebar (⌃⌘S)")
+            .help(StudioKeyboardShortcuts.help(isSidebarShown ? "Hide Sidebar" : "Show Sidebar", .showSidebar))
             .accessibilityLabel(isSidebarShown ? "Hide Sidebar" : "Show Sidebar")
-            .keyboardShortcut("s", modifiers: [.control, .command])
+            .studioShortcut(.showSidebar)
             ViewThatFits(in: .horizontal) {
                 row(sideBlockWidth: 220)
                 row(sideBlockWidth: nil)
@@ -141,7 +141,7 @@ struct StudioContentHeader: View {
                     isActive: isLibraryShown,
                     action: onToggleLibrary
                 )
-                .help(isLibraryShown ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
+                .help(StudioKeyboardShortcuts.help(isLibraryShown ? "Hide Library" : "Show Library", .showLibrary))
                 .accessibilityLabel(isLibraryShown ? "Hide Library" : "Show Library")
 
                 MereToolbarIconButton(
@@ -149,7 +149,7 @@ struct StudioContentHeader: View {
                     isActive: isInspectorShown,
                     action: onToggleInspector
                 )
-                .help(isInspectorShown ? "Hide Inspector (⌥⌘I)" : "Show Inspector (⌥⌘I)")
+                .help(StudioKeyboardShortcuts.help(isInspectorShown ? "Hide Inspector" : "Show Inspector", .showInspector))
                 .accessibilityLabel(isInspectorShown ? "Hide Inspector" : "Show Inspector")
             }
 
@@ -158,7 +158,7 @@ struct StudioContentHeader: View {
                 isActive: isCommandShown,
                 action: onToggleCommand
             )
-            .help("Command (⌥⌘C)")
+            .help(StudioKeyboardShortcuts.help("Command", .showCommandView))
             .accessibilityLabel("Command")
         }
     }
