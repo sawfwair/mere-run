@@ -6,9 +6,10 @@ Computer Use without changing the website's code. You still need a small
 controller that understands how your app presents tickets and how to check the
 result of each action.
 
-Complete the [one-ticket support pilot](./customer-support.md) first. Keep the
-website open in one macOS window. Use a fictional or approved sample ticket
-whose draft, tags, team, and priority you can inspect afterward.
+Follow the [one-ticket support pilot](./customer-support.md) if you want to set
+up the tools yourself. The coding-agent prompt in this guide can also do that
+setup. Keep the website open in one macOS window. Use a fictional or approved
+sample ticket whose draft, tags, team, and priority you can inspect afterward.
 
 ## Map one ticket
 
@@ -58,11 +59,11 @@ labels or ticket IDs would not adapt it to another website.
 
 ## Ask a coding agent to set it up
 
-Run Codex or Claude on the same Mac with terminal access to `mere.run`,
-`mere-computer-use`, and Cua Driver. Grant `CuaDriver.app` Accessibility and
-Screen Recording permissions as described in the support pilot. Open a sample
-ticket in the website, then paste this prompt into the coding agent. If Cua
-Driver cannot inspect that window, fix its permissions before the agent acts.
+Run Codex or Claude on the same Mac with terminal access. Open a sample ticket
+in the website, then paste this prompt into the coding agent. The agent can
+check the CLI, models, plugin, and driver. If `CuaDriver.app` needs Accessibility
+or Screen Recording permissions, grant them in macOS System Settings before
+the agent operates the window.
 
 ```text
 I have an existing customer support website open in a macOS window. Create a
@@ -72,9 +73,13 @@ in that app.
 
 Use GLiNER2.5 Decide through `mere.run text classify` to suggest team and
 priority. Use Ornith through `mere-computer-use` and Cua Driver to read and
-operate only the selected window. Use local model inference. Check the current
-CLI help and plugin doctor before depending on a command. Do not accept model
-terms on my behalf.
+operate only the selected window. Use local model inference. First check the
+installed `mere.run` commands, model support, Computer Use plugin, Pi, and Cua
+Driver. Install missing public components using their documented commands;
+use a current source build if the installed CLI lacks GLiNER classification or
+Ornith image input. Run `mere-computer-use doctor` for Ornith before acting.
+Do not bypass hardware checks, accept model terms on my behalf, or infer that
+macOS permissions are granted. Tell me the exact setting to change if needed.
 
 Start with the sample ticket I have selected. Identify the correct window with
 `mere-computer-use windows`; ask me to choose if several windows match. Inspect
