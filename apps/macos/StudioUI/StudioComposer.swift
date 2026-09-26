@@ -604,36 +604,24 @@ struct StudioComposerChipLabel: View {
     }
 }
 
-/// The open panel every attachment well shares: files of the slot's types, or a folder for a
-/// directory slot, several at once for a list slot.
-@MainActor
-enum StudioAttachmentPicker {
-    static func pick<Draft: StudioAttachmentDraft>(for slot: StudioAttachmentSlot, into draft: inout Draft) {
-        let panel = NSOpenPanel()
-        let picksDirectory = slot.acceptedTypes.contains(.folder)
-        panel.canChooseFiles = !picksDirectory
-        panel.canChooseDirectories = picksDirectory
-        panel.canCreateDirectories = picksDirectory
-        panel.allowsMultipleSelection = slot.allowsMultiple
-        if !picksDirectory { panel.allowedContentTypes = slot.acceptedTypes }
-        guard panel.runModal() == .OK else { return }
-        slot.attach(panel.urls, to: &draft)
-    }
-}
-
 /// One 48×48 slot of the attachment well. Empty: a dashed outline with a plus. Filled: the
 /// file's thumbnail (or a kind glyph for audio and video) with a hover-revealed remove button.
-/// Accepts a drop, a paste (⌘V while focused), and a click to pick; an audio slot's context
-/// menu also offers "Record…", which files the recording with the task's domain.
+/// Accepts a drop (a Finder file or a Library row), a paste (⌘V while focused), and a click:
+/// straight to the open panel, or — when the Library holds a file the slot takes — a menu of
+/// From Disk…, From Library…, and, on an audio slot, Record…, which files the recording with
+/// the task's domain.
 struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
     let slot: StudioAttachmentSlot
     @Binding var draft: Draft
+    /// The disk choice: the caller's open panel into the draft.
     let onPick: () -> Void
 
     @Environment(\.studioTaskScope) private var taskScope
+    @Environment(\.studioLibraryItems) private var libraryItems
     @State private var isDropTargeted = false
     @State private var hovering = false
     @State private var isRecording = false
+    @State private var isPickingFromLibrary = false
 
     private var recordingDomain: StudioDomain {
         StudioTask(rawValue: taskScope)?.domain ?? .audio
@@ -645,39 +633,41 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
     private var paths: [String] { slot.paths(in: draft) }
     private var isFilled: Bool { !paths.isEmpty }
 
+    private var target: StudioAttachTarget { StudioAttachTarget(slot: slot, draft: $draft) }
+
+    private var hasLibraryChoices: Bool {
+        StudioLibraryInputs.hasCandidates(in: libraryItems, for: target.requirement)
+    }
+
     var body: some View {
-        Button(action: onPick) {
-            ZStack {
-                if let first = paths.first {
-                    thumbnail(for: URL(fileURLWithPath: first))
-                } else {
-                    Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(MereRunTheme.textMuted)
-                }
+        StudioAttachMenu(
+            target: target,
+            chooseFromDisk: onPick,
+            isPickingFromLibrary: $isPickingFromLibrary,
+            arrowEdge: .top
+        ) { _ in
+            tile
+        } extraItems: {
+            if slot.canRecord {
+                Button { isRecording = true } label: { Label("Record…", systemImage: "mic") }
             }
-            .frame(width: Self.side, height: Self.side)
-            .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
-            .overlay { outline }
-            .overlay(alignment: .topTrailing) {
-                if isFilled, hovering {
-                    Button {
-                        slot.clear(in: &draft)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.callout)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(MereRunTheme.surface, MereRunTheme.textPrimary)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(3)
-                    .help("Remove")
-                    .accessibilityLabel("Remove \(slot.label.lowercased())")
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
         }
-        .buttonStyle(.plain)
+        .overlay(alignment: .topTrailing) {
+            if isFilled, hovering {
+                Button {
+                    slot.clear(in: &draft)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.callout)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(MereRunTheme.surface, MereRunTheme.textPrimary)
+                }
+                .buttonStyle(.plain)
+                .padding(3)
+                .help("Remove")
+                .accessibilityLabel("Remove \(slot.label.lowercased())")
+            }
+        }
         .focusable()
         .onHover { hovering = $0 }
         .dropDestination(for: URL.self) { urls, _ in
@@ -690,7 +680,10 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
         }
         .onPasteCommand(of: [.fileURL, .image]) { _ in paste() }
         .contextMenu {
-            Button("Choose…", action: onPick)
+            Button("Choose from Disk…", action: onPick)
+            if hasLibraryChoices {
+                Button("Choose from Library…") { isPickingFromLibrary = true }
+            }
             if slot.canRecord {
                 Button("Record…") { isRecording = true }
             }
@@ -706,11 +699,34 @@ struct StudioAttachmentSlotView<Draft: StudioAttachmentDraft>: View {
                 slot.attach([url], to: &draft)
             }
         }
-        .help(isFilled ? paths.joined(separator: "\n")
-              : "Drop, paste, or click to add \(slot.label.lowercased())\(slot.canRecord ? "; right-click to record" : "")")
+        .help(isFilled ? paths.joined(separator: "\n") : helpText)
         .accessibilityLabel(slot.label)
         .accessibilityValue(isFilled ? slot.caption(in: draft) : "Empty")
-        .accessibilityHint("Drop a file, paste with Command-V, or click to choose")
+        .accessibilityHint(hasLibraryChoices
+            ? "Drop a file, paste with Command-V, or click to choose from disk or from the Library"
+            : "Drop a file, paste with Command-V, or click to choose")
+    }
+
+    private var helpText: String {
+        let source = hasLibraryChoices ? " from disk or the Library" : ""
+        let record = slot.canRecord ? "; right-click to record" : ""
+        return "Drop, paste, or click to add \(slot.label.lowercased())\(source)\(record)"
+    }
+
+    private var tile: some View {
+        ZStack {
+            if let first = paths.first {
+                thumbnail(for: URL(fileURLWithPath: first))
+            } else {
+                Image(systemName: "plus")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+        }
+        .frame(width: Self.side, height: Self.side)
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
+        .overlay { outline }
+        .contentShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
     }
 
     @ViewBuilder

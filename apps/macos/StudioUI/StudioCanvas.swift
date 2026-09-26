@@ -7,28 +7,30 @@ import SwiftUI
 // itself is `StudioFeedCanvas.swift`.
 
 /// A blank canvas that teaches: serif headline, one line of guidance, and prompts you can
-/// click straight into the composer.
+/// click straight into the composer. An input-first task also gets its primary attach control
+/// ("Choose audio…"), which offers the Library beside the disk whenever the Library can help.
 struct StudioEmptyState: View {
     let presentation: StudioTaskPresentation
     var isCompact = false
     var onUseExample: ((String) -> Void)?
-    var onAttach: (() -> Void)?
+    /// The slot the primary control fills; nil hides it.
+    var attach: StudioAttachTarget?
 
     init(
         presentation: StudioTaskPresentation,
         isCompact: Bool = false,
         onUseExample: ((String) -> Void)? = nil,
-        onAttach: (() -> Void)? = nil
+        attach: StudioAttachTarget? = nil
     ) {
         self.presentation = presentation
         self.isCompact = isCompact
         self.onUseExample = onUseExample
-        self.onAttach = onAttach
+        self.attach = attach
     }
 
-    init(mode: StudioMode, isCompact: Bool = false, onUseExample: ((String) -> Void)? = nil, onAttach: (() -> Void)? = nil) {
+    init(mode: StudioMode, isCompact: Bool = false, onUseExample: ((String) -> Void)? = nil, attach: StudioAttachTarget? = nil) {
         self.init(presentation: StudioTaskPresentation(mode: mode), isCompact: isCompact,
-                  onUseExample: onUseExample, onAttach: onAttach)
+                  onUseExample: onUseExample, attach: attach)
     }
 
     var body: some View {
@@ -56,11 +58,13 @@ struct StudioEmptyState: View {
                     .frame(maxWidth: 460)
             }
 
-            if presentation.requiresAttachment, let onAttach {
-                Button(action: onAttach) {
-                    Label(presentation.attachLabel, systemImage: "paperclip")
-                }
-                .buttonStyle(.merePrimary)
+            if presentation.requiresAttachment, let attach {
+                StudioAttachButton(
+                    target: attach,
+                    title: presentation.attachLabel,
+                    systemImage: "paperclip",
+                    prominence: .primary
+                )
             }
 
             if !presentation.examplePrompts.isEmpty, let onUseExample {

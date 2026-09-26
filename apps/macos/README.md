@@ -268,8 +268,8 @@ picture, an `AVAssetImageGenerator` poster frame for video, a peak silhouette
 for audio, the first line for a text result — decoded off the main actor and
 cached by path, size, and modification date (`StudioUI/StudioLibraryThumbnail.swift`).
 Rows carry a hover star (`StudioLibraryItem.isFavorite`, an additive optional
-written as `nil` when unstarred), rename in place, and drag out to Finder or any
-app. ⌘ and ⇧ click build a batch (`StudioLibrarySelection`) with a bar for
+written as `nil` when unstarred), rename in place, and drag as file URLs onto
+another task's well, composer, or canvas, or out to Finder or any app. ⌘ and ⇧ click build a batch (`StudioLibrarySelection`) with a bar for
 Reveal, Save to…, and Delete; Delete asks first and offers to move the run's
 files to the Trash. A batch of exactly two finished image runs adds **Compare**
 to the bar and the context menu, which opens the older run in the result
@@ -328,7 +328,8 @@ Video: start frame, end frame, audio; Music: source and timbre references;
 Voice: reference audio; Vision and Audio tasks: their required input; Chat: a
 per-turn image that stays behind the paperclip until attached — and every slot
 takes a drop, a paste (⌘V), or a click to pick, storing straight into the draft
-field the CLI flag reads. Code and Sound ▸ Generate declare no slots. Under the
+field the CLI flag reads. Code and Sound ▸ Generate declare no slots. A click
+offers the Library as well as the disk; see [Library items as inputs](#library-items-as-inputs). Under the
 prompt, a **chip strip** shows up to four contract essentials (size, length,
 duration, steps, seed, resolution, task, voice mode, thinking) as menus with
 popover editors for custom values; some modes show only the model chip. The **model chip** is the only
@@ -350,7 +351,8 @@ composer. A finished run is a generation card: prompt, the chips it ran with
 (read from its own command), every output in a grid of 236pt tiles (images,
 video, 3D; audio gets the waveform player, text the Markdown renderer), and
 Vary (rerun with a fresh, recorded seed), Rerun, Use as input, Quick Look,
-Reveal, Copy, and Save to…; outputs drag out to Finder. A run in flight is a
+Reveal, Copy, and Save to…; outputs drag onto another task's well or out to
+Finder. A run in flight is a
 card that observes its `Job` directly — progress bar, "Denoising 15/24 · 0:41",
 Cancel, and the log tail behind an Activity disclosure — and a queued run is a
 row with Remove; both come from `JobStore`, not from a controller mirror. A
@@ -604,6 +606,44 @@ only brings it forward, so its edits stay. A console run is a normal inference
 job — same queue, progress, artifact resolution and Library row — and while the
 console is key the Run menu drives it while Go and Help keep acting on the
 Studio window.
+
+## Library items as inputs
+
+A song composed in Music, a picture generated in Image, or a stem from Separate
+can go straight into another task's input. Every attachment entry point shares
+one control, `StudioAttachMenu` (`StudioUI/StudioLibraryInputPicker.swift`): a
+well slot's plus, the empty state's primary button ("Choose audio…"), the
+Analyze canvas's Choose…/Replace, the inspector's and project pages' path rows
+(`ContractFormPathRow`), 3D ▸ From image's Add views…, and Video ▸ Subjects'
+driving clip. When the Library holds a finished run with a file the entry
+point takes, the click opens a menu of **From Disk…** and **From Library…**
+(plus Record… on an audio well), and the control shows a pull-down chevron.
+When it holds none, the click goes straight to the open panel, so an empty
+Library never costs a click.
+
+**From Library…** opens a popover that lists those runs newest first, with the
+Library row's thumbnail or waveform, title, task, and time, and a search field
+that matches what the Library column's search matches plus file names. A run
+with several such files — stems, a batch of pictures — lists each file under
+it. Type to search, use ↑ and ↓ to move, press Return to choose, and press
+Escape to close. A pick fills the slot through the slot's own `attach`,
+exactly as a disk pick would.
+
+What a slot takes comes from the slot itself: `StudioAttachmentRequirement`
+reads a well slot's accepted types (the mode's declaration or the template's
+contract) or a path row's, and `StudioLibraryInputs`
+(`StudioKit/StudioLibraryInputs.swift`) filters finished, non-conversation runs
+to the artifacts those types accept that are still on disk. Nothing is
+hard-coded per page. The Library store reaches every entry point as the
+`studioLibraryItems` environment value, which the window root sets; a view
+hosted without it offers the disk alone.
+
+Library rows and tiles, feed output tiles, result rows, and Foley's audio all
+drag through one modifier, `studioFileDrag`. It provides the file's own type,
+so Finder copies the file, and its file URL, so a Studio drop target reads the
+original path. Wells, the composer, and the task workspace's canvas take the
+drop through their existing `dropDestination(for: URL.self)`, which routes the
+file to the first slot that accepts it and refuses anything else.
 
 ## Focus, compare, and continue
 

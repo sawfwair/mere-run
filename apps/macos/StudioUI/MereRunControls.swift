@@ -18,18 +18,62 @@ package struct MerePrimaryButtonStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .font(MereRunTheme.bodyFont.weight(.semibold))
-                .padding(.horizontal, MereRunTheme.Spacing.md)
-                .padding(.vertical, MereRunTheme.Spacing.xs)
-                .frame(minHeight: 28)
-                .background {
-                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
-                        .fill(tint.opacity(configuration.isPressed ? 0.78 : 1))
-                }
-                .foregroundStyle(MereRunTheme.background)
-                .contentShape(Rectangle())
+                .modifier(MerePrimaryChrome(tint: tint, isPressed: configuration.isPressed))
                 .opacity(isEnabled ? (configuration.isPressed ? 0.95 : 1) : 0.4)
         }
+    }
+}
+
+/// The primary control's face — type, padding, and fill — shared by the button style and the
+/// menu label, so a primary action that opens a menu reads exactly like one that does not.
+private struct MerePrimaryChrome: ViewModifier {
+    let tint: Color
+    let isPressed: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .font(MereRunTheme.bodyFont.weight(.semibold))
+            .padding(.horizontal, MereRunTheme.Spacing.md)
+            .padding(.vertical, MereRunTheme.Spacing.xs)
+            .frame(minHeight: 28)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                    .fill(tint.opacity(isPressed ? 0.78 : 1))
+            }
+            .foregroundStyle(MereRunTheme.background)
+            .contentShape(Rectangle())
+    }
+}
+
+/// The primary button's chrome on a `Menu`'s label, with the pull-down chevron that says the
+/// click opens a menu. The menu shows its own open state, so the label carries no press feedback.
+/// Without the chevron it is the face of a control that draws its own chrome and sometimes opens
+/// a menu, so both states read as the same `.merePrimary` pill.
+package struct MerePrimaryMenuLabel: View {
+    let title: String
+    let systemImage: String?
+    let showsChevron: Bool
+
+    package init(_ title: String, systemImage: String? = nil, showsChevron: Bool = true) {
+        self.title = title
+        self.systemImage = systemImage
+        self.showsChevron = showsChevron
+    }
+
+    package var body: some View {
+        HStack(spacing: 6) {
+            if let systemImage {
+                Label(title, systemImage: systemImage)
+            } else {
+                Text(title)
+            }
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .opacity(0.8)
+            }
+        }
+        .modifier(MerePrimaryChrome(tint: MereRunTheme.accent, isPressed: false))
     }
 }
 
@@ -101,19 +145,33 @@ private struct MereSecondaryChrome: ViewModifier {
 /// the label carries no press feedback; it does take the hover wash.
 package struct MereSecondaryMenuLabel: View {
     let title: String
-    let systemImage: String
+    let systemImage: String?
+    /// A trailing pull-down chevron, for a label whose title names an action rather than a choice.
+    let showsChevron: Bool
     @State private var hovering = false
 
-    package init(_ title: String, systemImage: String) {
+    package init(_ title: String, systemImage: String? = nil, showsChevron: Bool = false) {
         self.title = title
         self.systemImage = systemImage
+        self.showsChevron = showsChevron
     }
 
     package var body: some View {
-        Label(title, systemImage: systemImage)
-            .modifier(MereSecondaryChrome(hovering: hovering))
-            .onHover { hovering = $0 }
-            .animation(MereRunTheme.Motion.quick, value: hovering)
+        HStack(spacing: 5) {
+            if let systemImage {
+                Label(title, systemImage: systemImage)
+            } else {
+                Text(title)
+            }
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+        }
+        .modifier(MereSecondaryChrome(hovering: hovering))
+        .onHover { hovering = $0 }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
     }
 }
 

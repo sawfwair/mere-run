@@ -132,7 +132,7 @@ struct StudioResultFileRow: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .accessibilityElement(children: .contain)
-            .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+            .studioFileDrag(url)
             StudioResultHairline()
         }
     }

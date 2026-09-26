@@ -440,14 +440,15 @@ struct StudioSCAILView: View {
                 TextField("/path/to/driving.mp4", text: $drivingVideo)
                     .mereField()
                     .accessibilityLabel("Driving video")
-                ProjectSecondaryButton("Choose…") {
-                    if let url = StudioFilePanels.chooseFile(
-                        title: "Driving video",
-                        allowedContentTypes: [.movie]
-                    ).first {
-                        drivingVideo = url.path
-                    }
-                }
+                StudioAttachButton(
+                    target: StudioAttachTarget(
+                        requirement: StudioAttachmentRequirement(label: "Driving video", acceptedTypes: [.movie])
+                    ) { urls in
+                        if let url = urls.first { drivingVideo = url.path }
+                    },
+                    title: "Choose…"
+                )
+                .accessibilityLabel("Choose driving video")
             }
         }
         .padding(12)

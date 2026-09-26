@@ -24,7 +24,7 @@ struct StudioSyncReviewTile: View {
                 .frame(maxWidth: .infinity)
                 .background(MereRunTheme.surfaceRaised.opacity(0.6))
                 .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
-                .onDrag { NSItemProvider(contentsOf: audioURL) ?? NSItemProvider() }
+                .studioFileDrag(audioURL)
                 .accessibilityLabel("Generated foley \(audioURL.lastPathComponent)")
         }
         .accessibilityElement(children: .contain)

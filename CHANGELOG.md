@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- Studio can use Library items as inputs. Every attachment entry point (well
+  slots, empty-state Choose buttons, the Analyze canvas's Replace, and path
+  rows) offers From Disk… and From Library… when the Library holds a compatible
+  file. The searchable Library picker lists each stem or picture of a
+  multi-output run. Library rows and output tiles drag onto wells and
+  canvases. Video inputs no longer accept audio-only files.
+
 ## 0.57.0 - 2026-09-25
 
 - Add native GLiNER2.5 Decide extraction through `text extract`, batch and

@@ -98,7 +98,7 @@ package enum StudioMode: String, CaseIterable, Codable, Identifiable {
         case .listen:
             return [.audio]
         case .track:
-            return [.movie, .video, .audiovisualContent]
+            return [.movie, .video]
         case .video:
             return [.image]
         default:

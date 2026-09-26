@@ -23,7 +23,8 @@ struct StudioFeedActions {
     /// Get the managed model a failed run needed, through the same path as the readiness card.
     let pullModel: (String) -> Void
     let useExample: (String) -> Void
-    let attach: () -> Void
+    /// The slot the empty state's primary control fills; nil when the task needs no file first.
+    let attach: StudioAttachTarget?
     var focus: (StudioLibraryItem, URL) -> Void = { _, _ in }
 }
 
@@ -81,7 +82,7 @@ struct StudioFeedCanvas: View {
     var body: some View {
         Group {
             if cards.isEmpty && !showsReadinessCard {
-                StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, onAttach: actions.attach)
+                StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, attach: actions.attach)
                     .padding(MereRunTheme.Spacing.xxxl)
             } else {
                 feed
@@ -111,7 +112,7 @@ struct StudioFeedCanvas: View {
                 ScrollView {
                     LazyVStack(spacing: Metrics.cardSpacing) {
                         if cards.isEmpty {
-                            StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, onAttach: actions.attach)
+                            StudioEmptyState(presentation: presentation, onUseExample: actions.useExample, attach: actions.attach)
                                 .padding(.vertical, MereRunTheme.Spacing.xl)
                         }
                         ForEach(cards) { card in
@@ -507,7 +508,7 @@ struct StudioGenerationCard: View {
                     }
                     .buttonStyle(.plain)
                     .help(url.path)
-                    .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+                    .studioFileDrag(url)
                 }
             }
         }
@@ -617,7 +618,7 @@ private struct StudioOutputGrid: View {
                     .frame(maxWidth: .infinity)
                     .background(MereRunTheme.surfaceRaised.opacity(0.6))
                     .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
-                    .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+                    .studioFileDrag(url)
             }
         }
     }
@@ -646,7 +647,7 @@ private struct StudioOutputGrid: View {
             if StudioOutputFileKind.classify(url) == .image, let onOpen { onOpen(url) }
             else { QuickLookCoordinator.shared.preview(url) }
         }
-        .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+        .studioFileDrag(url)
         .contextMenu {
             Button("Open") { NSWorkspace.shared.open(url) }
             Button("Quick Look") { QuickLookCoordinator.shared.preview(url) }

@@ -6,7 +6,7 @@ import SwiftUI
 /// to a kind or favorites, searchable, shown as rows or as a grid of thumbnails, grouped by day,
 /// keyboard-navigable (arrows move, Space previews), with Quick Look surfacing on hover. Picking a
 /// row of another domain switches the destination; ⌘ and ⇧ build a batch to reveal, save, or
-/// delete in one go, and any row can be dragged out to Finder or another app.
+/// delete in one go, and any row can be dragged onto another task's well or out to Finder or another app.
 struct StudioLibraryPanel: View {
     let items: [StudioLibraryItem]
     let domain: StudioDomain
@@ -348,7 +348,7 @@ struct StudioLibraryPanel: View {
             onCancelRename: { renamingID = nil },
             action: { click(item) }
         )
-        .modifier(StudioLibraryDragOut(url: item.outputURL))
+        .studioFileDrag(item.outputURL)
         .contextMenu { menu(for: item) }
     }
 
@@ -362,7 +362,7 @@ struct StudioLibraryPanel: View {
                     onToggleFavorite: { onToggleFavorite(item.id) },
                     action: { click(item) }
                 )
-                .modifier(StudioLibraryDragOut(url: item.outputURL))
+                .studioFileDrag(item.outputURL)
                 .contextMenu { menu(for: item) }
             }
         }
@@ -573,20 +573,6 @@ private struct StudioLibraryDeleteRequest: Identifiable {
     }
 }
 
-/// Drag a row or tile straight into Finder, Mail, or another app. Rows with no file are inert
-/// rather than dragging an empty promise.
-private struct StudioLibraryDragOut: ViewModifier {
-    let url: URL?
-
-    func body(content: Content) -> some View {
-        if let url {
-            content.onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
-        } else {
-            content
-        }
-    }
-}
-
 /// One Library row: a 40pt thumbnail (or a glyph tile), the title on one line, and a meta line
 /// that carries a status dot while the run is queued, running, or failed. Hovering reveals the
 /// favorite star and Quick Look; renaming happens in place, never in a dialog.
@@ -703,13 +689,8 @@ private struct StudioLibraryRow: View {
         return .clear
     }
 
-    /// The task that made the row ("Generate", "Find"), or the command's own title when a
-    /// specialist command other than the mode's prompt template produced it.
     private var kindTitle: String {
-        if let templateID = item.templateID, templateID != item.mode.defaultTemplateID {
-            return item.displayKindTitle
-        }
-        return item.mode.destination.task.title
+        StudioLibraryRowMeta.kindTitle(for: item)
     }
 
     /// "Generate · 12:43 PM" once done; "Running · 62%" / "Queued" / "Failed · 12:43 PM" otherwise.
@@ -805,6 +786,15 @@ private struct StudioLibraryTile: View {
 
 /// The row meta line and status dot, shared by the list rows and the grid tiles.
 enum StudioLibraryRowMeta {
+    /// The task that made the row ("Generate", "Find"), or the command's own title when a
+    /// specialist command other than the mode's prompt template produced it.
+    static func kindTitle(for item: StudioLibraryItem) -> String {
+        if let templateID = item.templateID, templateID != item.mode.defaultTemplateID {
+            return item.displayKindTitle
+        }
+        return item.mode.destination.task.title
+    }
+
     static func text(
         item: StudioLibraryItem,
         kindTitle: String,
