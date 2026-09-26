@@ -148,7 +148,7 @@ package final class StudioTaskRunner {
     /// Records the run and launches it. The Library row starts as running or queued by whether
     /// the inference lane has a slot, the same reading the feed's cards make.
     @discardableResult
-    private func submit(_ request: StudioRunRequest, task: StudioTask) -> Bool {
+    func submit(_ request: StudioRunRequest, task: StudioTask) -> Bool {
         sessions.set(Optional(request.id), for: task.rawValue + ".requestID")
         sessions.noteSubmission(request.id, from: task)
         let arguments = request.execution?.arguments ?? request.template.arguments(from: request.draft, source: controller.scopeSource)

@@ -291,6 +291,9 @@ package struct StudioDraft: Codable, Equatable, Sendable {
     /// frame (`--end-frame`). Optional for the same reason; nil reads as frame 0 and the whole clip.
     package var visionInitFrame: Int?
     package var visionEndFrame: Int?
+    /// The files the input slot runs one at a time when it batches (`batchInputPaths`). Optional
+    /// preserves saved Studio drafts from before batches; nil is a single run.
+    package var batchInputs: [String]?
     // Speak voice cloning (Studio surface). "style" uses the voice description; "clone" uses a
     // saved profile or reference audio.
     package var voiceMode = "style"
@@ -414,6 +417,7 @@ package struct StudioDraft: Codable, Equatable, Sendable {
         prompt = modeDefaultPrompt(mode)
         secondaryText = modeDefaultSecondaryText(mode)
         inputPath = ""
+        batchInputs = nil
         model = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
         width = mode == .video ? 768 : 1024
         height = mode == .video ? 512 : 1024
@@ -1153,6 +1157,10 @@ package struct StudioLibraryItem: Codable, Identifiable, Equatable {
     /// recorded, so the links are inferred from the run's input paths; an empty list means the
     /// user removed every link.
     package var sourceItemIDs: [UUID]? = nil
+
+    /// The batch this run was submitted in: every file of one Run over a batched input shares
+    /// it (`StudioInputBatch`). Optional and additive; a single run leaves it nil.
+    package var batchGroup: UUID? = nil
 
     package var isStarred: Bool { isFavorite == true }
 

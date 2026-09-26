@@ -38,10 +38,11 @@ extension StudioDraft: StudioUndoableDraft {
 }
 
 extension StudioTaskDraft: StudioUndoableDraft {
-    /// Same variant and parked forms, and every changed flag holds text or nothing on both sides;
-    /// positionals and the Command view's extra arguments are text.
+    /// Same variant, parked forms, and batch, and every changed flag holds text or nothing on both
+    /// sides; positionals and the Command view's extra arguments are text.
     package func differsOnlyInText(from previous: StudioTaskDraft) -> Bool {
-        guard templateID == previous.templateID, parked == previous.parked else { return false }
+        guard templateID == previous.templateID, parked == previous.parked,
+              batchInputPaths == previous.batchInputPaths else { return false }
         return Set(form.values.keys).union(previous.form.values.keys).allSatisfy { flag in
             form[flag].isTextOrUnset && previous.form[flag].isTextOrUnset
         }
@@ -81,6 +82,12 @@ enum StudioDraftUndo {
         fields: [StudioContractField<Draft>],
         slots: [StudioAttachmentSlot]
     ) -> String? {
+        if let batch = batchUndoName(
+            from: previous.batchInputPaths, to: next.batchInputPaths,
+            emptied: slots.first(where: \.batches).map { $0.paths(in: next).isEmpty } ?? false
+        ) {
+            return batch
+        }
         for slot in slots {
             let before = slot.paths(in: previous)
             let after = slot.paths(in: next)
@@ -95,6 +102,16 @@ enum StudioDraftUndo {
         if picked.count == 1 { return "Change \(picked[0].label)" }
         if picked.count > 1 || !next.differsOnlyInText(from: previous) { return "Change Settings" }
         return nil
+    }
+
+    /// A batch's own steps: files added to it, one taken out, or the whole batch cleared
+    /// (`emptied`: the slot holds nothing now). A batch that shrinks to one file is a file taken
+    /// out; nil when the batch did not change.
+    static func batchUndoName(from previous: [String], to next: [String], emptied: Bool) -> String? {
+        guard previous != next else { return nil }
+        if next.count > previous.count { return "Add Files" }
+        if emptied { return "Clear Files" }
+        return next.count < previous.count ? "Remove File" : "Change Files"
     }
 
     /// Whether this field's change was typed into a text field: a free-text option, the seed row,

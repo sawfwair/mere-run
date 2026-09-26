@@ -254,7 +254,17 @@ struct StudioTaskComposer: View {
         .accessibilityLabel("Stop current run")
     }
 
+    @ViewBuilder
     private var sendButton: some View {
+        if let count = slots.batchRunCount(in: draft) {
+            StudioBatchRunButton(count: count, isEnabled: sendEnabled,
+                                 blockedReason: readiness.blocksRun ? readiness.message(titles: titles) : nil, action: onRun)
+        } else {
+            singleSendButton
+        }
+    }
+
+    private var singleSendButton: some View {
         Button(action: onRun) {
             ZStack {
                 Circle().fill(sendEnabled ? MereRunTheme.accent : MereRunTheme.surfaceRaised)

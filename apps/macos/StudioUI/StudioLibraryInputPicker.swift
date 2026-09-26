@@ -124,9 +124,9 @@ struct StudioAttachMenu<Face: View, ExtraItems: View>: View {
             StudioLibraryInputPicker(
                 requirement: target.requirement,
                 items: libraryItems,
-                onPick: { url in
+                onPick: { urls in
                     pickingBinding.wrappedValue = false
-                    target.attach([url])
+                    target.attach(urls)
                 },
                 onChooseFromDisk: {
                     pickingBinding.wrappedValue = false
@@ -205,15 +205,19 @@ struct StudioPressDimButtonStyle: ButtonStyle {
 
 /// "From Library…": the finished runs whose files the slot takes, newest first, searchable. A run
 /// with one such file is one row; a run with several (stems, a batch of pictures) lists each file
-/// under it. Type to search, ↑/↓ to move, Return to choose, Escape to close.
+/// under it. Type to search, ↑/↓ to move, Return to choose, Escape to close. Where the slot takes
+/// several files (a list, or a batch), each row has a check to gather several, and Add takes them
+/// in the order they were checked; a click on a row with nothing checked still takes that one.
 struct StudioLibraryInputPicker: View {
     let requirement: StudioAttachmentRequirement
     let items: [StudioLibraryItem]
-    let onPick: (URL) -> Void
+    let onPick: ([URL]) -> Void
     let onChooseFromDisk: () -> Void
 
     @State private var query = ""
     @State private var highlighted: StudioLibraryInputChoice?
+    /// The files checked so far, in the order they were checked.
+    @State private var checked: [URL] = []
     @FocusState private var searchFocused: Bool
     @Environment(\.studioModelTitles) private var titles
     @Environment(\.studioReferenceDate) private var referenceDate
@@ -298,7 +302,11 @@ struct StudioLibraryInputPicker: View {
                 .focused($searchFocused)
                 .focusEffectDisabled()
                 .onSubmit {
-                    if let choice = highlighted ?? choices.first { onPick(choice.url) }
+                    if !checked.isEmpty {
+                        onPick(checked)
+                    } else if let choice = highlighted ?? choices.first {
+                        onPick([choice.url])
+                    }
                 }
                 .onKeyPress(.downArrow) { move(by: 1, in: choices) }
                 .onKeyPress(.upArrow) { move(by: -1, in: choices) }
@@ -353,7 +361,8 @@ struct StudioLibraryInputPicker: View {
         let choice = StudioLibraryInputChoice(itemID: group.id, url: url)
         return StudioLibraryInputRow(
             isHighlighted: highlighted == choice,
-            action: { onPick(url) },
+            check: checkState(url),
+            action: { choose(url) },
             onHover: { if $0 { highlighted = choice } }
         ) {
             HStack(spacing: 10) {
@@ -413,7 +422,8 @@ struct StudioLibraryInputPicker: View {
         let role = group.item.artifactRoleLabel(for: url)
         return StudioLibraryInputRow(
             isHighlighted: highlighted == choice,
-            action: { onPick(url) },
+            check: checkState(url),
+            action: { choose(url) },
             onHover: { if $0 { highlighted = choice } }
         ) {
             HStack(spacing: 8) {
@@ -470,7 +480,11 @@ struct StudioLibraryInputPicker: View {
 
     private func footer(runCount: Int) -> some View {
         HStack(spacing: 8) {
-            if runCount > 0 {
+            if !checked.isEmpty {
+                Text("\(checked.count) checked")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+            } else if runCount > 0 {
                 Text(runCount == 1 ? "1 run" : "\(runCount) runs")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(MereRunTheme.textMuted)
@@ -481,9 +495,39 @@ struct StudioLibraryInputPicker: View {
             }
             .buttonStyle(.mereSecondary)
             .help("Choose a file in Finder instead")
+            if !checked.isEmpty {
+                Button("Add \(checked.count)") { onPick(checked) }
+                    .buttonStyle(.merePrimary)
+                    .help("Add the checked files in the order you checked them (Return)")
+                    .accessibilityLabel(checked.count == 1 ? "Add 1 file" : "Add \(checked.count) files")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    /// A row's check: nil where the slot takes one file.
+    private func checkState(_ url: URL) -> StudioLibraryInputCheck? {
+        guard requirement.allowsMultiple else { return nil }
+        return StudioLibraryInputCheck(isChecked: checked.contains(url)) { toggle(url) }
+    }
+
+    /// A click on a row: while files are checked it checks or unchecks this one too; otherwise
+    /// it takes this file alone, as the picker always has.
+    private func choose(_ url: URL) {
+        if requirement.allowsMultiple, !checked.isEmpty {
+            toggle(url)
+        } else {
+            onPick([url])
+        }
+    }
+
+    private func toggle(_ url: URL) {
+        if let index = checked.firstIndex(of: url) {
+            checked.remove(at: index)
+        } else {
+            checked.append(url)
+        }
     }
 
     private func move(by offset: Int, in choices: [StudioLibraryInputChoice]) -> KeyPress.Result {
@@ -519,15 +563,42 @@ struct StudioLibraryInputPicker: View {
     }()
 }
 
+/// A row's check where the slot takes several files: whether it is checked, and the toggle.
+private struct StudioLibraryInputCheck {
+    let isChecked: Bool
+    let toggle: () -> Void
+}
+
 /// One choosable row of the picker: the Library row's hover and selection fills, a button for
 /// VoiceOver and the keyboard, and hover that moves the keyboard highlight so the two agree.
+/// Where the slot takes several files, a check before it gathers the row into the selection.
 private struct StudioLibraryInputRow<Content: View>: View {
     let isHighlighted: Bool
+    var check: StudioLibraryInputCheck?
     let action: () -> Void
     let onHover: (Bool) -> Void
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        HStack(spacing: 2) {
+            if let check {
+                Button(action: check.toggle) {
+                    Image(systemName: check.isChecked ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(check.isChecked ? MereRunTheme.accent : MereRunTheme.textMuted)
+                        .frame(width: 24, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(check.isChecked ? "Uncheck" : "Check to add several at once")
+                .accessibilityLabel(check.isChecked ? "Checked" : "Not checked")
+                .accessibilityAddTraits(check.isChecked ? [.isButton, .isSelected] : .isButton)
+            }
+            rowButton
+        }
+    }
+
+    private var rowButton: some View {
         Button(action: action) {
             content()
                 .padding(.vertical, 5)

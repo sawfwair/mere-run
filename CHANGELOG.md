@@ -60,6 +60,15 @@ The format is based on Keep a Changelog.
   paths. Collection and link edits undo. Collections live in `collections.json`
   beside `library.json`, which only gains an optional `sourceItemIDs` field, so
   earlier builds still read the Library.
+- Studio runs a task once per file when several files are dropped, pasted, or
+  picked for an input that takes one (Transcribe, Read, Find, Enhance,
+  Separate, Depth, and more, decided by the slot schema). The well shows the
+  stack with a file list to remove or add files, Run reads "Run 12", and the
+  Library picker can check several files. Readiness is checked once and every
+  file is checked before anything runs, with the option to skip the ones that
+  can't. Each file is its own run with its own output, queued in order, and
+  the Library rows share a batch id. A bar on the page and a row in the
+  Activity popover follow the batch and stop it.
 
 ## 0.58.0 - 2026-09-26
 

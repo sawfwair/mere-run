@@ -19,6 +19,8 @@ package struct StudioTaskDraft: Codable, Equatable {
     /// whole — InstantMesh's ordered views and cameras, Compare's second picture — rather than
     /// only what the two templates share.
     package private(set) var parked: [CommandTemplateID: StudioConsoleDraft] = [:]
+    /// The files the primary slot runs one at a time when it batches; empty for a single run.
+    package var batchInputPaths: [String] = []
 
     package init(templateID: CommandTemplateID, form: StudioConsoleDraft) {
         self.templateID = templateID
@@ -26,11 +28,11 @@ package struct StudioTaskDraft: Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case templateID, form, parked
+        case templateID, form, parked, batchInputPaths
     }
 
     /// A draft saved before variants were parked has no `parked` entry; one parked for a
-    /// template this build no longer has drops that form.
+    /// template this build no longer has drops that form. One saved before batches has none.
     package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         templateID = try container.decode(CommandTemplateID.self, forKey: .templateID)
@@ -40,6 +42,7 @@ package struct StudioTaskDraft: Codable, Equatable {
             guard let id = CommandTemplateID(rawValue: key) else { continue }
             self.parked[id] = form
         }
+        batchInputPaths = try container.decodeIfPresent([String].self, forKey: .batchInputPaths) ?? []
     }
 
     /// Parked forms are keyed by template id, so the file reads as an object of forms.
@@ -49,6 +52,9 @@ package struct StudioTaskDraft: Codable, Equatable {
         try container.encode(form, forKey: .form)
         if !parked.isEmpty {
             try container.encode(Dictionary(uniqueKeysWithValues: parked.map { ($0.key.rawValue, $0.value) }), forKey: .parked)
+        }
+        if !batchInputPaths.isEmpty {
+            try container.encode(batchInputPaths, forKey: .batchInputPaths)
         }
     }
 
@@ -183,9 +189,20 @@ package struct StudioTaskDraft: Codable, Equatable {
     /// carries the values whose flags the new template also declares (the input, the model)
     /// and drops the rest, so Faces ▸ Compare keeps the picture Detect was pointed at. The model
     /// is cleared when the templates default to different models: a face model is no use to the
-    /// pose command.
+    /// pose command. A batch carries to a variant whose own input batches and takes every file in
+    /// it (Faces ▸ Detect to Embed); any other switch leaves the new variant one file.
     package mutating func switchTemplate(to next: CommandTemplateID) {
         guard next != templateID else { return }
+        let batch = batchInputPaths
+        switchForm(to: next)
+        batchInputPaths = []
+        if !batch.isEmpty, let slot = StudioTaskSchema.primarySlot(for: next), slot.batches,
+           batch.allSatisfy({ slot.accepts(URL(fileURLWithPath: $0)) }) {
+            slot.setBatch(batch, in: &self)
+        }
+    }
+
+    private mutating func switchForm(to next: CommandTemplateID) {
         let previous = self
         var parked = previous.parked
         parked[previous.templateID] = previous.form
@@ -235,6 +252,8 @@ package struct StudioTaskDraft: Codable, Equatable {
     package mutating func adopt(_ restored: StudioTaskDraft) {
         switchTemplate(to: restored.templateID)
         form = restored.form
+        // The recorded run read one file; a batch left in the well would run over it.
+        batchInputPaths = []
     }
 
     private func clearingDestinations(where clears: (String) -> Bool) -> StudioTaskDraft {

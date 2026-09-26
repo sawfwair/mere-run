@@ -19,6 +19,10 @@ package protocol StudioAttachmentDraft {
     /// Settings that follow an attachment so the slot is never silently ignored (a cloned voice
     /// needs clone mode). Most drafts have none.
     mutating func didAttach(to slot: StudioAttachmentSlot)
+    /// The files a batching slot (`StudioAttachmentSlot.batches`) runs one at a time: two or
+    /// more, the first of them also held in the slot itself; empty while the slot holds one file
+    /// or none.
+    var batchInputPaths: [String] { get set }
 }
 
 /// One slot in the composer's attachment well, bound to a draft field, a contract flag, or a
@@ -49,6 +53,9 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
     /// A per-turn attachment (Chat's image): the well stays collapsed to the paperclip until
     /// something is attached, so an empty slot never sits above every message.
     package var isTransient = false
+    /// The slot takes one file per run, and several files dropped, pasted, or picked into it
+    /// become a batch that runs once per file (`batchesRuns(for:)` decides).
+    package var batches = false
 
     package init(
         id: String,
@@ -56,7 +63,8 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
         acceptedTypes: [UTType],
         storage: Storage,
         isRequired: Bool = false,
-        isTransient: Bool = false
+        isTransient: Bool = false,
+        batches: Bool = false
     ) {
         self.id = id
         self.label = label
@@ -64,6 +72,7 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
         self.storage = storage
         self.isRequired = isRequired
         self.isTransient = isTransient
+        self.batches = batches
     }
 
     package var allowsMultiple: Bool {
@@ -87,8 +96,10 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
         !paths(in: draft).isEmpty
     }
 
-    /// The caption shown beside the slot: the file name when filled, the slot label otherwise.
+    /// The caption shown beside the slot: the file name when filled, "12 files" for a batch, the
+    /// slot label otherwise.
     package func caption<Draft: StudioAttachmentDraft>(in draft: Draft) -> String {
+        if isBatched(in: draft) { return "\(draft.batchInputPaths.count) files" }
         let paths = paths(in: draft)
         guard let first = paths.first else { return label }
         let name = URL(fileURLWithPath: first).lastPathComponent
@@ -113,10 +124,13 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
     }
 
     /// Stores `urls` in the slot: a single-path slot keeps the first, a list slot appends them all.
+    /// A batching slot given several files makes them its batch, and adds to a batch it holds.
     package func attach<Draft: StudioAttachmentDraft>(_ urls: [URL], to draft: inout Draft) {
         let incoming = urls.filter(accepts).map(\.path)
         guard !incoming.isEmpty else { return }
-        if allowsMultiple {
+        if batches, incoming.count > 1 || isBatched(in: draft) {
+            setBatch((isBatched(in: draft) ? draft.batchInputPaths : []) + incoming, in: &draft)
+        } else if allowsMultiple {
             let existing = Self.separatedPaths(draft.attachmentText(for: storage))
             draft.setAttachmentText(
                 (existing + incoming.filter { !existing.contains($0) }).joined(separator: "\n"),
@@ -130,6 +144,7 @@ package struct StudioAttachmentSlot: Identifiable, Equatable {
 
     package func clear<Draft: StudioAttachmentDraft>(in draft: inout Draft) {
         draft.setAttachmentText("", for: storage)
+        if batches { draft.batchInputPaths = [] }
     }
 
     package static func separatedPaths(_ raw: String) -> [String] {
@@ -151,19 +166,36 @@ extension Array where Element == StudioAttachmentSlot {
 
 extension StudioAttachmentDraft {
     /// Routes each dropped file to the slot it belongs in. Returns whether anything was attached.
+    /// Files that land in a batching slot after it is filled — the second audio file on
+    /// Transcribe, not the second picture that fills Compare's candidate — join it as a batch.
     @discardableResult
     package mutating func attach(dropped urls: [URL], slots: [StudioAttachmentSlot]) -> Bool {
         var attached = false
+        let batchSlot = slots.first(where: \.batches)
+        var batched: [URL] = []
         for url in urls {
             guard let slot = slots.slot(for: url, in: self) else { continue }
-            slot.attach([url], to: &self)
             attached = true
+            if slot.id == batchSlot?.id {
+                // The first fills the slot, so the files after it route past a filled slot the
+                // way they always have.
+                if batched.isEmpty { slot.attach([url], to: &self) }
+                batched.append(url)
+            } else {
+                slot.attach([url], to: &self)
+            }
         }
+        if let batchSlot, batched.count > 1 { batchSlot.attach(batched, to: &self) }
         return attached
     }
 }
 
 extension StudioDraft: StudioAttachmentDraft {
+    package var batchInputPaths: [String] {
+        get { batchInputs ?? [] }
+        set { batchInputs = newValue.isEmpty ? nil : newValue }
+    }
+
     package func attachmentText(for storage: StudioAttachmentSlot.Storage) -> String {
         switch storage {
         case .path(let keyPath), .pathList(let keyPath):
@@ -188,8 +220,13 @@ extension StudioDraft: StudioAttachmentDraft {
 }
 
 extension StudioMode {
-    /// The attachment slots this mode's composer declares, in well order.
+    /// The attachment slots this mode's composer declares, in well order, the first marked when
+    /// it batches (`StudioAttachmentSlot.batchesRuns(for:)`).
     package var attachmentSlots: [StudioAttachmentSlot] {
+        declaredAttachmentSlots.markingBatchInput(for: task)
+    }
+
+    private var declaredAttachmentSlots: [StudioAttachmentSlot] {
         switch self {
         case .createImage:
             return [

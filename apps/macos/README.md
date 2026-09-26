@@ -123,6 +123,10 @@ surface for is still reachable the day the contract declares it.
   system and text-editing keys it must leave alone. `StudioKit/StudioPromptHistory.swift`
   and `StudioKit/StudioPageDefaults.swift`: the composer's prompt recall and the
   inspector's saved defaults.
+- `StudioKit/StudioInputBatch.swift` and `StudioKit/StudioTaskRunner+Batch.swift`:
+  which slots batch, the per-file checks, and running and stopping a batch;
+  `StudioUI/StudioBatchInputs.swift` draws the stack, its list, Run N, and the
+  batch bars.
 
 The declarative schemas live in StudioKit beside the model, and the views that
 draw them in StudioUI, one file each side:
@@ -895,6 +899,51 @@ installed only while the prompt has focus and only for its window. Edit ▸
 Paste chosen from the menu bar reaches the wells and the canvas, but in the
 prompt it pastes text as before.
 
+## Batch inputs
+
+Several files given to a task whose input takes one run the task once per
+file. Drop them on the well or the canvas, paste them, choose several in the
+open panel, or check several in the Library picker. The well then shows a stack
+with the count ("12 files"), and Run reads **Run 12**. A click on the stack
+lists the files in the order they run, each with its folder and a remove
+button, with **Add files…** and **Clear** below. A drop or paste on the stack
+adds to it. Removing down to one file leaves a plain attachment, and every
+change is an Undo step ("Add Files", "Remove File", "Clear Files").
+
+Which inputs batch comes from the slot schema, not a per-page table:
+`StudioAttachmentSlot.batchesRuns(for:)` (`StudioKit/StudioInputBatch.swift`)
+marks a task's first slot when it holds one required file (not a list or a
+folder), stays in the well between runs, and belongs to a Generate or Analyze
+task that is not a conversation. Transcribe, Read, Find, Segment, Track,
+Enhance, Separate, Depth, Pose, Faces, Who Spoke, 3D ▸ From image, and the
+Earth tasks batch. Slots that already take a list, such as Faces ▸ Batch's
+pictures or 3D's views, keep their own list; optional inputs such as Image ▸
+Generate's input picture, live sessions, and training projects never batch.
+When several files are dropped, files still fill the other slots that take
+them first, so two pictures dropped on Faces ▸ Compare still fill its
+reference and candidate.
+
+The batch lives in the draft (`StudioTaskDraft.batchInputPaths`, and
+`StudioDraft.batchInputs` for the prompt tasks), with its first file also in
+the slot itself, so the canvas and the Command view show the first run. Both
+fields are optional in saved drafts. On Run, `StudioTaskRunner.reviewBatch`
+(or `StudioPromptTaskController.reviewPromptBatch`) checks readiness once for
+the batch, then each file: that it is still on disk, is a file the slot takes,
+can be read, and makes a command the contract accepts. Nothing is created
+while checking. When some files can't run, an alert names them and why and
+offers **Skip and run N**; when none can, the banner says why. Each file then
+becomes its own run through `StudioTaskRunner`, in order, named by
+`StudioOutputLocation` after its own input, so every run writes its own
+result. The runs wait in the inference lane in batch order, and their Library
+rows share a `batchGroup` id (`StudioLibraryItem.batchGroup`, optional and
+additive).
+
+While a batch has runs in flight, a bar over the page's composer shows how far
+it has come ("4 of 12 done") with **Stop batch**, and the Activity popover
+lists it above the lanes with the same control. Stop batch takes the batch's
+waiting runs out of the queue first, then stops the running ones; finished
+results stay.
+
 ## Focus, compare, and continue
 
 Click an image or **Focus** on its result card to inspect it in the workspace.
@@ -1443,6 +1492,13 @@ with the reason it stays CLI-only.
 - `StudioKitTests/CommandArgumentGoldenTests` and `CommandDefaultDraftTests` pin
   every template's argv and starting draft against recorded fixtures, so a
   refactor that changes a command line has to say so.
+- `StudioKitTests/StudioInputBatchTests` sweeps every task's well in both draft
+  schemas for which slots batch, and runs batches through the task runner:
+  one run per file with its own destination, a shared group, a bad file named
+  and skipped, readiness checked once, and Stop batch.
+  `StudioUITests/StudioBatchInputSnapshotTests` renders the stacked well with
+  Run 12, the file list, the batch bars, and the Library picker's checks, light
+  and dark, when `MERERUN_STUDIO_SNAPSHOT_DIR` is set.
 
 `StudioUITests/StudioSnapshotTests` renders the shell for visual review without
 driving the live app: every domain at its default task at 1440×820 in light and dark, plus

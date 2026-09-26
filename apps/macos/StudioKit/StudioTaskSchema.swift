@@ -129,7 +129,8 @@ package enum StudioTaskSchema {
         // The required option comes first in the well, whatever the contract's declaration
         // order: it is the input the run is about (`text train-lora --data`, not its optional
         // resume checkpoint), so the canvas shows it large and the output is named after it.
-        return slots + optionSlots.filter(\.isRequired) + optionSlots.filter { !$0.isRequired }
+        return (slots + optionSlots.filter(\.isRequired) + optionSlots.filter { !$0.isRequired })
+            .markingBatchInput(for: templateID.studioTask)
     }
 
     /// The slot the Analyze canvas shows large: the first one.
