@@ -20,6 +20,28 @@ The format is based on Keep a Changelog.
   file. The searchable Library picker lists each stem or picture of a
   multi-output run. Library rows and output tiles drag onto wells and
   canvases. Video inputs no longer accept audio-only files.
+## 0.58.0 - 2026-09-26
+
+- Add native Breeze TTS 2 speech synthesis for voice design, reference
+  cloning, voice direction, English vocal events, and incremental audio
+  chunks. The CLI, loopback speech API, and Studio expose model-scoped seed
+  and classifier-free guidance controls. Managed pulls pin the BreezeBlue
+  checkpoint and require acceptance of its research and non-commercial
+  license; automatic runtime download is unavailable. Local real-checkpoint
+  tests covered seeded output, streaming, cloning proxies, and API parity.
+  Chinese generation, perceptual quality, and packaged-app behavior remain
+  outside that local qualification.
+- Use completed Studio Library outputs as compatible inputs across composer
+  wells, task canvases, inspectors, and Analyze. Search and select individual
+  files from multi-output runs or drag them into accepted inputs. Video inputs
+  no longer accept audio-only files. Automated schema, drag, and snapshot
+  checks passed; native menu placement, keyboard interaction, and VoiceOver
+  still require in-app acceptance.
+- Add business guides for customer support and document archives, including
+  direct GLiNER2.5 Decide and Cua Driver ticket triage and an Ornith-assisted
+  route. The guides start with an approved ticket or source folder, keep
+  ticket actions draft-only, and distinguish example workflows from verified
+  deployment in a reader's app.
 
 ## 0.57.0 - 2026-09-25
 
