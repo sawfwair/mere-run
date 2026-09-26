@@ -1,4 +1,4 @@
-# Adapt the support workflow to your ticketing app
+# Adapt an Ornith support workflow to your ticketing app
 
 This guide is for a developer or support operator with a ticketing website
 open on an Apple Silicon Mac. You can run GLiNER2.5 Decide, Ornith, and
@@ -6,7 +6,10 @@ Computer Use without changing the website's code. You still need a small
 controller that understands how your app presents tickets and how to check the
 result of each action.
 
-Follow [Triage tickets in your support app](./customer-support.md) to set
+For a controller that applies GLiNER labels through Cua Driver without Ornith,
+follow [Route tickets with GLiNER and Cua Driver](./direct-ticket-triage.md).
+
+Follow [Triage tickets and save drafts](./customer-support.md) to set
 up the tools yourself. The coding-agent prompt in this guide can also do that
 setup. Keep the website open in one macOS window. Select a ticket that your
 team authorizes for a draft-only run. Confirm that you can inspect its draft,

@@ -9,14 +9,15 @@ API key.
 
 | Your task | Guide | First result to check |
 | --- | --- | --- |
-| Route support requests and prepare replies | [Triage tickets in your support app](./customer-support.md) | The selected ticket has the intended team, priority, tags, and saved draft. No reply was sent. |
+| Route support requests with GLiNER and Cua Driver | [Route tickets with GLiNER and Cua Driver](./direct-ticket-triage.md) | The selected ticket has the intended team, priority, and tags. |
+| Route requests and prepare reply drafts with Ornith | [Triage tickets and save drafts](./customer-support.md) | The selected ticket has the intended team, priority, tags, and saved draft. No reply was sent. |
 | Find information across a shared drive | [Search your document archive](./shared-archive.md) | Search returns the expected source files, and cited claims match those files. |
 
-For support, GLiNER2.5 Decide suggests a team and priority. Ornith uses the
-Computer Use plugin to operate the selected window. The
-[support adaptation guide](./adapt-support-workflow.md) explains how to map
-your own website and includes a prompt that you can paste into Codex or Claude
-while a ticket is open.
+For support, GLiNER2.5 Decide suggests a team and priority. A direct Cua
+Driver controller can apply approved labels without Ornith. To prepare reply
+drafts, use Ornith through the Computer Use plugin. Both support guides include
+or link to a prompt that you can paste into Codex or Claude while your website
+is open.
 
 For documents, Archive Tools indexes an approved folder without changing its
 source files. You can search the index or ask a question that requires several

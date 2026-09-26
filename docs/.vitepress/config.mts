@@ -74,8 +74,9 @@ export default defineConfig({
         text: 'For business',
         items: [
           { text: 'Business use cases', link: '/business/' },
-          { text: 'Triage tickets in your app', link: '/business/customer-support' },
-          { text: 'Adapt a support workflow', link: '/business/adapt-support-workflow' },
+          { text: 'Route tickets with GLiNER and Cua Driver', link: '/business/direct-ticket-triage' },
+          { text: 'Triage tickets and save drafts', link: '/business/customer-support' },
+          { text: 'Adapt an Ornith support workflow', link: '/business/adapt-support-workflow' },
           { text: 'Search your document archive', link: '/business/shared-archive' }
         ]
       },
